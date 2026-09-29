@@ -12,9 +12,6 @@ SHELL := bash
 # the remotes pinned in Cargo.lock.
 SVEN_DIR ?= ../sven
 BRAIN_DIR ?= ../edgeai/brain
-# The build directory `make local` configures. Sharing sven's lets brain's
-# and sven's compiled crates be reused rather than built a second time.
-TARGET_DIR ?= $(SVEN_DIR)/target
 
 CARGO ?= cargo
 # Release everywhere, tests included: brain's kernels are unusably slow
@@ -28,9 +25,9 @@ PROFILE := --release
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## /  /'
 
-## local - build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR, TARGET_DIR); writes the gitignored .cargo/config.toml
+## local - build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR); writes the gitignored .cargo/config.toml
 local:
-	bash scripts/local-config.sh $(SVEN_DIR) $(BRAIN_DIR) $(TARGET_DIR)
+	bash scripts/local-config.sh $(SVEN_DIR) $(BRAIN_DIR)
 
 ## lock - pin Cargo.lock to the HEADs of SVEN_DIR and BRAIN_DIR (push those commits before sharing the lock)
 lock:

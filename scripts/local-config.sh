@@ -19,15 +19,15 @@
 # build fails offline, and it rewrites Cargo.lock to path sources. Neither
 # mechanism used here touches Cargo.lock.
 #
-# Usage: scripts/local-config.sh <sven-dir> <brain-dir> [<target-dir>]
+# Usage: scripts/local-config.sh <sven-dir> <brain-dir>
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 SVEN_URL=https://github.com/swedishembedded/sven
 BRAIN_URL=https://github.com/swedishembedded/brain
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-    echo "usage: $0 <sven-dir> <brain-dir> [<target-dir>]" >&2
+if [ "$#" -ne 2 ]; then
+    echo "usage: $0 <sven-dir> <brain-dir>" >&2
     exit 2
 fi
 
@@ -41,23 +41,12 @@ checkout() {
 sven=$(checkout "$1" crates/sdk/Cargo.toml)
 brain=$(checkout "$2" crates/sdk/Cargo.toml)
 
-target=""
-if [ "$#" -eq 3 ]; then
-    mkdir -p "$3"
-    target=$(cd "$3" && pwd)
-fi
-
 mkdir -p .cargo
 {
     echo "# Written by scripts/local-config.sh (make local). Gitignored: it names"
     echo "# this machine's checkouts. Delete it to build against the remotes."
     echo
     echo "paths = [\"$sven\", \"$brain\"]"
-    if [ -n "$target" ]; then
-        echo
-        echo "[build]"
-        echo "target-dir = \"$target\""
-    fi
     echo
     echo "[source.sven-remote]"
     echo "git = \"$SVEN_URL\""
@@ -77,5 +66,4 @@ mkdir -p .cargo
 echo "local-config: wrote .cargo/config.toml"
 echo "  sven:  $sven"
 echo "  brain: $brain"
-[ -n "$target" ] && echo "  target-dir: $target"
 exit 0

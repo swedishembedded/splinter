@@ -136,7 +136,7 @@ Each is enforced by a gate in `make check` and at commit where it can be:
 
 ```bash
 make hooks/install   # once per clone: pre-commit, commit-msg and pre-push hooks
-make local           # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR, TARGET_DIR)
+make local           # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR)
 make lock            # pin Cargo.lock to those checkouts' HEADs
 make build test      # release profile throughout
 make check           # every gate: hygiene, headers, scope, layering, env reads, perf numbers,
