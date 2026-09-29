@@ -316,4 +316,25 @@ mod tests {
         assert!(parse_answer("The answer is 168 MHz.").is_err());
         assert!(parse_answer("{\"result\": \"168 MHz\"}").is_err());
     }
+
+    /// An explore-produced record is exactly what the trainer's dataset reader
+    /// parses,
+    /// and the assistant side teaches the shape `ask` parses: the answer
+    /// wrapped as one {"answer": ...} object. Training on bare answers
+    /// makes a fine-tuned model drop the wrapper and every strict parse
+    /// then fails on the model's own (correct) reply.
+    #[test]
+    fn an_explore_record_is_valid_pool_input() {
+        let record = training_record("explore-test", "What is the max?", "42 Mbit/s");
+        assert_eq!(
+            record["messages"][0],
+            serde_json::json!({"role": "user", "content": "What is the max?", "train": false})
+        );
+        assert_eq!(
+            record["messages"][1],
+            serde_json::json!({"role": "assistant", "content": r#"{"answer":"42 Mbit/s"}"#, "train": true})
+        );
+        assert_eq!(record["metadata"]["run_id"], "explore-test");
+        assert_eq!(record["metadata"]["verified_by"], serde_json::json!([]));
+    }
 }

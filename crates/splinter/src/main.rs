@@ -25,6 +25,7 @@ mod learn;
 mod train;
 
 use splinter_agent::{outcome, runner, AttemptOptions};
+use splinter_knowledge as explore;
 use splinter_policy::{LocalWeights, ModelSelection, RemoteModel};
 use splinter_store::StateRoot;
 use std::path::PathBuf;
@@ -190,7 +191,6 @@ struct Flags {
     scope_negatives: Vec<String>,
 }
 
-pub(crate) mod explore;
 const DEFAULT_TRAIN_STEPS: u32 = 40;
 const DEFAULT_LORA_RANK: u32 = 8;
 const DEFAULT_LORA_ALPHA: f32 = 16.0;

@@ -184,7 +184,7 @@ pub(crate) struct FactsOptions {
     pub holdout_one_in: usize,
     pub chunk_lines: Option<usize>,
     /// Device identifiers outside the document's scope; see
-    /// [`crate::explore::ExploreOptions::scope_negatives`].
+    /// [`splinter_knowledge::ExploreOptions::scope_negatives`].
     pub scope_negatives: Vec<String>,
     pub steps: u32,
     pub rank: u32,
@@ -221,9 +221,9 @@ pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<Fac
         let file = options.file.clone().ok_or_else(|| {
             anyhow::anyhow!("facts needs --file FILE (or --out naming an existing dataset)")
         })?;
-        let summary = crate::explore::run(
+        let summary = splinter_knowledge::run(
             root,
-            crate::explore::ExploreOptions {
+            splinter_knowledge::ExploreOptions {
                 file,
                 out: dataset.clone(),
                 chunk_lines: options.chunk_lines,
