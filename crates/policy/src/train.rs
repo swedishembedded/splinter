@@ -53,8 +53,8 @@ pub struct HeldOutScore {
     /// better. NaN when every held-out record was skipped.
     pub loss: f32,
     /// Fraction of supervised positions, 0.0-1.0, where the greedy argmax
-    /// matched the true next token.
-    pub token_accuracy: f64,
+    /// matched the true next token; `None` when no position was scored.
+    pub token_accuracy: Option<f64>,
     /// Supervised token positions the two numbers above were computed over.
     pub positions: usize,
 }
