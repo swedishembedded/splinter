@@ -36,14 +36,23 @@ pub struct Family {
 /// Why a family did not load.
 #[derive(Debug)]
 pub enum FamilyError {
+    /// `family.toml` could not be read.
     Read {
+        /// The manifest path that was tried.
         path: PathBuf,
+        /// The underlying I/O error.
         source: std::io::Error,
     },
+    /// `family.toml` is not valid TOML, or lacks a field the contract needs.
     Parse {
+        /// The manifest path.
         path: PathBuf,
+        /// The TOML deserialization error.
         source: toml::de::Error,
     },
+    /// The manifest parsed but breaks the contract: an empty request, fewer
+    /// than two hidden-state choices, no predicates, or a predicate with no
+    /// justifying comment. The message names the manifest and the rule.
     Contract(String),
 }
 
@@ -173,21 +182,36 @@ impl Family {
         Ok(())
     }
 
+    /// The family's `id`, which training records carry as their family and
+    /// splits are keyed on.
     pub fn id(&self) -> &str {
         &self.id
     }
+
+    /// What the agent is asked for, verbatim from the manifest (trimmed).
     pub fn request(&self) -> &str {
         &self.request
     }
+
+    /// The completion predicates an episode is judged by.
     pub fn predicates(&self) -> &PredicateSet {
         &self.predicates
     }
+
+    /// The hidden-state values an episode may be started with (the
+    /// manifest's `variation.live_deployment`); at least two, so an agent
+    /// that never investigates cannot score like one that does.
     pub fn live_choices(&self) -> &[String] {
         &self.live_choices
     }
+
+    /// Tool calls an episode may make (`limits.tool_calls`).
     pub fn tool_call_budget(&self) -> u32 {
         self.tool_calls
     }
+
+    /// The family's directory: the one holding `family.toml`, the workspace
+    /// template, the world, the verifier and the witness.
     pub fn root(&self) -> &Path {
         &self.root
     }

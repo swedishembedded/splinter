@@ -24,10 +24,16 @@ use crate::Verdict;
 pub enum Outcome {
     /// The instance reached a verdict. `solved` is the verifier's, never the
     /// agent's own opinion of whether it finished.
-    Answered { solved: bool },
+    Answered {
+        /// Whether every declared predicate held.
+        solved: bool,
+    },
     /// The instance never reached a verdict. `reason` is kept so a run can be
     /// diagnosed without re-running it.
-    Errored { reason: String },
+    Errored {
+        /// Why no verdict was reached, e.g. the episode's error message.
+        reason: String,
+    },
 }
 
 impl Outcome {
@@ -73,16 +79,21 @@ impl Outcome {
 /// The score of one arm: one model, one configuration, one set of instances.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArmScore {
+    /// The arm's name in the report, e.g. `baseline`.
     pub label: String,
     /// The model this arm actually ran against, recorded so a number can never
     /// be attributed to the wrong weights. See [`crate::ServedModel`].
     pub model: String,
+    /// Instances whose verdict was solved; the numerator of [`Self::rate`].
     pub solved: usize,
+    /// Instances that reached a verdict, solved or not; the denominator.
     pub answered: usize,
+    /// Instances that never reached a verdict, excluded from both.
     pub errored: usize,
 }
 
 impl ArmScore {
+    /// An empty score for the arm `label` measuring `model`.
     pub fn new(label: impl Into<String>, model: impl Into<String>) -> ArmScore {
         ArmScore {
             label: label.into(),
@@ -91,6 +102,7 @@ impl ArmScore {
         }
     }
 
+    /// Counts one instance's outcome into the arm.
     pub fn record(&mut self, outcome: &Outcome) {
         match outcome {
             Outcome::Answered { solved } => {

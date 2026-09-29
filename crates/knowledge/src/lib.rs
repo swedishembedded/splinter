@@ -12,6 +12,8 @@
 //! * [`negatives`] - out-of-scope variants trained toward an abstention.
 //! * [`explore`] - the whole run, traced like an agent attempt.
 
+#![warn(missing_docs)]
+
 pub mod explore;
 pub mod extract;
 pub mod gates;

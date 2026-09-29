@@ -16,14 +16,19 @@
 /// One UTC instant, broken into the parts both consumers need.
 #[derive(Clone, Copy, Debug)]
 pub struct Stamp {
+    /// Proleptic Gregorian year, e.g. `2026`.
     pub year: i64,
     /// 1-12.
     pub month: i64,
     /// 1-31.
     pub day: i64,
+    /// Hour of the UTC day, 0-23.
     pub hour: i64,
+    /// Minute of the hour, 0-59.
     pub min: i64,
+    /// Second of the minute, 0-59 (leap seconds are not represented).
     pub sec: i64,
+    /// Milliseconds into the second, 0-999.
     pub millis: u32,
 }
 

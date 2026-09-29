@@ -16,6 +16,8 @@
 //! * [`facts`] - a document learned end to end: explore, split, train,
 //!   score.
 
+#![warn(missing_docs)]
+
 pub mod ask;
 pub mod attempt;
 pub mod config;

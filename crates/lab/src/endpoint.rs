@@ -49,7 +49,12 @@ pub enum NoAdapterPath {
     /// A watcher is running, but for a different model than the one about to
     /// be measured. This is the trap that produces a convincing null result:
     /// both the watched model and the requested one answer normally.
-    WatchingAnotherModel { watching: String, requested: String },
+    WatchingAnotherModel {
+        /// The model id the server's watcher line names in parentheses.
+        watching: String,
+        /// The API model id the arm was about to measure.
+        requested: String,
+    },
 }
 
 impl fmt::Display for NoAdapterPath {

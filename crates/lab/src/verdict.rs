@@ -51,6 +51,7 @@ impl PredicateSet {
         Ok(PredicateSet { names })
     }
 
+    /// The declared predicate names, in declaration order.
     pub fn names(&self) -> &[String] {
         &self.names
     }
@@ -88,6 +89,8 @@ impl PredicateSet {
 /// The verifier did not produce a value for every declared predicate.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unevaluated {
+    /// Declared predicates the verifier's output had no value for, in
+    /// declaration order.
     pub missing: Vec<String>,
 }
 

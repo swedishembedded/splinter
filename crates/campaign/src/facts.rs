@@ -29,7 +29,10 @@ use splinter_store::{write_atomic, StateRoot};
 /// One fact: the question and its reference answer.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Fact {
+    /// The question, as the record's user message carries it.
     pub question: String,
+    /// The bare reference answer, with any `{"answer": ...}` wrapper
+    /// removed.
     pub answer: String,
 }
 
@@ -37,7 +40,9 @@ pub struct Fact {
 /// wrapper, both evaluation sets carry the bare answer.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Split {
+    /// Facts trained on, in input order; also the recall evaluation set.
     pub train: Vec<Fact>,
+    /// Held-out facts, in input order: the generalization evaluation set.
     pub eval: Vec<Fact>,
 }
 
@@ -72,15 +77,28 @@ pub fn split(facts: &[Fact], one_in: usize) -> anyhow::Result<Split> {
 /// What one `facts` pipeline produced, for the summary line and the report.
 #[derive(Debug)]
 pub struct FactsReport {
+    /// Run id of the exploration that extracted the facts; empty when an
+    /// existing dataset was reused and nothing was explored.
     pub explore_run: String,
+    /// Facts in the dataset, before the split.
     pub facts: usize,
+    /// Facts in the training half.
     pub train_records: usize,
+    /// Facts held out of training.
     pub eval_records: usize,
+    /// Id of the training attempt, naming its directory `train/<id>`, which
+    /// holds the adapter and `decision.json`.
     pub train_id: String,
+    /// Whether the held-out gate promoted the new adapter. When it did not,
+    /// both scores below are of the base model alone.
     pub promoted: bool,
+    /// Trained questions answered correctly: what the model retained.
     pub recall_correct: usize,
+    /// Trained questions scored.
     pub recall_total: usize,
+    /// Held-out questions answered correctly: what generalized.
     pub holdout_correct: usize,
+    /// Held-out questions scored.
     pub holdout_total: usize,
 }
 
@@ -187,12 +205,17 @@ pub struct FactsOptions {
     pub work_dir: std::path::PathBuf,
     /// Every Nth record is held out of training for evaluation.
     pub holdout_one_in: usize,
+    /// Section size cap in lines for exploration; see
+    /// [`splinter_knowledge::ExploreOptions::chunk_lines`].
     pub chunk_lines: Option<usize>,
     /// Device identifiers outside the document's scope; see
     /// [`splinter_knowledge::ExploreOptions::scope_negatives`].
     pub scope_negatives: Vec<String>,
+    /// Training steps for the adapter.
     pub steps: u32,
+    /// LoRA rank of the adapter.
     pub rank: u32,
+    /// LoRA alpha of the adapter; the update is scaled by `alpha / rank`.
     pub alpha: f32,
     /// The model that extracts the facts - local or remote.
     pub extractor: ModelSelection,

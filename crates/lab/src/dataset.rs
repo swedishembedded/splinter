@@ -57,10 +57,17 @@ pub enum Provenance {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Excluded {
     /// The verifier did not accept the work.
-    NotSolved { unmet: Vec<String> },
+    NotSolved {
+        /// The declared predicates that did not hold.
+        unmet: Vec<String>,
+    },
     /// The transcript contains a message this harness could not represent, so
     /// any example drawn from it would be missing context the model saw.
-    OpaqueTurn { role: String },
+    OpaqueTurn {
+        /// Role of the message that could not be represented; `(none)` when
+        /// a captured request message carried no role at all.
+        role: String,
+    },
     /// Nothing in the episode would be supervised.
     NothingToLearn,
 }
@@ -121,12 +128,21 @@ pub struct WireFunction {
 /// One packed conversation, ready to serialise as a JSONL line.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Record {
+    /// The conversation in order; only assistant messages carry
+    /// `train: true`.
     pub messages: Vec<WireMessage>,
+    /// Tool schemas exactly as the captured request sent them, so the chat
+    /// template renders the same tools preamble at training time as at
+    /// inference. Empty for a record derived from stored history, which
+    /// does not keep them.
     #[serde(default)]
     pub tools: Vec<serde_json::Value>,
+    /// How the record was produced; never rendered into the prompt.
     pub metadata: RecordMetadata,
 }
 
+/// Where a record came from: the family it belongs to, who produced the
+/// trajectory, and what was hidden while it ran.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordMetadata {
     /// The task family. Splits are keyed on this, never on the episode: two
@@ -134,6 +150,8 @@ pub struct RecordMetadata {
     /// shape, so splitting by episode leaks near-duplicate context across
     /// train and test and reports memorisation as generalisation.
     pub family: String,
+    /// Who produced the trajectory, so on-policy rollouts stay separable
+    /// from teacher and scripted demonstrations.
     pub provenance: Provenance,
     /// What was hidden for this episode. Recorded after the fact, for
     /// auditing the mix - never shown to a model.

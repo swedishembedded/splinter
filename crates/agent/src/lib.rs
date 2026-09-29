@@ -16,6 +16,8 @@
 //! state root, so a run is reviewable - and resumable - after the process
 //! that wrote it is gone.
 
+#![warn(missing_docs)]
+
 pub mod budget;
 pub mod events;
 pub mod outcome;

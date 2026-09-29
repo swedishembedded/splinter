@@ -36,8 +36,9 @@ pub struct TrainOptions {
     /// Training steps (small by default: the loop trains on its own
     /// verified experience, a few samples at a time).
     pub steps: u32,
-    /// LoRA rank / alpha for the adapter.
+    /// LoRA rank of the adapter.
     pub rank: u32,
+    /// LoRA alpha of the adapter; the update is scaled by `alpha / rank`.
     pub alpha: f32,
 }
 

@@ -57,9 +57,16 @@ pub struct ExploreOptions {
 /// What one exploration produced, for the CLI's summary line.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExploreSummary {
+    /// Id of the exploration's run (`explore-...`), naming its directory
+    /// under `runs/` and stamped on every record it wrote.
     pub run_id: String,
+    /// Sections the document was split into, after the chunk cap.
     pub sections: usize,
+    /// Training records written to the output file: accepted facts plus
+    /// the scope negatives derived from them.
     pub facts: usize,
+    /// Sections that yielded nothing because the completion failed or its
+    /// reply did not parse strictly.
     pub parse_failures: usize,
     /// Questions the anchor gate refused: the generator produced them
     /// without the device identifier the title carries.
@@ -69,6 +76,13 @@ pub struct ExploreSummary {
     pub untraceable: usize,
 }
 
+/// Explores `options.file` section by section with `options.model`, writes
+/// the accepted facts to `options.out` as training records, and records the
+/// exploration as its own run (manifest, trace, outcome) under `root`.
+/// A section whose completion fails or whose reply does not parse is
+/// counted in the summary, not an error; errors are failures of the run
+/// itself - an unreadable or sectionless document, a model that does not
+/// load, a state write that fails.
 pub fn run(root: &StateRoot, options: ExploreOptions) -> anyhow::Result<ExploreSummary> {
     let text = std::fs::read_to_string(&options.file)
         .with_context(|| format!("reading {}", options.file.display()))?;

@@ -34,10 +34,17 @@ pub struct Episode {
 /// Why an episode could not be set up or run.
 #[derive(Debug)]
 pub enum EpisodeError {
+    /// A filesystem or process operation of the harness itself failed.
     Io {
+        /// The step that failed, e.g. `starting the world`.
         what: String,
+        /// The underlying I/O error.
         source: std::io::Error,
     },
+    /// One of the family's own programs misbehaved: the world did not come
+    /// up, or the baseline capture, verifier or witness exited non-zero or
+    /// printed output that did not parse. Carries its stderr or the parse
+    /// error.
     World(String),
 }
 
@@ -145,6 +152,8 @@ impl Episode {
         &self.hidden_state
     }
 
+    /// The episode's own directory: the workspace, the world's socket and
+    /// the verifier's baseline all live under it.
     pub fn dir(&self) -> &Path {
         &self.dir
     }

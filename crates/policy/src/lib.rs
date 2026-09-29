@@ -14,6 +14,8 @@
 //! brain's public SDK covers chat inference and fine-tuning, this crate is
 //! the one place that changes.
 
+#![warn(missing_docs)]
+
 pub mod complete;
 pub mod local;
 pub mod selection;

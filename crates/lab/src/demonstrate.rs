@@ -35,18 +35,29 @@ use tokio::sync::Mutex;
 #[derive(Clone, Debug)]
 pub enum Step {
     /// Call a tool. `arguments` is JSON text, as a model would emit it.
-    Call { name: String, arguments: String },
+    Call {
+        /// Name of the tool to call, as the agent's tool schema names it.
+        name: String,
+        /// The call's arguments as JSON text, sent through unparsed.
+        arguments: String,
+    },
     /// Finish with an answer.
-    Say { text: String },
+    Say {
+        /// The final reply, streamed back as the assistant's content.
+        text: String,
+    },
 }
 
 impl Step {
+    /// A [`Step::Call`] of tool `name` with JSON `arguments`.
     pub fn call(name: &str, arguments: &str) -> Step {
         Step::Call {
             name: name.to_string(),
             arguments: arguments.to_string(),
         }
     }
+
+    /// A [`Step::Say`] that ends the turn with `text`.
     pub fn say(text: &str) -> Step {
         Step::Say {
             text: text.to_string(),
@@ -93,6 +104,8 @@ impl Demonstrator {
         Ok(Demonstrator { port, state })
     }
 
+    /// The OpenAI-compatible endpoint to point the agent's model
+    /// configuration at, `http://127.0.0.1:<port>/v1`.
     pub fn base_url(&self) -> String {
         format!("http://127.0.0.1:{}/v1", self.port)
     }

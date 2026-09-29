@@ -42,6 +42,8 @@ pub enum Status {
 }
 
 impl Status {
+    /// The status word as it is serialized and recorded in the run manifest,
+    /// e.g. `budget_exhausted`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -97,8 +99,12 @@ pub struct ChangedFile {
 /// reviewing side runs its own commands against the revision.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Check {
+    /// The shell command as configured, run with `sh -c` in the workspace.
     pub command: String,
+    /// The command's exit code; `-1` when it was ended by a signal and has
+    /// none.
     pub exit: i32,
+    /// Whether the check passed, which is exactly `exit == 0`.
     pub passed: bool,
     /// Reference to the artifact file holding the full output.
     pub output_ref: Option<String>,
@@ -107,8 +113,12 @@ pub struct Check {
 /// What the run observed about resources and spending.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Usage {
+    /// Tool calls the kernel started during the attempt.
     pub tool_calls: u64,
+    /// Tool calls that finished with an error; each one's first line is in
+    /// [`Outcome::tool_failures`].
     pub failed_tool_calls: u64,
+    /// Times the kernel compacted the conversation to fit the context.
     pub compactions: u64,
     /// Model input/output tokens, summed over the usage reports the kernel
     /// emitted. `input_tokens` is fresh-only - the providers report cached
@@ -117,35 +127,48 @@ pub struct Usage {
     /// counters; the trace carries every raw report, so the sums stay
     /// auditable.
     pub input_tokens: u64,
+    /// Model output tokens, summed the same way.
     pub output_tokens: u64,
     /// Tokens served from / written to the provider's prompt cache, summed
     /// like `input_tokens`.
     pub cache_read_tokens: u64,
+    /// Tokens written to the provider's prompt cache, summed the same way.
     pub cache_write_tokens: u64,
     /// USD cost where the provider reported one (OpenRouter does; a local
     /// serve does not). `null` means unmeasured, never free.
     pub cost_usd: Option<f64>,
+    /// Wall-clock seconds of this attempt, from the start of its turn until
+    /// its outcome is assembled, completion checks included; a resumed
+    /// attempt counts only itself.
     pub duration_secs: u64,
 }
 
 /// The structured handoff.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Outcome {
+    /// Schema version of `outcome.json`; [`Outcome::SCHEMA`] when written.
     pub schema: u32,
+    /// Id of the run this outcome belongs to, as `runs/<id>` names its
+    /// directory.
     pub run_id: String,
+    /// How the attempt ended, after its completion checks (see [`verdict`]).
     pub status: Status,
     /// The model's final reply, verbatim. Evidence for the reviewer, never a
     /// substitute for the evidence below.
     pub reply: Option<String>,
+    /// Files the attempt changed, on the basis `changed_files_basis` names.
     pub changed_files: Vec<ChangedFile>,
     /// `git` when the workspace is a repository and the diff is derivable;
     /// `tool_evidence` when the attempt is not a repository and only the
     /// kernel's file-mutation events speak.
     pub changed_files_basis: String,
+    /// The completion checks, in configured order. Empty when the turn did
+    /// not complete: checks run only after a completed turn.
     pub checks: Vec<Check>,
     /// Everything a failed tool call said (first line each), because "11
     /// tool calls and nothing changed" is not a diagnosis.
     pub tool_failures: Vec<String>,
+    /// Resources and spending this attempt observed.
     pub usage: Usage,
     /// What the run could not resolve on its own: completion checks that
     /// never ran, an interrupted turn, a tool the engine refused.
@@ -155,6 +178,7 @@ pub struct Outcome {
 }
 
 impl Outcome {
+    /// The `outcome.json` schema version this build writes.
     pub const SCHEMA: u32 = 1;
 
     /// Writes itself under the run directory, atomically.

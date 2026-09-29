@@ -35,9 +35,13 @@ pub struct FineTune<'a> {
     pub attempt_dir: &'a Path,
     /// Where the packed token dataset is written.
     pub prepared_dir: &'a Path,
+    /// Optimizer steps to train for; warmup is the first fifth of them and
+    /// the learning rate decays over all of them.
     pub steps: u32,
-    /// LoRA rank / alpha for the adapter.
+    /// LoRA rank of the adapter's low-rank update matrices.
     pub rank: u32,
+    /// LoRA alpha: the update is scaled by `alpha / rank` before it is added
+    /// to the base weights.
     pub alpha: f32,
 }
 
@@ -45,8 +49,13 @@ pub struct FineTune<'a> {
 /// supervised positions of the held-out records.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub struct HeldOutScore {
+    /// Mean per-token cross-entropy over the supervised positions; lower is
+    /// better. NaN when every held-out record was skipped.
     pub loss: f32,
+    /// Fraction of supervised positions, 0.0-1.0, where the greedy argmax
+    /// matched the true next token.
     pub token_accuracy: f64,
+    /// Supervised token positions the two numbers above were computed over.
     pub positions: usize,
 }
 

@@ -20,6 +20,8 @@ use splinter_policy::{complete_text, ModelSelection};
 /// What one ask needs.
 #[derive(Clone, Debug)]
 pub struct AskOptions {
+    /// The question, verbatim; it is wrapped in the prompt that demands the
+    /// `{"answer": string}` reply shape.
     pub question: String,
     /// The model asked - the same selection every stage makes.
     pub model: ModelSelection,

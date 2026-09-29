@@ -40,7 +40,12 @@ use sven_sdk::{config, ApprovalPolicy, Engine};
 /// Everything one attempt needs, as configured by the caller.
 #[derive(Clone, Debug)]
 pub struct AttemptOptions {
+    /// Directory the agent works in; it becomes the process working
+    /// directory for the attempt, and its git state is the changed-file
+    /// evidence when it is a repository.
     pub workspace: PathBuf,
+    /// The task in plain language, as the agent receives it. A resume wraps
+    /// it in a continuation prompt naming the tool calls already completed.
     pub task: String,
     /// Completion checks the attempt executes itself after the turn, as its
     /// own validation evidence. Repeatable.
@@ -48,7 +53,11 @@ pub struct AttemptOptions {
     /// The model the agent runs on: local weights served in-process by
     /// default, a model reached over an API when the caller opted in.
     pub model: ModelSelection,
+    /// Wall-clock seconds the turn may run before it is dropped and the
+    /// attempt ends as `timeout`.
     pub timeout_secs: u64,
+    /// Tool-call rounds the agent may make in the turn; `None` keeps sven's
+    /// configured default.
     pub max_tool_rounds: Option<u32>,
     /// Attempts the run may make, resumes included; recorded at `run` and
     /// enforced by `resume` from the manifest.

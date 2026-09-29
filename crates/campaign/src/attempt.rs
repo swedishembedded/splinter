@@ -33,11 +33,23 @@ pub struct AttemptRequest {
     pub task: Option<String>,
     /// Completion checks the attempt runs itself after the turn.
     pub checks: Vec<String>,
+    /// The model to serve, before defaults.
     pub model: ModelChoice,
+    /// Wall-clock seconds one attempt's turn may run. For a local model it
+    /// also raises sven's stream-silence watchdog to the same bound, since
+    /// a local prefill is silent for a long time before its first chunk.
     pub timeout_secs: u64,
+    /// Tool-call rounds per turn; `None` keeps sven's configured default.
     pub max_tool_rounds: Option<u32>,
+    /// Model output tokens one attempt may generate; `None` applies
+    /// [`DEFAULT_MAX_OUTPUT_TOKENS`].
     pub max_output_tokens: Option<u64>,
+    /// Billed USD one attempt may spend. Refused for a local model, which
+    /// is not billed; `None` applies [`DEFAULT_REMOTE_MAX_COST_USD`] to an
+    /// OpenRouter model and no cap to any other endpoint.
     pub max_cost_usd: Option<f64>,
+    /// Attempts the run may make, the first included; at least 1. Recorded
+    /// by a fresh run; a resume is held to the limit its run recorded.
     pub max_attempts: u32,
     /// Capture the exact model input at the wire.
     pub record_input: bool,

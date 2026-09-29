@@ -33,16 +33,30 @@ use crate::{write_atomic, StateRoot};
 pub struct RunManifest {
     /// Schema version, so an old state directory stays readable.
     pub schema: u32,
+    /// The run's id, which also names its directory, `runs/<run_id>`.
     pub run_id: String,
+    /// What the run works on, as a display path: the canonical workspace
+    /// directory for an agent attempt, the source document for an
+    /// exploration.
     pub workspace: String,
+    /// The task as given to the agent, verbatim; a resume reuses it.
     pub task: String,
     /// `pending` while the attempt runs, then the attempt's final status.
     pub status: String,
     /// A run may be resumed into further attempts; this is the latest.
     pub attempts: u32,
+    /// When the run was created, as a [`crate::clock::utc_now`] timestamp.
     pub started_ts: String,
+    /// When this manifest was last written, in the same format; it moves at
+    /// every status transition and every resume.
     pub updated_ts: String,
+    /// The identity of the model the run served from, as
+    /// `ModelSelection::identity` renders it: `brain/<org>/<model>[+<adapter>]`
+    /// for local weights, the `provider/model` spec for a remote model.
     pub model: String,
+    /// The endpoint a remote model was reached at, when one was configured.
+    /// `None` for a local model, and for a remote one on its provider's
+    /// default endpoint.
     pub base_url: Option<String>,
     /// The local adapter this run serves from, when one was configured -
     /// the path, not the display name, so a resume can restore the exact
@@ -53,14 +67,21 @@ pub struct RunManifest {
     pub limits: Limits,
 }
 
+/// The limits a run was configured with, recorded in its manifest so a
+/// resume enforces the same ones and `show` can say why a run stopped.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Limits {
+    /// Wall-clock seconds one attempt's turn may take before it ends as a
+    /// timeout. `0` in a manifest that recorded no limits (an exploration).
     pub timeout_secs: u64,
+    /// Tool-call rounds the agent may make in one turn; `None` leaves sven's
+    /// configured default in force.
     pub max_tool_rounds: Option<u32>,
     /// Attempts the run may make in total, the first included; each
     /// `resume` is one more. `None` is unlimited.
     pub max_attempts: Option<u32>,
+    /// Usage limits per attempt, stored flattened beside the fields above.
     #[serde(flatten)]
     pub budget: Budget,
 }

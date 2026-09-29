@@ -37,6 +37,7 @@ use std::process::Command;
 /// One action to perform, named the way the tool's own schema names it.
 #[derive(Clone, Debug)]
 pub struct Action {
+    /// The tool to call, e.g. `read_file` or `shell`.
     pub tool: String,
     /// The arguments as a JSON object; rendered to `key=value` pairs for the
     /// CLI and kept verbatim for the training record.
@@ -44,6 +45,7 @@ pub struct Action {
 }
 
 impl Action {
+    /// An action calling `tool` with the JSON object `arguments`.
     pub fn new(tool: &str, arguments: serde_json::Value) -> Action {
         Action {
             tool: tool.to_string(),
@@ -55,26 +57,36 @@ impl Action {
 /// What an action did.
 #[derive(Clone, Debug)]
 pub struct Performed {
+    /// The action as it was performed.
     pub action: Action,
     /// Exactly what the tool printed - the observation the model would see.
     pub observation: String,
+    /// Whether the tool reported an error. Always `false` from [`perform`],
+    /// which returns a failing action as [`PerformError::Refused`] instead.
     pub failed: bool,
 }
 
 /// Why a demonstration could not be performed.
 #[derive(Debug)]
 pub enum PerformError {
+    /// The `sven` binary could not be started.
     Spawn {
+        /// The tool the action named.
         tool: String,
+        /// The underlying spawn error.
         source: std::io::Error,
     },
     /// A tool reported an error. A demonstration whose own actions fail is not
     /// a demonstration, and continuing would build a record of doing the wrong
     /// thing and calling it correct.
     Refused {
+        /// The tool that refused.
         tool: String,
+        /// What it said: its stderr, or its stdout when stderr was empty.
         output: String,
     },
+    /// The action's arguments were not a JSON object, so they cannot be
+    /// rendered as the CLI's `key=value` pairs.
     Arguments(String),
 }
 

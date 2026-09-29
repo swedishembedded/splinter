@@ -56,6 +56,8 @@
 //! scrolled past in a log - so where it was possible to make the mistake
 //! unrepresentable instead, that is what these types do.
 
+#![warn(missing_docs)]
+
 pub mod answers;
 mod dataset;
 mod demonstrate;

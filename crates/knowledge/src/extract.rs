@@ -14,6 +14,7 @@ use anyhow::Context;
 /// One strict parse of a facts reply.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Facts {
+    /// `(question, answer)` pairs in reply order, before any dedup or gate.
     pub pairs: Vec<(String, String)>,
 }
 

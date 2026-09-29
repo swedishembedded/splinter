@@ -108,9 +108,12 @@ pub fn learn_run(root: &StateRoot, run_id: &str) -> anyhow::Result<Learned> {
     Ok(Learned::Appended)
 }
 
+/// What [`learn_run`] did with a run that was accepted as learning evidence.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Learned {
+    /// The run's record was appended to the experience pool.
     Appended,
+    /// The pool already held a record for this run id; nothing was written.
     AlreadyRecorded,
 }
 

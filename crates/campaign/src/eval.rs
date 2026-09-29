@@ -48,9 +48,13 @@ pub struct EvalOptions {
 /// One judged question.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Entry {
+    /// The question as the dataset's user message carries it.
     pub question: String,
+    /// The reference answer, the dataset's assistant message.
     pub expected: String,
+    /// The parsed answer string; empty on a parse failure.
     pub got: String,
+    /// Whether the judge accepted `got` against `expected`.
     pub correct: bool,
     /// Which comparison decided: the text way for numberless references,
     /// the numeric way when numbers disagreed, "parse_failure" when the
@@ -61,12 +65,21 @@ pub struct Entry {
 /// What one evaluation produced, for the CLI's summary line and the report.
 #[derive(Debug, serde::Serialize)]
 pub struct Report {
+    /// Records evaluated, after shuffling and `limit`.
     pub total: usize,
+    /// Records judged correct.
     pub correct: usize,
+    /// Records judged wrong, parse failures included.
     pub incorrect: usize,
+    /// Records whose completion failed or whose reply was not exactly one
+    /// `{"answer": string}` object; each is also counted in `incorrect`.
     pub parse_failures: usize,
+    /// `correct / total`, 0.0-1.0.
     pub accuracy: f64,
+    /// Every judged record, in evaluation order.
     pub entries: Vec<Entry>,
+    /// Identity of the model evaluated, as `ModelSelection::identity`
+    /// renders it.
     pub model: String,
 }
 

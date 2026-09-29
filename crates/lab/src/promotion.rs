@@ -8,14 +8,21 @@
 /// The held-out verdict for one training attempt.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Scores {
+    /// Held-out loss of the base model alone: mean per-token cross-entropy
+    /// over the supervised positions of the held-out records.
     pub base_loss: f32,
+    /// Held-out loss of the base plus the candidate adapter, on the same
+    /// records and measured the same way.
     pub tuned_loss: f32,
 }
 
 /// What the gate decided for one candidate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decision {
+    /// The candidate beat the base, and any matched champion; it may serve.
     Promoted,
+    /// The candidate did not earn adoption: no strict improvement, a
+    /// non-finite score, or it lost to a matched champion.
     Rejected,
 }
 

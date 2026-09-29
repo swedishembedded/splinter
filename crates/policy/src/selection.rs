@@ -22,7 +22,11 @@ use crate::local::{LocalQwen, LocalWeights};
 pub struct RemoteModel {
     /// `provider/model`, e.g. `openrouter/z-ai/glm-5.3-flash`.
     pub spec: String,
+    /// Endpoint override written into sven's model configuration; `None`
+    /// keeps the endpoint sven's configuration already has for the provider.
     pub base_url: Option<String>,
+    /// API key written into sven's model configuration; `None` keeps the key
+    /// sven's configuration already has.
     pub api_key: Option<String>,
 }
 
