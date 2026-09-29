@@ -22,6 +22,8 @@
 //! is unmatchable by construction). One pool of facts, three files.
 
 use anyhow::Context;
+use splinter_lab::promotion::Decision;
+use splinter_policy::{LocalWeights, ModelSelection};
 use splinter_store::{write_atomic, StateRoot};
 
 /// One fact: the question and its reference answer.
@@ -187,11 +189,12 @@ pub(crate) struct FactsOptions {
     pub steps: u32,
     pub rank: u32,
     pub alpha: f32,
-    /// Model selection, exactly as `explore` reads it.
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub local: Option<crate::provider::LocalWeights>,
+    /// The model that extracts the facts - local or remote.
+    pub extractor: ModelSelection,
+    /// The local model the facts are trained into and scored on. Scoring
+    /// always serves THIS model (plus the new adapter on promotion): the
+    /// numbers describe what was learned, whichever model extracted.
+    pub policy: LocalWeights,
 }
 
 /// One run of the whole pipeline. Stages reuse Splinter's own commands -
@@ -225,10 +228,7 @@ pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<Fac
                 out: dataset.clone(),
                 chunk_lines: options.chunk_lines,
                 scope_negatives: options.scope_negatives.clone(),
-                model: options.model.clone(),
-                base_url: options.base_url.clone(),
-                api_key: options.api_key.clone(),
-                local: options.local.clone(),
+                model: options.extractor.clone(),
             },
         )?;
         (summary.run_id.clone(), read_facts(&dataset)?)
@@ -253,11 +253,7 @@ pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<Fac
     // Stage 3: train, behind the same held-out gate `train` enforces. A
     // rejection is a finished pipeline with a negative result - the report
     // still lands, the adapter stays unserved, and the exit code says so.
-    let model_dir = options
-        .local
-        .as_ref()
-        .map(|w| w.base.clone())
-        .unwrap_or_else(default_model_dir);
+    let model_dir = options.policy.base.clone();
     let train_options = crate::train::TrainOptions {
         model_dir: model_dir.clone(),
         dataset: Some(train_path.clone()),
@@ -266,7 +262,7 @@ pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<Fac
         alpha: options.alpha,
     };
     let (decision, train_dir) = crate::train::run(root, &train_options)?;
-    let promoted = decision == crate::train::Decision::Promoted;
+    let promoted = decision == Decision::Promoted;
     eprintln!(
         "facts: train {} (decision record in {}/decision.json)",
         if promoted { "promoted" } else { "rejected" },
@@ -278,23 +274,16 @@ pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<Fac
     // adapter actually learned. A rejected candidate is scored base-only:
     // there is no adapter to serve, and scoring a phantom would fake a
     // result.
-    let serving = crate::provider::LocalWeights {
+    let serving = ModelSelection::Local(LocalWeights {
         base: model_dir,
         adapter: promoted.then(|| train_dir.join("adapter.safetensors")),
-        context_tokens: options
-            .local
-            .as_ref()
-            .map(|w| w.context_tokens)
-            .unwrap_or(16_384),
-    };
+        context_tokens: options.policy.context_tokens,
+    });
     let score = |name: &str, path: &std::path::Path| -> anyhow::Result<(usize, usize)> {
         let report = crate::eval::run(crate::eval::EvalOptions {
             dataset: path.to_path_buf(),
             out: work.join(format!("{name}-report.json")),
-            model: options.model.clone(),
-            base_url: options.base_url.clone(),
-            api_key: options.api_key.clone(),
-            local: Some(serving.clone()),
+            model: serving.clone(),
             shuffle: false,
             limit: None,
         })?;
@@ -335,17 +324,6 @@ pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<Fac
         &serde_json::to_string_pretty(&summary)?,
     )?;
     Ok(report)
-}
-
-/// Where the base checkpoint lives when the caller did not say - the same
-/// default every model-touching command reads.
-fn default_model_dir() -> std::path::PathBuf {
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() => {
-            std::path::PathBuf::from(home).join(".local/share/brain/models/Qwen/Qwen3-0.6B")
-        }
-        _ => std::path::PathBuf::from(".local/share/brain/models/Qwen/Qwen3-0.6B"),
-    }
 }
 
 #[cfg(test)]

@@ -39,6 +39,8 @@
 //! * [`Recorder`] - the exact request the agent sent, captured at the wire.
 //!   An agent's stored history holds neither the system prompt nor the tool
 //!   schemas, so it is not enough to train on.
+//! * [`promotion`] - the gate over a training attempt's held-out scores,
+//!   and the rule that decides which records are held out.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
 //!   supervising assistant turns and nothing else, and refusing a transcript
 //!   with a hole in it.
@@ -59,6 +61,7 @@ mod episode;
 mod family;
 mod model_id;
 mod perform;
+pub mod promotion;
 mod recorder;
 mod score;
 mod verdict;

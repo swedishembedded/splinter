@@ -27,6 +27,7 @@ use crate::events::{collect, Tally};
 use crate::outcome::{
     capture_changed_files, capture_tool_evidence, ChangedFile, Check, Outcome, Status,
 };
+use splinter_policy::{local_model_name, panic_message, LocalQwen, ModelSelection};
 use splinter_store::clock::utc_now;
 use splinter_store::runs::{Limits, RunManifest};
 use splinter_store::trace::Trace;
@@ -44,14 +45,9 @@ pub struct AttemptOptions {
     /// Completion checks the attempt executes itself after the turn, as its
     /// own validation evidence. Repeatable.
     pub checks: Vec<String>,
-    /// `"provider/model"` override; omitted leaves sven's configuration.
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    /// The local model to serve the agent from, in-process. `None` with no
-    /// `model` means the default local weights; local-first is the loop's
-    /// own default, and a remote provider is opted into with `--model`.
-    pub local: Option<crate::provider::LocalWeights>,
+    /// The model the agent runs on: local weights served in-process by
+    /// default, a model reached over an API when the caller opted in.
+    pub model: ModelSelection,
     pub timeout_secs: u64,
     pub max_tool_rounds: Option<u32>,
     /// Attempts the run may make, resumes included; recorded at `run` and
@@ -84,9 +80,9 @@ pub fn run(root: &StateRoot, options: AttemptOptions) -> anyhow::Result<(Outcome
         attempts: 1,
         started_ts: utc_now(),
         updated_ts: utc_now(),
-        model: model_identity(&options),
-        base_url: options.base_url.clone(),
-        local_adapter: options.local.as_ref().and_then(|w| w.adapter.clone()),
+        model: options.model.identity(),
+        base_url: remote_base_url(&options.model),
+        local_adapter: options.model.local().and_then(|w| w.adapter.clone()),
         limits: Limits {
             timeout_secs: options.timeout_secs,
             max_tool_rounds: options.max_tool_rounds,
@@ -163,7 +159,7 @@ pub fn resume(
     // that does know the adapter backfills it, so every later resume
     // inherits the configuration this attempt actually serves from.
     if manifest.local_adapter.is_none() {
-        manifest.local_adapter = options.local.as_ref().and_then(|w| w.adapter.clone());
+        manifest.local_adapter = options.model.local().and_then(|w| w.adapter.clone());
     }
     save_manifest(&dir, &manifest)?;
 
@@ -281,56 +277,11 @@ fn record_workspace_baseline(trace: &Trace, workspace: &std::path::Path) -> anyh
     trace.event("workspace_baseline", &mut payload).map(|_| ())
 }
 
-/// The name the local provider reports: the checkpoint's directory layout
-/// as an org/model pair (`.../models/Qwen/Qwen3-0.6B` -> `Qwen/Qwen3-0.6B`),
-/// which is exactly how the model store names what it holds.
-fn local_model_name(weights: &crate::provider::LocalWeights) -> String {
-    let model = weights
-        .base
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let org = weights
-        .base
-        .parent()
-        .and_then(|p| p.file_name())
-        .map(|n| n.to_string_lossy().into_owned());
-    match org {
-        Some(org) if !model.is_empty() => format!("{org}/{model}"),
-        _ => model,
-    }
-}
-
-/// [`local_model_name`] for callers outside the runner (explore/ask), which
-/// trace the same model identity a run would record.
-pub(crate) fn local_model_name_of(weights: &crate::provider::LocalWeights) -> String {
-    local_model_name(weights)
-}
-
-/// The model identity a manifest records: the remote spec when one was
-/// named, otherwise the local weights this attempt will actually serve from
-/// (`brain/<checkpoint-dir>`, plus the adapter when one rides along), so the
-/// manifest answers "which weights produced this" without reading the trace.
-fn model_identity(options: &AttemptOptions) -> String {
-    if let Some(spec) = &options.model {
-        return spec.clone();
-    }
-    match &options.local {
-        Some(weights) => {
-            let base = weights
-                .base
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| weights.base.display().to_string());
-            match &weights.adapter {
-                Some(adapter) => match adapter.file_stem() {
-                    Some(stem) => format!("brain/{base}+{}", stem.to_string_lossy()),
-                    None => format!("brain/{base}"),
-                },
-                None => format!("brain/{base}"),
-            }
-        }
-        None => "local/default".into(),
+/// The endpoint a remote model is reached at, as the manifest records it.
+fn remote_base_url(model: &ModelSelection) -> Option<String> {
+    match model {
+        ModelSelection::Remote(remote) => remote.base_url.clone(),
+        ModelSelection::Local(_) => None,
     }
 }
 
@@ -362,12 +313,8 @@ async fn drive(
     started: Instant,
 ) -> anyhow::Result<Outcome> {
     let mut settings = config::load(None)?;
-    if let Some(spec) = &options.model {
-        let (provider, name) = spec
-            .split_once('/')
-            .ok_or_else(|| anyhow::anyhow!("--model must be provider/model, got {spec:?}"))?;
-        settings.model.provider = provider.to_string();
-        settings.model.name = name.to_string();
+    if let ModelSelection::Remote(remote) = &options.model {
+        remote.apply_to(&mut settings)?;
     }
     if let Some(rounds) = options.max_tool_rounds {
         settings.agent.max_tool_rounds = rounds;
@@ -376,8 +323,7 @@ async fn drive(
     // Through the recorder when one is asked for, so the captured request is
     // the one the server really answered.
     let recorder = if options.record_input {
-        match options
-            .base_url
+        match remote_base_url(&options.model)
             .as_deref()
             .and_then(splinter_lab::upstream_of)
         {
@@ -402,14 +348,8 @@ async fn drive(
             }
         }
     } else {
-        if let Some(url) = &options.base_url {
-            settings.model.base_url = Some(url.clone());
-        }
         None
     };
-    if let Some(key) = &options.api_key {
-        settings.model.api_key = Some(key.clone());
-    }
 
     // The engine, with its model: the local one loaded in-process when this
     // attempt is a local one, else the provider the configuration names. The
@@ -422,20 +362,21 @@ async fn drive(
         // does (timeout, interrupt) the runner stops the in-flight local
         // generation through it, so the device is quiet before the process
         // exits.
-        let local: Option<Arc<crate::provider::LocalQwen>> = if let Some(weights) = &options.local {
+        let local: Option<Arc<LocalQwen>> = if let Some(weights) = options.model.local() {
             let t0 = std::time::Instant::now();
             // A device that cannot hold the requested context surfaces as a
             // wgpu error, which brain's backend reports by panicking. Load
             // under catch_unwind so that becomes this attempt's recorded,
             // non-crashing failure - the trace keeps its model_load_failed
             // event and the CLI exits with an error instead of a signal.
-            let load = || crate::provider::LocalQwen::load(weights, &local_model_name(weights));
+            let name = local_model_name(&weights.base);
+            let load = || LocalQwen::load(weights, &name);
             let provider = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(load)) {
                 Ok(Ok(provider)) => Ok(provider),
                 Ok(Err(e)) => Err(format!("{e:#}")),
                 Err(panic) => Err(format!(
                     "device panic during model load: {}",
-                    crate::provider::panic_message(&panic)
+                    panic_message(&panic)
                 )),
             }
             .map_err(|error| {
@@ -450,7 +391,7 @@ async fn drive(
             })?;
             let provider = Arc::new(provider);
             let mut note = serde_json::json!({
-                "model": local_model_name(weights),
+                "model": name,
                 "weights": weights.base.display().to_string(),
                 "adapter": weights.adapter.as_deref().map(|a| a.display().to_string()),
                 "context_tokens": weights.context_tokens,

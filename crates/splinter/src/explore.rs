@@ -23,13 +23,12 @@
 //! - Dedup by normalized question text: the same fact appearing in two
 //!   sections (or re-run over a grown document) trains once.
 
-use crate::provider::LocalWeights;
+use splinter_policy::{complete_text, ModelSelection};
 use splinter_store::{write_atomic, StateRoot};
 
 use anyhow::Context;
 use splinter_store::runs::{Limits, RunManifest};
 use splinter_store::trace::Trace;
-use sven_sdk::model::{CompletionRequest, Message, ModelProvider, ResponseEvent, Role};
 
 /// Everything one exploration needs, as configured by the caller.
 #[derive(Clone, Debug)]
@@ -41,13 +40,8 @@ pub struct ExploreOptions {
     /// Section size cap in lines; a section past it starts a new chunk at
     /// the next heading or paragraph boundary. `None` means uncapped.
     pub chunk_lines: Option<usize>,
-    /// Model selection, exactly as `run` reads it: local weights by
-    /// default, `--model` for remote, `--adapter` folds the promotion
-    /// pointer.
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub local: Option<LocalWeights>,
+    /// The model that extracts the facts.
+    pub model: ModelSelection,
     /// Device identifiers OUTSIDE the document's scope. Every other
     /// accepted fact also trains a negative variant with one of these
     /// substituted, answered by [`NOT_COVERED`], so the adapter learns
@@ -444,91 +438,6 @@ fn facts_prompt(section: &str) -> String {
     )
 }
 
-/// Collects a completion's streamed text into one string. Shared with `ask`.
-pub(crate) async fn complete_text(
-    provider: &dyn ModelProvider,
-    prompt: &str,
-) -> anyhow::Result<String> {
-    let req = CompletionRequest {
-        messages: vec![Message {
-            role: Role::User,
-            content: sven_sdk::model::MessageContent::Text(prompt.to_string()),
-        }],
-        // The OpenAI-compat driver parses every response as SSE, so a
-        // non-streaming request would return a plain JSON object the
-        // parser extracts nothing from - the stream would end empty and
-        // every strict parse would fail on it.
-        stream: true,
-        // A reasoning model spends its output budget on thinking before
-        // any answer text arrives; the drivers' 4096-token default ends
-        // such a turn at `MaxTokens` with zero visible text. One section
-        // asking for EVERY fact needs room for the reasoning AND the
-        // object, so the completion carries its own cap. The local
-        // provider ignores the override (its 512-token budget and
-        // context check are its own), so this stays remote-only.
-        max_output_tokens_override: Some(32_768),
-        // Observed drift: a full-sheet extraction prompt once drew a
-        // markdown answer despite the JSON-only instruction. Drivers that
-        // support it accept a JSON-object constraint on the wire; drivers
-        // that don't ignore the field, and the strict parse stays the gate.
-        response_format: Some(sven_sdk::model::ResponseFormat::JsonObject),
-        ..Default::default()
-    };
-    let mut stream = provider.complete(req).await?;
-    let mut text = String::new();
-    use futures::StreamExt;
-    while let Some(event) = stream.next().await {
-        match event? {
-            ResponseEvent::TextDelta(delta) => text.push_str(&delta),
-            // The budget ran out with no visible answer - likely a reasoning
-            // model that spent everything on thinking. An empty Ok here would
-            // surface downstream as a parse failure on a reply that never
-            // existed; name the real cause instead.
-            ResponseEvent::MaxTokens if text.is_empty() => {
-                anyhow::bail!(
-                    "completion hit the output-token limit before any answer text; \
-                    raise max_output_tokens_override or simplify the prompt"
-                );
-            }
-            ResponseEvent::Error(what) => {
-                anyhow::bail!("stream failed: {what}");
-            }
-            ResponseEvent::Done => break,
-            _ => {}
-        }
-    }
-    Ok(text)
-}
-
-pub(crate) fn provider_from_shared(
-    options: &ExploreOptions,
-) -> anyhow::Result<Box<dyn ModelProvider>> {
-    provider_from(options)
-}
-
-/// Builds the model provider exactly as `run` does: local in-process
-/// weights when no `--model` was given, else the configured remote driver.
-fn provider_from(options: &ExploreOptions) -> anyhow::Result<Box<dyn ModelProvider>> {
-    if let Some(spec) = &options.model {
-        let (provider, name) = spec
-            .split_once('/')
-            .ok_or_else(|| anyhow::anyhow!("--model must be provider/model, got {spec:?}"))?;
-        let mut settings = sven_sdk::config::load(None)?;
-        settings.model.provider = provider.to_string();
-        settings.model.name = name.to_string();
-        settings.model.base_url = options.base_url.clone();
-        settings.model.api_key = options.api_key.clone();
-        return sven_sdk::drivers::from_config(&settings.model);
-    }
-    let weights = options
-        .local
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("no local weights configured"))?;
-    let name = crate::runner::local_model_name_of(&weights);
-    let provider = crate::provider::LocalQwen::load(&weights, &name)?;
-    Ok(Box::new(provider))
-}
-
 /// Runs the whole exploration, tracing to its own run dir like `run` does:
 /// manifest, one event per section, and an outcome with the counts.
 /// The document's title line - the first level-1 heading - which names
@@ -563,15 +472,12 @@ pub(crate) fn run(root: &StateRoot, options: ExploreOptions) -> anyhow::Result<E
         attempts: 1,
         started_ts: splinter_store::clock::utc_now(),
         updated_ts: splinter_store::clock::utc_now(),
-        model: match &options.model {
-            Some(spec) => spec.clone(),
-            None => format!(
-                "brain/{}",
-                crate::runner::local_model_name_of(options.local.as_ref().expect("local weights"))
-            ),
+        model: options.model.identity(),
+        base_url: match &options.model {
+            ModelSelection::Remote(remote) => remote.base_url.clone(),
+            ModelSelection::Local(_) => None,
         },
-        base_url: options.base_url.clone(),
-        local_adapter: options.local.as_ref().and_then(|w| w.adapter.clone()),
+        local_adapter: options.model.local().and_then(|w| w.adapter.clone()),
         limits: Limits::default(),
     };
     write_atomic(
@@ -581,7 +487,7 @@ pub(crate) fn run(root: &StateRoot, options: ExploreOptions) -> anyhow::Result<E
 
     // One provider for the whole run: the load is the expensive step, and
     // every section wants the same model anyway.
-    let provider = provider_from(&options)?;
+    let provider = options.model.provider()?;
     let rt = tokio::runtime::Runtime::new()?;
 
     let mut records: Vec<serde_json::Value> = Vec::new();
@@ -985,7 +891,8 @@ mod tests {
         assert!(!answer_numbers_traceable("14 mm", sizes));
     }
 
-    /// An explore-produced record is exactly what learn::read_pool parses,
+    /// An explore-produced record is exactly what the trainer's dataset reader
+    /// parses,
     /// and the assistant side teaches the shape `ask` parses: the answer
     /// wrapped as one {"answer": ...} object. Training on bare answers
     /// makes a fine-tuned model drop the wrapper and every strict parse
@@ -1003,127 +910,5 @@ mod tests {
         );
         assert_eq!(record["metadata"]["run_id"], "explore-test");
         assert_eq!(record["metadata"]["verified_by"], serde_json::json!([]));
-    }
-
-    /// Captures the request a completion carries, so tests can assert on the
-    /// wire contract without a server.
-    struct CapturingProvider {
-        reply: &'static str,
-        seen: std::sync::Mutex<Vec<CompletionRequest>>,
-    }
-
-    /// Plays a fixed event script, for testing stream failure paths.
-    struct ScriptedProvider(Vec<anyhow::Result<ResponseEvent>>);
-
-    #[async_trait::async_trait]
-    impl ModelProvider for ScriptedProvider {
-        fn name(&self) -> &str {
-            "scripted"
-        }
-        fn model_name(&self) -> &str {
-            "script-1"
-        }
-        async fn complete(
-            &self,
-            _req: CompletionRequest,
-        ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-            let script = self
-                .0
-                .iter()
-                .map(|e| match e {
-                    Ok(ev) => Ok(ev.clone()),
-                    Err(e) => Err(anyhow::anyhow!("{e}")),
-                })
-                .collect::<Vec<_>>();
-            Ok(Box::pin(futures::stream::iter(script)))
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl ModelProvider for CapturingProvider {
-        fn name(&self) -> &str {
-            "capturing"
-        }
-        fn model_name(&self) -> &str {
-            "capture-1"
-        }
-        async fn complete(
-            &self,
-            req: CompletionRequest,
-        ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-            self.seen.lock().unwrap().push(req);
-            let reply = self.reply;
-            Ok(Box::pin(futures::stream::iter(vec![
-                Ok(ResponseEvent::TextDelta(reply.to_string())),
-                Ok(ResponseEvent::Done),
-            ])))
-        }
-    }
-
-    /// A reasoning model that burns its whole output budget on thinking ends
-    /// at MaxTokens with ZERO visible text. That must surface as an error
-    /// naming the budget, not Ok("") - an empty Ok sends the caller chasing
-    /// a parse failure on a reply that never existed.
-    #[tokio::test]
-    async fn max_tokens_with_no_text_is_an_error_not_an_empty_ok() {
-        let provider = ScriptedProvider(vec![
-            Ok(ResponseEvent::ThinkingDelta("pondering...".into())),
-            Ok(ResponseEvent::MaxTokens),
-            Ok(ResponseEvent::Done),
-        ]);
-        let err = complete_text(&provider, "extract facts").await.unwrap_err();
-        assert!(
-            err.to_string().contains("output-token limit"),
-            "error should name the output-token limit, got: {err:#}"
-        );
-    }
-
-    /// Text before the limit is not lost to the same error: it flows on to
-    /// the strict parser, which reports the raw reply as evidence.
-    #[tokio::test]
-    async fn max_tokens_with_text_keeps_the_text() {
-        let provider = ScriptedProvider(vec![
-            Ok(ResponseEvent::TextDelta(r#"{"answer": "168 MHz"}"#.into())),
-            Ok(ResponseEvent::MaxTokens),
-            Ok(ResponseEvent::Done),
-        ]);
-        let text = complete_text(&provider, "q").await.unwrap();
-        assert_eq!(text, r#"{"answer": "168 MHz"}"#);
-    }
-
-    /// A fatal mid-stream error is a hard failure of the completion, per the
-    /// ResponseEvent::Error contract - never a silently truncated Ok.
-    #[tokio::test]
-    async fn stream_error_events_fail_the_completion() {
-        let provider = ScriptedProvider(vec![
-            Ok(ResponseEvent::TextDelta("partial".into())),
-            Ok(ResponseEvent::Error("connection reset".into())),
-        ]);
-        let err = complete_text(&provider, "q").await.unwrap_err();
-        assert!(
-            err.to_string().contains("connection reset"),
-            "error should carry the stream failure, got: {err:#}"
-        );
-    }
-
-    /// Facts extraction runs against models that drift out of the requested
-    /// shape (a full-sheet prompt produced a markdown answer in one observed
-    /// run). Drivers that support it accept a JSON-object constraint, so the
-    /// completion must ask for one; the strict parser stays as the gate.
-    #[tokio::test]
-    async fn completions_constrain_the_reply_to_a_json_object() {
-        let provider = CapturingProvider {
-            reply: r#"{"facts": []}"#,
-            seen: std::sync::Mutex::new(Vec::new()),
-        };
-        let text = complete_text(&provider, "extract facts").await.unwrap();
-        assert_eq!(text, r#"{"facts": []}"#);
-        let seen = provider.seen.lock().unwrap();
-        assert_eq!(seen.len(), 1);
-        assert_eq!(
-            seen[0].response_format,
-            Some(sven_sdk::model::ResponseFormat::JsonObject)
-        );
-        assert!(seen[0].stream, "driver parses every reply as SSE");
     }
 }

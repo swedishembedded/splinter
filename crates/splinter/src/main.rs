@@ -25,11 +25,11 @@ mod events;
 mod facts;
 mod learn;
 mod outcome;
-mod provider;
 mod runner;
 mod train;
 
 use runner::AttemptOptions;
+use splinter_policy::{LocalWeights, ModelSelection, RemoteModel};
 use splinter_store::StateRoot;
 use std::path::PathBuf;
 pub(crate) mod ask;
@@ -342,6 +342,10 @@ fn parse(args: &[String]) -> anyhow::Result<Flags> {
     );
     anyhow::ensure!(flags.max_attempts >= 1, "--max-attempts must be at least 1");
     anyhow::ensure!(
+        flags.base_url.is_none() || flags.model.is_some(),
+        "--base-url names the endpoint of a remote model; give --model provider/name with it"
+    );
+    anyhow::ensure!(
         flags.adapter.is_none() || flags.model.is_none(),
         "--adapter applies to the local model; drop --model to run locally"
     );
@@ -421,11 +425,11 @@ fn train_cmd(args: &[String]) -> anyhow::Result<()> {
     };
     let (decision, dir) = train::run(&state_root(), &options)?;
     match decision {
-        train::Decision::Promoted => {
+        splinter_lab::promotion::Decision::Promoted => {
             println!("promoted: adapter and scores in {}", dir.display());
             Ok(())
         }
-        train::Decision::Rejected => {
+        splinter_lab::promotion::Decision::Rejected => {
             println!(
                 "rejected: held-out loss did not improve; scores in {}/decision.json",
                 dir.display()
@@ -451,10 +455,7 @@ fn explore_cmd(args: &[String]) -> anyhow::Result<()> {
         file,
         out,
         chunk_lines: flags.chunk_lines,
-        model: flags.model.clone(),
-        base_url: flags.base_url.clone(),
-        api_key: api_key_of(&flags),
-        local: local_weights_of(&flags),
+        model: model_of(&flags, local_weights(&flags)),
         scope_negatives: flags.scope_negatives.clone(),
     };
     let root = state_root();
@@ -488,10 +489,7 @@ fn ask_cmd(args: &[String]) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("ask needs --question TEXT"))?;
     let options = ask::AskOptions {
         question,
-        model: flags.model.clone(),
-        base_url: flags.base_url.clone(),
-        api_key: api_key_of(&flags),
-        local: query_weights_of(&flags, &state_root())?,
+        model: model_of(&flags, query_weights(&flags, &state_root())?),
     };
     match ask::run(options) {
         Ok(answer) => {
@@ -527,10 +525,7 @@ fn eval_facts_cmd(args: &[String]) -> anyhow::Result<()> {
     let options = eval::EvalOptions {
         dataset,
         out: out.clone(),
-        model: flags.model.clone(),
-        base_url: flags.base_url.clone(),
-        api_key: api_key_of(&flags),
-        local: query_weights_of(&flags, &state_root())?,
+        model: model_of(&flags, query_weights(&flags, &state_root())?),
         shuffle: flags.shuffle,
         limit: flags.limit,
     };
@@ -564,10 +559,11 @@ fn facts_cmd(args: &[String]) -> anyhow::Result<()> {
         steps: flags.steps,
         rank: flags.rank,
         alpha: flags.alpha,
-        model: flags.model.clone(),
-        base_url: flags.base_url.clone(),
-        api_key: api_key_of(&flags),
-        local: local_weights_of(&flags),
+        extractor: model_of(&flags, local_weights(&flags)),
+        policy: LocalWeights {
+            adapter: None,
+            ..local_weights(&flags)
+        },
     };
     let report = facts::run(&root, options)?;
     println!(
@@ -601,13 +597,10 @@ fn facts_cmd(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The local weights `run` would serve from, when no `--model` was given -
-/// the same local-first selection, including the `--adapter` promotion
-/// pointer fold.
-fn local_weights_of(flags: &Flags) -> Option<provider::LocalWeights> {
-    if flags.model.is_some() {
-        return None;
-    }
+/// The local weights a command serves from: `--local-weights`, else
+/// `$BRAIN_QWEN_WEIGHTS`, else brain's model-store default, with the
+/// `--adapter` the caller named.
+fn local_weights(flags: &Flags) -> LocalWeights {
     let base = flags
         .local_weights
         .clone()
@@ -618,11 +611,24 @@ fn local_weights_of(flags: &Flags) -> Option<provider::LocalWeights> {
                 .map(PathBuf::from)
         })
         .unwrap_or_else(default_local_weights);
-    Some(provider::LocalWeights {
+    LocalWeights {
         base,
         adapter: flags.adapter.clone(),
         context_tokens: flags.context_tokens,
-    })
+    }
+}
+
+/// The model a command runs on: the remote model `--model` names (only with
+/// `--allow-api-models`, which `parse` enforces), else `local`.
+fn model_of(flags: &Flags, local: LocalWeights) -> ModelSelection {
+    match &flags.model {
+        Some(spec) => ModelSelection::Remote(RemoteModel {
+            spec: spec.clone(),
+            base_url: flags.base_url.clone(),
+            api_key: api_key_of(flags),
+        }),
+        None => ModelSelection::Local(local),
+    }
 }
 
 /// The local weights a QUESTION command (`ask`, `eval-facts`) serves from:
@@ -630,14 +636,11 @@ fn local_weights_of(flags: &Flags) -> Option<provider::LocalWeights> {
 /// needs no flag at all. `--base` forces the untouched base model - the
 /// adapter-vs-base contrast - and refuses to combine with an explicit
 /// `--adapter`, which would leave the intent ambiguous. Delegating
-/// commands (`run`, `explore`) keep `local_weights_of`: a facts adapter's
+/// commands (`run`, `explore`) keep [`local_weights`]: a facts adapter's
 /// `{"answer": ...}` reply shape leaks into a coding loop and ends the
 /// run answer-less, so serving it there by default would trade a working
 /// agent for convenience.
-fn query_weights_of(
-    flags: &Flags,
-    root: &StateRoot,
-) -> anyhow::Result<Option<provider::LocalWeights>> {
+fn query_weights(flags: &Flags, root: &StateRoot) -> anyhow::Result<LocalWeights> {
     anyhow::ensure!(
         !(flags.force_base && flags.adapter.is_some()),
         "--base and --adapter are exclusive: one names the base model, the other an adapter"
@@ -646,13 +649,11 @@ fn query_weights_of(
         !(flags.force_base && flags.model.is_some()),
         "--base applies to the local model; drop --model to query locally"
     );
-    let mut weights = local_weights_of(flags);
-    if let Some(local) = weights.as_mut() {
-        if local.adapter.is_none() && !flags.force_base {
-            let pointer = root.adapter_pointer();
-            if pointer.is_file() {
-                local.adapter = Some(pointer);
-            }
+    let mut weights = local_weights(flags);
+    if weights.adapter.is_none() && !flags.force_base {
+        let pointer = root.adapter_pointer();
+        if pointer.is_file() {
+            weights.adapter = Some(pointer);
         }
     }
     Ok(weights)
@@ -735,43 +736,17 @@ fn options_from(flags: &Flags, root: &StateRoot, run_id: &str) -> anyhow::Result
         None => anyhow::bail!("run needs --task TEXT or --task-file FILE"),
     };
     // Local-first: with no --model the attempt serves the agent from local
-    // weights, in-process. An explicit --local-weights wins over the
-    // environment, which wins over the documented default path.
-    let local = if flags.model.is_some() {
-        None
-    } else {
-        let base = flags
-            .local_weights
-            .clone()
-            .or_else(|| {
-                std::env::var("BRAIN_QWEN_WEIGHTS")
-                    .ok()
-                    .filter(|p| !p.is_empty())
-                    .map(PathBuf::from)
-            })
-            .unwrap_or_else(default_local_weights);
-        // A resume keeps the adapter the run was recorded with unless the
-        // caller overrides it; see `adapter_for_resume`.
-        let adapter = if run_id.is_empty() {
-            flags.adapter.clone()
-        } else {
-            adapter_for_resume(flags, root, run_id)?
-        };
-        Some(provider::LocalWeights {
-            base,
-            adapter,
-            context_tokens: flags.context_tokens,
-        })
-    };
-    let api_key = api_key_of(flags);
+    // weights, in-process. A resume keeps the adapter the run was recorded
+    // with unless the caller overrides it; see `adapter_for_resume`.
+    let mut local = local_weights(flags);
+    if !run_id.is_empty() {
+        local.adapter = adapter_for_resume(flags, root, run_id)?;
+    }
     Ok(AttemptOptions {
         workspace,
         task,
         checks: flags.checks.clone(),
-        model: flags.model.clone(),
-        base_url: flags.base_url.clone(),
-        api_key,
-        local,
+        model: model_of(flags, local),
         timeout_secs: flags.timeout_secs,
         max_tool_rounds: flags.max_tool_rounds,
         max_attempts: flags.max_attempts,
@@ -1044,7 +1019,7 @@ mod tests {
 
         // No flags: the promotion pointer rides along.
         let defaulted = parse(&[]).unwrap();
-        let weights = query_weights_of(&defaulted, &root).unwrap().unwrap();
+        let weights = query_weights(&defaulted, &root).unwrap();
         assert_eq!(
             weights.adapter,
             Some(pointer.clone()),
@@ -1053,24 +1028,24 @@ mod tests {
 
         // --base: no adapter, even with a pointer in place.
         let base = parse(&["--base".into()]).unwrap();
-        let weights = query_weights_of(&base, &root).unwrap().unwrap();
+        let weights = query_weights(&base, &root).unwrap();
         assert_eq!(weights.adapter, None, "--base serves the base model");
 
         // --adapter is explicit and wins over the default.
         let explicit = parse(&["--adapter".into(), "/mine.safetensors".into()]).unwrap();
-        let weights = query_weights_of(&explicit, &root).unwrap().unwrap();
+        let weights = query_weights(&explicit, &root).unwrap();
         assert_eq!(
             weights.adapter,
             Some(std::path::PathBuf::from("/mine.safetensors"))
         );
 
         // The ambiguous combinations are refused, not resolved silently.
-        assert!(query_weights_of(
+        assert!(query_weights(
             &parse(&["--base".into(), "--adapter".into(), "/m.safetensors".into()]).unwrap(),
             &root
         )
         .is_err());
-        assert!(query_weights_of(
+        assert!(query_weights(
             &parse(&[
                 "--base".into(),
                 "--allow-api-models".into(),
@@ -1087,7 +1062,7 @@ mod tests {
         // answer-less.
         let run_flags = parse(&[]).unwrap();
         assert_eq!(
-            local_weights_of(&run_flags).unwrap().adapter,
+            local_weights(&run_flags).adapter,
             None,
             "run/explore never serve the promotion pointer by default"
         );

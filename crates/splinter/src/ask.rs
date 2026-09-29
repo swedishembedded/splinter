@@ -14,39 +14,22 @@
 //! cannot be parsed exits 2, because a script reading a broken answer as
 //! an answer is worse than reading nothing.
 
-use crate::explore::complete_text;
 use anyhow::Context;
+use splinter_policy::{complete_text, ModelSelection};
 
-/// What one ask needs - the same model selection `run` and `explore` use.
+/// What one ask needs.
 #[derive(Clone, Debug)]
 pub struct AskOptions {
     pub question: String,
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub local: Option<crate::provider::LocalWeights>,
-}
-
-/// Builds the provider exactly as `explore` does (same local-first rule).
-fn provider_from(options: &AskOptions) -> anyhow::Result<Box<dyn sven_sdk::model::ModelProvider>> {
-    let explore_options = crate::explore::ExploreOptions {
-        file: std::path::PathBuf::new(),
-        out: std::path::PathBuf::new(),
-        chunk_lines: None,
-        scope_negatives: Vec::new(),
-        model: options.model.clone(),
-        base_url: options.base_url.clone(),
-        api_key: options.api_key.clone(),
-        local: options.local.clone(),
-    };
-    crate::explore::provider_from_shared(&explore_options)
+    /// The model asked - the same selection every stage makes.
+    pub model: ModelSelection,
 }
 
 /// Asks one question and returns the parsed answer string. The caller
 /// prints it wrapped as `{"answer": ...}` so stdout stays strictly JSON.
 pub(crate) fn run(options: AskOptions) -> anyhow::Result<String> {
     let prompt = prompt(&options.question);
-    let provider = provider_from(&options)?;
+    let provider = options.model.provider()?;
     let rt = tokio::runtime::Runtime::new()?;
     let reply: String = rt
         .block_on(async { complete_text(provider.as_ref(), &prompt).await })

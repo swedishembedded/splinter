@@ -25,22 +25,23 @@
 //! `qwen3::eval::score_chat` uses, so a served adapter is numerically the
 //! model it was trained to be.
 
-use anyhow::Context;
-use capability::{CancelToken, Invocation, Outcome, Progress};
-use checkpoint::weightio::WeightReader;
-use data::qwen_tokenizer::QwenBpe;
-use data::rng::Rng;
-use data::tokenizer::Tokenizer;
-use qwen3::chat::{self, SeqState};
-use qwen3::lora;
-use qwen3::model::Qwen;
-use qwen3::sample::generate_kv_stream_cancellable;
+mod generate;
+mod request;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use sven_sdk::model::{
-    CompletionRequest, ContentPart, Message, MessageContent, ModelProvider, ResponseEvent, Role,
-    ToolSchema,
-};
+
+use anyhow::Context;
+use capability::CancelToken;
+use checkpoint::weightio::WeightReader;
+use data::qwen_tokenizer::QwenBpe;
+use data::tokenizer::Tokenizer;
+use qwen3::lora;
+use qwen3::model::Qwen;
+use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
+
+use generate::{events_from, generate_once, Generation};
+use request::invocation_from;
 
 /// Sampling defaults for agent work, applied per request. Low temperature:
 /// an agent is executing a procedure, not writing prose; the small models
@@ -52,7 +53,6 @@ use sven_sdk::model::{
 /// generation.
 const DEFAULT_MAX_NEW_TOKENS: usize = 512;
 const DEFAULT_TEMPERATURE: f64 = 0.2;
-const DEFAULT_TOP_K: i64 = 20;
 
 /// Prefill chunk size, in prompt tokens. Prefill runs in chunks of this many
 /// tokens so a cancellation lands within one chunk instead of after the
@@ -230,7 +230,7 @@ fn resolve_adapter_file(specified: &std::path::Path) -> anyhow::Result<std::path
 
 /// A directory pointing at a checkpoint resolves to the checkpoint inside
 /// it; a file passes through. Mirrors brain's own `resolve_base`.
-pub(crate) fn resolve_base(specified: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
+pub fn resolve_base(specified: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
     if specified.is_file() {
         return Ok(specified.to_path_buf());
     }
@@ -365,7 +365,7 @@ impl futures::Stream for Events {
 
 /// A panic payload as text, however it was constructed.
 #[must_use]
-pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+pub fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
     panic
         .downcast_ref::<String>()
         .cloned()
@@ -373,403 +373,9 @@ pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
         .unwrap_or_else(|| "no message".into())
 }
 
-/// Maps sven's request onto the invocation brain's chat parser reads. The
-/// message/tool shapes are the OpenAI wire shapes brain's
-/// `parse_chat_messages`/`parse_tools` accept - sven's types are serialized
-/// into those shapes rather than re-invented here.
-fn invocation_from(
-    req: &CompletionRequest,
-    max_new: usize,
-    temperature: f64,
-) -> anyhow::Result<Invocation> {
-    // The request's output budget is a contract: a caller asking for more
-    // than the default (explore wants one WHOLE JSON object per section)
-    // must get it. complete() clamps the ask to the KV cache first; what
-    // survives to here is what the engine will be told.
-    let max_new = req
-        .max_output_tokens_override
-        .map_or(max_new, |n| n as usize);
-    let messages: Vec<serde_json::Value> = req.messages.iter().map(message_json).collect();
-    let tools: Vec<serde_json::Value> = req.tools.iter().map(tool_json).collect();
-    let mut inv = Invocation::new();
-    if !messages.is_empty() {
-        inv = inv.set(
-            "messages",
-            serde_json::Value::String(
-                serde_json::to_string(&messages).context("serializing messages")?,
-            ),
-        );
-    }
-    if !tools.is_empty() {
-        inv = inv.set(
-            "tools",
-            serde_json::Value::String(serde_json::to_string(&tools).context("serializing tools")?),
-        );
-    }
-    inv = inv
-        .set("max_new", serde_json::json!(max_new))
-        .set("temp", serde_json::json!(temperature))
-        .set("top_k", serde_json::json!(DEFAULT_TOP_K))
-        // Agent work wants the answer, not a reasoning preamble it cannot
-        // use as tool input.
-        .set("enable_thinking", serde_json::json!(false));
-    Ok(inv)
-}
-
-/// One sven message as brain's chat parser reads it. A tool result rides in
-/// as `role: "tool"` with its call id; an assistant tool request rides out
-/// as `tool_calls`, so the template renders the exchange the model itself
-/// produced.
-#[must_use]
-fn message_json(message: &Message) -> serde_json::Value {
-    let role = match message.role {
-        Role::System => "system",
-        Role::User => "user",
-        Role::Assistant => "assistant",
-        Role::Tool => "tool",
-    };
-    let mut value = serde_json::json!({
-        "role": role,
-        "content": content_text(message),
-    });
-    match &message.content {
-        MessageContent::ToolCall {
-            tool_call_id,
-            function,
-        } => {
-            value["tool_calls"] = serde_json::json!([{
-                "id": tool_call_id,
-                "function": {"name": function.name, "arguments": function.arguments},
-            }]);
-            value["content"] = serde_json::Value::String(String::new());
-        }
-        MessageContent::ToolResult {
-            tool_call_id,
-            content,
-        } => {
-            value["tool_call_id"] = serde_json::json!(tool_call_id);
-            if let Some(text) = content.as_text() {
-                value["content"] = serde_json::json!(text);
-            }
-        }
-        _ => {}
-    }
-    value
-}
-
-/// The message's text content: plain text verbatim, mixed parts joined. A
-/// tool-result part array keeps its text rather than disappearing.
-#[must_use]
-fn content_text(message: &Message) -> String {
-    match &message.content {
-        MessageContent::Text(text) => text.clone(),
-        MessageContent::ContentParts(parts) => parts
-            .iter()
-            .filter_map(|p| match p {
-                ContentPart::Text { text } => Some(text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(""),
-        _ => String::new(),
-    }
-}
-
-/// One sven tool schema as an OpenAI-shaped function object, the shape
-/// brain's tool parser accepts.
-#[must_use]
-fn tool_json(tool: &ToolSchema) -> serde_json::Value {
-    serde_json::json!({
-        "type": "function",
-        "function": {
-            "name": tool.name,
-            "description": tool.description,
-            "parameters": tool.parameters,
-        },
-    })
-}
-
-/// Everything one generation reads beyond the locked model and the parsed
-/// request: the sampler's head, tokenizer and stop tokens, the inline
-/// context budget, the stream visible text goes out on, and the token an
-/// abandoned turn arms.
-struct Generation<'a> {
-    head: &'a [f32],
-    tok: &'a QwenBpe,
-    eos: &'a [u32],
-    context_tokens: u32,
-    tx: &'a tokio::sync::mpsc::Sender<anyhow::Result<ResponseEvent>>,
-    cancel: &'a CancelToken,
-}
-
-/// One generation, start to finish: render, decode, scan, finish. Runs on a
-/// dedicated OS thread with the model lock held, streaming visible text
-/// through the stream as the scanner produces it.
-///
-/// Cancellation is cooperative: the token is polled between prefill chunks
-/// (sized by [`PREFILL_CHUNK_TOKENS`]) and between decode steps, never
-/// inside one (brain's documented contract). A dropped receiver - the turn
-/// above this stream was abandoned - arms it through the failed send; the
-/// runner's `stop_generation` arms it directly. Either way an interrupted
-/// turn stops within one chunk of where it is, not after the whole prompt
-/// or the whole generation cap.
-fn generate_once(model: &Qwen, inv: &Invocation, gen: &Generation<'_>) -> anyhow::Result<Outcome> {
-    let mut req = chat::parse_request(gen.tok, inv).map_err(anyhow::Error::msg)?;
-    let context = usize::try_from(gen.context_tokens).unwrap_or(usize::MAX);
-    anyhow::ensure!(
-        req.ids.len() < context,
-        "prompt ({} tokens) fills the engine's context ({context}); nothing left to generate",
-        req.ids.len()
-    );
-    // A prompt leaves exactly so much room. A caller that asked for more
-    // than fits (explore's 32k object budget against a 16k cache) gets the
-    // remaining room, not an error: the budget was an upper bound, and the
-    // rendered prompt's size is only known here, after the chat-template
-    // render. An oversized PROMPT is the hard error above.
-    req.max_new = req.max_new.min(context - req.ids.len());
-    let mut rng = Rng::new(req.seed);
-    // Two numbers an operator needs to tell a slow device from a wedged
-    // generation: how much prompt there is, and how long the first token
-    // took to arrive after it.
-    let started = std::time::Instant::now();
-    eprintln!("serve: prompt {} tokens", req.ids.len());
-    let mut first_token: Option<std::time::Duration> = None;
-    // A clone of the token outlives the sequence: the emit path arms it when
-    // the consumer above this stream is gone.
-    let abandon = gen.cancel.clone();
-    let mut seq = SeqState::new(&req, gen.cancel.clone());
-    let mut ids_out: Vec<u32> = Vec::with_capacity(req.max_new);
-    // A failed send means the consumer is gone - the turn was abandoned
-    // above this stream - so arm the token; the next `advance` observes it
-    // and ends the sequence.
-    let emit = &mut |p: Progress| {
-        if let Some(text) = p.delta {
-            if first_token.is_none() {
-                first_token = Some(started.elapsed());
-                eprintln!(
-                    "serve: prompt {} tokens, first token after {:.1}s",
-                    req.ids.len(),
-                    first_token.unwrap().as_secs_f32()
-                );
-            }
-            if gen
-                .tx
-                .blocking_send(Ok(ResponseEvent::TextDelta(text)))
-                .is_err()
-            {
-                abandon.cancel();
-            }
-        }
-    };
-    let generated = generate_kv_stream_cancellable(
-        model,
-        &req.ids,
-        req.max_new,
-        req.temp,
-        req.top_k,
-        req.top_p,
-        gen.eos,
-        &mut rng,
-        gen.head,
-        gen.cancel,
-        PREFILL_CHUNK_TOKENS,
-        &mut |_i, t| {
-            ids_out.push(t);
-            // `advance` answers "should we stop?"; the callback answers
-            // "keep going?" - the same inversion the serving path applies.
-            !seq.advance(gen.tok, &ids_out, emit)
-        },
-    );
-    // `finish` flushes the scanner's held-back tail through the same emit,
-    // so the streamed deltas and the outcome's text stay identical.
-    Ok(seq.finish(gen.tok, &generated, emit))
-}
-
-/// The finished outcome's non-text events. Visible text was streamed while
-/// it was scanned; the tail carries the tool calls the scanner extracted -
-/// complete, post-finish - then usage, then done.
-fn events_from(outcome: Outcome) -> Vec<anyhow::Result<ResponseEvent>> {
-    let mut events = Vec::new();
-    if let Some(calls) = outcome
-        .outputs
-        .get("tool_calls")
-        .and_then(|v| v.as_str())
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-        .and_then(|v| v.as_array().cloned())
-    {
-        for (index, call) in calls.iter().enumerate() {
-            let arguments = match call.get("arguments") {
-                Some(serde_json::Value::String(s)) => s.clone(),
-                Some(other) => other.to_string(),
-                None => String::new(),
-            };
-            events.push(Ok(ResponseEvent::ToolCall {
-                index: index as u32,
-                id: call
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                name: call
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                arguments,
-            }));
-        }
-    }
-    events.push(Ok(ResponseEvent::Usage {
-        input_tokens: outcome
-            .outputs
-            .get("prompt_tokens")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u32,
-        output_tokens: outcome
-            .outputs
-            .get("completion_tokens")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u32,
-        cache_read_tokens: 0,
-        cache_write_tokens: 0,
-        cost_usd: None,
-    }));
-    events.push(Ok(ResponseEvent::Done));
-    events
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sven_sdk::model::{ContentPart, FunctionCall, ToolResultContent};
-
-    fn message(role: Role, content: MessageContent) -> Message {
-        Message { role, content }
-    }
-
-    /// A request's output budget is a contract with the caller: `explore`
-    /// asks for 32k because a section's facts reply must arrive as ONE
-    /// complete JSON object - a reply truncated at the provider's own
-    /// default mid-string is a parse failure and the section's facts are
-    /// lost (observed: "EOF while parsing a string"). The override must
-    /// reach the engine, clamped to what the KV cache can hold.
-    #[test]
-    fn a_requests_output_budget_reaches_the_invocation() {
-        let req = CompletionRequest {
-            messages: vec![message(Role::User, MessageContent::Text("q".into()))],
-            max_output_tokens_override: Some(32_768),
-            ..CompletionRequest::default()
-        };
-        let inv = invocation_from(&req, DEFAULT_MAX_NEW_TOKENS, 0.7).unwrap();
-        assert_eq!(
-            inv.params.get("max_new"),
-            Some(&serde_json::json!(32_768)),
-            "the request's output budget must override the provider default"
-        );
-        // No override: the provider default stands.
-        let plain = CompletionRequest {
-            messages: vec![message(Role::User, MessageContent::Text("q".into()))],
-            ..CompletionRequest::default()
-        };
-        let inv = invocation_from(&plain, DEFAULT_MAX_NEW_TOKENS, 0.7).unwrap();
-        assert_eq!(
-            inv.params.get("max_new"),
-            Some(&serde_json::json!(DEFAULT_MAX_NEW_TOKENS))
-        );
-    }
-
-    #[test]
-    fn sven_messages_map_onto_the_openai_shapes_brains_parser_reads() {
-        let user = message(Role::User, MessageContent::Text("do the thing".into()));
-        let assistant = message(
-            Role::Assistant,
-            MessageContent::ToolCall {
-                tool_call_id: "call_1".into(),
-                function: FunctionCall {
-                    name: "write".into(),
-                    arguments: r#"{"path":"a.txt"}"#.into(),
-                },
-            },
-        );
-        let tool = message(
-            Role::Tool,
-            MessageContent::ToolResult {
-                tool_call_id: "call_1".into(),
-                content: ToolResultContent::Text("wrote 5 bytes".into()),
-            },
-        );
-        let mapped: Vec<serde_json::Value> = [&user, &assistant, &tool]
-            .iter()
-            .map(|m| message_json(m))
-            .collect();
-        assert_eq!(mapped[0]["role"], "user");
-        assert_eq!(mapped[1]["tool_calls"][0]["function"]["name"], "write");
-        assert_eq!(mapped[2]["role"], "tool");
-        assert_eq!(mapped[2]["tool_call_id"], "call_1");
-        assert_eq!(mapped[2]["content"], "wrote 5 bytes");
-        // Round-trip through brain's own parser - the consumer this feeds.
-        let raw = serde_json::to_string(&mapped).unwrap();
-        let parsed = chat::parse_chat_messages(&raw, None).unwrap();
-        assert_eq!(parsed.len(), 3);
-        assert_eq!(parsed[1].tool_calls[0].name, "write");
-        assert_eq!(parsed[1].tool_calls[0].arguments, r#"{"path":"a.txt"}"#);
-        assert_eq!(parsed[2].role, data::qwen_chat::Role::Tool);
-        assert_eq!(parsed[2].tool_call_id.as_deref(), Some("call_1"));
-    }
-
-    #[test]
-    fn sven_tool_schemas_map_onto_openai_function_objects() {
-        let tool = ToolSchema {
-            name: "read".into(),
-            description: "read a file".into(),
-            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}}}),
-            is_mcp: false,
-        };
-        let mapped = tool_json(&tool);
-        // The tools param is the whole array, as the invocation builds it.
-        let raw = serde_json::to_string(&vec![mapped]).unwrap();
-        let parsed = chat::parse_tools(Some(&raw)).unwrap();
-        assert_eq!(parsed.len(), 1);
-        assert!(parsed[0].contains("read"));
-    }
-
-    #[test]
-    fn a_finished_outcomes_tail_is_tool_calls_usage_and_done() {
-        let outcome = Outcome::new()
-            .set("text", serde_json::json!("did it"))
-            .set("prompt_tokens", serde_json::json!(120))
-            .set("completion_tokens", serde_json::json!(34))
-            .set(
-                "tool_calls",
-                serde_json::json!(r#"[{"id":"c1","name":"write","arguments":"{}"}]"#),
-            );
-        let events = events_from(outcome);
-        // The visible text was streamed while it was scanned; the tail must
-        // not repeat it.
-        assert_eq!(events.len(), 3, "tool call, usage, done");
-        assert!(matches!(
-            &events[0],
-            Ok(ResponseEvent::ToolCall { name, arguments, .. })
-                if name == "write" && arguments == "{}"
-        ));
-        assert!(matches!(
-            &events[1],
-            Ok(ResponseEvent::Usage { input_tokens, output_tokens, cost_usd: None, .. })
-                if *input_tokens == 120 && *output_tokens == 34
-        ));
-        assert!(matches!(events[2], Ok(ResponseEvent::Done)));
-    }
-
-    #[test]
-    fn mixed_content_parts_keep_their_text() {
-        let message = message(
-            Role::User,
-            MessageContent::ContentParts(vec![ContentPart::Text {
-                text: "see ".into(),
-            }]),
-        );
-        assert_eq!(content_text(&message), "see ");
-    }
 
     #[test]
     fn a_directory_of_the_standard_layout_resolves_to_its_checkpoint() {

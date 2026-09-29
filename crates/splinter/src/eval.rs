@@ -36,11 +36,8 @@ pub struct EvalOptions {
     pub dataset: std::path::PathBuf,
     /// The report file, written atomically at the end.
     pub out: std::path::PathBuf,
-    /// Same model selection `run` and `ask` read.
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub local: Option<crate::provider::LocalWeights>,
+    /// The model evaluated.
+    pub model: splinter_policy::ModelSelection,
     /// Shuffle the records (with a time-seeded LCG, no dependency) before
     /// evaluating, so `--limit N` samples rather than truncates.
     pub shuffle: bool,
@@ -313,40 +310,17 @@ pub(crate) fn run(options: EvalOptions) -> anyhow::Result<Report> {
         anyhow::ensure!(!records.is_empty(), "--limit must be at least 1");
     }
 
-    let model = match &options.model {
-        Some(spec) => spec.clone(),
-        None => format!(
-            "brain/{}",
-            crate::runner::local_model_name_of(
-                options
-                    .local
-                    .as_ref()
-                    .ok_or_else(|| { anyhow::anyhow!("no local weights configured") })?
-            )
-        ),
-    };
-
+    let model = options.model.identity();
     // One provider for the whole evaluation: the load is the expensive
-    // step and every question wants the same model anyway - the same
-    // shape `explore` uses.
-    let explore_options = crate::explore::ExploreOptions {
-        file: std::path::PathBuf::new(),
-        out: std::path::PathBuf::new(),
-        chunk_lines: None,
-        scope_negatives: Vec::new(),
-        model: options.model.clone(),
-        base_url: options.base_url.clone(),
-        api_key: options.api_key.clone(),
-        local: options.local.clone(),
-    };
-    let provider = crate::explore::provider_from_shared(&explore_options)?;
+    // step and every question wants the same model anyway.
+    let provider = options.model.provider()?;
     let rt = tokio::runtime::Runtime::new()?;
 
     let mut entries = Vec::new();
     let mut parse_failures = 0usize;
     for record in &records {
         let result: anyhow::Result<String> = rt.block_on(async {
-            crate::explore::complete_text(provider.as_ref(), &crate::ask::prompt(&record.question))
+            splinter_policy::complete_text(provider.as_ref(), &crate::ask::prompt(&record.question))
                 .await
         });
         let (correct, basis, got) = match result

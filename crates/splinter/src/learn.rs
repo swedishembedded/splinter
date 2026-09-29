@@ -126,24 +126,6 @@ fn pool_has_run(pool: &std::path::Path, run_id: &str) -> anyhow::Result<bool> {
     Ok(false)
 }
 
-/// Read every record in the pool. A pool the trainer's own parser refuses is
-/// an error here, not a silent skip - `train` is about to pay for a device
-/// and a run, and the shape check is free now.
-pub(crate) fn read_pool(pool: &std::path::Path) -> anyhow::Result<Vec<data::chat::ChatSample>> {
-    let summary = brain::validate_chat_dataset(pool).map_err(|e| {
-        anyhow::anyhow!(
-            "dataset pool {} is not valid trainer input: {e}",
-            pool.display()
-        )
-    })?;
-    anyhow::ensure!(
-        summary.trained_messages > 0,
-        "dataset pool {} holds no supervised turns",
-        pool.display()
-    );
-    Ok(data::chat::ChatSample::from_jsonl(pool)?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,9 +261,10 @@ mod tests {
             learn_run(&root, "loop-learn-dup").unwrap(),
             Learned::AlreadyRecorded
         );
-        let summary = brain::validate_chat_dataset(root.experience_pool()).unwrap();
+        let records = splinter_policy::train::read_dataset(&root.experience_pool()).unwrap();
         assert_eq!(
-            summary.records, 1,
+            records.len(),
+            1,
             "a repeated learn must not weight the run twice"
         );
         let _ = std::fs::remove_dir_all(root.path());
@@ -306,7 +289,7 @@ mod tests {
         );
         learn_run(&root, "loop-learn-p1").unwrap();
         learn_run(&root, "loop-learn-p2").unwrap();
-        let samples = read_pool(&root.experience_pool()).unwrap();
+        let samples = splinter_policy::train::read_dataset(&root.experience_pool()).unwrap();
         assert_eq!(samples.len(), 2);
         assert!(samples[0].messages[1].train);
         let _ = std::fs::remove_dir_all(root.path());

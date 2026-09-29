@@ -3799,19 +3799,11 @@ name = "splinter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "brain",
- "brain-capability",
- "brain-checkpoint",
- "brain-data",
- "brain-gpu-core",
- "brain-model",
- "brain-qwen3",
- "futures",
  "serde",
  "serde_json",
  "sha2",
  "splinter-lab",
+ "splinter-policy",
  "splinter-store",
  "sven-sdk",
  "tokio",
@@ -3828,6 +3820,27 @@ dependencies = [
  "sven-sdk",
  "tokio",
  "toml",
+]
+
+[[package]]
+name = "splinter-policy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "brain",
+ "brain-capability",
+ "brain-checkpoint",
+ "brain-data",
+ "brain-gpu-core",
+ "brain-model",
+ "brain-qwen3",
+ "futures",
+ "serde",
+ "serde_json",
+ "splinter-lab",
+ "sven-sdk",
+ "tokio",
 ]
 
 [[package]]
