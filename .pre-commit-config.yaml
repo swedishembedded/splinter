@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The single definition of Splinter's git hooks. `make hooks/install` wires
+# all three stages; `make check` runs the same gates over the whole tree, so
+# a clone without hooks installed is still held to them.
+#
+# Every hook is local (`language: system`): installing or running them never
+# needs a network clone of a third-party hook repository.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  - repo: local
+    hooks:
+      - id: text-hygiene
+        name: text hygiene (ASCII punctuation, whitespace, line endings, parse)
+        entry: python3 scripts/hooks/text-hygiene.py --fix
+        language: system
+        types: [text]
+
+      - id: spdx-license-headers
+        name: SPDX license and copyright headers
+        entry: python3 scripts/spdx/check.py
+        language: system
+
+      - id: no-machine-paths
+        name: no absolute machine paths
+        entry: bash scripts/gates/check-no-machine-paths.sh
+        language: system
+        types: [text]
+
+      - id: no-large-or-binary-files
+        name: no weights, media or oversized files
+        entry: bash scripts/gates/check-large-files.sh
+        language: system
+
+      - id: no-doc-citations-in-code
+        name: no docs/ or .agents/ citations in code
+        entry: bash scripts/gates/check-no-doc-citations.sh
+        language: system
+
+      - id: manifests-parse
+        name: every Cargo manifest parses
+        entry: bash scripts/gates/check-manifests.sh
+        language: system
+        files: (^|/)Cargo\.toml$
+        pass_filenames: false
+
+      - id: strip-commit-trailers
+        name: strip Co-Authored-By/Claude-Session trailers
+        entry: python3 scripts/hooks/commit-msg
+        language: system
+        stages: [commit-msg]
+
+      - id: pre-push-backstop
+        name: trailers, doc citations and linear history
+        entry: python3 scripts/hooks/pre-push
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

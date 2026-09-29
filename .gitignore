@@ -1,0 +1,23 @@
+# Build output. A local build normally goes to a shared target directory
+# chosen by `make local`; this covers a build without one.
+/target/
+
+# Machine-specific cargo overrides written by `make local`: absolute paths to
+# local brain and sven checkouts. Never shared.
+/.cargo/config.toml
+
+# Local task tracking and scratch work.
+/.todo/
+/scratchpad/
+
+# Python bytecode from the hook and task scripts.
+__pycache__/
+*.pyc
+
+# Model artifacts never belong in the tree (scripts/gates/check-large-files.sh
+# refuses them even when forced past this list).
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.bin

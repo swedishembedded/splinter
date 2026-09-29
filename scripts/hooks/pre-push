@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+"""Git pre-push hook: the backstop for anything a commit-time hook missed.
+
+Refuses the push if (1) a commit about to be pushed still carries a
+Co-Authored-By:/Claude-Session: trailer, (2) the tree cites a docs/ or
+.agents/ path from code (a full-tree scan: the commit-time check is
+diff-scoped and a rebase does not reliably re-run it), or (3) HEAD's history
+contains a merge commit.
+
+It never rewrites history - which commits get reworded before they are
+shared is a human decision - it only reports and refuses.
+
+Git passes one "<local-ref> <local-sha> <remote-ref> <remote-sha>" line per
+ref on stdin. When run through the pre-commit framework that stdin is
+consumed before it reaches this script, so the fallback is every commit on
+HEAD not already on a remote-tracking ref.
+"""
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from trailers import has_trailer
+
+ZERO = "0" * 40
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def rev_list(*args):
+    out = subprocess.run(["git", "rev-list", *args], capture_output=True, text=True)
+    return [line for line in out.stdout.split("\n") if line] if out.returncode == 0 else []
+
+
+def commits_to_check(local_sha, remote_sha):
+    if local_sha == ZERO:
+        return []
+    if remote_sha == ZERO:
+        return rev_list(local_sha, "--not", "--remotes")
+    return rev_list(f"{remote_sha}..{local_sha}")
+
+
+def run_gate(*argv):
+    result = subprocess.run(["bash", *argv], capture_output=True, text=True, cwd=REPO_ROOT)
+    return None if result.returncode == 0 else (result.stdout + result.stderr)
+
+
+def main():
+    shas = set()
+    if not sys.stdin.isatty():
+        for line in sys.stdin:
+            parts = line.split()
+            if len(parts) == 4:
+                shas.update(commits_to_check(parts[1], parts[3]))
+    if not shas:
+        shas.update(rev_list("HEAD", "--not", "--remotes"))
+
+    failed = False
+    offenders = []
+    for sha in sorted(shas):
+        message = subprocess.run(["git", "cat-file", "-p", sha], capture_output=True).stdout
+        idx = message.find(b"\n\n")
+        if has_trailer(message[idx + 2:] if idx != -1 else b""):
+            offenders.append(sha)
+    if offenders:
+        failed = True
+        print("pre-push: these commits still carry a Co-Authored-By:/Claude-Session: trailer:", file=sys.stderr)
+        for sha in offenders:
+            subject = subprocess.run(
+                ["git", "log", "-1", "--format=%s", sha], capture_output=True, text=True
+            ).stdout.strip()
+            print(f"  {sha[:10]}  {subject}", file=sys.stderr)
+        print("Reword them (the commit-msg hook strips these on new commits), then push again.\n", file=sys.stderr)
+
+    for gate in (
+        ["scripts/gates/check-no-doc-citations.sh"],
+        ["scripts/gates/check-linear-history.sh", "HEAD"],
+    ):
+        report = run_gate(*gate)
+        if report is not None:
+            failed = True
+            print("pre-push: " + report, file=sys.stderr)
+
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
