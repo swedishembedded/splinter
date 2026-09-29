@@ -51,7 +51,7 @@ fmt:
 ## check - every gate over the whole tree (what the hooks check per commit)
 check: check/gates check/fmt check/clippy
 
-## check/gates - text hygiene, headers, paths, file sizes, citations, manifests, lock sources, history
+## check/gates - text hygiene, headers, paths, file sizes, citations, manifests, lock sources, repo scope, history
 check/gates:
 	python3 scripts/hooks/text-hygiene.py
 	python3 scripts/spdx/check.py $$(git ls-files)
@@ -60,6 +60,7 @@ check/gates:
 	bash scripts/gates/check-no-doc-citations.sh
 	bash scripts/gates/check-manifests.sh
 	bash scripts/gates/check-lock-sources.sh
+	bash scripts/gates/check-repo-scope.sh
 	bash scripts/gates/check-linear-history.sh
 
 ## check/fmt - formatting of Splinter's own sources

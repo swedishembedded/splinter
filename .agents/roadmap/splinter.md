@@ -65,7 +65,6 @@ the released adapter answers the same questions from plain `brain serve`.
 6. **Extract sven's learning code**: the learning half of `sven-memory`
    (fact ledger, ingestion, assimilation, rule expansion, the submission
    drain, the brain study submitter, the doctor), the `learn` CLI, the
-   learning configuration and its wiring in the runtime builder - and the
-   learning roadmaps in sven's `.agents/roadmap/` (`continuous-learning`,
-   `document-to-capability`, `closing-the-loop`, `dream-rsi`,
-   `student-mode`).
+   learning configuration and its wiring in the runtime builder. (The
+   learning design notes that lived in sven and brain are already in
+   `.agents/research/`.)

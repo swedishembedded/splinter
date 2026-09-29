@@ -41,6 +41,12 @@ repos:
         entry: bash scripts/gates/check-no-doc-citations.sh
         language: system
 
+      - id: repo-scope
+        name: names only the projects Splinter depends on
+        entry: bash scripts/gates/check-repo-scope.sh
+        language: system
+        types: [text]
+
       - id: manifests-parse
         name: every Cargo manifest parses
         entry: bash scripts/gates/check-manifests.sh

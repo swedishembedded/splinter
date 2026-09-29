@@ -7,6 +7,31 @@ acquires that capability, measures that it did, and releases a better
 version of its own model. The released model is then deployable without
 Splinter: on plain `brain serve`, or through sven talking to brain.
 
+## Repository scope
+
+**In scope** - the learning campaign and nothing it can get from its
+dependencies:
+- Turning a request ("learn this document", "learn this tool") into tasks,
+  sources and a campaign; the controller that runs it.
+- Knowledge intake: sources, sections, facts and probes, with provenance.
+- Deciding which experience qualifies as training material, and curating
+  versioned datasets from it.
+- Experiment design and measurement: verifiers the policy cannot reach,
+  held-out, retention and anchor suites, release gates.
+- Releases: immutable adapters with manifests, the default alias, lineage
+  from an answer back to its sources.
+- Owning the embedded runtime's resources (one resident base, phases).
+
+**Out of scope** - use the dependency, or fix it there:
+- Running agents, tools, sessions, delegation, trajectories: **sven**.
+- Model computation - inference, training algorithms, evaluation arithmetic,
+  checkpoints, adapter formats, serving: **brain**.
+- Anything that re-implements either of those locally.
+
+**Naming other projects.** Splinter depends on sven and brain, so it names
+them. It names no other project: describe an orchestrator or host
+generically. `make check` enforces this (`check-repo-scope`).
+
 ## Ownership - what belongs where
 
 | System | Owns | Must not own |
@@ -56,6 +81,7 @@ the decision about when and on what to use it.
 |---|---|
 | A non-obvious defect or a gate that lied, with the number that proved it | `.agents/knowledge/<NNN>-<slug>.md`, listed in `.agents/knowledge/index.md` |
 | Outstanding work | `.agents/roadmap/` |
+| Research and design notes that inform the roadmap | `.agents/research/` |
 | User-facing documentation | `README.md` |
 
 Code never cites a `docs/` or `.agents/` path (a gate enforces it): state the
