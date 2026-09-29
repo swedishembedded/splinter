@@ -41,15 +41,11 @@ the released adapter answers the same questions from plain `brain serve`.
 
 1. **Repository.** Done: hooks, gates, cargo dependencies on the sven and
    brain remotes with a pinned lock, and a gitignored local override.
-2. **Import the prototype.** Done in this repository (`crates/splinter`,
-   `crates/lab`, `experiments/tool-syntax`, `tasks/`). Remaining, in sven:
-   delete its brain-linked sample workspaces (`samples/agent`,
-   `samples/learning`) and their Makefile, gitignore and gate entries; add a
-   standalone task-and-verify sample with no brain dependency, so sven still
-   proves agent execution, verification and trajectory capture on its own;
-   record the two SDK findings its learning README carried (an SDK
-   application gets no tracing; the scripted-model stall) in sven's own
-   notes.
+2. **Import the prototype.** Done: `crates/splinter`, `crates/lab`,
+   `experiments/tool-syntax` and `tasks/` here, and sven no longer carries
+   them or any brain dependency. sven's own standalone task-and-verify
+   sample is tracked in sven's `sdk-framework` roadmap, because it needs
+   the facade's structured outcome and explicit toolsets first.
 3. **Intent front door.** A typed intent parse on the policy feeds a
    code-owned controller; ambiguity becomes a question, never a guess.
 4. **Continual policy.** Champion lineage, replay, the four-part release
