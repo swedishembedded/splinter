@@ -21,6 +21,17 @@ internal = []
 [crates.splinter-policy]
 internal = ["splinter-lab"]
 brain = true
+# brain crates reached past brain's public SDK (`brain`). Each entry is a
+# surface the SDK does not publish yet; the list may only shrink, and the
+# gate refuses both a new internal crate and an entry nothing uses.
+brain_internal = [
+    "brain-capability",
+    "brain-checkpoint",
+    "brain-data",
+    "brain-gpu-core",
+    "brain-model",
+    "brain-qwen3",
+]
 
 [crates.splinter-agent]
 internal = ["splinter-store", "splinter-lab", "splinter-policy"]
