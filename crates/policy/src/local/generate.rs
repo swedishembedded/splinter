@@ -80,11 +80,12 @@ pub(super) fn generate_once(
     let emit = &mut |p: Progress| {
         if let Some(text) = p.delta {
             if first_token.is_none() {
-                first_token = Some(started.elapsed());
+                let elapsed = started.elapsed();
+                first_token = Some(elapsed);
                 eprintln!(
                     "serve: prompt {} tokens, first token after {:.1}s",
                     req.ids.len(),
-                    first_token.unwrap().as_secs_f32()
+                    elapsed.as_secs_f32()
                 );
             }
             if gen

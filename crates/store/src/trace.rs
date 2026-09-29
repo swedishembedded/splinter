@@ -86,7 +86,10 @@ impl Trace {
     /// the last event only.
     pub fn event(&self, kind: &str, payload: &mut serde_json::Value) -> anyhow::Result<usize> {
         let bound = self.bind_large_strings(payload)?;
-        let mut guard = self.file.lock().unwrap();
+        let mut guard = self
+            .file
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.seq += 1;
         let event = Event {
             v: SCHEMA_VERSION,
@@ -107,7 +110,10 @@ impl Trace {
 
     fn bind_large_strings(&self, payload: &mut serde_json::Value) -> anyhow::Result<usize> {
         let mut count = 0usize;
-        let mut seq = self.artifact_seq.lock().unwrap();
+        let mut seq = self
+            .artifact_seq
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         bind_in_place(payload, &self.artifacts, &mut seq, &mut count)?;
         Ok(count)
     }

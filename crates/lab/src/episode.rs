@@ -93,7 +93,13 @@ impl Episode {
         // does not reveal it; asking the service does.
         {
             use std::io::Write;
-            let stdin = world.stdin.as_mut().expect("stdin was piped");
+            let stdin = io(
+                "handing the world its hidden state",
+                world
+                    .stdin
+                    .as_mut()
+                    .ok_or_else(|| std::io::Error::other("the world's stdin is not piped")),
+            )?;
             io(
                 "handing the world its hidden state",
                 writeln!(stdin, "{hidden_state}"),

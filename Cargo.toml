@@ -11,6 +11,12 @@ edition = "2021"
 license = "Apache-2.0"
 publish = false
 
+[workspace.lints.clippy]
+# A failure outside tests is an error naming what failed, not a panic; an
+# invariant that cannot fail is stated with `unreachable!`.
+unwrap_used = "warn"
+expect_used = "warn"
+
 [workspace.dependencies]
 # sven and brain are consumed from their remotes, at the revisions pinned in
 # Cargo.lock. A local build against sibling checkouts is a gitignored

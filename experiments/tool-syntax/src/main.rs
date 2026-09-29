@@ -83,7 +83,9 @@ fn family_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
-        .expect("the repository root")
+        .unwrap_or_else(|| {
+            unreachable!("a package two levels below the repository root has two ancestors")
+        })
         .join("tasks/config-discovery")
 }
 

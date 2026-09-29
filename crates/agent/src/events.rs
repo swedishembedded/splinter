@@ -76,21 +76,35 @@ impl Tally {
     }
 
     pub(crate) fn mutated_paths(&self) -> Vec<String> {
-        self.mutated_paths.lock().unwrap().clone()
+        self.mutated_paths
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub(crate) fn tool_failures(&self) -> Vec<String> {
-        self.tool_failures.lock().unwrap().clone()
+        self.tool_failures
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub(crate) fn note_summarized(&self, kind: &'static str) {
-        *self.summarized.lock().unwrap().entry(kind).or_insert(0) += 1;
+        *self
+            .summarized
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entry(kind)
+            .or_insert(0) += 1;
     }
 
     /// The summarized counts as a JSON object; empty when nothing was
     /// summarized, so `collect` writes no line at all.
     pub(crate) fn summarized_summary(&self) -> serde_json::Value {
-        let map = self.summarized.lock().unwrap();
+        let map = self
+            .summarized
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if map.is_empty() {
             return serde_json::json!({});
         }
@@ -178,7 +192,11 @@ fn payload_of(event: SessionEvent, tally: &Tally) -> serde_json::Value {
             // repository.
             if let Some(path) = call.args.get("path").and_then(|v| v.as_str()) {
                 if call.name.contains("write") || call.name.contains("edit") {
-                    tally.mutated_paths.lock().unwrap().push(path.to_string());
+                    tally
+                        .mutated_paths
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(path.to_string());
                 }
             }
             serde_json::json!({ "call_id": call.id, "name": call.name, "arguments": call.args })
@@ -201,7 +219,7 @@ fn payload_of(event: SessionEvent, tally: &Tally) -> serde_json::Value {
                 tally
                     .tool_failures
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .push(format!("{tool_name}: {first}"));
             }
             serde_json::json!({ "call_id": call_id, "name": tool_name, "is_error": is_error, "output": output })

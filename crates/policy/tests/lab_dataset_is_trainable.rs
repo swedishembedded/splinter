@@ -13,6 +13,10 @@
 //! So the check runs the real parser, through the policy crate that trains
 //! on the lab's output - which is also why this test lives here.
 
+// A test file: its fixture helpers panic on a broken fixture, which is the
+// failure report.
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use std::collections::BTreeMap;
 
 use splinter_lab::{record_from_episode, to_jsonl, PredicateSet, Provenance, Verdict};

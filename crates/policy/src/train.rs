@@ -171,6 +171,12 @@ fn fit_opts(steps: u32, block: u32) -> FitOpts {
     }
 }
 
+/// `path` as the UTF-8 string brain's loaders take, or an error naming it.
+fn utf8(path: &Path) -> anyhow::Result<&str> {
+    path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("{} is not valid UTF-8", path.display()))
+}
+
 /// Fine-tunes a LoRA on `request.dataset` and scores base and tuned on the
 /// held-out records.
 pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
@@ -178,7 +184,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
     // brain's loader APIs take the checkpoint FILE; the caller passes the
     // standard directory, resolved once here.
     let weights = crate::local::resolve_base(model_dir)?;
-    let weights = weights.to_str().expect("model path is utf-8");
+    let weights = utf8(&weights)?;
     anyhow::ensure!(
         request.dataset.exists(),
         "no dataset at {} - learn a verified run first",
@@ -195,13 +201,8 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
     })?;
 
     let tmpl = data::chat_template::ChatTemplate::from_model_dir(model_dir)?;
-    let tok = data::qwen_tokenizer::QwenBpe::from_file(
-        model_dir
-            .join("tokenizer.json")
-            .to_str()
-            .expect("model path is utf-8"),
-    )
-    .map_err(|e| anyhow::anyhow!("loading tokenizer from {model_dir:?}: {e}"))?;
+    let tok = data::qwen_tokenizer::QwenBpe::from_file(utf8(&model_dir.join("tokenizer.json"))?)
+        .map_err(|e| anyhow::anyhow!("loading tokenizer from {model_dir:?}: {e}"))?;
 
     // The block must hold the longest example, or training silently
     // supervises nothing for it.
@@ -244,7 +245,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
         request.steps, request.rank
     );
     let full_ckpt = request.attempt_dir.join("full.safetensors");
-    let full_ckpt = full_ckpt.to_str().expect("checkpoint path is utf-8");
+    let full_ckpt = utf8(&full_ckpt)?;
     finetune_from(
         weights,
         request.prepared_dir,
@@ -271,7 +272,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
             .unwrap_or("base")
     );
     let card_id = format!("{base_id}:loop:experience:latest");
-    let adapter_str = adapter.to_str().expect("adapter path is utf-8");
+    let adapter_str = utf8(&adapter)?;
     qwen3::lora::save_adapter(adapter_str, &reloaded, &card_id, &base_id, None)
         .map_err(|e| anyhow::anyhow!("saving LoRA adapter: {e}"))?;
 
