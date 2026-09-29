@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+//! One delegated task attempt through sven's engine.
+//!
+//! * [`runner`] - run or resume an attempt: the engine turn raced against
+//!   its wall-clock, tool-round and usage limits and a cross-process cancel,
+//!   the completion checks, a resumable checkpoint.
+//! * [`events`] - the engine's event stream mapped into the run's trace,
+//!   tallying the usage the limits and the outcome read.
+//! * [`outcome`] - the structured, reviewable result: status, changed
+//!   files, check evidence, usage, artifacts.
+//! * [`budget`] - the rule that decides a usage limit has been spent.
+//!
+//! Everything an attempt produces lands in its run directory under the
+//! state root, so a run is reviewable - and resumable - after the process
+//! that wrote it is gone.
+
+pub mod budget;
+pub mod events;
+pub mod outcome;
+pub mod runner;
+
+pub use outcome::{Outcome, Status};
+pub use runner::{resume, run, AttemptOptions};

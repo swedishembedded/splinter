@@ -31,6 +31,7 @@ brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
 splinter-lab = { path = "crates/lab" }
 splinter-store = { path = "crates/store" }
 splinter-policy = { path = "crates/policy" }
+splinter-agent = { path = "crates/agent" }
 
 anyhow = "1"
 async-trait = "0.1"

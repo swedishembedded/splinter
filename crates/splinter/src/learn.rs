@@ -21,14 +21,17 @@
 
 use splinter_store::StateRoot;
 
-use crate::outcome::Status;
+use splinter_agent::outcome::Status;
 
 /// A run is learning evidence only when the outcome says completed and at
 /// least one completion check actually passed. The manifest's status alone
 /// is not enough: it tracks the latest attempt, while the outcome carries
 /// the check evidence.
-fn verified(run_id: &str, dir: &std::path::Path) -> anyhow::Result<crate::outcome::Outcome> {
-    let outcome = crate::outcome::Outcome::load(dir)?;
+fn verified(
+    run_id: &str,
+    dir: &std::path::Path,
+) -> anyhow::Result<splinter_agent::outcome::Outcome> {
+    let outcome = splinter_agent::outcome::Outcome::load(dir)?;
     anyhow::ensure!(
         outcome.status == Status::Completed,
         "run {run_id} is {} - only a completed run is learning evidence",
@@ -47,7 +50,7 @@ fn verified(run_id: &str, dir: &std::path::Path) -> anyhow::Result<crate::outcom
 fn record(
     root: &StateRoot,
     run_id: &str,
-    outcome: &crate::outcome::Outcome,
+    outcome: &splinter_agent::outcome::Outcome,
 ) -> anyhow::Result<serde_json::Value> {
     let task = splinter_store::runs::read_manifest(root, run_id)?.task;
     let reply = outcome
@@ -129,7 +132,7 @@ fn pool_has_run(pool: &std::path::Path, run_id: &str) -> anyhow::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::outcome::{Check, Outcome, Status, Usage};
+    use splinter_agent::outcome::{Check, Outcome, Status, Usage};
     use splinter_store::runs::RunManifest;
 
     /// A fresh state root per test, so tests running in parallel never share

@@ -3802,6 +3802,22 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "splinter-agent",
+ "splinter-lab",
+ "splinter-policy",
+ "splinter-store",
+ "sven-sdk",
+ "tokio",
+]
+
+[[package]]
+name = "splinter-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "sha2",
  "splinter-lab",
  "splinter-policy",
  "splinter-store",

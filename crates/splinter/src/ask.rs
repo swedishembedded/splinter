@@ -28,24 +28,11 @@ pub struct AskOptions {
 /// Asks one question and returns the parsed answer string. The caller
 /// prints it wrapped as `{"answer": ...}` so stdout stays strictly JSON.
 pub(crate) fn run(options: AskOptions) -> anyhow::Result<String> {
-    let prompt = prompt(&options.question);
+    let prompt = splinter_lab::answers::question_prompt(&options.question);
     let provider = options.model.provider()?;
     let rt = tokio::runtime::Runtime::new()?;
     let reply: String = rt
         .block_on(async { complete_text(provider.as_ref(), &prompt).await })
         .context("the model produced no reply")?;
-    crate::explore::parse_answer_reply(&reply)
-}
-
-/// The exact prompt one question sees - shared with `eval-facts`, so an
-/// evaluated reply is asked the same way an `ask`ed one is.
-pub(crate) fn prompt(question: &str) -> String {
-    let prompt = format!(
-        "Answer the question below from your knowledge. Reply with EXACTLY one JSON object \
-         and nothing else - no prose, no code fences:\n\
-         {{\"answer\": string}}\n\n\
-         QUESTION:\n{}",
-        question
-    );
-    prompt
+    splinter_lab::answers::parse_answer(&reply)
 }

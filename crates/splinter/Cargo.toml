@@ -20,6 +20,7 @@ sven-sdk = { workspace = true }
 splinter-lab = { workspace = true }
 splinter-store = { workspace = true }
 splinter-policy = { workspace = true }
+splinter-agent = { workspace = true }
 
 anyhow = { workspace = true }
 sha2 = { workspace = true }

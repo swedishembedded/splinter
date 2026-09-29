@@ -19,16 +19,12 @@
 //! Every run writes its complete trace under `~/.sven/splinter/runs/<run_id>/`;
 //! nothing depends on the process that wrote it still being alive.
 
-mod budget;
 pub(crate) mod eval;
-mod events;
 mod facts;
 mod learn;
-mod outcome;
-mod runner;
 mod train;
 
-use runner::AttemptOptions;
+use splinter_agent::{outcome, runner, AttemptOptions};
 use splinter_policy::{LocalWeights, ModelSelection, RemoteModel};
 use splinter_store::StateRoot;
 use std::path::PathBuf;

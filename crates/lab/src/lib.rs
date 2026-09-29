@@ -39,6 +39,8 @@
 //! * [`Recorder`] - the exact request the agent sent, captured at the wire.
 //!   An agent's stored history holds neither the system prompt nor the tool
 //!   schemas, so it is not enough to train on.
+//! * [`answers`] - the one reply shape a question is answered in, how it
+//!   is parsed, written as training data and judged.
 //! * [`promotion`] - the gate over a training attempt's held-out scores,
 //!   and the rule that decides which records are held out.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
@@ -54,6 +56,7 @@
 //! scrolled past in a log - so where it was possible to make the mistake
 //! unrepresentable instead, that is what these types do.
 
+pub mod answers;
 mod dataset;
 mod demonstrate;
 mod endpoint;

@@ -115,7 +115,7 @@ pub(crate) fn read_facts(path: &std::path::Path) -> anyhow::Result<Vec<Fact>> {
         // not. `write_split` re-wraps for training, so the wrapper on disk
         // is incidental.
         let answer =
-            crate::explore::parse_answer_reply(&wrapped).unwrap_or_else(|_| wrapped.clone());
+            splinter_lab::answers::parse_answer(&wrapped).unwrap_or_else(|_| wrapped.clone());
         facts.push(Fact {
             question: content("user")?,
             answer,

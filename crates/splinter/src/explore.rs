@@ -147,30 +147,12 @@ pub(crate) fn split_sections(text: &str, chunk_lines: Option<usize>) -> Vec<Stri
     sections
 }
 
-/// Strips optional markdown code fences around a reply, so a model that
-/// answered perfectly inside ```json fences still parses. Fences are the
-/// one tolerated decoration; prose around the object is not.
-fn strip_fences(reply: &str) -> &str {
-    let trimmed = reply.trim();
-    let without = trimmed
-        .strip_prefix("```")
-        .and_then(|r| {
-            r.trim_start_matches(|c: char| c.is_ascii_alphanumeric())
-                .strip_prefix('\n')
-        })
-        .unwrap_or(trimmed);
-    without
-        .strip_suffix("```")
-        .map(|r| r.trim())
-        .unwrap_or(without)
-}
-
 /// Strict parse: the reply must be EXACTLY one JSON object of the shape
 /// `{"facts": [{"question": string, "answer": string}, ...]}` after
 /// trimming whitespace and stripping code fences. Anything else - prose,
 /// an array, a missing key, a non-string field - is a failure.
 pub(crate) fn parse_facts_reply(reply: &str) -> anyhow::Result<Facts> {
-    let value: serde_json::Value = serde_json::from_str(strip_fences(reply))
+    let value: serde_json::Value = serde_json::from_str(splinter_lab::answers::strip_fences(reply))
         .context("reply is not exactly one JSON object")?;
     let object = value
         .as_object()
@@ -197,25 +179,6 @@ pub(crate) fn parse_facts_reply(reply: &str) -> anyhow::Result<Facts> {
         pairs.push((question.to_string(), answer.to_string()));
     }
     Ok(Facts { pairs })
-}
-
-/// Strict parse for `ask`: the reply must be exactly one
-/// `{"answer": string}` object (fences tolerated, prose is not).
-pub(crate) fn parse_answer_reply(reply: &str) -> anyhow::Result<String> {
-    let value: serde_json::Value =
-        serde_json::from_str(strip_fences(reply)).with_context(|| {
-            // A parse failure is a scored event; the raw reply is the evidence
-            // a repair decision needs, so it rides in the error chain.
-            format!("reply is not exactly one JSON object: {reply:?}")
-        })?;
-    let object = value
-        .as_object()
-        .with_context(|| "reply is not a JSON object".to_string())?;
-    let answer = object
-        .get("answer")
-        .and_then(|v| v.as_str())
-        .with_context(|| "reply object has no string \"answer\"".to_string())?;
-    Ok(answer.to_string())
 }
 
 /// The fixed reply a question about an out-of-scope device trains toward:
@@ -391,24 +354,6 @@ fn question_is_anchored(question: &str, identifiers: &[String]) -> bool {
             .any(|id| lower.contains(&id.to_lowercase()))
 }
 
-/// One training record, in the SAME schema `learn` appends to the pool:
-/// the question as context (not supervised), the answer as the supervised
-/// turn.
-pub(crate) fn training_record(run_id: &str, question: &str, answer: &str) -> serde_json::Value {
-    // The assistant side teaches the reply shape `ask` parses, not just the
-    // fact: fine-tuning on bare answers trains the wrapper away, and a
-    // model that answers "84 MHz" without the {"answer": ...} object then
-    // fails every strict parse of its own correct reply.
-    let reply = serde_json::json!({ "answer": answer }).to_string();
-    serde_json::json!({
-        "messages": [
-            { "role": "user", "content": question, "train": false },
-            { "role": "assistant", "content": reply, "train": true },
-        ],
-        "metadata": { "run_id": run_id, "verified_by": [] },
-    })
-}
-
 /// The exact prompt one section sees. It demands the whole shape, and it
 /// says what "covers the section" means: every factual claim, not a sample.
 /// It also demands subject-anchored questions: a fine-tuned model learns
@@ -527,7 +472,9 @@ pub(crate) fn run(root: &StateRoot, options: ExploreOptions) -> anyhow::Result<E
                             untraceable_section += 1;
                             continue;
                         }
-                        records.push(training_record(&run_id, &question, &answer));
+                        records.push(splinter_lab::answers::training_record(
+                            &run_id, &question, &answer,
+                        ));
                         added += 1;
                         // One negative per second accepted fact: enough to
                         // teach the boundary without letting the shared
@@ -544,7 +491,11 @@ pub(crate) fn run(root: &StateRoot, options: ExploreOptions) -> anyhow::Result<E
                                 if let Some(negative) =
                                     negative_question(&question, id, negative, &identifiers)
                                 {
-                                    records.push(training_record(&run_id, &negative, NOT_COVERED));
+                                    records.push(splinter_lab::answers::training_record(
+                                        &run_id,
+                                        &negative,
+                                        NOT_COVERED,
+                                    ));
                                 }
                             }
                         }
@@ -753,21 +704,6 @@ mod tests {
         }
     }
 
-    /// An ask reply parses to its answer string; prose is a refusal.
-    #[test]
-    fn ask_replies_parse_strictly() {
-        assert_eq!(
-            parse_answer_reply("{\"answer\": \"42 Mbit/s\"}").unwrap(),
-            "42 Mbit/s"
-        );
-        assert_eq!(
-            parse_answer_reply("```\n{\"answer\": \"168 MHz\"}\n```").unwrap(),
-            "168 MHz"
-        );
-        assert!(parse_answer_reply("The answer is 168 MHz.").is_err());
-        assert!(parse_answer_reply("{\"result\": \"168 MHz\"}").is_err());
-    }
-
     /// Dedup is by normalized question text: case and whitespace collapse.
     #[test]
     fn question_dedup_normalizes_text() {
@@ -899,7 +835,8 @@ mod tests {
     /// then fails on the model's own (correct) reply.
     #[test]
     fn an_explore_record_is_valid_pool_input() {
-        let record = training_record("explore-test", "What is the max?", "42 Mbit/s");
+        let record =
+            splinter_lab::answers::training_record("explore-test", "What is the max?", "42 Mbit/s");
         assert_eq!(
             record["messages"][0],
             serde_json::json!({"role": "user", "content": "What is the max?", "train": false})
