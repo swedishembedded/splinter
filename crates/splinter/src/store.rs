@@ -8,17 +8,19 @@
 
 //! Where the loop's durable state lives, and what each part is for.
 //!
-//! Everything is under `~/.splinter/` (override: `SPLINTER_STATE`) - never
-//! inside sven's or brain's own state directories - because a run whose
-//! evidence is scattered under temp directories cannot be audited after a
-//! restart, and an audit after a restart is the point of the trace.
+//! Everything is under `~/.sven/splinter/` (override: `SPLINTER_STATE`):
+//! Sven's home, in a namespace of its own so nothing here overwrites or is
+//! read as sven's own state. One root matters because a run whose evidence
+//! is scattered under temp directories cannot be audited after a restart,
+//! and an audit after a restart is the point of the trace.
 //!
 //! Layout:
 //!
 //! ```text
-//! ~/.splinter/
+//! ~/.sven/splinter/
 //!   runs/<run_id>/         one delegated attempt
 //!     run.json             manifest + latest status (atomic)
+//!     cancel.request       present while a cancel is pending
 //!     events.jsonl         the append-only trace
 //!     transcript.json      what the agent exchanged with the model
 //!     checkpoint/state.json  a suspended AgentState (serde)
@@ -39,7 +41,7 @@ use std::path::{Path, PathBuf};
 pub fn state_root() -> PathBuf {
     match std::env::var("SPLINTER_STATE") {
         Ok(dir) if !dir.is_empty() => PathBuf::from(dir),
-        _ => dirs_home().join(".splinter"),
+        _ => dirs_home().join(".sven").join("splinter"),
     }
 }
 
@@ -148,6 +150,58 @@ pub struct RunManifest {
 pub struct Limits {
     pub timeout_secs: u64,
     pub max_tool_rounds: Option<u32>,
+    /// Attempts the run may make in total, the first included; each
+    /// `resume` is one more. `None` is unlimited.
+    pub max_attempts: Option<u32>,
+    #[serde(flatten)]
+    pub budget: crate::budget::Budget,
+}
+
+/// Refuses a further attempt once the run has made as many as its limit
+/// allows. Retries spend the same recorded task budget as the first try.
+pub fn ensure_attempt_allowed(manifest: &RunManifest) -> anyhow::Result<()> {
+    if let Some(max) = manifest.limits.max_attempts {
+        anyhow::ensure!(
+            manifest.attempts < max,
+            "run {} has made {} of {max} allowed attempt(s); the retry budget is spent",
+            manifest.run_id,
+            manifest.attempts
+        );
+    }
+    Ok(())
+}
+
+const CANCEL_REQUEST: &str = "cancel.request";
+
+/// Asks the process running `run_id` to stop its attempt. The request is a
+/// file in the run's directory, so it works from any process; the runner
+/// polls for it and ends the attempt as `cancelled`. Refused for a run that
+/// is not in progress, which has nothing to stop.
+pub fn request_cancel(run_id: &str) -> anyhow::Result<PathBuf> {
+    let manifest = read_manifest(run_id)?;
+    anyhow::ensure!(
+        manifest.status == "pending",
+        "run {run_id} is not in progress (status {:?}); nothing to cancel",
+        manifest.status
+    );
+    let path = run_dir(run_id).join(CANCEL_REQUEST);
+    write_atomic(&path, &crate::clock::utc_now())?;
+    Ok(path)
+}
+
+/// Whether a cancel has been requested for the run in `dir`.
+#[must_use]
+pub fn cancel_requested(dir: &Path) -> bool {
+    dir.join(CANCEL_REQUEST).is_file()
+}
+
+/// Consumes a cancel request, so the attempt that starts next is not
+/// stopped by one aimed at its predecessor.
+pub fn clear_cancel(dir: &Path) -> std::io::Result<()> {
+    match fs::remove_file(dir.join(CANCEL_REQUEST)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
 }
 
 /// Reads a run's manifest, refusing to invent one.
@@ -186,6 +240,88 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(1));
         let b = new_run_id();
         assert!(a < b, "ids must sort as a history: {a} vs {b}");
+    }
+
+    /// The loop's state is Sven state: it lives in its own namespace under
+    /// `~/.sven/`, beside - never inside - sven's own files.
+    #[test]
+    fn the_default_state_root_is_namespaced_under_sven_home() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let home = std::env::var_os("HOME");
+        std::env::remove_var("SPLINTER_STATE");
+        let someone = std::env::temp_dir().join("someone");
+        std::env::set_var("HOME", &someone);
+        let root = state_root();
+        match home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+        assert_eq!(root, someone.join(".sven").join("splinter"));
+    }
+
+    /// A cancel is requested from another process through the run's
+    /// directory, only for a run still in progress, and an attempt that
+    /// starts afterwards is not cancelled by a stale request.
+    #[test]
+    fn a_cancel_request_reaches_only_the_run_in_progress() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let root = std::env::temp_dir().join(format!("loop-cancel-{}", std::process::id()));
+        std::env::set_var("SPLINTER_STATE", &root);
+        let manifest = RunManifest {
+            run_id: "loop-test-cancel".into(),
+            status: "pending".into(),
+            ..Default::default()
+        };
+        let dir = run_dir(&manifest.run_id);
+        write_atomic(
+            &dir.join("run.json"),
+            &serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        assert!(!cancel_requested(&dir));
+        request_cancel("loop-test-cancel").unwrap();
+        assert!(cancel_requested(&dir));
+        clear_cancel(&dir).unwrap();
+        assert!(!cancel_requested(&dir), "a new attempt starts uncancelled");
+
+        let finished = RunManifest {
+            status: "completed".into(),
+            ..manifest
+        };
+        write_atomic(
+            &dir.join("run.json"),
+            &serde_json::to_string(&finished).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            request_cancel("loop-test-cancel").is_err(),
+            "a finished run has nothing to cancel"
+        );
+        assert!(request_cancel("loop-test-missing").is_err());
+
+        std::env::remove_var("SPLINTER_STATE");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A resume is a retry, and retries are budgeted: past the recorded
+    /// attempt limit it is refused instead of started.
+    #[test]
+    fn a_resume_past_the_attempt_limit_is_refused() {
+        let mut manifest = RunManifest {
+            attempts: 2,
+            limits: Limits {
+                max_attempts: Some(3),
+                ..Limits::default()
+            },
+            ..Default::default()
+        };
+        assert!(ensure_attempt_allowed(&manifest).is_ok());
+        manifest.attempts = 3;
+        let refused = ensure_attempt_allowed(&manifest).unwrap_err().to_string();
+        assert!(refused.contains("3 of 3"), "{refused}");
+        manifest.limits.max_attempts = None;
+        assert!(ensure_attempt_allowed(&manifest).is_ok(), "unlimited");
     }
 
     #[test]

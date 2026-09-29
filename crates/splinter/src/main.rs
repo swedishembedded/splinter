@@ -13,11 +13,13 @@
 //! splinter run --workspace DIR --task TEXT [options]
 //! splinter show [--run ID | --list]
 //! splinter resume --run ID [run options]
+//! splinter cancel --run ID
 //! ```
 //!
-//! Every run writes its complete trace under `~/.splinter/runs/<run_id>/`;
+//! Every run writes its complete trace under `~/.sven/splinter/runs/<run_id>/`;
 //! nothing depends on the process that wrote it still being alive.
 
+mod budget;
 mod clock;
 pub(crate) mod eval;
 mod events;
@@ -43,7 +45,10 @@ usage: splinter <command> [options]
       print a run's manifest, outcome and trace index
   resume --run ID [run options]
       continue an interrupted run from its checkpoint, reconciling against
-      its own trace before acting
+      its own trace before acting; refused once --max-attempts is spent
+  cancel --run ID
+      stop a run in progress from another process; its attempt ends as
+      `cancelled` with checkpoint and trace written, resumable
   learn --run ID
       append a verified run's experience to the training pool (refuses a
       failed or unverified run)
@@ -91,19 +96,31 @@ options for run / resume:
   --adapter FILE         LoRA adapter folded into the local model at load
   --ctx N                inline context budget for the local model (default
                          16384)
+  --allow-api-models     permit a model reached over an API; without it
+                         --model and --base-url are refused and every
+                         model call stays local and in-process
   --model provider/name  run a REMOTE model instead of the local one (e.g.
                          openrouter/z-ai/glm-5.3-flash); needs its api key
+                         and --allow-api-models
   --base-url URL         served OpenAI-compatible endpoint (remote models)
   --api-key KEY          key for that endpoint (default: AGENT_OPENROUTER_KEY
                          for openrouter, BRAIN_API_KEY otherwise)
   --timeout-secs N       per-attempt wall-clock limit (default 600)
   --max-tool-rounds N    per-attempt tool-round limit (default: sven config)
+  --max-output-tokens N  per-attempt generated-token limit (default 100000)
+  --max-cost-usd X       per-attempt billed-cost limit, remote models only
+                         (default 1.00 for openrouter/ models); a provider
+                         that reports usage without a price exhausts it
+  --max-attempts N       attempts per run, resumes included (default 3)
   --record-input         capture the exact model input at the wire
                          (needs --base-url naming a proxied upstream)
   --json                 print the outcome as JSON on success
 
-State lives under ~/.splinter/ (override: SPLINTER_STATE). Every run has a
-stable id; its manifest, trace, transcript, checkpoint and outcome survive
+A limit that fires ends the attempt as `timeout` or `budget_exhausted`; the
+checkpoint and trace are written either way.
+
+State lives under ~/.sven/splinter/ (override: SPLINTER_STATE). Every run has
+a stable id; its manifest, trace, transcript, checkpoint and outcome survive
 the process that wrote them.
 ";
 
@@ -113,6 +130,7 @@ fn main() -> anyhow::Result<()> {
         Some("run") => run(&args[1..]),
         Some("show") => show(&args[1..]),
         Some("resume") => resume(&args[1..]),
+        Some("cancel") => cancel(&args[1..]),
         Some("learn") => learn_cmd(&args[1..]),
         Some("train") => train_cmd(&args[1..]),
         Some("explore") => explore_cmd(&args[1..]),
@@ -143,6 +161,10 @@ struct Flags {
     context_tokens: u32,
     timeout_secs: u64,
     max_tool_rounds: Option<u32>,
+    max_output_tokens: Option<u64>,
+    max_cost_usd: Option<f64>,
+    max_attempts: u32,
+    allow_api_models: bool,
     record_input: bool,
     json: bool,
     run: Option<String>,
@@ -169,6 +191,39 @@ const DEFAULT_LORA_ALPHA: f32 = 16.0;
 /// Every Nth explored fact is held out of training, so the pipeline's
 /// generalization score always has something to measure.
 const DEFAULT_HOLDOUT_ONE_IN: usize = 5;
+/// Generated tokens one attempt may spend. At the local model's measured
+/// decode rate the wall-clock limit binds long before this does; it exists
+/// for fast remote models, where it is the bound that stops a loop.
+const DEFAULT_MAX_OUTPUT_TOKENS: u64 = 100_000;
+/// Billed USD one attempt on an OpenRouter model may spend unless the caller
+/// sets another cap. Conservative on purpose: raising it is a visible flag.
+const DEFAULT_REMOTE_MAX_COST_USD: f64 = 1.0;
+/// Attempts per run, the first included: a first try and two resumes.
+const DEFAULT_MAX_ATTEMPTS: u32 = 3;
+
+impl Flags {
+    /// Whether this invocation names a model reached over an API.
+    fn names_api_model(&self) -> bool {
+        self.model.is_some() || self.base_url.is_some()
+    }
+
+    /// The attempt's usage limits, defaults applied. Only OpenRouter models
+    /// get a default cost cap: they report a price per call, so the cap can
+    /// be enforced. Other endpoints (a served brain, say) report none, and a
+    /// default cap there would stop every run on its first usage report.
+    fn budget(&self) -> budget::Budget {
+        let openrouter = self
+            .model
+            .as_deref()
+            .is_some_and(|m| m.starts_with("openrouter/"));
+        budget::Budget {
+            max_output_tokens: Some(self.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT_TOKENS)),
+            max_cost_usd: self
+                .max_cost_usd
+                .or(openrouter.then_some(DEFAULT_REMOTE_MAX_COST_USD)),
+        }
+    }
+}
 
 fn parse(args: &[String]) -> anyhow::Result<Flags> {
     let mut flags = Flags {
@@ -183,6 +238,10 @@ fn parse(args: &[String]) -> anyhow::Result<Flags> {
         context_tokens: 16_384,
         timeout_secs: 600,
         max_tool_rounds: None,
+        max_output_tokens: None,
+        max_cost_usd: None,
+        max_attempts: DEFAULT_MAX_ATTEMPTS,
+        allow_api_models: false,
         record_input: false,
         json: false,
         run: None,
@@ -223,6 +282,10 @@ fn parse(args: &[String]) -> anyhow::Result<Flags> {
             "--ctx" => flags.context_tokens = take(&mut i)?.parse()?,
             "--timeout-secs" => flags.timeout_secs = take(&mut i)?.parse()?,
             "--max-tool-rounds" => flags.max_tool_rounds = Some(take(&mut i)?.parse()?),
+            "--max-output-tokens" => flags.max_output_tokens = Some(take(&mut i)?.parse()?),
+            "--max-cost-usd" => flags.max_cost_usd = Some(take(&mut i)?.parse()?),
+            "--max-attempts" => flags.max_attempts = take(&mut i)?.parse()?,
+            "--allow-api-models" => flags.allow_api_models = true,
             "--record-input" => flags.record_input = true,
             "--json" => flags.json = true,
             "--run" => flags.run = Some(take(&mut i)?),
@@ -259,6 +322,16 @@ fn parse(args: &[String]) -> anyhow::Result<Flags> {
         );
     }
     anyhow::ensure!(
+        flags.allow_api_models || !flags.names_api_model(),
+        "--model and --base-url reach a model over an API; that is refused unless \
+         --allow-api-models is given (the default runs every model call locally)"
+    );
+    anyhow::ensure!(
+        flags.max_cost_usd.is_none() || flags.names_api_model(),
+        "--max-cost-usd limits billed remote usage; local inference is not billed per token"
+    );
+    anyhow::ensure!(flags.max_attempts >= 1, "--max-attempts must be at least 1");
+    anyhow::ensure!(
         flags.adapter.is_none() || flags.model.is_none(),
         "--adapter applies to the local model; drop --model to run locally"
     );
@@ -284,6 +357,21 @@ fn resume(args: &[String]) -> anyhow::Result<()> {
     let options = options_from(&flags, &run_id)?;
     let (outcome, _manifest) = runner::resume(&run_id, options)?;
     report(&outcome, flags.json)
+}
+
+/// `cancel --run ID`: ask the process running a run to stop its attempt.
+fn cancel(args: &[String]) -> anyhow::Result<()> {
+    let flags = parse(args)?;
+    let run_id = flags
+        .run
+        .ok_or_else(|| anyhow::anyhow!("cancel needs --run ID"))?;
+    let request = store::request_cancel(&run_id)?;
+    println!(
+        "cancel requested for {run_id} ({}); the attempt stops within a second or one \
+         generation chunk, then `show --run {run_id}` reports it",
+        request.display()
+    );
+    Ok(())
 }
 
 /// `learn --run ID`: append a verified run's experience to the training
@@ -667,6 +755,9 @@ fn options_from(flags: &Flags, run_id: &str) -> anyhow::Result<AttemptOptions> {
         local,
         timeout_secs: flags.timeout_secs,
         max_tool_rounds: flags.max_tool_rounds,
+        max_attempts: flags.max_attempts,
+        budget: flags.budget(),
+        allow_api_models: flags.allow_api_models,
         record_input: flags.record_input,
     })
 }
@@ -961,6 +1052,7 @@ mod tests {
         assert!(query_weights_of(
             &parse(&[
                 "--base".into(),
+                "--allow-api-models".into(),
                 "--model".into(),
                 "openrouter/z-ai/glm-5.3-flash".into()
             ])
@@ -980,5 +1072,60 @@ mod tests {
 
         std::env::remove_var("SPLINTER_STATE");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Local models are the default and remote ones an explicit opt-in:
+    /// naming a remote model or endpoint without `--allow-api-models` is
+    /// refused before anything is sent anywhere.
+    #[test]
+    fn remote_models_need_the_explicit_opt_in() {
+        let args =
+            |extra: &[&str]| -> Vec<String> { extra.iter().map(|a| a.to_string()).collect() };
+        let refused = parse(&args(&["--model", "openrouter/z-ai/glm-5.3-flash"]))
+            .err()
+            .expect("a remote model without the opt-in is refused")
+            .to_string();
+        assert!(refused.contains("--allow-api-models"), "{refused}");
+        assert!(parse(&args(&["--base-url", "http://127.0.0.1:9/v1"])).is_err());
+        let allowed = parse(&args(&[
+            "--allow-api-models",
+            "--model",
+            "openrouter/z-ai/glm-5.3-flash",
+        ]))
+        .unwrap();
+        assert!(allowed.allow_api_models && allowed.model.is_some());
+        assert!(
+            parse(&args(&["--allow-api-models"]))
+                .unwrap()
+                .model
+                .is_none(),
+            "the opt-in alone keeps the local model"
+        );
+    }
+
+    /// Local inference is not billed per token, so a cost cap on it would
+    /// be a limit that can never fire; it is refused instead of ignored. A
+    /// remote run gets a visible default cap.
+    #[test]
+    fn cost_caps_apply_to_remote_models_only() {
+        let args =
+            |extra: &[&str]| -> Vec<String> { extra.iter().map(|a| a.to_string()).collect() };
+        assert!(parse(&args(&["--max-cost-usd", "0.5"])).is_err());
+        let remote = parse(&args(&[
+            "--allow-api-models",
+            "--model",
+            "openrouter/z-ai/glm-5.3-flash",
+        ]))
+        .unwrap();
+        assert_eq!(
+            remote.budget().max_cost_usd,
+            Some(DEFAULT_REMOTE_MAX_COST_USD)
+        );
+        let local = parse(&[]).unwrap();
+        assert_eq!(local.budget().max_cost_usd, None);
+        assert_eq!(
+            local.budget().max_output_tokens,
+            Some(DEFAULT_MAX_OUTPUT_TOKENS)
+        );
     }
 }

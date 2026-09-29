@@ -4,21 +4,25 @@
 # splinter - the command line
 
 `run` delegates a task; `show` inspects runs; `resume` continues an
-interrupted one from its own checkpoint. The model is LOCAL and IN-PROCESS
-by default: brain's Qwen3 stack is linked directly, weights and optional
-LoRA adapters load from disk at startup, and `--model` opts into a remote
-provider instead.
+interrupted one from its own checkpoint; `cancel` stops one in progress
+from another process. The model is LOCAL and IN-PROCESS by default:
+brain's Qwen3 stack is linked directly, weights and optional LoRA adapters
+load from disk at startup, and a remote provider is used only when
+`--allow-api-models` is given together with `--model` or `--base-url`.
 
 ## Commands (all verified)
 
 ```bash
 splinter run --workspace DIR --task TEXT [--check CMD ...]
                       [--local-weights DIR] [--adapter FILE] [--ctx N]
-                      [--model provider/name] [--base-url URL] [--api-key KEY]
+                      [--allow-api-models] [--model provider/name]
+                      [--base-url URL] [--api-key KEY]
                       [--timeout-secs N] [--max-tool-rounds N]
-                      [--record-input] [--json]
+                      [--max-output-tokens N] [--max-cost-usd X]
+                      [--max-attempts N] [--record-input] [--json]
 splinter show [--run ID | --list]
 splinter resume --run ID [run options]
+splinter cancel --run ID
 splinter learn --run ID
 splinter train [--dataset FILE] [--local-weights DIR]
                         [--steps N] [--rank N] [--alpha F]
@@ -69,7 +73,7 @@ refused.
 
 Question commands (`ask`, `eval-facts`) serve the PROMOTED adapter by
 default: when no adapter is named, the pointer at
-`~/.splinter/adapter.json` is used if it exists. `--base` asks the base
+`~/.sven/splinter/adapter.json` is used if it exists. `--base` asks the base
 model for the contrast (a promoted adapter without it is the fastest way
 to see what training bought); `--base` together with `--adapter` or
 `--model` is refused as ambiguous. `run` and `explore` keep base-only
@@ -101,22 +105,46 @@ Default model selection, local-first:
 
 - no `--model`: in-process Qwen3 from `--local-weights`, else
   `$BRAIN_QWEN_WEIGHTS`, else `~/.local/share/brain/models/Qwen/Qwen3-0.6B`
-- `--model openrouter/<id>`: remote via OpenRouter; the key comes from
-  `AGENT_OPENROUTER_KEY` unless `--api-key` is given
-- `--model <name>` with `--base-url`: an OpenAI-compatible endpoint; the
-  key default is `BRAIN_API_KEY`
+- `--allow-api-models --model openrouter/<id>`: remote via OpenRouter; the
+  key comes from `AGENT_OPENROUTER_KEY` unless `--api-key` is given
+- `--allow-api-models --model <name> --base-url URL`: an OpenAI-compatible
+  endpoint; the key default is `BRAIN_API_KEY`
 
-A non-completed attempt (failed, timeout, budget exhausted) exits non-zero,
-so a delegating script never reads a stall as success.
+Without `--allow-api-models`, `--model` and `--base-url` are refused on
+every command, so no repository content leaves the machine by accident.
+
+## Limits
+
+Every limit is recorded in the run manifest and the `task_received` event.
+
+| limit | default | fires as |
+| --- | --- | --- |
+| `--timeout-secs N` | 600 | `timeout` |
+| `--max-tool-rounds N` | sven config | the engine ends the turn |
+| `--max-output-tokens N` | 100000 | `budget_exhausted` |
+| `--max-cost-usd X` | 1.00 for `openrouter/` models, none otherwise; refused for local models | `budget_exhausted` |
+| `--max-attempts N` | 3 (the first try plus two resumes) | `resume` is refused |
+
+Unmeasured cost is not free: a cost cap on a provider whose usage reports
+carry no price ends the attempt on its first report. A fired limit, a
+`cancel` and a Ctrl-C all stop the in-flight generation, write the
+checkpoint, transcript and outcome, and leave the run resumable; the
+reason lands in the trace as a `limit_fired` event and in the outcome's
+`unresolved` list.
+
+A non-completed attempt (failed, timeout, cancelled, budget exhausted,
+errored) exits non-zero, so a delegating script never reads a stall as
+success.
 
 ## What a run record contains
 
-Under `~/.splinter/runs/<run-id>/` (override the root with
+Under `~/.sven/splinter/runs/<run-id>/` (override the root with
 `SPLINTER_STATE`):
 
 | file | purpose |
 | --- | --- |
 | `run.json` | manifest: task, workspace, limits, status, attempt count |
+| `cancel.request` | present while a `cancel` is pending |
 | `events.jsonl` | append-only trace, schema `v1`, fsynced per event |
 | `transcript.json` | the model conversation |
 | `checkpoint/state.json` | resumable agent state |
@@ -130,18 +158,18 @@ numbers survive process restarts (a resumed run continues the numbering).
 ## The training gate (`learn` -> `train`)
 
 `learn --run ID` appends one run's experience to
-`~/.splinter/datasets/experience.jsonl` - but only a run the reviewer
+`~/.sven/splinter/datasets/experience.jsonl` - but only a run the reviewer
 could already trust: the attempt completed AND at least one completion
 check passed AND the run has a final reply. Anything else is refused with
 the reason. Learning the same run twice is a no-op.
 
 `train` fine-tunes a LoRA adapter on the pool through brain's own trainer
 and holds the newest record out as the held-out sample. The adapter is
-promoted (a pointer written to `~/.splinter/adapter.json`) only when the
+promoted (a pointer written to `~/.sven/splinter/adapter.json`) only when the
 held-out loss strictly improved at the same weight tier on both sides of
 the comparison; a rejected attempt keeps its scores on disk but no
 pointer, and exits non-zero. Both scores land in the attempt's
 `decision.json` either way, so a rejected adapter is evidence, not folklore.
 `--adapter` serves the promoted one: it names either a LoRA safetensors file
-or the promotion pointer itself (`~/.splinter/adapter.json`), so a serving
+or the promotion pointer itself (`~/.sven/splinter/adapter.json`), so a serving
 invocation stays valid as later trainings promote new adapters over it.

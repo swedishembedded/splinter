@@ -53,6 +53,15 @@ pub struct AttemptOptions {
     pub local: Option<crate::provider::LocalWeights>,
     pub timeout_secs: u64,
     pub max_tool_rounds: Option<u32>,
+    /// Attempts the run may make, resumes included; recorded at `run` and
+    /// enforced by `resume` from the manifest.
+    pub max_attempts: u32,
+    /// Usage limits, raced against the turn.
+    pub budget: crate::budget::Budget,
+    /// Whether the caller permitted a model reached over an API - recorded
+    /// with the task contract, so a remote call is attributable to an
+    /// explicit opt-in.
+    pub allow_api_models: bool,
     /// Capture the exact model input at the wire (needs a proxied upstream).
     pub record_input: bool,
 }
@@ -80,6 +89,8 @@ pub fn run(options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
         limits: Limits {
             timeout_secs: options.timeout_secs,
             max_tool_rounds: options.max_tool_rounds,
+            max_attempts: Some(options.max_attempts),
+            budget: options.budget,
         },
     };
     save_manifest(&manifest)?;
@@ -89,11 +100,10 @@ pub fn run(options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
         "head": head,
         "task": options.task,
         "checks": options.checks,
-        "limits": {
-            "timeout_secs": options.timeout_secs,
-            "max_tool_rounds": options.max_tool_rounds,
-        },
+        "limits": manifest.limits,
         "model": manifest.model,
+        "allow_api_models": options.allow_api_models,
+        "splinter_version": env!("CARGO_PKG_VERSION"),
     });
     trace.event("task_received", &mut contract)?;
     record_workspace_baseline(&trace, &workspace)?;
@@ -106,6 +116,9 @@ pub fn run(options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
 pub fn resume(run_id: &str, options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
     let dir = crate::store::run_dir(run_id);
     let manifest = crate::store::read_manifest(run_id)?;
+    crate::store::ensure_attempt_allowed(&manifest)?;
+    // A cancel aimed at the previous attempt must not stop this one.
+    crate::store::clear_cancel(&dir)?;
     let checkpoint_path = dir.join("checkpoint").join("state.json");
     let text = std::fs::read_to_string(&checkpoint_path).map_err(|e| {
         anyhow::anyhow!(
@@ -125,6 +138,8 @@ pub fn resume(run_id: &str, options: AttemptOptions) -> anyhow::Result<(Outcome,
             "attempt": manifest.attempts + 1,
             "prior_status": manifest.status,
             "completed_tool_calls_before": prior.len(),
+            "budget": options.budget,
+            "allow_api_models": options.allow_api_models,
         }),
     )?;
     let mut manifest = manifest;
@@ -467,10 +482,20 @@ async fn drive(
     let task = options.task.clone();
     let sent: Option<Result<String, sven_sdk::CallError>>;
     let raced: Option<Status>;
+    let mut stop_reason: Option<String> = None;
     tokio::select! {
         res = agent.send(&task) => { sent = Some(res); raced = None; }
         _ = tokio::time::sleep(Duration::from_secs(options.timeout_secs)) => { sent = None; raced = Some(Status::Timeout); }
         _ = tokio::signal::ctrl_c() => { sent = None; raced = Some(Status::Cancelled); }
+        (status, reason) = watch_limits(&dir, options.budget, &tally, started) => {
+            sent = None;
+            raced = Some(status);
+            stop_reason = Some(reason);
+        }
+    }
+    if let (Some(status), Some(reason)) = (raced, &stop_reason) {
+        let mut note = serde_json::json!({ "status": status.as_str(), "reason": reason });
+        trace.event("limit_fired", &mut note)?;
     }
 
     // Write the turn's durable state before the agent goes away - whichever
@@ -513,7 +538,41 @@ async fn drive(
         }
     }
 
-    build_outcome(run_id, &dir, &options, raced, sent, &tally, &trace, started).await
+    build_outcome(
+        run_id,
+        &dir,
+        &options,
+        raced,
+        stop_reason,
+        sent,
+        &tally,
+        &trace,
+        started,
+    )
+    .await
+}
+
+/// Resolves when the attempt must stop for a reason other than its own
+/// turn, the timeout or Ctrl-C: a cancel requested from another process, or
+/// a spent usage budget. Polled, because both are read off shared state
+/// (the run directory, the tally) that no one signals.
+async fn watch_limits(
+    dir: &std::path::Path,
+    budget: crate::budget::Budget,
+    tally: &Tally,
+    started: Instant,
+) -> (Status, String) {
+    let mut tick = tokio::time::interval(Duration::from_millis(500));
+    loop {
+        tick.tick().await;
+        if crate::store::cancel_requested(dir) {
+            return (Status::Cancelled, "cancel requested".into());
+        }
+        let usage = tally.usage(started.elapsed().as_secs());
+        if let Some(reason) = crate::budget::exhausted(&budget, &usage, tally.usage_reports()) {
+            return (Status::BudgetExhausted, reason);
+        }
+    }
 }
 
 /// Builds the structured outcome from what the run observed: kernel events,
@@ -525,6 +584,7 @@ async fn build_outcome(
     dir: &std::path::Path,
     options: &AttemptOptions,
     raced: Option<Status>,
+    stop_reason: Option<String>,
     sent: Option<Result<String, sven_sdk::CallError>>,
     tally: &Tally,
     trace: &Trace,
@@ -548,7 +608,13 @@ async fn build_outcome(
         );
     }
     let mut diff_artifacts: Vec<String> = Vec::new();
-    if status == Status::Timeout || status == Status::Cancelled {
+    if let Some(reason) = stop_reason {
+        unresolved.push(format!("the attempt was stopped: {reason}"));
+    }
+    if matches!(
+        status,
+        Status::Timeout | Status::Cancelled | Status::BudgetExhausted
+    ) {
         unresolved.push(
             "the attempt's turn was interrupted; tool calls completed before the interrupt took \
              effect and are in the trace - use `resume` to reconcile and continue"

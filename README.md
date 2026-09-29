@@ -53,8 +53,8 @@ Builds then compile the checkouts' working trees, offline, without touching
 checkouts' HEADs; push those commits before sharing the lock. Delete
 `.cargo/config.toml` to go back to the remotes.
 
-Runtime state (runs, datasets, adapters) lives under `~/.splinter`
-(override: `SPLINTER_STATE`).
+Runtime state (runs, datasets, adapters) lives under `~/.sven/splinter`,
+Sven's home in a namespace of its own (override: `SPLINTER_STATE`).
 
 ## License
 

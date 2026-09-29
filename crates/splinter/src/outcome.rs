@@ -33,8 +33,10 @@ pub enum Status {
     Failed,
     /// The configured timeout fired mid-turn.
     Timeout,
-    /// An interruption (Ctrl-C) arrived mid-turn.
+    /// An interruption (Ctrl-C or `splinter cancel`) arrived mid-turn.
     Cancelled,
+    /// A usage limit (generated tokens, billed cost) was spent mid-turn.
+    BudgetExhausted,
     /// The engine or a tool boundary errored before any verdict.
     Errored,
 }
@@ -47,6 +49,7 @@ impl Status {
             Status::Failed => "failed",
             Status::Timeout => "timeout",
             Status::Cancelled => "cancelled",
+            Status::BudgetExhausted => "budget_exhausted",
             Status::Errored => "errored",
         }
     }

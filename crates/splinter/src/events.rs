@@ -37,6 +37,9 @@ pub(crate) struct Tally {
     /// unmeasured is not free.
     cost_e5: AtomicU64,
     saw_cost: AtomicU64,
+    /// Usage reports received, priced or not: what tells "no price
+    /// reported" apart from "nothing reported yet".
+    usage_reports: AtomicU64,
     tool_failures: Mutex<Vec<String>>,
     mutated_paths: Mutex<Vec<String>>,
     asked_questions: AtomicU64,
@@ -62,6 +65,10 @@ impl Tally {
             },
             duration_secs,
         }
+    }
+
+    pub(crate) fn usage_reports(&self) -> u64 {
+        self.usage_reports.load(Ordering::Relaxed)
     }
 
     pub(crate) fn asked_questions(&self) -> u64 {
@@ -216,6 +223,7 @@ fn payload_of(event: SessionEvent, tally: &Tally) -> serde_json::Value {
             cost_usd,
             ..
         } => {
+            tally.usage_reports.fetch_add(1, Ordering::Relaxed);
             tally
                 .input_tokens
                 .fetch_add(input as u64, Ordering::Relaxed);
