@@ -20,7 +20,6 @@
 //! nothing depends on the process that wrote it still being alive.
 
 mod budget;
-mod clock;
 pub(crate) mod eval;
 mod events;
 mod facts;
@@ -28,11 +27,12 @@ mod learn;
 mod outcome;
 mod provider;
 mod runner;
-mod store;
+mod runs;
 mod trace;
 mod train;
 
 use runner::AttemptOptions;
+use splinter_store::StateRoot;
 use std::path::PathBuf;
 pub(crate) mod ask;
 
@@ -146,6 +146,18 @@ fn main() -> anyhow::Result<()> {
             eprint!("{USAGE}");
             std::process::exit(2);
         }
+    }
+}
+
+/// The state root for this process: `SPLINTER_STATE` when set, else the
+/// default under the home directory. The one place the environment names it.
+fn state_root() -> StateRoot {
+    match std::env::var("SPLINTER_STATE") {
+        Ok(dir) if !dir.is_empty() => StateRoot::new(dir),
+        _ => match std::env::var("HOME") {
+            Ok(home) if !home.is_empty() => StateRoot::under_home(std::path::Path::new(&home)),
+            _ => StateRoot::under_home(std::path::Path::new(".")),
+        },
     }
 }
 
@@ -341,9 +353,10 @@ fn parse(args: &[String]) -> anyhow::Result<Flags> {
 fn run(args: &[String]) -> anyhow::Result<()> {
     let flags = parse(args)?;
     allow_slow_local_prefill(&flags);
+    let root = state_root();
     let run_id = flags.run.clone().unwrap_or_default();
-    let options = options_from(&flags, &run_id)?;
-    let (outcome, _manifest) = runner::run(options)?;
+    let options = options_from(&flags, &root, &run_id)?;
+    let (outcome, _manifest) = runner::run(&root, options)?;
     report(&outcome, flags.json)
 }
 
@@ -354,8 +367,9 @@ fn resume(args: &[String]) -> anyhow::Result<()> {
         .run
         .clone()
         .ok_or_else(|| anyhow::anyhow!("resume needs --run ID"))?;
-    let options = options_from(&flags, &run_id)?;
-    let (outcome, _manifest) = runner::resume(&run_id, options)?;
+    let root = state_root();
+    let options = options_from(&flags, &root, &run_id)?;
+    let (outcome, _manifest) = runner::resume(&root, &run_id, options)?;
     report(&outcome, flags.json)
 }
 
@@ -365,7 +379,7 @@ fn cancel(args: &[String]) -> anyhow::Result<()> {
     let run_id = flags
         .run
         .ok_or_else(|| anyhow::anyhow!("cancel needs --run ID"))?;
-    let request = store::request_cancel(&run_id)?;
+    let request = runs::request_cancel(&state_root(), &run_id)?;
     println!(
         "cancel requested for {run_id} ({}); the attempt stops within a second or one \
          generation chunk, then `show --run {run_id}` reports it",
@@ -382,10 +396,11 @@ fn learn_cmd(args: &[String]) -> anyhow::Result<()> {
         .run
         .clone()
         .ok_or_else(|| anyhow::anyhow!("learn needs --run ID"))?;
-    match learn::learn_run(&run_id)? {
+    let root = state_root();
+    match learn::learn_run(&root, &run_id)? {
         learn::Learned::Appended => println!(
             "learned {run_id}: appended to {}",
-            learn::pool_path().display()
+            root.experience_pool().display()
         ),
         learn::Learned::AlreadyRecorded => {
             println!("learned {run_id}: already in the pool, no duplicate written")
@@ -406,7 +421,7 @@ fn train_cmd(args: &[String]) -> anyhow::Result<()> {
         rank: flags.rank,
         alpha: flags.alpha,
     };
-    let (decision, dir) = train::run(&options)?;
+    let (decision, dir) = train::run(&state_root(), &options)?;
     match decision {
         train::Decision::Promoted => {
             println!("promoted: adapter and scores in {}", dir.display());
@@ -444,7 +459,8 @@ fn explore_cmd(args: &[String]) -> anyhow::Result<()> {
         local: local_weights_of(&flags),
         scope_negatives: flags.scope_negatives.clone(),
     };
-    let summary = explore::run(options)?;
+    let root = state_root();
+    let summary = explore::run(&root, options)?;
     println!(
         "explored {}: {} section(s), {} fact(s), {} parse failure(s), \
          {} unanchored question(s) refused, {} answer(s) with untraceable numbers refused\n\
@@ -455,7 +471,7 @@ fn explore_cmd(args: &[String]) -> anyhow::Result<()> {
         summary.parse_failures,
         summary.unanchored,
         summary.untraceable,
-        store::run_dir(&summary.run_id).display(),
+        root.run_dir(&summary.run_id).display(),
         flags
             .out
             .map(|o| o.display().to_string())
@@ -477,7 +493,7 @@ fn ask_cmd(args: &[String]) -> anyhow::Result<()> {
         model: flags.model.clone(),
         base_url: flags.base_url.clone(),
         api_key: api_key_of(&flags),
-        local: query_weights_of(&flags)?,
+        local: query_weights_of(&flags, &state_root())?,
     };
     match ask::run(options) {
         Ok(answer) => {
@@ -516,7 +532,7 @@ fn eval_facts_cmd(args: &[String]) -> anyhow::Result<()> {
         model: flags.model.clone(),
         base_url: flags.base_url.clone(),
         api_key: api_key_of(&flags),
-        local: query_weights_of(&flags)?,
+        local: query_weights_of(&flags, &state_root())?,
         shuffle: flags.shuffle,
         limit: flags.limit,
     };
@@ -538,10 +554,8 @@ fn eval_facts_cmd(args: &[String]) -> anyhow::Result<()> {
 /// a delegating script never reads a rejected candidate as progress.
 fn facts_cmd(args: &[String]) -> anyhow::Result<()> {
     let flags = parse(args)?;
-    let work_dir = flags
-        .work_dir
-        .clone()
-        .unwrap_or_else(|| store::state_root().join("facts"));
+    let root = state_root();
+    let work_dir = flags.work_dir.clone().unwrap_or_else(|| root.facts());
     let options = facts::FactsOptions {
         file: flags.file.clone(),
         out: flags.out.clone(),
@@ -557,7 +571,7 @@ fn facts_cmd(args: &[String]) -> anyhow::Result<()> {
         api_key: api_key_of(&flags),
         local: local_weights_of(&flags),
     };
-    let report = facts::run(options)?;
+    let report = facts::run(&root, options)?;
     println!(
         "facts: {} fact(s) from {} ({} train / {} eval), training {}",
         report.facts,
@@ -622,7 +636,10 @@ fn local_weights_of(flags: &Flags) -> Option<provider::LocalWeights> {
 /// `{"answer": ...}` reply shape leaks into a coding loop and ends the
 /// run answer-less, so serving it there by default would trade a working
 /// agent for convenience.
-fn query_weights_of(flags: &Flags) -> anyhow::Result<Option<provider::LocalWeights>> {
+fn query_weights_of(
+    flags: &Flags,
+    root: &StateRoot,
+) -> anyhow::Result<Option<provider::LocalWeights>> {
     anyhow::ensure!(
         !(flags.force_base && flags.adapter.is_some()),
         "--base and --adapter are exclusive: one names the base model, the other an adapter"
@@ -634,7 +651,7 @@ fn query_weights_of(flags: &Flags) -> anyhow::Result<Option<provider::LocalWeigh
     let mut weights = local_weights_of(flags);
     if let Some(local) = weights.as_mut() {
         if local.adapter.is_none() && !flags.force_base {
-            let pointer = train::adapter_pointer();
+            let pointer = root.adapter_pointer();
             if pointer.is_file() {
                 local.adapter = Some(pointer);
             }
@@ -666,11 +683,11 @@ fn allow_slow_local_prefill(flags: &Flags) {
 /// run's own recorded task. A resume must not require the caller to retype
 /// what the run already carries - and a divergent retyping would silently
 /// change what the recovered attempt works on.
-fn task_for_resume(flags: &Flags, run_id: &str) -> anyhow::Result<String> {
+fn task_for_resume(flags: &Flags, root: &StateRoot, run_id: &str) -> anyhow::Result<String> {
     if let Some(task) = &flags.task {
         return Ok(task.clone());
     }
-    Ok(store::read_manifest(run_id)?.task)
+    Ok(runs::read_manifest(root, run_id)?.task)
 }
 
 /// The adapter a resume serves from: an explicit `--adapter` wins; otherwise
@@ -678,11 +695,15 @@ fn task_for_resume(flags: &Flags, run_id: &str) -> anyhow::Result<String> {
 /// not have to restate what the run carries, and dropping it silently turns
 /// a resumed attempt into a base-model run while the manifest still says an
 /// adapter rode along.
-fn adapter_for_resume(flags: &Flags, run_id: &str) -> anyhow::Result<Option<std::path::PathBuf>> {
+fn adapter_for_resume(
+    flags: &Flags,
+    root: &StateRoot,
+    run_id: &str,
+) -> anyhow::Result<Option<std::path::PathBuf>> {
     if flags.adapter.is_some() {
         return Ok(flags.adapter.clone());
     }
-    Ok(store::read_manifest(run_id)?.local_adapter)
+    Ok(runs::read_manifest(root, run_id)?.local_adapter)
 }
 
 /// The api key follows the provider actually configured: OpenRouter's key
@@ -703,7 +724,7 @@ fn api_key_of(flags: &Flags) -> Option<String> {
         })
 }
 
-fn options_from(flags: &Flags, run_id: &str) -> anyhow::Result<AttemptOptions> {
+fn options_from(flags: &Flags, root: &StateRoot, run_id: &str) -> anyhow::Result<AttemptOptions> {
     let workspace = flags
         .workspace
         .clone()
@@ -712,7 +733,7 @@ fn options_from(flags: &Flags, run_id: &str) -> anyhow::Result<AttemptOptions> {
         Some(task) => task.clone(),
         // Only a resume may fall back to the run's own task: a fresh run
         // without a task has nothing to continue.
-        None if !run_id.is_empty() => task_for_resume(flags, run_id)?,
+        None if !run_id.is_empty() => task_for_resume(flags, root, run_id)?,
         None => anyhow::bail!("run needs --task TEXT or --task-file FILE"),
     };
     // Local-first: with no --model the attempt serves the agent from local
@@ -736,7 +757,7 @@ fn options_from(flags: &Flags, run_id: &str) -> anyhow::Result<AttemptOptions> {
         let adapter = if run_id.is_empty() {
             flags.adapter.clone()
         } else {
-            adapter_for_resume(flags, run_id)?
+            adapter_for_resume(flags, root, run_id)?
         };
         Some(provider::LocalWeights {
             base,
@@ -837,8 +858,9 @@ fn report_human(outcome: &outcome::Outcome) {
 
 fn show(args: &[String]) -> anyhow::Result<()> {
     let flags = parse(args)?;
+    let root = state_root();
     if let Some(run_id) = &flags.run {
-        let manifest = store::read_manifest(run_id)?;
+        let manifest = runs::read_manifest(&root, run_id)?;
         println!(
             "run:      {}\nstatus:   {}\nattempts: {}\nmodel:    {}\nstarted:  {}",
             manifest.run_id,
@@ -849,7 +871,7 @@ fn show(args: &[String]) -> anyhow::Result<()> {
         );
         println!("workspace: {}", manifest.workspace);
         println!("task: {}", manifest.task);
-        let dir = store::run_dir(run_id);
+        let dir = root.run_dir(run_id);
         match outcome::Outcome::load(&dir) {
             Ok(outcome) => {
                 println!(
@@ -873,9 +895,9 @@ fn show(args: &[String]) -> anyhow::Result<()> {
         }
         return Ok(());
     }
-    let runs = store::list_runs()?;
+    let runs = runs::list_runs(&root)?;
     if runs.is_empty() {
-        println!("no runs recorded under {}", store::state_root().display());
+        println!("no runs recorded under {}", root.path().display());
         return Ok(());
     }
     for manifest in runs {
@@ -894,21 +916,25 @@ fn show(args: &[String]) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    fn scratch(name: &str) -> StateRoot {
+        let path = std::env::temp_dir().join(format!("splinter-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        StateRoot::new(path)
+    }
+
     /// A resume without `--task` continues the run's own recorded task - the
     /// caller must not have to retype what the run carries, and a divergent
     /// retyping would silently change what the recovered attempt works on.
     #[test]
     fn a_resume_without_a_task_continues_the_runs_recorded_task() {
-        let _guard = store::ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-resume-task-{}", std::process::id()));
-        std::env::set_var("SPLINTER_STATE", &root);
-        let dir = store::run_dir("loop-test-resume-task");
+        let root = scratch("loop-resume-task");
+        let dir = root.run_dir("loop-test-resume-task");
         std::fs::create_dir_all(&dir).unwrap();
-        let manifest = store::RunManifest {
+        let manifest = runs::RunManifest {
             task: "confirm the sum".into(),
             ..Default::default()
         };
-        store::write_atomic(
+        splinter_store::write_atomic(
             &dir.join("run.json"),
             &serde_json::to_string(&manifest).unwrap(),
         )
@@ -916,22 +942,23 @@ mod tests {
 
         let with_task = task_for_resume(
             &parse(&["--task".into(), "explicit".into()]).unwrap(),
+            &root,
             "loop-test-resume-task",
         )
         .unwrap();
         assert_eq!(with_task, "explicit", "an explicit task wins");
 
-        let defaulted = task_for_resume(&parse(&[]).unwrap(), "loop-test-resume-task").unwrap();
+        let defaulted =
+            task_for_resume(&parse(&[]).unwrap(), &root, "loop-test-resume-task").unwrap();
         assert_eq!(defaulted, "confirm the sum", "the run's own task continues");
 
-        let unknown = task_for_resume(&parse(&[]).unwrap(), "loop-test-missing");
+        let unknown = task_for_resume(&parse(&[]).unwrap(), &root, "loop-test-missing");
         assert!(
             unknown.is_err(),
             "a run with no manifest has no task to continue"
         );
 
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     /// A resume without `--adapter` serves the adapter the run was recorded
@@ -941,20 +968,18 @@ mod tests {
     /// an adapter rode along.
     #[test]
     fn a_resume_without_an_adapter_serves_the_runs_recorded_adapter() {
-        let _guard = store::ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-resume-adapter-{}", std::process::id()));
-        std::env::set_var("SPLINTER_STATE", &root);
-        let dir = store::run_dir("loop-test-resume-adapter");
+        let root = scratch("loop-resume-adapter");
+        let dir = root.run_dir("loop-test-resume-adapter");
         std::fs::create_dir_all(&dir).unwrap();
         let scratch =
             std::env::temp_dir().join(format!("loop-resume-adapter-{}", std::process::id()));
         let recorded = scratch.join("recorded-adapter.safetensors");
-        let manifest = store::RunManifest {
+        let manifest = runs::RunManifest {
             task: "fix it".into(),
             local_adapter: Some(recorded.clone()),
             ..Default::default()
         };
-        store::write_atomic(
+        splinter_store::write_atomic(
             &dir.join("run.json"),
             &serde_json::to_string(&manifest).unwrap(),
         )
@@ -964,7 +989,7 @@ mod tests {
         let explicit_path = scratch.join("explicit.safetensors");
         let explicit = parse(&["--adapter".into(), explicit_path.display().to_string()]).unwrap();
         assert_eq!(
-            adapter_for_resume(&explicit, "loop-test-resume-adapter").unwrap(),
+            adapter_for_resume(&explicit, &root, "loop-test-resume-adapter").unwrap(),
             Some(explicit_path),
             "an explicit adapter wins"
         );
@@ -972,34 +997,33 @@ mod tests {
         // No flag: the run's recorded adapter continues.
         let defaulted = parse(&[]).unwrap();
         assert_eq!(
-            adapter_for_resume(&defaulted, "loop-test-resume-adapter").unwrap(),
+            adapter_for_resume(&defaulted, &root, "loop-test-resume-adapter").unwrap(),
             Some(recorded),
             "the run's recorded adapter continues"
         );
 
         // A run recorded without an adapter resumes on base weights, and an
         // unknown run id has nothing to fall back to.
-        let bare = store::RunManifest {
+        let bare = runs::RunManifest {
             task: "fix it".into(),
             ..Default::default()
         };
-        store::write_atomic(
+        splinter_store::write_atomic(
             &dir.join("run.json"),
             &serde_json::to_string(&bare).unwrap(),
         )
         .unwrap();
         assert_eq!(
-            adapter_for_resume(&defaulted, "loop-test-resume-adapter").unwrap(),
+            adapter_for_resume(&defaulted, &root, "loop-test-resume-adapter").unwrap(),
             None,
             "no recorded adapter resumes on base weights"
         );
         assert!(
-            adapter_for_resume(&defaulted, "loop-test-missing").is_err(),
+            adapter_for_resume(&defaulted, &root, "loop-test-missing").is_err(),
             "a run with no manifest has no adapter to continue"
         );
 
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     /// A question command serves the promoted adapter by default - querying
@@ -1008,10 +1032,8 @@ mod tests {
     /// with an explicit `--adapter`.
     #[test]
     fn question_commands_serve_the_promoted_adapter_until_base_is_asked() {
-        let _guard = store::ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-query-w-{}", std::process::id()));
-        std::env::set_var("SPLINTER_STATE", &root);
-        let pointer = store::state_root().join("adapter.json");
+        let root = scratch("loop-query-w");
+        let pointer = root.adapter_pointer();
         std::fs::create_dir_all(pointer.parent().unwrap()).unwrap();
         std::fs::write(
             &pointer,
@@ -1024,7 +1046,7 @@ mod tests {
 
         // No flags: the promotion pointer rides along.
         let defaulted = parse(&[]).unwrap();
-        let weights = query_weights_of(&defaulted).unwrap().unwrap();
+        let weights = query_weights_of(&defaulted, &root).unwrap().unwrap();
         assert_eq!(
             weights.adapter,
             Some(pointer.clone()),
@@ -1033,12 +1055,12 @@ mod tests {
 
         // --base: no adapter, even with a pointer in place.
         let base = parse(&["--base".into()]).unwrap();
-        let weights = query_weights_of(&base).unwrap().unwrap();
+        let weights = query_weights_of(&base, &root).unwrap().unwrap();
         assert_eq!(weights.adapter, None, "--base serves the base model");
 
         // --adapter is explicit and wins over the default.
         let explicit = parse(&["--adapter".into(), "/mine.safetensors".into()]).unwrap();
-        let weights = query_weights_of(&explicit).unwrap().unwrap();
+        let weights = query_weights_of(&explicit, &root).unwrap().unwrap();
         assert_eq!(
             weights.adapter,
             Some(std::path::PathBuf::from("/mine.safetensors"))
@@ -1046,7 +1068,8 @@ mod tests {
 
         // The ambiguous combinations are refused, not resolved silently.
         assert!(query_weights_of(
-            &parse(&["--base".into(), "--adapter".into(), "/m.safetensors".into()]).unwrap()
+            &parse(&["--base".into(), "--adapter".into(), "/m.safetensors".into()]).unwrap(),
+            &root
         )
         .is_err());
         assert!(query_weights_of(
@@ -1056,7 +1079,8 @@ mod tests {
                 "--model".into(),
                 "openrouter/z-ai/glm-5.3-flash".into()
             ])
-            .unwrap()
+            .unwrap(),
+            &root
         )
         .is_err());
 
@@ -1070,8 +1094,7 @@ mod tests {
             "run/explore never serve the promotion pointer by default"
         );
 
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     /// Local models are the default and remote ones an explicit opt-in:

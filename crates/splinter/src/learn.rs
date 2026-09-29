@@ -19,15 +19,9 @@
 //! (`brain::validate_chat_dataset`), so `learn` cannot write a pool the
 //! `train` step will later reject over shape.
 
-use crate::outcome::Status;
-use crate::store;
+use splinter_store::StateRoot;
 
-/// The pool file every learned record is appended to.
-pub(crate) fn pool_path() -> std::path::PathBuf {
-    store::state_root()
-        .join("datasets")
-        .join("experience.jsonl")
-}
+use crate::outcome::Status;
 
 /// A run is learning evidence only when the outcome says completed and at
 /// least one completion check actually passed. The manifest's status alone
@@ -50,8 +44,12 @@ fn verified(run_id: &str, dir: &std::path::Path) -> anyhow::Result<crate::outcom
 /// One run becomes one chat record: the task as the user message (context,
 /// not supervised) and the final assistant reply as the supervised turn.
 /// The reply is the outcome's verbatim `reply`, not a transcript guess.
-fn record(run_id: &str, outcome: &crate::outcome::Outcome) -> anyhow::Result<serde_json::Value> {
-    let task = store::read_manifest(run_id)?.task;
+fn record(
+    root: &StateRoot,
+    run_id: &str,
+    outcome: &crate::outcome::Outcome,
+) -> anyhow::Result<serde_json::Value> {
+    let task = crate::runs::read_manifest(root, run_id)?.task;
     let reply = outcome
         .reply
         .as_deref()
@@ -83,14 +81,14 @@ fn record(run_id: &str, outcome: &crate::outcome::Outcome) -> anyhow::Result<ser
 /// was appended. Learning the same run twice is a no-op that says so - the
 /// pool is keyed by run id, and a duplicated record would weight that
 /// experience twice in every training run.
-pub(crate) fn learn_run(run_id: &str) -> anyhow::Result<Learned> {
-    let pool = pool_path();
+pub(crate) fn learn_run(root: &StateRoot, run_id: &str) -> anyhow::Result<Learned> {
+    let pool = root.experience_pool();
     if pool.exists() && pool_has_run(&pool, run_id)? {
         return Ok(Learned::AlreadyRecorded);
     }
-    let dir = store::run_dir(run_id);
+    let dir = root.run_dir(run_id);
     let outcome = verified(run_id, &dir)?;
-    let line = record(run_id, &outcome)?;
+    let line = record(root, run_id, &outcome)?;
     if let Some(parent) = pool.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -150,23 +148,24 @@ pub(crate) fn read_pool(pool: &std::path::Path) -> anyhow::Result<Vec<data::chat
 mod tests {
     use super::*;
     use crate::outcome::{Check, Outcome, Status, Usage};
-    use crate::store::RunManifest;
+    use crate::runs::RunManifest;
 
-    /// SPLINTER_STATE is process-global, and cargo runs these tests in
-    /// parallel threads: every fixture/learn sequence holds
-    /// [`crate::store::ENV_LOCK`] so one test's state root cannot leak
-    /// into another's.
-    use crate::store::ENV_LOCK;
+    /// A fresh state root per test, so tests running in parallel never share
+    /// a pool.
+    fn scratch(name: &str) -> StateRoot {
+        let path = std::env::temp_dir().join(format!("splinter-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        StateRoot::new(path)
+    }
 
     fn fixture_run(
-        state: &std::path::Path,
+        root: &StateRoot,
         run_id: &str,
         status: Status,
         checks: Vec<Check>,
         reply: &str,
     ) {
-        std::env::set_var("SPLINTER_STATE", state);
-        let dir = store::run_dir(run_id);
+        let dir = root.run_dir(run_id);
         std::fs::create_dir_all(&dir).unwrap();
         let manifest = RunManifest {
             run_id: run_id.into(),
@@ -174,7 +173,7 @@ mod tests {
             status: status.as_str().into(),
             ..Default::default()
         };
-        store::write_atomic(
+        splinter_store::write_atomic(
             &dir.join("run.json"),
             &serde_json::to_string(&manifest).unwrap(),
         )
@@ -206,9 +205,7 @@ mod tests {
 
     #[test]
     fn a_verified_run_becomes_a_user_task_and_a_supervised_reply() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-learn-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = scratch("loop-learn");
         fixture_run(
             &root,
             "loop-learn-ok",
@@ -216,9 +213,9 @@ mod tests {
             passing_check(),
             "fixed add to return the sum.",
         );
-        let learned = learn_run("loop-learn-ok").unwrap();
+        let learned = learn_run(&root, "loop-learn-ok").unwrap();
         assert_eq!(learned, Learned::Appended);
-        let pool = pool_path();
+        let pool = root.experience_pool();
         let text = std::fs::read_to_string(&pool).unwrap();
         let v: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
         let msgs = v["messages"].as_array().unwrap();
@@ -229,15 +226,12 @@ mod tests {
         assert_eq!(msgs[1]["role"], "assistant");
         assert_eq!(msgs[1]["train"], true);
         assert_eq!(msgs[1]["content"], "fixed add to return the sum.");
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     #[test]
     fn an_unverified_run_is_refused_not_learned() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-learn-fail-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = scratch("loop-learn-fail");
         // A failed run, and a completed run without check evidence: neither
         // is verified, and each refusal must say which requirement failed.
         fixture_run(
@@ -247,7 +241,7 @@ mod tests {
             passing_check(),
             "tried and failed",
         );
-        assert!(learn_run("loop-learn-bad").is_err());
+        assert!(learn_run(&root, "loop-learn-bad").is_err());
 
         fixture_run(
             &root,
@@ -256,21 +250,20 @@ mod tests {
             vec![],
             "said done",
         );
-        let err = learn_run("loop-learn-nocheck").unwrap_err().to_string();
+        let err = learn_run(&root, "loop-learn-nocheck")
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("no completion check"),
             "refusal must name the missing verification: {err}"
         );
-        assert!(!pool_path().exists());
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        assert!(!root.experience_pool().exists());
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     #[test]
     fn learning_the_same_run_twice_records_it_once() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-learn-dup-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = scratch("loop-learn-dup");
         fixture_run(
             &root,
             "loop-learn-dup",
@@ -278,25 +271,25 @@ mod tests {
             passing_check(),
             "done",
         );
-        assert_eq!(learn_run("loop-learn-dup").unwrap(), Learned::Appended);
         assert_eq!(
-            learn_run("loop-learn-dup").unwrap(),
+            learn_run(&root, "loop-learn-dup").unwrap(),
+            Learned::Appended
+        );
+        assert_eq!(
+            learn_run(&root, "loop-learn-dup").unwrap(),
             Learned::AlreadyRecorded
         );
-        let summary = brain::validate_chat_dataset(pool_path()).unwrap();
+        let summary = brain::validate_chat_dataset(root.experience_pool()).unwrap();
         assert_eq!(
             summary.records, 1,
             "a repeated learn must not weight the run twice"
         );
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     #[test]
     fn the_pool_parses_as_trainer_input() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-learn-pool-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = scratch("loop-learn-pool");
         fixture_run(
             &root,
             "loop-learn-p1",
@@ -311,12 +304,11 @@ mod tests {
             passing_check(),
             "second fix",
         );
-        learn_run("loop-learn-p1").unwrap();
-        learn_run("loop-learn-p2").unwrap();
-        let samples = read_pool(&pool_path()).unwrap();
+        learn_run(&root, "loop-learn-p1").unwrap();
+        learn_run(&root, "loop-learn-p2").unwrap();
+        let samples = read_pool(&root.experience_pool()).unwrap();
         assert_eq!(samples.len(), 2);
         assert!(samples[0].messages[1].train);
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 }

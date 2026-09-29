@@ -23,14 +23,15 @@
 //! acting, which is why recovery never repeats a non-idempotent action
 //! blindly.
 
-use crate::clock::utc_now;
 use crate::events::{collect, Tally};
 use crate::outcome::{
     capture_changed_files, capture_tool_evidence, ChangedFile, Check, Outcome, Status,
 };
-use crate::store::{write_atomic, Limits, RunManifest};
+use crate::runs::{Limits, RunManifest};
 use crate::trace::Trace;
-use std::path::PathBuf;
+use splinter_store::clock::utc_now;
+use splinter_store::{write_atomic, StateRoot};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sven_sdk::{config, ApprovalPolicy, Engine};
@@ -67,10 +68,10 @@ pub struct AttemptOptions {
 }
 
 /// Runs one attempt of `task` in `workspace`, from a fresh conversation.
-pub fn run(options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
+pub fn run(root: &StateRoot, options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
     let workspace = options.workspace.canonicalize()?;
-    let run_id = crate::store::new_run_id();
-    let dir = crate::store::run_dir(&run_id);
+    let run_id = splinter_store::new_run_id();
+    let dir = root.run_dir(&run_id);
     let trace = Arc::new(Trace::open(&dir, &run_id, 1)?);
 
     let head = git_head(&workspace).unwrap_or_else(|| "not a git repository".into());
@@ -93,7 +94,7 @@ pub fn run(options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
             budget: options.budget,
         },
     };
-    save_manifest(&manifest)?;
+    save_manifest(&dir, &manifest)?;
 
     let mut contract = serde_json::json!({
         "workspace": manifest.workspace,
@@ -108,17 +109,29 @@ pub fn run(options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
     trace.event("task_received", &mut contract)?;
     record_workspace_baseline(&trace, &workspace)?;
 
-    finish(&run_id, &mut manifest, options, None, trace, Instant::now())
+    finish(
+        &dir,
+        &run_id,
+        &mut manifest,
+        options,
+        None,
+        trace,
+        Instant::now(),
+    )
 }
 
 /// Resumes a run from its last valid checkpoint, as a further attempt on the
 /// same trace.
-pub fn resume(run_id: &str, options: AttemptOptions) -> anyhow::Result<(Outcome, RunManifest)> {
-    let dir = crate::store::run_dir(run_id);
-    let manifest = crate::store::read_manifest(run_id)?;
-    crate::store::ensure_attempt_allowed(&manifest)?;
+pub fn resume(
+    root: &StateRoot,
+    run_id: &str,
+    options: AttemptOptions,
+) -> anyhow::Result<(Outcome, RunManifest)> {
+    let dir = root.run_dir(run_id);
+    let manifest = crate::runs::read_manifest(root, run_id)?;
+    crate::runs::ensure_attempt_allowed(&manifest)?;
     // A cancel aimed at the previous attempt must not stop this one.
-    crate::store::clear_cancel(&dir)?;
+    crate::runs::clear_cancel(&dir)?;
     let checkpoint_path = dir.join("checkpoint").join("state.json");
     let text = std::fs::read_to_string(&checkpoint_path).map_err(|e| {
         anyhow::anyhow!(
@@ -152,11 +165,12 @@ pub fn resume(run_id: &str, options: AttemptOptions) -> anyhow::Result<(Outcome,
     if manifest.local_adapter.is_none() {
         manifest.local_adapter = options.local.as_ref().and_then(|w| w.adapter.clone());
     }
-    save_manifest(&manifest)?;
+    save_manifest(&dir, &manifest)?;
 
     let mut opts = options;
     opts.task = continuation_prompt(&opts.task, &prior);
     finish(
+        &dir,
         run_id,
         &mut manifest,
         opts,
@@ -209,6 +223,7 @@ fn continuation_prompt(task: &str, prior: &[String]) -> String {
 /// The attempt itself, shared by `run` and `resume`. Runs the async engine
 /// work to completion, then writes the outcome and closes the manifest.
 fn finish(
+    dir: &Path,
     run_id: &str,
     manifest: &mut RunManifest,
     options: AttemptOptions,
@@ -216,7 +231,6 @@ fn finish(
     trace: Arc<Trace>,
     started: Instant,
 ) -> anyhow::Result<(Outcome, RunManifest)> {
-    let dir = crate::store::run_dir(run_id);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -226,6 +240,7 @@ fn finish(
     let previous_cwd = std::env::current_dir()?;
     std::env::set_current_dir(&options.workspace)?;
     let result = runtime.block_on(drive(
+        dir,
         run_id,
         options,
         prior_state,
@@ -242,10 +257,10 @@ fn finish(
     runtime.shutdown_timeout(Duration::from_secs(10));
 
     let outcome = result?;
-    outcome.save(&dir)?;
+    outcome.save(dir)?;
     manifest.status = outcome.status.as_str().into();
     manifest.updated_ts = utc_now();
-    save_manifest(manifest)?;
+    save_manifest(dir, manifest)?;
     Ok((outcome, manifest.clone()))
 }
 
@@ -332,21 +347,20 @@ fn git_head(workspace: &std::path::Path) -> Option<String> {
     }
 }
 
-fn save_manifest(manifest: &RunManifest) -> anyhow::Result<()> {
-    let path = crate::store::run_dir(&manifest.run_id).join("run.json");
+fn save_manifest(dir: &Path, manifest: &RunManifest) -> anyhow::Result<()> {
+    let path = dir.join("run.json");
     write_atomic(&path, &serde_json::to_string_pretty(manifest)?)
         .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
 }
 
 async fn drive(
+    dir: &Path,
     run_id: &str,
     options: AttemptOptions,
     prior_state: Option<sven_sdk::AgentState>,
     trace: Arc<Trace>,
     started: Instant,
 ) -> anyhow::Result<Outcome> {
-    let dir = crate::store::run_dir(run_id);
-
     let mut settings = config::load(None)?;
     if let Some(spec) = &options.model {
         let (provider, name) = spec
@@ -487,7 +501,7 @@ async fn drive(
         res = agent.send(&task) => { sent = Some(res); raced = None; }
         _ = tokio::time::sleep(Duration::from_secs(options.timeout_secs)) => { sent = None; raced = Some(Status::Timeout); }
         _ = tokio::signal::ctrl_c() => { sent = None; raced = Some(Status::Cancelled); }
-        (status, reason) = watch_limits(&dir, options.budget, &tally, started) => {
+        (status, reason) = watch_limits(dir, options.budget, &tally, started) => {
             sent = None;
             raced = Some(status);
             stop_reason = Some(reason);
@@ -531,7 +545,7 @@ async fn drive(
 
     // The exact model input, when it was being captured.
     if let Some(recorder) = &recorder {
-        let path = splinter_lab::capture_path(&dir);
+        let path = splinter_lab::capture_path(dir);
         if let Err(e) = recorder.dump(&path).await {
             let mut note = serde_json::json!({ "note": format!("could not write the captured model input: {e}") });
             trace.event("record_input_failed", &mut note)?;
@@ -540,7 +554,7 @@ async fn drive(
 
     build_outcome(
         run_id,
-        &dir,
+        dir,
         &options,
         raced,
         stop_reason,
@@ -565,7 +579,7 @@ async fn watch_limits(
     let mut tick = tokio::time::interval(Duration::from_millis(500));
     loop {
         tick.tick().await;
-        if crate::store::cancel_requested(dir) {
+        if crate::runs::cancel_requested(dir) {
             return (Status::Cancelled, "cancel requested".into());
         }
         let usage = tally.usage(started.elapsed().as_secs());

@@ -29,6 +29,7 @@ brain-model = { git = "https://github.com/swedishembedded/brain" }
 brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
 
 splinter-lab = { path = "crates/lab" }
+splinter-store = { path = "crates/store" }
 
 anyhow = "1"
 async-trait = "0.1"

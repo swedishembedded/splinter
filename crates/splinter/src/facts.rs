@@ -21,8 +21,8 @@
 //! `ask` parses) while evaluation needs the bare answer (a wrapped reference
 //! is unmatchable by construction). One pool of facts, three files.
 
-use crate::store;
 use anyhow::Context;
+use splinter_store::{write_atomic, StateRoot};
 
 /// One fact: the question and its reference answer.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -162,9 +162,9 @@ pub(crate) fn write_split(
         holdout_text.push_str(&bare(fact));
         holdout_text.push('\n');
     }
-    store::write_atomic(train_path, &train_text)?;
-    store::write_atomic(train_eval_path, &recall_text)?;
-    store::write_atomic(holdout_path, &holdout_text)?;
+    write_atomic(train_path, &train_text)?;
+    write_atomic(train_eval_path, &recall_text)?;
+    write_atomic(holdout_path, &holdout_text)?;
     Ok(())
 }
 
@@ -198,7 +198,7 @@ pub(crate) struct FactsOptions {
 /// explore, train, eval-facts - through their library entry points, so
 /// there is one spelling of each stage and this module is composition,
 /// not a second implementation.
-pub(crate) fn run(options: FactsOptions) -> anyhow::Result<FactsReport> {
+pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<FactsReport> {
     let work = options.work_dir.clone();
     std::fs::create_dir_all(&work).with_context(|| format!("creating {}", work.display()))?;
 
@@ -218,16 +218,19 @@ pub(crate) fn run(options: FactsOptions) -> anyhow::Result<FactsReport> {
         let file = options.file.clone().ok_or_else(|| {
             anyhow::anyhow!("facts needs --file FILE (or --out naming an existing dataset)")
         })?;
-        let summary = crate::explore::run(crate::explore::ExploreOptions {
-            file,
-            out: dataset.clone(),
-            chunk_lines: options.chunk_lines,
-            scope_negatives: options.scope_negatives.clone(),
-            model: options.model.clone(),
-            base_url: options.base_url.clone(),
-            api_key: options.api_key.clone(),
-            local: options.local.clone(),
-        })?;
+        let summary = crate::explore::run(
+            root,
+            crate::explore::ExploreOptions {
+                file,
+                out: dataset.clone(),
+                chunk_lines: options.chunk_lines,
+                scope_negatives: options.scope_negatives.clone(),
+                model: options.model.clone(),
+                base_url: options.base_url.clone(),
+                api_key: options.api_key.clone(),
+                local: options.local.clone(),
+            },
+        )?;
         (summary.run_id.clone(), read_facts(&dataset)?)
     };
     anyhow::ensure!(!facts.is_empty(), "{} holds no facts", dataset.display());
@@ -262,7 +265,7 @@ pub(crate) fn run(options: FactsOptions) -> anyhow::Result<FactsReport> {
         rank: options.rank,
         alpha: options.alpha,
     };
-    let (decision, train_dir) = crate::train::run(&train_options)?;
+    let (decision, train_dir) = crate::train::run(root, &train_options)?;
     let promoted = decision == crate::train::Decision::Promoted;
     eprintln!(
         "facts: train {} (decision record in {}/decision.json)",
@@ -327,7 +330,7 @@ pub(crate) fn run(options: FactsOptions) -> anyhow::Result<FactsReport> {
         "recall": { "correct": report.recall_correct, "total": report.recall_total },
         "holdout": { "correct": report.holdout_correct, "total": report.holdout_total },
     });
-    store::write_atomic(
+    write_atomic(
         &work.join("facts-report.json"),
         &serde_json::to_string_pretty(&summary)?,
     )?;

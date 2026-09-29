@@ -24,8 +24,9 @@
 //! decision record holds both scores, so "the model got worse" is evidence,
 //! not folklore.
 
+use splinter_store::{write_atomic, StateRoot};
+
 use crate::learn;
-use crate::store;
 use data::chat::ChatSample;
 use model::FitOpts;
 use qwen3::finetune::{finetune_from, Mode};
@@ -149,7 +150,7 @@ fn opts(steps: u32, block: u32) -> FitOpts {
 
 /// One training attempt, end to end. Returns the decision and where the
 /// decision record (and, on promotion, the adapter) lives.
-pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)> {
+pub(crate) fn run(root: &StateRoot, options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)> {
     let model_dir = options.model_dir.clone();
     // brain's loader APIs take the checkpoint FILE; a caller may pass the
     // standard directory, so resolve once and score/train against the
@@ -157,7 +158,7 @@ pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)>
     let weights = crate::provider::resolve_base(&model_dir)?;
     let pool = match &options.dataset {
         Some(path) => path.clone(),
-        None => learn::pool_path(),
+        None => root.experience_pool(),
     };
     anyhow::ensure!(
         pool.exists(),
@@ -196,7 +197,7 @@ pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)>
         &tok,
         &tmpl,
         tok.vocab_size(),
-        &train_dir()?,
+        &train_dir(root)?,
     )?;
     let block = block_size(prepared.longest_example);
     eprintln!(
@@ -218,7 +219,7 @@ pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)>
         dt,
     );
 
-    let out = attempt_dir()?;
+    let out = attempt_dir(root)?;
     let adapter = out.join("adapter.safetensors");
     let fit_opts = opts(options.steps, block);
     // finetune_from writes a full training checkpoint (adapter tensors on
@@ -233,7 +234,7 @@ pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)>
     let full_ckpt = out.join("full.safetensors");
     finetune_from(
         weights.to_str().expect("model path is utf-8"),
-        &train_dir()?,
+        &train_dir(root)?,
         &fit_opts,
         &Mode::Lora {
             rank: options.rank,
@@ -288,7 +289,7 @@ pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)>
     // enough when a better adapter already serves - the gate must not let a
     // regression displace it. Only a champion scored on the same pool and
     // split bounds a candidate; `decide` checks that by base loss.
-    let champion = read_champion_scores(&adapter_pointer());
+    let champion = read_champion_scores(&root.adapter_pointer());
     let decision = decide(&scores, champion.as_ref());
 
     let record = serde_json::json!({
@@ -302,14 +303,14 @@ pub(crate) fn run(options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)>
         "decision": match decision { Decision::Promoted => "promoted", Decision::Rejected => "rejected" },
         "adapter": adapter,
     });
-    store::write_atomic(
+    write_atomic(
         &out.join("decision.json"),
         &serde_json::to_string_pretty(&record)?,
     )?;
 
     apply_decision(
         &decision,
-        &adapter_pointer(),
+        &root.adapter_pointer(),
         &adapter,
         &model_dir,
         &scores,
@@ -341,28 +342,23 @@ fn apply_decision(
         "scores": { "base_loss": scores.base_loss, "tuned_loss": scores.tuned_loss },
         "decision_record": decision_record,
     });
-    store::write_atomic(pointer, &serde_json::to_string_pretty(&record)?)
+    write_atomic(pointer, &serde_json::to_string_pretty(&record)?)
         .map_err(|e| anyhow::anyhow!("{}: {e}", pointer.display()))
 }
 
 /// One training attempt's own output directory, created exactly once.
-fn attempt_dir() -> anyhow::Result<PathBuf> {
-    let dir = store::state_root()
-        .join("train")
-        .join(store::new_id_with_prefix("train"));
+fn attempt_dir(root: &StateRoot) -> anyhow::Result<PathBuf> {
+    let dir = root
+        .train()
+        .join(splinter_store::new_id_with_prefix("train"));
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
-fn train_dir() -> anyhow::Result<PathBuf> {
-    let dir = store::state_root().join("train").join("prepared");
+fn train_dir(root: &StateRoot) -> anyhow::Result<PathBuf> {
+    let dir = root.train().join("prepared");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
-}
-
-/// Where serving reads the currently promoted adapter from, if any.
-pub(crate) fn adapter_pointer() -> PathBuf {
-    store::state_root().join("adapter.json")
 }
 
 /// The champion's recorded gate scores, when a pointer is in place. A
@@ -384,10 +380,10 @@ mod tests {
 
     #[test]
     fn a_rejected_attempt_leaves_the_promoted_adapter_in_service() {
-        let _guard = crate::store::ENV_LOCK.lock().unwrap();
-        let root = std::env::temp_dir().join(format!("loop-train-gate-{}", std::process::id()));
-        std::env::set_var("SPLINTER_STATE", &root);
-        let pointer = store::state_root().join("adapter.json");
+        let root = StateRoot::new(
+            std::env::temp_dir().join(format!("splinter-train-gate-{}", std::process::id())),
+        );
+        let pointer = root.adapter_pointer();
         std::fs::create_dir_all(pointer.parent().unwrap()).unwrap();
         let standing = serde_json::json!({ "adapter": "/previous/good-adapter.safetensors" });
         std::fs::write(&pointer, serde_json::to_string_pretty(&standing).unwrap()).unwrap();
@@ -431,8 +427,7 @@ mod tests {
         assert_eq!(promoted["adapter"], adapter.display().to_string());
         assert_eq!(promoted["scores"]["tuned_loss"], 1.0);
 
-        std::env::remove_var("SPLINTER_STATE");
-        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(root.path());
     }
 
     #[test]

@@ -46,7 +46,7 @@ test:
 
 ## fmt - format Splinter's own sources (never a dependency's)
 fmt:
-	rustfmt --edition 2021 $$(git ls-files '*.rs')
+	rustfmt --edition 2021 $$(git ls-files --cached --others --exclude-standard '*.rs')
 
 ## check - every gate over the whole tree (what the hooks check per commit)
 check: check/gates check/fmt check/clippy
@@ -65,7 +65,7 @@ check/gates:
 
 ## check/fmt - formatting of Splinter's own sources
 check/fmt:
-	rustfmt --edition 2021 --check $$(git ls-files '*.rs')
+	rustfmt --edition 2021 --check $$(git ls-files --cached --others --exclude-standard '*.rs')
 
 ## check/clippy - clippy on every target, warnings denied
 check/clippy:

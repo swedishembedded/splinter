@@ -26,8 +26,8 @@
 //! failure, scored wrong - a salvaged half-answer would inflate a score
 //! the promotion gate trusts.
 
-use crate::store::write_atomic;
 use anyhow::Context;
+use splinter_store::write_atomic;
 
 /// Everything one evaluation needs, as configured by the caller.
 #[derive(Clone, Debug)]

@@ -93,7 +93,7 @@ impl Trace {
             run: &self.run_id,
             attempt: self.attempt,
             seq: guard.seq,
-            ts: crate::clock::utc_now(),
+            ts: splinter_store::clock::utc_now(),
             kind,
             payload: payload.clone(),
         };

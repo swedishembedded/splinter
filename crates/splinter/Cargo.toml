@@ -25,6 +25,7 @@ brain-capability = { workspace = true }
 brain-model = { workspace = true }
 brain-gpu-core = { workspace = true }
 splinter-lab = { workspace = true }
+splinter-store = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

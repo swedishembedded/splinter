@@ -24,7 +24,9 @@
 //!   sections (or re-run over a grown document) trains once.
 
 use crate::provider::LocalWeights;
-use crate::store::{self, write_atomic};
+use splinter_store::{write_atomic, StateRoot};
+
+use crate::runs::{Limits, RunManifest};
 use crate::trace::Trace;
 use anyhow::Context;
 use sven_sdk::model::{CompletionRequest, Message, ModelProvider, ResponseEvent, Role};
@@ -535,7 +537,7 @@ fn document_title(text: &str) -> Option<&str> {
     text.lines().find(|l| l.starts_with("# "))
 }
 
-pub(crate) fn run(options: ExploreOptions) -> anyhow::Result<ExploreSummary> {
+pub(crate) fn run(root: &StateRoot, options: ExploreOptions) -> anyhow::Result<ExploreSummary> {
     let text = std::fs::read_to_string(&options.file)
         .with_context(|| format!("reading {}", options.file.display()))?;
     let sections = split_sections(&text, options.chunk_lines);
@@ -548,19 +550,19 @@ pub(crate) fn run(options: ExploreOptions) -> anyhow::Result<ExploreSummary> {
         .map(title_identifiers)
         .unwrap_or_default();
 
-    let run_id = store::new_id_with_prefix("explore");
-    let dir = store::run_dir(&run_id);
+    let run_id = splinter_store::new_id_with_prefix("explore");
+    let dir = root.run_dir(&run_id);
     let trace = Trace::open(&dir, &run_id, 1)?;
 
-    let mut manifest = store::RunManifest {
+    let mut manifest = RunManifest {
         schema: 1,
         run_id: run_id.clone(),
         workspace: options.file.display().to_string(),
         task: format!("explore facts from {}", options.file.display()),
         status: "pending".into(),
         attempts: 1,
-        started_ts: crate::clock::utc_now(),
-        updated_ts: crate::clock::utc_now(),
+        started_ts: splinter_store::clock::utc_now(),
+        updated_ts: splinter_store::clock::utc_now(),
         model: match &options.model {
             Some(spec) => spec.clone(),
             None => format!(
@@ -570,9 +572,9 @@ pub(crate) fn run(options: ExploreOptions) -> anyhow::Result<ExploreSummary> {
         },
         base_url: options.base_url.clone(),
         local_adapter: options.local.as_ref().and_then(|w| w.adapter.clone()),
-        limits: store::Limits::default(),
+        limits: Limits::default(),
     };
-    store::write_atomic(
+    write_atomic(
         &dir.join("run.json"),
         &serde_json::to_string_pretty(&manifest)?,
     )?;
@@ -696,8 +698,8 @@ pub(crate) fn run(options: ExploreOptions) -> anyhow::Result<ExploreSummary> {
         &serde_json::to_string_pretty(&outcome)?,
     )?;
     manifest.status = "completed".into();
-    manifest.updated_ts = crate::clock::utc_now();
-    store::write_atomic(
+    manifest.updated_ts = splinter_store::clock::utc_now();
+    write_atomic(
         &dir.join("run.json"),
         &serde_json::to_string_pretty(&manifest)?,
     )?;

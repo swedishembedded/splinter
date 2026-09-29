@@ -161,7 +161,7 @@ impl Outcome {
     pub fn save(&self, run_dir: &Path) -> anyhow::Result<()> {
         let path = run_dir.join("outcome.json");
         let text = serde_json::to_string_pretty(self)?;
-        crate::store::write_atomic(&path, &text)
+        splinter_store::write_atomic(&path, &text)
             .with_context(|| format!("writing {}", path.display()))
     }
 
