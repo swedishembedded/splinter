@@ -6,1118 +6,194 @@
 // team needs expertise in agent interfaces or CLI design, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! The loop agent: run a delegated workspace task through sven's engine,
-//! trace every observable action, and hand back a structured result.
+//! The `splinter` command line: argument parsing and output only. Every
+//! command is a call into `splinter-campaign`, configured once from the
+//! environment.
 //!
-//! ```text
-//! splinter run --workspace DIR --task TEXT [options]
-//! splinter show [--run ID | --list]
-//! splinter resume --run ID [run options]
-//! splinter cancel --run ID
-//! ```
-//!
-//! Every run writes its complete trace under `~/.sven/splinter/runs/<run_id>/`;
-//! nothing depends on the process that wrote it still being alive.
+//! Exit status: 0 on success; 1 when a delegated attempt did not complete or
+//! a trained candidate was rejected - a script must never read either as
+//! progress; 2 on a usage error or an `ask` reply that does not parse.
 
-pub(crate) mod eval;
-mod facts;
-mod learn;
-mod train;
+mod cli;
+mod output;
 
-use splinter_agent::{outcome, runner, AttemptOptions};
+use clap::Parser;
+use splinter_campaign::{ask, attempt, eval, facts, learn, train, Config};
 use splinter_knowledge as explore;
-use splinter_policy::{LocalWeights, ModelSelection, RemoteModel};
-use splinter_store::StateRoot;
-use std::path::PathBuf;
-pub(crate) mod ask;
+use splinter_lab::promotion::Decision;
+use splinter_policy::LocalWeights;
 
-const USAGE: &str = "\
-usage: splinter <command> [options]
-
-  run --workspace DIR --task TEXT [options]
-      delegate a task to the agent in DIR and write a structured outcome
-  show [--run ID | --list]
-      print a run's manifest, outcome and trace index
-  resume --run ID [run options]
-      continue an interrupted run from its checkpoint, reconciling against
-      its own trace before acting; refused once --max-attempts is spent
-  cancel --run ID
-      stop a run in progress from another process; its attempt ends as
-      `cancelled` with checkpoint and trace written, resumable
-  learn --run ID
-      append a verified run's experience to the training pool (refuses a
-      failed or unverified run)
-  train [--dataset FILE] [--local-weights DIR] [--steps N] [--rank N]
-        [--alpha F]
-      fine-tune a LoRA adapter on the pool and promote it only when the
-      held-out loss improved; non-zero exit on rejection
-  explore --file FILE --out OUT.jsonl [--chunk-lines N]
-          [--scope-negatives ID1,ID2,...]
-      extract a question/answer training dataset from a markdown fact
-      sheet: one JSONL record per fact, in the schema `learn` writes.
-      Every question must name a device the document's title names; one
-      that does not is refused. The identifiers listed in
-      --scope-negatives lie outside the document: for every other fact a
-      negative variant trains the fixed abstention reply, so the adapter
-      learns where its knowledge ends
-  ask --question TEXT
-      one-shot question; prints only the parsed {\"answer\": ...} JSON
-      object; exit 2 when the reply is not strictly parseable
-  eval-facts --dataset FILE.jsonl --out REPORT.json [--adapter FILE]
-             [--shuffle] [--limit N] [--base]
-      ask the configured model every question in a facts dataset and
-      score each reply against its reference answer; writes a JSON
-      report (per-question verdicts) and prints a one-line summary.
-      Serves the promoted adapter by default; --base forces the
-      untouched base model (the adapter-vs-base contrast)
-  facts --file FILE [--work-dir DIR] [--out DATASET.jsonl]
-        [--holdout-one-in N] [--steps N] [--rank N] [--alpha F]
-        [--chunk-lines N] [--scope-negatives ID1,ID2,...]
-        [model options as for run]
-      learn a markdown fact sheet end to end: explore every fact,
-      split (1-in-N held out), fine-tune a LoRA behind the held-out
-      gate, and score recall on the trained questions plus
-      generalization on the held-out ones. Artifacts and the JSON
-      report land in --work-dir (default: facts/ under the state
-      root); exit non-zero when the gate rejected the adapter
-
-options for run / resume:
-  --task-file FILE       read the task from FILE instead of --task
-  --check CMD            completion check the run executes itself after the
-                         turn (repeatable; the reviewer runs its own too)
-  --local-weights DIR    local model checkpoint directory to serve the agent
-                         from, in-process (default: $BRAIN_QWEN_WEIGHTS, else
-                         ~/.local/share/brain/models/Qwen/Qwen3-0.6B)
-  --adapter FILE         LoRA adapter folded into the local model at load
-  --ctx N                inline context budget for the local model (default
-                         16384)
-  --allow-api-models     permit a model reached over an API; without it
-                         --model and --base-url are refused and every
-                         model call stays local and in-process
-  --model provider/name  run a REMOTE model instead of the local one (e.g.
-                         openrouter/z-ai/glm-5.3-flash); needs its api key
-                         and --allow-api-models
-  --base-url URL         served OpenAI-compatible endpoint (remote models)
-  --api-key KEY          key for that endpoint (default: AGENT_OPENROUTER_KEY
-                         for openrouter, BRAIN_API_KEY otherwise)
-  --timeout-secs N       per-attempt wall-clock limit (default 600)
-  --max-tool-rounds N    per-attempt tool-round limit (default: sven config)
-  --max-output-tokens N  per-attempt generated-token limit (default 100000)
-  --max-cost-usd X       per-attempt billed-cost limit, remote models only
-                         (default 1.00 for openrouter/ models); a provider
-                         that reports usage without a price exhausts it
-  --max-attempts N       attempts per run, resumes included (default 3)
-  --record-input         capture the exact model input at the wire
-                         (needs --base-url naming a proxied upstream)
-  --json                 print the outcome as JSON on success
-
-A limit that fires ends the attempt as `timeout` or `budget_exhausted`; the
-checkpoint and trace are written either way.
-
-State lives under ~/.sven/splinter/ (override: SPLINTER_STATE). Every run has
-a stable id; its manifest, trace, transcript, checkpoint and outcome survive
-the process that wrote them.
-";
+use cli::{Cli, Command};
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.first().map(String::as_str) {
-        Some("run") => run(&args[1..]),
-        Some("show") => show(&args[1..]),
-        Some("resume") => resume(&args[1..]),
-        Some("cancel") => cancel(&args[1..]),
-        Some("learn") => learn_cmd(&args[1..]),
-        Some("train") => train_cmd(&args[1..]),
-        Some("explore") => explore_cmd(&args[1..]),
-        Some("ask") => ask_cmd(&args[1..]),
-        Some("eval-facts") => eval_facts_cmd(&args[1..]),
-        Some("facts") => facts_cmd(&args[1..]),
-        Some("--help") | Some("-h") | None => {
-            print!("{USAGE}");
-            Ok(())
+    let config = Config::from_env();
+    match Cli::parse().command {
+        Command::Run(args) => {
+            let json = args.json;
+            let outcome = attempt::run(&config, &args.into_request()?)?;
+            output::attempt(&outcome, json)
         }
-        Some(other) => {
-            eprintln!("unknown command {other:?}\n");
-            eprint!("{USAGE}");
-            std::process::exit(2);
+        Command::Resume(args) => {
+            let json = args.attempt.json;
+            let outcome = attempt::resume(&config, &args.run, &args.attempt.into_request()?)?;
+            output::attempt(&outcome, json)
         }
-    }
-}
-
-/// The state root for this process: `SPLINTER_STATE` when set, else the
-/// default under the home directory. The one place the environment names it.
-fn state_root() -> StateRoot {
-    match std::env::var("SPLINTER_STATE") {
-        Ok(dir) if !dir.is_empty() => StateRoot::new(dir),
-        _ => match std::env::var("HOME") {
-            Ok(home) if !home.is_empty() => StateRoot::under_home(std::path::Path::new(&home)),
-            _ => StateRoot::under_home(std::path::Path::new(".")),
-        },
-    }
-}
-
-struct Flags {
-    workspace: Option<PathBuf>,
-    task: Option<String>,
-    checks: Vec<String>,
-    model: Option<String>,
-    base_url: Option<String>,
-    api_key: Option<String>,
-    local_weights: Option<PathBuf>,
-    adapter: Option<PathBuf>,
-    context_tokens: u32,
-    timeout_secs: u64,
-    max_tool_rounds: Option<u32>,
-    max_output_tokens: Option<u64>,
-    max_cost_usd: Option<f64>,
-    max_attempts: u32,
-    allow_api_models: bool,
-    record_input: bool,
-    json: bool,
-    run: Option<String>,
-    dataset: Option<PathBuf>,
-    steps: u32,
-    rank: u32,
-    alpha: f32,
-    file: Option<PathBuf>,
-    out: Option<PathBuf>,
-    chunk_lines: Option<usize>,
-    question: Option<String>,
-    shuffle: bool,
-    limit: Option<usize>,
-    work_dir: Option<PathBuf>,
-    holdout_one_in: usize,
-    force_base: bool,
-    scope_negatives: Vec<String>,
-}
-
-const DEFAULT_TRAIN_STEPS: u32 = 40;
-const DEFAULT_LORA_RANK: u32 = 8;
-const DEFAULT_LORA_ALPHA: f32 = 16.0;
-/// Every Nth explored fact is held out of training, so the pipeline's
-/// generalization score always has something to measure.
-const DEFAULT_HOLDOUT_ONE_IN: usize = 5;
-/// Generated tokens one attempt may spend. At the local model's measured
-/// decode rate the wall-clock limit binds long before this does; it exists
-/// for fast remote models, where it is the bound that stops a loop.
-const DEFAULT_MAX_OUTPUT_TOKENS: u64 = 100_000;
-/// Billed USD one attempt on an OpenRouter model may spend unless the caller
-/// sets another cap. Conservative on purpose: raising it is a visible flag.
-const DEFAULT_REMOTE_MAX_COST_USD: f64 = 1.0;
-/// Attempts per run, the first included: a first try and two resumes.
-const DEFAULT_MAX_ATTEMPTS: u32 = 3;
-
-impl Flags {
-    /// Whether this invocation names a model reached over an API.
-    fn names_api_model(&self) -> bool {
-        self.model.is_some() || self.base_url.is_some()
-    }
-
-    /// The attempt's usage limits, defaults applied. Only OpenRouter models
-    /// get a default cost cap: they report a price per call, so the cap can
-    /// be enforced. Other endpoints (a served brain, say) report none, and a
-    /// default cap there would stop every run on its first usage report.
-    fn budget(&self) -> splinter_store::runs::Budget {
-        let openrouter = self
-            .model
-            .as_deref()
-            .is_some_and(|m| m.starts_with("openrouter/"));
-        splinter_store::runs::Budget {
-            max_output_tokens: Some(self.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT_TOKENS)),
-            max_cost_usd: self
-                .max_cost_usd
-                .or(openrouter.then_some(DEFAULT_REMOTE_MAX_COST_USD)),
-        }
-    }
-}
-
-fn parse(args: &[String]) -> anyhow::Result<Flags> {
-    let mut flags = Flags {
-        workspace: None,
-        task: None,
-        checks: Vec::new(),
-        model: None,
-        base_url: None,
-        api_key: None,
-        local_weights: None,
-        adapter: None,
-        context_tokens: 16_384,
-        timeout_secs: 600,
-        max_tool_rounds: None,
-        max_output_tokens: None,
-        max_cost_usd: None,
-        max_attempts: DEFAULT_MAX_ATTEMPTS,
-        allow_api_models: false,
-        record_input: false,
-        json: false,
-        run: None,
-        dataset: None,
-        steps: DEFAULT_TRAIN_STEPS,
-        rank: DEFAULT_LORA_RANK,
-        alpha: DEFAULT_LORA_ALPHA,
-        file: None,
-        out: None,
-        chunk_lines: None,
-        question: None,
-        shuffle: false,
-        limit: None,
-        work_dir: None,
-        holdout_one_in: DEFAULT_HOLDOUT_ONE_IN,
-        force_base: false,
-        scope_negatives: Vec::new(),
-    };
-    let mut i = 0;
-    let mut task_file: Option<PathBuf> = None;
-    while i < args.len() {
-        let take = |i: &mut usize| -> anyhow::Result<String> {
-            *i += 1;
-            args.get(*i)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("{} needs a value", args[*i - 1]))
-        };
-        match args[i].as_str() {
-            "--workspace" => flags.workspace = Some(PathBuf::from(take(&mut i)?)),
-            "--task" => flags.task = Some(take(&mut i)?),
-            "--task-file" => task_file = Some(PathBuf::from(take(&mut i)?)),
-            "--check" => flags.checks.push(take(&mut i)?),
-            "--model" => flags.model = Some(take(&mut i)?),
-            "--base-url" => flags.base_url = Some(take(&mut i)?),
-            "--api-key" => flags.api_key = Some(take(&mut i)?),
-            "--local-weights" => flags.local_weights = Some(PathBuf::from(take(&mut i)?)),
-            "--adapter" => flags.adapter = Some(PathBuf::from(take(&mut i)?)),
-            "--ctx" => flags.context_tokens = take(&mut i)?.parse()?,
-            "--timeout-secs" => flags.timeout_secs = take(&mut i)?.parse()?,
-            "--max-tool-rounds" => flags.max_tool_rounds = Some(take(&mut i)?.parse()?),
-            "--max-output-tokens" => flags.max_output_tokens = Some(take(&mut i)?.parse()?),
-            "--max-cost-usd" => flags.max_cost_usd = Some(take(&mut i)?.parse()?),
-            "--max-attempts" => flags.max_attempts = take(&mut i)?.parse()?,
-            "--allow-api-models" => flags.allow_api_models = true,
-            "--record-input" => flags.record_input = true,
-            "--json" => flags.json = true,
-            "--run" => flags.run = Some(take(&mut i)?),
-            "--dataset" => flags.dataset = Some(PathBuf::from(take(&mut i)?)),
-            "--steps" => flags.steps = take(&mut i)?.parse()?,
-            "--rank" => flags.rank = take(&mut i)?.parse()?,
-            "--alpha" => flags.alpha = take(&mut i)?.parse()?,
-            "--file" => flags.file = Some(PathBuf::from(take(&mut i)?)),
-            "--out" => flags.out = Some(PathBuf::from(take(&mut i)?)),
-            "--chunk-lines" => flags.chunk_lines = Some(take(&mut i)?.parse()?),
-            "--question" => flags.question = Some(take(&mut i)?),
-            "--shuffle" => flags.shuffle = true,
-            "--limit" => flags.limit = Some(take(&mut i)?.parse()?),
-            "--work-dir" => flags.work_dir = Some(PathBuf::from(take(&mut i)?)),
-            "--holdout-one-in" => flags.holdout_one_in = take(&mut i)?.parse()?,
-            "--scope-negatives" => {
-                flags.scope_negatives = take(&mut i)?
-                    .split(',')
-                    .map(str::trim)
-                    .map(str::to_string)
-                    .collect()
-            }
-            "--base" => flags.force_base = true,
-            "--list" => {}
-            other => anyhow::bail!("unknown option {other:?}"),
-        }
-        i += 1;
-    }
-    if let Some(path) = task_file {
-        anyhow::ensure!(flags.task.is_none(), "--task and --task-file are exclusive");
-        flags.task = Some(
-            std::fs::read_to_string(&path)
-                .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?,
-        );
-    }
-    anyhow::ensure!(
-        flags.allow_api_models || !flags.names_api_model(),
-        "--model and --base-url reach a model over an API; that is refused unless \
-         --allow-api-models is given (the default runs every model call locally)"
-    );
-    anyhow::ensure!(
-        flags.max_cost_usd.is_none() || flags.names_api_model(),
-        "--max-cost-usd limits billed remote usage; local inference is not billed per token"
-    );
-    anyhow::ensure!(flags.max_attempts >= 1, "--max-attempts must be at least 1");
-    anyhow::ensure!(
-        flags.base_url.is_none() || flags.model.is_some(),
-        "--base-url names the endpoint of a remote model; give --model provider/name with it"
-    );
-    anyhow::ensure!(
-        flags.adapter.is_none() || flags.model.is_none(),
-        "--adapter applies to the local model; drop --model to run locally"
-    );
-    Ok(flags)
-}
-
-fn run(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    allow_slow_local_prefill(&flags);
-    let root = state_root();
-    let run_id = flags.run.clone().unwrap_or_default();
-    let options = options_from(&flags, &root, &run_id)?;
-    let (outcome, _manifest) = runner::run(&root, options)?;
-    report(&outcome, flags.json)
-}
-
-fn resume(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    allow_slow_local_prefill(&flags);
-    let run_id = flags
-        .run
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("resume needs --run ID"))?;
-    let root = state_root();
-    let options = options_from(&flags, &root, &run_id)?;
-    let (outcome, _manifest) = runner::resume(&root, &run_id, options)?;
-    report(&outcome, flags.json)
-}
-
-/// `cancel --run ID`: ask the process running a run to stop its attempt.
-fn cancel(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let run_id = flags
-        .run
-        .ok_or_else(|| anyhow::anyhow!("cancel needs --run ID"))?;
-    let request = splinter_store::runs::request_cancel(&state_root(), &run_id)?;
-    println!(
-        "cancel requested for {run_id} ({}); the attempt stops within a second or one \
-         generation chunk, then `show --run {run_id}` reports it",
-        request.display()
-    );
-    Ok(())
-}
-
-/// `learn --run ID`: append a verified run's experience to the training
-/// pool. Refuses anything the reviewer could not already trust.
-fn learn_cmd(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let run_id = flags
-        .run
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("learn needs --run ID"))?;
-    let root = state_root();
-    match learn::learn_run(&root, &run_id)? {
-        learn::Learned::Appended => println!(
-            "learned {run_id}: appended to {}",
-            root.experience_pool().display()
-        ),
-        learn::Learned::AlreadyRecorded => {
-            println!("learned {run_id}: already in the pool, no duplicate written")
-        }
-    }
-    Ok(())
-}
-
-/// `train`: fine-tune a LoRA adapter on the pool and let the held-out gate
-/// decide. Prints both scores either way; exits non-zero on rejection so a
-/// delegating script never reads "worse model" as progress.
-fn train_cmd(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let options = train::TrainOptions {
-        model_dir: flags.local_weights.unwrap_or_else(default_local_weights),
-        dataset: flags.dataset,
-        steps: flags.steps,
-        rank: flags.rank,
-        alpha: flags.alpha,
-    };
-    let (decision, dir) = train::run(&state_root(), &options)?;
-    match decision {
-        splinter_lab::promotion::Decision::Promoted => {
-            println!("promoted: adapter and scores in {}", dir.display());
-            Ok(())
-        }
-        splinter_lab::promotion::Decision::Rejected => {
+        Command::Show(args) => output::show(&config.state_root, args.run.as_deref()),
+        Command::Cancel(args) => {
+            let request = splinter_store::runs::request_cancel(&config.state_root, &args.run)?;
             println!(
-                "rejected: held-out loss did not improve; scores in {}/decision.json",
-                dir.display()
-            );
-            std::process::exit(1);
-        }
-    }
-}
-
-/// `explore --file FILE --out OUT.jsonl [--chunk-lines N]`: turn a markdown
-/// fact sheet into question/answer training records, traced like a run.
-fn explore_cmd(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let file = flags
-        .file
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("explore needs --file FILE"))?;
-    let out = flags
-        .out
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("explore needs --out OUT.jsonl"))?;
-    let options = explore::ExploreOptions {
-        file,
-        out,
-        chunk_lines: flags.chunk_lines,
-        model: model_of(&flags, local_weights(&flags)),
-        scope_negatives: flags.scope_negatives.clone(),
-    };
-    let root = state_root();
-    let summary = explore::run(&root, options)?;
-    println!(
-        "explored {}: {} section(s), {} fact(s), {} parse failure(s), \
-         {} unanchored question(s) refused, {} answer(s) with untraceable numbers refused\n\
-         run:     {}\nout:     {}",
-        summary.run_id,
-        summary.sections,
-        summary.facts,
-        summary.parse_failures,
-        summary.unanchored,
-        summary.untraceable,
-        root.run_dir(&summary.run_id).display(),
-        flags
-            .out
-            .map(|o| o.display().to_string())
-            .unwrap_or_default(),
-    );
-    Ok(())
-}
-
-/// `ask --question TEXT`: one-shot strict-JSON question. Prints ONLY the
-/// parsed object; exit 2 on an unparseable reply.
-fn ask_cmd(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let question = flags
-        .question
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("ask needs --question TEXT"))?;
-    let options = ask::AskOptions {
-        question,
-        model: model_of(&flags, query_weights(&flags, &state_root())?),
-    };
-    match ask::run(options) {
-        Ok(answer) => {
-            // Print the parsed object, not the raw reply - the caller reads
-            // JSON or nothing.
-            println!(
-                "{}",
-                serde_json::to_string(&serde_json::json!({ "answer": answer }))?
+                "cancel requested for {} ({}); the attempt stops within a second or one \
+                 generation chunk, then `show --run {}` reports it",
+                args.run,
+                request.display(),
+                args.run
             );
             Ok(())
         }
-        Err(e) => {
-            eprintln!("ask: {e:#}");
-            std::process::exit(2);
-        }
-    }
-}
-
-/// `eval-facts --dataset FILE.jsonl --out REPORT.json [--adapter FILE]
-/// [--shuffle] [--limit N]`: ask the model every dataset question and
-/// score each reply against its reference, writing a JSON report with
-/// per-question verdicts and printing a one-line summary.
-fn eval_facts_cmd(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let dataset = flags
-        .dataset
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("eval-facts needs --dataset FILE.jsonl"))?;
-    let out = flags
-        .out
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("eval-facts needs --out REPORT.json"))?;
-    let options = eval::EvalOptions {
-        dataset,
-        out: out.clone(),
-        model: model_of(&flags, query_weights(&flags, &state_root())?),
-        shuffle: flags.shuffle,
-        limit: flags.limit,
-    };
-    let report = eval::run(options)?;
-    println!(
-        "eval-facts: {}/{} correct (accuracy {:.3}, {} parse failure(s)) - report in {}",
-        report.correct,
-        report.total,
-        report.accuracy,
-        report.parse_failures,
-        out.display(),
-    );
-    Ok(())
-}
-
-/// `facts --file FILE`: the whole document-learning pipeline in one
-/// command. Prints a two-line verdict - what was learned and what the
-/// scores are - and exits non-zero when the gate rejected the adapter, so
-/// a delegating script never reads a rejected candidate as progress.
-fn facts_cmd(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let root = state_root();
-    let work_dir = flags.work_dir.clone().unwrap_or_else(|| root.facts());
-    let options = facts::FactsOptions {
-        file: flags.file.clone(),
-        out: flags.out.clone(),
-        work_dir,
-        holdout_one_in: flags.holdout_one_in,
-        chunk_lines: flags.chunk_lines,
-        scope_negatives: flags.scope_negatives.clone(),
-        steps: flags.steps,
-        rank: flags.rank,
-        alpha: flags.alpha,
-        extractor: model_of(&flags, local_weights(&flags)),
-        policy: LocalWeights {
-            adapter: None,
-            ..local_weights(&flags)
-        },
-    };
-    let report = facts::run(&root, options)?;
-    println!(
-        "facts: {} fact(s) from {} ({} train / {} eval), training {}",
-        report.facts,
-        flags
-            .file
-            .as_ref()
-            .map(|f| f.display().to_string())
-            .unwrap_or_else(|| "existing dataset".into()),
-        report.train_records,
-        report.eval_records,
-        if report.promoted {
-            format!("promoted ({})", report.train_id)
-        } else {
-            "REJECTED by the held-out gate".into()
-        },
-    );
-    println!(
-        "facts: recall {}/{} = {:.3}, holdout {}/{} = {:.3}",
-        report.recall_correct,
-        report.recall_total,
-        report.recall_correct as f64 / report.recall_total.max(1) as f64,
-        report.holdout_correct,
-        report.holdout_total,
-        report.holdout_correct as f64 / report.holdout_total.max(1) as f64,
-    );
-    if !report.promoted {
-        std::process::exit(1);
-    }
-    Ok(())
-}
-
-/// The local weights a command serves from: `--local-weights`, else
-/// `$BRAIN_QWEN_WEIGHTS`, else brain's model-store default, with the
-/// `--adapter` the caller named.
-fn local_weights(flags: &Flags) -> LocalWeights {
-    let base = flags
-        .local_weights
-        .clone()
-        .or_else(|| {
-            std::env::var("BRAIN_QWEN_WEIGHTS")
-                .ok()
-                .filter(|p| !p.is_empty())
-                .map(PathBuf::from)
-        })
-        .unwrap_or_else(default_local_weights);
-    LocalWeights {
-        base,
-        adapter: flags.adapter.clone(),
-        context_tokens: flags.context_tokens,
-    }
-}
-
-/// The model a command runs on: the remote model `--model` names (only with
-/// `--allow-api-models`, which `parse` enforces), else `local`.
-fn model_of(flags: &Flags, local: LocalWeights) -> ModelSelection {
-    match &flags.model {
-        Some(spec) => ModelSelection::Remote(RemoteModel {
-            spec: spec.clone(),
-            base_url: flags.base_url.clone(),
-            api_key: api_key_of(flags),
-        }),
-        None => ModelSelection::Local(local),
-    }
-}
-
-/// The local weights a QUESTION command (`ask`, `eval-facts`) serves from:
-/// the promoted adapter by default, so querying what the pipeline learned
-/// needs no flag at all. `--base` forces the untouched base model - the
-/// adapter-vs-base contrast - and refuses to combine with an explicit
-/// `--adapter`, which would leave the intent ambiguous. Delegating
-/// commands (`run`, `explore`) keep [`local_weights`]: a facts adapter's
-/// `{"answer": ...}` reply shape leaks into a coding loop and ends the
-/// run answer-less, so serving it there by default would trade a working
-/// agent for convenience.
-fn query_weights(flags: &Flags, root: &StateRoot) -> anyhow::Result<LocalWeights> {
-    anyhow::ensure!(
-        !(flags.force_base && flags.adapter.is_some()),
-        "--base and --adapter are exclusive: one names the base model, the other an adapter"
-    );
-    anyhow::ensure!(
-        !(flags.force_base && flags.model.is_some()),
-        "--base applies to the local model; drop --model to query locally"
-    );
-    let mut weights = local_weights(flags);
-    if weights.adapter.is_none() && !flags.force_base {
-        let pointer = root.adapter_pointer();
-        if pointer.is_file() {
-            weights.adapter = Some(pointer);
-        }
-    }
-    Ok(weights)
-}
-
-/// The engine's stream watchdog declares a connection dead after 300 s of
-/// silence between chunks - a guard for a REMOTE wire going stale. A local
-/// provider is silent for a different reason: its prefill is one GPU submit
-/// per prompt token, tens of seconds before the first chunk leaves the
-/// process, and no chunk in between is honest to invent. When serving
-/// locally, the attempt's own `--timeout-secs` is the bound that matters -
-/// the timeout race stops the generation through the cancel token - so the
-/// stream watchdog is raised to match instead of racing the prefill it was
-/// never meant to judge. Set before the engine turns run, which read the
-/// value per turn.
-fn allow_slow_local_prefill(flags: &Flags) {
-    if flags.model.is_none() {
-        std::env::set_var(
-            "SVEN_STREAM_CHUNK_TIMEOUT_SECS",
-            flags.timeout_secs.to_string(),
-        );
-    }
-}
-
-/// The task a resume continues: an explicit `--task` wins; otherwise the
-/// run's own recorded task. A resume must not require the caller to retype
-/// what the run already carries - and a divergent retyping would silently
-/// change what the recovered attempt works on.
-fn task_for_resume(flags: &Flags, root: &StateRoot, run_id: &str) -> anyhow::Result<String> {
-    if let Some(task) = &flags.task {
-        return Ok(task.clone());
-    }
-    Ok(splinter_store::runs::read_manifest(root, run_id)?.task)
-}
-
-/// The adapter a resume serves from: an explicit `--adapter` wins; otherwise
-/// the run's recorded one. Same rule as the task fallback - the caller must
-/// not have to restate what the run carries, and dropping it silently turns
-/// a resumed attempt into a base-model run while the manifest still says an
-/// adapter rode along.
-fn adapter_for_resume(
-    flags: &Flags,
-    root: &StateRoot,
-    run_id: &str,
-) -> anyhow::Result<Option<std::path::PathBuf>> {
-    if flags.adapter.is_some() {
-        return Ok(flags.adapter.clone());
-    }
-    Ok(splinter_store::runs::read_manifest(root, run_id)?.local_adapter)
-}
-
-/// The api key follows the provider actually configured: OpenRouter's key
-/// lives in its own environment name, everything else keeps the generic
-/// one. Unset is not filled in here - a provider that needs a key fails
-/// with its own error naming it. Every model-touching command shares this
-/// rule; only `run` used to honor it, which made `ask --model openrouter/...`
-/// need an explicit --api-key the same call through `run` never did.
-fn api_key_of(flags: &Flags) -> Option<String> {
-    flags
-        .api_key
-        .clone()
-        .or_else(|| match flags.model.as_deref() {
-            Some(spec) if spec.starts_with("openrouter/") => {
-                std::env::var("AGENT_OPENROUTER_KEY").ok()
+        Command::Learn(args) => {
+            match learn::learn_run(&config.state_root, &args.run)? {
+                learn::Learned::Appended => println!(
+                    "learned {}: appended to {}",
+                    args.run,
+                    config.state_root.experience_pool().display()
+                ),
+                learn::Learned::AlreadyRecorded => println!(
+                    "learned {}: already in the pool, no duplicate written",
+                    args.run
+                ),
             }
-            _ => std::env::var("BRAIN_API_KEY").ok(),
-        })
-}
-
-fn options_from(flags: &Flags, root: &StateRoot, run_id: &str) -> anyhow::Result<AttemptOptions> {
-    let workspace = flags
-        .workspace
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("run needs --workspace DIR"))?;
-    let task = match &flags.task {
-        Some(task) => task.clone(),
-        // Only a resume may fall back to the run's own task: a fresh run
-        // without a task has nothing to continue.
-        None if !run_id.is_empty() => task_for_resume(flags, root, run_id)?,
-        None => anyhow::bail!("run needs --task TEXT or --task-file FILE"),
-    };
-    // Local-first: with no --model the attempt serves the agent from local
-    // weights, in-process. A resume keeps the adapter the run was recorded
-    // with unless the caller overrides it; see `adapter_for_resume`.
-    let mut local = local_weights(flags);
-    if !run_id.is_empty() {
-        local.adapter = adapter_for_resume(flags, root, run_id)?;
-    }
-    Ok(AttemptOptions {
-        workspace,
-        task,
-        checks: flags.checks.clone(),
-        model: model_of(flags, local),
-        timeout_secs: flags.timeout_secs,
-        max_tool_rounds: flags.max_tool_rounds,
-        max_attempts: flags.max_attempts,
-        budget: flags.budget(),
-        allow_api_models: flags.allow_api_models,
-        record_input: flags.record_input,
-    })
-}
-
-/// Where the default local weights live, when neither the caller nor the
-/// environment names them: the model-store location brain itself uses.
-fn default_local_weights() -> PathBuf {
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() => {
-            PathBuf::from(home).join(".local/share/brain/models/Qwen/Qwen3-0.6B")
+            Ok(())
         }
-        _ => PathBuf::from(".local/share/brain/models/Qwen/Qwen3-0.6B"),
-    }
-}
-
-fn report(outcome: &outcome::Outcome, json: bool) -> anyhow::Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(outcome)?);
-    } else {
-        report_human(outcome);
-    }
-    // Non-zero exit on a non-completed attempt - in BOTH output modes. A
-    // script that delegated work must not read a timeout as success, and a
-    // JSON consumer checks the exit code, not the prose.
-    if outcome.status != outcome::Status::Completed {
-        std::process::exit(1);
-    }
-    Ok(())
-}
-
-fn report_human(outcome: &outcome::Outcome) {
-    println!("run:     {}", outcome.run_id);
-    println!("status:  {}", outcome.status.as_str());
-    if !outcome.changed_files.is_empty() {
-        println!(
-            "changed: {} file(s) ({})",
-            outcome.changed_files.len(),
-            outcome.changed_files_basis
-        );
-        for file in outcome.changed_files.iter().take(10) {
-            println!("  {} ({})", file.path, file.kind);
-        }
-    }
-    for check in &outcome.checks {
-        println!(
-            "check:   {} -> {} ({})",
-            check.command,
-            check.exit,
-            if check.passed { "pass" } else { "FAIL" }
-        );
-    }
-    println!(
-        "usage:   {} tool call(s), {} failed, {} in / {} out tok{}",
-        outcome.usage.tool_calls,
-        outcome.usage.failed_tool_calls,
-        outcome.usage.input_tokens,
-        outcome.usage.output_tokens,
-        outcome
-            .usage
-            .cost_usd
-            .map(|c| format!(", ${c:.4}"))
-            .unwrap_or_else(|| ", cost unmeasured".into()),
-    );
-    if !outcome.tool_failures.is_empty() {
-        println!("failures:");
-        for failure in outcome.tool_failures.iter().take(10) {
-            println!("  {failure}");
-        }
-    }
-    if !outcome.unresolved.is_empty() {
-        println!("unresolved:");
-        for issue in &outcome.unresolved {
-            println!("  {issue}");
-        }
-    }
-}
-
-fn show(args: &[String]) -> anyhow::Result<()> {
-    let flags = parse(args)?;
-    let root = state_root();
-    if let Some(run_id) = &flags.run {
-        let manifest = splinter_store::runs::read_manifest(&root, run_id)?;
-        println!(
-            "run:      {}\nstatus:   {}\nattempts: {}\nmodel:    {}\nstarted:  {}",
-            manifest.run_id,
-            manifest.status,
-            manifest.attempts,
-            manifest.model,
-            manifest.started_ts,
-        );
-        println!("workspace: {}", manifest.workspace);
-        println!("task: {}", manifest.task);
-        let dir = root.run_dir(run_id);
-        match outcome::Outcome::load(&dir) {
-            Ok(outcome) => {
-                println!(
-                    "outcome:  {} ({} check(s), {} changed file(s))",
-                    outcome.status.as_str(),
-                    outcome.checks.len(),
-                    outcome.changed_files.len()
-                );
+        Command::Train(args) => {
+            let options = train::TrainOptions {
+                model_dir: args
+                    .local_weights
+                    .unwrap_or_else(|| config.default_local_weights.clone()),
+                dataset: args.dataset,
+                steps: args.training.steps,
+                rank: args.training.rank,
+                alpha: args.training.alpha,
+            };
+            let (decision, dir) = train::run(&config.state_root, &options)?;
+            match decision {
+                Decision::Promoted => {
+                    println!("promoted: adapter and scores in {}", dir.display());
+                    Ok(())
+                }
+                Decision::Rejected => {
+                    println!(
+                        "rejected: held-out loss did not improve; scores in {}/decision.json",
+                        dir.display()
+                    );
+                    std::process::exit(1);
+                }
             }
-            Err(e) => println!("outcome:  not written yet ({e})"),
         }
-        let events = splinter_store::trace::read_events(&dir)?;
-        println!("trace:    {} event(s); last:", events.len());
-        if let Some(last) = events.last() {
+        Command::Explore(args) => {
+            args.model.validate()?;
+            let choice = args.model.choice();
+            let summary = explore::run(
+                &config.state_root,
+                explore::ExploreOptions {
+                    file: args.file,
+                    out: args.out.clone(),
+                    chunk_lines: args.chunk_lines,
+                    model: choice.selection(&config, choice.local_weights(&config)),
+                    scope_negatives: args.scope_negatives,
+                },
+            )?;
             println!(
-                "  [{} {} {}]",
-                last.get("ts").and_then(|v| v.as_str()).unwrap_or("?"),
-                last.get("seq").and_then(|v| v.as_u64()).unwrap_or(0),
-                last.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+                "explored {}: {} section(s), {} fact(s), {} parse failure(s), \
+                 {} unanchored question(s) refused, {} answer(s) with untraceable numbers \
+                 refused\nrun:     {}\nout:     {}",
+                summary.run_id,
+                summary.sections,
+                summary.facts,
+                summary.parse_failures,
+                summary.unanchored,
+                summary.untraceable,
+                config.state_root.run_dir(&summary.run_id).display(),
+                args.out.display(),
             );
+            Ok(())
         }
-        return Ok(());
-    }
-    let runs = splinter_store::runs::list_runs(&root)?;
-    if runs.is_empty() {
-        println!("no runs recorded under {}", root.path().display());
-        return Ok(());
-    }
-    for manifest in runs {
-        println!(
-            "{}  {:<10}  {}  {}",
-            manifest.run_id,
-            manifest.status,
-            manifest.model,
-            manifest.task.chars().take(60).collect::<String>()
-        );
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn scratch(name: &str) -> StateRoot {
-        let path = std::env::temp_dir().join(format!("splinter-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        StateRoot::new(path)
-    }
-
-    /// A resume without `--task` continues the run's own recorded task - the
-    /// caller must not have to retype what the run carries, and a divergent
-    /// retyping would silently change what the recovered attempt works on.
-    #[test]
-    fn a_resume_without_a_task_continues_the_runs_recorded_task() {
-        let root = scratch("loop-resume-task");
-        let dir = root.run_dir("loop-test-resume-task");
-        std::fs::create_dir_all(&dir).unwrap();
-        let manifest = splinter_store::runs::RunManifest {
-            task: "confirm the sum".into(),
-            ..Default::default()
-        };
-        splinter_store::write_atomic(
-            &dir.join("run.json"),
-            &serde_json::to_string(&manifest).unwrap(),
-        )
-        .unwrap();
-
-        let with_task = task_for_resume(
-            &parse(&["--task".into(), "explicit".into()]).unwrap(),
-            &root,
-            "loop-test-resume-task",
-        )
-        .unwrap();
-        assert_eq!(with_task, "explicit", "an explicit task wins");
-
-        let defaulted =
-            task_for_resume(&parse(&[]).unwrap(), &root, "loop-test-resume-task").unwrap();
-        assert_eq!(defaulted, "confirm the sum", "the run's own task continues");
-
-        let unknown = task_for_resume(&parse(&[]).unwrap(), &root, "loop-test-missing");
-        assert!(
-            unknown.is_err(),
-            "a run with no manifest has no task to continue"
-        );
-
-        let _ = std::fs::remove_dir_all(root.path());
-    }
-
-    /// A resume without `--adapter` serves the adapter the run was recorded
-    /// with - same rule as the task fallback: the caller must not have to
-    /// restate what the run carries, and dropping it silently turns a
-    /// resumed attempt into a base-model run while the manifest still says
-    /// an adapter rode along.
-    #[test]
-    fn a_resume_without_an_adapter_serves_the_runs_recorded_adapter() {
-        let root = scratch("loop-resume-adapter");
-        let dir = root.run_dir("loop-test-resume-adapter");
-        std::fs::create_dir_all(&dir).unwrap();
-        let scratch =
-            std::env::temp_dir().join(format!("loop-resume-adapter-{}", std::process::id()));
-        let recorded = scratch.join("recorded-adapter.safetensors");
-        let manifest = splinter_store::runs::RunManifest {
-            task: "fix it".into(),
-            local_adapter: Some(recorded.clone()),
-            ..Default::default()
-        };
-        splinter_store::write_atomic(
-            &dir.join("run.json"),
-            &serde_json::to_string(&manifest).unwrap(),
-        )
-        .unwrap();
-
-        // Explicit flag wins over the recorded one.
-        let explicit_path = scratch.join("explicit.safetensors");
-        let explicit = parse(&["--adapter".into(), explicit_path.display().to_string()]).unwrap();
-        assert_eq!(
-            adapter_for_resume(&explicit, &root, "loop-test-resume-adapter").unwrap(),
-            Some(explicit_path),
-            "an explicit adapter wins"
-        );
-
-        // No flag: the run's recorded adapter continues.
-        let defaulted = parse(&[]).unwrap();
-        assert_eq!(
-            adapter_for_resume(&defaulted, &root, "loop-test-resume-adapter").unwrap(),
-            Some(recorded),
-            "the run's recorded adapter continues"
-        );
-
-        // A run recorded without an adapter resumes on base weights, and an
-        // unknown run id has nothing to fall back to.
-        let bare = splinter_store::runs::RunManifest {
-            task: "fix it".into(),
-            ..Default::default()
-        };
-        splinter_store::write_atomic(
-            &dir.join("run.json"),
-            &serde_json::to_string(&bare).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(
-            adapter_for_resume(&defaulted, &root, "loop-test-resume-adapter").unwrap(),
-            None,
-            "no recorded adapter resumes on base weights"
-        );
-        assert!(
-            adapter_for_resume(&defaulted, &root, "loop-test-missing").is_err(),
-            "a run with no manifest has no adapter to continue"
-        );
-
-        let _ = std::fs::remove_dir_all(root.path());
-    }
-
-    /// A question command serves the promoted adapter by default - querying
-    /// what the pipeline learned needs no flag - while `--base` forces the
-    /// untouched base model for the contrast, and the two never combine
-    /// with an explicit `--adapter`.
-    #[test]
-    fn question_commands_serve_the_promoted_adapter_until_base_is_asked() {
-        let root = scratch("loop-query-w");
-        let pointer = root.adapter_pointer();
-        std::fs::create_dir_all(pointer.parent().unwrap()).unwrap();
-        std::fs::write(
-            &pointer,
-            serde_json::to_string_pretty(&serde_json::json!({
-                "adapter": "/somewhere/adapter.safetensors"
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-
-        // No flags: the promotion pointer rides along.
-        let defaulted = parse(&[]).unwrap();
-        let weights = query_weights(&defaulted, &root).unwrap();
-        assert_eq!(
-            weights.adapter,
-            Some(pointer.clone()),
-            "the promoted adapter is the default"
-        );
-
-        // --base: no adapter, even with a pointer in place.
-        let base = parse(&["--base".into()]).unwrap();
-        let weights = query_weights(&base, &root).unwrap();
-        assert_eq!(weights.adapter, None, "--base serves the base model");
-
-        // --adapter is explicit and wins over the default.
-        let explicit = parse(&["--adapter".into(), "/mine.safetensors".into()]).unwrap();
-        let weights = query_weights(&explicit, &root).unwrap();
-        assert_eq!(
-            weights.adapter,
-            Some(std::path::PathBuf::from("/mine.safetensors"))
-        );
-
-        // The ambiguous combinations are refused, not resolved silently.
-        assert!(query_weights(
-            &parse(&["--base".into(), "--adapter".into(), "/m.safetensors".into()]).unwrap(),
-            &root
-        )
-        .is_err());
-        assert!(query_weights(
-            &parse(&[
-                "--base".into(),
-                "--allow-api-models".into(),
-                "--model".into(),
-                "openrouter/z-ai/glm-5.3-flash".into()
-            ])
-            .unwrap(),
-            &root
-        )
-        .is_err());
-
-        // A delegating command keeps the base-only default even when a
-        // pointer exists: a facts adapter's reply shape ends a coding run
-        // answer-less.
-        let run_flags = parse(&[]).unwrap();
-        assert_eq!(
-            local_weights(&run_flags).adapter,
-            None,
-            "run/explore never serve the promotion pointer by default"
-        );
-
-        let _ = std::fs::remove_dir_all(root.path());
-    }
-
-    /// Local models are the default and remote ones an explicit opt-in:
-    /// naming a remote model or endpoint without `--allow-api-models` is
-    /// refused before anything is sent anywhere.
-    #[test]
-    fn remote_models_need_the_explicit_opt_in() {
-        let args =
-            |extra: &[&str]| -> Vec<String> { extra.iter().map(|a| a.to_string()).collect() };
-        let refused = parse(&args(&["--model", "openrouter/z-ai/glm-5.3-flash"]))
-            .err()
-            .expect("a remote model without the opt-in is refused")
-            .to_string();
-        assert!(refused.contains("--allow-api-models"), "{refused}");
-        assert!(parse(&args(&["--base-url", "http://127.0.0.1:9/v1"])).is_err());
-        let allowed = parse(&args(&[
-            "--allow-api-models",
-            "--model",
-            "openrouter/z-ai/glm-5.3-flash",
-        ]))
-        .unwrap();
-        assert!(allowed.allow_api_models && allowed.model.is_some());
-        assert!(
-            parse(&args(&["--allow-api-models"]))
-                .unwrap()
-                .model
-                .is_none(),
-            "the opt-in alone keeps the local model"
-        );
-    }
-
-    /// Local inference is not billed per token, so a cost cap on it would
-    /// be a limit that can never fire; it is refused instead of ignored. A
-    /// remote run gets a visible default cap.
-    #[test]
-    fn cost_caps_apply_to_remote_models_only() {
-        let args =
-            |extra: &[&str]| -> Vec<String> { extra.iter().map(|a| a.to_string()).collect() };
-        assert!(parse(&args(&["--max-cost-usd", "0.5"])).is_err());
-        let remote = parse(&args(&[
-            "--allow-api-models",
-            "--model",
-            "openrouter/z-ai/glm-5.3-flash",
-        ]))
-        .unwrap();
-        assert_eq!(
-            remote.budget().max_cost_usd,
-            Some(DEFAULT_REMOTE_MAX_COST_USD)
-        );
-        let local = parse(&[]).unwrap();
-        assert_eq!(local.budget().max_cost_usd, None);
-        assert_eq!(
-            local.budget().max_output_tokens,
-            Some(DEFAULT_MAX_OUTPUT_TOKENS)
-        );
+        Command::Ask(args) => {
+            args.model.validate()?;
+            let choice = args.model.choice();
+            let weights = choice.query_weights(&config, args.base)?;
+            let options = ask::AskOptions {
+                question: args.question,
+                model: choice.selection(&config, weights),
+            };
+            match ask::run(options) {
+                // The parsed object, not the raw reply: the caller reads
+                // JSON or nothing.
+                Ok(answer) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string(&serde_json::json!({ "answer": answer }))?
+                    );
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("ask: {e:#}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        Command::EvalFacts(args) => {
+            args.model.validate()?;
+            let choice = args.model.choice();
+            let weights = choice.query_weights(&config, args.base)?;
+            let report = eval::run(eval::EvalOptions {
+                dataset: args.dataset,
+                out: args.out.clone(),
+                model: choice.selection(&config, weights),
+                shuffle: args.shuffle,
+                limit: args.limit,
+            })?;
+            println!(
+                "eval-facts: {}/{} correct (accuracy {:.3}, {} parse failure(s)) - report in {}",
+                report.correct,
+                report.total,
+                report.accuracy,
+                report.parse_failures,
+                args.out.display(),
+            );
+            Ok(())
+        }
+        Command::Facts(args) => {
+            args.model.validate()?;
+            let choice = args.model.choice();
+            let source = args
+                .file
+                .as_ref()
+                .map(|f| f.display().to_string())
+                .unwrap_or_else(|| "existing dataset".into());
+            let report = facts::run(
+                &config.state_root,
+                facts::FactsOptions {
+                    file: args.file,
+                    out: args.out,
+                    work_dir: args.work_dir.unwrap_or_else(|| config.state_root.facts()),
+                    holdout_one_in: args.holdout_one_in,
+                    chunk_lines: args.chunk_lines,
+                    scope_negatives: args.scope_negatives,
+                    steps: args.training.steps,
+                    rank: args.training.rank,
+                    alpha: args.training.alpha,
+                    extractor: choice.selection(&config, choice.local_weights(&config)),
+                    policy: LocalWeights {
+                        adapter: None,
+                        ..choice.local_weights(&config)
+                    },
+                },
+            )?;
+            output::facts(&report, &source);
+            if !report.promoted {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
     }
 }

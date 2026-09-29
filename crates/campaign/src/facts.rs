@@ -28,7 +28,7 @@ use splinter_store::{write_atomic, StateRoot};
 
 /// One fact: the question and its reference answer.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) struct Fact {
+pub struct Fact {
     pub question: String,
     pub answer: String,
 }
@@ -36,7 +36,7 @@ pub(crate) struct Fact {
 /// The split every stage downstream reads: training keeps the reply
 /// wrapper, both evaluation sets carry the bare answer.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Split {
+pub struct Split {
     pub train: Vec<Fact>,
     pub eval: Vec<Fact>,
 }
@@ -47,7 +47,7 @@ pub(crate) struct Split {
 /// would read the eval stage as vacuously perfect. `one_in` below 2 is
 /// refused outright - a pipeline that scored itself on its own training
 /// data would report memorization as generalization.
-pub(crate) fn split(facts: &[Fact], one_in: usize) -> anyhow::Result<Split> {
+pub fn split(facts: &[Fact], one_in: usize) -> anyhow::Result<Split> {
     anyhow::ensure!(
         one_in >= 2,
         "--holdout-one-in must be at least 2 (a holdout of nothing evaluates nothing)"
@@ -71,7 +71,7 @@ pub(crate) fn split(facts: &[Fact], one_in: usize) -> anyhow::Result<Split> {
 
 /// What one `facts` pipeline produced, for the summary line and the report.
 #[derive(Debug)]
-pub(crate) struct FactsReport {
+pub struct FactsReport {
     pub explore_run: String,
     pub facts: usize,
     pub train_records: usize,
@@ -87,7 +87,7 @@ pub(crate) struct FactsReport {
 /// Reads an explore-written JSONL file into facts. The assistant side
 /// carries the `{"answer": ...}` wrapper explore writes; it is unwrapped
 /// here so the split decides the form, not the file.
-pub(crate) fn read_facts(path: &std::path::Path) -> anyhow::Result<Vec<Fact>> {
+pub fn read_facts(path: &std::path::Path) -> anyhow::Result<Vec<Fact>> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let mut facts = Vec::new();
@@ -131,7 +131,7 @@ pub(crate) fn read_facts(path: &std::path::Path) -> anyhow::Result<Vec<Fact>> {
 ///   reply shape `ask` parses).
 /// - `train_eval_path`: the SAME questions, bare answers - the recall set.
 /// - `holdout_path`: the held-out questions, bare - the generalization set.
-pub(crate) fn write_split(
+pub fn write_split(
     split: &Split,
     train_path: &std::path::Path,
     train_eval_path: &std::path::Path,
@@ -170,9 +170,14 @@ pub(crate) fn write_split(
     Ok(())
 }
 
+/// Every Nth explored fact is held out of training when a command names no
+/// other ratio, so the pipeline's generalization score always has something
+/// to measure.
+pub const DEFAULT_HOLDOUT_ONE_IN: usize = 5;
+
 /// Everything one `facts` pipeline needs.
 #[derive(Clone, Debug)]
-pub(crate) struct FactsOptions {
+pub struct FactsOptions {
     /// The markdown fact sheet to learn from.
     pub file: Option<std::path::PathBuf>,
     /// Where the extracted dataset lives (default: under the work dir).
@@ -201,7 +206,7 @@ pub(crate) struct FactsOptions {
 /// explore, train, eval-facts - through their library entry points, so
 /// there is one spelling of each stage and this module is composition,
 /// not a second implementation.
-pub(crate) fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<FactsReport> {
+pub fn run(root: &StateRoot, options: FactsOptions) -> anyhow::Result<FactsReport> {
     let work = options.work_dir.clone();
     std::fs::create_dir_all(&work).with_context(|| format!("creating {}", work.display()))?;
 

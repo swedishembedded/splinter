@@ -27,7 +27,7 @@ pub struct AskOptions {
 
 /// Asks one question and returns the parsed answer string. The caller
 /// prints it wrapped as `{"answer": ...}` so stdout stays strictly JSON.
-pub(crate) fn run(options: AskOptions) -> anyhow::Result<String> {
+pub fn run(options: AskOptions) -> anyhow::Result<String> {
     let prompt = splinter_lab::answers::question_prompt(&options.question);
     let provider = options.model.provider()?;
     let rt = tokio::runtime::Runtime::new()?;

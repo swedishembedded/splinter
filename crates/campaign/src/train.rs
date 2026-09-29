@@ -18,9 +18,17 @@ use splinter_lab::promotion::{decide, Decision, Scores};
 use splinter_policy::train::{fine_tune, FineTune};
 use splinter_store::{write_atomic, StateRoot};
 
+/// Training steps when a command names none: small, because the loop
+/// trains on its own verified experience a few records at a time.
+pub const DEFAULT_STEPS: u32 = 40;
+/// LoRA rank of a new adapter when a command names none.
+pub const DEFAULT_LORA_RANK: u32 = 8;
+/// LoRA alpha of a new adapter when a command names none.
+pub const DEFAULT_LORA_ALPHA: f32 = 16.0;
+
 /// Options for one training attempt.
 #[derive(Clone, Debug)]
-pub(crate) struct TrainOptions {
+pub struct TrainOptions {
     /// Base checkpoint to fine-tune against (the model the agent serves).
     pub model_dir: PathBuf,
     /// Dataset file to train on; defaults to the accumulated pool.
@@ -35,7 +43,7 @@ pub(crate) struct TrainOptions {
 
 /// One training attempt, end to end. Returns the decision and the attempt's
 /// directory, which holds the decision record and the adapter.
-pub(crate) fn run(root: &StateRoot, options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)> {
+pub fn run(root: &StateRoot, options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)> {
     let dataset = options
         .dataset
         .clone()

@@ -33,9 +33,11 @@ splinter-store = { path = "crates/store" }
 splinter-policy = { path = "crates/policy" }
 splinter-agent = { path = "crates/agent" }
 splinter-knowledge = { path = "crates/knowledge" }
+splinter-campaign = { path = "crates/campaign" }
 
 anyhow = "1"
 async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

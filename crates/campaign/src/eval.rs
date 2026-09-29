@@ -152,7 +152,7 @@ fn shuffle<T>(items: &mut [T]) {
 }
 
 /// Runs the whole evaluation: read, ask, judge, report.
-pub(crate) fn run(options: EvalOptions) -> anyhow::Result<Report> {
+pub fn run(options: EvalOptions) -> anyhow::Result<Report> {
     let mut records = read_dataset(&options.dataset)?;
     anyhow::ensure!(
         !records.is_empty(),

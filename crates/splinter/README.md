@@ -10,32 +10,32 @@ brain's Qwen3 stack is linked directly, weights and optional LoRA adapters
 load from disk at startup, and a remote provider is used only when
 `--allow-api-models` is given together with `--model` or `--base-url`.
 
-## Commands (all verified)
+## Commands
+
+`splinter <command> --help` is the authoritative reference; each command
+accepts exactly the options it uses.
 
 ```bash
-splinter run --workspace DIR --task TEXT [--check CMD ...]
-                      [--local-weights DIR] [--adapter FILE] [--ctx N]
-                      [--allow-api-models] [--model provider/name]
-                      [--base-url URL] [--api-key KEY]
-                      [--timeout-secs N] [--max-tool-rounds N]
-                      [--max-output-tokens N] [--max-cost-usd X]
-                      [--max-attempts N] [--record-input] [--json]
+splinter run --workspace DIR (--task TEXT | --task-file FILE) [--check CMD ...]
+             [model options] [--timeout-secs N] [--max-tool-rounds N]
+             [--max-output-tokens N] [--max-cost-usd X] [--max-attempts N]
+             [--record-input] [--json]
+splinter resume --run ID [options as for run]
 splinter show [--run ID | --list]
-splinter resume --run ID [run options]
 splinter cancel --run ID
 splinter learn --run ID
-splinter train [--dataset FILE] [--local-weights DIR]
-                        [--steps N] [--rank N] [--alpha F]
+splinter train [--dataset FILE] [--local-weights DIR] [--steps N] [--rank N] [--alpha F]
 splinter explore --file FILE --out OUT.jsonl [--chunk-lines N]
-                      [--model provider/name] [--local-weights DIR]
-                      [--adapter FILE] [--ctx N] [--base-url URL]
-                      [--api-key KEY]
-splinter ask --question TEXT [model options as for run]
-splinter eval-facts --file FILE [--adapter FILE] [--base]
-                      [model options as for run]
-splinter facts --file FILE [--work-dir DIR]
-                      [--holdout-one-in N] [--scope-negatives IDS]
-                      [train options] [model options]
+                 [--scope-negatives ID1,ID2,...] [model options]
+splinter ask --question TEXT [--base] [model options]
+splinter eval-facts --dataset FILE.jsonl --out REPORT.json [--shuffle] [--limit N]
+                    [--base] [model options]
+splinter facts [--file FILE] [--work-dir DIR] [--out DATASET.jsonl]
+               [--holdout-one-in N] [--chunk-lines N] [--scope-negatives IDS]
+               [--steps N] [--rank N] [--alpha F] [model options]
+
+model options: [--local-weights DIR] [--adapter FILE] [--ctx N]
+               [--allow-api-models --model provider/name [--base-url URL] [--api-key KEY]]
 ```
 
 `explore` turns a markdown fact sheet (e.g.

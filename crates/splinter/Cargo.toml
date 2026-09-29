@@ -22,8 +22,10 @@ splinter-store = { workspace = true }
 splinter-policy = { workspace = true }
 splinter-agent = { workspace = true }
 splinter-knowledge = { workspace = true }
+splinter-campaign = { workspace = true }
 
 anyhow = { workspace = true }
+clap = { workspace = true }
 sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

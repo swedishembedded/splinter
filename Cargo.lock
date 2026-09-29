@@ -3799,10 +3799,12 @@ name = "splinter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "serde",
  "serde_json",
  "sha2",
  "splinter-agent",
+ "splinter-campaign",
  "splinter-knowledge",
  "splinter-lab",
  "splinter-policy",
@@ -3823,6 +3825,21 @@ dependencies = [
  "splinter-policy",
  "splinter-store",
  "sven-sdk",
+ "tokio",
+]
+
+[[package]]
+name = "splinter-campaign"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "splinter-agent",
+ "splinter-knowledge",
+ "splinter-lab",
+ "splinter-policy",
+ "splinter-store",
  "tokio",
 ]
 

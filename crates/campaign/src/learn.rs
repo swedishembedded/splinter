@@ -84,7 +84,7 @@ fn record(
 /// was appended. Learning the same run twice is a no-op that says so - the
 /// pool is keyed by run id, and a duplicated record would weight that
 /// experience twice in every training run.
-pub(crate) fn learn_run(root: &StateRoot, run_id: &str) -> anyhow::Result<Learned> {
+pub fn learn_run(root: &StateRoot, run_id: &str) -> anyhow::Result<Learned> {
     let pool = root.experience_pool();
     if pool.exists() && pool_has_run(&pool, run_id)? {
         return Ok(Learned::AlreadyRecorded);
@@ -109,7 +109,7 @@ pub(crate) fn learn_run(root: &StateRoot, run_id: &str) -> anyhow::Result<Learne
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Learned {
+pub enum Learned {
     Appended,
     AlreadyRecorded,
 }
