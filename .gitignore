@@ -6,6 +6,10 @@
 # local brain and sven checkouts. Never shared.
 /.cargo/config.toml
 
+# sven's per-directory session state (audit log, logs, workflows) wherever an
+# agent runs in this tree.
+.sven/
+
 # Local task tracking and scratch work.
 /.todo/
 /scratchpad/
