@@ -155,21 +155,27 @@ pub(super) fn events_from(outcome: Outcome) -> Vec<anyhow::Result<ResponseEvent>
             }));
         }
     }
-    events.push(Ok(ResponseEvent::Usage {
-        input_tokens: outcome
+    // Usage is reported only when the engine counted it: a missing count is
+    // unmeasured, not zero. This engine has no prompt cache, so its cache
+    // counts are a true zero.
+    let count = |key: &str| {
+        outcome
             .outputs
-            .get("prompt_tokens")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u32,
-        output_tokens: outcome
-            .outputs
-            .get("completion_tokens")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u32,
-        cache_read_tokens: 0,
-        cache_write_tokens: 0,
-        cost_usd: None,
-    }));
+            .get(key)
+            .and_then(|v| v.as_u64())
+            .and_then(|n| u32::try_from(n).ok())
+    };
+    if let (Some(input_tokens), Some(output_tokens)) =
+        (count("prompt_tokens"), count("completion_tokens"))
+    {
+        events.push(Ok(ResponseEvent::Usage {
+            input_tokens,
+            output_tokens,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            cost_usd: None,
+        }));
+    }
     events.push(Ok(ResponseEvent::Done));
     events
 }
@@ -203,5 +209,15 @@ mod tests {
                 if *input_tokens == 120 && *output_tokens == 34
         ));
         assert!(matches!(events[2], Ok(ResponseEvent::Done)));
+    }
+
+    /// An outcome that carries no token counts reports no usage at all: a
+    /// missing count is unmeasured, and a zero would read as free.
+    #[test]
+    fn an_outcome_without_token_counts_reports_no_usage() {
+        let outcome = Outcome::new().set("text", serde_json::json!("did it"));
+        let events = events_from(outcome);
+        assert_eq!(events.len(), 1, "done only: {events:?}");
+        assert!(matches!(events[0], Ok(ResponseEvent::Done)));
     }
 }
