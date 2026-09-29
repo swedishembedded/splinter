@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Splinter's crate layering: the authoritative list of which workspace crate
+# may depend on which. scripts/gates/check-architecture.sh enforces it
+# against `cargo metadata` in `make check`. AGENTS.md explains the layers;
+# when the two disagree, this file wins.
+#
+# Every workspace package must be listed. `internal` names the Splinter
+# crates it may depend on (normal, build and dev dependencies alike).
+# `brain` says whether it may depend on any brain crate: only the policy
+# crate may, so the day brain's SDK covers what Splinter needs, one crate
+# changes.
+
+[crates.splinter-store]
+internal = []
+
+[crates.splinter-lab]
+internal = []
+
+[crates.splinter-policy]
+internal = ["splinter-lab"]
+brain = true
+
+[crates.splinter-agent]
+internal = ["splinter-store", "splinter-lab", "splinter-policy"]
+
+[crates.splinter-knowledge]
+internal = ["splinter-store", "splinter-lab", "splinter-policy"]
+
+[crates.splinter-campaign]
+internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge"]
+
+[crates.splinter]
+internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-campaign"]
+
+[crates.splinter-tool-syntax]
+internal = ["splinter-lab", "splinter-policy"]
+
+[limits]
+# A source file larger than this is split; the listed exceptions may only
+# shrink, and an entry is removed once its file is back under the limit.
+max_file_lines = 800

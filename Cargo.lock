@@ -3860,7 +3860,6 @@ name = "splinter-lab"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "brain",
  "serde",
  "serde_json",
  "sven-sdk",
@@ -3904,10 +3903,10 @@ name = "splinter-tool-syntax"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "brain",
  "serde",
  "serde_json",
  "splinter-lab",
+ "splinter-policy",
  "sven-sdk",
  "tokio",
 ]

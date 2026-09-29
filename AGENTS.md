@@ -87,15 +87,50 @@ the decision about when and on what to use it.
 Code never cites a `docs/` or `.agents/` path (a gate enforces it): state the
 fact inline instead.
 
-## Layout
+## Architecture
 
-| Path | What |
-|---|---|
-| `crates/splinter` | the `splinter` binary: runs, traces, fact extraction, training, promotion, the in-process brain model provider |
-| `crates/lab` | `splinter-lab`: the measurement harness every experiment shares - served-model identity, verdicts that cannot be self-awarded, wire capture, dataset derivation |
-| `experiments/<name>` | one controlled learning experiment per directory, each with a README stating what was measured |
-| `tasks/<family>` | frozen task families: workspace, hidden world, verifier, audit |
-| `scripts/` | local-override and lock pinning, hooks, gates |
+Seven crates in layers; a crate depends only on the ones below it.
+`architecture.toml` is the authoritative edge list and
+`scripts/gates/check-architecture.sh` enforces it against `cargo metadata`.
+
+| Crate | Owns | Depends on |
+|---|---|---|
+| `splinter-store` | durable state: the injected `StateRoot` and its layout, atomic writes, time-ordered ids, the UTC clock, run manifests and limits, the append-only trace | - |
+| `splinter-lab` | measurement: the answer contract (prompt, reply shape, parse, training record, judge), the promotion gate and holdout rule, verdicts that cannot be self-awarded, served-model identity, wire capture, dataset derivation from verified episodes, task families | - |
+| `splinter-policy` | the model being trained, and the only crate that touches brain: the in-process provider behind sven's `ModelProvider`, `ModelSelection` and its identity, LoRA fine-tuning with held-out scoring, one-prompt completion | lab |
+| `splinter-agent` | one delegated attempt through sven: run and resume, limits, cancel, completion checks, the structured outcome | store, lab, policy |
+| `splinter-knowledge` | document intake: sections, fact extraction, the anchoring and traceability gates, scope negatives, the traced exploration | store, lab, policy |
+| `splinter-campaign` | the controller: `Config` (the only reader of the environment), `ModelChoice`, and each command's pipeline - attempts, learning a run, training behind the gate, ask, eval, document learning | all of the above |
+| `splinter` | the binary: `clap` grammar and output, nothing else | campaign and the types it prints |
+
+Beside the crates: `experiments/<name>` holds one controlled learning
+experiment per directory (a standalone program with a README stating what
+was measured), `tasks/<family>` the frozen task families (workspace, hidden
+world, verifier, audit), and `scripts/` the local override, lock pinning,
+hooks and gates.
+
+## Quality rules
+
+Each is enforced by a gate in `make check` and at commit where it can be:
+
+- **Layering** - edges only as `architecture.toml` lists; only
+  `splinter-policy` depends on brain (`check-architecture`).
+- **Configuration is a value** - only `splinter-campaign`'s `config` module
+  reads or writes the environment; everything below takes its settings as
+  arguments, and tests build their own `StateRoot` instead of mutating
+  process state (`check-env-reads`).
+- **Small files** - no source file over 800 lines (`check-architecture`).
+- **Documented** - every public item of a library crate has a doc comment
+  (`#![warn(missing_docs)]` under clippy `-D warnings`).
+- **No numbers without reproduction** - no unreviewed performance figure in
+  a README, comment or string (`check-no-perf-numbers`).
+- **Scripts that work** - every script parses and is referenced
+  (`check-scripts`).
+- **One definition per default** - a default (a model, a limit, a step
+  count) is a named constant in the crate that owns it; the CLI shows it,
+  it does not restate it.
+- **Errors carry context** - a failure names what failed and on which input;
+  `unwrap`/`expect` outside tests only for an invariant the code states.
 
 ## Commands
 
@@ -104,7 +139,8 @@ make hooks/install   # once per clone: pre-commit, commit-msg and pre-push hooks
 make local           # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR, TARGET_DIR)
 make lock            # pin Cargo.lock to those checkouts' HEADs
 make build test      # release profile throughout
-make check           # every gate: hygiene, headers, fmt, clippy -D warnings, lock sources, history
+make check           # every gate: hygiene, headers, scope, layering, env reads, perf numbers,
+                     # scripts, fmt, clippy -D warnings, lock sources, history
 ```
 
 Never run `cargo fmt --all`: it follows the local path overrides into the

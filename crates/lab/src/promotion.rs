@@ -62,7 +62,7 @@ pub fn holdout_split<T>(samples: &[T]) -> Option<(&[T], &[T])> {
     if samples.len() < 2 {
         return None;
     }
-    // 10% held out, at least one: a single record's 20-odd token positions
+    // A tenth held out, at least one: a single record's 20-odd token positions
     // cannot carry a promotion verdict on a pool of hundreds - its noise
     // would masquerade as improvement or regression. The newest records are
     // held out: the pool is appended in run order, so the most recent

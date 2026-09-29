@@ -58,8 +58,8 @@ fn default_model_store(home: &Path) -> PathBuf {
 
 /// Widens sven's stream watchdog for a local model.
 ///
-/// The watchdog declares a connection dead after 300 s of silence between
-/// chunks - a guard for a REMOTE wire going stale. A local provider is silent
+/// The watchdog declares a connection dead after sven's default idle limit
+/// between chunks - a guard for a REMOTE wire going stale. A local provider is silent
 /// for a different reason: its prefill takes tens of seconds before the
 /// first chunk, and no chunk in between is honest to invent. The attempt's
 /// own wall-clock limit is the bound that matters there, so the watchdog is

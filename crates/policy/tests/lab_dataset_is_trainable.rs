@@ -10,8 +10,8 @@
 //! refuses a dataset after the GPU has been claimed, or worse, one that
 //! accepts it and supervises the wrong spans.
 //!
-//! So the check runs the real parser: the lab links brain directly, and this
-//! is what that buys.
+//! So the check runs the real parser, through the policy crate that trains
+//! on the lab's output - which is also why this test lives here.
 
 use std::collections::BTreeMap;
 
@@ -71,7 +71,7 @@ fn the_trainer_accepts_what_this_harness_derives() {
     std::fs::write(&path, &jsonl).expect("write");
 
     // The real parser, from the crate that trains on it.
-    let summary = brain::validate_chat_dataset(&path)
+    let summary = splinter_policy::train::validate_dataset(&path)
         .unwrap_or_else(|e| panic!("the trainer rejected a derived dataset: {e}\n{jsonl}"));
 
     assert_eq!(summary.records, 1);

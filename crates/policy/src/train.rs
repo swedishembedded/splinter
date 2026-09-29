@@ -74,16 +74,55 @@ pub struct Trained {
     pub tuned: HeldOutScore,
 }
 
+/// What a chat dataset holds, as the trainer's own parser counts it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DatasetSummary {
+    /// Conversations, one per JSONL line.
+    pub records: usize,
+    /// Messages across every conversation.
+    pub messages: usize,
+    /// Messages marked for supervision (`"train": true`).
+    pub trained_messages: usize,
+}
+
+impl From<brain::ChatDatasetSummary> for DatasetSummary {
+    fn from(s: brain::ChatDatasetSummary) -> Self {
+        Self {
+            records: s.records,
+            messages: s.messages,
+            trained_messages: s.trained_messages,
+        }
+    }
+}
+
+/// Parses `dataset` with the trainer's own parser: the wire schema, and the
+/// supervision boundaries it declares. The error names the offending record.
+pub fn validate_dataset(dataset: &Path) -> anyhow::Result<DatasetSummary> {
+    brain::validate_chat_dataset(dataset)
+        .map(DatasetSummary::from)
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "dataset {} is not valid trainer input: {e}",
+                dataset.display()
+            )
+        })
+}
+
+/// [`validate_dataset`], and encodes every record with the checkpoint in
+/// `model_dir` (its tokenizer and chat template): a record can satisfy the
+/// wire schema and still have no honest loss-mask boundary under the
+/// template it will train with. Needs no device.
+pub fn validate_dataset_for(dataset: &Path, model_dir: &Path) -> anyhow::Result<DatasetSummary> {
+    brain::validate_chat_dataset_for(dataset, model_dir)
+        .map(DatasetSummary::from)
+        .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
 /// Checks `dataset` the way training will parse it and returns its records,
 /// before a device is claimed: a dataset that fails shape, encoding or
 /// supervision is refused here with the offending record named.
 pub fn read_dataset(dataset: &Path) -> anyhow::Result<Vec<ChatSample>> {
-    let summary = brain::validate_chat_dataset(dataset).map_err(|e| {
-        anyhow::anyhow!(
-            "dataset {} is not valid trainer input: {e}",
-            dataset.display()
-        )
-    })?;
+    let summary = validate_dataset(dataset)?;
     anyhow::ensure!(
         summary.trained_messages > 0,
         "dataset {} holds no supervised turns",
@@ -145,8 +184,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
         "no dataset at {} - learn a verified run first",
         request.dataset.display()
     );
-    let summary = brain::validate_chat_dataset_for(request.dataset, model_dir)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let summary = validate_dataset_for(request.dataset, model_dir)?;
     let samples = read_dataset(request.dataset)?;
     let (train_samples, val_samples) = holdout_split(&samples).ok_or_else(|| {
         anyhow::anyhow!(

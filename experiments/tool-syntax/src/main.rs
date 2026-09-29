@@ -592,13 +592,15 @@ fn demonstrate(args: &[String]) -> anyhow::Result<()> {
     // the wire schema completely and still have no honest loss-mask boundary
     // under the checkpoint's own chat template.
     let checked = match std::env::var("BRAIN_QWEN_WEIGHTS") {
-        Ok(weights) => brain::validate_chat_dataset_for(&out, std::path::Path::new(&weights)),
+        Ok(weights) => {
+            splinter_policy::train::validate_dataset_for(&out, std::path::Path::new(&weights))
+        }
         Err(_) => {
             println!(
                 "note: BRAIN_QWEN_WEIGHTS is not set, so the dataset is only parsed, not encoded; \
                  a shape the template cannot mask would not be caught until training starts"
             );
-            brain::validate_chat_dataset(&out)
+            splinter_policy::train::validate_dataset(&out)
         }
     };
     match checked {

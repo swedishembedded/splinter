@@ -268,8 +268,8 @@ mod tests {
 
     /// Streaming deltas and HSM transitions arrive dozens of times a second
     /// and the complete texts already record what the deltas added up to, so
-    /// one trace line apiece would be pure write amplification (a real run
-    /// measured 97% of trace volume as empty "other" lines, each fsynced).
+    /// one trace line apiece would be pure write amplification (in a real
+    /// run nearly all of the trace was empty "other" lines, each fsynced).
     /// They are counted and summarized instead - summarized, not dropped, so
     /// a reader can still see that they happened and how many.
     #[test]

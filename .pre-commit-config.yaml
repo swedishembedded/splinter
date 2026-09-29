@@ -61,6 +61,31 @@ repos:
         files: (^|/)Cargo\.(toml|lock)$
         pass_filenames: false
 
+      - id: env-reads
+        name: only the campaign config reads the environment
+        entry: bash scripts/gates/check-env-reads.sh
+        language: system
+        types: [rust]
+
+      - id: architecture
+        name: crate layering and file size (architecture.toml)
+        entry: bash scripts/gates/check-architecture.sh
+        language: system
+        files: (\.rs|Cargo\.toml|architecture\.toml)$
+        pass_filenames: false
+
+      - id: no-perf-numbers
+        name: no unreviewed performance numbers in prose or narration
+        entry: bash scripts/gates/check-no-perf-numbers.sh
+        language: system
+
+      - id: scripts
+        name: every script parses and is referenced
+        entry: bash scripts/gates/check-scripts.sh
+        language: system
+        files: ^scripts/
+        pass_filenames: false
+
       - id: rustfmt
         name: rustfmt
         entry: rustfmt --edition 2021
