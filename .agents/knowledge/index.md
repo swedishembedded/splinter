@@ -6,3 +6,4 @@ in the same commit.
 
 | Id | Title |
 |---|---|
+| [001](001-a-cargo-patch-cannot-override-a-git-dependency-offline.md) | A cargo `[patch]` cannot override a git dependency offline |

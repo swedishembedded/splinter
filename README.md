@@ -25,7 +25,36 @@ provider; neither needs Splinter installed.
 
 ## Status
 
-Early. See `AGENTS.md` for how the repository is organised.
+Early. Today's command line (`crates/splinter/README.md`) runs delegated
+tasks through sven with a local in-process Qwen3, derives training data from
+verified runs, extracts facts from documents, trains LoRA adapters through
+brain and gates their promotion. The plain-language front door above is
+being built on it.
+
+## Building
+
+sven and brain are git dependencies at the revisions pinned in `Cargo.lock`:
+
+```bash
+make build     # release build of every package
+make test      # every test; no model, GPU or network needed
+make check     # all gates: text hygiene, headers, fmt, clippy -D warnings, lock sources
+```
+
+To build against local checkouts instead - to change sven or brain and
+Splinter together - write the gitignored local override once:
+
+```bash
+make local SVEN_DIR=<sven-checkout> BRAIN_DIR=<brain-checkout>
+```
+
+Builds then compile the checkouts' working trees, offline, without touching
+`Cargo.toml` or `Cargo.lock`. `make lock` re-pins the lock to those
+checkouts' HEADs; push those commits before sharing the lock. Delete
+`.cargo/config.toml` to go back to the remotes.
+
+Runtime state (runs, datasets, adapters) lives under `~/.splinter`
+(override: `SPLINTER_STATE`).
 
 ## License
 

@@ -48,6 +48,26 @@ repos:
         files: (^|/)Cargo\.toml$
         pass_filenames: false
 
+      - id: lock-sources
+        name: Cargo.lock pins sven and brain to their remotes
+        entry: bash scripts/gates/check-lock-sources.sh
+        language: system
+        files: (^|/)Cargo\.(toml|lock)$
+        pass_filenames: false
+
+      - id: rustfmt
+        name: rustfmt
+        entry: rustfmt --edition 2021
+        language: system
+        types: [rust]
+
+      - id: clippy
+        name: clippy -D warnings on the packages that own the staged files
+        entry: bash scripts/hooks/clippy-staged.sh
+        language: system
+        types: [rust]
+        require_serial: true
+
       - id: strip-commit-trailers
         name: strip Co-Authored-By/Claude-Session trailers
         entry: python3 scripts/hooks/commit-msg

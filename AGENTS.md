@@ -61,9 +61,25 @@ the decision about when and on what to use it.
 Code never cites a `docs/` or `.agents/` path (a gate enforces it): state the
 fact inline instead.
 
+## Layout
+
+| Path | What |
+|---|---|
+| `crates/splinter` | the `splinter` binary: runs, traces, fact extraction, training, promotion, the in-process brain model provider |
+| `crates/lab` | `splinter-lab`: the measurement harness every experiment shares - served-model identity, verdicts that cannot be self-awarded, wire capture, dataset derivation |
+| `experiments/<name>` | one controlled learning experiment per directory, each with a README stating what was measured |
+| `tasks/<family>` | frozen task families: workspace, hidden world, verifier, audit |
+| `scripts/` | local-override and lock pinning, hooks, gates |
+
 ## Commands
 
 ```bash
 make hooks/install   # once per clone: pre-commit, commit-msg and pre-push hooks
-make check           # every gate over the whole tree
+make local           # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR, TARGET_DIR)
+make lock            # pin Cargo.lock to those checkouts' HEADs
+make build test      # release profile throughout
+make check           # every gate: hygiene, headers, fmt, clippy -D warnings, lock sources, history
 ```
+
+Never run `cargo fmt --all`: it follows the local path overrides into the
+sven and brain checkouts. `make fmt` formats Splinter's own files only.

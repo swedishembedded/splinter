@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[workspace]
+resolver = "2"
+members = ["crates/*", "experiments/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+# sven and brain are consumed from their remotes, at the revisions pinned in
+# Cargo.lock. A local build against sibling checkouts is a gitignored
+# override written by `make local`; it never edits this file or the lock.
+#
+# Only `sven-sdk` and `brain` are meant to be depended on. Every other brain
+# crate listed here is a surface brain's SDK does not publish yet, and each
+# one is an item in the roadmap's SDK phase to remove.
+sven-sdk = { git = "https://github.com/swedishembedded/sven" }
+brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["study"] }
+brain-qwen3 = { git = "https://github.com/swedishembedded/brain" }
+brain-data = { git = "https://github.com/swedishembedded/brain" }
+brain-checkpoint = { git = "https://github.com/swedishembedded/brain" }
+brain-capability = { git = "https://github.com/swedishembedded/brain" }
+brain-model = { git = "https://github.com/swedishembedded/brain" }
+brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
+
+splinter-lab = { path = "crates/lab" }
+
+anyhow = "1"
+async-trait = "0.1"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "process", "signal"] }
+toml = "0.8"

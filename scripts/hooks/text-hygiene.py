@@ -47,6 +47,13 @@ PUNCTUATION = {
     "\u00a0": " ",
 }
 PUNCTUATION_RE = re.compile("[" + "".join(PUNCTUATION) + "]")
+
+# Verbatim source documents: their punctuation is input the pipeline must
+# handle, so it is data, not prose. Exempt from the punctuation rule only;
+# every other rule still applies. Each entry is a reviewed decision.
+VERBATIM_DOCUMENTS = {
+    "crates/splinter/examples/stm32_datasheet.md",
+}
 CONFLICT_RE = re.compile(r"^(<<<<<<< |=======$|>>>>>>> )", re.MULTILINE)
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 
@@ -56,8 +63,9 @@ def tracked_files():
     return [p for p in out.stdout.decode().split("\0") if p]
 
 
-def repaired(text: str) -> str:
-    text = PUNCTUATION_RE.sub(lambda m: PUNCTUATION[m.group(0)], text)
+def repaired(text: str, verbatim: bool) -> str:
+    if not verbatim:
+        text = PUNCTUATION_RE.sub(lambda m: PUNCTUATION[m.group(0)], text)
     text = text.replace("\r\n", "\n")
     lines = text.split("\n")
     lines = [ln.rstrip() for ln in lines]
@@ -101,7 +109,7 @@ def main(argv):
             continue
 
         problems = structural_errors(path, text)
-        clean = repaired(text)
+        clean = repaired(text, path in VERBATIM_DOCUMENTS)
         if clean != text:
             if fix:
                 p.write_text(clean, encoding="utf-8")
