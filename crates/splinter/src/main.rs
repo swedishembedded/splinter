@@ -27,8 +27,6 @@ mod learn;
 mod outcome;
 mod provider;
 mod runner;
-mod runs;
-mod trace;
 mod train;
 
 use runner::AttemptOptions;
@@ -223,12 +221,12 @@ impl Flags {
     /// get a default cost cap: they report a price per call, so the cap can
     /// be enforced. Other endpoints (a served brain, say) report none, and a
     /// default cap there would stop every run on its first usage report.
-    fn budget(&self) -> budget::Budget {
+    fn budget(&self) -> splinter_store::runs::Budget {
         let openrouter = self
             .model
             .as_deref()
             .is_some_and(|m| m.starts_with("openrouter/"));
-        budget::Budget {
+        splinter_store::runs::Budget {
             max_output_tokens: Some(self.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT_TOKENS)),
             max_cost_usd: self
                 .max_cost_usd
@@ -379,7 +377,7 @@ fn cancel(args: &[String]) -> anyhow::Result<()> {
     let run_id = flags
         .run
         .ok_or_else(|| anyhow::anyhow!("cancel needs --run ID"))?;
-    let request = runs::request_cancel(&state_root(), &run_id)?;
+    let request = splinter_store::runs::request_cancel(&state_root(), &run_id)?;
     println!(
         "cancel requested for {run_id} ({}); the attempt stops within a second or one \
          generation chunk, then `show --run {run_id}` reports it",
@@ -687,7 +685,7 @@ fn task_for_resume(flags: &Flags, root: &StateRoot, run_id: &str) -> anyhow::Res
     if let Some(task) = &flags.task {
         return Ok(task.clone());
     }
-    Ok(runs::read_manifest(root, run_id)?.task)
+    Ok(splinter_store::runs::read_manifest(root, run_id)?.task)
 }
 
 /// The adapter a resume serves from: an explicit `--adapter` wins; otherwise
@@ -703,7 +701,7 @@ fn adapter_for_resume(
     if flags.adapter.is_some() {
         return Ok(flags.adapter.clone());
     }
-    Ok(runs::read_manifest(root, run_id)?.local_adapter)
+    Ok(splinter_store::runs::read_manifest(root, run_id)?.local_adapter)
 }
 
 /// The api key follows the provider actually configured: OpenRouter's key
@@ -860,7 +858,7 @@ fn show(args: &[String]) -> anyhow::Result<()> {
     let flags = parse(args)?;
     let root = state_root();
     if let Some(run_id) = &flags.run {
-        let manifest = runs::read_manifest(&root, run_id)?;
+        let manifest = splinter_store::runs::read_manifest(&root, run_id)?;
         println!(
             "run:      {}\nstatus:   {}\nattempts: {}\nmodel:    {}\nstarted:  {}",
             manifest.run_id,
@@ -883,7 +881,7 @@ fn show(args: &[String]) -> anyhow::Result<()> {
             }
             Err(e) => println!("outcome:  not written yet ({e})"),
         }
-        let events = trace::read_events(&dir)?;
+        let events = splinter_store::trace::read_events(&dir)?;
         println!("trace:    {} event(s); last:", events.len());
         if let Some(last) = events.last() {
             println!(
@@ -895,7 +893,7 @@ fn show(args: &[String]) -> anyhow::Result<()> {
         }
         return Ok(());
     }
-    let runs = runs::list_runs(&root)?;
+    let runs = splinter_store::runs::list_runs(&root)?;
     if runs.is_empty() {
         println!("no runs recorded under {}", root.path().display());
         return Ok(());
@@ -930,7 +928,7 @@ mod tests {
         let root = scratch("loop-resume-task");
         let dir = root.run_dir("loop-test-resume-task");
         std::fs::create_dir_all(&dir).unwrap();
-        let manifest = runs::RunManifest {
+        let manifest = splinter_store::runs::RunManifest {
             task: "confirm the sum".into(),
             ..Default::default()
         };
@@ -974,7 +972,7 @@ mod tests {
         let scratch =
             std::env::temp_dir().join(format!("loop-resume-adapter-{}", std::process::id()));
         let recorded = scratch.join("recorded-adapter.safetensors");
-        let manifest = runs::RunManifest {
+        let manifest = splinter_store::runs::RunManifest {
             task: "fix it".into(),
             local_adapter: Some(recorded.clone()),
             ..Default::default()
@@ -1004,7 +1002,7 @@ mod tests {
 
         // A run recorded without an adapter resumes on base weights, and an
         // unknown run id has nothing to fall back to.
-        let bare = runs::RunManifest {
+        let bare = splinter_store::runs::RunManifest {
             task: "fix it".into(),
             ..Default::default()
         };

@@ -20,9 +20,14 @@
 //! ```
 //!
 //! Every file a reader acts on is written with [`write_atomic`]: a status
-//! half-written by a crash must never read as a status.
+//! half-written by a crash must never read as a status. [`runs`] holds a
+//! run's manifest and limits, [`trace`] its append-only event log - the two
+//! records every stage that runs a model writes, attempts and explorations
+//! alike.
 
 pub mod clock;
+pub mod runs;
+pub mod trace;
 
 use std::fs;
 use std::io::Write;

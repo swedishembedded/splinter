@@ -12,7 +12,7 @@
 //! does not understand cannot silently vanish from the evidence.
 
 use crate::outcome::Usage;
-use crate::trace::Trace;
+use splinter_store::trace::Trace;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use sven_sdk::SessionEvent;

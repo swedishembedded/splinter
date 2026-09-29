@@ -26,9 +26,9 @@
 use crate::provider::LocalWeights;
 use splinter_store::{write_atomic, StateRoot};
 
-use crate::runs::{Limits, RunManifest};
-use crate::trace::Trace;
 use anyhow::Context;
+use splinter_store::runs::{Limits, RunManifest};
+use splinter_store::trace::Trace;
 use sven_sdk::model::{CompletionRequest, Message, ModelProvider, ResponseEvent, Role};
 
 /// Everything one exploration needs, as configured by the caller.

@@ -15,17 +15,9 @@
 //! such report, because an attempt that cannot see its spend cannot honour
 //! a cap on it.
 
-use crate::outcome::Usage;
+use splinter_store::runs::Budget;
 
-/// The configured usage limits of one attempt. `None` is "no limit".
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Budget {
-    /// Model output tokens, summed over the attempt's usage reports.
-    pub max_output_tokens: Option<u64>,
-    /// Provider-billed USD. Only meaningful for a remote model; local
-    /// inference is not billed per token.
-    pub max_cost_usd: Option<f64>,
-}
+use crate::outcome::Usage;
 
 /// Why `usage` has spent `budget`, or `None` while it has not. `reports` is
 /// how many usage reports the provider has emitted so far, which is what

@@ -3833,6 +3833,12 @@ dependencies = [
 [[package]]
 name = "splinter-store"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "splinter-tool-syntax"

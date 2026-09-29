@@ -49,7 +49,7 @@ fn record(
     run_id: &str,
     outcome: &crate::outcome::Outcome,
 ) -> anyhow::Result<serde_json::Value> {
-    let task = crate::runs::read_manifest(root, run_id)?.task;
+    let task = splinter_store::runs::read_manifest(root, run_id)?.task;
     let reply = outcome
         .reply
         .as_deref()
@@ -148,7 +148,7 @@ pub(crate) fn read_pool(pool: &std::path::Path) -> anyhow::Result<Vec<data::chat
 mod tests {
     use super::*;
     use crate::outcome::{Check, Outcome, Status, Usage};
-    use crate::runs::RunManifest;
+    use splinter_store::runs::RunManifest;
 
     /// A fresh state root per test, so tests running in parallel never share
     /// a pool.

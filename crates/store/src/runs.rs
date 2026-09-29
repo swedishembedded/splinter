@@ -23,7 +23,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use splinter_store::{write_atomic, StateRoot};
+use crate::{write_atomic, StateRoot};
 
 /// A run's manifest: what was configured, and where the attempt stands.
 /// Written atomically at every transition, so `show` never depends on the
@@ -62,7 +62,17 @@ pub struct Limits {
     /// `resume` is one more. `None` is unlimited.
     pub max_attempts: Option<u32>,
     #[serde(flatten)]
-    pub budget: crate::budget::Budget,
+    pub budget: Budget,
+}
+
+/// The configured usage limits of one attempt. `None` is "no limit".
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Budget {
+    /// Model output tokens, summed over the attempt's usage reports.
+    pub max_output_tokens: Option<u64>,
+    /// Provider-billed USD. Only meaningful for a remote model; local
+    /// inference is not billed per token.
+    pub max_cost_usd: Option<f64>,
 }
 
 /// Refuses a further attempt once the run has made as many as its limit
@@ -93,7 +103,7 @@ pub fn request_cancel(root: &StateRoot, run_id: &str) -> anyhow::Result<PathBuf>
         manifest.status
     );
     let path = root.run_dir(run_id).join(CANCEL_REQUEST);
-    write_atomic(&path, &splinter_store::clock::utc_now())?;
+    write_atomic(&path, &crate::clock::utc_now())?;
     Ok(path)
 }
 

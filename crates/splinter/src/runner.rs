@@ -27,9 +27,9 @@ use crate::events::{collect, Tally};
 use crate::outcome::{
     capture_changed_files, capture_tool_evidence, ChangedFile, Check, Outcome, Status,
 };
-use crate::runs::{Limits, RunManifest};
-use crate::trace::Trace;
 use splinter_store::clock::utc_now;
+use splinter_store::runs::{Limits, RunManifest};
+use splinter_store::trace::Trace;
 use splinter_store::{write_atomic, StateRoot};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -58,7 +58,7 @@ pub struct AttemptOptions {
     /// enforced by `resume` from the manifest.
     pub max_attempts: u32,
     /// Usage limits, raced against the turn.
-    pub budget: crate::budget::Budget,
+    pub budget: splinter_store::runs::Budget,
     /// Whether the caller permitted a model reached over an API - recorded
     /// with the task contract, so a remote call is attributable to an
     /// explicit opt-in.
@@ -128,10 +128,10 @@ pub fn resume(
     options: AttemptOptions,
 ) -> anyhow::Result<(Outcome, RunManifest)> {
     let dir = root.run_dir(run_id);
-    let manifest = crate::runs::read_manifest(root, run_id)?;
-    crate::runs::ensure_attempt_allowed(&manifest)?;
+    let manifest = splinter_store::runs::read_manifest(root, run_id)?;
+    splinter_store::runs::ensure_attempt_allowed(&manifest)?;
     // A cancel aimed at the previous attempt must not stop this one.
-    crate::runs::clear_cancel(&dir)?;
+    splinter_store::runs::clear_cancel(&dir)?;
     let checkpoint_path = dir.join("checkpoint").join("state.json");
     let text = std::fs::read_to_string(&checkpoint_path).map_err(|e| {
         anyhow::anyhow!(
@@ -183,7 +183,7 @@ pub fn resume(
 /// The tool calls the previous attempt completed, as the trace recorded them
 /// - the evidence recovery reconciles against.
 fn summarize_prior(dir: &std::path::Path) -> anyhow::Result<Vec<String>> {
-    let events = crate::trace::read_events(dir)?;
+    let events = splinter_store::trace::read_events(dir)?;
     let mut completed = Vec::new();
     for event in events {
         if event.get("type").and_then(|v| v.as_str()) != Some("tool_finished") {
@@ -572,14 +572,14 @@ async fn drive(
 /// (the run directory, the tally) that no one signals.
 async fn watch_limits(
     dir: &std::path::Path,
-    budget: crate::budget::Budget,
+    budget: splinter_store::runs::Budget,
     tally: &Tally,
     started: Instant,
 ) -> (Status, String) {
     let mut tick = tokio::time::interval(Duration::from_millis(500));
     loop {
         tick.tick().await;
-        if crate::runs::cancel_requested(dir) {
+        if splinter_store::runs::cancel_requested(dir) {
             return (Status::Cancelled, "cancel requested".into());
         }
         let usage = tally.usage(started.elapsed().as_secs());
