@@ -20,9 +20,9 @@
 //! in any other: a replay runs where the original ran, or not at all.
 //!
 //! Approval: `run_code` declares `ExecuteShell`, so sven asks before each
-//! call. The solver approves exactly that capability and refuses every
-//! other gate. That is safe because the engine has no built-in tools and
-//! `run_code` is its only tool, so no other tool can raise the gate; and
+//! call. The solver approves a gate only when the call it gates is
+//! `run_code` and refuses every other gate. That is safe because the
+//! engine has no built-in tools, so nothing else can raise the gate; and
 //! what a call may do is contained by its sandbox backend's limits (and,
 //! for the container backend, its isolation), not by a person reading the
 //! code. With nobody to ask, a question the agent puts is answered empty.
@@ -228,18 +228,20 @@ fn engine(
     }
 }
 
-/// Approves the capability `run_code` needs and nothing else; see the
-/// module documentation for why that is safe.
+/// Approves a `run_code` call and nothing else, by the call it gates;
+/// see the module documentation for why that is safe.
 fn approve_run_code_only(gate: HumanGate) {
     // A dropped receiver means the turn already ended; nothing waits for
     // the answer.
     match gate {
         HumanGate::Approval {
             capability,
+            call,
             reply_tx,
             ..
         } => {
-            let _ = reply_tx.send(capability == ToolCapability::ExecuteShell);
+            let is_run_code = call.is_some_and(|call| call.name == RUN_CODE);
+            let _ = reply_tx.send(is_run_code && capability == ToolCapability::ExecuteShell);
         }
         HumanGate::Question { reply_tx, .. } => {
             let _ = reply_tx.send(String::new());

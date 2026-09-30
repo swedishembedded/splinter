@@ -74,18 +74,12 @@ the released adapter answers the same questions from plain `brain serve`.
      reports the conclusion instead of dropping the turn. Also open: file
      tools rooted in a given directory, which workspace environments need
      (Splinter's environments are closed-book and runtime until then); and
-     an approval gate that names the tool call it gates - `HumanGate`
-     carries only the capability and a prose prompt, so the solver can
-     approve a capability, not a tool. Also open: typed model-driven
-     methods (`Method`, `Engine::call`) that a run can bound - a call
-     takes no `RunOptions` (deadline, output-token budget, cancel) - and
-     whose derived schema a consumer can satisfy without a direct
-     `schemars` dependency pinned to sven's; until then the task
-     generators ask through the closed-book solve and parse the reply
-     strictly, with no repair turn. Also open: an ATIF trajectory as
-     chat messages with each agent step's boundary kept, in the SDK - the
-     step-to-message rendering sven has is internal and flattens the steps,
-     so Splinter's views render trajectories themselves.
+     an ATIF trajectory as chat messages with each agent step's boundary
+     kept, in the SDK - the step-to-message rendering sven has is internal
+     and flattens the steps, so Splinter's views render trajectories
+     themselves. Typed methods can now be bounded (`call_with`) and their
+     schema crate is re-exported (`sven_sdk::schemars`); the task
+     generators can move onto them.
 6. **Extract sven's learning code**: the learning half of `sven-memory`
    (fact ledger, ingestion, assimilation, rule expansion, the submission
    drain, the brain study submitter, the doctor), the `learn` CLI, the
