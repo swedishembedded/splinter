@@ -27,6 +27,7 @@ use splinter_store::experience::{Environment, ExperienceError, Task};
 use splinter_store::source::{PartRef, SourceId};
 use splinter_store::sources::SourceStore;
 use sven_sdk::model::ModelProvider;
+use sven_sdk::CancelToken;
 
 use super::admit::{Admission, Proposal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
@@ -181,6 +182,7 @@ pub struct ModelTaskGenerator {
     runtimes: Vec<RuntimeEnvironment>,
     policy: GenerationPolicy,
     mutation: MutationPolicy,
+    cancel: Option<CancelToken>,
 }
 
 impl ModelTaskGenerator {
@@ -200,6 +202,7 @@ impl ModelTaskGenerator {
             runtimes: Vec::new(),
             policy: GenerationPolicy::default(),
             mutation: MutationPolicy::default(),
+            cancel: None,
         }
     }
 
@@ -222,6 +225,15 @@ impl ModelTaskGenerator {
     #[must_use]
     pub fn with_mutation(mut self, mutation: MutationPolicy) -> Self {
         self.mutation = mutation;
+        self
+    }
+
+    /// Stops the request in progress, and every later one, once `cancel`
+    /// is cancelled: a stopped request has no reply, rejected as
+    /// [`super::Rejection::NoReply`].
+    #[must_use]
+    pub fn with_cancel(mut self, cancel: CancelToken) -> Self {
+        self.cancel = Some(cancel);
         self
     }
 
@@ -309,6 +321,7 @@ impl ModelTaskGenerator {
         )?;
         let mut options = SolveOptions::new(self.policy.deadline);
         options.max_output_tokens = self.policy.max_output_tokens;
+        options.cancel = self.cancel.clone();
         let solution = solve(
             &request,
             &ResolvedEnvironment::ClosedBook,

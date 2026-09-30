@@ -10,32 +10,31 @@
 //!
 //! ```text
 //! <root>/
-//!   runs/<run_id>/            one attempt or exploration: manifest, trace,
-//!                             transcript, checkpoint, outcome, artifacts
-//!   datasets/experience.jsonl training records derived from verified runs
-//!   facts/                    the document-learning pipeline's work dirs
-//!   train/<attempt_id>/       one training attempt's adapter and scores
-//!   train/prepared/           the tokenized dataset of the latest attempt
-//!   adapter.json              the promoted adapter serving reads
-//!   experiences/              the content-addressed experience store
+//!   runs/<run_id>/            one command's run record and cancel request
 //!   sources/                  the content-addressed source store
+//!   tasks/                    the content-addressed task store
+//!   experiences/              the content-addressed experience store
+//!   datasets/<id>/            one dataset and its manifest
+//!   calibrations/             each judge's latest calibration
+//!   train/<candidate_id>/     one trained candidate: adapter, scores, record
+//!   sandbox/                  the process sandbox's per-call directories
 //! ```
 //!
 //! Every file a reader acts on is written with [`write_atomic`]: a status
 //! half-written by a crash must never read as a status. A content-addressed
 //! object is written with [`write_once`], which never replaces a file.
-//! [`runs`] holds a run's manifest and limits, [`trace`] its append-only
-//! event log - the two records every stage that runs a model writes,
-//! attempts and explorations alike.
+//! [`runs`] holds a command's run record, readable and cancellable from any
+//! process.
 //!
-//! [`experience`], [`annotation`] and [`experiences`] are the experience
-//! store every training set is projected from: immutable experiences under
-//! their content address, append-only annotations beside them, and named
-//! sets of experience ids. [`source`] and [`sources`] are what those
-//! experiences are grounded in: every document, repository and command run
-//! Splinter learns from, its content stored once per digest, so a span of
-//! an experience resolves to the exact bytes it names. [`error`] is the
-//! error both stores report.
+//! [`source`] and [`sources`] are what Splinter learns from: every
+//! document, repository and command run, its content stored once per
+//! digest, so a span resolves to the exact bytes it names. [`tasks`] holds
+//! the tasks generated from them and the named sets a stage hands the
+//! next. [`experience`], [`annotation`] and [`experiences`] are the
+//! experience store every training set is projected from: immutable
+//! experiences under their content address, append-only annotations beside
+//! them, and named sets of experience ids. [`error`] is the error every
+//! store reports.
 
 #![warn(missing_docs)]
 
@@ -48,7 +47,7 @@ pub mod experiences;
 pub mod runs;
 pub mod source;
 pub mod sources;
-pub mod trace;
+pub mod tasks;
 
 use std::fs;
 use std::io::Write;
@@ -90,28 +89,16 @@ impl StateRoot {
         self.runs().join(run_id)
     }
 
-    /// The pool verified runs' training records are appended to.
+    /// The source store's directory.
     #[must_use]
-    pub fn experience_pool(&self) -> PathBuf {
-        self.0.join("datasets").join("experience.jsonl")
+    pub fn sources(&self) -> PathBuf {
+        self.0.join("sources")
     }
 
-    /// The document-learning pipeline's default work directory.
+    /// The task store's directory.
     #[must_use]
-    pub fn facts(&self) -> PathBuf {
-        self.0.join("facts")
-    }
-
-    /// Where training attempts and their prepared datasets live.
-    #[must_use]
-    pub fn train(&self) -> PathBuf {
-        self.0.join("train")
-    }
-
-    /// The pointer to the currently promoted adapter.
-    #[must_use]
-    pub fn adapter_pointer(&self) -> PathBuf {
-        self.0.join("adapter.json")
+    pub fn tasks(&self) -> PathBuf {
+        self.0.join("tasks")
     }
 
     /// The experience store's directory.
@@ -120,23 +107,34 @@ impl StateRoot {
         self.0.join("experiences")
     }
 
-    /// The source store's directory.
+    /// Where datasets and their manifests live.
     #[must_use]
-    pub fn sources(&self) -> PathBuf {
-        self.0.join("sources")
+    pub fn datasets(&self) -> PathBuf {
+        self.0.join("datasets")
+    }
+
+    /// Where each judge's latest calibration lives.
+    #[must_use]
+    pub fn calibrations(&self) -> PathBuf {
+        self.0.join("calibrations")
+    }
+
+    /// Where trained candidates live.
+    #[must_use]
+    pub fn train(&self) -> PathBuf {
+        self.0.join("train")
+    }
+
+    /// The process sandbox's scratch root: a directory per code call.
+    #[must_use]
+    pub fn sandbox(&self) -> PathBuf {
+        self.0.join("sandbox")
     }
 }
 
-/// A new run id: time-ordered, so a directory listing reads as a history,
-/// with a random suffix so two runs started in the same second never
-/// collide.
-#[must_use]
-pub fn new_run_id() -> String {
-    new_id_with_prefix("loop")
-}
-
-/// [`new_run_id`] with a different leading tag, so records from another
-/// stage (training attempts, explorations) never sort into the run history.
+/// A new id led by `prefix`: time-ordered, so a directory listing reads as
+/// a history, with a sub-second suffix so two ids made in the same
+/// millisecond are unlikely to collide.
 #[must_use]
 pub fn new_id_with_prefix(prefix: &str) -> String {
     let t = clock::now();
@@ -233,9 +231,9 @@ mod tests {
 
     #[test]
     fn run_ids_are_time_ordered_and_unique_within_a_second() {
-        let a = new_run_id();
+        let a = new_id_with_prefix("run");
         std::thread::sleep(std::time::Duration::from_millis(1));
-        let b = new_run_id();
+        let b = new_id_with_prefix("run");
         assert!(a < b, "ids must sort as a history: {a} vs {b}");
     }
 

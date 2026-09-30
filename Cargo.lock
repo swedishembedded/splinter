@@ -3871,19 +3871,11 @@ dependencies = [
 name = "splinter"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "serde",
  "serde_json",
- "sha2",
- "splinter-agent",
  "splinter-campaign",
- "splinter-knowledge",
- "splinter-lab",
- "splinter-policy",
  "splinter-store",
- "sven-sdk",
- "tokio",
 ]
 
 [[package]]
@@ -3893,11 +3885,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "serde",
  "serde_json",
- "sha2",
  "splinter-lab",
- "splinter-policy",
  "splinter-sandbox",
  "splinter-store",
  "splinter-views",
@@ -3919,9 +3908,11 @@ dependencies = [
  "splinter-knowledge",
  "splinter-lab",
  "splinter-policy",
+ "splinter-sandbox",
  "splinter-store",
  "splinter-views",
  "sven-sdk",
+ "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -3949,7 +3940,6 @@ dependencies = [
 name = "splinter-lab"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "serde",
  "serde_json",
  "splinter-sandbox",
@@ -3972,6 +3962,7 @@ dependencies = [
  "serde_json",
  "splinter-lab",
  "sven-sdk",
+ "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -3991,7 +3982,6 @@ dependencies = [
 name = "splinter-store"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "serde",
  "serde_json",
  "sha2",

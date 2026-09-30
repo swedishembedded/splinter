@@ -6,200 +6,211 @@
 // in evaluation-gated fine-tuning, you can procure our services by sending
 // an email to info@swedishembedded.com.
 
-//! A training attempt with the gate outside the trainer's optimism: the
-//! policy fine-tunes and scores, the lab's gate decides, and only a
-//! promotion moves the adapter pointer serving reads. Every attempt -
-//! adopted or rejected - leaves both scores in its decision record, so
-//! "the model got worse" is evidence, not folklore.
+//! The train stage: stored datasets become a candidate adapter, scored on
+//! held-out records, and never released - releasing a candidate is not
+//! part of training.
+//!
+//! The datasets are concatenated in the order given into the candidate's
+//! own directory, and the newest records of that file are held out
+//! (`splinter_lab::holdout`); a replayed dataset is mixed into training
+//! whole and never held out, so the held-out score measures the new data.
+//! `--from` names the base, and an adapter on it to continue training.
 
 use std::path::PathBuf;
 
-use splinter_lab::promotion::{decide, Decision, Scores};
-use splinter_policy::train::{fine_tune, FineTune};
-use splinter_store::{write_atomic, StateRoot};
+use serde::Serialize;
+use splinter_policy::train::{fine_tune, FineTune, HeldOutScore};
+use splinter_policy::{ModelSelection, PolicyError};
+use splinter_store::write_atomic;
+use splinter_views::{DatasetId, Format, StoredDataset};
+use sven_sdk::CancelToken;
 
-/// Training steps when a command names none: small, because the loop
-/// trains on its own verified experience a few records at a time.
+use crate::context::Context;
+use crate::datasets::resolve_dataset;
+use crate::error::{io, CampaignError};
+use crate::model_ref::ModelRef;
+
+/// Training steps when a command names none.
 pub const DEFAULT_STEPS: u32 = 40;
 /// LoRA rank of a new adapter when a command names none.
 pub const DEFAULT_LORA_RANK: u32 = 8;
-/// LoRA alpha of a new adapter when a command names none.
+/// LoRA alpha of a new adapter: the update is scaled by `alpha / rank`.
 pub const DEFAULT_LORA_ALPHA: f32 = 16.0;
 
-/// Options for one training attempt.
-#[derive(Clone, Debug)]
-pub struct TrainOptions {
-    /// Base checkpoint to fine-tune against (the model the agent serves).
-    pub model_dir: PathBuf,
-    /// Dataset file to train on; defaults to the accumulated pool.
-    pub dataset: Option<PathBuf>,
-    /// Training steps (small by default: the loop trains on its own
-    /// verified experience, a few samples at a time).
+/// The file a candidate's record is kept in, inside its directory.
+pub const CANDIDATE_RECORD: &str = "candidate.json";
+
+/// One training request.
+#[derive(Clone, Debug, Serialize)]
+pub struct TrainRequest {
+    /// The datasets trained on, by id or unique prefix, in order.
+    pub datasets: Vec<String>,
+    /// The base to train, and an adapter on it to continue.
+    pub from: ModelRef,
+    /// A dataset mixed into training whole, never held out.
+    pub replay: Option<String>,
+    /// Optimizer steps.
     pub steps: u32,
-    /// LoRA rank of the adapter.
+    /// LoRA rank of a new adapter.
     pub rank: u32,
-    /// LoRA alpha of the adapter; the update is scaled by `alpha / rank`.
-    pub alpha: f32,
 }
 
-/// One training attempt, end to end. Returns the decision and the attempt's
-/// directory, which holds the decision record and the adapter.
-pub fn run(root: &StateRoot, options: &TrainOptions) -> anyhow::Result<(Decision, PathBuf)> {
-    let dataset = options
-        .dataset
-        .clone()
-        .unwrap_or_else(|| root.experience_pool());
-    let out = attempt_dir(root)?;
-    let trained = fine_tune(&FineTune {
-        model_dir: &options.model_dir,
-        dataset: &dataset,
-        attempt_dir: &out,
-        steps: options.steps,
-        rank: options.rank,
-        alpha: options.alpha,
-    })?;
+/// A trained candidate.
+#[derive(Clone, Debug, Serialize)]
+pub struct Candidate {
+    /// Its id, which names its directory under the state root's `train/`.
+    pub candidate: String,
+    /// The reference it was trained from.
+    pub from: String,
+    /// The datasets trained on.
+    pub datasets: Vec<DatasetId>,
+    /// The dataset replayed, if any.
+    pub replay: Option<DatasetId>,
+    /// The adapter file.
+    pub adapter: PathBuf,
+    /// Its digest.
+    pub adapter_digest: String,
+    /// The base on the held-out records.
+    pub base_score: HeldOutScore,
+    /// The base with the adapter on the same records.
+    pub tuned_score: HeldOutScore,
+    /// Records trained and held out, together.
+    pub records: usize,
+    /// Always `false`: training never releases a candidate.
+    pub released: bool,
+}
 
-    // An unscored held-out set has no loss; the gate rejects a non-finite
-    // score, so an unmeasured one can never promote.
-    let scores = Scores {
-        base_loss: trained.base.loss.unwrap_or(f32::NAN),
-        tuned_loss: trained.tuned.loss.unwrap_or(f32::NAN),
+/// Trains a candidate; the seam `learn` trains through.
+pub trait Trainer {
+    /// Trains a candidate on `datasets` (verified, trainable) as `request`
+    /// asks, stopping when `cancel` fires.
+    fn train(
+        &self,
+        ctx: &Context,
+        request: &TrainRequest,
+        datasets: &[StoredDataset],
+        cancel: &CancelToken,
+    ) -> Result<Candidate, CampaignError>;
+}
+
+/// Trains with brain's LoRA fine-tune.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BrainTrainer;
+
+impl Trainer for BrainTrainer {
+    fn train(
+        &self,
+        ctx: &Context,
+        request: &TrainRequest,
+        datasets: &[StoredDataset],
+        cancel: &CancelToken,
+    ) -> Result<Candidate, CampaignError> {
+        let ModelSelection::Local(weights) = ctx.selection(&request.from)? else {
+            return Err(CampaignError::Refused(format!(
+                "{} is reached over the network and cannot be trained here",
+                request.from
+            )));
+        };
+        let replay = request
+            .replay
+            .as_deref()
+            .map(|id| trainable(ctx, id))
+            .transpose()?;
+        let candidate = splinter_store::new_id_with_prefix("candidate");
+        let dir = ctx.root().train().join(&candidate);
+        std::fs::create_dir_all(&dir).map_err(io(&dir))?;
+        let combined = dir.join("dataset.jsonl");
+        let mut text = String::new();
+        for dataset in datasets {
+            text.push_str(&std::fs::read_to_string(&dataset.path).map_err(io(&dataset.path))?);
+        }
+        write_atomic(&combined, &text).map_err(io(&combined))?;
+        let replayed: Vec<PathBuf> = replay.iter().map(|d| d.path.clone()).collect();
+        let trained = fine_tune(&FineTune {
+            model_dir: &weights.base,
+            dataset: &combined,
+            attempt_dir: &dir,
+            steps: request.steps,
+            rank: request.rank,
+            alpha: DEFAULT_LORA_ALPHA,
+            replay: &replayed,
+            continue_from: weights.adapter.as_deref(),
+            cancel: Some(cancel),
+        })
+        .map_err(|e| match e {
+            PolicyError::Cancelled { .. } => CampaignError::Cancelled,
+            other => CampaignError::Train(other.to_string()),
+        })?;
+        let record = Candidate {
+            candidate,
+            from: request.from.to_string(),
+            datasets: datasets.iter().map(|d| d.id.clone()).collect(),
+            replay: replay.map(|d| d.id),
+            adapter: trained.adapter,
+            adapter_digest: trained.adapter_digest,
+            base_score: trained.base,
+            tuned_score: trained.tuned,
+            records: trained.records,
+            released: false,
+        };
+        let path = dir.join(CANDIDATE_RECORD);
+        let json = serde_json::to_string_pretty(&record).map_err(|source| CampaignError::Json {
+            what: "candidate".into(),
+            source,
+        })?;
+        write_atomic(&path, &json).map_err(io(&path))?;
+        Ok(record)
+    }
+}
+
+/// The stored dataset `id` names, refused unless brain can train it.
+pub fn trainable(ctx: &Context, id: &str) -> Result<StoredDataset, CampaignError> {
+    let dataset = resolve_dataset(ctx, id)?;
+    if dataset.manifest.format != Format::GenericMessagesV2 {
+        return Err(CampaignError::Refused(format!(
+            "dataset {} is export-only ({:?} records); brain cannot train it",
+            dataset.id, dataset.manifest.objective
+        )));
+    }
+    Ok(dataset)
+}
+
+/// Trains a candidate on `request`'s datasets with `trainer`.
+pub fn train(
+    ctx: &Context,
+    request: &TrainRequest,
+    trainer: &dyn Trainer,
+    cancel: &CancelToken,
+) -> Result<Candidate, CampaignError> {
+    if request.datasets.is_empty() {
+        return Err(CampaignError::Refused("name at least one dataset".into()));
+    }
+    let datasets = request
+        .datasets
+        .iter()
+        .map(|id| trainable(ctx, id))
+        .collect::<Result<Vec<_>, _>>()?;
+    trainer.train(ctx, request, &datasets, cancel)
+}
+
+/// How many candidates were trained under the state root.
+pub fn candidate_count(ctx: &Context) -> Result<usize, CampaignError> {
+    let dir = ctx.root().train();
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(io(&dir)(e)),
     };
-    // The standing champion's scores, from the pointer: beats-base is not
-    // enough when a better adapter already serves. Only a champion scored
-    // on the same pool and split bounds a candidate; `decide` checks that by
-    // base loss.
-    let champion = read_champion_scores(&root.adapter_pointer());
-    let decision = decide(&scores, champion.as_ref());
-
-    let record = serde_json::json!({
-        "dataset": dataset,
-        "records": trained.records,
-        "block_size": trained.block,
-        "steps": options.steps,
-        "rank": options.rank,
-        "base": trained.base,
-        "tuned": trained.tuned,
-        "decision": match decision { Decision::Promoted => "promoted", Decision::Rejected => "rejected" },
-        "adapter": trained.adapter,
-        "adapter_digest": trained.adapter_digest,
-        "training_record": trained.training_record,
-    });
-    let decision_record = out.join("decision.json");
-    write_atomic(&decision_record, &serde_json::to_string_pretty(&record)?)?;
-    apply_decision(
-        &decision,
-        &root.adapter_pointer(),
-        &trained.adapter,
-        &options.model_dir,
-        &scores,
-        &decision_record,
-    )?;
-    Ok((decision, out))
-}
-
-/// Applies the gate's verdict to durable state. Promotion repoints the
-/// adapter pointer at the new adapter, so serving follows the promotion.
-/// Rejection changes nothing: the pointer names the previous known-good
-/// adapter, and a failed training attempt must not take it out of service -
-/// "no pointer" means this attempt wrote none, never that the standing
-/// promotion was torn down.
-fn apply_decision(
-    decision: &Decision,
-    pointer: &std::path::Path,
-    adapter: &std::path::Path,
-    model_dir: &std::path::Path,
-    scores: &Scores,
-    decision_record: &std::path::Path,
-) -> anyhow::Result<()> {
-    if *decision != Decision::Promoted {
-        return Ok(());
+    let mut count = 0;
+    for entry in entries {
+        if entry
+            .map_err(io(&dir))?
+            .path()
+            .join(CANDIDATE_RECORD)
+            .is_file()
+        {
+            count += 1;
+        }
     }
-    let record = serde_json::json!({
-        "adapter": adapter,
-        "model_dir": model_dir,
-        "scores": { "base_loss": scores.base_loss, "tuned_loss": scores.tuned_loss },
-        "decision_record": decision_record,
-    });
-    write_atomic(pointer, &serde_json::to_string_pretty(&record)?)
-        .map_err(|e| anyhow::anyhow!("{}: {e}", pointer.display()))
-}
-
-/// One training attempt's own output directory, created exactly once.
-fn attempt_dir(root: &StateRoot) -> anyhow::Result<PathBuf> {
-    let dir = root
-        .train()
-        .join(splinter_store::new_id_with_prefix("train"));
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
-/// The champion's recorded gate scores, when a pointer is in place. A
-/// missing or malformed pointer is no champion - the base-only rule
-/// applies - never an error: a rejected first attempt leaves no pointer,
-/// and training must still work from there.
-fn read_champion_scores(pointer: &std::path::Path) -> Option<Scores> {
-    let text = std::fs::read_to_string(pointer).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-    Some(Scores {
-        base_loss: value.get("scores")?.get("base_loss")?.as_f64()? as f32,
-        tuned_loss: value.get("scores")?.get("tuned_loss")?.as_f64()? as f32,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_rejected_attempt_leaves_the_promoted_adapter_in_service() {
-        let root = StateRoot::new(
-            std::env::temp_dir().join(format!("splinter-train-gate-{}", std::process::id())),
-        );
-        let pointer = root.adapter_pointer();
-        std::fs::create_dir_all(pointer.parent().unwrap()).unwrap();
-        let standing = serde_json::json!({ "adapter": "/previous/good-adapter.safetensors" });
-        std::fs::write(&pointer, serde_json::to_string_pretty(&standing).unwrap()).unwrap();
-
-        // A rejection writes nothing and tears nothing down: the standing
-        // promotion stays servable.
-        apply_decision(
-            &Decision::Rejected,
-            &pointer,
-            std::path::Path::new("/this/attempt/adapter.safetensors"),
-            std::path::Path::new("/base"),
-            &Scores {
-                base_loss: 1.0,
-                tuned_loss: 1.2,
-            },
-            std::path::Path::new("/this/attempt/decision.json"),
-        )
-        .unwrap();
-        assert_eq!(
-            std::fs::read_to_string(&pointer).unwrap(),
-            serde_json::to_string_pretty(&standing).unwrap(),
-            "a failed training must not remove the known-good promotion"
-        );
-
-        // A promotion repoints the pointer at the new adapter.
-        let adapter = std::path::Path::new("/this/attempt/adapter.safetensors");
-        apply_decision(
-            &Decision::Promoted,
-            &pointer,
-            adapter,
-            std::path::Path::new("/base"),
-            &Scores {
-                base_loss: 1.2,
-                tuned_loss: 1.0,
-            },
-            std::path::Path::new("/this/attempt/decision.json"),
-        )
-        .unwrap();
-        let promoted: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&pointer).unwrap()).unwrap();
-        assert_eq!(promoted["adapter"], adapter.display().to_string());
-        assert_eq!(promoted["scores"]["tuned_loss"], 1.0);
-
-        let _ = std::fs::remove_dir_all(root.path());
-    }
+    Ok(count)
 }

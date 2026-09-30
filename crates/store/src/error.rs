@@ -12,6 +12,7 @@ use crate::digest::Digest;
 use crate::experience::{ExperienceError, ExperienceId};
 use crate::experiences::SetId;
 use crate::source::{SourceError, SourceId};
+use crate::tasks::TaskSetId;
 
 /// Why a store operation failed.
 #[derive(Debug, thiserror::Error)]
@@ -39,6 +40,23 @@ pub enum StoreError {
     /// The store holds no source with this id.
     #[error("no source {0} in the store")]
     UnknownSource(SourceId),
+    /// The store holds no task with this id.
+    #[error("no task {0} in the store")]
+    UnknownTask(Digest),
+    /// The store holds no task set with this id.
+    #[error("no task set {0} in the store")]
+    UnknownTaskSet(TaskSetId),
+    /// No run with this id was recorded.
+    #[error("no run {0} is recorded")]
+    UnknownRun(String),
+    /// A run that is not in progress, asked to stop.
+    #[error("run {run} is not in progress (it is {status}); there is nothing to cancel")]
+    RunNotInProgress {
+        /// The run.
+        run: String,
+        /// Its recorded status.
+        status: String,
+    },
     /// The source holds no part of this name.
     #[error("source {source_id} has no part {part:?}")]
     UnknownPart {
@@ -132,6 +150,29 @@ pub(crate) fn read_verified(path: &Path, address: &Digest) -> Result<Vec<u8>, St
         });
     }
     Ok(bytes)
+}
+
+/// The digests named by the `<64 hex>.json` files directly in `dir`, in
+/// digest order; empty when `dir` does not exist. Anything else in it (a
+/// write-once temporary file) is not a stored object and is skipped.
+pub(crate) fn object_digests(dir: &Path) -> Result<Vec<Digest>, StoreError> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(io(dir)(e)),
+    };
+    let mut digests = Vec::new();
+    for entry in entries {
+        let name = entry.map_err(io(dir))?.file_name();
+        let Some(hex) = name.to_str().and_then(|n| n.strip_suffix(".json")) else {
+            continue;
+        };
+        if let Ok(digest) = Digest::parse(&format!("sha256:{hex}")) {
+            digests.push(digest);
+        }
+    }
+    digests.sort();
+    Ok(digests)
 }
 
 /// `bytes` decoded as the record stored at `path`.

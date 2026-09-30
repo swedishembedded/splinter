@@ -7,13 +7,10 @@
 //! * [`capture`] - a document, a repository tree or a command run captured
 //!   as an immutable source for the source store.
 //! * [`sections`] - a text split into addressable byte ranges: at headings
-//!   for Markdown, at paragraphs otherwise; the fact extractor's chunks
-//!   each carry the document's subject.
-//! * [`extract`] - ask for every fact in a section; parse the reply strictly.
-//! * [`gates`] - refuse duplicates, questions not anchored on the subject,
-//!   and answers whose numbers the section does not carry.
-//! * [`negatives`] - out-of-scope variants trained toward an abstention.
-//! * [`explore`] - the whole run, traced like an agent attempt.
+//!   for Markdown, at paragraphs otherwise.
+//! * [`gates`] - the text rules a generated task is held to: instruction
+//!   normalisation for duplicate detection, and numbers traceable to the
+//!   evidence.
 //! * [`denoise`] - a passage of a source part, corrupted, as a task to
 //!   restore it: the first task generator feeding the experience store.
 //! * [`tasks`] - tasks of many kinds proposed by a generator model and
@@ -24,11 +21,6 @@
 
 pub mod capture;
 pub mod denoise;
-pub mod explore;
-pub mod extract;
 pub mod gates;
-pub mod negatives;
 pub mod sections;
 pub mod tasks;
-
-pub use explore::{run, ExploreOptions, ExploreSummary};

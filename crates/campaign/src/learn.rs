@@ -1,306 +1,386 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements delegated-task coding agents that feed
-// their verified experience to a gated training path. If your team needs
-// expertise in supervised fine-tuning pipelines, you can procure our
-// services by sending an email to info@swedishembedded.com.
+// Swedish Embedded AB implements learning agents that acquire a capability
+// from a document or a tool and prove it with evidence, for its clients. If
+// your team needs expertise in continual learning or agent evaluation, you
+// can procure our services by sending an email to info@swedishembedded.com.
 
-//! The loop's evidence pool: verified runs become chat-training records.
+//! `learn`: sources -> tasks -> solve -> verify -> critique and retry ->
+//! dataset -> train, as one recorded run whose every stage is also a
+//! command of its own.
 //!
-//! Only a run the reviewer could already trust is worth training on: the
-//! attempt completed AND its own completion checks passed. Anything less -
-//! a failure, a timeout, a run with no check evidence - is refused with the
-//! reason, because a model fine-tuned on unverified transcripts learns to
-//! sound finished, not to be finished.
+//! Each stage hands the next the content-addressed set it wrote, and its
+//! summary is recorded (and reported) as it finishes, so a stage can be
+//! inspected, or rerun alone, from what the run records. The policy -
+//! `policy:default` - generates, solves, critiques and retries; its tasks
+//! are graded by their kinds' verifiers, never by a judge. The dataset is
+//! the `sft-final` view over the first attempts and the revisions, and the
+//! candidate trained on it is reported, not released.
 //!
-//! The pool is one JSONL file, appended one record per learned run and
-//! validated against the exact schema the trainer's parser enforces
-//! (`brain::validate_chat_dataset`), so `learn` cannot write a pool the
-//! `train` step will later reject over shape.
+//! The pipeline stops early, and says why, when a stage leaves the next
+//! nothing to work on or the budget is spent; `--dry-run` resolves the
+//! plan and writes nothing.
 
-use splinter_store::StateRoot;
+use std::time::{Duration, Instant};
 
-use splinter_agent::outcome::Status;
+use serde::Serialize;
+use splinter_lab::holdout::MIN_SAMPLES;
+use splinter_store::experiences::SetId;
+use splinter_store::source::SourceId;
 
-/// A run is learning evidence only when the outcome says completed and at
-/// least one completion check actually passed. The manifest's status alone
-/// is not enough: it tracks the latest attempt, while the outcome carries
-/// the check evidence.
-fn verified(
-    run_id: &str,
-    dir: &std::path::Path,
-) -> anyhow::Result<splinter_agent::outcome::Outcome> {
-    let outcome = splinter_agent::outcome::Outcome::load(dir)?;
-    anyhow::ensure!(
-        outcome.status == Status::Completed,
-        "run {run_id} is {} - only a completed run is learning evidence",
-        outcome.status.as_str()
-    );
-    anyhow::ensure!(
-        outcome.checks.iter().any(|c| c.passed),
-        "run {run_id} passed no completion check - evidence without verification is not learning material"
-    );
-    Ok(outcome)
+use crate::context::Context;
+use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};
+use crate::datasets::{build, BuildRequest, Built, ViewName};
+use crate::error::CampaignError;
+use crate::model_ref::ModelRef;
+use crate::runs::{record, Recorded, Recorder};
+use crate::solving::{solve_set, Solved};
+use crate::sources::{self, SourceSummary, SourceTarget};
+use crate::tasks::{check_kinds, generate, Generation, TasksGenerated, DEFAULT_LEARN_KINDS};
+use crate::train::{train, Candidate, TrainRequest, Trainer, DEFAULT_LORA_RANK, DEFAULT_STEPS};
+use crate::verify::{verify_set, Verified};
+
+/// The stages, in order, as runs and reports name them.
+pub const STAGES: [&str; 7] = [
+    "sources", "tasks", "solve", "verify", "critique", "dataset", "train",
+];
+
+/// One `learn`.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct LearnRequest {
+    /// What to learn from, as the command line names it.
+    pub sources: Vec<String>,
+    /// What the learner is after.
+    pub goal: Option<String>,
+    /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`].
+    pub kinds: Vec<String>,
+    /// Wall-clock time the whole pipeline may take.
+    pub budget: Option<Duration>,
+    /// Resolve the plan and write nothing.
+    pub dry_run: bool,
 }
 
-/// One run becomes one chat record: the task as the user message (context,
-/// not supervised) and the final assistant reply as the supervised turn.
-/// The reply is the outcome's verbatim `reply`, not a transcript guess.
-fn record(
-    root: &StateRoot,
-    run_id: &str,
-    outcome: &splinter_agent::outcome::Outcome,
-) -> anyhow::Result<serde_json::Value> {
-    let task = splinter_store::runs::read_manifest(root, run_id)?.task;
-    let reply = outcome
-        .reply
-        .as_deref()
-        .map(str::trim)
-        .filter(|r| !r.is_empty());
-    anyhow::ensure!(
-        reply.is_some(),
-        "run {run_id} has no final reply to supervise"
-    );
-    let passed: Vec<&str> = outcome
-        .checks
-        .iter()
-        .filter(|c| c.passed)
-        .map(|c| c.command.as_str())
-        .collect();
-    Ok(serde_json::json!({
-        "messages": [
-            { "role": "user", "content": task.trim(), "train": false },
-            { "role": "assistant", "content": reply.unwrap_or_default(), "train": true },
-        ],
-        "metadata": {
-            "run_id": run_id,
-            "verified_by": passed,
-        },
-    }))
+/// What a dry run reports: the plan, and nothing written.
+#[derive(Clone, Debug, Serialize)]
+pub struct LearnPlan {
+    /// The state root the run would write under.
+    pub state: std::path::PathBuf,
+    /// The sources, as they would be captured.
+    pub sources: Vec<SourceTarget>,
+    /// The task kinds.
+    pub kinds: Vec<String>,
+    /// The goal.
+    pub goal: Option<String>,
+    /// The budget, in seconds.
+    pub budget_secs: Option<u64>,
+    /// The model that generates, solves, critiques and retries.
+    pub policy: String,
+    /// The stages, in order.
+    pub stages: Vec<&'static str>,
+    /// Always `true`: nothing was written.
+    pub dry_run: bool,
 }
 
-/// Learn one run: verify it, append its record to the pool, and return what
-/// was appended. Learning the same run twice is a no-op that says so - the
-/// pool is keyed by run id, and a duplicated record would weight that
-/// experience twice in every training run.
-pub fn learn_run(root: &StateRoot, run_id: &str) -> anyhow::Result<Learned> {
-    let pool = root.experience_pool();
-    if pool.exists() && pool_has_run(&pool, run_id)? {
-        return Ok(Learned::AlreadyRecorded);
-    }
-    let dir = root.run_dir(run_id);
-    let outcome = verified(run_id, &dir)?;
-    let line = record(root, run_id, &outcome)?;
-    if let Some(parent) = pool.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut text = serde_json::to_string(&line)?;
-    text.push('\n');
-    // Appends only ever grow the pool, one line per learned run; O_APPEND
-    // keeps a concurrent writer from splitting a line.
-    use std::io::Write;
-    std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&pool)?
-        .write_all(text.as_bytes())?;
-    Ok(Learned::Appended)
+/// What a `learn` run reports, stage by stage.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct LearnReport {
+    /// The sources learned from.
+    pub sources: Vec<SourceSummary>,
+    /// The tasks stage.
+    pub tasks: Option<TasksGenerated>,
+    /// The solve stage.
+    pub solve: Option<Solved>,
+    /// The verify stage.
+    pub verify: Option<Verified>,
+    /// The critique stage.
+    pub critique: Option<Critiqued>,
+    /// The dataset stage.
+    pub dataset: Option<Built>,
+    /// The candidate trained, reported and not released.
+    pub candidate: Option<Candidate>,
+    /// Why the pipeline stopped before training, if it did.
+    pub stopped: Option<String>,
 }
 
-/// What [`learn_run`] did with a run that was accepted as learning evidence.
-#[derive(Debug, PartialEq, Eq)]
+/// What `learn` did: the plan of a dry run, or the recorded run.
+#[derive(Clone, Debug, Serialize)]
+#[serde(untagged)]
 pub enum Learned {
-    /// The run's record was appended to the experience pool.
-    Appended,
-    /// The pool already held a record for this run id; nothing was written.
-    AlreadyRecorded,
+    /// A dry run's plan.
+    Planned(LearnPlan),
+    /// A run and its report.
+    Ran(Box<Recorded<LearnReport>>),
 }
 
-fn pool_has_run(pool: &std::path::Path, run_id: &str) -> anyhow::Result<bool> {
-    let text = std::fs::read_to_string(pool)?;
-    for line in text.lines() {
-        let v: serde_json::Value = serde_json::from_str(line)?;
-        if v.get("metadata")
-            .and_then(|m| m.get("run_id"))
-            .and_then(|r| r.as_str())
-            == Some(run_id)
-        {
-            return Ok(true);
-        }
+/// Runs `request`, training with `trainer`.
+pub fn learn(
+    ctx: &Context,
+    request: &LearnRequest,
+    trainer: &dyn Trainer,
+) -> Result<Learned, CampaignError> {
+    let kinds = if request.kinds.is_empty() {
+        DEFAULT_LEARN_KINDS.iter().map(|k| k.to_string()).collect()
+    } else {
+        check_kinds(&request.kinds)?
+    };
+    if request.sources.is_empty() {
+        return Err(CampaignError::Refused(
+            "name at least one source to learn from".into(),
+        ));
     }
-    Ok(false)
+    let targets = request
+        .sources
+        .iter()
+        .map(|s| SourceTarget::from_learn_arg(s))
+        .collect::<Result<Vec<_>, _>>()?;
+    let policy = ModelRef::policy_default();
+    if request.dry_run {
+        return Ok(Learned::Planned(LearnPlan {
+            state: ctx.root().path().to_path_buf(),
+            sources: targets,
+            kinds,
+            goal: request.goal.clone(),
+            budget_secs: request.budget.map(|b| b.as_secs()),
+            policy: ctx.selection(&policy)?.identity(),
+            stages: STAGES.to_vec(),
+            dry_run: true,
+        }));
+    }
+    let pipeline = Pipeline {
+        ctx,
+        targets: &targets,
+        kinds: &kinds,
+        goal: request.goal.as_deref(),
+        deadline: request.budget.map(|b| Instant::now() + b),
+        trainer,
+    };
+    let recorded = record(ctx, "learn", request, |run| {
+        let mut report = LearnReport::default();
+        pipeline.run(run, &mut report)?;
+        Ok(report)
+    })?;
+    Ok(Learned::Ran(Box::new(recorded)))
+}
+
+/// One learn run's inputs, resolved.
+struct Pipeline<'a> {
+    ctx: &'a Context,
+    targets: &'a [SourceTarget],
+    kinds: &'a [String],
+    goal: Option<&'a str>,
+    deadline: Option<Instant>,
+    trainer: &'a dyn Trainer,
+}
+
+impl Pipeline<'_> {
+    /// The stages, filling `report` as they finish; returns early (with
+    /// `report.stopped` set) when one leaves the next nothing to do.
+    fn run(&self, run: &mut Recorder<'_>, report: &mut LearnReport) -> Result<(), CampaignError> {
+        let Self {
+            ctx,
+            targets,
+            kinds,
+            goal,
+            deadline,
+            trainer,
+        } = *self;
+        let policy = ModelRef::policy_default();
+        let spent = |stage: &str| {
+            deadline
+                .is_some_and(|d| Instant::now() >= d)
+                .then(|| format!("the budget was spent before the {stage} stage"))
+        };
+
+        let mut source_ids: Vec<SourceId> = Vec::new();
+        for target in targets {
+            let added = sources::add(ctx, target)?;
+            source_ids.push(added.source.id.clone());
+            report.sources.push(added.source);
+        }
+        run.stage("sources", &report.sources)?;
+
+        run.check_cancelled()?;
+        let generated = generate(
+            ctx,
+            &Generation {
+                sources: &source_ids,
+                kinds,
+                generator: &policy,
+                goal,
+                deadline,
+                cancel: run.cancel_token(),
+            },
+        )?;
+        run.stage("tasks", &generated)?;
+        let task_set = generated.task_set.clone();
+        let tasks = generated.tasks;
+        report.tasks = Some(generated);
+        if tasks == 0 {
+            report.stopped = Some("no task was admitted, so there is nothing to solve".into());
+            return Ok(());
+        }
+
+        if let Some(why) = spent("solve") {
+            report.stopped = Some(why);
+            return Ok(());
+        }
+        let solved = solve_set(ctx, &task_set, &policy, deadline, &run.cancel_token())?;
+        run.stage("solve", &solved)?;
+        let first_attempts = solved.experience_set.clone();
+        report.solve = Some(solved);
+
+        run.check_cancelled()?;
+        let verified = verify_set(ctx, &first_attempts, None, &run.cancel_token())?;
+        run.stage("verify", &verified)?;
+        let failed = verified.failed;
+        report.verify = Some(verified);
+
+        let mut sets: Vec<SetId> = vec![first_attempts.clone()];
+        if failed > 0 {
+            if let Some(why) = spent("critique") {
+                report.stopped = Some(why);
+                return Ok(());
+            }
+            let critiqued = critique_set(
+                ctx,
+                &CritiqueRequest {
+                    set: &first_attempts,
+                    critic: &policy,
+                    solver: &policy,
+                    retries: DEFAULT_RETRIES,
+                    deadline,
+                    cancel: run.cancel_token(),
+                },
+            )?;
+            run.stage("critique", &critiqued)?;
+            sets.push(critiqued.revisions.clone());
+            report.critique = Some(critiqued);
+        }
+
+        run.check_cancelled()?;
+        let built = match build(
+            ctx,
+            &BuildRequest {
+                sets,
+                view: ViewName::SftFinal,
+                strip: None,
+                min_strength: None,
+                export_only: false,
+            },
+        ) {
+            Ok(built) => built,
+            Err(CampaignError::View(splinter_views::ViewError::Empty)) => {
+                report.stopped = Some(
+                    "no experience passed verification, so there is nothing to train on".into(),
+                );
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+        };
+        run.stage("dataset", &built)?;
+        let dataset = built.dataset.to_string();
+        let records = built.records;
+        report.dataset = Some(built);
+        if records < MIN_SAMPLES {
+            report.stopped = Some(format!(
+                "{records} record(s) passed; training holds records out for scoring and needs \
+                 at least {MIN_SAMPLES}"
+            ));
+            return Ok(());
+        }
+
+        if let Some(why) = spent("train") {
+            report.stopped = Some(why);
+            return Ok(());
+        }
+        let candidate = train(
+            ctx,
+            &TrainRequest {
+                datasets: vec![dataset],
+                from: policy,
+                replay: None,
+                steps: DEFAULT_STEPS,
+                rank: DEFAULT_LORA_RANK,
+            },
+            trainer,
+            &run.cancel_token(),
+        )?;
+        run.stage("train", &candidate)?;
+        report.candidate = Some(candidate);
+        Ok(())
+    }
+}
+
+/// A duration as `learn --budget` takes it: whole units of `s`, `m` and
+/// `h`, alone or combined largest first (`30m`, `1h30m`), or bare
+/// seconds.
+pub fn parse_budget(text: &str) -> Result<Duration, CampaignError> {
+    let refuse = |why: &str| {
+        CampaignError::Refused(format!(
+            "{text:?} is not a duration ({why}): e.g. 30m, 2h, 1h30m; units h, m and s"
+        ))
+    };
+    if text.is_empty() {
+        return Err(refuse("it is empty"));
+    }
+    if let Ok(seconds) = text.parse::<u64>() {
+        return positive(Duration::from_secs(seconds)).ok_or_else(|| refuse("it is zero"));
+    }
+    let mut total: u64 = 0;
+    let mut number = String::new();
+    let mut last_unit = u64::MAX;
+    for c in text.chars() {
+        if c.is_ascii_digit() {
+            number.push(c);
+            continue;
+        }
+        let unit = match c {
+            'h' => 3600,
+            'm' => 60,
+            's' => 1,
+            _ => return Err(refuse("units are h, m and s")),
+        };
+        if number.is_empty() {
+            return Err(refuse("a unit needs a number before it"));
+        }
+        if unit >= last_unit {
+            return Err(refuse("units go largest first, each once"));
+        }
+        let value: u64 = number
+            .parse()
+            .map_err(|_| refuse("the number is too large"))?;
+        total = value
+            .checked_mul(unit)
+            .and_then(|v| total.checked_add(v))
+            .ok_or_else(|| refuse("it is too long"))?;
+        number.clear();
+        last_unit = unit;
+    }
+    if !number.is_empty() {
+        return Err(refuse("a number needs a unit after it"));
+    }
+    positive(Duration::from_secs(total)).ok_or_else(|| refuse("it is zero"))
+}
+
+fn positive(duration: Duration) -> Option<Duration> {
+    (!duration.is_zero()).then_some(duration)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use splinter_agent::outcome::{Check, Outcome, Status, Usage};
-    use splinter_store::runs::RunManifest;
-
-    /// A fresh state root per test, so tests running in parallel never share
-    /// a pool.
-    fn scratch(name: &str) -> StateRoot {
-        let path = std::env::temp_dir().join(format!("splinter-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        StateRoot::new(path)
-    }
-
-    fn fixture_run(
-        root: &StateRoot,
-        run_id: &str,
-        status: Status,
-        checks: Vec<Check>,
-        reply: &str,
-    ) {
-        let dir = root.run_dir(run_id);
-        std::fs::create_dir_all(&dir).unwrap();
-        let manifest = RunManifest {
-            run_id: run_id.into(),
-            task: "fix the add function".into(),
-            status: status.as_str().into(),
-            ..Default::default()
-        };
-        splinter_store::write_atomic(
-            &dir.join("run.json"),
-            &serde_json::to_string(&manifest).unwrap(),
-        )
-        .unwrap();
-        let outcome = Outcome {
-            schema: 1,
-            run_id: run_id.into(),
-            status,
-            reply: Some(reply.into()),
-            changed_files: vec![],
-            changed_files_basis: "tool_evidence".into(),
-            checks,
-            tool_failures: vec![],
-            usage: Usage::default(),
-            unresolved: vec![],
-            artifacts: vec![],
-        };
-        outcome.save(&dir).unwrap();
-    }
-
-    fn passing_check() -> Vec<Check> {
-        vec![Check {
-            command: "sh tests/run.sh".into(),
-            exit: 0,
-            passed: true,
-            output_ref: None,
-        }]
-    }
 
     #[test]
-    fn a_verified_run_becomes_a_user_task_and_a_supervised_reply() {
-        let root = scratch("loop-learn");
-        fixture_run(
-            &root,
-            "loop-learn-ok",
-            Status::Completed,
-            passing_check(),
-            "fixed add to return the sum.",
-        );
-        let learned = learn_run(&root, "loop-learn-ok").unwrap();
-        assert_eq!(learned, Learned::Appended);
-        let pool = root.experience_pool();
-        let text = std::fs::read_to_string(&pool).unwrap();
-        let v: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
-        let msgs = v["messages"].as_array().unwrap();
-        assert_eq!(msgs.len(), 2);
-        assert_eq!(msgs[0]["role"], "user");
-        assert_eq!(msgs[0]["train"], false);
-        assert_eq!(msgs[0]["content"], "fix the add function");
-        assert_eq!(msgs[1]["role"], "assistant");
-        assert_eq!(msgs[1]["train"], true);
-        assert_eq!(msgs[1]["content"], "fixed add to return the sum.");
-        let _ = std::fs::remove_dir_all(root.path());
-    }
-
-    #[test]
-    fn an_unverified_run_is_refused_not_learned() {
-        let root = scratch("loop-learn-fail");
-        // A failed run, and a completed run without check evidence: neither
-        // is verified, and each refusal must say which requirement failed.
-        fixture_run(
-            &root,
-            "loop-learn-bad",
-            Status::Failed,
-            passing_check(),
-            "tried and failed",
-        );
-        assert!(learn_run(&root, "loop-learn-bad").is_err());
-
-        fixture_run(
-            &root,
-            "loop-learn-nocheck",
-            Status::Completed,
-            vec![],
-            "said done",
-        );
-        let err = learn_run(&root, "loop-learn-nocheck")
-            .unwrap_err()
-            .to_string();
-        assert!(
-            err.contains("no completion check"),
-            "refusal must name the missing verification: {err}"
-        );
-        assert!(!root.experience_pool().exists());
-        let _ = std::fs::remove_dir_all(root.path());
-    }
-
-    #[test]
-    fn learning_the_same_run_twice_records_it_once() {
-        let root = scratch("loop-learn-dup");
-        fixture_run(
-            &root,
-            "loop-learn-dup",
-            Status::Completed,
-            passing_check(),
-            "done",
-        );
-        assert_eq!(
-            learn_run(&root, "loop-learn-dup").unwrap(),
-            Learned::Appended
-        );
-        assert_eq!(
-            learn_run(&root, "loop-learn-dup").unwrap(),
-            Learned::AlreadyRecorded
-        );
-        let pool = splinter_policy::train::validate_dataset(&root.experience_pool()).unwrap();
-        assert_eq!(
-            pool.records, 1,
-            "a repeated learn must not weight the run twice"
-        );
-        let _ = std::fs::remove_dir_all(root.path());
-    }
-
-    #[test]
-    fn the_pool_parses_as_trainer_input() {
-        let root = scratch("loop-learn-pool");
-        fixture_run(
-            &root,
-            "loop-learn-p1",
-            Status::Completed,
-            passing_check(),
-            "first fix",
-        );
-        fixture_run(
-            &root,
-            "loop-learn-p2",
-            Status::Completed,
-            passing_check(),
-            "second fix",
-        );
-        learn_run(&root, "loop-learn-p1").unwrap();
-        learn_run(&root, "loop-learn-p2").unwrap();
-        // The trainer's own parser accepts the pool as it stands...
-        let pool = splinter_policy::train::validate_dataset(&root.experience_pool()).unwrap();
-        assert_eq!(pool.records, 2);
-        // ...and supervises the reply, the record's second message.
-        let text = std::fs::read_to_string(root.experience_pool()).unwrap();
-        let first: serde_json::Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
-        assert_eq!(first["messages"][1]["train"], serde_json::json!(true));
-        let _ = std::fs::remove_dir_all(root.path());
+    fn a_budget_is_whole_units_largest_first() {
+        let secs = |text: &str| parse_budget(text).ok().map(|d| d.as_secs());
+        assert_eq!(secs("90"), Some(90));
+        assert_eq!(secs("90s"), Some(90));
+        assert_eq!(secs("30m"), Some(1800));
+        assert_eq!(secs("1h30m"), Some(5400));
+        assert_eq!(secs("2h5s"), Some(7205));
+        for refused in ["", "0", "0s", "m", "1.5h", "30m1h", "5x", "10mm", "3m3m"] {
+            assert!(parse_budget(refused).is_err(), "{refused}");
+        }
     }
 }

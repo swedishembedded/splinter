@@ -1,40 +1,124 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
-//
-// Swedish Embedded AB implements delegated-task coding agents whose answers
-// are machine-readable by construction. If your team needs expertise in
-// strict-output model interfaces, you can procure our services by sending
-// an email to info@swedishembedded.com.
 
-//! One-shot fact question: the model's whole reply is one JSON object.
-//!
-//! `ask` exists so a delegating script never has to parse prose: the reply
-//! is demanded as `{"answer": string}`, parsed strictly, and the parsed
-//! object - not the raw reply - is what reaches stdout. A reply that
-//! cannot be parsed exits 2, because a script reading a broken answer as
-//! an answer is worse than reading nothing.
+//! `ask`: one question put to a model the way every task is solved -
+//! closed-book by default, so the answer is what the model knows; with
+//! `--open-book` the named source's text rides along in the question.
 
-use anyhow::Context;
-use splinter_policy::{complete_text, ModelSelection};
+use std::time::Duration;
 
-/// What one ask needs.
-#[derive(Clone, Debug)]
-pub struct AskOptions {
-    /// The question, verbatim; it is wrapped in the prompt that demands the
-    /// `{"answer": string}` reply shape.
+use serde::Serialize;
+use splinter_agent::solve::{solve, SolveOptions};
+use splinter_sandbox::ResolvedEnvironment;
+use splinter_store::experience::{Environment, Task};
+use splinter_store::source::SourceId;
+
+use crate::context::Context;
+use crate::error::CampaignError;
+use crate::model_ref::ModelRef;
+use crate::solving::conclusion_name;
+use crate::sources;
+
+/// How long one answer may take.
+pub const DEFAULT_ASK_DEADLINE: Duration = Duration::from_secs(300);
+
+/// The most source text an open-book question carries, in bytes.
+pub const MAX_OPEN_BOOK_BYTES: usize = 64 * 1024;
+
+/// The task kind a question is asked as.
+pub const ASK_TASK_KIND: &str = "ask";
+
+/// What `ask` reports.
+#[derive(Clone, Debug, Serialize)]
+pub struct Answer {
+    /// The question, as asked.
     pub question: String,
-    /// The model asked - the same selection every stage makes.
-    pub model: ModelSelection,
+    /// The model's answer.
+    pub answer: String,
+    /// The identity of the model that answered.
+    pub model: String,
+    /// The source shown with the question, if any.
+    pub open_book: Option<SourceId>,
 }
 
-/// Asks one question and returns the parsed answer string. The caller
-/// prints it wrapped as `{"answer": ...}` so stdout stays strictly JSON.
-pub fn run(options: AskOptions) -> anyhow::Result<String> {
-    let prompt = splinter_lab::answers::question_prompt(&options.question);
-    let provider = options.model.provider()?;
-    let rt = tokio::runtime::Runtime::new()?;
-    let reply: String = rt
-        .block_on(async { complete_text(provider.as_ref(), &prompt).await })
-        .context("the model produced no reply")?;
-    splinter_lab::answers::parse_answer(&reply)
+/// Asks `question` of `policy`, with the text of the source `open_book`
+/// names when one is given.
+pub fn ask(
+    ctx: &Context,
+    question: &str,
+    open_book: Option<&str>,
+    policy: &ModelRef,
+) -> Result<Answer, CampaignError> {
+    if question.trim().is_empty() {
+        return Err(CampaignError::Refused("the question is empty".into()));
+    }
+    let (instruction, open_book) = match open_book {
+        None => (question.to_string(), None),
+        Some(id) => {
+            let source = sources::resolve(ctx, id)?;
+            let material = material(ctx, &source)?;
+            (
+                format!("{question}\n\nReference material:\n\n{material}"),
+                Some(source),
+            )
+        }
+    };
+    let model = ctx.model(policy)?;
+    let task = Task::new(
+        ASK_TASK_KIND,
+        vec![],
+        Environment::closed_book(),
+        instruction,
+        vec![],
+    )?;
+    let solution = ctx.block_on(solve(
+        &task,
+        &ResolvedEnvironment::ClosedBook,
+        model.provider.clone(),
+        SolveOptions::new(DEFAULT_ASK_DEADLINE),
+    ))?;
+    let answer = solution.final_output.ok_or_else(|| CampaignError::Model {
+        model: model.identity.clone(),
+        detail: format!(
+            "it gave no answer (its run ended: {})",
+            conclusion_name(solution.conclusion)
+        ),
+    })?;
+    Ok(Answer {
+        question: question.to_string(),
+        answer,
+        model: model.identity,
+        open_book,
+    })
+}
+
+/// The source's text parts, each under its name; refused past
+/// [`MAX_OPEN_BOOK_BYTES`] rather than cut, since a cut would silently
+/// change what the model was shown.
+fn material(ctx: &Context, id: &SourceId) -> Result<String, CampaignError> {
+    let store = ctx.sources();
+    let source = store.get_source(id)?;
+    let mut text = String::new();
+    for part in source
+        .parts
+        .iter()
+        .filter(|p| p.media_type.starts_with("text/"))
+    {
+        let bytes = store.read_blob(&part.content)?;
+        text.push_str(&format!("--- {} ---\n", part.name));
+        text.push_str(&String::from_utf8_lossy(&bytes));
+        text.push('\n');
+        if text.len() > MAX_OPEN_BOOK_BYTES {
+            return Err(CampaignError::Refused(format!(
+                "source {id} holds more than {MAX_OPEN_BOOK_BYTES} bytes of text, more than one \
+                 question can carry"
+            )));
+        }
+    }
+    if text.is_empty() {
+        return Err(CampaignError::Refused(format!(
+            "source {id} has no text part to show"
+        )));
+    }
+    Ok(text)
 }

@@ -98,8 +98,39 @@ impl Check {
 
 /// `reply` parsed strictly; the error says why it is not the shape.
 pub(crate) fn parse(reply: &str) -> Result<Reply, String> {
-    serde_json::from_str(splinter_lab::answers::strip_fences(reply)).map_err(|e| e.to_string())
+    serde_json::from_str(strip_fences(reply)).map_err(|e| e.to_string())
+}
+
+/// `reply` without optional markdown code fences around it, so a model that
+/// answered perfectly inside ```json fences still parses. Fences are the
+/// one tolerated decoration; prose around the object is not.
+fn strip_fences(reply: &str) -> &str {
+    let trimmed = reply.trim();
+    let without = trimmed
+        .strip_prefix("```")
+        .and_then(|r| {
+            r.trim_start_matches(|c: char| c.is_ascii_alphanumeric())
+                .strip_prefix('\n')
+        })
+        .unwrap_or(trimmed);
+    without
+        .strip_suffix("```")
+        .map(|r| r.trim())
+        .unwrap_or(without)
 }
 
 /// The shape, as the model is told it.
 pub(crate) const SHAPE: &str = r#"{"tasks": [{"instruction": string, "reference": string, "evidence": [{"section": number, "quote": string or null}], "material": string or null, "hints": [string], "checks": [{"code": string, "stdin": string or null, "exit_code": number or null, "stdout": string or null}], "tests": [same as checks]}]}"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fences around the object are tolerated; prose around it is not.
+    #[test]
+    fn a_fenced_reply_parses_and_prose_does_not() {
+        let fenced = "```json\n{\"tasks\": []}\n```";
+        assert!(parse(fenced).is_ok_and(|reply| reply.tasks.is_empty()));
+        assert!(parse("Here you go: {\"tasks\": []}").is_err());
+    }
+}

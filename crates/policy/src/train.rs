@@ -13,13 +13,16 @@
 //! Splinter decides which records are held out ([`holdout_split`]) and
 //! writes the two halves as separate files; [`brain::ChatFineTune`]
 //! validates both against the base's tokenizer and chat template, trains
-//! the adapter on one, scores base and tuned on the other at one precision,
-//! and writes the adapter and its training record. What to do with the
-//! scores - promote, reject - is the caller's decision.
+//! the adapter on one (with any replayed datasets mixed in, and continuing
+//! an existing adapter when one is named), scores base and tuned on the
+//! other at one precision, and writes the adapter and its training record.
+//! What to do with the scores is the caller's decision.
 
 use std::path::{Path, PathBuf};
 
-use splinter_lab::promotion::holdout_split;
+use splinter_lab::holdout::holdout_split;
+
+use crate::error::PolicyError;
 
 /// The file names one attempt's split is written under, inside its
 /// attempt directory.
@@ -44,6 +47,15 @@ pub struct FineTune<'a> {
     /// LoRA alpha: the update is scaled by `alpha / rank` before it is added
     /// to the base weights.
     pub alpha: f32,
+    /// Chat datasets whose every record is mixed into training (never held
+    /// out), so earlier experience is replayed beside the new.
+    pub replay: &'a [PathBuf],
+    /// An adapter to continue training instead of starting a fresh one; its
+    /// own rank and alpha then apply.
+    pub continue_from: Option<&'a Path>,
+    /// Stops training at the next optimizer step once cancelled; a
+    /// cancelled fine-tune exports no adapter and is reported as an error.
+    pub cancel: Option<&'a sven_sdk::CancelToken>,
 }
 
 /// One held-out score: teacher-forced loss and token accuracy over the
@@ -120,14 +132,12 @@ impl From<brain::ChatDatasetSummary> for DatasetSummary {
 
 /// Parses `dataset` with the trainer's own parser: the wire schema, and the
 /// supervision boundaries it declares. The error names the offending record.
-pub fn validate_dataset(dataset: &Path) -> anyhow::Result<DatasetSummary> {
+pub fn validate_dataset(dataset: &Path) -> Result<DatasetSummary, PolicyError> {
     brain::validate_chat_dataset(dataset)
         .map(DatasetSummary::from)
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "dataset {} is not valid trainer input: {e}",
-                dataset.display()
-            )
+        .map_err(|e| PolicyError::Dataset {
+            path: dataset.to_path_buf(),
+            reason: e.to_string(),
         })
 }
 
@@ -135,29 +145,34 @@ pub fn validate_dataset(dataset: &Path) -> anyhow::Result<DatasetSummary> {
 /// `model_dir` (its tokenizer and chat template): a record can satisfy the
 /// wire schema and still have no honest loss-mask boundary under the
 /// template it will train with. Needs no device.
-pub fn validate_dataset_for(dataset: &Path, model_dir: &Path) -> anyhow::Result<DatasetSummary> {
+pub fn validate_dataset_for(
+    dataset: &Path,
+    model_dir: &Path,
+) -> Result<DatasetSummary, PolicyError> {
     brain::validate_chat_dataset_for(dataset, model_dir)
         .map(DatasetSummary::from)
-        .map_err(|e| anyhow::anyhow!("{e}"))
+        .map_err(|e| PolicyError::Dataset {
+            path: dataset.to_path_buf(),
+            reason: e.to_string(),
+        })
 }
 
 /// Fine-tunes a LoRA on `request.dataset` and scores base and tuned on the
 /// held-out records.
-pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
-    anyhow::ensure!(
-        request.dataset.exists(),
-        "no dataset at {} - learn a verified run first",
-        request.dataset.display()
-    );
+pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
+    let failed = |reason: String| PolicyError::Train {
+        dir: request.attempt_dir.to_path_buf(),
+        reason,
+    };
     let summary = validate_dataset(request.dataset)?;
     let (train, held_out) = split_dataset(request.dataset, request.attempt_dir)?;
     // brain resolves a directory only in its model store's layout; the
     // checkpoint file is resolved here, and its directory supplies the
     // tokenizer and chat template.
     let weights = crate::local::resolve_base(request.model_dir)?;
-    let weights = weights
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("{} is not valid UTF-8", weights.display()))?;
+    let weights = weights.to_str().ok_or_else(|| PolicyError::NotUtf8 {
+        path: weights.clone(),
+    })?;
     // The card names what produced the adapter and what it sits on, so an
     // adapter is traceable to its own training evidence.
     let base_id = format!(
@@ -168,33 +183,47 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
             .and_then(|n| n.to_str())
             .unwrap_or("base")
     );
-    eprintln!(
-        "train: {} record(s), tuning {} step(s), lora rank {}",
-        summary.records, request.steps, request.rank
-    );
-    let outcome = brain::ChatFineTune::from_pretrained(weights)
+    for replayed in request.replay {
+        validate_dataset(replayed)?;
+    }
+    let mut fine_tune = brain::ChatFineTune::from_pretrained(weights)
         .dataset(train)
         .held_out(held_out)
         .out_dir(request.attempt_dir)
-        .adapter_id(format!("{base_id}:loop:experience:latest"))
+        .adapter_id(format!("{base_id}:splinter:candidate"))
         .steps(request.steps)
         .rank(request.rank)
-        .alpha(request.alpha)
-        .run()
-        .map_err(|e| anyhow::anyhow!("fine-tuning on {}: {e}", request.dataset.display()))?;
-    let incomplete = |what: &str| {
-        anyhow::anyhow!(
-            "fine-tune in {} reported no {what}",
-            request.attempt_dir.display()
-        )
-    };
-    // `run` has no cancel token, so it completes or fails; a completed run
-    // with a held-out set carries both scores, the adapter and its record.
-    anyhow::ensure!(
-        outcome.status == brain::FineTuneStatus::Completed,
-        "fine-tune in {} did not complete",
-        request.attempt_dir.display()
-    );
+        .alpha(request.alpha);
+    for replayed in request.replay {
+        fine_tune = fine_tune.replay(replayed);
+    }
+    if let Some(adapter) = request.continue_from {
+        fine_tune = fine_tune.continue_from(adapter);
+    }
+    // brain's token stops training at a step boundary; sven's is the one
+    // the caller cancels, so it is polled once per step.
+    let brain_cancel = brain::CancelToken::armed();
+    let outcome = fine_tune
+        .run_with(&brain_cancel, |_| {
+            if request
+                .cancel
+                .is_some_and(sven_sdk::CancelToken::is_cancelled)
+            {
+                brain_cancel.cancel();
+            }
+        })
+        .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
+    if brain_cancel.is_cancelled() {
+        return Err(PolicyError::Cancelled {
+            dir: request.attempt_dir.to_path_buf(),
+        });
+    }
+    let incomplete = |what: &str| failed(format!("it reported no {what}"));
+    // Not cancelled, so it completed or failed; a completed run with a
+    // held-out set carries both scores, the adapter and its record.
+    if outcome.status != brain::FineTuneStatus::Completed {
+        return Err(failed("it did not complete".into()));
+    }
     Ok(Trained {
         adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
         adapter_digest: outcome
@@ -219,26 +248,28 @@ pub fn fine_tune(request: &FineTune<'_>) -> anyhow::Result<Trained> {
 /// Writes `dataset`'s records into `dir` as two files - the records to
 /// train on and the newest ones, held out - and returns their paths. A
 /// record is a non-blank line, as the trainer's parser reads it.
-fn split_dataset(dataset: &Path, dir: &Path) -> anyhow::Result<(PathBuf, PathBuf)> {
-    let text = std::fs::read_to_string(dataset)
-        .map_err(|e| anyhow::anyhow!("reading {}: {e}", dataset.display()))?;
+fn split_dataset(dataset: &Path, dir: &Path) -> Result<(PathBuf, PathBuf), PolicyError> {
+    let text = std::fs::read_to_string(dataset).map_err(|source| PolicyError::Io {
+        path: dataset.to_path_buf(),
+        source,
+    })?;
     let records: Vec<&str> = text
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect();
-    let (train, held_out) = holdout_split(&records).ok_or_else(|| {
-        anyhow::anyhow!(
-            "{} holds {} record(s); evaluation needs at least 2 so one can be held out",
-            dataset.display(),
-            records.len()
-        )
+    let (train, held_out) = holdout_split(&records).ok_or_else(|| PolicyError::TooFewRecords {
+        path: dataset.to_path_buf(),
+        records: records.len(),
     })?;
-    let write = |name: &str, lines: &[&str]| -> anyhow::Result<PathBuf> {
+    let write = |name: &str, lines: &[&str]| -> Result<PathBuf, PolicyError> {
         let path = dir.join(name);
         let mut body = lines.join("\n");
         body.push('\n');
-        std::fs::write(&path, body).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+        std::fs::write(&path, body).map_err(|source| PolicyError::Io {
+            path: path.clone(),
+            source,
+        })?;
         Ok(path)
     };
     Ok((write(TRAIN_FILE, train)?, write(HELD_OUT_FILE, held_out)?))

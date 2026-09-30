@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-knowledge"
-description = "Knowledge intake: documents, repositories and command runs captured as sources; text split into addressable sections; every fact extracted as a question/answer pair, gated on subject anchoring and traceable numbers, with scope negatives; task generators."
+description = "Knowledge intake: documents, repositories and command runs captured as sources; text split into addressable sections; task generators - denoise, and a generator model's proposals admitted by code."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,7 +17,6 @@ splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 splinter-views = { workspace = true }
 
-anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sven-sdk = { workspace = true }
@@ -25,6 +24,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 

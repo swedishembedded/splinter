@@ -29,7 +29,7 @@ use std::path::PathBuf;
 
 use crate::digest::Digest;
 use crate::error::StoreError;
-use crate::error::{decode, io, read_verified};
+use crate::error::{decode, io, object_digests, read_verified};
 use crate::experience::Span;
 use crate::source::{CapturedSource, Source, SourceId};
 use crate::{write_once, StateRoot};
@@ -174,26 +174,9 @@ impl SourceStore {
 
     /// Every stored source's id, in id order (without verifying them).
     pub fn list(&self) -> Result<Vec<SourceId>, StoreError> {
-        let dir = self.dir.join("objects");
-        let entries = match fs::read_dir(&dir) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(io(&dir)(e)),
-        };
-        let mut ids = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(io(&dir))?;
-            let name = entry.file_name();
-            // Anything but `<64 hex>.json` (a write-once temporary file) is
-            // not a stored source.
-            let Some(hex) = name.to_str().and_then(|n| n.strip_suffix(".json")) else {
-                continue;
-            };
-            if let Ok(digest) = Digest::parse(&format!("sha256:{hex}")) {
-                ids.push(SourceId(digest));
-            }
-        }
-        ids.sort();
-        Ok(ids)
+        Ok(object_digests(&self.dir.join("objects"))?
+            .into_iter()
+            .map(SourceId)
+            .collect())
     }
 }

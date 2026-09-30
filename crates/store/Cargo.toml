@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-store"
-description = "Splinter's durable state: the state-root layout, atomic writes, time-ordered ids, the UTC clock, and the content-addressed experience and source stores."
+description = "Splinter's durable state: the state-root layout, atomic and write-once writes, time-ordered ids, the UTC clock, run records, and the content-addressed source, task and experience stores."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,6 @@ publish.workspace = true
 [dependencies]
 sven-sdk = { workspace = true }
 
-anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

@@ -46,8 +46,13 @@ the released adapter answers the same questions from plain `brain serve`.
    them or any brain dependency. sven's own standalone task-and-verify
    sample is tracked in sven's `sdk-framework` roadmap, because it needs
    the facade's structured outcome and explicit toolsets first.
-3. **Intent front door.** A typed intent parse on the policy feeds a
-   code-owned controller; ambiguity becomes a question, never a guess.
+3. **Intent front door.** Done: a sentence is classified on the policy
+   through sven's typed, bounded method call into candidate intents with
+   confidences; code routes them - a confident single reading runs as its
+   command, an ambiguous one is asked back, a destructive or network-opting
+   one is never run on a guess. The command line is one verb per pipeline
+   stage over content-addressed sets, with `learn` composing them. Open:
+   `release`, `eval`, `lineage` and `rollback`, which come with phase 4.
 4. **Continual policy.** Champion lineage, replay, the four-part release
    gate, manifests, the default alias, and a default-policy size chosen by
    measurement (the largest Qwen3 brain's training path fits).
@@ -68,11 +73,12 @@ the released adapter answers the same questions from plain `brain serve`.
      export-only format.
    - sven: done for an empty default toolset, explicit toolsets, structured
      outcomes, bounded runs (cancel, deadline, token budget), parked
-     questions, history taken from the session, and ATIF trajectories. Open:
-     the runner still races its own timeout, interrupt and limits around
-     `send`; bounding the run with `RunOptions` keeps the kernel state and
-     reports the conclusion instead of dropping the turn. Also open: file
-     tools rooted in a given directory, which workspace environments need
+     questions, history taken from the session, and ATIF trajectories; every
+     model run Splinter makes is bounded through `RunOptions`. Open: the
+     stream watchdog's idle limit is read only from the environment
+     (`SVEN_STREAM_CHUNK_TIMEOUT_SECS`), so a local model's long prefill
+     needs Splinter's configuration to set a process variable instead of
+     passing a value. Also open: file tools rooted in a given directory, which workspace environments need
      (Splinter's environments are closed-book and runtime until then); and
      an ATIF trajectory as chat messages with each agent step's boundary
      kept, in the SDK - the step-to-message rendering sven has is internal

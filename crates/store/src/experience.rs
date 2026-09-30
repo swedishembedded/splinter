@@ -315,14 +315,22 @@ impl Task {
             instruction,
             privileged,
         };
-        validate_task(
-            &task.task,
-            &task.evidence,
-            &task.environment,
-            &task.instruction,
-            &task.privileged,
-        )?;
+        task.validate()?;
         Ok(task)
+    }
+
+    /// Checks what [`Task::new`] checks on a task that was not built by it
+    /// (one read back from storage): the required text fields, spans that
+    /// end after they start, an environment snapshot that matches, and a
+    /// task reference that addresses this task.
+    pub fn validate(&self) -> Result<(), ExperienceError> {
+        validate_task(
+            &self.task,
+            &self.evidence,
+            &self.environment,
+            &self.instruction,
+            &self.privileged,
+        )
     }
 
     /// This task with `item` added to what only the teacher sees: a new

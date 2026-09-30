@@ -37,12 +37,15 @@
 //! [`write_dataset`] writes a projection in the one format its objective
 //! maps to - brain's `generic-messages-v2` for what brain trains, Splinter's
 //! export-only format on request for the rest - with a manifest beside it.
+//! [`DatasetStore`] keeps such datasets under the state root, each named by
+//! its manifest's digest.
 
 #![warn(missing_docs)]
 
 mod corpus;
 mod dataset;
 mod render;
+mod store;
 mod strip;
 mod trajectory;
 mod views;
@@ -60,6 +63,7 @@ pub use corpus::{Corpus, Entry};
 pub use dataset::{
     manifest_path, write_dataset, Counts, Dataset, Format, Manifest, WriteOptions, EXPORT_FORMAT,
 };
+pub use store::{DatasetId, DatasetStore, StoredDataset, DATASET_FILE};
 pub use strip::{
     check_self_contained, Fraction, NotSelfContained, Strip, MIN_QUOTED_CHARS, REFERRING_PHRASES,
 };
@@ -390,6 +394,9 @@ pub enum ViewError {
         /// Why it is refused.
         reason: String,
     },
+    /// No dataset is stored under this id.
+    #[error("no dataset {0} in the store")]
+    UnknownDataset(DatasetId),
     /// There are no records to write; a dataset that trains on nothing is
     /// a producer bug, not a dataset.
     #[error("no records to write")]

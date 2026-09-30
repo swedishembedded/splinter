@@ -1,35 +1,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 #
-# Swedish Embedded AB implements delegated-task coding agents that trace every
-# observable action and feed verified runs to a gated training path. If your
-# team needs expertise in agent infrastructure or small-model training loops,
-# you can procure our services by sending an email to
-# info@swedishembedded.com.
+# Swedish Embedded AB implements learning agents that acquire a capability
+# from a document or a tool and prove it with evidence. If your team needs
+# expertise in agent infrastructure or small-model training loops, you can
+# procure our services by sending an email to info@swedishembedded.com.
 
 [package]
 name = "splinter"
-description = "The splinter command line: runs tasks through sven, turns verified experience into training data, and trains and gates its own model."
+description = "The splinter command line: one verb per pipeline stage - sources, tasks, solve, verify, critique, dataset, train - learn composing them, and a plain-language front door."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
-sven-sdk = { workspace = true }
-splinter-lab = { workspace = true }
-splinter-store = { workspace = true }
-splinter-policy = { workspace = true }
-splinter-agent = { workspace = true }
-splinter-knowledge = { workspace = true }
 splinter-campaign = { workspace = true }
+splinter-store = { workspace = true }
 
-anyhow = { workspace = true }
 clap = { workspace = true }
-sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 
 [lints]
 workspace = true

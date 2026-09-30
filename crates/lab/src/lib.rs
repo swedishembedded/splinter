@@ -39,10 +39,8 @@
 //! * [`Recorder`] - the exact request the agent sent, captured at the wire.
 //!   An agent's stored history holds neither the system prompt nor the tool
 //!   schemas, so it is not enough to train on.
-//! * [`answers`] - the one reply shape a question is answered in, how it
-//!   is parsed, written as training data and judged.
-//! * [`promotion`] - the gate over a training attempt's held-out scores,
-//!   and the rule that decides which records are held out.
+//! * [`holdout`] - the rule that decides which records of a training set
+//!   are held out for scoring.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
 //!   supervising assistant turns and nothing else, and refusing a transcript
 //!   with a hole in it. [`WireMessage`] is one message of the
@@ -65,16 +63,15 @@
 
 #![warn(missing_docs)]
 
-pub mod answers;
 mod dataset;
 mod demonstrate;
 pub mod denoise;
 mod endpoint;
 mod episode;
 mod family;
+pub mod holdout;
 mod model_id;
 mod perform;
-pub mod promotion;
 mod recorder;
 mod score;
 mod verdict;

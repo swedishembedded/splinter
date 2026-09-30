@@ -11,10 +11,17 @@
 //! `model` answers "which weights produced this" whichever stage wrote it.
 
 use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
 
 use sven_sdk::model::ModelProvider;
 
+use crate::error::PolicyError;
 use crate::local::{LocalQwen, LocalWeights};
+
+/// How long dropping a [`LoadedModel`] waits for a local generation still
+/// running to stop before the process may exit.
+pub const QUIESCE_GRACE: Duration = Duration::from_secs(60);
 
 /// A model reached over an API, named `provider/model` the way sven's
 /// configuration names it.
@@ -33,10 +40,14 @@ pub struct RemoteModel {
 impl RemoteModel {
     /// Writes this model into sven's configuration: provider, model name,
     /// endpoint and key.
-    pub fn apply_to(&self, config: &mut sven_sdk::config::Config) -> anyhow::Result<()> {
-        let (provider, name) = self.spec.split_once('/').ok_or_else(|| {
-            anyhow::anyhow!("a remote model is provider/model, got {:?}", self.spec)
-        })?;
+    pub fn apply_to(&self, config: &mut sven_sdk::config::Config) -> Result<(), PolicyError> {
+        let (provider, name) = self
+            .spec
+            .split_once('/')
+            .ok_or_else(|| PolicyError::Remote {
+                spec: self.spec.clone(),
+                reason: "a remote model is provider/model".into(),
+            })?;
         config.model.provider = provider.to_string();
         config.model.name = name.to_string();
         if self.base_url.is_some() {
@@ -85,19 +96,76 @@ impl ModelSelection {
         }
     }
 
-    /// A provider for this selection. Loading local weights is the expensive
-    /// step - build one provider per stage, not per request.
-    pub fn provider(&self) -> anyhow::Result<Box<dyn ModelProvider>> {
+    /// This selection loaded: a provider for it, known by its
+    /// [`Self::identity`]. Loading local weights is the expensive step -
+    /// load once per command, not per request.
+    pub fn load(&self) -> Result<LoadedModel, PolicyError> {
+        let identity = self.identity();
         match self {
             Self::Remote(remote) => {
-                let mut config = sven_sdk::config::load(None)?;
+                let unreachable = |e: anyhow::Error| PolicyError::Remote {
+                    spec: remote.spec.clone(),
+                    reason: format!("{e:#}"),
+                };
+                let mut config = sven_sdk::config::load(None).map_err(unreachable)?;
                 remote.apply_to(&mut config)?;
-                sven_sdk::drivers::from_config(&config.model)
+                let driver = sven_sdk::drivers::from_config(&config.model).map_err(unreachable)?;
+                Ok(LoadedModel {
+                    provider: Arc::from(driver),
+                    identity,
+                    local: None,
+                })
             }
-            Self::Local(weights) => Ok(Box::new(LocalQwen::load(
-                weights,
-                &local_model_name(&weights.base),
-            )?)),
+            Self::Local(weights) => {
+                let local = Arc::new(LocalQwen::load(weights, &local_model_name(&weights.base))?);
+                Ok(LoadedModel {
+                    provider: local.clone(),
+                    identity,
+                    local: Some(local),
+                })
+            }
+        }
+    }
+}
+
+/// A model loaded for the length of a command: the provider every engine
+/// on it shares, and its identity. Dropping it stops a local generation
+/// still running and waits up to [`QUIESCE_GRACE`] for the device to go
+/// quiet, so a process never exits under a live device call.
+pub struct LoadedModel {
+    provider: Arc<dyn ModelProvider>,
+    identity: String,
+    local: Option<Arc<LocalQwen>>,
+}
+
+impl LoadedModel {
+    /// The provider engines run the model through.
+    #[must_use]
+    pub fn provider(&self) -> Arc<dyn ModelProvider> {
+        Arc::clone(&self.provider)
+    }
+
+    /// The identity records give the model ([`ModelSelection::identity`]).
+    #[must_use]
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+}
+
+impl std::fmt::Debug for LoadedModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedModel")
+            .field("identity", &self.identity)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for LoadedModel {
+    fn drop(&mut self) {
+        if let Some(local) = &self.local {
+            // Best effort by contract: a generation that outlives the grace
+            // is cancelling and stops on its own.
+            let _ = local.stop_generation(QUIESCE_GRACE);
         }
     }
 }

@@ -6,20 +6,21 @@
 //! * [`local`] - brain's chat pipeline in-process behind sven's
 //!   `ModelProvider` seam: load, stream a generation, stop it cleanly.
 //! * [`selection`] - which model a stage runs on (local weights, or a model
-//!   reached over an API), and the identity every record gives it.
+//!   reached over an API), the identity every record gives it, and the
+//!   model loaded for a command.
 //! * [`train`] - one LoRA fine-tune scored on held-out records.
-//! * [`complete`] - one prompt in, one reply's text out.
+//! * [`error`] - why a model could not be loaded, reached or trained.
 //!
 //! Every other crate reaches the model through these types, and these types
 //! reach brain only through its public SDK, the `brain` crate.
 
 #![warn(missing_docs)]
 
-pub mod complete;
+pub mod error;
 pub mod local;
 pub mod selection;
 pub mod train;
 
-pub use complete::complete_text;
-pub use local::{panic_message, resolve_base, LocalQwen, LocalWeights};
-pub use selection::{local_model_name, ModelSelection, RemoteModel};
+pub use error::PolicyError;
+pub use local::LocalWeights;
+pub use selection::{LoadedModel, ModelSelection, RemoteModel};

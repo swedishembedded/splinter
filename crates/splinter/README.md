@@ -3,173 +3,144 @@
 
 # splinter - the command line
 
-`run` delegates a task; `show` inspects runs; `resume` continues an
-interrupted one from its own checkpoint; `cancel` stops one in progress
-from another process. The model is LOCAL and IN-PROCESS by default:
-brain's Qwen3 stack is linked directly, weights and optional LoRA adapters
-load from disk at startup, and a remote provider is used only when
-`--allow-api-models` is given together with `--model` or `--base-url`.
+One verb per pipeline stage. The thing a verb acts on is a positional
+argument; every stage writes what it makes under the state root by content
+address, so any stage can be rerun or inspected alone; `--json` works on
+every command. `splinter <command> --help` is the authoritative reference.
 
-## Commands
+```
+splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
+splinter "<sentence>"             the front door: a sentence becomes one of the commands below
+splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run]
+splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
+splinter status
+splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
+splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | list | show <ID>
+splinter solve <TASKSET-ID> [--solver REF]
+splinter verify <EXPERIENCE-SET> [--judge REF]
+splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
+splinter judge calibrate <LABELLED-FILE> --judge REF
+splinter experiences list | show <ID> [--graph]
+splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
+                       [--min-strength executable|formal|consistency|judged] [--export-only]
+splinter dataset export <DATASET-ID> --out DIR
+splinter train <DATASET-ID>... [--from REF] [--replay DATASET-ID] [--steps N] [--rank R]
+splinter runs list | show <ID> | cancel <ID>
 
-`splinter <command> --help` is the authoritative reference; each command
-accepts exactly the options it uses.
-
-```bash
-splinter run --workspace DIR (--task TEXT | --task-file FILE) [--check CMD ...]
-             [model options] [--timeout-secs N] [--max-tool-rounds N]
-             [--max-output-tokens N] [--max-cost-usd X] [--max-attempts N]
-             [--record-input] [--json]
-splinter resume --run ID [options as for run]
-splinter show [--run ID | --list]
-splinter cancel --run ID
-splinter learn --run ID
-splinter train [--dataset FILE] [--local-weights DIR] [--steps N] [--rank N] [--alpha F]
-splinter explore --file FILE --out OUT.jsonl [--chunk-lines N]
-                 [--scope-negatives ID1,ID2,...] [model options]
-splinter ask --question TEXT [--base] [model options]
-splinter eval-facts --dataset FILE.jsonl --out REPORT.json [--shuffle] [--limit N]
-                    [--base] [model options]
-splinter facts [--file FILE] [--work-dir DIR] [--out DATASET.jsonl]
-               [--holdout-one-in N] [--chunk-lines N] [--scope-negatives IDS]
-               [--steps N] [--rank N] [--alpha F] [model options]
-
-model options: [--local-weights DIR] [--adapter FILE] [--ctx N]
-               [--allow-api-models --model provider/name [--base-url URL] [--api-key KEY]]
+global: --state DIR  --json  -v  --allow-remote
 ```
 
-`explore` turns a markdown fact sheet (e.g.
-`examples/stm32_datasheet.md`) into a question/answer training dataset:
-the file is split at headings - or, once a section exceeds
-`--chunk-lines N`, at paragraph boundaries - each section is asked for
-EVERY factual claim as `{"facts": [{"question", "answer"}, ...]}`,
-replies are parsed strictly (a non-conforming reply is counted as a
-parse failure and its section skipped), and one JSONL record per fact is
-written atomically to `--out` in the exact schema `learn` uses for the
-experience pool. Facts are deduplicated by normalized question text.
-Every chunk carries the document's title line, every question must name
-a device the title names (the anchor gate refuses the rest - an
-unanchored question would train this device's answers onto other
-devices' questions), and `--scope-negatives ID1,ID2,...` adds negative
-variants: the same question with an out-of-scope device substituted
-(the whole slash-separated device run goes, so a negative names only
-out-of-scope devices), answered by a fixed abstention, so the adapter
-learns where its knowledge ends instead of answering other chips with
-this chip's numbers. The whole exploration is traced to its own run directory
-(manifest, `events.jsonl` with one event per section, `outcome.json`
-with the counts).
+An id is the full `sha256:<hex>`, the hex alone, or a prefix of at least
+four hex digits that names exactly one stored object.
 
-`ask` asks one question one-shot: the model must reply with exactly one
-`{"answer": string}` JSON object, the reply is parsed strictly (optional
-markdown code fences are stripped), and ONLY the parsed object is printed
-to stdout. An unparseable reply exits with code 2. Like `run` and
-`explore`, it traces to its own run directory.
+## Models
 
-`eval-facts` scores a question/answer file against bare model replies and
-prints the exact-match rate. Questions without a trained answer shape are
-useless to a wrapped training set, so the reference answers must be bare
-strings or bare `{"answer": ...}` objects - a wrapped training record is
-refused.
+Every model is named the same way:
 
-Question commands (`ask`, `eval-facts`) serve the PROMOTED adapter by
-default: when no adapter is named, the pointer at
-`~/.sven/splinter/adapter.json` is used if it exists. `--base` asks the base
-model for the contrast (a promoted adapter without it is the fastest way
-to see what training bought); `--base` together with `--adapter` or
-`--model` is refused as ambiguous. `run` and `explore` keep base-only
-defaults: a facts adapter's reply shape leaks into a coding loop.
+| Reference | Model |
+|---|---|
+| `policy:default` | the configured base (`BRAIN_QWEN_WEIGHTS`, else `Qwen/Qwen3-0.6B` in brain's model store); the champion adapter joins it once releases exist |
+| `local:<checkpoint>[+<adapter>]` | a checkpoint path (absolute, or starting `./` or `../`) or a name in brain's model store, with an optional LoRA adapter file after the first `+` |
+| `remote:<provider>/<name>` | a model reached over the network through sven's provider configuration |
 
-`facts` runs the whole document-learning pipeline as one command:
+A remote reference is refused unless `--allow-remote` is given or
+`SPLINTER_ALLOW_REMOTE=1` is set; that is the only way Splinter uses the
+network. OpenRouter models take their key from `AGENT_OPENROUTER_KEY`, any
+other provider from `BRAIN_API_KEY`.
 
-```bash
-splinter facts --file examples/stm32_datasheet.md --work-dir DIR
-```
+## The pipeline
 
-Document -> `explore` extracts every fact -> split into train and held-out
-eval sets (`--holdout-one-in N`, default 5: every Nth fact is held out) ->
-gated LoRA `train` on the training split (the same champion-bounded
-promote/reject rule as `train` itself) -> recall scored on the trained
-questions -> generalization scored on the held-out questions. Each stage
-reuses its artifacts when they already exist in `--work-dir` (a second run
-re-scores instead of re-exploring), and `facts-report.json` in the work
-dir carries the counts and the promotion decision. Exit is non-zero when
-the gate rejects the candidate, so a delegating script never reads a
-rejection as success.
+| Stage | Command | Reads | Writes |
+|---|---|---|---|
+| sources | `source add` | a file, a directory, a command's run | a source |
+| tasks | `tasks generate` | sources | a task set |
+| solve | `solve` | a task set | an experience set |
+| verify | `verify` | an experience set | verdicts on its experiences |
+| critique | `critique` | an experience set | an experience set of critiques and revisions |
+| dataset | `dataset build` | experience sets | a dataset and its manifest |
+| train | `train` | datasets | a candidate adapter (not released) |
 
-`--task-file FILE` reads the task from a file instead of `--task`. Any
-`--check CMD` is run by the agent itself after its turn; a non-zero exit
-keeps the attempt open and its output lands in the trace. `--adapter`
-requires the local model (it is refused together with `--model`).
+`learn` runs them all as one run on `policy:default` (for instance
+`splinter learn crates/splinter/examples/stm32_datasheet.md`), printing
+each stage as it finishes: the sources are captured; tasks of the requested kinds
+(default `recall`) are generated from every text part and admitted by
+code; each is solved in the environment it records; each experience is
+graded by its task kind's verifiers (a judge only through `verify
+--judge`); failures are critiqued and retried once; the first attempts and
+revisions that passed become an `sft-final` dataset; and a candidate is
+trained on it. The candidate is reported and not released. `--budget`
+bounds the whole run's wall-clock time; `--goal` steers what tasks are
+asked for; `--dry-run` prints the plan and writes nothing. A `learn` that
+stops before training (nothing admitted, nothing passed, the budget spent)
+says why and exits 1.
 
-Default model selection, local-first:
+Task kinds: `recall`, `explain`, `predict`, `construct`, `debug`,
+`counterexample`, `transform`, `classify`, `retrieve`, `multi-turn`,
+`combine` (written by the generator model) and `denoise` (a corrupted
+passage to restore, no model needed). Kinds that run code need `python3`.
 
-- no `--model`: in-process Qwen3 from `--local-weights`, else
-  `$BRAIN_QWEN_WEIGHTS`, else `~/.local/share/brain/models/Qwen/Qwen3-0.6B`
-- `--allow-api-models --model openrouter/<id>`: remote via OpenRouter; the
-  key comes from `AGENT_OPENROUTER_KEY` unless `--api-key` is given
-- `--allow-api-models --model <name> --base-url URL`: an OpenAI-compatible
-  endpoint; the key default is `BRAIN_API_KEY`
+`verify` appends verdicts from each task kind's own verifiers: formal
+(exact match, lenient), executable checks, mutation-validated tests,
+agreement among answers, and - only with `--judge REF` - a judge gated by
+the calibration `judge calibrate` stored for it. A labelled file is JSON
+Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 
-Without `--allow-api-models`, `--model` and `--base-url` are refused on
-every command, so no repository content leaves the machine by accident.
+`dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
+`verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`. The
+default `--min-strength` is `consistency`; `--strip` defaults to `all`
+(the student sees only the instruction). Objectives brain cannot train
+(preference, contrastive, reward, raw text) need `--export-only`.
 
-## Limits
+`train` concatenates the datasets in order and holds the newest records
+out for scoring; `--replay` mixes a dataset into training whole, never held
+out. `--from local:<checkpoint>+<adapter>` continues training that adapter.
 
-Every limit is recorded in the run manifest and the `task_received` event.
+## The front door
 
-| limit | default | fires as |
-| --- | --- | --- |
-| `--timeout-secs N` | 600 | `timeout` |
-| `--max-tool-rounds N` | sven config | the engine ends the turn |
-| `--max-output-tokens N` | 100000 | `budget_exhausted` |
-| `--max-cost-usd X` | 1.00 for `openrouter/` models, none otherwise; refused for local models | `budget_exhausted` |
-| `--max-attempts N` | 3 (the first try plus two resumes) | `resume` is refused |
+`splinter "learn the manual in ./docs"` asks the policy model, through
+sven's typed method call, which command the sentence means; the reply is
+a list of candidate intents (`learn`, `ask`, `status`, `add_source`,
+`list_sources`, `list_runs`, `cancel_run`), each with its arguments and a
+confidence. Code decides: a single reading at confidence 0.7 or more, and
+0.2 ahead of any other, runs as its command (printed on stderr first).
+Anything less is asked back - in the REPL at a terminal you pick one; with
+`--json` or a sentence argument the candidates are printed and the exit is
+3. A remote model without the opt-in is refused; cancelling a run, running
+a command (`cmd:`) and using a remote model are never done on a guess.
 
-Unmeasured cost is not free: a cost cap on a provider whose usage reports
-carry no price ends the attempt on its first report. A fired limit, a
-`cancel` and a Ctrl-C all stop the in-flight generation, write the
-checkpoint, transcript and outcome, and leave the run resumable; the
-reason lands in the trace as a `limit_fired` event and in the outcome's
-`unresolved` list.
+## JSON output
 
-A non-completed attempt (failed, timeout, cancelled, budget exhausted,
-errored) exits non-zero, so a delegating script never reads a stall as
-success.
+With `--json` every command prints one JSON document on stdout; errors
+print `{"error": string, "refused": bool}`. Commands that record a run add
+`"run"` (its id) to their report. Two reports in detail:
 
-## What a run record contains
+`source list`: `{"sources": [source]}`, each source
+`{"id", "kind", "origin", "parts", "bytes", "captured_at"}` - `kind` is
+`document`, `repository` or `command`; `origin` is the stored origin
+(`{"kind": "document", "path"}`, `{"kind": "repository", "path",
+"revision", "skipped"}` or `{"kind": "command", "argv", "cwd",
+"exit_code", "timed_out", "stdout_truncated", "stderr_truncated"}`);
+`parts` counts files or output streams and `bytes` sums their sizes.
 
-Under `~/.sven/splinter/runs/<run-id>/` (override the root with
-`SPLINTER_STATE`):
+`status`: `{"state", "policy", "recent_runs", "counts"}` - `policy` is
+`{"reference", "model", "base", "adapter"}` (`adapter` is `null` until
+releases exist); `recent_runs` lists up to five runs as `{"id", "command",
+"status", "started_at", "updated_at"}`; `counts` is `{"sources",
+"task_sets", "tasks", "experiences", "experience_sets", "datasets",
+"candidates"}`.
 
-| file | purpose |
-| --- | --- |
-| `run.json` | manifest: task, workspace, limits, status, attempt count |
-| `cancel.request` | present while a `cancel` is pending |
-| `events.jsonl` | append-only trace, schema `v1`, fsynced per event |
-| `transcript.json` | the model conversation |
-| `checkpoint/state.json` | resumable agent state |
-| `outcome.json` | structured result (status, checks, changed files, usage) |
-| `workspace.diff` | diff of the workspace at attempt end |
-| `artifacts/` | tool outputs too large for the trace line |
+## Runs
 
-The manifest is written atomically at every transition; trace sequence
-numbers survive process restarts (a resumed run continues the numbering).
+Every command that writes pipeline state records a run under
+`<state>/runs/<run-id>/run.json`: the command and its arguments, each
+stage as it finishes, its status (`running`, `completed`, `failed`,
+`cancelled`) and what it produced. `runs cancel <ID>` asks a run in
+progress to stop: it stops the model run in progress and the stage at its
+next check, and training at its next optimizer step. A run whose process
+died stays `running`.
 
-## The training gate (`learn` -> `train`)
+## Exit status
 
-`learn --run ID` appends one run's experience to
-`~/.sven/splinter/datasets/experience.jsonl` - but only a run the reviewer
-could already trust: the attempt completed AND at least one completion
-check passed AND the run has a final reply. Anything else is refused with
-the reason. Learning the same run twice is a no-op.
-
-`train` fine-tunes a LoRA adapter on the pool through brain's own trainer
-and holds the newest record out as the held-out sample. The adapter is
-promoted (a pointer written to `~/.sven/splinter/adapter.json`) only when the
-held-out loss strictly improved at the same weight tier on both sides of
-the comparison; a rejected attempt keeps its scores on disk but no
-pointer, and exits non-zero. Both scores land in the attempt's
-`decision.json` either way, so a rejected adapter is evidence, not folklore.
-`--adapter` serves the promoted one: it names either a LoRA safetensors file
-or the promotion pointer itself (`~/.sven/splinter/adapter.json`), so a serving
-invocation stays valid as later trainings promote new adapters over it.
+0 done; 1 the work failed or stopped short of what was asked; 2 refused
+before anything ran (usage, an unknown id, a remote model without the
+opt-in); 3 a sentence was asked back.

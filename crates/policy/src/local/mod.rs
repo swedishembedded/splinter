@@ -33,10 +33,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use anyhow::Context;
 use brain::{CancelToken, ChatPipeline, TextGenerationPipeline};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 
+use crate::error::PolicyError;
 use events::events_from;
 use request::{chat_request, Sampling};
 
@@ -60,10 +60,10 @@ const AGENT_SAMPLING: Sampling = Sampling {
 pub struct LocalQwen {
     pipeline: Arc<Mutex<ChatPipeline>>,
     model_name: String,
-    /// The in-flight generation's cancel token, if one is running. The
-    /// runner arms it - through [`Self::stop_generation`] - when the attempt
-    /// ends before the turn does, so a decode stops within one prefill chunk
-    /// or one token instead of running to its cap.
+    /// The in-flight generation's cancel token, if one is running.
+    /// [`Self::stop_generation`] arms it when the work using the model ends
+    /// before the turn does, so a decode stops within one prefill chunk or
+    /// one token instead of running to its cap.
     in_flight: Arc<Mutex<Option<CancelToken>>>,
     /// Generations currently running. [`Self::stop_generation`] waits on
     /// this reaching zero so the process never exits under a live device
@@ -78,8 +78,7 @@ pub struct LocalWeights {
     /// Checkpoint directory (or file) - the same layout brain's model store
     /// uses. A directory resolves to the checkpoint inside it.
     pub base: PathBuf,
-    /// Optional LoRA adapter file (or a promotion pointer naming one),
-    /// folded in at load.
+    /// Optional LoRA adapter file, folded in at load.
     pub adapter: Option<PathBuf>,
     /// Inline context budget (tokens): the KV cache is built for exactly
     /// this many, so a prompt plus its generation must fit inside it.
@@ -90,9 +89,8 @@ impl LocalQwen {
     /// Loads weights, tokenizer and (optionally) an adapter, and builds the
     /// decode engine. This is the expensive step - do it once, at startup,
     /// not per request.
-    pub fn load(weights: &LocalWeights, model_name: &str) -> anyhow::Result<Self> {
-        let base = resolve_base(&weights.base)
-            .with_context(|| format!("resolving weights at {}", weights.base.display()))?;
+    pub fn load(weights: &LocalWeights, model_name: &str) -> Result<Self, PolicyError> {
+        let base = resolve_base(&weights.base)?;
         let mut builder =
             TextGenerationPipeline::builder(utf8(&base)?).capacity(weights.context_tokens.max(1));
         // A brain-format checkpoint carries no tokenizer; the one beside it
@@ -105,11 +103,12 @@ impl LocalQwen {
             builder = builder.tokenizer(utf8(&tokenizer)?);
         }
         if let Some(adapter) = &weights.adapter {
-            builder = builder.adapter(utf8(&resolve_adapter_file(adapter)?)?);
+            builder = builder.adapter(utf8(adapter)?);
         }
-        let pipeline = builder
-            .load()
-            .map_err(|e| anyhow::anyhow!("loading {}: {e}", base.display()))?;
+        let pipeline = builder.load().map_err(|e| PolicyError::Load {
+            path: base.clone(),
+            reason: e.to_string(),
+        })?;
         Ok(Self {
             pipeline: Arc::new(Mutex::new(ChatPipeline::from(pipeline))),
             model_name: model_name.to_string(),
@@ -119,12 +118,12 @@ impl LocalQwen {
     }
 
     /// Cancels the in-flight generation, if any, and waits up to `grace` for
-    /// it to actually stop. The runner calls this on a raced attempt end -
-    /// timeout, interrupt - so the process exits AFTER the device is quiet:
+    /// it to actually stop, so the process exits AFTER the device is quiet:
     /// exiting under a live prefill or decode crashes the process instead of
-    /// ending it. Returns whether every generation has stopped; on `false`
-    /// the caller should treat the exit as best-effort (the generation is
-    /// cancelling and will stop, just not inside the grace window).
+    /// ending it. [`crate::LoadedModel`] calls it when it is dropped.
+    /// Returns whether every generation has stopped; on `false` the exit is
+    /// best-effort (the generation is cancelling and will stop, just not
+    /// inside the grace window).
     #[must_use]
     pub fn stop_generation(&self, grace: std::time::Duration) -> bool {
         if let Some(cancel) = self
@@ -144,47 +143,15 @@ impl LocalQwen {
 }
 
 /// `path` as the UTF-8 string brain's loaders take, or an error naming it.
-fn utf8(path: &Path) -> anyhow::Result<&str> {
-    path.to_str()
-        .ok_or_else(|| anyhow::anyhow!("{} is not valid UTF-8", path.display()))
-}
-
-/// The adapter to fold: `--adapter` names either a LoRA safetensors file
-/// directly or the loop's own promotion pointer (`train`'s `adapter.json`,
-/// which names the currently promoted adapter). Accepting the pointer is
-/// the whole point of writing it: a serving invocation keeps working as
-/// adapters are re-trained, without being rewritten per promotion.
-fn resolve_adapter_file(specified: &Path) -> anyhow::Result<PathBuf> {
-    if specified.extension().and_then(|e| e.to_str()) != Some("json") {
-        return Ok(specified.to_path_buf());
-    }
-    let pointer: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(specified).map_err(|e| {
-            anyhow::anyhow!("reading adapter pointer {}: {e}", specified.display())
-        })?)
-        .map_err(|e| anyhow::anyhow!("parsing adapter pointer {}: {e}", specified.display()))?;
-    let target = pointer
-        .get("adapter")
-        .and_then(|a| a.as_str())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "adapter pointer {} has no \"adapter\" path",
-                specified.display()
-            )
-        })?;
-    let target = PathBuf::from(target);
-    anyhow::ensure!(
-        target.is_file(),
-        "adapter pointer {} names {} which does not exist",
-        specified.display(),
-        target.display()
-    );
-    Ok(target)
+fn utf8(path: &Path) -> Result<&str, PolicyError> {
+    path.to_str().ok_or_else(|| PolicyError::NotUtf8 {
+        path: path.to_path_buf(),
+    })
 }
 
 /// A directory pointing at a checkpoint resolves to the checkpoint inside
 /// it; a file passes through. Mirrors brain's own `resolve_base`.
-pub fn resolve_base(specified: &Path) -> anyhow::Result<PathBuf> {
+pub fn resolve_base(specified: &Path) -> Result<PathBuf, PolicyError> {
     if specified.is_file() {
         return Ok(specified.to_path_buf());
     }
@@ -196,7 +163,9 @@ pub fn resolve_base(specified: &Path) -> anyhow::Result<PathBuf> {
     }
     // Anything else: refuse here, where the caller can name the directory,
     // rather than inside the checkpoint open.
-    anyhow::bail!("no checkpoint file found under {}", specified.display())
+    Err(PolicyError::NoCheckpoint {
+        path: specified.to_path_buf(),
+    })
 }
 
 #[async_trait::async_trait]
@@ -236,8 +205,8 @@ impl ModelProvider for LocalQwen {
         // (timeout, interrupt) would hang the process inside
         // `Runtime::drop`. Here an abandoned stream is what arms the cancel:
         // its receiver is gone, the next send fails, and the decode stops at
-        // the next token. The runner additionally calls `stop_generation`
-        // before exiting, so the device is quiet - not merely abandoned -
+        // the next token. `LoadedModel` additionally calls `stop_generation`
+        // when it is dropped, so the device is quiet - not merely abandoned -
         // when the process ends.
         let spawned = std::thread::Builder::new()
             .name("loop-generate".to_string())
@@ -306,8 +275,7 @@ impl futures::Stream for Events {
 }
 
 /// A panic payload as text, however it was constructed.
-#[must_use]
-pub fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
     panic
         .downcast_ref::<String>()
         .cloned()
@@ -326,44 +294,6 @@ mod tests {
         assert!(resolve_base(&dir).is_err(), "nothing inside, no resolution");
         std::fs::write(dir.join("model.safetensors"), b"x").unwrap();
         assert_eq!(resolve_base(&dir).unwrap(), dir.join("model.safetensors"));
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn a_promotion_pointer_resolves_to_the_adapter_it_names() {
-        let dir =
-            std::env::temp_dir().join(format!("loop-provider-adapter-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let adapter = dir.join("adapter.safetensors");
-        std::fs::write(&adapter, b"x").unwrap();
-
-        // A pointer written by `train`'s promotion resolves to the file it
-        // names, so a serving invocation can keep passing the stable path.
-        let pointer = dir.join("adapter.json");
-        std::fs::write(
-            &pointer,
-            serde_json::json!({"adapter": adapter.display().to_string()}).to_string(),
-        )
-        .unwrap();
-        assert_eq!(resolve_adapter_file(&pointer).unwrap(), adapter);
-
-        // A direct safetensors path passes through untouched.
-        assert_eq!(resolve_adapter_file(&adapter).unwrap(), adapter);
-
-        // A broken pointer fails loudly, naming what is missing.
-        let dangling = dir.join("dangling.json");
-        std::fs::write(
-            &dangling,
-            serde_json::json!({"adapter": dir.join("gone.safetensors").display().to_string()})
-                .to_string(),
-        )
-        .unwrap();
-        let err = resolve_adapter_file(&dangling).unwrap_err().to_string();
-        assert!(
-            err.contains("does not exist"),
-            "refusal must name the missing target: {err}"
-        );
-
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

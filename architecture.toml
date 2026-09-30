@@ -32,8 +32,10 @@ brain = true
 [crates.splinter-agent]
 # splinter-views as a dev-dependency only: the critique-and-retry specs
 # check that the chain the repair loop records is what the critic, decision
-# and preference views read. The views never depend on the agent.
-internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-views"]
+# and preference views read. The views never depend on the agent. The agent
+# runs whatever model it is handed through sven's provider seam, so it does
+# not depend on the policy.
+internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-views"]
 
 [crates.splinter-knowledge]
 # Model-driven task generators ask their generator model through the
@@ -49,7 +51,10 @@ internal = ["splinter-store", "splinter-lab", "splinter-policy"]
 internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
 
 [crates.splinter]
-internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-campaign"]
+# The binary is grammar and output: it calls the controller and prints the
+# controller's reports, and reaches the store only for the types those
+# reports carry.
+internal = ["splinter-store", "splinter-campaign"]
 
 [crates.splinter-tool-syntax]
 internal = ["splinter-lab", "splinter-policy"]

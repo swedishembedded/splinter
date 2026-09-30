@@ -1,31 +1,54 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements learning agents that acquire a capability
+// from a document or a tool and prove it with evidence, for its clients. If
+// your team needs expertise in continual learning or agent evaluation, you
+// can procure our services by sending an email to info@swedishembedded.com.
 
 //! Splinter's controller: what each command does, composed from the lower
-//! crates.
+//! crates. One module per pipeline stage, each reading and writing the
+//! content-addressed stores under the state root, and `learn` composing
+//! them.
 //!
 //! * [`config`] - the configuration, and the only place the environment
-//!   is read.
-//! * [`models`] - the model a command asked for, checked and resolved.
-//! * [`attempt`] - a delegated task attempt and its resume.
-//! * [`learn`] - a verified run becomes training experience.
-//! * [`train`] - a fine-tune behind the promotion gate, and the pointer
-//!   serving follows.
-//! * [`ask`], [`eval`] - one question, and a whole facts dataset, asked of
-//!   the model and judged.
-//! * [`facts`] - a document learned end to end: explore, split, train,
-//!   score.
+//!   is read; [`context`] - what every command works with.
+//! * [`model_ref`] - the one way a command names a model.
+//! * [`sources`] - capture and inspect sources.
+//! * [`tasks`] - sources become a task set.
+//! * [`solving`] - a task set becomes an experience set.
+//! * [`verify`] - verdicts appended, by each task kind's verifiers;
+//!   [`judge`] - a judge's calibration.
+//! * [`critique`] - failures critiqued and retried.
+//! * [`datasets`] - experience sets projected into a stored dataset.
+//! * [`train`] - datasets become a candidate adapter, never released.
+//! * [`learn`] - every stage above, as one run.
+//! * [`runs`] - every command's run record, and cancelling one.
+//! * [`status`], [`experiences`], [`ask`] - inspection and questions.
+//! * [`front_door`] - a sentence becomes a command, decided by code.
 
 #![warn(missing_docs)]
 
 pub mod ask;
-pub mod attempt;
 pub mod config;
-pub mod eval;
-pub mod facts;
+pub mod context;
+pub mod critique;
+pub mod datasets;
+pub mod error;
+pub mod experiences;
+pub mod front_door;
+mod ids;
+pub mod judge;
 pub mod learn;
-pub mod models;
+pub mod model_ref;
+pub mod runs;
+pub mod solving;
+pub mod sources;
+pub mod status;
+pub mod tasks;
 pub mod train;
+pub mod verify;
 
 pub use config::Config;
-pub use models::ModelChoice;
+pub use context::Context;
+pub use error::CampaignError;

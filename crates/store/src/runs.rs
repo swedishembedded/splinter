@@ -1,240 +1,251 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements delegated-task coding agents whose runs,
-// traces and learned state survive process restart. If your team needs
-// expertise in agent infrastructure or durable operating state, you can
-// procure our services by sending an email to info@swedishembedded.com.
+// Swedish Embedded AB implements learning pipelines whose every run is
+// inspectable and stoppable from any process, for its clients. If your
+// team needs expertise in durable operating state for agent systems, you
+// can procure our services by sending an email to info@swedishembedded.com.
 
-//! A run's durable record: its manifest, its limits, and the cross-process
-//! cancel request. Everything lives in the run's directory under the state
-//! root, so `show`, `resume` and `cancel` work from any process.
+//! A run: one command's pipeline work, recorded so it can be inspected -
+//! and stopped - from any process.
 //!
 //! ```text
 //! runs/<run_id>/
-//!   run.json               manifest + latest status (atomic)
-//!   events.jsonl           the append-only trace
-//!   transcript.json        what the agent exchanged with the model
-//!   checkpoint/state.json  a suspended AgentState (serde)
-//!   captured-requests.json model input captured at the wire, when recorded
-//!   artifacts/             large tool outputs, referenced by trace events
+//!   run.json          the record: command, arguments, stages, status,
+//!                     outputs; rewritten atomically at every change
+//!   cancel.request    present once a cancel was requested
 //! ```
+//!
+//! A [`RunLog`] is the writing side: [`RunLog::start`] records the run as
+//! running, [`RunLog::stage`] appends each stage's summary as it finishes,
+//! and [`RunLog::finish`] records how it ended and what it produced. A
+//! process that dies before finishing leaves its run recorded as running;
+//! nothing here can tell a live run from a dead one.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::{write_atomic, StateRoot};
+use serde::{Deserialize, Serialize};
 
-/// A run's manifest: what was configured, and where the attempt stands.
-/// Written atomically at every transition, so `show` never depends on the
-/// process that wrote it still being alive.
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
-#[serde(default)]
-pub struct RunManifest {
-    /// Schema version, so an old state directory stays readable.
-    pub schema: u32,
-    /// The run's id, which also names its directory, `runs/<run_id>`.
-    pub run_id: String,
-    /// What the run works on, as a display path: the canonical workspace
-    /// directory for an agent attempt, the source document for an
-    /// exploration.
-    pub workspace: String,
-    /// The task as given to the agent, verbatim; a resume reuses it.
-    pub task: String,
-    /// `pending` while the attempt runs, then the attempt's final status.
-    pub status: String,
-    /// A run may be resumed into further attempts; this is the latest.
-    pub attempts: u32,
-    /// When the run was created, as a [`crate::clock::utc_now`] timestamp.
-    pub started_ts: String,
-    /// When this manifest was last written, in the same format; it moves at
-    /// every status transition and every resume.
-    pub updated_ts: String,
-    /// The identity of the model the run served from, as
-    /// `ModelSelection::identity` renders it: `brain/<org>/<model>[+<adapter>]`
-    /// for local weights, the `provider/model` spec for a remote model.
-    pub model: String,
-    /// The endpoint a remote model was reached at, when one was configured.
-    /// `None` for a local model, and for a remote one on its provider's
-    /// default endpoint.
-    pub base_url: Option<String>,
-    /// The local adapter this run serves from, when one was configured -
-    /// the path, not the display name, so a resume can restore the exact
-    /// configuration instead of a base-model run wearing the same label.
-    pub local_adapter: Option<std::path::PathBuf>,
-    /// The configured limits, as configured - recorded so "why did it stop"
-    /// has an answer that does not require guessing what was set.
-    pub limits: Limits,
-}
+use crate::clock::Clock;
+use crate::error::{decode, io, StoreError};
+use crate::{new_id_with_prefix, write_atomic, StateRoot};
 
-/// The limits a run was configured with, recorded in its manifest so a
-/// resume enforces the same ones and `show` can say why a run stopped.
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
-#[serde(default)]
-pub struct Limits {
-    /// Wall-clock seconds one attempt's turn may take before it ends as a
-    /// timeout. `0` in a manifest that recorded no limits (an exploration).
-    pub timeout_secs: u64,
-    /// Tool-call rounds the agent may make in one turn; `None` leaves sven's
-    /// configured default in force.
-    pub max_tool_rounds: Option<u32>,
-    /// Attempts the run may make in total, the first included; each
-    /// `resume` is one more. `None` is unlimited.
-    pub max_attempts: Option<u32>,
-    /// Usage limits per attempt, stored flattened beside the fields above.
-    #[serde(flatten)]
-    pub budget: Budget,
-}
+/// The file a run's record is kept in, inside its directory.
+const RECORD: &str = "run.json";
 
-/// The configured usage limits of one attempt. `None` is "no limit".
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Budget {
-    /// Model output tokens, summed over the attempt's usage reports.
-    pub max_output_tokens: Option<u64>,
-    /// Provider-billed USD. Only meaningful for a remote model; local
-    /// inference is not billed per token.
-    pub max_cost_usd: Option<f64>,
-}
-
-/// Refuses a further attempt once the run has made as many as its limit
-/// allows. Retries spend the same recorded task budget as the first try.
-pub fn ensure_attempt_allowed(manifest: &RunManifest) -> anyhow::Result<()> {
-    if let Some(max) = manifest.limits.max_attempts {
-        anyhow::ensure!(
-            manifest.attempts < max,
-            "run {} has made {} of {max} allowed attempt(s); the retry budget is spent",
-            manifest.run_id,
-            manifest.attempts
-        );
-    }
-    Ok(())
-}
-
+/// The file whose presence asks a run to stop, inside its directory.
 const CANCEL_REQUEST: &str = "cancel.request";
 
-/// Asks the process running `run_id` to stop its attempt. The request is a
-/// file in the run's directory, so it works from any process; the runner
-/// polls for it and ends the attempt as `cancelled`. Refused for a run that
-/// is not in progress, which has nothing to stop.
-pub fn request_cancel(root: &StateRoot, run_id: &str) -> anyhow::Result<PathBuf> {
-    let manifest = read_manifest(root, run_id)?;
-    anyhow::ensure!(
-        manifest.status == "pending",
-        "run {run_id} is not in progress (status {:?}); nothing to cancel",
-        manifest.status
-    );
-    let path = root.run_dir(run_id).join(CANCEL_REQUEST);
-    write_atomic(&path, &crate::clock::utc_now())?;
-    Ok(path)
+/// Where a run stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunStatus {
+    /// Started and not yet finished (or its process died).
+    Running,
+    /// Finished with everything it set out to do.
+    Completed,
+    /// Stopped by an error, recorded in [`Run::error`].
+    Failed,
+    /// Stopped by a cancel request.
+    Cancelled,
 }
 
-/// Whether a cancel has been requested for the run in `dir`.
+impl RunStatus {
+    /// The status as it is serialized.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+/// One finished stage of a run.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RunStage {
+    /// The stage's name.
+    pub stage: String,
+    /// When it finished.
+    pub finished_at: String,
+    /// What it did, as the command reports it.
+    pub summary: serde_json::Value,
+}
+
+/// A run's record.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Run {
+    /// The run's id, which also names its directory.
+    pub id: String,
+    /// The command that started it.
+    pub command: String,
+    /// What the command was asked to do.
+    pub arguments: serde_json::Value,
+    /// Where it stands.
+    pub status: RunStatus,
+    /// When it started.
+    pub started_at: String,
+    /// When its record last changed.
+    pub updated_at: String,
+    /// Its finished stages, in order.
+    pub stages: Vec<RunStage>,
+    /// What it produced, as the command reports it; `null` until it ends.
+    pub outputs: serde_json::Value,
+    /// Why it failed, when it did.
+    pub error: Option<String>,
+}
+
+/// The writing side of one run. See the module documentation.
+#[derive(Debug)]
+pub struct RunLog {
+    dir: PathBuf,
+    run: Run,
+}
+
+impl RunLog {
+    /// Records a new run of `command` with `arguments`, running, stamped by
+    /// `clock`.
+    pub fn start(
+        root: &StateRoot,
+        command: &str,
+        arguments: serde_json::Value,
+        clock: &dyn Clock,
+    ) -> Result<Self, StoreError> {
+        let id = new_id_with_prefix("run");
+        let dir = root.run_dir(&id);
+        let runs = root.runs();
+        fs::create_dir_all(&runs).map_err(io(&runs))?;
+        // Exclusive: an id is never reused, even by a racing process.
+        fs::create_dir(&dir).map_err(io(&dir))?;
+        let now = clock.utc_now();
+        let log = Self {
+            dir,
+            run: Run {
+                id,
+                command: command.to_string(),
+                arguments,
+                status: RunStatus::Running,
+                started_at: now.clone(),
+                updated_at: now,
+                stages: Vec::new(),
+                outputs: serde_json::Value::Null,
+                error: None,
+            },
+        };
+        log.write()?;
+        Ok(log)
+    }
+
+    /// The run's id.
+    #[must_use]
+    pub fn id(&self) -> &str {
+        &self.run.id
+    }
+
+    /// Appends the finished stage `stage` with `summary`.
+    pub fn stage(
+        &mut self,
+        stage: &str,
+        summary: serde_json::Value,
+        clock: &dyn Clock,
+    ) -> Result<(), StoreError> {
+        let now = clock.utc_now();
+        self.run.stages.push(RunStage {
+            stage: stage.to_string(),
+            finished_at: now.clone(),
+            summary,
+        });
+        self.run.updated_at = now;
+        self.write()
+    }
+
+    /// Records how the run ended - `status`, what it produced, and why it
+    /// failed when it did - and consumes the log.
+    pub fn finish(
+        mut self,
+        status: RunStatus,
+        outputs: serde_json::Value,
+        error: Option<String>,
+        clock: &dyn Clock,
+    ) -> Result<Run, StoreError> {
+        self.run.status = status;
+        self.run.outputs = outputs;
+        self.run.error = error;
+        self.run.updated_at = clock.utc_now();
+        self.write()?;
+        Ok(self.run)
+    }
+
+    fn write(&self) -> Result<(), StoreError> {
+        let text =
+            serde_json::to_string_pretty(&self.run).map_err(|source| StoreError::Serialize {
+                what: "run",
+                source,
+            })?;
+        let path = self.dir.join(RECORD);
+        write_atomic(&path, &text).map_err(io(&path))
+    }
+}
+
+/// Whether a cancel was requested for the run whose directory is `dir`.
 #[must_use]
 pub fn cancel_requested(dir: &Path) -> bool {
     dir.join(CANCEL_REQUEST).is_file()
 }
 
-/// Consumes a cancel request, so the attempt that starts next is not
-/// stopped by one aimed at its predecessor.
-pub fn clear_cancel(dir: &Path) -> std::io::Result<()> {
-    match fs::remove_file(dir.join(CANCEL_REQUEST)) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
-        _ => Ok(()),
+/// Asks the process running `run_id` to stop. The request is a file in the
+/// run's directory, so it works from any process; the run polls for it.
+/// Refused for a run that is not recorded or not in progress.
+pub fn request_cancel(root: &StateRoot, run_id: &str) -> Result<PathBuf, StoreError> {
+    let run = read_run(root, run_id)?;
+    if run.status != RunStatus::Running {
+        return Err(StoreError::RunNotInProgress {
+            run: run_id.to_string(),
+            status: run.status.as_str().to_string(),
+        });
     }
+    let path = root.run_dir(run_id).join(CANCEL_REQUEST);
+    write_atomic(&path, &crate::clock::utc_now()).map_err(io(&path))?;
+    Ok(path)
 }
 
-/// Reads a run's manifest, refusing to invent one.
-pub fn read_manifest(root: &StateRoot, run_id: &str) -> anyhow::Result<RunManifest> {
-    let path = root.run_dir(run_id).join("run.json");
-    let text = fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-    serde_json::from_str(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
+/// The record of `run_id`.
+pub fn read_run(root: &StateRoot, run_id: &str) -> Result<Run, StoreError> {
+    // A run id names a directory: anything that could step out of `runs/`
+    // is no run.
+    if run_id.is_empty() || run_id.contains(['/', '\\']) || run_id.starts_with('.') {
+        return Err(StoreError::UnknownRun(run_id.to_string()));
+    }
+    let path = root.run_dir(run_id).join(RECORD);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(StoreError::UnknownRun(run_id.to_string()))
+        }
+        Err(e) => return Err(io(&path)(e)),
+    };
+    decode(&path, &bytes)
 }
 
-/// Every run directory, oldest first, by manifest status.
-pub fn list_runs(root: &StateRoot) -> anyhow::Result<Vec<RunManifest>> {
-    let runs = root.runs();
-    if !runs.is_dir() {
-        return Ok(Vec::new());
-    }
-    let mut found = Vec::new();
-    for entry in fs::read_dir(&runs)? {
-        let path = entry?.path().join("run.json");
-        if let Ok(text) = fs::read_to_string(&path) {
-            if let Ok(manifest) = serde_json::from_str::<RunManifest>(&text) {
-                found.push(manifest);
-            }
+/// Every recorded run, oldest first. A directory without a readable record
+/// is not a run and is skipped.
+pub fn list_runs(root: &StateRoot) -> Result<Vec<Run>, StoreError> {
+    let dir = root.runs();
+    let entries = match fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(io(&dir)(e)),
+    };
+    let mut runs = Vec::new();
+    for entry in entries {
+        let name = entry.map_err(io(&dir))?.file_name();
+        if let Some(run) = name.to_str().and_then(|id| read_run(root, id).ok()) {
+            runs.push(run);
         }
     }
-    found.sort_by(|a, b| a.run_id.cmp(&b.run_id));
-    Ok(found)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn scratch(name: &str) -> StateRoot {
-        StateRoot::new(std::env::temp_dir().join(format!("splinter-{name}-{}", std::process::id())))
-    }
-
-    /// A cancel is requested from another process through the run's
-    /// directory, only for a run still in progress, and an attempt that
-    /// starts afterwards is not cancelled by a stale request.
-    #[test]
-    fn a_cancel_request_reaches_only_the_run_in_progress() {
-        let root = scratch("cancel");
-        let manifest = RunManifest {
-            run_id: "loop-test-cancel".into(),
-            status: "pending".into(),
-            ..Default::default()
-        };
-        let dir = root.run_dir(&manifest.run_id);
-        write_atomic(
-            &dir.join("run.json"),
-            &serde_json::to_string(&manifest).unwrap(),
-        )
-        .unwrap();
-
-        assert!(!cancel_requested(&dir));
-        request_cancel(&root, "loop-test-cancel").unwrap();
-        assert!(cancel_requested(&dir));
-        clear_cancel(&dir).unwrap();
-        assert!(!cancel_requested(&dir), "a new attempt starts uncancelled");
-
-        let finished = RunManifest {
-            status: "completed".into(),
-            ..manifest
-        };
-        write_atomic(
-            &dir.join("run.json"),
-            &serde_json::to_string(&finished).unwrap(),
-        )
-        .unwrap();
-        assert!(
-            request_cancel(&root, "loop-test-cancel").is_err(),
-            "a finished run has nothing to cancel"
-        );
-        assert!(request_cancel(&root, "loop-test-missing").is_err());
-        let _ = fs::remove_dir_all(root.path());
-    }
-
-    /// A resume is a retry, and retries are budgeted: past the recorded
-    /// attempt limit it is refused instead of started.
-    #[test]
-    fn a_resume_past_the_attempt_limit_is_refused() {
-        let mut manifest = RunManifest {
-            attempts: 2,
-            limits: Limits {
-                max_attempts: Some(3),
-                ..Limits::default()
-            },
-            ..Default::default()
-        };
-        assert!(ensure_attempt_allowed(&manifest).is_ok());
-        manifest.attempts = 3;
-        let refused = ensure_attempt_allowed(&manifest).unwrap_err().to_string();
-        assert!(refused.contains("3 of 3"), "{refused}");
-        manifest.limits.max_attempts = None;
-        assert!(ensure_attempt_allowed(&manifest).is_ok(), "unlimited");
-    }
+    runs.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(runs)
 }

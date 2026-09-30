@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements delegated-task coding agents that grow
-// their own training data. If your team needs expertise in data extraction
-// from technical documents, you can procure our services by sending an
-// email to info@swedishembedded.com.
+// Swedish Embedded AB implements admission gates that keep ungrounded
+// model-written training data out of datasets. If your team needs expertise
+// in data extraction from technical documents, you can procure our services
+// by sending an email to info@swedishembedded.com.
 
-//! What an extracted fact must pass before it becomes training data:
-//! a question new to the dataset, anchored on the document's subject, with
-//! every number in its answer traceable to the section it came from.
+//! Text rules a generated task is held to before it is admitted: its
+//! instruction normalised for duplicate detection, and every number its
+//! reference states traceable to the evidence it came from.
 
 /// Normalized question text for dedup: lowercase, whitespace collapsed.
 pub fn normalize(question: &str) -> String {
@@ -17,18 +17,6 @@ pub fn normalize(question: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase()
-}
-
-/// The anchor gate: does the question name a device the document's title
-/// names? The check is case-insensitive containment on the title's
-/// identifiers. With no identifiers to anchor on, every question passes -
-/// the gate refuses only what it can name.
-pub fn question_is_anchored(question: &str, identifiers: &[String]) -> bool {
-    let lower = question.to_lowercase();
-    identifiers.is_empty()
-        || identifiers
-            .iter()
-            .any(|id| lower.contains(&id.to_lowercase()))
 }
 
 /// The number tokens of `text`, each with the unit word that binds to it
@@ -121,7 +109,6 @@ pub fn answer_numbers_traceable(answer: &str, section: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sections::title_identifiers;
 
     /// Dedup is by normalized question text: case and whitespace collapse.
     #[test]
@@ -133,31 +120,6 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         assert!(seen.insert(normalize("What is the max?")));
         assert!(!seen.insert(normalize("what is  the max?")));
-    }
-
-    /// The anchor gate is the pipeline-side enforcement of the generator
-    /// instruction. An unanchored question is the retrieval key that leaks
-    /// this chip's answers onto other chips' questions (the measured defect:
-    /// a trained adapter answering a CPU-clock question about the wrong
-    /// family with this family's SDIO number), so the pipeline drops it
-    /// rather than training it.
-    #[test]
-    fn the_anchor_gate_refuses_questions_the_title_does_not_anchor() {
-        let ids = title_identifiers("# STM32F405 / STM32F407 \u{2014} Technical Fact Sheet");
-        assert_eq!(ids, vec!["STM32F405", "STM32F407"], "{ids:?}");
-        assert!(question_is_anchored(
-            "What is the maximum CPU clock frequency of the STM32F407?",
-            &ids
-        ));
-        assert!(!question_is_anchored(
-            "What is the maximum frequency of the USART/UART?",
-            &ids
-        ));
-        // A title without an identifier names no device: the gate disables
-        // itself instead of rejecting every question.
-        let generic = title_identifiers("A Technical Fact Sheet");
-        assert!(generic.is_empty());
-        assert!(question_is_anchored("Any question at all", &generic));
     }
 
     /// The traceability gate: every number an answer states must be

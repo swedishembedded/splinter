@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use crate::annotation::{Annotation, AnnotationBody};
 use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
-use crate::error::{decode, io, read_verified};
+use crate::error::{decode, io, object_digests, read_verified};
 use crate::experience::{Experience, ExperienceId};
 use crate::{sync_dir, write_once, StateRoot};
 
@@ -269,6 +269,22 @@ impl ExperienceStore {
         }
         let bytes = read_verified(&path, &id.0)?;
         decode(&path, &bytes)
+    }
+
+    /// Every stored experience's id, in id order (without verifying them).
+    pub fn list(&self) -> Result<Vec<ExperienceId>, StoreError> {
+        Ok(object_digests(&self.dir.join("objects"))?
+            .into_iter()
+            .map(ExperienceId)
+            .collect())
+    }
+
+    /// Every stored set's id, in id order (without verifying them).
+    pub fn list_sets(&self) -> Result<Vec<SetId>, StoreError> {
+        Ok(object_digests(&self.dir.join("sets"))?
+            .into_iter()
+            .map(SetId)
+            .collect())
     }
 }
 

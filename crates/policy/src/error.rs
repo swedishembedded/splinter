@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+//! Why the policy could not load, reach or train a model.
+
+use std::path::PathBuf;
+
+/// Why a policy operation failed. Each names what failed and on which
+/// input; brain's and sven's own errors are carried as their text.
+#[derive(Debug, thiserror::Error)]
+pub enum PolicyError {
+    /// No checkpoint file where one was named.
+    #[error("no checkpoint file found under {path}")]
+    NoCheckpoint {
+        /// The path named.
+        path: PathBuf,
+    },
+    /// A path brain must be given as UTF-8 is not.
+    #[error("{path} is not valid UTF-8")]
+    NotUtf8 {
+        /// The path.
+        path: PathBuf,
+    },
+    /// brain could not load the weights.
+    #[error("loading {path}: {reason}")]
+    Load {
+        /// The checkpoint.
+        path: PathBuf,
+        /// brain's error.
+        reason: String,
+    },
+    /// A remote model could not be configured or reached.
+    #[error("remote model {spec}: {reason}")]
+    Remote {
+        /// The model, `provider/name`.
+        spec: String,
+        /// Why.
+        reason: String,
+    },
+    /// A dataset is not valid trainer input.
+    #[error("dataset {path} is not valid trainer input: {reason}")]
+    Dataset {
+        /// The dataset file.
+        path: PathBuf,
+        /// brain's parser's error.
+        reason: String,
+    },
+    /// A dataset too small to hold a record out.
+    #[error(
+        "{path} holds {records} record(s); scoring needs at least {} so one can be held out",
+        splinter_lab::holdout::MIN_SAMPLES
+    )]
+    TooFewRecords {
+        /// The dataset file.
+        path: PathBuf,
+        /// Records in it.
+        records: usize,
+    },
+    /// A fine-tune failed, or completed without what it must report.
+    #[error("fine-tune in {dir}: {reason}")]
+    Train {
+        /// The fine-tune's directory.
+        dir: PathBuf,
+        /// What went wrong.
+        reason: String,
+    },
+    /// A fine-tune was cancelled; it exported no adapter.
+    #[error("fine-tune in {dir} was cancelled; it exported no adapter")]
+    Cancelled {
+        /// The fine-tune's directory.
+        dir: PathBuf,
+    },
+    /// A file operation failed.
+    #[error("{path}: {source}")]
+    Io {
+        /// The file.
+        path: PathBuf,
+        /// The underlying error.
+        source: std::io::Error,
+    },
+}

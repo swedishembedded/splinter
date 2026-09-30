@@ -1,161 +1,655 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! What the commands print: an attempt's outcome, and the run index.
+//! What the commands print: every report as text for a person, or - with
+//! `--json` - as the report itself, one JSON document on stdout whose field
+//! names are the report's documented fields.
 
-use splinter_agent::outcome::{Outcome, Status};
-use splinter_store::runs::{list_runs, read_manifest};
-use splinter_store::trace::read_events;
-use splinter_store::StateRoot;
+use std::fmt::Write as _;
 
-/// Prints an attempt's outcome and exits non-zero unless it completed - in
-/// both output modes: a script that delegated work must not read a timeout
-/// as success, and a JSON consumer checks the exit code, not the prose.
-pub fn attempt(outcome: &Outcome, json: bool) -> anyhow::Result<()> {
+use serde::Serialize;
+use splinter_campaign::ask::Answer;
+use splinter_campaign::critique::Critiqued;
+use splinter_campaign::datasets::{Built, Exported};
+use splinter_campaign::experiences::{ExperienceLine, ExperienceShow, SetList};
+use splinter_campaign::front_door::Routed;
+use splinter_campaign::judge::Calibrated;
+use splinter_campaign::learn::{LearnPlan, LearnReport, Learned};
+use splinter_campaign::runs::{CancelRequested, Recorded, RunList};
+use splinter_campaign::solving::Solved;
+use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
+use splinter_campaign::status::Status;
+use splinter_campaign::tasks::{TaskSetList, TaskShow, TasksGenerated};
+use splinter_campaign::train::Candidate;
+use splinter_campaign::verify::Verified;
+use splinter_campaign::CampaignError;
+use splinter_store::runs::Run;
+use splinter_store::source::{Origin, Source};
+
+/// A report a command prints.
+pub trait Report: Serialize {
+    /// The report as text for a person.
+    fn human(&self) -> String;
+}
+
+/// Prints `report` as JSON or as text.
+pub fn emit(json: bool, report: &impl Report) {
     if json {
-        println!("{}", serde_json::to_string_pretty(outcome)?);
+        match serde_json::to_string_pretty(report) {
+            Ok(text) => println!("{text}"),
+            // Every report is plain data; one that cannot be serialized is
+            // a bug worth seeing rather than hiding.
+            Err(e) => eprintln!("splinter: the report could not be written as JSON: {e}"),
+        }
     } else {
-        attempt_human(outcome);
-    }
-    // Non-zero exit on a non-completed attempt - in BOTH output modes. A
-    // script that delegated work must not read a timeout as success, and a
-    // JSON consumer checks the exit code, not the prose.
-    if outcome.status != Status::Completed {
-        std::process::exit(1);
-    }
-    Ok(())
-}
-
-fn attempt_human(outcome: &Outcome) {
-    println!("run:     {}", outcome.run_id);
-    println!("status:  {}", outcome.status.as_str());
-    if !outcome.changed_files.is_empty() {
-        println!(
-            "changed: {} file(s) ({})",
-            outcome.changed_files.len(),
-            outcome.changed_files_basis
-        );
-        for file in outcome.changed_files.iter().take(10) {
-            println!("  {} ({})", file.path, file.kind);
-        }
-    }
-    for check in &outcome.checks {
-        println!(
-            "check:   {} -> {} ({})",
-            check.command,
-            check.exit,
-            if check.passed { "pass" } else { "FAIL" }
-        );
-    }
-    println!(
-        "usage:   {} tool call(s), {} failed, {} in / {} out tok{}",
-        outcome.usage.tool_calls,
-        outcome.usage.failed_tool_calls,
-        outcome.usage.input_tokens,
-        outcome.usage.output_tokens,
-        outcome
-            .usage
-            .cost_usd
-            .map(|c| format!(", ${c:.4}"))
-            .unwrap_or_else(|| ", cost unmeasured".into()),
-    );
-    if !outcome.tool_failures.is_empty() {
-        println!("failures:");
-        for failure in outcome.tool_failures.iter().take(10) {
-            println!("  {failure}");
-        }
-    }
-    if !outcome.unresolved.is_empty() {
-        println!("unresolved:");
-        for issue in &outcome.unresolved {
-            println!("  {issue}");
-        }
+        print!("{}", report.human());
     }
 }
 
-/// Prints one run's manifest, outcome and trace index, or - with no run
-/// named - every run under the state root.
-pub fn show(root: &StateRoot, run: Option<&str>) -> anyhow::Result<()> {
-    if let Some(run_id) = run {
-        let manifest = read_manifest(root, run_id)?;
-        println!(
-            "run:      {}\nstatus:   {}\nattempts: {}\nmodel:    {}\nstarted:  {}",
-            manifest.run_id,
-            manifest.status,
-            manifest.attempts,
-            manifest.model,
-            manifest.started_ts,
-        );
-        println!("workspace: {}", manifest.workspace);
-        println!("task: {}", manifest.task);
-        let dir = root.run_dir(run_id);
-        match Outcome::load(&dir) {
-            Ok(outcome) => {
+/// Prints why a command failed: on stderr always, and as
+/// `{"error": ..., "refused": ...}` on stdout with `--json`.
+pub fn error(json: bool, error: &CampaignError) {
+    eprintln!("splinter: {error}");
+    if json {
+        let value =
+            serde_json::json!({ "error": error.to_string(), "refused": error.is_refusal() });
+        println!("{value:#}");
+    }
+}
+
+/// Prints the question the front door asks back, or its refusal: as text,
+/// or with `--json` as the routing itself (`{"routed": "clarify", "reason",
+/// "candidates": [{"intent", "confidence", "command"}]}` or `{"routed":
+/// "refuse", ...}`).
+pub fn routed(json: bool, routed: &Routed) {
+    if json {
+        match serde_json::to_string_pretty(routed) {
+            Ok(text) => println!("{text}"),
+            Err(e) => eprintln!("splinter: the reply could not be written as JSON: {e}"),
+        }
+    }
+    match routed {
+        Routed::Refuse(why) => eprintln!("splinter: {why}"),
+        Routed::Clarify(question) if !json => {
+            println!("{}", question.reason);
+            for (n, candidate) in question.candidates.iter().enumerate() {
                 println!(
-                    "outcome:  {} ({} check(s), {} changed file(s))",
-                    outcome.status.as_str(),
-                    outcome.checks.len(),
-                    outcome.changed_files.len()
+                    "  {}) splinter {}  ({:.2})",
+                    n + 1,
+                    shell_words(&candidate.command),
+                    candidate.confidence
                 );
             }
-            Err(e) => println!("outcome:  not written yet ({e})"),
         }
-        let events = read_events(&dir)?;
-        println!("trace:    {} event(s); last:", events.len());
-        if let Some(last) = events.last() {
-            println!(
-                "  [{} {} {}]",
-                last.get("ts").and_then(|v| v.as_str()).unwrap_or("?"),
-                last.get("seq").and_then(|v| v.as_u64()).unwrap_or(0),
-                last.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+        _ => {}
+    }
+}
+
+/// One line saying what a finished `learn` stage did, from its summary.
+pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
+    let field = |name: &str| match &summary[name] {
+        serde_json::Value::Null => "?".to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    match stage {
+        "sources" => format!("{} source(s)", summary.as_array().map_or(0, Vec::len)),
+        "tasks" => format!("{} task(s) in {}", field("tasks"), field("task_set")),
+        "solve" => format!(
+            "{} solved, {} answered, in {}",
+            field("solved"),
+            field("answered"),
+            field("experience_set")
+        ),
+        "verify" => format!(
+            "{} passed, {} failed, {} undecided",
+            field("passed"),
+            field("failed"),
+            field("undecided")
+        ),
+        "critique" => format!(
+            "{} critiqued, {} repaired",
+            field("critiqued"),
+            field("repaired")
+        ),
+        "dataset" => format!("{} record(s) in {}", field("records"), field("dataset")),
+        "train" => format!("candidate {}, not released", field("candidate")),
+        _ => summary.to_string(),
+    }
+}
+
+/// Arguments as a person would type them, each quoted when it has to be.
+pub fn shell_words(words: &[String]) -> String {
+    words
+        .iter()
+        .map(|w| {
+            if !w.is_empty()
+                && w.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_./:,+=@".contains(c))
+            {
+                w.clone()
+            } else {
+                format!("'{}'", w.replace('\'', r"'\''"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A serializable value as a short word: a string as itself, anything else
+/// as compact JSON.
+fn word(value: &impl Serialize) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(s)) => s,
+        Ok(other) => other.to_string(),
+        Err(_) => "?".into(),
+    }
+}
+
+/// Counts by name, as `name n, name n`.
+fn tally<K: Serialize, V: std::fmt::Display>(counts: impl IntoIterator<Item = (K, V)>) -> String {
+    let parts: Vec<String> = counts
+        .into_iter()
+        .map(|(k, v)| format!("{} {v}", word(&k)))
+        .collect();
+    if parts.is_empty() {
+        "none".into()
+    } else {
+        parts.join(", ")
+    }
+}
+
+impl<R: Report> Report for Recorded<R> {
+    fn human(&self) -> String {
+        format!("{}run: {}\n", self.report.human(), self.run)
+    }
+}
+
+fn origin(origin: &Origin) -> String {
+    match origin {
+        Origin::Document { path } | Origin::Repository { path, .. } => path.clone(),
+        Origin::Command {
+            argv,
+            cwd,
+            exit_code,
+            ..
+        } => format!(
+            "{} (in {cwd}, exit {})",
+            shell_words(argv),
+            exit_code.map_or("by signal".into(), |c| c.to_string())
+        ),
+    }
+}
+
+fn source_line(source: &SourceSummary) -> String {
+    format!(
+        "{}  {:<10}  {} part(s), {} bytes  {}",
+        source.id,
+        source.kind,
+        source.parts,
+        source.bytes,
+        origin(&source.origin)
+    )
+}
+
+impl Report for SourceAdded {
+    fn human(&self) -> String {
+        let note = if self.new { "" } else { " (already stored)" };
+        format!("source {}{note}\n", source_line(&self.source))
+    }
+}
+
+impl Report for SourceList {
+    fn human(&self) -> String {
+        if self.sources.is_empty() {
+            return "no sources stored\n".into();
+        }
+        self.sources.iter().map(|s| source_line(s) + "\n").collect()
+    }
+}
+
+impl Report for Source {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "source {} ({}), captured {}\n  from: {}\n",
+            self.id,
+            self.kind(),
+            self.captured_at,
+            origin(&self.origin)
+        );
+        for part in &self.parts {
+            let _ = writeln!(
+                out,
+                "  {}  {}  {} bytes",
+                part.name, part.media_type, part.bytes
             );
         }
-        return Ok(());
+        out
     }
-    let runs = list_runs(root)?;
-    if runs.is_empty() {
-        println!("no runs recorded under {}", root.path().display());
-        return Ok(());
-    }
-    for manifest in runs {
-        println!(
-            "{}  {:<10}  {}  {}",
-            manifest.run_id,
-            manifest.status,
-            manifest.model,
-            manifest.task.chars().take(60).collect::<String>()
+}
+
+impl Report for TasksGenerated {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "task set {}: {} task(s) from {} text part(s)\n",
+            self.task_set, self.tasks, self.parts
         );
+        for (kind, counts) in &self.per_kind {
+            let _ = writeln!(
+                out,
+                "  {kind}: {} admitted, {} rejected",
+                counts.admitted, counts.rejected
+            );
+        }
+        if !self.rejected.is_empty() {
+            let _ = writeln!(out, "  rejected: {}", tally(&self.rejected));
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "  stopped: {why}");
+        }
+        out
     }
-    Ok(())
 }
 
-/// Prints a document-learning pipeline's two-line verdict: what was
-/// learned, and how well - recall on the trained questions, generalization
-/// on the held-out ones. A score over zero questions is printed as not
-/// measured, never as 0.
-pub fn facts(report: &splinter_campaign::facts::FactsReport, source: &str) {
-    println!(
-        "facts: {} fact(s) from {source} ({} train / {} eval), training {}",
-        report.facts,
-        report.train_records,
-        report.eval_records,
-        if report.promoted {
-            format!("promoted ({})", report.train_id)
-        } else {
-            "REJECTED by the held-out gate".into()
-        },
-    );
-    println!(
-        "facts: recall {}, holdout {}",
-        ratio(report.recall_correct, report.recall_total),
-        ratio(report.holdout_correct, report.holdout_total),
-    );
+impl Report for TaskSetList {
+    fn human(&self) -> String {
+        if self.task_sets.is_empty() {
+            return "no task sets stored\n".into();
+        }
+        self.task_sets
+            .iter()
+            .map(|s| format!("{}  {} task(s)  {}\n", s.id, s.tasks, s.name))
+            .collect()
+    }
 }
 
-fn ratio(correct: usize, total: usize) -> String {
-    if total == 0 {
-        "not measured (0 questions)".into()
+impl Report for TaskShow {
+    fn human(&self) -> String {
+        match self {
+            Self::Set { id, name, tasks } => {
+                let mut out = format!("task set {id}: {name}\n");
+                for task in tasks {
+                    let _ = writeln!(
+                        out,
+                        "  {}  {:<14}  {}",
+                        task.task,
+                        task.kind,
+                        one_line(&task.instruction)
+                    );
+                }
+                out
+            }
+            Self::Task { task } => format!(
+                "task {} ({}) in {}\n{}\n{} privileged item(s), {} evidence span(s)\n",
+                task.task.id,
+                task.task.kind,
+                task.environment.kind,
+                task.instruction,
+                task.privileged.len(),
+                task.evidence.len()
+            ),
+        }
+    }
+}
+
+/// `text` on one line, cut to a readable width.
+fn one_line(text: &str) -> String {
+    let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() > 80 {
+        format!("{}...", flat.chars().take(77).collect::<String>())
     } else {
-        format!("{correct}/{total} = {:.3}", correct as f64 / total as f64)
+        flat
+    }
+}
+
+impl Report for Solved {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "experience set {}: {} solved by {}, {} answered\n  runs ended: {}\n",
+            self.experience_set,
+            self.solved,
+            self.solver,
+            self.answered,
+            tally(&self.conclusions)
+        );
+        for skipped in &self.skipped {
+            let _ = writeln!(out, "  skipped {}: {}", skipped.task, skipped.reason);
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "  stopped: {why}");
+        }
+        out
+    }
+}
+
+impl Report for Verified {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "{} experience(s) graded: verdicts {} pass, {} fail, {} abstain; now {} pass, {} fail, {} undecided\n",
+            self.experiences,
+            self.verdicts.pass,
+            self.verdicts.fail,
+            self.verdicts.abstain,
+            self.passed,
+            self.failed,
+            self.undecided
+        );
+        for item in &self.unverified {
+            let _ = writeln!(out, "  not graded {}: {}", item.experience, item.reason);
+        }
+        out
+    }
+}
+
+impl Report for Critiqued {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "{} failure(s) critiqued, {} repaired ({} not failed, left alone)\n  loops stopped: {}\n  experience set {} (revisions: {})\n",
+            self.critiqued,
+            self.repaired,
+            self.not_failed,
+            tally(&self.stops),
+            self.experience_set,
+            self.revisions
+        );
+        for item in &self.unrepaired {
+            let _ = writeln!(out, "  not repaired {}: {}", item.experience, item.reason);
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "  stopped: {why}");
+        }
+        out
+    }
+}
+
+fn share(value: Option<f64>) -> String {
+    value.map_or("not measured".into(), |v| format!("{v:.3}"))
+}
+
+impl Report for Calibrated {
+    fn human(&self) -> String {
+        let c = &self.calibration;
+        format!(
+            "judge {} measured on {} labelled experience(s): pass precision {}, fail precision {}, abstains {}\n  calibration {} kept at {}\n",
+            self.judge,
+            c.n,
+            share(c.precision_pass),
+            share(c.precision_fail),
+            share(c.abstain_rate),
+            c.id,
+            self.path.display()
+        )
+    }
+}
+
+impl Report for SetList {
+    fn human(&self) -> String {
+        if self.experience_sets.is_empty() {
+            return "no experience sets stored\n".into();
+        }
+        self.experience_sets
+            .iter()
+            .map(|s| format!("{}  {} experience(s)  {}\n", s.id, s.experiences, s.name))
+            .collect()
+    }
+}
+
+fn experience_line(line: &ExperienceLine) -> String {
+    let strength = line
+        .decision
+        .strength
+        .map_or(String::new(), |s| format!(" ({})", word(&s)));
+    format!(
+        "{}  {:<10}  {}{strength}  {}",
+        line.id, line.kind, line.decision.decision, line.solver
+    )
+}
+
+impl Report for ExperienceShow {
+    fn human(&self) -> String {
+        match self {
+            Self::Set {
+                id,
+                name,
+                experiences,
+            } => {
+                let mut out = format!("experience set {id}: {name}\n");
+                for line in experiences {
+                    let _ = writeln!(out, "  {}", experience_line(line));
+                }
+                out
+            }
+            Self::Experience {
+                id,
+                decision,
+                experience,
+                annotations,
+            } => format!(
+                "experience {id} ({}), {} by {}\n{}\n  answer: {}\n  {} annotation(s)\n",
+                experience.task.kind,
+                decision.decision,
+                experience.provenance.solver,
+                experience.instruction,
+                experience
+                    .final_output
+                    .as_deref()
+                    .map_or("(none)".into(), one_line),
+                annotations.len()
+            ),
+            Self::Graph {
+                nodes,
+                edges,
+                truncated,
+            } => {
+                let mut out = String::new();
+                for node in nodes {
+                    let _ = writeln!(out, "{}", experience_line(node));
+                }
+                for edge in edges {
+                    let _ = writeln!(out, "  {} {} {}", edge.from, word(&edge.relation), edge.to);
+                }
+                if *truncated {
+                    out.push_str("  (cut: the graph is larger than shown)\n");
+                }
+                out
+            }
+        }
+    }
+}
+
+impl Report for Built {
+    fn human(&self) -> String {
+        format!(
+            "dataset {}: {} {} record(s), objective {}, format {}\n  file: {}\n  excluded: {}\n",
+            self.dataset,
+            self.records,
+            self.view,
+            word(&self.objective),
+            word(&self.format),
+            self.path.display(),
+            tally(&self.excluded)
+        )
+    }
+}
+
+impl Report for Exported {
+    fn human(&self) -> String {
+        format!(
+            "dataset {} exported to {}\n  manifest: {}\n",
+            self.dataset,
+            self.path.display(),
+            self.manifest.display()
+        )
+    }
+}
+
+fn loss(value: Option<f32>) -> String {
+    value.map_or("not measured".into(), |v| format!("{v:.4}"))
+}
+
+impl Report for Candidate {
+    fn human(&self) -> String {
+        format!(
+            "candidate {} trained from {} on {} record(s)\n  adapter: {} ({})\n  held-out loss: base {}, candidate {}\n  not released: releasing a candidate is not part of training\n",
+            self.candidate,
+            self.from,
+            self.records,
+            self.adapter.display(),
+            self.adapter_digest,
+            loss(self.base_score.loss),
+            loss(self.tuned_score.loss)
+        )
+    }
+}
+
+impl Report for RunList {
+    fn human(&self) -> String {
+        if self.runs.is_empty() {
+            return "no runs recorded\n".into();
+        }
+        self.runs
+            .iter()
+            .map(|r| {
+                format!(
+                    "{}  {:<10}  {}  {}\n",
+                    r.id,
+                    r.status.as_str(),
+                    r.started_at,
+                    r.command
+                )
+            })
+            .collect()
+    }
+}
+
+impl Report for Run {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "run {} ({}): {}, started {}, updated {}\n",
+            self.id,
+            self.command,
+            self.status.as_str(),
+            self.started_at,
+            self.updated_at
+        );
+        for stage in &self.stages {
+            let _ = writeln!(out, "  {} finished {}", stage.stage, stage.finished_at);
+        }
+        if let Some(error) = &self.error {
+            let _ = writeln!(out, "  error: {error}");
+        }
+        out
+    }
+}
+
+impl Report for CancelRequested {
+    fn human(&self) -> String {
+        format!(
+            "cancel requested for {}; it stops at its next check (runs show {})\n",
+            self.run, self.run
+        )
+    }
+}
+
+impl Report for Status {
+    fn human(&self) -> String {
+        let c = &self.counts;
+        let mut out = format!(
+            "state:  {}\npolicy: {} = {} ({})\nstores: {} source(s), {} task set(s) of {} task(s), {} experience(s) in {} set(s), {} dataset(s), {} candidate(s)\n",
+            self.state.display(),
+            self.policy.reference,
+            self.policy.model,
+            self.policy
+                .adapter
+                .as_ref()
+                .map_or("no adapter: nothing is released".into(), |a| a.display().to_string()),
+            c.sources,
+            c.task_sets,
+            c.tasks,
+            c.experiences,
+            c.experience_sets,
+            c.datasets,
+            c.candidates
+        );
+        if self.recent_runs.is_empty() {
+            out.push_str("runs:   none recorded\n");
+        }
+        for run in &self.recent_runs {
+            let _ = writeln!(
+                out,
+                "run:    {}  {:<10}  {}",
+                run.id,
+                run.status.as_str(),
+                run.command
+            );
+        }
+        out
+    }
+}
+
+impl Report for Answer {
+    fn human(&self) -> String {
+        format!("{}\n", self.answer.trim_end())
+    }
+}
+
+impl Report for LearnPlan {
+    fn human(&self) -> String {
+        let sources: Vec<String> = self.sources.iter().map(word).collect();
+        format!(
+            "dry run - nothing written under {}\n  sources: {}\n  kinds:   {}\n  goal:    {}\n  budget:  {}\n  policy:  {}\n  stages:  {}\n",
+            self.state.display(),
+            sources.join(", "),
+            self.kinds.join(", "),
+            self.goal.as_deref().unwrap_or("-"),
+            self.budget_secs.map_or("none".into(), |s| format!("{s}s")),
+            self.policy,
+            self.stages.join(" -> ")
+        )
+    }
+}
+
+impl Report for LearnReport {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        let stage = |out: &mut String, name: &str, body: String| {
+            for (i, line) in body.lines().enumerate() {
+                let label = if i == 0 { name } else { "" };
+                let _ = writeln!(out, "{label:<9}{line}");
+            }
+        };
+        let sources: String = self.sources.iter().map(|s| source_line(s) + "\n").collect();
+        stage(&mut out, "sources", sources);
+        if let Some(r) = &self.tasks {
+            stage(&mut out, "tasks", r.human());
+        }
+        if let Some(r) = &self.solve {
+            stage(&mut out, "solve", r.human());
+        }
+        if let Some(r) = &self.verify {
+            stage(&mut out, "verify", r.human());
+        }
+        if let Some(r) = &self.critique {
+            stage(&mut out, "critique", r.human());
+        }
+        if let Some(r) = &self.dataset {
+            stage(&mut out, "dataset", r.human());
+        }
+        if let Some(r) = &self.candidate {
+            stage(&mut out, "train", r.human());
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "stopped  {why}");
+        }
+        out
+    }
+}
+
+impl Report for Learned {
+    fn human(&self) -> String {
+        match self {
+            Self::Planned(plan) => plan.human(),
+            Self::Ran(run) => run.human(),
+        }
     }
 }
