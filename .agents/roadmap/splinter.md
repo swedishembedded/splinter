@@ -83,13 +83,18 @@ the released adapter answers the same questions from plain `brain serve`.
      card records, so Splinter hashes the base checkpoint again for a
      release manifest. Loading a checkpoint whose safetensors header length
      is garbage aborts the process on the allocation instead of returning
-     an error. Also open: trainers that read
-     a dataset file for the objectives Splinter's views project beyond SFT -
-     preference pairs (DPO), rewarded trajectories, raw text for continued
-     pretraining, and contrastive pairs for the chat model (the SDK's
-     contrastive fine-tuner trains one encoder architecture from in-memory
-     pairs). Until then those views are written only in Splinter's
-     export-only format.
+     an error. Preference pairs train: the `preference` view is written
+     as brain's `generic-preference-v1`, validated by its parser, and
+     `train` trains a preference dataset with `brain::PreferenceFineTune`
+     (DPO against the model it continues, scored by brain's preference
+     score on the held-out pairs). Also open: trainers that read a dataset
+     file for the remaining objectives Splinter's views project - rewarded
+     trajectories, raw text for continued pretraining, and contrastive
+     pairs for the chat model (the SDK's contrastive fine-tuner trains one
+     encoder architecture from in-memory pairs); until then those views
+     are written only in Splinter's export-only format. A preference run
+     replays nothing, since the preference trainer takes no replay set;
+     `learn` trains supervised only.
    - sven: done for an empty default toolset, explicit toolsets, structured
      outcomes, bounded runs (cancel, deadline, token budget), parked
      questions, history taken from the session, and ATIF trajectories; every

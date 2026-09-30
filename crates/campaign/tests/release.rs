@@ -303,6 +303,7 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps: 1,
             rank: 4,
+            beta: None,
         },
         &FakeTrainer::knowing(&[ANCHOR, "alpha", "beta", "gamma"]),
         &CancelToken::new(),

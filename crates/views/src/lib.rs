@@ -35,8 +35,10 @@
 //! accepts; see [`strip`](Strip) for the rules.
 //!
 //! [`write_dataset`] writes a projection in the one format its objective
-//! maps to - brain's `generic-messages-v2` for what brain trains, Splinter's
-//! export-only format on request for the rest - with a manifest beside it.
+//! maps to - brain's `generic-messages-v2` for chat records and
+//! `generic-preference-v1` for preference pairs, Splinter's export-only
+//! format on request for what brain cannot train - with a manifest beside
+//! it.
 //! [`DatasetStore`] keeps such datasets under the state root, each named by
 //! its manifest's digest. [`replay_sample`] picks which earlier records are
 //! replayed beside new ones.
@@ -96,14 +98,26 @@ pub enum Objective {
 }
 
 impl Objective {
+    /// The format brain's public SDK trains this objective from, when it
+    /// has a trainer for it: chat fine-tuning trains SFT and classification
+    /// rendered as SFT from [`Format::GenericMessagesV2`], preference
+    /// fine-tuning trains DPO from [`Format::GenericPreferenceV1`]. brain
+    /// has no trainer that reads contrastive triples for the policy model,
+    /// rewarded trajectories or a raw text corpus as a dataset.
+    #[must_use]
+    pub fn brain_format(self) -> Option<Format> {
+        match self {
+            Self::Sft | Self::Classification => Some(Format::GenericMessagesV2),
+            Self::Dpo => Some(Format::GenericPreferenceV1),
+            Self::Contrastive | Self::Reward | Self::Cpt => None,
+        }
+    }
+
     /// Whether brain's public SDK trains this objective from a dataset
-    /// file: chat fine-tuning trains SFT and classification rendered as
-    /// SFT; brain has no trainer that reads preference pairs, contrastive
-    /// triples for the policy model, rewarded trajectories or a raw text
-    /// corpus as a dataset.
+    /// file; see [`Objective::brain_format`].
     #[must_use]
     pub fn trainable_by_brain(self) -> bool {
-        matches!(self, Self::Sft | Self::Classification)
+        self.brain_format().is_some()
     }
 }
 
@@ -428,7 +442,7 @@ pub enum ViewError {
     #[error("cannot serialize a record: {0}")]
     Serialize(#[from] serde_json::Error),
     /// Brain's parser refused the dataset.
-    #[error("{path} is not a valid chat dataset: {reason}")]
+    #[error("{path} is refused by brain's dataset parser: {reason}")]
     Invalid {
         /// The dataset file.
         path: std::path::PathBuf,

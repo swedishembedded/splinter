@@ -13,19 +13,26 @@
 //!   its destination, parsed with brain's own dataset parser (through
 //!   `splinter-policy`), and only then moved into place - so a dataset the
 //!   trainer would refuse is never reported written.
-//! * Preference pairs, contrastive triples, rewarded trajectories and raw
-//!   text have no trainer in brain's public SDK. The writer refuses them
-//!   with [`ViewError::ObjectiveNotTrainable`] unless the caller sets
+//! * DPO preference pairs are written as brain's `generic-preference-v1`
+//!   ([`Format::GenericPreferenceV1`]): one pair per line,
+//!   `{"prompt":[messages],"chosen":{message},"rejected":{message},
+//!   "metadata":{...}}`, the messages in the `generic-messages-v2` shape
+//!   without `train` - supervision follows from position: the prompt is
+//!   never trained on, the two candidates always are. It is checked by
+//!   brain's own preference parser the same way before it is moved into
+//!   place.
+//! * Contrastive triples, rewarded trajectories and raw text have no
+//!   trainer in brain's public SDK. The writer refuses them with
+//!   [`ViewError::ObjectiveNotTrainable`] unless the caller sets
 //!   [`WriteOptions::export_only`], and then writes Splinter's export
 //!   format ([`Format::SplinterExportV1`], [`EXPORT_FORMAT`]): one JSON
 //!   object per line, `{"format":"splinter-export-v1","shape":<shape>,
 //!   <the shape's fields>,"metadata":{...}}`, the shapes and their fields
-//!   being [`RecordBody`]'s variants in snake case (`preference`: `prompt`,
-//!   `chosen`, `rejected`; `contrastive`: `query`, `positive`,
-//!   `negatives`; `rewarded`: `messages`, `reward`; `text`: `text`).
-//!   Messages are `generic-messages-v2` messages. No file brain would
-//!   misread is ever written: the export format is not the chat format,
-//!   and brain's parser refuses it.
+//!   being [`RecordBody`]'s variants in snake case (`contrastive`: `query`,
+//!   `positive`, `negatives`; `rewarded`: `messages`, `reward`; `text`:
+//!   `text`). Messages are `generic-messages-v2` messages. No file brain
+//!   would misread is ever written: the export format is neither of
+//!   brain's, and brain's parsers refuse it.
 //!
 //! A trainable objective is always written in brain's format, with or
 //! without `export_only`: one objective, one file shape.
@@ -62,6 +69,9 @@ pub enum Format {
     /// Brain's chat dataset format.
     #[serde(rename = "generic-messages-v2")]
     GenericMessagesV2,
+    /// Brain's preference pair format.
+    #[serde(rename = "generic-preference-v1")]
+    GenericPreferenceV1,
     /// Splinter's export-only format, which no trainer reads.
     #[serde(rename = "splinter-export-v1")]
     SplinterExportV1,
@@ -86,8 +96,8 @@ pub struct Dataset {
     pub digest: Digest,
     /// Records in it.
     pub records: usize,
-    /// Supervised messages across them, as brain's parser counted them;
-    /// `None` for a file brain does not parse.
+    /// Supervised messages across them, as brain's chat parser counted
+    /// them; `None` for a file that is not a chat dataset.
     pub trained_messages: Option<usize>,
     /// The digest of its manifest's bytes.
     pub manifest: Digest,
@@ -144,6 +154,39 @@ struct ChatLine<'a> {
     metadata: &'a RecordMetadata,
 }
 
+/// One line of the preference format: exactly the fields brain's parser
+/// accepts.
+#[derive(Serialize)]
+struct PreferenceLine<'a> {
+    prompt: Vec<Turn<'a>>,
+    chosen: Turn<'a>,
+    rejected: Turn<'a>,
+    metadata: &'a RecordMetadata,
+}
+
+/// A `generic-messages-v2` message without `train`, as a preference line
+/// carries it.
+#[derive(Serialize)]
+struct Turn<'a> {
+    role: &'a str,
+    content: &'a str,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    tool_calls: &'a [splinter_lab::WireToolCall],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<&'a str>,
+}
+
+impl<'a> From<&'a splinter_lab::WireMessage> for Turn<'a> {
+    fn from(message: &'a splinter_lab::WireMessage) -> Self {
+        Self {
+            role: &message.role,
+            content: &message.content,
+            tool_calls: &message.tool_calls,
+            tool_call_id: message.tool_call_id.as_deref(),
+        }
+    }
+}
+
 /// One line of the export format.
 #[derive(Serialize)]
 struct ExportLine<'a> {
@@ -156,8 +199,8 @@ struct ExportLine<'a> {
 /// Writes `projection`'s records to `path` in the format its objective maps
 /// to, and its manifest beside it. Refuses an empty projection, a record
 /// whose shape does not serve the objective, an objective brain cannot
-/// train unless `options.export_only`, and a chat dataset brain's parser
-/// rejects or that supervises nothing; in every case nothing is left at
+/// train unless `options.export_only`, and a dataset brain's parser
+/// rejects or that trains on nothing; in every case nothing is left at
 /// `path`.
 pub fn write_dataset(
     path: &Path,
@@ -165,12 +208,10 @@ pub fn write_dataset(
     options: WriteOptions,
 ) -> Result<Dataset, ViewError> {
     let objective = projection.objective;
-    let format = if objective.trainable_by_brain() {
-        Format::GenericMessagesV2
-    } else if options.export_only {
-        Format::SplinterExportV1
-    } else {
-        return Err(ViewError::ObjectiveNotTrainable { objective });
+    let format = match objective.brain_format() {
+        Some(format) => format,
+        None if options.export_only => Format::SplinterExportV1,
+        None => return Err(ViewError::ObjectiveNotTrainable { objective }),
     };
     if projection.records.is_empty() {
         return Err(ViewError::Empty);
@@ -186,17 +227,21 @@ pub fn write_dataset(
     };
     let pending = path.with_extension("pending");
     splinter_store::write_atomic(&pending, &text).map_err(io(&pending))?;
-    let trained_messages = match format {
-        Format::GenericMessagesV2 => match validate(path, &pending) {
-            Ok(trained) => Some(trained),
-            Err(e) => {
-                // The refusal is the error worth reporting; a leftover
-                // pending file is harmless and replaced by the next write.
-                let _ = std::fs::remove_file(&pending);
-                return Err(e);
-            }
-        },
-        Format::SplinterExportV1 => None,
+    let validated = match format {
+        Format::GenericMessagesV2 => validate_chat(path, &pending).map(Some),
+        Format::GenericPreferenceV1 => {
+            validate_pairs(path, &pending, projection.records.len()).map(|()| None)
+        }
+        Format::SplinterExportV1 => Ok(None),
+    };
+    let trained_messages = match validated {
+        Ok(trained) => trained,
+        Err(e) => {
+            // The refusal is the error worth reporting; a leftover pending
+            // file is harmless and replaced by the next write.
+            let _ = std::fs::remove_file(&pending);
+            return Err(e);
+        }
     };
     let digest = Digest::of(text.as_bytes());
     let manifest = canonical_json(&manifest(projection, format, &digest))?;
@@ -237,8 +282,22 @@ fn line(
                 metadata: &record.metadata,
             })?
         }
-        // Only a chat record serves a trainable objective, so a chat
-        // format line is always a chat record; anything else is exported.
+        (
+            Format::GenericPreferenceV1,
+            RecordBody::Preference {
+                prompt,
+                chosen,
+                rejected,
+            },
+        ) => serde_json::to_string(&PreferenceLine {
+            prompt: prompt.iter().map(Turn::from).collect(),
+            chosen: chosen.into(),
+            rejected: rejected.into(),
+            metadata: &record.metadata,
+        })?,
+        // A record serving an objective brain trains is written in that
+        // objective's format, so the shapes above are the only ones brain's
+        // formats see; anything else is exported.
         _ => serde_json::to_string(&ExportLine {
             format: EXPORT_FORMAT,
             body: &record.body,
@@ -250,17 +309,37 @@ fn line(
 /// Brain's parser's verdict on the chat dataset written at `pending` for
 /// `path`: its supervised message count, refused when it supervises
 /// nothing.
-fn validate(path: &Path, pending: &Path) -> Result<usize, ViewError> {
-    let invalid = |reason: String| ViewError::Invalid {
-        path: path.to_path_buf(),
-        reason,
-    };
-    let summary =
-        splinter_policy::train::validate_dataset(pending).map_err(|e| invalid(format!("{e:#}")))?;
+fn validate_chat(path: &Path, pending: &Path) -> Result<usize, ViewError> {
+    let summary = splinter_policy::train::validate_dataset(pending)
+        .map_err(|e| invalid(path, format!("{e:#}")))?;
     if summary.trained_messages == 0 {
-        return Err(invalid("no message is supervised".into()));
+        return Err(invalid(path, "no message is supervised".into()));
     }
     Ok(summary.trained_messages)
+}
+
+/// Brain's preference parser's verdict on the pairs written at `pending`
+/// for `path`, refused unless it reads every one of the `records` written.
+fn validate_pairs(path: &Path, pending: &Path, records: usize) -> Result<(), ViewError> {
+    let summary = splinter_policy::train::validate_preference_dataset(pending)
+        .map_err(|e| invalid(path, format!("{e:#}")))?;
+    if summary.pairs != records {
+        return Err(invalid(
+            path,
+            format!(
+                "{records} pair(s) were written but brain's parser read {}",
+                summary.pairs
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn invalid(path: &Path, reason: String) -> ViewError {
+    ViewError::Invalid {
+        path: path.to_path_buf(),
+        reason,
+    }
 }
 
 fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manifest {

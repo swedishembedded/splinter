@@ -6,23 +6,37 @@
 // in evaluation-gated fine-tuning, you can procure our services by sending
 // an email to info@swedishembedded.com.
 
-//! One LoRA fine-tune of the local model on a chat dataset, scored on the
-//! held-out records before and after - brain's own trainer and evaluator,
-//! called through its SDK, not a second implementation of either.
+//! One LoRA fine-tune of the local model, scored on held-out records -
+//! brain's own trainers and evaluators, called through its SDK, not a
+//! second implementation of any of them. Two regimes:
 //!
-//! Splinter decides which records are held out ([`holdout_split`]) and
-//! writes the two halves as separate files; [`brain::ChatFineTune`]
-//! validates both against the base's tokenizer and chat template, trains
-//! the adapter on one (with any replayed datasets mixed in, and continuing
-//! an existing adapter when one is named), scores base and tuned on the
-//! other at one precision, and writes the adapter and its training record.
-//! What to do with the scores is the caller's decision.
+//! * [`fine_tune`]: supervised fine-tuning on a `generic-messages-v2` chat
+//!   dataset through [`brain::ChatFineTune`], which validates both halves
+//!   of the split against the base's tokenizer and chat template, trains
+//!   the adapter on one (with any replayed datasets mixed in), and scores
+//!   base and tuned on the other at one precision.
+//! * [`train_preference`]: direct preference optimisation on a
+//!   `generic-preference-v1` pair dataset through
+//!   [`brain::PreferenceFineTune`], against a frozen reference - the model
+//!   the run starts from - and scored as brain's preference score: on the
+//!   held-out pairs, how much more the tuned adapter prefers each chosen
+//!   answer over its rejected one than the reference does.
+//!
+//! In both, Splinter decides which records are held out ([`holdout_split`])
+//! and writes the two halves as separate files, a named adapter is
+//! continued instead of a fresh one started, and brain writes the adapter
+//! and its training record into the attempt directory. What to do with the
+//! scores is the caller's decision.
 
 use std::path::{Path, PathBuf};
 
 use splinter_lab::holdout::holdout_split;
 
 use crate::error::PolicyError;
+
+/// The DPO temperature `beta` a preference fine-tune uses when its caller
+/// names none: brain's default.
+pub const DEFAULT_DPO_BETA: f32 = brain::DEFAULT_DPO_BETA;
 
 /// The file names one attempt's split is written under, inside its
 /// attempt directory.
@@ -157,6 +171,42 @@ pub fn validate_dataset_for(
         })
 }
 
+/// What a preference dataset holds, as the trainer's own parser counts it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PreferenceDatasetSummary {
+    /// Preference pairs, one per JSONL line.
+    pub pairs: usize,
+    /// Prompt messages across every pair.
+    pub prompt_messages: usize,
+    /// Pairs carrying a tool schema.
+    pub pairs_with_tools: usize,
+}
+
+impl From<brain::PreferenceDatasetSummary> for PreferenceDatasetSummary {
+    fn from(s: brain::PreferenceDatasetSummary) -> Self {
+        Self {
+            pairs: s.pairs,
+            prompt_messages: s.prompt_messages,
+            pairs_with_tools: s.pairs_with_tools,
+        }
+    }
+}
+
+/// Parses `dataset` as `generic-preference-v1` with the trainer's own
+/// parser: the wire schema, every candidate an assistant turn, and no pair
+/// whose two candidates are the same turn. The error names the offending
+/// record and field.
+pub fn validate_preference_dataset(
+    dataset: &Path,
+) -> Result<PreferenceDatasetSummary, PolicyError> {
+    brain::validate_preference_dataset(dataset)
+        .map(PreferenceDatasetSummary::from)
+        .map_err(|reason| PolicyError::Dataset {
+            path: dataset.to_path_buf(),
+            reason,
+        })
+}
+
 /// Fine-tunes a LoRA on `request.dataset` and scores base and tuned on the
 /// held-out records.
 pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
@@ -166,27 +216,11 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     };
     let summary = validate_dataset(request.dataset)?;
     let (train, held_out) = split_dataset(request.dataset, request.attempt_dir)?;
-    // brain resolves a directory only in its model store's layout; the
-    // checkpoint file is resolved here, and its directory supplies the
-    // tokenizer and chat template.
-    let weights = crate::local::resolve_base(request.model_dir)?;
-    let weights = weights.to_str().ok_or_else(|| PolicyError::NotUtf8 {
-        path: weights.clone(),
-    })?;
-    // The card names what produced the adapter and what it sits on, so an
-    // adapter is traceable to its own training evidence.
-    let base_id = format!(
-        "local/{}",
-        request
-            .model_dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("base")
-    );
+    let (weights, base_id) = base_weights(request.model_dir)?;
     for replayed in request.replay {
         validate_dataset(replayed)?;
     }
-    let mut fine_tune = brain::ChatFineTune::from_pretrained(weights)
+    let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
         .dataset(train)
         .held_out(held_out)
         .out_dir(request.attempt_dir)
@@ -200,18 +234,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     if let Some(adapter) = request.continue_from {
         fine_tune = fine_tune.continue_from(adapter);
     }
-    // brain's token stops training at a step boundary; sven's is the one
-    // the caller cancels, so it is polled once per step.
     let brain_cancel = brain::CancelToken::armed();
     let outcome = fine_tune
-        .run_with(&brain_cancel, |_| {
-            if request
-                .cancel
-                .is_some_and(sven_sdk::CancelToken::is_cancelled)
-            {
-                brain_cancel.cancel();
-            }
-        })
+        .run_with(&brain_cancel, poll(request.cancel, &brain_cancel))
         .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
@@ -243,6 +268,180 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
             .ok_or_else(|| incomplete("tuned score"))?
             .into(),
     })
+}
+
+/// One preference fine-tune: what to train, on which pairs, and where its
+/// files go.
+#[derive(Clone, Debug)]
+pub struct PreferenceTune<'a> {
+    /// Base checkpoint directory (the model the agent serves).
+    pub model_dir: &'a Path,
+    /// `generic-preference-v1` JSONL pairs; the newest are held out.
+    pub dataset: &'a Path,
+    /// This attempt's own directory: the split, the adapter and its
+    /// training record land here.
+    pub attempt_dir: &'a Path,
+    /// Optimizer steps, one pair each.
+    pub steps: u32,
+    /// LoRA rank of a fresh adapter.
+    pub rank: u32,
+    /// LoRA alpha of a fresh adapter.
+    pub alpha: f32,
+    /// The DPO temperature scaling the reference-normalised margin
+    /// ([`DEFAULT_DPO_BETA`] unless the caller chooses otherwise).
+    pub beta: f32,
+    /// An adapter to continue instead of starting a fresh one; base plus
+    /// this adapter is then the frozen reference, and its own rank and
+    /// alpha apply.
+    pub continue_from: Option<&'a Path>,
+    /// Stops training at the next optimizer step once cancelled; a
+    /// cancelled fine-tune exports no adapter and is reported as an error.
+    pub cancel: Option<&'a sven_sdk::CancelToken>,
+}
+
+/// brain's preference score of a tuned adapter against its reference on a
+/// set of pairs.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PreferenceScore {
+    /// Fraction, 0.0-1.0, of scored pairs where the tuned model prefers the
+    /// chosen answer more than the reference does; `None` when no pair was
+    /// scored.
+    pub accuracy: Option<f32>,
+    /// Mean over scored pairs of the reference-normalised log-probability
+    /// margin of chosen over rejected, in nats (without `beta`); `None`
+    /// when no pair was scored.
+    pub mean_margin: Option<f32>,
+    /// Pairs scored.
+    pub pairs: usize,
+    /// Pairs skipped because a candidate does not fit the model's context.
+    pub skipped: usize,
+}
+
+impl From<brain::PreferenceScore> for PreferenceScore {
+    fn from(s: brain::PreferenceScore) -> Self {
+        Self {
+            accuracy: s.accuracy,
+            mean_margin: s.mean_margin,
+            pairs: s.pairs,
+            skipped: s.skipped,
+        }
+    }
+}
+
+/// What one preference fine-tune produced.
+#[derive(Clone, Debug)]
+pub struct TrainedPreference {
+    /// The adapter file, carrying its ModelCard.
+    pub adapter: PathBuf,
+    /// `sha256:<hex>` of the adapter file.
+    pub adapter_digest: String,
+    /// brain's training record for the adapter, beside it.
+    pub training_record: PathBuf,
+    /// Pairs in the dataset, trained and held out together.
+    pub records: usize,
+    /// Training row length, sized to the longest candidate.
+    pub block: u32,
+    /// The DPO temperature it trained with.
+    pub beta: f32,
+    /// The digest of the adapter the reference carried (the one continued);
+    /// `None` when the reference was the base alone.
+    pub reference_adapter: Option<String>,
+    /// The tuned adapter against the reference on the pairs trained on;
+    /// `None` when brain did not measure it.
+    pub train_score: Option<PreferenceScore>,
+    /// The same on the held-out pairs; `None` when brain did not measure
+    /// it.
+    pub held_out_score: Option<PreferenceScore>,
+}
+
+/// Fine-tunes a LoRA by DPO on `request.dataset`'s pairs and scores it
+/// against its reference on the held-out pairs.
+pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreference, PolicyError> {
+    let failed = |reason: String| PolicyError::Train {
+        dir: request.attempt_dir.to_path_buf(),
+        reason,
+    };
+    let summary = validate_preference_dataset(request.dataset)?;
+    let (train, held_out) = split_dataset(request.dataset, request.attempt_dir)?;
+    let (weights, base_id) = base_weights(request.model_dir)?;
+    let mut fine_tune = brain::PreferenceFineTune::from_pretrained(weights.as_str())
+        .dataset(train)
+        .held_out(held_out)
+        .out_dir(request.attempt_dir)
+        .adapter_id(format!("{base_id}:splinter:candidate"))
+        .steps(request.steps)
+        .rank(request.rank)
+        .alpha(request.alpha)
+        .beta(request.beta);
+    if let Some(adapter) = request.continue_from {
+        fine_tune = fine_tune.continue_from(adapter);
+    }
+    let brain_cancel = brain::CancelToken::armed();
+    let outcome = fine_tune
+        .run_with(&brain_cancel, poll(request.cancel, &brain_cancel))
+        .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
+    if brain_cancel.is_cancelled() {
+        return Err(PolicyError::Cancelled {
+            dir: request.attempt_dir.to_path_buf(),
+        });
+    }
+    if outcome.status != brain::FineTuneStatus::Completed {
+        return Err(failed("it did not complete".into()));
+    }
+    let incomplete = |what: &str| failed(format!("it reported no {what}"));
+    Ok(TrainedPreference {
+        adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
+        adapter_digest: outcome
+            .adapter_digest
+            .ok_or_else(|| incomplete("adapter digest"))?,
+        training_record: outcome
+            .record
+            .ok_or_else(|| incomplete("training record"))?,
+        records: summary.pairs,
+        block: outcome.block,
+        beta: outcome.beta,
+        reference_adapter: outcome.trained_from,
+        train_score: outcome.train_score.map(PreferenceScore::from),
+        held_out_score: outcome.held_out_score.map(PreferenceScore::from),
+    })
+}
+
+/// The checkpoint file under `model_dir`, as the UTF-8 path brain takes,
+/// and the base id an adapter's card names. brain resolves a directory only
+/// in its model store's layout, so the file is resolved here; its
+/// directory supplies the tokenizer and chat template. The card names what
+/// produced the adapter and what it sits on, so an adapter is traceable to
+/// its own training evidence.
+fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyError> {
+    let weights = crate::local::resolve_base(model_dir)?;
+    let weights = weights
+        .to_str()
+        .ok_or_else(|| PolicyError::NotUtf8 {
+            path: weights.clone(),
+        })?
+        .to_string();
+    let base_id = format!(
+        "local/{}",
+        model_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("base")
+    );
+    Ok((weights, base_id))
+}
+
+/// The progress callback that cancels `brain_cancel` once `cancel` fires:
+/// brain's token stops training at a step boundary, sven's is the one the
+/// caller cancels, so it is polled once per step.
+fn poll<'a>(
+    cancel: Option<&'a sven_sdk::CancelToken>,
+    brain_cancel: &'a brain::CancelToken,
+) -> impl FnMut(&brain::FineTuneProgress) + 'a {
+    move |_| {
+        if cancel.is_some_and(sven_sdk::CancelToken::is_cancelled) {
+            brain_cancel.cancel();
+        }
+    }
 }
 
 /// Writes `dataset`'s records into `dir` as two files - the records to

@@ -23,8 +23,11 @@
 //!
 //! Each pair yields one record: the student's turn of the chosen
 //! experience (see [`Strip`]; both attempted the same task) as the prompt,
-//! and the two final outputs as the chosen and rejected replies. The
-//! record's experiences are the chosen, then the rejected one.
+//! and the two final outputs as the chosen and rejected replies - each an
+//! assistant turn carrying the tool calls its experience's last agent step
+//! made, if it made any. Two replies that say the same (the same text and
+//! the same calls) are excluded as identical. The record's experiences are
+//! the chosen, then the rejected one.
 
 use std::collections::HashSet;
 
@@ -33,6 +36,7 @@ use splinter_store::digest::Digest;
 use splinter_store::experience::ExperienceId;
 
 use crate::render::{message, student_turn};
+use crate::trajectory::{final_calls, same_message};
 use crate::{
     Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip, View, ViewError,
 };
@@ -83,15 +87,21 @@ impl Preference {
         ) else {
             return Err(Exclusion::NoFinalOutput);
         };
-        if better == worse {
+        let reply = |entry: &Entry, output: &str| {
+            let mut reply = message("assistant", output, true);
+            reply.tool_calls = final_calls(&entry.experience.trajectory);
+            reply
+        };
+        let (better, worse) = (reply(chosen, better), reply(rejected, worse));
+        if same_message(&better, &worse) {
             return Err(Exclusion::IdenticalOutputs);
         }
         let turn = student_turn(chosen, &self.strip)?;
         Ok((
             RecordBody::Preference {
                 prompt: vec![message("user", &turn, false)],
-                chosen: message("assistant", better, true),
-                rejected: message("assistant", worse, true),
+                chosen: better,
+                rejected: worse,
             },
             Provenance::of(vec![chosen.id.clone(), rejected.id.clone()]),
         ))

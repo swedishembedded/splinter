@@ -348,6 +348,7 @@ impl Session {
                     replay_fraction: args.replay_fraction,
                     steps: args.steps,
                     rank: args.rank,
+                    beta: args.beta,
                 };
                 let candidate = record(ctx, "train", &request, |run| {
                     train(ctx, &request, &BrainTrainer, &run.cancel_token())

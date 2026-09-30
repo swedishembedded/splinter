@@ -21,10 +21,11 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::gate::GateConfig;
 use splinter_campaign::release::{arm, release, ReleaseId, ReleaseRequest, ReleaseStore, Released};
 use splinter_campaign::train::{
-    train, Candidate, TrainPlan, TrainRequest, Trainer, DEFAULT_REPLAY_FRACTION,
+    train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::{CampaignError, Context};
 use splinter_lab::WireMessage;
+use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
 use splinter_store::annotation::Strength;
 use splinter_store::clock::FixedClock;
@@ -145,6 +146,53 @@ pub fn dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         .id
 }
 
+/// Stores a preference dataset over `n` facts about `topic`: each pair
+/// prefers the answer over a shrug. As with [`dataset`], only the held-out
+/// tasks are put in the task store.
+pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
+    let held_out_from = n - (n / 10).max(1);
+    let message = |role: &str, content: String, train: bool| WireMessage {
+        role: role.into(),
+        content,
+        tool_calls: Vec::new(),
+        tool_call_id: None,
+        train,
+    };
+    let mut records = Vec::new();
+    for i in 0..n {
+        let task = fact(topic, i);
+        if i >= held_out_from {
+            ctx.tasks().put(&task).unwrap();
+        }
+        records.push(Record {
+            body: RecordBody::Preference {
+                prompt: vec![message("user", question(topic, i), false)],
+                chosen: message("assistant", answer(topic, i), true),
+                rejected: message("assistant", "I do not know.".into(), true),
+            },
+            metadata: RecordMetadata {
+                experiences: Vec::new(),
+                task: Some(task.task.id.clone()),
+                sources: Vec::new(),
+                view: "preference".into(),
+                objective: Objective::Dpo,
+            },
+        });
+    }
+    let projection = Projection {
+        view: "preference".into(),
+        objective: Objective::Dpo,
+        strip: Some(Strip::All),
+        min_strength: Some(Strength::Formal),
+        records,
+        excluded: BTreeMap::new(),
+    };
+    ctx.datasets()
+        .put(&projection, WriteOptions::default())
+        .unwrap()
+        .id
+}
+
 /// Writes `n` anchor facts as an anchor file in `dir`.
 pub fn anchor_file(dir: &Path, n: usize) -> PathBuf {
     let path = dir.join("anchor.jsonl");
@@ -221,6 +269,7 @@ pub fn candidate(ctx: &Context, topic: &str, knows: &[&str]) -> (Candidate, Fake
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps: 1,
             rank: 4,
+            beta: None,
         },
         &trainer,
         &CancelToken::new(),
@@ -268,13 +317,17 @@ pub fn serve_release(ctx: &Context, id: &ReleaseId) {
     ctx.add_model(arm(ctx.config(), Some(&stored.adapter)), knower(&knows));
 }
 
-/// A trainer double: its adapter file is JSON naming the topics its
-/// candidate knows, and it hands the context a scripted model knowing
-/// them under the candidate's arm. Keeps every plan it was given.
+/// A trainer double for both regimes: its adapter file is JSON naming the
+/// topics its candidate knows, and it hands the context a scripted model
+/// knowing them under the candidate's arm. Keeps every plan it was given,
+/// and which of its methods trained it.
 pub struct FakeTrainer {
     knows: Vec<String>,
     /// The plans it trained.
     pub plans: Mutex<Vec<TrainPlan>>,
+    /// The regime of each method called, in order: `train` is SFT,
+    /// `train_preference` DPO.
+    pub called: Mutex<Vec<Regime>>,
 }
 
 impl FakeTrainer {
@@ -283,6 +336,7 @@ impl FakeTrainer {
         Self {
             knows: topics.iter().map(|t| t.to_string()).collect(),
             plans: Mutex::new(Vec::new()),
+            called: Mutex::new(Vec::new()),
         }
     }
 }
@@ -298,13 +352,17 @@ pub fn unscored() -> HeldOutScore {
     }
 }
 
-impl Trainer for FakeTrainer {
-    fn train(
-        &self,
-        ctx: &Context,
-        plan: &TrainPlan,
-        _cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+/// What [`FakeTrainer`] wrote for a plan.
+struct FakeAdapter {
+    adapter: PathBuf,
+    digest: String,
+    record: PathBuf,
+    records: usize,
+}
+
+impl FakeTrainer {
+    /// Writes the adapter and training record for `plan` and serves it.
+    fn fake(&self, ctx: &Context, plan: &TrainPlan) -> FakeAdapter {
         self.plans.lock().unwrap().push(plan.clone());
         let adapter = plan.dir.join("adapter.safetensors");
         let bytes =
@@ -319,14 +377,53 @@ impl Trainer for FakeTrainer {
             .iter()
             .map(|d| d.manifest.counts.records)
             .sum();
-        Ok(Trained {
+        FakeAdapter {
             adapter,
-            adapter_digest: Digest::of(bytes.as_bytes()).to_string(),
-            training_record: record,
+            digest: Digest::of(bytes.as_bytes()).to_string(),
+            record,
             records,
+        }
+    }
+}
+
+impl Trainer for FakeTrainer {
+    fn train(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<Trained, CampaignError> {
+        self.called.lock().unwrap().push(Regime::Sft);
+        let fake = self.fake(ctx, plan);
+        Ok(Trained {
+            adapter: fake.adapter,
+            adapter_digest: fake.digest,
+            training_record: fake.record,
+            records: fake.records,
             block: 0,
             base: unscored(),
             tuned: unscored(),
+        })
+    }
+
+    fn train_preference(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<TrainedPreference, CampaignError> {
+        self.called.lock().unwrap().push(Regime::Dpo);
+        let fake = self.fake(ctx, plan);
+        Ok(TrainedPreference {
+            adapter: fake.adapter,
+            adapter_digest: fake.digest,
+            training_record: fake.record,
+            records: fake.records,
+            block: 0,
+            beta: plan.beta,
+            reference_adapter: None,
+            train_score: None,
+            held_out_score: None,
         })
     }
 }

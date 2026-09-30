@@ -15,7 +15,9 @@ use splinter_campaign::eval::SuiteChoice;
 use splinter_campaign::learn::parse_budget;
 use splinter_campaign::lineage::Direction;
 use splinter_campaign::model_ref::{ModelRef, POLICY_DEFAULT};
-use splinter_campaign::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS};
+use splinter_campaign::train::{
+    DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
+};
 use splinter_store::annotation::Strength;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
@@ -337,11 +339,12 @@ pub enum DatasetCommand {
     },
 }
 
-/// `train`.
+/// `train`: the datasets' objective decides how - chat datasets by
+/// supervised fine-tuning, preference datasets by DPO.
 #[derive(Debug, Args)]
 pub struct TrainArgs {
-    /// The datasets, by id or unique prefix; the newest records of the last
-    /// are held out for scoring.
+    /// The datasets, by id or unique prefix, all chat or all preference
+    /// pairs; the newest records of the last are held out for scoring.
     #[arg(required = true, value_name = "DATASET-ID")]
     pub datasets: Vec<String>,
     /// The base to train, and an adapter on it to continue.
@@ -357,6 +360,14 @@ pub struct TrainArgs {
     /// LoRA rank of a new adapter.
     #[arg(long, default_value_t = DEFAULT_LORA_RANK, value_name = "R")]
     pub rank: u32,
+    /// The DPO temperature, for preference datasets only.
+    #[arg(long, value_name = "BETA", help = beta_help())]
+    pub beta: Option<f32>,
+}
+
+/// `--beta`'s help, naming the default it falls back to.
+fn beta_help() -> String {
+    format!("The DPO temperature, for preference datasets only [default: {DEFAULT_DPO_BETA}]")
 }
 
 /// `release`.
@@ -625,11 +636,13 @@ mod tests {
             "10",
             "--rank",
             "4",
+            "--beta",
+            "0.2",
         ]) else {
             panic!("train");
         };
         assert_eq!(train.datasets.len(), 2);
-        assert_eq!((train.steps, train.rank), (10, 4));
+        assert_eq!((train.steps, train.rank, train.beta), (10, 4, Some(0.2)));
         assert_eq!(train.replay_fraction, 0.5);
 
         let Command::Release(release) = command(&["release", "candidate-1", "--alias", "staging"])

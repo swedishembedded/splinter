@@ -20,7 +20,7 @@ use splinter_campaign::solving::Solved;
 use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
 use splinter_campaign::status::Status;
 use splinter_campaign::tasks::{TaskSetList, TaskShow, TasksGenerated};
-use splinter_campaign::train::Candidate;
+use splinter_campaign::train::{Candidate, Regime};
 use splinter_campaign::verify::Verified;
 use splinter_campaign::CampaignError;
 use splinter_store::runs::Run;
@@ -511,15 +511,40 @@ impl Report for Candidate {
                 r.fraction
             )
         });
+        let measured = match &self.preference {
+            Some(preference) => {
+                let (accuracy, margin) = preference
+                    .held_out_score
+                    .as_ref()
+                    .map_or((None, None), |s| (s.accuracy, s.mean_margin));
+                let reference = preference
+                    .reference_adapter
+                    .as_deref()
+                    .map_or("the base".to_string(), |a| format!("adapter {a}"));
+                format!(
+                    "held-out preference against {reference}: accuracy {}, mean margin {} nats (beta {})",
+                    loss(accuracy),
+                    loss(margin),
+                    preference.beta
+                )
+            }
+            None => format!(
+                "held-out loss: base {}, candidate {}",
+                loss(self.base_score.and_then(|s| s.loss)),
+                loss(self.tuned_score.and_then(|s| s.loss))
+            ),
+        };
+        let regime = match self.regime {
+            Regime::Sft => "supervised fine-tuning",
+            Regime::Dpo => "preference (DPO) fine-tuning",
+        };
         format!(
-            "candidate {} trained from {} ({parent}) on {} record(s)\n  replayed: {replay}\n  adapter: {} ({})\n  held-out loss: base {}, candidate {}\n  not released: `splinter release {}` runs the gate\n",
+            "candidate {} trained by {regime} from {} ({parent}) on {} record(s)\n  replayed: {replay}\n  adapter: {} ({})\n  {measured}\n  not released: `splinter release {}` runs the gate\n",
             self.candidate,
             self.from,
             self.records,
             self.adapter.display(),
             self.adapter_digest,
-            loss(self.base_score.loss),
-            loss(self.tuned_score.loss),
             self.candidate
         )
     }

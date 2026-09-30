@@ -8,7 +8,8 @@
 //! * [`selection`] - which model a stage runs on (local weights, or a model
 //!   reached over an API), the identity every record gives it, and the
 //!   model loaded for a command.
-//! * [`train`] - one LoRA fine-tune scored on held-out records.
+//! * [`train`] - one LoRA fine-tune, supervised (chat) or by DPO
+//!   (preference pairs), scored on held-out records.
 //! * [`stats`] - brain's paired sign test, which a release decision rests
 //!   on.
 //! * [`error`] - why a model could not be loaded, reached or trained.

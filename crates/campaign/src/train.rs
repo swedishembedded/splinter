@@ -9,23 +9,39 @@
 //! The train stage: stored datasets become a candidate adapter, scored on
 //! held-out records. Training never releases; `release` decides that.
 //!
+//! The datasets' objective decides the [`Regime`]: chat datasets (SFT, and
+//! classification rendered as SFT) are trained by supervised fine-tuning,
+//! preference pair datasets (DPO) by direct preference optimisation. Every
+//! dataset of one run must be of one regime, and an export-only dataset is
+//! refused: brain cannot train it. The candidate records its regime; the
+//! release gate's checks grade the model's answers and do not depend on
+//! it.
+//!
 //! The datasets are concatenated in the order given into the candidate's
 //! own directory, and the newest records of that file are held out
 //! (`splinter_lab::holdout`). Trained from `policy:<alias>`, a candidate
 //! continues the adapter of the release the alias was resolved to - never
-//! the base weights once a release exists - and replays a seeded sample of
-//! every earlier release's training records beside the new ones:
-//! `replay_fraction` ([`DEFAULT_REPLAY_FRACTION`]) of each release's
-//! records, drawn with [`REPLAY_SEED`], from the part of its datasets that
-//! was trained on and never from what it held out, so its held-out tasks
-//! stay unseen for the retention check. Replayed records are never held
-//! out, so the held-out score measures the new data. From a `local:`
-//! reference there is no release, so nothing is replayed.
+//! the base weights once a release exists. A supervised candidate trained
+//! so also replays a seeded sample of every earlier release's chat
+//! training records beside the new ones: `replay_fraction`
+//! ([`DEFAULT_REPLAY_FRACTION`]) of each such release's records, drawn with
+//! [`REPLAY_SEED`], from the part of its datasets that was trained on and
+//! never from what it held out, so its held-out tasks stay unseen for the
+//! retention check. Replayed records are never held out, so the held-out
+//! score measures the new data. From a `local:` reference there is no
+//! release, so nothing is replayed. brain's preference fine-tune trains on
+//! its pairs alone, so a preference candidate replays nothing; the frozen
+//! reference it is trained against - the model it continues - is what keeps
+//! it close to what came before, and the gate's retention check measures
+//! whether it did.
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_policy::train::{fine_tune, FineTune, HeldOutScore, Trained};
+use splinter_policy::train::{
+    fine_tune, train_preference, FineTune, HeldOutScore, PreferenceScore, PreferenceTune, Trained,
+    TrainedPreference,
+};
 use splinter_policy::{ModelSelection, PolicyError};
 use splinter_store::digest::Digest;
 use splinter_store::write_atomic;
@@ -47,6 +63,9 @@ pub const DEFAULT_LORA_RANK: u32 = 8;
 pub const DEFAULT_LORA_ALPHA: f32 = 16.0;
 /// The fraction of each earlier release's training records replayed.
 pub const DEFAULT_REPLAY_FRACTION: f64 = 0.25;
+/// The DPO temperature of a preference fine-tune when a command names none:
+/// brain's default.
+pub use splinter_policy::train::DEFAULT_DPO_BETA;
 /// The seed of the replay draw: the same records are replayed every time.
 pub const REPLAY_SEED: u64 = 0;
 
@@ -54,6 +73,32 @@ pub const REPLAY_SEED: u64 = 0;
 pub const CANDIDATE_RECORD: &str = "candidate.json";
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
+
+/// How a candidate was trained, decided by its datasets' objective.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Regime {
+    /// Supervised fine-tuning on chat records (`generic-messages-v2`); the
+    /// regime of a record that names none.
+    #[default]
+    Sft,
+    /// Direct preference optimisation on chosen/rejected pairs
+    /// (`generic-preference-v1`).
+    Dpo,
+}
+
+impl Regime {
+    /// The regime a dataset of `format` is trained by; `None` for a format
+    /// brain does not train.
+    #[must_use]
+    pub fn of(format: Format) -> Option<Self> {
+        match format {
+            Format::GenericMessagesV2 => Some(Self::Sft),
+            Format::GenericPreferenceV1 => Some(Self::Dpo),
+            Format::SplinterExportV1 => None,
+        }
+    }
+}
 
 /// One training request.
 #[derive(Clone, Debug, Serialize)]
@@ -69,6 +114,9 @@ pub struct TrainRequest {
     pub steps: u32,
     /// LoRA rank of a new adapter.
     pub rank: u32,
+    /// The DPO temperature, for preference datasets only;
+    /// [`DEFAULT_DPO_BETA`] when `None`.
+    pub beta: Option<f32>,
 }
 
 /// Where the replayed records came from.
@@ -91,7 +139,7 @@ pub struct ReplaySample {
     pub fraction: f64,
     /// The draw's seed.
     pub seed: u64,
-    /// Each earlier release, oldest first.
+    /// Each earlier release trained on chat records, oldest first.
     pub sources: Vec<ReplaySource>,
     /// Records replayed in all.
     pub records: usize,
@@ -104,6 +152,8 @@ pub struct ReplaySample {
 pub struct TrainPlan {
     /// The candidate's id.
     pub candidate: String,
+    /// How it is trained.
+    pub regime: Regime,
     /// Its directory: everything training writes goes here.
     pub dir: PathBuf,
     /// The datasets, in order; the newest records are held out.
@@ -120,6 +170,23 @@ pub struct TrainPlan {
     pub steps: u32,
     /// LoRA rank of a new adapter.
     pub rank: u32,
+    /// The DPO temperature; used by the preference regime only.
+    pub beta: f32,
+}
+
+/// A preference candidate's measurements: brain's preference score of the
+/// adapter against the reference it was trained against.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PreferenceSummary {
+    /// The DPO temperature it trained with.
+    pub beta: f32,
+    /// The digest of the adapter the reference carried (the one
+    /// continued); `None` when the reference was the base alone.
+    pub reference_adapter: Option<String>,
+    /// On the pairs trained on; `None` when not measured.
+    pub train_score: Option<PreferenceScore>,
+    /// On the held-out pairs; `None` when not measured.
+    pub held_out_score: Option<PreferenceScore>,
 }
 
 /// How a candidate was trained, as its release records it.
@@ -133,10 +200,20 @@ pub struct TrainingSummary {
     pub rank: u32,
     /// Records in the new datasets.
     pub records: usize,
-    /// The base on the held-out records.
-    pub base_score: HeldOutScore,
-    /// The base with the adapter on the same records.
-    pub tuned_score: HeldOutScore,
+    /// How it was trained.
+    #[serde(default)]
+    pub regime: Regime,
+    /// The base on the held-out records; `None` when not measured (the
+    /// preference regime measures preferences instead).
+    #[serde(default)]
+    pub base_score: Option<HeldOutScore>,
+    /// The base with the adapter on the same records; `None` when not
+    /// measured.
+    #[serde(default)]
+    pub tuned_score: Option<HeldOutScore>,
+    /// The preference measurements; `None` for the supervised regime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preference: Option<PreferenceSummary>,
     /// brain's own training record of the adapter.
     pub record: serde_json::Value,
 }
@@ -148,6 +225,9 @@ pub struct Candidate {
     pub candidate: String,
     /// The reference it was trained from.
     pub from: String,
+    /// How it was trained.
+    #[serde(default)]
+    pub regime: Regime,
     /// The base checkpoint.
     pub base: PathBuf,
     /// The release it was trained from; `None` from a base or a `local:`
@@ -169,29 +249,47 @@ pub struct Candidate {
     pub steps: u32,
     /// LoRA rank asked for.
     pub rank: u32,
-    /// The base on the held-out records.
-    pub base_score: HeldOutScore,
-    /// The base with the adapter on the same records.
-    pub tuned_score: HeldOutScore,
+    /// The base on the held-out records; `None` when not measured (the
+    /// preference regime measures preferences instead).
+    #[serde(default)]
+    pub base_score: Option<HeldOutScore>,
+    /// The base with the adapter on the same records; `None` when not
+    /// measured.
+    #[serde(default)]
+    pub tuned_score: Option<HeldOutScore>,
+    /// The preference measurements; `None` for the supervised regime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preference: Option<PreferenceSummary>,
     /// Records in the new datasets, trained and held out together.
     pub records: usize,
     /// Always `false`: training never releases; `release` decides.
     pub released: bool,
 }
 
-/// Trains a candidate; the seam `train` and `learn` train through.
+/// Trains a candidate; the seam `train` and `learn` train through. `train`
+/// calls the method of the plan's regime.
 pub trait Trainer {
-    /// Trains the adapter `plan` describes into `plan.dir`, stopping when
-    /// `cancel` fires.
+    /// Trains the supervised adapter `plan` describes into `plan.dir`,
+    /// stopping when `cancel` fires.
     fn train(
         &self,
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<Trained, CampaignError>;
+
+    /// Trains the preference adapter `plan` describes into `plan.dir`,
+    /// stopping when `cancel` fires.
+    fn train_preference(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<TrainedPreference, CampaignError>;
 }
 
-/// Trains with brain's LoRA fine-tune.
+/// Trains with brain's LoRA fine-tunes: chat fine-tuning for the
+/// supervised regime, preference fine-tuning for DPO.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BrainTrainer;
 
@@ -202,12 +300,7 @@ impl Trainer for BrainTrainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<Trained, CampaignError> {
-        let combined = plan.dir.join("dataset.jsonl");
-        let mut text = String::new();
-        for dataset in &plan.datasets {
-            text.push_str(&std::fs::read_to_string(&dataset.path).map_err(io(&dataset.path))?);
-        }
-        write_atomic(&combined, &text).map_err(io(&combined))?;
+        let combined = combine(plan)?;
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
         fine_tune(&FineTune {
             model_dir: &plan.base,
@@ -220,23 +313,60 @@ impl Trainer for BrainTrainer {
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
         })
-        .map_err(|e| match e {
-            PolicyError::Cancelled { .. } => CampaignError::Cancelled,
-            other => CampaignError::Train(other.to_string()),
+        .map_err(trainer_error)
+    }
+
+    fn train_preference(
+        &self,
+        _ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<TrainedPreference, CampaignError> {
+        let combined = combine(plan)?;
+        train_preference(&PreferenceTune {
+            model_dir: &plan.base,
+            dataset: &combined,
+            attempt_dir: &plan.dir,
+            steps: plan.steps,
+            rank: plan.rank,
+            alpha: DEFAULT_LORA_ALPHA,
+            beta: plan.beta,
+            continue_from: plan.continue_from.as_deref(),
+            cancel: Some(cancel),
         })
+        .map_err(trainer_error)
     }
 }
 
-/// The stored dataset `id` names, refused unless brain can train it.
-pub fn trainable(ctx: &Context, id: &str) -> Result<StoredDataset, CampaignError> {
+/// `plan`'s datasets concatenated in order into one file in its directory.
+fn combine(plan: &TrainPlan) -> Result<PathBuf, CampaignError> {
+    let combined = plan.dir.join("dataset.jsonl");
+    let mut text = String::new();
+    for dataset in &plan.datasets {
+        text.push_str(&std::fs::read_to_string(&dataset.path).map_err(io(&dataset.path))?);
+    }
+    write_atomic(&combined, &text).map_err(io(&combined))?;
+    Ok(combined)
+}
+
+fn trainer_error(e: PolicyError) -> CampaignError {
+    match e {
+        PolicyError::Cancelled { .. } => CampaignError::Cancelled,
+        other => CampaignError::Train(other.to_string()),
+    }
+}
+
+/// The stored dataset `id` names and the regime brain trains it by,
+/// refused when brain cannot train it.
+pub fn trainable(ctx: &Context, id: &str) -> Result<(StoredDataset, Regime), CampaignError> {
     let dataset = resolve_dataset(ctx, id)?;
-    if dataset.manifest.format != Format::GenericMessagesV2 {
+    let Some(regime) = Regime::of(dataset.manifest.format) else {
         return Err(CampaignError::Refused(format!(
             "dataset {} is export-only ({:?} records); brain cannot train it",
             dataset.id, dataset.manifest.objective
         )));
-    }
-    Ok(dataset)
+    };
+    Ok((dataset, regime))
 }
 
 /// Trains a candidate on `request`'s datasets with `trainer`.
@@ -252,11 +382,29 @@ pub fn train(
     let fraction = Fraction::new(request.replay_fraction).map_err(|e| {
         CampaignError::Refused(format!("replay fraction {}: {e}", request.replay_fraction))
     })?;
-    let datasets = request
+    let resolved = request
         .datasets
         .iter()
         .map(|id| trainable(ctx, id))
         .collect::<Result<Vec<_>, _>>()?;
+    let regime = resolved[0].1;
+    if let Some((other, _)) = resolved.iter().find(|(_, r)| *r != regime) {
+        return Err(CampaignError::Refused(format!(
+            "dataset {} holds {:?} records but {} holds {:?} records; one run trains one \
+             regime",
+            other.id, other.manifest.objective, resolved[0].0.id, resolved[0].0.manifest.objective
+        )));
+    }
+    let beta = match (regime, request.beta) {
+        (Regime::Dpo, beta) => beta.unwrap_or(DEFAULT_DPO_BETA),
+        (Regime::Sft, None) => DEFAULT_DPO_BETA,
+        (Regime::Sft, Some(_)) => {
+            return Err(CampaignError::Refused(
+                "beta applies to preference datasets only; these are chat datasets".into(),
+            ))
+        }
+    };
+    let datasets: Vec<StoredDataset> = resolved.into_iter().map(|(d, _)| d).collect();
     let ModelSelection::Local(weights) = ctx.selection(&request.from)? else {
         return Err(CampaignError::Refused(format!(
             "{} is reached over the network and cannot be trained here",
@@ -270,12 +418,13 @@ pub fn train(
     let candidate = splinter_store::new_id_with_prefix("candidate");
     let dir = ctx.root().train().join(&candidate);
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
-    let replay = match &pin {
-        Some(pin) => Some(draw_replay(ctx, &pin.release, fraction, &dir)?),
-        None => None,
+    let replay = match (&pin, regime) {
+        (Some(pin), Regime::Sft) => Some(draw_replay(ctx, &pin.release, fraction, &dir)?),
+        _ => None,
     };
     let plan = TrainPlan {
         candidate: candidate.clone(),
+        regime,
         dir: dir.clone(),
         datasets,
         base: weights.base.clone(),
@@ -287,11 +436,16 @@ pub fn train(
             .map(|_| dir.join(REPLAY_FILE)),
         steps: request.steps,
         rank: request.rank,
+        beta,
     };
-    let trained = trainer.train(ctx, &plan, cancel)?;
+    let trained = match regime {
+        Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
+        Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),
+    };
     let record = Candidate {
         candidate,
         from: request.from.to_string(),
+        regime,
         base: plan.base,
         parent: plan.parent,
         continued_from: plan.continue_from,
@@ -302,8 +456,9 @@ pub fn train(
         training_record: trained.training_record,
         steps: request.steps,
         rank: request.rank,
-        base_score: trained.base,
-        tuned_score: trained.tuned,
+        base_score: trained.base_score,
+        tuned_score: trained.tuned_score,
+        preference: trained.preference,
         records: trained.records,
         released: false,
     };
@@ -316,8 +471,53 @@ pub fn train(
     Ok(record)
 }
 
-/// Draws the replay sample of every release in `release`'s lineage into
-/// `dir`'s replay file.
+/// What either regime's trainer produced, as a candidate records it.
+struct Outcome {
+    adapter: PathBuf,
+    adapter_digest: String,
+    training_record: PathBuf,
+    records: usize,
+    base_score: Option<HeldOutScore>,
+    tuned_score: Option<HeldOutScore>,
+    preference: Option<PreferenceSummary>,
+}
+
+impl From<Trained> for Outcome {
+    fn from(t: Trained) -> Self {
+        Self {
+            adapter: t.adapter,
+            adapter_digest: t.adapter_digest,
+            training_record: t.training_record,
+            records: t.records,
+            base_score: Some(t.base),
+            tuned_score: Some(t.tuned),
+            preference: None,
+        }
+    }
+}
+
+impl From<TrainedPreference> for Outcome {
+    fn from(t: TrainedPreference) -> Self {
+        Self {
+            adapter: t.adapter,
+            adapter_digest: t.adapter_digest,
+            training_record: t.training_record,
+            records: t.records,
+            base_score: None,
+            tuned_score: None,
+            preference: Some(PreferenceSummary {
+                beta: t.beta,
+                reference_adapter: t.reference_adapter,
+                train_score: t.train_score,
+                held_out_score: t.held_out_score,
+            }),
+        }
+    }
+}
+
+/// Draws the replay sample of every release in `release`'s lineage that
+/// was trained on chat records into `dir`'s replay file; a preference
+/// release's pairs are not chat records and are not replayed.
 fn draw_replay(
     ctx: &Context,
     release: &ReleaseId,
@@ -335,6 +535,9 @@ fn draw_replay(
     let mut text = String::new();
     for earlier in lineage.iter().rev() {
         let datasets = earlier.manifest.datasets.clone();
+        if earlier.manifest.training.regime != Regime::Sft {
+            continue;
+        }
         let (trained_on, _held_out) = split_records(ctx, &datasets)?;
         let picked = replay_sample(&trained_on, fraction, REPLAY_SEED);
         for &index in &picked {

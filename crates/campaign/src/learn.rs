@@ -348,6 +348,7 @@ impl Pipeline<'_> {
                 replay_fraction: DEFAULT_REPLAY_FRACTION,
                 steps: DEFAULT_STEPS,
                 rank: DEFAULT_LORA_RANK,
+                beta: None,
             },
             trainer,
             &run.cancel_token(),

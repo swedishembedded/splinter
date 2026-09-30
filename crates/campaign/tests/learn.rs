@@ -39,7 +39,7 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{anchor, rollback, ReleaseId, ReleaseStore};
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
-use splinter_policy::train::Trained;
+use splinter_policy::train::{Trained, TrainedPreference};
 use splinter_policy::ModelSelection;
 use splinter_store::runs::{read_run, RunStatus};
 use splinter_views::DatasetId;
@@ -64,6 +64,19 @@ impl Trainer for RecordingTrainer {
             .unwrap()
             .extend(plan.datasets.iter().map(|d| d.id.clone()));
         FakeTrainer::knowing(&[]).train(ctx, plan, cancel)
+    }
+
+    fn train_preference(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<TrainedPreference, CampaignError> {
+        self.handed
+            .lock()
+            .unwrap()
+            .extend(plan.datasets.iter().map(|d| d.id.clone()));
+        FakeTrainer::knowing(&[]).train_preference(ctx, plan, cancel)
     }
 }
 
@@ -223,6 +236,15 @@ impl Trainer for AliasMover {
         };
         *self.seen.lock().unwrap() = Some((plan.clone(), weights.adapter));
         FakeTrainer::knowing(&[]).train(ctx, plan, cancel)
+    }
+
+    fn train_preference(
+        &self,
+        _ctx: &Context,
+        _plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<TrainedPreference, CampaignError> {
+        panic!("learn trains chat datasets only")
     }
 }
 

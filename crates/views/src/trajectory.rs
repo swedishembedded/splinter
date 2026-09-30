@@ -24,7 +24,7 @@
 //!   a hole in its context would teach from a state the solver never saw.
 
 use splinter_lab::{WireFunction, WireMessage, WireToolCall};
-use sven_sdk::atif::{ContentSegment, MessageBody, StepOrigin, Trajectory};
+use sven_sdk::atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 
 use crate::render::message;
 
@@ -87,19 +87,7 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
             }
             StepOrigin::Agent => {
                 let text = text_of(&step.message)?;
-                let calls: Vec<WireToolCall> = step
-                    .tool_calls
-                    .iter()
-                    .flatten()
-                    .map(|call| WireToolCall {
-                        id: Some(call.tool_call_id.clone()),
-                        kind: "function".into(),
-                        function: WireFunction {
-                            name: call.function_name.clone(),
-                            arguments: call.arguments.to_string(),
-                        },
-                    })
-                    .collect();
+                let calls = wire_calls(step);
                 if text.is_empty() && calls.is_empty() {
                     continue;
                 }
@@ -132,6 +120,34 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
         }
     }
     Some(Conversation { messages, actions })
+}
+
+/// The tool calls `step` made, in `generic-messages-v2`'s tool-call form
+/// with the arguments JSON-encoded.
+fn wire_calls(step: &TraceStep) -> Vec<WireToolCall> {
+    step.tool_calls
+        .iter()
+        .flatten()
+        .map(|call| WireToolCall {
+            id: Some(call.tool_call_id.clone()),
+            kind: "function".into(),
+            function: WireFunction {
+                name: call.function_name.clone(),
+                arguments: call.arguments.to_string(),
+            },
+        })
+        .collect()
+}
+
+/// The tool calls `trajectory`'s last agent step made, as
+/// [`conversation`] renders them; empty when it made none.
+pub(crate) fn final_calls(trajectory: &Trajectory) -> Vec<WireToolCall> {
+    trajectory
+        .steps
+        .iter()
+        .rfind(|s| s.source == StepOrigin::Agent)
+        .map(wire_calls)
+        .unwrap_or_default()
 }
 
 /// The text of `body`; `None` when it holds an image.

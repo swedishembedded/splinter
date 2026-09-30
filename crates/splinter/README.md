@@ -24,7 +24,7 @@ splinter experiences list | show <ID> [--graph]
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
 splinter dataset export <DATASET-ID> --out DIR
-splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R]
+splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B]
 splinter release <CANDIDATE-ID> [--alias NAME] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
@@ -103,18 +103,31 @@ Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 `dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
 `verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
-(the student sees only the instruction). Objectives brain cannot train
-(preference, contrastive, reward, raw text) need `--export-only`.
+(the student sees only the instruction). Chat views are written as
+brain's `generic-messages-v2`, `preference` as brain's
+`generic-preference-v1` (one pair per line: the student's prompt, the
+chosen and the rejected answer), each checked by brain's own parser.
+Objectives brain cannot train (contrastive, reward, raw text) need
+`--export-only`.
 
-`train` concatenates the datasets in order and holds the newest records
-out for scoring. From `policy:<alias>` (the default) it continues the
-adapter of the release the alias points at - never the base weights once a
-release exists - and replays `--replay-fraction` (default 0.25) of every
-earlier release's trained-on records, a seeded sample that is the same on
-every run and never includes what that release held out; replayed records
-are never held out. `--from local:<checkpoint>+<adapter>` continues that
-adapter instead, with no replay, and such a candidate cannot replace a
-champion.
+`train` trains the regime its datasets' objective names - chat datasets
+by supervised fine-tuning, preference datasets by DPO against the model
+the run starts from (`--beta`, the DPO temperature, defaults to brain's);
+one run's datasets are all one or all the other. It concatenates them in
+order and holds the newest records out for scoring: a supervised candidate
+reports the held-out loss of base and candidate, a preference candidate
+brain's preference score on the held-out pairs (how often, and by how
+many nats, it prefers the chosen answer more than its reference does).
+From `policy:<alias>` (the default) it continues the adapter of the
+release the alias points at - never the base weights once a release
+exists - and a supervised run replays `--replay-fraction` (default 0.25)
+of every earlier release's trained-on chat records, a seeded sample that
+is the same on every run and never includes what that release held out;
+replayed records are never held out. A preference run replays nothing:
+brain's preference trainer trains on its pairs alone. `--from
+local:<checkpoint>+<adapter>` continues that adapter instead, with no
+replay, and such a candidate cannot replace a champion. The candidate
+records its regime; the release gate grades either the same way.
 
 ## Releases
 

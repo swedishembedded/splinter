@@ -43,11 +43,13 @@ so any stage can be rerun or inspected alone (`splinter runs show`,
 `splinter experiences show --graph`). Every model runs locally unless a
 `remote:` model is named with `--allow-remote`.
 
-A trained candidate continues the current release (the champion) with a
-replay of what earlier releases learned, and becomes the policy only if
-the release gate measures that it improved on the new material's held-out
-questions, kept what earlier releases learned, held a frozen anchor suite
-of general tasks, and runs on plain `brain serve` with the same answers.
+A trained candidate continues the current release (the champion) - by
+supervised fine-tuning with a replay of what earlier releases learned, or
+by DPO on pairs preferring a verified answer over a failed one - and
+becomes the policy only if the release gate measures that it improved on
+the new material's held-out questions, kept what earlier releases
+learned, held a frozen anchor suite of general tasks, and runs on plain
+`brain serve` with the same answers.
 Each release is an immutable adapter with a manifest of every number the
 gate measured; `splinter rollback default` returns to the previous one.
 
