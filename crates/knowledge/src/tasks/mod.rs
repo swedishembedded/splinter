@@ -77,6 +77,10 @@ pub const DEFAULT_SHINGLE_WORDS: usize = 3;
 /// default.
 pub const DEFAULT_MAX_OVERLAP: f64 = 0.8;
 
+/// How many times a malformed reply is sent back for correction, by
+/// default.
+pub const DEFAULT_REPAIRS: u32 = 1;
+
 /// How long one request to the generator model may take, by default.
 pub const DEFAULT_REQUEST_DEADLINE: Duration = Duration::from_secs(600);
 
@@ -98,6 +102,9 @@ pub struct GenerationPolicy {
     pub deadline: Duration,
     /// Output tokens one request may generate; `None` sets no budget.
     pub max_output_tokens: Option<u64>,
+    /// How many times a reply that is not the shape is sent back to the
+    /// model for correction, within the request's deadline and budget.
+    pub repairs: u32,
 }
 
 impl Default for GenerationPolicy {
@@ -110,6 +117,7 @@ impl Default for GenerationPolicy {
             max_overlap: DEFAULT_MAX_OVERLAP,
             deadline: DEFAULT_REQUEST_DEADLINE,
             max_output_tokens: None,
+            repairs: DEFAULT_REPAIRS,
         }
     }
 }

@@ -11,7 +11,8 @@
 //! resolve to the source's bytes and support its reference (or, for a
 //! computed answer, its reference must pass its own checks in the sandbox
 //! and its generated tests must survive mutation validation); its
-//! instruction must stand on its own; malformed replies and duplicates are
+//! instruction must stand on its own; a malformed reply is sent back for
+//! one correction, and one still malformed is rejected; duplicates are
 //! rejected and counted by reason; a kind is data, so a new one needs no
 //! generator code.
 
@@ -234,7 +235,7 @@ async fn malformed_replies_are_rejected_without_panicking() {
     let scratch = Scratch::new("model-tasks-malformed");
     let (store, _, source) = stored(&scratch, MANUAL);
     let recall = kind("recall");
-    let replies = vec![
+    let replies = [
         "Sure! Here are some tasks.".to_string(),
         "{\"tasks\": [{\"instruction\": \"What is the baud rate?\"}]}".to_string(),
         "{\"tasks\": [".to_string(),
@@ -248,12 +249,38 @@ async fn malformed_replies_are_rejected_without_panicking() {
         String::new(),
     ];
     let count = replies.len();
-    let model = Scripted::new(replies);
+    // Each is sent back once for correction and comes back as malformed.
+    let twice = replies
+        .iter()
+        .flat_map(|r| [r.clone(), r.clone()])
+        .collect();
+    let model = Scripted::new(twice);
     let generator = generator(model, store, vec![]);
     let kinds = vec![&recall; count];
     let report = generator.generate(&source, &kinds).await.unwrap();
     assert!(report.admitted.is_empty(), "{report:#?}");
     assert_eq!(report.count(Rejection::Malformed), count, "{report:#?}");
+}
+
+#[tokio::test]
+async fn a_malformed_reply_corrected_on_request_is_admitted() {
+    let scratch = Scratch::new("model-tasks-corrected");
+    let (store, _, source) = stored(&scratch, MANUAL);
+    let recall = kind("recall");
+    let model = Scripted::new(vec![
+        "Sure! Here are some tasks.".to_string(),
+        reply(vec![entry(
+            "At what baud rate does the Frobnicator console UART run?",
+            "115200 baud",
+            1,
+            Some("115200 baud"),
+        )]),
+    ]);
+    let generator = generator(model.clone(), store, vec![]);
+    let report = generator.generate(&source, &[&recall]).await.unwrap();
+    assert_eq!(report.admitted.len(), 1, "{report:#?}");
+    assert_eq!(report.count(Rejection::Malformed), 0, "{report:#?}");
+    assert_eq!(model.seen.lock().unwrap().len(), 2, "one correction round");
 }
 
 #[tokio::test]

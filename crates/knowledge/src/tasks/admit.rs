@@ -29,7 +29,7 @@ use super::dedup::{Repeat, Seen};
 use super::generator::{GenerateError, SourceText};
 use super::grounding::support;
 use super::kind::{AnswerForm, Material, SolverEnvironment, TaskKind};
-use super::reply::{self, Candidate};
+use super::reply::{Candidate, Reply};
 use super::{GeneratedTask, GenerationPolicy, GenerationReport, Rejection};
 
 /// One request's outcome, waiting for admission.
@@ -40,8 +40,8 @@ pub(crate) struct Proposal {
     pub(crate) runtime: Option<RuntimeEnvironment>,
     /// The digest of the prompt sent.
     pub(crate) prompt: Digest,
-    /// The model's reply; `None` when its run ended without one.
-    pub(crate) reply: Option<String>,
+    /// The tasks the model proposed, or why it proposed none.
+    pub(crate) reply: Result<Reply, Refusal>,
 }
 
 /// What admission needs besides the proposals.
@@ -52,8 +52,8 @@ pub(crate) struct Admission {
     pub(crate) generator: String,
 }
 
-/// A candidate's rejection: why, and what exactly failed.
-type Refusal = (Rejection, String);
+/// A rejection: why, and what exactly failed.
+pub(crate) type Refusal = (Rejection, String);
 
 /// Everything a candidate's checks are judged in.
 struct Context<'a> {
@@ -76,19 +76,10 @@ impl Admission {
         let mut seen = Seen::new(self.policy.shingle_words, self.policy.max_overlap);
         for proposal in proposals {
             let name = proposal.kind.name.as_str();
-            let Some(reply) = proposal.reply.as_deref() else {
-                report.reject(
-                    name,
-                    0,
-                    Rejection::NoReply,
-                    "the run ended without a reply".into(),
-                );
-                continue;
-            };
-            let parsed = match reply::parse(reply) {
+            let parsed = match proposal.reply {
                 Ok(parsed) => parsed,
-                Err(why) => {
-                    report.reject(name, 0, Rejection::Malformed, why);
+                Err((rejection, why)) => {
+                    report.reject(name, 0, rejection, why);
                     continue;
                 }
             };

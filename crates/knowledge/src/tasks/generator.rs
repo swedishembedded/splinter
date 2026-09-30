@@ -9,31 +9,48 @@
 //! The generator: a source part's sections shown to a generator model,
 //! closed-book, and its proposals admitted by code.
 //!
-//! The model is asked through [`splinter_agent::solve::solve`] with a
-//! closed-book task whose instruction is the prompt, so it runs exactly as
-//! a solver or a judge does: no tools, bounded by a deadline and an
-//! optional output-token budget. Its reply is parsed strictly (see the
-//! shape in the prompt); a reply that does not parse is rejected whole,
-//! with no second attempt.
+//! The model is asked through a typed sven call ([`Engine::call_with`])
+//! with no tools, bounded by a deadline and an optional output-token
+//! budget that cover every attempt: the kind's brief and rules are the
+//! call's task, the sections its input, and the reply's shape is
+//! [`Reply`]'s schema. sven reads the reply as that shape and sends one
+//! that is not back for correction, up to `repairs` times; a reply still
+//! malformed after that is rejected whole.
 
-use splinter_agent::solve::{solve, Model, SolveError, SolveOptions};
+use serde::Serialize;
+use splinter_agent::solve::{Model, SolveOptions};
 use splinter_lab::verifiers::mutation::MutationPolicy;
-use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
+use splinter_sandbox::RuntimeEnvironment;
 use splinter_store::digest::Digest;
 use splinter_store::error::StoreError;
-use splinter_store::experience::{Environment, ExperienceError, Task};
+use splinter_store::experience::ExperienceError;
 use splinter_store::source::{PartRef, SourceId};
 use splinter_store::sources::SourceStore;
-use sven_sdk::CancelToken;
+use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
-use super::admit::{Admission, Proposal};
+use super::admit::{Admission, Proposal, Refusal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
-use super::reply::SHAPE;
-use super::{GenerationPolicy, GenerationReport, GENERATOR};
+use super::reply::Reply;
+use super::{GenerationPolicy, GenerationReport, Rejection, GENERATOR};
 use crate::sections::{sections, Section};
 
-/// The task kind of the closed-book request a generator model is sent.
-pub const GENERATION_TASK_KIND: &str = "generate-tasks";
+/// The name of the typed call a generator model is sent.
+pub const GENERATION_METHOD: &str = "generate_tasks";
+
+/// The role the generator model is given.
+const ROLE: &str = "You write training tasks from source material, exactly as briefed.";
+
+/// What the generator model is shown: the sections, by position.
+#[derive(Serialize)]
+struct Sections<'a> {
+    sections: Vec<ShownSection<'a>>,
+}
+
+#[derive(Serialize)]
+struct ShownSection<'a> {
+    position: usize,
+    text: &'a str,
+}
 
 /// One text part of a stored source, split into the sections a generator
 /// model is shown.
@@ -160,7 +177,7 @@ pub enum GenerateError {
     Task(#[from] ExperienceError),
     /// The generator model could not be run.
     #[error("the generator model could not run: {0}")]
-    Model(#[from] SolveError),
+    Model(#[from] CallError),
     /// A sandbox or verifier failed while admitting a task.
     #[error("admitting a task failed: {0}")]
     Admission(#[from] splinter_lab::verifiers::VerifyError),
@@ -257,12 +274,13 @@ impl ModelTaskGenerator {
         for kind in kinds {
             kind.validate()?;
             let runtime = self.runtime_for(kind)?;
-            let prompt = prompt(source, kind, self.policy.tasks_per_request);
-            let reply = self.request(&prompt).await?;
+            let brief = brief(kind, self.policy.tasks_per_request);
+            let shown = shown(source);
+            let reply = self.request(&brief, &shown).await?;
             proposals.push(Proposal {
                 kind: (*kind).clone(),
                 runtime,
-                prompt: Digest::of(prompt.as_bytes()),
+                prompt: prompt_digest(&brief, &shown),
                 reply,
             });
         }
@@ -300,35 +318,76 @@ impl ModelTaskGenerator {
             })
     }
 
-    /// The model's reply to `prompt`, or `None` when its run ended without
-    /// one.
-    async fn request(&self, prompt: &str) -> Result<Option<String>, GenerateError> {
-        let request = Task::new(
-            GENERATION_TASK_KIND,
-            vec![],
-            Environment::closed_book(),
-            prompt,
-            vec![],
-        )?;
+    /// The model's reply to `brief` over `shown`: the tasks it proposed,
+    /// or why there are none - no reply before a bound stopped the call,
+    /// or a reply still malformed after correction.
+    async fn request(
+        &self,
+        brief: &str,
+        shown: &Sections<'_>,
+    ) -> Result<Result<Reply, Refusal>, GenerateError> {
         let mut options = SolveOptions::new(self.policy.deadline);
         options.max_output_tokens = self.policy.max_output_tokens;
         options.cancel = self.cancel.clone();
         options.stream_idle = self.model.stream_idle;
-        let solution = solve(
-            &request,
-            &ResolvedEnvironment::ClosedBook,
-            self.model.provider.clone(),
-            options,
-        )
-        .await?;
-        Ok(solution.final_output)
+        let method = Method::<Reply>::new(GENERATION_METHOD)
+            .role(ROLE)
+            .task(brief)
+            .max_repairs(self.policy.repairs);
+        let engine = Engine::builder()
+            .config(options.engine_config())
+            .model_provider(self.model.provider.clone())
+            .toolset(Toolset::none())
+            .build()?;
+        match engine
+            .call_with(&method, shown, options.run_options())
+            .await
+        {
+            Ok(reply) => Ok(Ok(reply)),
+            Err(CallError::Invalid {
+                attempts,
+                detail,
+                last,
+                ..
+            }) => Ok(Err((
+                Rejection::Malformed,
+                format!("{detail} (after {attempts} attempt(s)); last reply: {last}"),
+            ))),
+            Err(CallError::Stopped { conclusion }) => Ok(Err((
+                Rejection::NoReply,
+                format!("the call ended without a reply: {conclusion:?}"),
+            ))),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
-/// The prompt for tasks of `kind` from `source`: the kind's brief, the
-/// rules every task is held to, the reply's shape, and the sections by
-/// position.
-fn prompt(source: &SourceText, kind: &TaskKind, count: usize) -> String {
+/// The sections of `source`, by position, as the model is shown them.
+fn shown(source: &SourceText) -> Sections<'_> {
+    Sections {
+        sections: (0..source.sections.len())
+            .map(|position| ShownSection {
+                position,
+                text: source.section_text(position).unwrap_or_default(),
+            })
+            .collect(),
+    }
+}
+
+/// The digest of what one request showed the model: the brief and the
+/// sections.
+fn prompt_digest(brief: &str, shown: &Sections<'_>) -> Digest {
+    let sections = serde_json::to_string(shown).unwrap_or_else(|e| {
+        // Integers and strings always serialize.
+        unreachable!("sections serialize: {e}")
+    });
+    Digest::of(format!("{brief}\n{sections}").as_bytes())
+}
+
+/// The brief for tasks of `kind`: the kind's own brief and the rules every
+/// task is held to. The sections are the call's input; the reply's shape
+/// is its return type.
+fn brief(kind: &TaskKind, count: usize) -> String {
     let runtime = kind.runtime.as_deref().unwrap_or("-");
     let brief = kind
         .brief
@@ -384,15 +443,6 @@ fn prompt(source: &SourceText, kind: &TaskKind, count: usize) -> String {
         out.push_str("- ");
         out.push_str(&rule);
         out.push('\n');
-    }
-    out.push_str(
-        "\nReply with EXACTLY one JSON object and nothing else - no prose, no code fences:\n",
-    );
-    out.push_str(SHAPE);
-    out.push_str("\n\nSECTIONS:\n");
-    for position in 0..source.sections.len() {
-        let text = source.section_text(position).unwrap_or_default();
-        out.push_str(&format!("\n[{position}]\n{text}\n"));
     }
     out
 }
