@@ -10,7 +10,8 @@
 //! prints brain's startup line (with the adapter's real digest, or a wrong
 //! one when asked to lie), writes its API key and ready marker, and answers
 //! the OpenAI-compatible chat route from what the adapter file says the
-//! candidate knows. It tests the serve check's plumbing, not brain.
+//! candidate knows - when asked to decode greedily (temperature zero); a
+//! sampled request gets a draw that agrees with nothing. It tests the serve check's plumbing, not brain.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -490,7 +491,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(401); self.end_headers(); return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         users = [text_of(m.get("content")) for m in body["messages"] if m.get("role") == "user"]
-        answer = reply(users[-1] if users else "")
+        # Sampled at any temperature but zero, a real model's answer is a
+        # draw: the double answers only when asked to decode greedily.
+        answer = reply(users[-1] if users else "") if body.get("temperature") == 0 else "sampled"
         self.send_response(200)
         if body.get("stream"):
             self.send_header("Content-Type", "text/event-stream")

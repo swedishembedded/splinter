@@ -17,8 +17,10 @@
 //! candidate adapter's. Once
 //! it reports ready (`--ready-file`), a sample of the held-out tasks is
 //! re-answered through its OpenAI-compatible endpoint, with the key it
-//! wrote (`--api-keys-out`), and graded as in-process; every verdict must
-//! be the same. The server is stopped when the check ends, however it ends.
+//! wrote (`--api-keys-out`), decoded greedily as the in-process arms
+//! were ([`GREEDY_SAMPLING`]) so the two answers compare serving rather
+//! than two draws, and graded as in-process; every verdict must be the
+//! same. The server is stopped when the check ends, however it ends.
 //!
 //! Without a `brain` binary, or when it does not start, the check is not
 //! measured - and the gate fails.
@@ -30,6 +32,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use splinter_agent::solve::Model;
+use splinter_policy::local::GREEDY_SAMPLING;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
@@ -216,9 +219,13 @@ fn serve_and_ask(
         return Ok(gate::serve(measured));
     }
     let key = read_key(&keys).map_err(Failure::Unmeasured)?;
-    let loaded =
-        splinter_policy::selection::served_model(&format!("http://{address}/v1"), &key, &model)
-            .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
+    let loaded = splinter_policy::selection::served_model(
+        &format!("http://{address}/v1"),
+        &key,
+        &model,
+        Some(GREEDY_SAMPLING.temperature),
+    )
+    .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
     let served = Model::new(loaded.provider(), loaded.identity());
     let answers = grade(ctx, &served, sample, cancel).map_err(|e| match e {
         CampaignError::Cancelled => Failure::Cancelled,

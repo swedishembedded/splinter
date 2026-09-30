@@ -17,6 +17,9 @@
 //! closed-book: the model sees the instruction alone. A task that is not
 //! closed-book, or that cannot be found, is excluded and counted.
 //!
+//! A model is probed decoding greedily where its sampling can be set here
+//! ([`greedy`]), so a verdict is the weights', not one draw's.
+//!
 //! Grading is by the task kind's own verifiers, without a judge, and the
 //! store's decision rule over their verdicts: `Some(true)` right,
 //! `Some(false)` wrong, `None` when no verifier decided. Probe answers are
@@ -30,6 +33,7 @@ use splinter_agent::solve::{solve, Model, SolveOptions};
 use splinter_lab::holdout::holdout_split;
 use splinter_lab::paired::PairedOutcome;
 use splinter_lab::verifiers::Strongest;
+use splinter_policy::local::GREEDY_SAMPLING;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::annotation::decide;
 use splinter_store::digest::Digest;
@@ -39,6 +43,7 @@ use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};
+use crate::model_ref::ModelRef;
 use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::verify::verifiers_for;
 
@@ -175,6 +180,16 @@ fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, CampaignError>
         }
     }
     Ok(None)
+}
+
+/// The model `reference` names, decoding greedily
+/// ([`GREEDY_SAMPLING`]); as it samples where its sampling cannot be set
+/// here (a model reached over an API, or handed in rather than loaded).
+pub fn greedy(ctx: &Context, reference: &ModelRef) -> Result<Model, CampaignError> {
+    match ctx.resampled(reference, GREEDY_SAMPLING)? {
+        Some(model) => Ok(model),
+        None => ctx.model(reference),
+    }
 }
 
 /// `model`'s outcome on every task of `suite`, in order; see the module

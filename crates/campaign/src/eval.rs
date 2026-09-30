@@ -10,7 +10,7 @@
 //! anchor suite frozen or shown.
 //!
 //! The model is a candidate (by id or prefix: its base with its adapter)
-//! or a model reference. Which tasks a suite holds depends on it:
+//! or a model reference, decoding greedily as the gate's arms do. Which tasks a suite holds depends on it:
 //!
 //! | Suite | A candidate | `policy:<alias>` |
 //! |---|---|---|
@@ -233,7 +233,7 @@ pub fn eval(
             )]
         }
     };
-    let model = ctx.model(&subject.reference)?;
+    let model = probe::greedy(ctx, &subject.reference)?;
     let mut scores = Vec::with_capacity(suites.len());
     for (release, suite) in &suites {
         let outcomes = probe::grade(ctx, &model, suite, cancel)?;

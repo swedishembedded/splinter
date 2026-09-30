@@ -244,15 +244,18 @@ fn soft<T>(result: Result<T, CampaignError>) -> Result<Result<T, String>, Campai
     }
 }
 
-/// The model `reference` names graded on each of `suites`, then unloaded
-/// so the other arm and the served candidate have the device.
+/// The model `reference` names graded on each of `suites`, decoding
+/// greedily ([`probe::greedy`]) where its sampling can be set here - a
+/// verdict is then the weights', not a draw's, and the served candidate is
+/// asked the same way - then unloaded so the other arm and the served
+/// candidate have the device.
 fn grade_arm(
     ctx: &Context,
     reference: &ModelRef,
     suites: &[&Suite],
     cancel: &CancelToken,
 ) -> Result<Vec<Graded>, CampaignError> {
-    let model = match soft(ctx.model(reference))? {
+    let model = match soft(probe::greedy(ctx, reference))? {
         Ok(model) => model,
         Err(why) => return Ok(suites.iter().map(|_| Err(why.clone())).collect()),
     };

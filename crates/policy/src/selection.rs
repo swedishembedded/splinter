@@ -134,11 +134,14 @@ impl ModelSelection {
 ///
 /// Built on sven's default configuration rather than the user's: what is
 /// measured is the server, and no setting of the person running the check
-/// (a temperature, a token limit) may change what it answers.
+/// (a temperature, a token limit) may change what it answers. `temperature`
+/// replaces the default's when given: zero asks the server to decode
+/// greedily.
 pub fn served_model(
     base_url: &str,
     api_key: &str,
     model: &str,
+    temperature: Option<f32>,
 ) -> Result<LoadedModel, PolicyError> {
     let spec = format!("openai/{model}");
     let remote = RemoteModel {
@@ -148,6 +151,9 @@ pub fn served_model(
     };
     let mut config = sven_sdk::config::Config::default();
     remote.apply_to(&mut config)?;
+    if temperature.is_some() {
+        config.model.temperature = temperature;
+    }
     let driver =
         sven_sdk::drivers::from_config(&config.model).map_err(|e| PolicyError::Remote {
             spec: spec.clone(),

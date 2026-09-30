@@ -54,6 +54,15 @@ pub const AGENT_SAMPLING: Sampling = Sampling {
     top_k: 20,
 };
 
+/// Greedy decoding for measurement: agent sampling at temperature zero,
+/// which brain decodes as argmax. A probe graded twice - in-process and on
+/// a server - must get the same answer from the same weights, not two
+/// draws.
+pub const GREEDY_SAMPLING: Sampling = Sampling {
+    temperature: 0.0,
+    ..AGENT_SAMPLING
+};
+
 /// A loaded chat model (optionally with a folded LoRA adapter), ready to
 /// complete. One sequence decodes at a time - the model carries its KV
 /// cache across a generation - so requests serialize behind a lock; that is
