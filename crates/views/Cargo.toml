@@ -2,8 +2,8 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 [package]
-name = "splinter-knowledge"
-description = "Knowledge intake: a document split into sections, every fact extracted as a question/answer pair, gated on subject anchoring and traceable numbers, with scope negatives."
+name = "splinter-views"
+description = "Views over the experience store: each projects experiences and their annotations into training records for one objective, and writes them as a chat dataset the trainer accepts."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,10 +14,12 @@ splinter-lab = { workspace = true }
 splinter-policy = { workspace = true }
 splinter-store = { workspace = true }
 
-anyhow = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+
+[dev-dependencies]
+sven-sdk = { workspace = true }
 
 [lints]
 workspace = true

@@ -45,7 +45,10 @@
 //!   and the rule that decides which records are held out.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
 //!   supervising assistant turns and nothing else, and refusing a transcript
-//!   with a hole in it.
+//!   with a hole in it. [`WireMessage`] is one message of the
+//!   `generic-messages-v2` format those records are written in.
+//! * [`denoise`] - the denoise task family's formal verifier, grading an
+//!   experience against the reference passage it never showed the solver.
 //!
 //! # Making the expensive mistakes impossible rather than noticed
 //!
@@ -61,6 +64,7 @@
 pub mod answers;
 mod dataset;
 mod demonstrate;
+pub mod denoise;
 mod endpoint;
 mod episode;
 mod family;
@@ -73,7 +77,7 @@ mod verdict;
 
 pub use dataset::{
     record_from_episode, record_from_requests, records_from_performance, to_jsonl, Excluded,
-    Provenance, Record, RecordMetadata,
+    Provenance, Record, RecordMetadata, WireFunction, WireMessage, WireToolCall,
 };
 pub use demonstrate::{Demonstrator, Step};
 pub use endpoint::{AdapterPath, NoAdapterPath};

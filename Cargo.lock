@@ -3906,6 +3906,8 @@ name = "splinter-campaign"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
  "serde",
  "serde_json",
  "splinter-agent",
@@ -3913,6 +3915,8 @@ dependencies = [
  "splinter-lab",
  "splinter-policy",
  "splinter-store",
+ "splinter-views",
+ "sven-sdk",
  "tokio",
 ]
 
@@ -3925,6 +3929,7 @@ dependencies = [
  "splinter-lab",
  "splinter-policy",
  "splinter-store",
+ "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -3935,7 +3940,9 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+ "splinter-store",
  "sven-sdk",
+ "thiserror 2.0.21",
  "tokio",
  "toml",
 ]
@@ -3963,6 +3970,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sven-sdk",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3976,6 +3985,19 @@ dependencies = [
  "splinter-policy",
  "sven-sdk",
  "tokio",
+]
+
+[[package]]
+name = "splinter-views"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "splinter-lab",
+ "splinter-policy",
+ "splinter-store",
+ "sven-sdk",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

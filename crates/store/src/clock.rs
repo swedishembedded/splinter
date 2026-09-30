@@ -64,6 +64,42 @@ pub fn utc_now() -> String {
     )
 }
 
+/// A source of [`utc_now`]-shaped timestamps, passed to whatever stamps a
+/// durable record, so a test or a replay can pin time instead of reading the
+/// wall clock.
+pub trait Clock {
+    /// The current instant as `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+    fn utc_now(&self) -> String;
+}
+
+/// The wall clock: [`utc_now`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn utc_now(&self) -> String {
+        utc_now()
+    }
+}
+
+/// A clock that always reads the same instant.
+#[derive(Clone, Debug)]
+pub struct FixedClock(String);
+
+impl FixedClock {
+    /// A clock stopped at `stamp`, which is returned verbatim.
+    #[must_use]
+    pub fn new(stamp: impl Into<String>) -> Self {
+        Self(stamp.into())
+    }
+}
+
+impl Clock for FixedClock {
+    fn utc_now(&self) -> String {
+        self.0.clone()
+    }
+}
+
 /// Days-since-epoch to (year, month, day) - Howard Hinnant's algorithm, the
 /// same arithmetic a date library would apply, without the dependency.
 fn civil_from_days(z: i64) -> (i64, i64, i64) {

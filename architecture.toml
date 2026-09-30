@@ -16,7 +16,7 @@
 internal = []
 
 [crates.splinter-lab]
-internal = []
+internal = ["splinter-store"]
 
 [crates.splinter-policy]
 internal = ["splinter-lab"]
@@ -28,8 +28,11 @@ internal = ["splinter-store", "splinter-lab", "splinter-policy"]
 [crates.splinter-knowledge]
 internal = ["splinter-store", "splinter-lab", "splinter-policy"]
 
+[crates.splinter-views]
+internal = ["splinter-store", "splinter-lab", "splinter-policy"]
+
 [crates.splinter-campaign]
-internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge"]
+internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
 
 [crates.splinter]
 internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-campaign"]

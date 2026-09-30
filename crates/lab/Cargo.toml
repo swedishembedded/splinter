@@ -11,9 +11,11 @@ publish.workspace = true
 
 [dependencies]
 sven-sdk = { workspace = true }
+splinter-store = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 toml = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 

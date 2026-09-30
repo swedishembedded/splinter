@@ -17,17 +17,28 @@
 //!   train/<attempt_id>/       one training attempt's adapter and scores
 //!   train/prepared/           the tokenized dataset of the latest attempt
 //!   adapter.json              the promoted adapter serving reads
+//!   experiences/              the content-addressed experience store
 //! ```
 //!
 //! Every file a reader acts on is written with [`write_atomic`]: a status
-//! half-written by a crash must never read as a status. [`runs`] holds a
-//! run's manifest and limits, [`trace`] its append-only event log - the two
-//! records every stage that runs a model writes, attempts and explorations
-//! alike.
+//! half-written by a crash must never read as a status. A content-addressed
+//! object is written with [`write_once`], which never replaces a file.
+//! [`runs`] holds a run's manifest and limits, [`trace`] its append-only
+//! event log - the two records every stage that runs a model writes,
+//! attempts and explorations alike.
+//!
+//! [`experience`], [`annotation`] and [`experiences`] are the experience
+//! store every training set is projected from: immutable experiences under
+//! their content address, append-only annotations beside them, and named
+//! sets of experience ids.
 
 #![warn(missing_docs)]
 
+pub mod annotation;
 pub mod clock;
+pub mod digest;
+pub mod experience;
+pub mod experiences;
 pub mod runs;
 pub mod trace;
 
@@ -94,6 +105,12 @@ impl StateRoot {
     pub fn adapter_pointer(&self) -> PathBuf {
         self.0.join("adapter.json")
     }
+
+    /// The experience store's directory.
+    #[must_use]
+    pub fn experiences(&self) -> PathBuf {
+        self.0.join("experiences")
+    }
 }
 
 /// A new run id: time-ordered, so a directory listing reads as a history,
@@ -140,6 +157,59 @@ pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
         f.sync_all()?;
     }
     fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Creates `path` holding `bytes`, unless it already exists; returns
+/// whether it was created. Never replaces an existing file, and never
+/// exposes a partial one: the bytes go to a uniquely named temporary file in
+/// the same directory, are fsynced, and are hard-linked into place (which
+/// fails rather than replaces when `path` exists), then the directory entry
+/// is fsynced. Two writers racing on one path both succeed, and exactly one
+/// of them reports the creation.
+pub fn write_once(path: &Path, bytes: &[u8]) -> std::io::Result<bool> {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{} has no parent directory", path.display()),
+        )
+    })?;
+    fs::create_dir_all(parent)?;
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("object");
+    let tmp = parent.join(format!(
+        ".{name}.{}.{}.tmp",
+        std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let linked = (|| {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        match fs::hard_link(&tmp, path) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+            Err(e) => Err(e),
+        }
+    })();
+    let removed = fs::remove_file(&tmp);
+    let created = linked?;
+    removed?;
+    if created {
+        sync_dir(parent)?;
+    }
+    Ok(created)
+}
+
+/// Fsyncs a directory, so an entry just created in it survives a crash.
+pub fn sync_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    fs::File::open(dir)?.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = dir;
     Ok(())
 }
 

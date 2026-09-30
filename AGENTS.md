@@ -89,17 +89,18 @@ fact inline instead.
 
 ## Architecture
 
-Seven crates in layers; a crate depends only on the ones below it.
+Eight crates in layers; a crate depends only on the ones below it.
 `architecture.toml` is the authoritative edge list and
 `scripts/gates/check-architecture.sh` enforces it against `cargo metadata`.
 
 | Crate | Owns | Depends on |
 |---|---|---|
-| `splinter-store` | durable state: the injected `StateRoot` and its layout, atomic writes, time-ordered ids, the UTC clock, run manifests and limits, the append-only trace | - |
-| `splinter-lab` | measurement: the answer contract (prompt, reply shape, parse, training record, judge), the promotion gate and holdout rule, verdicts that cannot be self-awarded, served-model identity, wire capture, dataset derivation from verified episodes, task families | - |
+| `splinter-store` | durable state: the injected `StateRoot` and its layout, atomic and write-once writes, time-ordered ids, the UTC clock, run manifests and limits, the append-only trace, and the experience store - immutable content-addressed experiences, append-only annotations, experience sets, the derived reward | - |
+| `splinter-lab` | measurement: the answer contract (prompt, reply shape, parse, training record, judge), the promotion gate and holdout rule, verdicts that cannot be self-awarded, served-model identity, wire capture, dataset derivation from verified episodes, task families and their verifiers | store |
 | `splinter-policy` | the model being trained, and the only crate that touches brain: the in-process provider behind sven's `ModelProvider`, `ModelSelection` and its identity, LoRA fine-tuning with held-out scoring, one-prompt completion | lab |
 | `splinter-agent` | one delegated attempt through sven: run and resume, limits, cancel, completion checks, the structured outcome | store, lab, policy |
-| `splinter-knowledge` | document intake: sections, fact extraction, the anchoring and traceability gates, scope negatives, the traced exploration | store, lab, policy |
+| `splinter-knowledge` | document intake: sections, fact extraction, the anchoring and traceability gates, scope negatives, the traced exploration, task generators | store, lab, policy |
+| `splinter-views` | projections of the experience store into training records for one objective, and the chat dataset they are written as | store, lab, policy |
 | `splinter-campaign` | the controller: `Config` (the only reader of the environment), `ModelChoice`, and each command's pipeline - attempts, learning a run, training behind the gate, ask, eval, document learning | all of the above |
 | `splinter` | the binary: `clap` grammar and output, nothing else | campaign and the types it prints |
 

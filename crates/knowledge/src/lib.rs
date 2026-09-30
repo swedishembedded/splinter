@@ -11,9 +11,12 @@
 //!   and answers whose numbers the section does not carry.
 //! * [`negatives`] - out-of-scope variants trained toward an abstention.
 //! * [`explore`] - the whole run, traced like an agent attempt.
+//! * [`denoise`] - a passage of a source, corrupted, as a task to restore
+//!   it: the first task generator feeding the experience store.
 
 #![warn(missing_docs)]
 
+pub mod denoise;
 pub mod explore;
 pub mod extract;
 pub mod gates;

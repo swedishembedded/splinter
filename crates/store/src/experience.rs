@@ -1,0 +1,381 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements experience records that every training set
+// is projected from, for its clients. If your team needs expertise in
+// training-data provenance or agent learning pipelines, you can procure our
+// services by sending an email to info@swedishembedded.com.
+
+//! The experience: one task, what the solver did with it, and everything
+//! needed to judge and learn from it later.
+//!
+//! An [`Experience`] is immutable and content-addressed: its
+//! [`ExperienceId`] is the [`Digest`] of the canonical JSON of the whole
+//! record (see [`crate::digest`] for the canonical form). Everything in the
+//! record is part of the address, the provenance timestamp included, so two
+//! solves of the same task at different times are two experiences. What a
+//! grader later says about an experience is an annotation
+//! ([`crate::annotation`]), appended beside it, never written into it.
+//!
+//! The record separates what the student sees from what only the teacher
+//! saw: [`Experience::instruction`] is the user turn a training record may
+//! show; [`Experience::privileged`] (a reference answer, a hint, the source
+//! passage) is for generators and verifiers, and a view must never put it
+//! into a record.
+
+use serde::{Deserialize, Serialize};
+
+pub use crate::digest::{Digest, DigestError};
+use crate::{clock::Clock, digest::canonical_json};
+
+/// The content address of an [`Experience`]: the [`Digest`] of its
+/// canonical form.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ExperienceId(pub Digest);
+
+impl ExperienceId {
+    /// `sha256:<hex>`.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// The hex part alone, which names the experience's files.
+    #[must_use]
+    pub fn hex(&self) -> &str {
+        self.0.hex()
+    }
+}
+
+impl std::fmt::Display for ExperienceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Which task an experience attempted.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskRef {
+    /// The content address of the task: the [`Digest`] of the canonical
+    /// form of its kind, evidence, environment, instruction and privileged
+    /// information (see [`Task::new`]).
+    pub id: Digest,
+    /// What kind of task it is, free-form: `denoise`, `recall`, ...
+    pub kind: String,
+}
+
+/// A byte range `[start, end)` of a source the task is grounded in.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Span {
+    /// The digest of the whole source text the offsets index into.
+    pub source: Digest,
+    /// First byte of the span.
+    pub start: u64,
+    /// One past the last byte of the span; `start <= end`.
+    pub end: u64,
+}
+
+impl Span {
+    /// A span, refused when it ends before it starts.
+    pub fn new(source: Digest, start: u64, end: u64) -> Result<Self, ExperienceError> {
+        let span = Self { source, start, end };
+        span.validate()?;
+        Ok(span)
+    }
+
+    fn validate(&self) -> Result<(), ExperienceError> {
+        if self.start > self.end {
+            return Err(ExperienceError::Span {
+                source_digest: self.source.clone(),
+                start: self.start,
+                end: self.end,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Where the solver worked.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Environment {
+    /// `closed-book` (no tools, no sources), `runtime:<name>`, `workspace`.
+    pub kind: String,
+    /// The environment's own settings, as its producer defines them.
+    pub spec: serde_json::Value,
+    /// A digest of the environment's state when the solve started, when
+    /// there is state to capture.
+    pub snapshot: Option<Digest>,
+}
+
+/// What kind of privileged information an item is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivilegedKind {
+    /// Source text the task was generated from.
+    Passage,
+    /// A hint the teacher had and the student does not.
+    Hint,
+    /// A critique of an attempt.
+    Critique,
+    /// The reference answer.
+    Reference,
+    /// An oracle's output, such as a tool's ground truth.
+    Oracle,
+    /// Anything else, named by its producer.
+    Other(String),
+}
+
+/// Information only the teacher saw: a generator's or verifier's input,
+/// never part of what the student is trained to see.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Privileged {
+    /// What it is.
+    pub kind: PrivilegedKind,
+    /// The information itself.
+    pub content: String,
+    /// Where in a source it came from, when it came from one.
+    pub span: Option<Span>,
+}
+
+/// Who and what produced an experience, and when.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Provenance {
+    /// The model that solved the task, as its identity string.
+    pub solver: String,
+    /// The generator that produced the task, when one did.
+    pub generator: Option<String>,
+    /// The policy (adapter or checkpoint identity) the solver served from,
+    /// when it differs from the solver's own name.
+    pub policy: Option<String>,
+    /// Digests of the prompts involved in producing the experience.
+    pub prompt_digests: Vec<Digest>,
+    /// When the experience was recorded, from the injected [`Clock`].
+    pub created_at: String,
+}
+
+impl Provenance {
+    /// Provenance for `solver`, stamped by `clock`, with nothing else known.
+    #[must_use]
+    pub fn new(solver: impl Into<String>, clock: &dyn Clock) -> Self {
+        Self {
+            solver: solver.into(),
+            generator: None,
+            policy: None,
+            prompt_digests: Vec::new(),
+            created_at: clock.utc_now(),
+        }
+    }
+}
+
+/// A task as a generator emits it, before anyone solves it: everything an
+/// [`Experience`] records about the task itself.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Task {
+    /// The task's kind and content address.
+    pub task: TaskRef,
+    /// The spans the task is grounded in.
+    pub evidence: Vec<Span>,
+    /// Where the solver works.
+    pub environment: Environment,
+    /// The user turn the student sees.
+    pub instruction: String,
+    /// What only the teacher sees.
+    pub privileged: Vec<Privileged>,
+}
+
+/// The fields a task's address is computed over, in one place so building
+/// a task and validating an experience cannot disagree about them.
+#[derive(Serialize)]
+struct TaskBody<'a> {
+    kind: &'a str,
+    evidence: &'a [Span],
+    environment: &'a Environment,
+    instruction: &'a str,
+    privileged: &'a [Privileged],
+}
+
+impl TaskBody<'_> {
+    fn address(&self) -> Result<Digest, ExperienceError> {
+        Ok(Digest::of(&canonical_json(self)?))
+    }
+}
+
+impl Task {
+    /// A validated task whose [`TaskRef::id`] addresses its content.
+    pub fn new(
+        kind: impl Into<String>,
+        evidence: Vec<Span>,
+        environment: Environment,
+        instruction: impl Into<String>,
+        privileged: Vec<Privileged>,
+    ) -> Result<Self, ExperienceError> {
+        let kind = kind.into();
+        let instruction = instruction.into();
+        let id = TaskBody {
+            kind: &kind,
+            evidence: &evidence,
+            environment: &environment,
+            instruction: &instruction,
+            privileged: &privileged,
+        }
+        .address()?;
+        let task = Self {
+            task: TaskRef { id, kind },
+            evidence,
+            environment,
+            instruction,
+            privileged,
+        };
+        validate_task(
+            &task.task,
+            &task.evidence,
+            &task.environment,
+            &task.instruction,
+            &task.privileged,
+        )?;
+        Ok(task)
+    }
+}
+
+/// One solved (or attempted) task, immutable once stored.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Experience {
+    /// The task's kind and content address.
+    pub task: TaskRef,
+    /// The spans the task is grounded in.
+    pub evidence: Vec<Span>,
+    /// Where the solver worked.
+    pub environment: Environment,
+    /// The user turn the student sees.
+    pub instruction: String,
+    /// What only the teacher saw.
+    pub privileged: Vec<Privileged>,
+    /// What the solver did, as sven exports it.
+    pub trajectory: sven_sdk::atif::Trajectory,
+    /// The solver's final answer, when it gave one.
+    pub final_output: Option<String>,
+    /// Who produced it, and when.
+    pub provenance: Provenance,
+}
+
+impl Experience {
+    /// A validated experience of `task`.
+    pub fn new(
+        task: Task,
+        trajectory: sven_sdk::atif::Trajectory,
+        final_output: Option<String>,
+        provenance: Provenance,
+    ) -> Result<Self, ExperienceError> {
+        let experience = Self {
+            task: task.task,
+            evidence: task.evidence,
+            environment: task.environment,
+            instruction: task.instruction,
+            privileged: task.privileged,
+            trajectory,
+            final_output,
+            provenance,
+        };
+        experience.validate()?;
+        Ok(experience)
+    }
+
+    /// The canonical form the id is computed over.
+    pub fn canonical(&self) -> Result<Vec<u8>, ExperienceError> {
+        Ok(canonical_json(self)?)
+    }
+
+    /// The content address of this experience.
+    pub fn id(&self) -> Result<ExperienceId, ExperienceError> {
+        Ok(ExperienceId(Digest::of(&self.canonical()?)))
+    }
+
+    /// Checks what the type system cannot: spans that end after they start,
+    /// the required text fields present, and a task reference that
+    /// addresses the task this record carries.
+    pub fn validate(&self) -> Result<(), ExperienceError> {
+        validate_task(
+            &self.task,
+            &self.evidence,
+            &self.environment,
+            &self.instruction,
+            &self.privileged,
+        )?;
+        if self.provenance.solver.trim().is_empty() {
+            return Err(ExperienceError::Missing("provenance.solver"));
+        }
+        if self.provenance.created_at.trim().is_empty() {
+            return Err(ExperienceError::Missing("provenance.created_at"));
+        }
+        Ok(())
+    }
+}
+
+fn validate_task(
+    task: &TaskRef,
+    evidence: &[Span],
+    environment: &Environment,
+    instruction: &str,
+    privileged: &[Privileged],
+) -> Result<(), ExperienceError> {
+    for (field, value) in [
+        ("task.kind", task.kind.as_str()),
+        ("environment.kind", environment.kind.as_str()),
+        ("instruction", instruction),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ExperienceError::Missing(field));
+        }
+    }
+    for span in evidence
+        .iter()
+        .chain(privileged.iter().filter_map(|p| p.span.as_ref()))
+    {
+        span.validate()?;
+    }
+    let expected = TaskBody {
+        kind: &task.kind,
+        evidence,
+        environment,
+        instruction,
+        privileged,
+    }
+    .address()?;
+    if expected != task.id {
+        return Err(ExperienceError::TaskAddress {
+            recorded: task.id.clone(),
+            expected,
+        });
+    }
+    Ok(())
+}
+
+/// Why a task or an experience is not valid.
+#[derive(Debug, thiserror::Error)]
+pub enum ExperienceError {
+    /// A span ends before it starts.
+    #[error("span [{start}, {end}) of {source_digest} ends before it starts")]
+    Span {
+        /// The source the span indexes.
+        source_digest: Digest,
+        /// Its start.
+        start: u64,
+        /// Its end.
+        end: u64,
+    },
+    /// A required text field is empty.
+    #[error("{0} is empty")]
+    Missing(&'static str),
+    /// The task reference does not address the task the record carries.
+    #[error("task id {recorded} does not address this task (its content hashes to {expected})")]
+    TaskAddress {
+        /// The id the record carries.
+        recorded: Digest,
+        /// The id its content hashes to.
+        expected: Digest,
+    },
+    /// The record cannot be serialized (a float that JSON cannot hold).
+    #[error("cannot serialize the record: {0}")]
+    Serialize(#[from] serde_json::Error),
+}
