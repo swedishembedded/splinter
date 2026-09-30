@@ -128,6 +128,38 @@ impl ModelSelection {
     }
 }
 
+/// A model served by a `brain serve` at `base_url` (its OpenAI-compatible
+/// surface, ending in `/v1`), as `model` with the API key `api_key` it
+/// printed at startup.
+///
+/// Built on sven's default configuration rather than the user's: what is
+/// measured is the server, and no setting of the person running the check
+/// (a temperature, a token limit) may change what it answers.
+pub fn served_model(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+) -> Result<LoadedModel, PolicyError> {
+    let spec = format!("openai/{model}");
+    let remote = RemoteModel {
+        spec: spec.clone(),
+        base_url: Some(base_url.to_string()),
+        api_key: Some(api_key.to_string()),
+    };
+    let mut config = sven_sdk::config::Config::default();
+    remote.apply_to(&mut config)?;
+    let driver =
+        sven_sdk::drivers::from_config(&config.model).map_err(|e| PolicyError::Remote {
+            spec: spec.clone(),
+            reason: format!("{e:#}"),
+        })?;
+    Ok(LoadedModel {
+        provider: Arc::from(driver),
+        identity: format!("{spec}@{base_url}"),
+        local: None,
+    })
+}
+
 /// A model loaded for the length of a command: the provider every engine
 /// on it shares, and its identity. Dropping it stops a local generation
 /// still running and waits up to [`QUIESCE_GRACE`] for the device to go

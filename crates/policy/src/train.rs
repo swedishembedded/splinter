@@ -60,7 +60,7 @@ pub struct FineTune<'a> {
 
 /// One held-out score: teacher-forced loss and token accuracy over the
 /// supervised positions of the held-out records.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct HeldOutScore {
     /// Mean per-token cross-entropy over the supervised positions; lower is
     /// better. `None` when no position was scored.

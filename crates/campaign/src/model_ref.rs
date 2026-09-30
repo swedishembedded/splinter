@@ -11,6 +11,7 @@
 //! | Reference | Model |
 //! |---|---|
 //! | `policy:default` | the configured base, plus the champion adapter once releases exist |
+//! | `policy:<alias>` | the configured base, plus the adapter of the release `<alias>` points at |
 //! | `local:<checkpoint>[+<adapter>]` | a local checkpoint, optionally with a LoRA adapter file |
 //! | `remote:<provider>/<name>` | a model reached over the network |
 //!
@@ -20,7 +21,7 @@
 //! cannot be named. A remote reference resolves only with the network
 //! opt-in: `--allow-remote`, or [`Config::allow_remote`].
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use splinter_policy::{LocalWeights, ModelSelection, RemoteModel};
@@ -30,17 +31,18 @@ use crate::config::Config;
 /// Inline context budget of a local model.
 pub const DEFAULT_CONTEXT_TOKENS: u32 = 16_384;
 
-/// The one policy alias there is.
-const POLICY_DEFAULT: &str = "default";
+/// The alias the policy commands use by default: the champion.
+pub const POLICY_DEFAULT: &str = "default";
 
 /// The grammar, as refusals state it.
 const GRAMMAR: &str =
-    "a model reference is policy:default, local:<checkpoint>[+<adapter>] or remote:<provider>/<name>";
+    "a model reference is policy:default (or policy:<alias>), local:<checkpoint>[+<adapter>] or \
+     remote:<provider>/<name>";
 
 /// A model a command names; see the module documentation.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ModelRef {
-    /// `policy:<alias>`; `default` is the only alias.
+    /// `policy:<alias>`: the base, and the release the alias points at.
     Policy(String),
     /// `local:<checkpoint>[+<adapter>]`.
     Local {
@@ -78,8 +80,11 @@ pub enum RefError {
         /// The reference.
         found: String,
     },
-    /// A policy alias other than `default`.
-    #[error("unknown policy {alias:?}: `policy:default` is the only policy until releases exist")]
+    /// A policy alias that is not an alias name.
+    #[error(
+        "{alias:?} is not an alias name: a lowercase letter, then up to 63 lowercase letters, \
+         digits, - or _"
+    )]
     UnknownPolicy {
         /// The alias given.
         alias: String,
@@ -126,13 +131,21 @@ impl ModelRef {
         matches!(self, Self::Remote { .. })
     }
 
-    /// The model this reference names under `config`. A remote reference
-    /// is refused unless `allow_remote` or the configuration opts in.
-    pub fn resolve(&self, config: &Config, allow_remote: bool) -> Result<ModelSelection, RefError> {
+    /// The model this reference names under `config`; a policy reference
+    /// is the base with `policy_adapter`, the adapter of the release its
+    /// alias was resolved to (`None` before any release). A remote
+    /// reference is refused unless `allow_remote` or the configuration
+    /// opts in.
+    pub fn resolve(
+        &self,
+        config: &Config,
+        allow_remote: bool,
+        policy_adapter: Option<&Path>,
+    ) -> Result<ModelSelection, RefError> {
         match self {
             Self::Policy(_) => Ok(ModelSelection::Local(LocalWeights {
                 base: config.policy_base.clone(),
-                adapter: None,
+                adapter: policy_adapter.map(Path::to_path_buf),
                 context_tokens: DEFAULT_CONTEXT_TOKENS,
             })),
             Self::Local {
@@ -164,6 +177,17 @@ impl ModelRef {
     }
 }
 
+/// Whether `name` is an alias name: a lowercase ASCII letter, then up to 63
+/// lowercase letters, digits, `-` or `_` - safe as a file name, and never
+/// a path.
+#[must_use]
+pub fn is_alias_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && name.len() <= 64
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+}
+
 /// Where `checkpoint` is: a path as written, or a name in the model store.
 fn checkpoint_path(config: &Config, checkpoint: &str) -> PathBuf {
     let path = PathBuf::from(checkpoint);
@@ -186,7 +210,7 @@ impl FromStr for ModelRef {
             return Err(RefError::NoScheme { found: found() });
         };
         match scheme {
-            "policy" if rest == POLICY_DEFAULT => Ok(Self::policy_default()),
+            "policy" if is_alias_name(rest) => Ok(Self::Policy(rest.to_string())),
             "policy" => Err(RefError::UnknownPolicy {
                 alias: rest.to_string(),
             }),

@@ -11,14 +11,16 @@ use std::time::Duration;
 use clap::{ArgAction, Args, Parser, Subcommand};
 use splinter_campaign::critique::DEFAULT_RETRIES;
 use splinter_campaign::datasets::{parse_strength, parse_strip, Strip, ViewName};
+use splinter_campaign::eval::SuiteChoice;
 use splinter_campaign::learn::parse_budget;
-use splinter_campaign::model_ref::ModelRef;
-use splinter_campaign::train::{DEFAULT_LORA_RANK, DEFAULT_STEPS};
+use splinter_campaign::model_ref::{ModelRef, POLICY_DEFAULT};
+use splinter_campaign::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS};
 use splinter_store::annotation::Strength;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
 /// a repository, a command's output - and it generates tasks from it,
-/// solves and verifies them, and trains a candidate on what passed.
+/// solves and verifies them, trains a candidate on what passed, and
+/// releases it only if it measurably improves without forgetting.
 ///
 /// With no command, a REPL on the current policy: each line is handled
 /// exactly like `splinter "<line>"`.
@@ -26,8 +28,9 @@ use splinter_store::annotation::Strength;
 #[command(
     name = "splinter",
     version,
-    after_help = "Models are named policy:default, local:<checkpoint>[+<adapter>] or \
-                  remote:<provider>/<name>; remote ones need --allow-remote. Every stage stores \
+    after_help = "Models are named policy:default (or policy:<alias>), \
+                  local:<checkpoint>[+<adapter>] or remote:<provider>/<name>; remote ones need \
+                  --allow-remote. Every stage stores \
                   what it makes under the state root by content address, so any stage can be \
                   rerun or inspected alone."
 )]
@@ -66,8 +69,9 @@ pub struct Global {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Learn from sources: capture them, generate tasks, solve, verify,
-    /// critique and retry failures, build an sft-final dataset and train a
-    /// candidate on it. The candidate is reported, not released.
+    /// critique and retry failures, build an sft-final dataset, train a
+    /// candidate on it from the champion, and release it if it passes the
+    /// release gate.
     Learn(LearnArgs),
     /// Answer a question with a model, closed-book unless --open-book.
     Ask(AskArgs),
@@ -96,6 +100,18 @@ pub enum Command {
     Dataset(DatasetCommand),
     /// Train a candidate adapter on datasets; it is not released.
     Train(TrainArgs),
+    /// Run the release gate on a candidate and release it if every check
+    /// passes; or list the releases.
+    Release(ReleaseArgs),
+    /// Point an alias back at the release its current one was trained
+    /// from.
+    Rollback {
+        /// The alias, e.g. default.
+        alias: String,
+    },
+    /// Grade a candidate or a model closed-book on a suite; or freeze and
+    /// show the anchor suite.
+    Eval(EvalArgs),
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
@@ -124,6 +140,11 @@ fn strength(text: &str) -> Result<Strength, String> {
     parse_strength(text).map_err(|e| e.to_string())
 }
 
+fn suite(text: &str) -> Result<SuiteChoice, String> {
+    text.parse()
+        .map_err(|e: splinter_campaign::CampaignError| e.to_string())
+}
+
 /// `learn`.
 #[derive(Debug, Args)]
 pub struct LearnArgs {
@@ -143,6 +164,9 @@ pub struct LearnArgs {
     /// Report the plan and write nothing.
     #[arg(long)]
     pub dry_run: bool,
+    /// Stop at the trained candidate: do not run the release gate.
+    #[arg(long)]
+    pub no_release: bool,
 }
 
 /// `ask`.
@@ -319,15 +343,54 @@ pub struct TrainArgs {
     /// The base to train, and an adapter on it to continue.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub from: ModelRef,
-    /// A dataset mixed into training whole, never held out.
-    #[arg(long, value_name = "DATASET-ID")]
-    pub replay: Option<String>,
+    /// The fraction of each earlier release's training records replayed,
+    /// when training from a policy alias.
+    #[arg(long, default_value_t = DEFAULT_REPLAY_FRACTION, value_name = "F")]
+    pub replay_fraction: f64,
     /// Optimizer steps.
     #[arg(long, default_value_t = DEFAULT_STEPS, value_name = "N")]
     pub steps: u32,
     /// LoRA rank of a new adapter.
     #[arg(long, default_value_t = DEFAULT_LORA_RANK, value_name = "R")]
     pub rank: u32,
+}
+
+/// `release`.
+#[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct ReleaseArgs {
+    /// The candidate, by id or unique prefix.
+    #[arg(value_name = "CANDIDATE-ID")]
+    pub candidate: Option<String>,
+    /// The alias it replaces the champion of.
+    #[arg(long, default_value = POLICY_DEFAULT, value_name = "NAME")]
+    pub alias: String,
+    /// `list`.
+    #[command(subcommand)]
+    pub command: Option<ReleaseCommand>,
+}
+
+/// `release ...`.
+#[derive(Debug, Subcommand)]
+pub enum ReleaseCommand {
+    /// List the releases and the aliases pointing at them.
+    List,
+}
+
+/// `eval`.
+#[derive(Debug, Args)]
+pub struct EvalArgs {
+    /// A candidate id (or prefix) or a model reference; none shows the
+    /// anchor suite.
+    #[arg(value_name = "REF")]
+    pub model: Option<String>,
+    /// held-out, retention, anchor, or an anchor-format file of tasks.
+    #[arg(long, default_value = "held-out", value_parser = suite, value_name = "SUITE")]
+    pub suite: SuiteChoice,
+    /// With --suite anchor: make this file's tasks the anchor suite's next
+    /// version first. JSON Lines: {"instruction", "reference", "kind"?}.
+    #[arg(long, value_name = "FILE")]
+    pub freeze: Option<PathBuf>,
 }
 
 /// `runs ...`.
@@ -520,8 +583,8 @@ mod tests {
             "cd34",
             "--from",
             "local:./ckpt+a.safetensors",
-            "--replay",
-            "ef56",
+            "--replay-fraction",
+            "0.5",
             "--steps",
             "10",
             "--rank",
@@ -531,6 +594,42 @@ mod tests {
         };
         assert_eq!(train.datasets.len(), 2);
         assert_eq!((train.steps, train.rank), (10, 4));
+        assert_eq!(train.replay_fraction, 0.5);
+
+        let Command::Release(release) = command(&["release", "candidate-1", "--alias", "staging"])
+        else {
+            panic!("release");
+        };
+        assert_eq!(release.candidate.as_deref(), Some("candidate-1"));
+        assert_eq!(release.alias, "staging");
+        assert!(release.command.is_none());
+        let Command::Release(listing) = command(&["release", "list"]) else {
+            panic!("release list");
+        };
+        assert!(matches!(listing.command, Some(ReleaseCommand::List)));
+        assert_eq!(listing.alias, POLICY_DEFAULT);
+        assert!(matches!(
+            command(&["rollback", "default"]),
+            Command::Rollback { alias } if alias == "default"
+        ));
+        assert!(parse(&["rollback"]).is_err(), "rollback needs an alias");
+        let Command::Eval(eval) = command(&["eval", "policy:default"]) else {
+            panic!("eval");
+        };
+        assert_eq!(eval.suite, SuiteChoice::HeldOut);
+        let Command::Eval(eval) = command(&["eval", "--suite", "anchor", "--freeze", "a.jsonl"])
+        else {
+            panic!("eval anchor");
+        };
+        assert_eq!((eval.model, eval.suite), (None, SuiteChoice::Anchor));
+        let Command::Eval(eval) = command(&["eval", "c1", "--suite", "tasks.jsonl"]) else {
+            panic!("eval file");
+        };
+        assert_eq!(eval.suite, SuiteChoice::File("tasks.jsonl".into()));
+        let Command::Learn(learn) = command(&["learn", "docs", "--no-release"]) else {
+            panic!("learn");
+        };
+        assert!(learn.no_release);
         assert!(matches!(
             command(&["runs", "cancel", "run-1"]),
             Command::Runs(RunsCommand::Cancel { .. })
@@ -552,6 +651,10 @@ mod tests {
             &["experiences", "list"],
             &["dataset", "export", "ab12", "--out", "d"],
             &["train", "ab12"],
+            &["release", "list"],
+            &["release", "c1"],
+            &["rollback", "default"],
+            &["eval", "c1", "--suite", "anchor"],
             &["runs", "list"],
         ] {
             let flags = ["--json", "-v", "--allow-remote", "--state", "s"];
@@ -573,7 +676,8 @@ mod tests {
             refused.to_string().contains("remote:<provider>/<name>"),
             "{refused}"
         );
-        assert!(parse(&["ask", "q", "--policy", "policy:champion"]).is_err());
+        assert!(parse(&["ask", "q", "--policy", "policy:Champion"]).is_err());
+        assert!(parse(&["ask", "q", "--policy", "policy:staging"]).is_ok());
         // Parsing accepts a remote reference; using one needs the opt-in.
         assert!(parse(&["ask", "q", "--policy", "remote:openrouter/z-ai/glm"]).is_ok());
     }
@@ -587,6 +691,7 @@ mod tests {
             &["cancel", "--run", "r"],
             &["learn", "--run", "r"],
             &["train", "--dataset", "d.jsonl"],
+            &["train", "ab12", "--replay", "cd34"],
             &["explore", "--file", "f.md", "--out", "o.jsonl"],
             &["ask", "--question", "q"],
             &["eval-facts", "--dataset", "d", "--out", "o"],

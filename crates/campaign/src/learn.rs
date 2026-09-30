@@ -7,16 +7,21 @@
 // can procure our services by sending an email to info@swedishembedded.com.
 
 //! `learn`: sources -> tasks -> solve -> verify -> critique and retry ->
-//! dataset -> train, as one recorded run whose every stage is also a
-//! command of its own.
+//! dataset -> train -> release, as one recorded run whose every stage is
+//! also a command of its own.
 //!
 //! Each stage hands the next the content-addressed set it wrote, and its
 //! summary is recorded (and reported) as it finishes, so a stage can be
 //! inspected, or rerun alone, from what the run records. The policy -
-//! `policy:default` - generates, solves, critiques and retries; its tasks
-//! are graded by their kinds' verifiers, never by a judge. The dataset is
-//! the `sft-final` view over the first attempts and the revisions, and the
-//! candidate trained on it is reported, not released.
+//! `policy:default` - is resolved once, when the run starts, and the
+//! release it resolved to is the run's first recorded stage: the whole run
+//! generates, solves, critiques, retries and trains from that release,
+//! however the alias moves meanwhile. Its tasks are graded by their kinds'
+//! verifiers, never by a judge. The dataset is the `sft-final` view over
+//! the first attempts and the revisions; the candidate trained on it
+//! continues that release, and goes through the release gate, which
+//! releases it only if every check passes (`--no-release` stops at the
+//! candidate).
 //!
 //! The pipeline stops early, and says why, when a stage leaves the next
 //! nothing to work on or the budget is spent; `--dry-run` resolves the
@@ -33,17 +38,21 @@ use crate::context::Context;
 use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};
 use crate::datasets::{build, BuildRequest, Built, ViewName};
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
+use crate::model_ref::{ModelRef, POLICY_DEFAULT};
+use crate::release::{release, ReleaseId, ReleaseRequest, Released};
 use crate::runs::{record, Recorded, Recorder};
 use crate::solving::{solve_set, Solved};
 use crate::sources::{self, SourceSummary, SourceTarget};
 use crate::tasks::{check_kinds, generate, Generation, TasksGenerated, DEFAULT_LEARN_KINDS};
-use crate::train::{train, Candidate, TrainRequest, Trainer, DEFAULT_LORA_RANK, DEFAULT_STEPS};
+use crate::train::{
+    train, Candidate, TrainRequest, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION,
+    DEFAULT_STEPS,
+};
 use crate::verify::{verify_set, Verified};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 7] = [
-    "sources", "tasks", "solve", "verify", "critique", "dataset", "train",
+pub const STAGES: [&str; 9] = [
+    "policy", "sources", "tasks", "solve", "verify", "critique", "dataset", "train", "release",
 ];
 
 /// One `learn`.
@@ -59,6 +68,8 @@ pub struct LearnRequest {
     pub budget: Option<Duration>,
     /// Resolve the plan and write nothing.
     pub dry_run: bool,
+    /// Stop at the candidate: do not run the release gate.
+    pub no_release: bool,
 }
 
 /// What a dry run reports: the plan, and nothing written.
@@ -82,9 +93,21 @@ pub struct LearnPlan {
     pub dry_run: bool,
 }
 
+/// The policy a run works with, as resolved when it started.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct PolicyUsed {
+    /// The alias.
+    pub alias: String,
+    /// The release it pointed at; `None` when it pointed at none, and the
+    /// run works from the base.
+    pub release: Option<ReleaseId>,
+}
+
 /// What a `learn` run reports, stage by stage.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct LearnReport {
+    /// The policy the whole run used.
+    pub policy: PolicyUsed,
     /// The sources learned from.
     pub sources: Vec<SourceSummary>,
     /// The tasks stage.
@@ -97,10 +120,22 @@ pub struct LearnReport {
     pub critique: Option<Critiqued>,
     /// The dataset stage.
     pub dataset: Option<Built>,
-    /// The candidate trained, reported and not released.
+    /// The candidate trained.
     pub candidate: Option<Candidate>,
-    /// Why the pipeline stopped before training, if it did.
+    /// The release gate on it, and the release when it passed.
+    pub release: Option<Released>,
+    /// Why the pipeline stopped before training or releasing, if it did.
     pub stopped: Option<String>,
+}
+
+impl LearnReport {
+    /// Whether the run got as far as it was asked: a candidate trained,
+    /// and released unless the release was not asked for.
+    #[must_use]
+    pub fn finished(&self, release_asked: bool) -> bool {
+        self.candidate.is_some()
+            && (!release_asked || self.release.as_ref().is_some_and(|r| r.release.is_some()))
+    }
 }
 
 /// What `learn` did: the plan of a dry run, or the recorded run.
@@ -143,7 +178,10 @@ pub fn learn(
             goal: request.goal.clone(),
             budget_secs: request.budget.map(|b| b.as_secs()),
             policy: ctx.selection(&policy)?.identity(),
-            stages: STAGES.to_vec(),
+            stages: STAGES
+                .into_iter()
+                .filter(|stage| !(request.no_release && *stage == "release"))
+                .collect(),
             dry_run: true,
         }));
     }
@@ -154,6 +192,7 @@ pub fn learn(
         goal: request.goal.as_deref(),
         deadline: request.budget.map(|b| Instant::now() + b),
         trainer,
+        no_release: request.no_release,
     };
     let recorded = record(ctx, "learn", request, |run| {
         let mut report = LearnReport::default();
@@ -171,6 +210,7 @@ struct Pipeline<'a> {
     goal: Option<&'a str>,
     deadline: Option<Instant>,
     trainer: &'a dyn Trainer,
+    no_release: bool,
 }
 
 impl Pipeline<'_> {
@@ -184,8 +224,14 @@ impl Pipeline<'_> {
             goal,
             deadline,
             trainer,
+            no_release,
         } = *self;
         let policy = ModelRef::policy_default();
+        report.policy = PolicyUsed {
+            alias: POLICY_DEFAULT.into(),
+            release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
+        };
+        run.stage("policy", &report.policy)?;
         let spent = |stage: &str| {
             deadline
                 .is_some_and(|d| Instant::now() >= d)
@@ -299,7 +345,7 @@ impl Pipeline<'_> {
             &TrainRequest {
                 datasets: vec![dataset],
                 from: policy,
-                replay: None,
+                replay_fraction: DEFAULT_REPLAY_FRACTION,
                 steps: DEFAULT_STEPS,
                 rank: DEFAULT_LORA_RANK,
             },
@@ -307,7 +353,22 @@ impl Pipeline<'_> {
             &run.cancel_token(),
         )?;
         run.stage("train", &candidate)?;
+        let id = candidate.candidate.clone();
         report.candidate = Some(candidate);
+        if no_release {
+            return Ok(());
+        }
+        run.check_cancelled()?;
+        match release(ctx, &ReleaseRequest::new(id), &run.cancel_token()) {
+            Ok(released) => {
+                run.stage("release", &released)?;
+                report.release = Some(released);
+            }
+            // A candidate the gate may not judge (its champion moved on) is
+            // still trained; the run says why it was not released.
+            Err(e) if e.is_refusal() => report.stopped = Some(e.to_string()),
+            Err(e) => return Err(e),
+        }
         Ok(())
     }
 }

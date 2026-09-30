@@ -3,8 +3,9 @@
 
 //! Spec: one model-reference syntax everywhere a command names a model.
 //!
-//! * `policy:default` - the configured base (plus the champion adapter once
-//!   releases exist);
+//! * `policy:<alias>` - the configured base, plus the adapter of the
+//!   release the alias points at (`policy:default`, the champion, is the
+//!   base alone before any release);
 //! * `local:<checkpoint>[+<adapter>]` - a checkpoint path (absolute, or
 //!   starting `./` or `../`) or a name in brain's model store, with an
 //!   optional adapter file;
@@ -34,6 +35,7 @@ fn config() -> Config {
         allow_remote: false,
         command_env: BTreeMap::new(),
         working_dir: PathBuf::from("."),
+        brain_binary: None,
     }
 }
 
@@ -45,6 +47,7 @@ fn parse(text: &str) -> Result<ModelRef, RefError> {
 fn every_form_parses_and_prints_back() {
     for text in [
         "policy:default",
+        "policy:staging-2",
         "local:/ckpt/Qwen3-0.6B",
         "local:Qwen/Qwen3-0.6B",
         "local:./ckpt+./train/adapter.safetensors",
@@ -76,10 +79,12 @@ fn malformed_references_are_refused_precisely() {
     assert!(matches!(refused("Qwen3"), RefError::NoScheme { .. }));
     assert!(matches!(refused("gguf:x"), RefError::UnknownScheme { .. }));
     assert!(matches!(refused("policy:"), RefError::UnknownPolicy { .. }));
-    assert!(matches!(
-        refused("policy:champion"),
-        RefError::UnknownPolicy { .. }
-    ));
+    for not_an_alias in ["policy:Champion", "policy:../x", "policy:2nd", "policy:a/b"] {
+        assert!(
+            matches!(refused(not_an_alias), RefError::UnknownPolicy { .. }),
+            "{not_an_alias}"
+        );
+    }
     assert!(matches!(
         refused("local:"),
         RefError::EmptyCheckpoint { .. }
@@ -114,12 +119,12 @@ fn malformed_references_are_refused_precisely() {
 #[test]
 fn a_remote_model_is_refused_without_the_network_opt_in() {
     let remote = parse("remote:openrouter/z-ai/glm").unwrap();
-    let refused = remote.resolve(&config(), false).unwrap_err();
+    let refused = remote.resolve(&config(), false, None).unwrap_err();
     assert!(matches!(refused, RefError::RemoteNotAllowed { .. }));
     let message = refused.to_string();
     assert!(message.contains("--allow-remote"), "{message}");
 
-    let ModelSelection::Remote(model) = remote.resolve(&config(), true).unwrap() else {
+    let ModelSelection::Remote(model) = remote.resolve(&config(), true, None).unwrap() else {
         panic!("a remote reference resolves to a remote model");
     };
     assert_eq!(model.spec, "openrouter/z-ai/glm");
@@ -129,7 +134,7 @@ fn a_remote_model_is_refused_without_the_network_opt_in() {
         "the key follows the provider"
     );
     let brain = parse("remote:brain/qwen3").unwrap();
-    let ModelSelection::Remote(model) = brain.resolve(&config(), true).unwrap() else {
+    let ModelSelection::Remote(model) = brain.resolve(&config(), true, None).unwrap() else {
         panic!("remote");
     };
     assert_eq!(model.api_key.as_deref(), Some("brain-key"));
@@ -138,12 +143,16 @@ fn a_remote_model_is_refused_without_the_network_opt_in() {
         allow_remote: true,
         ..config()
     };
-    assert!(remote.resolve(&opted_in, false).is_ok());
+    assert!(remote.resolve(&opted_in, false, None).is_ok());
 }
 
 #[test]
 fn local_references_resolve_to_weights() {
-    let local = |text: &str| match parse(text).unwrap().resolve(&config(), false).unwrap() {
+    let local = |text: &str| match parse(text)
+        .unwrap()
+        .resolve(&config(), false, None)
+        .unwrap()
+    {
         ModelSelection::Local(weights) => weights,
         ModelSelection::Remote(_) => panic!("{text} is local"),
     };
@@ -165,4 +174,20 @@ fn local_references_resolve_to_weights() {
         Some(PathBuf::from("train/adapter.safetensors"))
     );
     assert_eq!(local("local:/abs/ckpt").base, PathBuf::from("/abs/ckpt"));
+
+    // A policy reference carries the adapter of the release its alias was
+    // resolved to; a local one ignores it.
+    let champion = std::path::Path::new("/state/releases/ab/adapter.safetensors");
+    let resolved = |text: &str| match parse(text)
+        .unwrap()
+        .resolve(&config(), false, Some(champion))
+        .unwrap()
+    {
+        ModelSelection::Local(weights) => weights,
+        ModelSelection::Remote(_) => panic!("{text} is local"),
+    };
+    let pinned = resolved("policy:default");
+    assert_eq!(pinned.base, PathBuf::from("/models/Qwen/Qwen3-0.6B"));
+    assert_eq!(pinned.adapter.as_deref(), Some(champion));
+    assert_eq!(resolved("local:/abs/ckpt").adapter, None);
 }

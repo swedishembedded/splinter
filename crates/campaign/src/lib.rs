@@ -21,7 +21,11 @@
 //!   [`judge`] - a judge's calibration.
 //! * [`critique`] - failures critiqued and retried.
 //! * [`datasets`] - experience sets projected into a stored dataset.
-//! * [`train`] - datasets become a candidate adapter, never released.
+//! * [`train`] - datasets become a candidate adapter, continuing the
+//!   champion with a replay of earlier releases' data.
+//! * [`release`] - the gate a candidate passes to become the policy, the
+//!   immutable releases and the aliases pointing at them, and rollback;
+//!   [`eval`] - one model graded on the gate's suites.
 //! * [`learn`] - every stage above, as one run.
 //! * [`runs`] - every command's run record, and cancelling one.
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions.
@@ -35,12 +39,14 @@ pub mod context;
 pub mod critique;
 pub mod datasets;
 pub mod error;
+pub mod eval;
 pub mod experiences;
 pub mod front_door;
 mod ids;
 pub mod judge;
 pub mod learn;
 pub mod model_ref;
+pub mod release;
 pub mod runs;
 pub mod solving;
 pub mod sources;

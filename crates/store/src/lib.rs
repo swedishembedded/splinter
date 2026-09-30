@@ -17,6 +17,9 @@
 //!   datasets/<id>/            one dataset and its manifest
 //!   calibrations/             each judge's latest calibration
 //!   train/<candidate_id>/     one trained candidate: adapter, scores, record
+//!   releases/<hex>/           one immutable release: its adapter and manifest
+//!   releases/aliases/<name>   the release an alias (`default`) points at
+//!   suites/anchor/            the frozen anchor suite's versions
 //!   sandbox/                  the process sandbox's per-call directories
 //! ```
 //!
@@ -123,6 +126,18 @@ impl StateRoot {
     #[must_use]
     pub fn train(&self) -> PathBuf {
         self.0.join("train")
+    }
+
+    /// Where releases and the aliases pointing at them live.
+    #[must_use]
+    pub fn releases(&self) -> PathBuf {
+        self.0.join("releases")
+    }
+
+    /// Where frozen evaluation suites live.
+    #[must_use]
+    pub fn suites(&self) -> PathBuf {
+        self.0.join("suites")
     }
 
     /// The process sandbox's scratch root: a directory per code call.

@@ -13,11 +13,13 @@ use serde_json::json;
 use splinter_campaign::ask::ask;
 use splinter_campaign::critique::{critique_set, CritiqueRequest};
 use splinter_campaign::datasets::{build, export, BuildRequest};
+use splinter_campaign::eval::{evaluate, EvalRequest};
 use splinter_campaign::experiences::{self, resolve_set};
 use splinter_campaign::front_door::{interpret, Routed};
 use splinter_campaign::judge::calibrate_judge;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::model_ref::ModelRef;
+use splinter_campaign::release::{self, ReleaseRequest};
 use splinter_campaign::runs::{self, record};
 use splinter_campaign::solving::solve_set;
 use splinter_campaign::sources::{self, SourceTarget};
@@ -28,8 +30,8 @@ use splinter_campaign::verify::{verify_set, Judge};
 use splinter_campaign::{CampaignError, Config, Context};
 
 use crate::cli::{
-    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, RunsCommand,
-    SourceCommand, TasksCommand,
+    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, ReleaseCommand,
+    RunsCommand, SourceCommand, TasksCommand,
 };
 use crate::output::{self, emit, shell_words};
 
@@ -207,14 +209,15 @@ impl Session {
                     kinds: args.kinds,
                     budget: args.budget,
                     dry_run: args.dry_run,
+                    no_release: args.no_release,
                 };
                 let learned = learn(ctx, &request, &BrainTrainer)?;
                 emit(json, &learned);
-                let trained = match &learned {
+                let finished = match &learned {
                     Learned::Planned(_) => true,
-                    Learned::Ran(run) => run.report.candidate.is_some(),
+                    Learned::Ran(run) => run.report.finished(!args.no_release),
                 };
-                return Ok(if trained { Exit::Ok } else { Exit::Failed });
+                return Ok(if finished { Exit::Ok } else { Exit::Failed });
             }
             Command::Ask(args) => {
                 emit(
@@ -341,7 +344,7 @@ impl Session {
                 let request = TrainRequest {
                     datasets: args.datasets,
                     from: args.from,
-                    replay: args.replay,
+                    replay_fraction: args.replay_fraction,
                     steps: args.steps,
                     rank: args.rank,
                 };
@@ -349,6 +352,46 @@ impl Session {
                     train(ctx, &request, &BrainTrainer, &run.cancel_token())
                 })?;
                 emit(json, &candidate);
+            }
+            Command::Release(args) => {
+                if matches!(args.command, Some(ReleaseCommand::List)) {
+                    emit(json, &release::list(ctx)?);
+                    return Ok(Exit::Ok);
+                }
+                let Some(candidate) = args.candidate else {
+                    return Err(CampaignError::Refused(
+                        "name a candidate to release, or `release list`".into(),
+                    ));
+                };
+                let request = ReleaseRequest {
+                    alias: args.alias,
+                    ..ReleaseRequest::new(candidate)
+                };
+                let released = record(ctx, "release", &request, |run| {
+                    release::release(ctx, &request, &run.cancel_token())
+                })?;
+                emit(json, &released);
+                // A blocked release did not do what was asked.
+                if released.report.release.is_none() {
+                    return Ok(Exit::Failed);
+                }
+            }
+            Command::Rollback { alias } => {
+                let arguments = json!({ "alias": alias });
+                emit(
+                    json,
+                    &record(ctx, "rollback", &arguments, |_| {
+                        release::rollback(ctx, &alias)
+                    })?,
+                );
+            }
+            Command::Eval(args) => {
+                let request = EvalRequest {
+                    model: args.model,
+                    suite: args.suite,
+                    freeze: args.freeze,
+                };
+                emit(json, &evaluate(ctx, &request)?);
             }
             Command::Runs(RunsCommand::List) => emit(json, &runs::list(ctx)?),
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),

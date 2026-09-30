@@ -38,6 +38,10 @@ pub struct Config {
     /// The directory a captured command runs in: where Splinter was
     /// started.
     pub working_dir: PathBuf,
+    /// The `brain` executable a release is checked to serve on; `None`
+    /// when there is none, and the release gate's serve check is then
+    /// unmeasured, which blocks the release.
+    pub brain_binary: Option<PathBuf>,
 }
 
 impl Config {
@@ -52,7 +56,9 @@ impl Config {
     /// * `SPLINTER_ALLOW_REMOTE` set to `1` or `true` as the network
     ///   opt-in;
     /// * the capture allowlist's variables, and the current directory, for
-    ///   command sources.
+    ///   command sources;
+    /// * `SPLINTER_BRAIN_BIN`, else the first `brain` executable on `PATH`,
+    ///   as the binary a release must serve on.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -77,7 +83,31 @@ impl Config {
                 .filter_map(|name| var(name).map(|value| (name.to_string(), value)))
                 .collect(),
             working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            brain_binary: var("SPLINTER_BRAIN_BIN")
+                .map(PathBuf::from)
+                .or_else(|| var("PATH").and_then(|path| find_executable(&path, "brain"))),
         }
+    }
+}
+
+/// The first file named `name` in the directories of the `PATH`-style list
+/// `path` that is executable.
+fn find_executable(path: &str, name: &str) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .map(|dir| dir.join(name))
+        .find(|candidate| is_executable(candidate))
+}
+
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
     }
 }
 

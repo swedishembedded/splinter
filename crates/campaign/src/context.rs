@@ -9,10 +9,18 @@
 //! names it; dropping the context stops a local generation still running
 //! before the process exits. A caller that already holds a model - a test's
 //! scripted one - hands it in with [`Context::with_model`] instead.
+//!
+//! `policy:<alias>` is resolved once per context, on first use: the
+//! release the alias points at then is the one every stage of the command
+//! uses, however the alias moves meanwhile ([`Context::policy_pin`]). Only
+//! the context's own release or rollback moves the pin along.
 
 use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use serde::Serialize;
 
 use splinter_agent::solve::Model;
 use splinter_policy::{LoadedModel, ModelSelection};
@@ -31,6 +39,7 @@ use splinter_views::DatasetStore;
 use crate::config::Config;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
+use crate::release::{ReleaseId, ReleaseStore};
 
 /// How long a local model may stay silent between two stream chunks: as
 /// long as its run lasts. sven's idle limit guards a remote wire going
@@ -47,7 +56,18 @@ struct Held {
     model: Model,
     /// The loaded model, when the context loaded it; dropping it quiesces
     /// a local device.
-    _loaded: Option<LoadedModel>,
+    loaded: Option<LoadedModel>,
+}
+
+/// The release a policy alias was resolved to for a context.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct PolicyPin {
+    /// The alias.
+    pub alias: String,
+    /// The release it pointed at.
+    pub release: ReleaseId,
+    /// That release's adapter file.
+    pub adapter: PathBuf,
 }
 
 /// See the module documentation.
@@ -57,6 +77,7 @@ pub struct Context {
     clock: Box<dyn Clock + Send + Sync>,
     runtime: tokio::runtime::Runtime,
     models: Mutex<HashMap<ModelRef, Held>>,
+    pins: Mutex<BTreeMap<String, Option<PolicyPin>>>,
     environments: Environments,
     progress: Option<Progress>,
 }
@@ -73,6 +94,7 @@ impl Context {
             clock: Box::new(SystemClock),
             runtime,
             models: Mutex::new(HashMap::new()),
+            pins: Mutex::new(BTreeMap::new()),
             environments,
             progress: None,
         })
@@ -82,13 +104,37 @@ impl Context {
     /// loading it.
     #[must_use]
     pub fn with_model(self, reference: ModelRef, model: Model) -> Self {
+        self.add_model(reference, model);
+        self
+    }
+
+    /// Answers `reference` with `model` from now on, instead of loading it.
+    pub fn add_model(&self, reference: ModelRef, model: Model) {
         self.lock_models().insert(
             reference,
             Held {
                 model,
-                _loaded: None,
+                loaded: None,
             },
         );
+    }
+
+    /// Unloads the model `reference` names, if this context loaded it,
+    /// freeing its device memory; a model handed in stays.
+    pub fn unload(&self, reference: &ModelRef) {
+        let mut models = self.lock_models();
+        if models
+            .get(reference)
+            .is_some_and(|held| held.loaded.is_some())
+        {
+            models.remove(reference);
+        }
+    }
+
+    /// The same context stamping records with `clock`.
+    #[must_use]
+    pub fn with_clock(mut self, clock: Box<dyn Clock + Send + Sync>) -> Self {
+        self.clock = clock;
         self
     }
 
@@ -154,9 +200,60 @@ impl Context {
     }
 
     /// The selection `reference` resolves to, without loading it: refused
-    /// for a remote model without the network opt-in.
+    /// for a remote model without the network opt-in, and for a policy
+    /// alias other than `default` that points at no release.
     pub fn selection(&self, reference: &ModelRef) -> Result<ModelSelection, CampaignError> {
-        Ok(reference.resolve(&self.config, self.allow_remote())?)
+        let adapter = match reference {
+            ModelRef::Policy(alias) => {
+                let pin = self.policy_pin(alias)?;
+                if pin.is_none() && alias != crate::model_ref::POLICY_DEFAULT {
+                    return Err(CampaignError::NotFound {
+                        what: "release alias",
+                        id: alias.clone(),
+                    });
+                }
+                pin.map(|p| p.adapter)
+            }
+            _ => None,
+        };
+        Ok(reference.resolve(&self.config, self.allow_remote(), adapter.as_deref())?)
+    }
+
+    /// The release `alias` points at, resolved on this context's first ask
+    /// and the same on every later one; `None` when it points at none.
+    pub fn policy_pin(&self, alias: &str) -> Result<Option<PolicyPin>, CampaignError> {
+        let mut pins = self
+            .pins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(pin) = pins.get(alias) {
+            return Ok(pin.clone());
+        }
+        let store = ReleaseStore::open(self.root());
+        let pin = match store.alias(alias)? {
+            Some(release) => {
+                let stored = store.get(&release)?;
+                Some(PolicyPin {
+                    alias: alias.to_string(),
+                    release,
+                    adapter: stored.adapter,
+                })
+            }
+            None => None,
+        };
+        pins.insert(alias.to_string(), pin.clone());
+        Ok(pin)
+    }
+
+    /// Drops `alias`'s pin and the policy model this context loaded for
+    /// it, so the next use resolves the alias afresh: for the context's own
+    /// release or rollback, which moved it.
+    pub(crate) fn repin_policy(&self, alias: &str) {
+        self.pins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(alias);
+        self.unload(&ModelRef::Policy(alias.to_string()));
     }
 
     /// The model `reference` names, loaded on first use.
@@ -178,7 +275,7 @@ impl Context {
             reference.clone(),
             Held {
                 model: model.clone(),
-                _loaded: Some(loaded),
+                loaded: Some(loaded),
             },
         );
         Ok(model)

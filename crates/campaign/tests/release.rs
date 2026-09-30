@@ -1,0 +1,428 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements gated self-improvement loops where a model
+// update is adopted only on held-out evidence. If your team needs expertise
+// in evaluation-gated fine-tuning, you can procure our services by sending
+// an email to info@swedishembedded.com.
+
+//! Spec: a candidate becomes the policy only through the release gate.
+//!
+//! * It is released when it beats the champion on the new data's held-out
+//!   tasks (a significant sign test), keeps every earlier release's
+//!   held-out tasks, holds the anchor suite, and serves on plain brain with
+//!   its own digest and the same verdicts; the release is immutable, its
+//!   manifest records every number, and `default` points at it.
+//! * Each check that fails - or cannot be measured - blocks the release
+//!   and says why.
+//! * The next candidate trains from the champion, replaying a seeded
+//!   sample of the earlier release's training records.
+//! * `rollback` moves an alias back along its lineage, and refuses with no
+//!   previous release.
+//!
+//! Models are scripted, training is a test double whose adapter file says
+//! what its candidate knows, and `brain` is a stand-in script that serves
+//! such an adapter (see the fixtures); no weights are needed.
+
+// Helpers outside a #[test] fn unwrap too: a panic is the failure report.
+#![allow(clippy::unwrap_used)]
+
+mod common;
+
+use common::gate::{
+    anchor_file, candidate, dataset, decide, gate_context, policy, question, released, Brain,
+    FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
+};
+use common::Scratch;
+use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
+use splinter_campaign::model_ref::ModelRef;
+use splinter_campaign::release::{
+    anchor, list, release, rollback, ReleaseId, ReleaseRequest, ReleaseStore, Released,
+};
+use splinter_campaign::train::{train, Candidate, TrainRequest, DEFAULT_REPLAY_FRACTION};
+use splinter_campaign::Context;
+use splinter_policy::ModelSelection;
+use splinter_store::digest::Digest;
+use sven_sdk::CancelToken;
+
+fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
+    anchor::freeze(ctx, &anchor_file(&scratch.0, 4)).unwrap();
+}
+
+#[test]
+fn a_candidate_that_passes_every_check_is_released() {
+    let (scratch, ctx) = gate_context("release-pass", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let (candidate, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+
+    let decided = decide(&ctx, &candidate);
+    let gate = &decided.gate;
+    assert!(gate.passed, "{gate:#?}");
+    assert_eq!(
+        decided.champion, None,
+        "before any release the base is the champion"
+    );
+
+    let improvement = gate.improvement.measured.as_ref().unwrap();
+    assert_eq!(improvement.suite.tasks, 6, "a tenth of {FACTS} held out");
+    assert_eq!(improvement.comparison.candidate_wins, 6);
+    assert_eq!(improvement.sign_test.discordant, 6);
+    assert!((improvement.sign_test.p_value - 1.0 / 64.0).abs() < 1e-12);
+    assert_eq!(improvement.alpha, 0.05);
+    let retention = gate.retention.measured.as_ref().unwrap();
+    assert!(
+        retention.suites.is_empty() && gate.retention.passed,
+        "nothing to retain yet"
+    );
+    let anchor = gate.anchor.measured.as_ref().unwrap();
+    assert_eq!((anchor.version, anchor.drop), (1, Some(0.0)));
+    let serve = gate.serve.measured.as_ref().unwrap();
+    assert_eq!(serve.served_digest, candidate.adapter_digest);
+    assert!(
+        serve.startup_line.starts_with("brain serve: "),
+        "{}",
+        serve.startup_line
+    );
+    assert_eq!((serve.sampled, serve.agreed), (6, 6));
+
+    // The release: its id is its manifest's digest, and the manifest says
+    // what it is and why it was released.
+    let id = decided.release.clone().unwrap();
+    let store = ReleaseStore::open(ctx.root());
+    let stored = store.get(&id).unwrap();
+    let bytes = std::fs::read(stored.dir.join("manifest.json")).unwrap();
+    assert_eq!(id.0, Digest::of(&bytes));
+    let manifest = &stored.manifest;
+    assert_eq!(manifest.base_digest, Digest::of(BASE_BYTES));
+    assert_eq!(manifest.base_model, "Qwen/Qwen3-0.6B");
+    assert_eq!(manifest.adapter_digest.as_str(), candidate.adapter_digest);
+    assert_eq!(manifest.parent, None);
+    assert_eq!(manifest.candidate, candidate.candidate);
+    assert_eq!(manifest.datasets, candidate.datasets);
+    assert_eq!(manifest.training.record["trainer"], "fake");
+    assert_eq!(&manifest.gate, gate);
+    assert_eq!(manifest.created_at, NOW);
+    assert_eq!(
+        std::fs::read(&stored.adapter).unwrap(),
+        std::fs::read(&candidate.adapter).unwrap(),
+        "the adapter is copied into the release"
+    );
+
+    // `default` points at it, and the policy is now base plus its adapter.
+    assert_eq!(store.alias("default").unwrap(), Some(id.clone()));
+    let ModelSelection::Local(weights) = ctx.selection(&policy()).unwrap() else {
+        panic!("the policy is local");
+    };
+    assert_eq!(weights.adapter.as_deref(), Some(stored.adapter.as_path()));
+
+    // Immutable: it is never written again, and its files are read-only.
+    let again = store.put(manifest, &candidate.adapter).unwrap_err();
+    assert!(again.to_string().contains("already exists"), "{again}");
+    assert!(std::fs::metadata(&stored.adapter)
+        .unwrap()
+        .permissions()
+        .readonly());
+    assert!(std::fs::metadata(stored.dir.join("manifest.json"))
+        .unwrap()
+        .permissions()
+        .readonly());
+}
+
+/// One blocked release: the reason the gate gives, and nothing released.
+fn blocked(ctx: &Context, candidate: &Candidate) -> Released {
+    let decided = decide(ctx, candidate);
+    assert!(!decided.gate.passed, "{:#?}", decided.gate);
+    assert_eq!(decided.release, None);
+    assert_eq!(
+        ReleaseStore::open(ctx.root()).alias("default").unwrap(),
+        decided.champion,
+        "a blocked release moves no alias"
+    );
+    decided
+}
+
+#[test]
+fn each_failing_check_blocks_the_release_and_says_why() {
+    // No improvement: the candidate knows no more than the base, so no
+    // held-out task is discordant and the sign test is not significant.
+    let (scratch, ctx) = gate_context("release-no-gain", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let (same, _) = candidate(&ctx, "alpha", &[ANCHOR]);
+    let decided = blocked(&ctx, &same);
+    let gate = &decided.gate;
+    assert!(!gate.improvement.passed);
+    let improvement = gate.improvement.measured.as_ref().unwrap();
+    assert_eq!(improvement.sign_test.discordant, 0);
+    assert_eq!(improvement.comparison.both_wrong, 6, "ties are counted");
+    let why = gate.improvement.reason.as_deref().unwrap();
+    assert!(why.contains("no significant improvement"), "{why}");
+    assert!(
+        gate.retention.passed && gate.anchor.passed && gate.serve.passed,
+        "{gate:#?}"
+    );
+
+    // Anchor regression: it learned the new facts and forgot the anchor.
+    let (scratch, ctx) = gate_context("release-anchor", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let (forgetful, _) = candidate(&ctx, "alpha", &["alpha"]);
+    let gate = blocked(&ctx, &forgetful).gate;
+    assert!(gate.improvement.passed && gate.serve.passed, "{gate:#?}");
+    assert!(!gate.anchor.passed);
+    assert_eq!(gate.anchor.measured.as_ref().unwrap().drop, Some(1.0));
+    assert!(gate.anchor.reason.as_deref().unwrap().contains("anchor"));
+
+    // No anchor suite frozen: unmeasured, so blocked.
+    let (_scratch, ctx) = gate_context("release-no-anchor", Brain::Honest);
+    let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let gate = blocked(&ctx, &good).gate;
+    assert!(gate.anchor.measured.is_none());
+    assert!(gate
+        .anchor
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains("not measured"));
+
+    // Served under another digest than the candidate's.
+    let (scratch, ctx) = gate_context("release-digest", Brain::WrongDigest);
+    freeze_anchor(&scratch, &ctx);
+    let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let gate = blocked(&ctx, &good).gate;
+    assert!(gate.improvement.passed && gate.anchor.passed, "{gate:#?}");
+    let serve = gate.serve.measured.as_ref().unwrap();
+    assert_ne!(serve.served_digest, serve.expected_digest);
+    assert_eq!(serve.sampled, 0, "a wrong adapter is not asked anything");
+    assert!(gate
+        .serve
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains("reported adapter"));
+
+    // No brain binary: the serve check is unmeasured, which blocks.
+    let (scratch, ctx) = gate_context("release-no-brain", Brain::Missing);
+    freeze_anchor(&scratch, &ctx);
+    let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let gate = blocked(&ctx, &good).gate;
+    assert!(gate.improvement.passed && gate.anchor.passed, "{gate:#?}");
+    assert!(gate.serve.measured.is_none());
+    let why = gate.serve.reason.as_deref().unwrap();
+    assert!(
+        why.contains("not measured") && why.contains("no brain binary"),
+        "{why}"
+    );
+}
+
+#[test]
+fn a_retention_drop_beyond_the_bound_blocks_the_release() {
+    let (scratch, ctx) = gate_context("release-retention", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let first = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
+
+    // Beta learned, alpha forgotten.
+    let (forgetful, _) = candidate(&ctx, "beta", &[ANCHOR, "beta"]);
+    let decided = blocked(&ctx, &forgetful);
+    assert_eq!(decided.champion, Some(first.clone()));
+    let gate = &decided.gate;
+    assert!(
+        gate.improvement.passed && gate.anchor.passed && gate.serve.passed,
+        "{gate:#?}"
+    );
+    assert!(!gate.retention.passed);
+    let retention = gate.retention.measured.as_ref().unwrap();
+    assert_eq!(retention.bound, 0.05);
+    let [suite] = retention.suites.as_slice() else {
+        panic!("one earlier release: {retention:#?}");
+    };
+    assert_eq!(suite.release, first);
+    assert_eq!(suite.drop, Some(1.0));
+    assert!(!suite.passed);
+}
+
+#[test]
+fn the_next_candidate_continues_the_champion_and_replays_its_data() {
+    let (scratch, ctx) = gate_context("release-continue", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let first = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let champion = ReleaseStore::open(ctx.root()).get(&first).unwrap();
+
+    let (next, trainer) = candidate(&ctx, "beta", &[ANCHOR, "alpha", "beta"]);
+    let plans = trainer.plans.lock().unwrap();
+    let plan = &plans[0];
+    assert_eq!(plan.parent, Some(first.clone()));
+    assert_eq!(
+        plan.continue_from.as_deref(),
+        Some(champion.adapter.as_path()),
+        "the champion's adapter is continued, not the base"
+    );
+    // A quarter of alpha's 54 trained-on records, rounded up; never one it
+    // held out.
+    let replay = next.replay.as_ref().unwrap();
+    assert_eq!(replay.fraction, DEFAULT_REPLAY_FRACTION);
+    assert_eq!(replay.records, 14);
+    assert_eq!(replay.sources[0].release, first);
+    assert_eq!(
+        (replay.sources[0].available, replay.sources[0].sampled),
+        (54, 14)
+    );
+    let file = std::fs::read_to_string(plan.replay_file.as_ref().unwrap()).unwrap();
+    assert_eq!(replay.digest, Some(Digest::of(file.as_bytes())));
+    assert_eq!(file.lines().count(), 14);
+    assert!(file.lines().all(|l| l.contains("alpha-")), "{file}");
+    for held_out in 54..FACTS {
+        assert!(
+            !file.contains(&question("alpha", held_out)),
+            "{held_out} was held out"
+        );
+    }
+    drop(plans);
+
+    // It keeps alpha, so it is released on top of the first.
+    let decided = decide(&ctx, &next);
+    assert!(decided.gate.passed, "{:#?}", decided.gate);
+    let retention = decided.gate.retention.measured.as_ref().unwrap();
+    assert_eq!(retention.suites.len(), 1);
+    assert_eq!(retention.suites[0].drop, Some(0.0));
+    let second = ReleaseStore::open(ctx.root())
+        .get(decided.release.as_ref().unwrap())
+        .unwrap();
+    assert_eq!(second.manifest.parent, Some(first));
+    assert_eq!(second.manifest.replay.as_ref(), Some(replay));
+
+    // Trained from the base while a champion exists: refused, never gated.
+    let data = dataset(&ctx, "gamma", FACTS);
+    let base = ModelRef::Local {
+        checkpoint: ctx.config().policy_base.display().to_string(),
+        adapter: None,
+    };
+    let from_base = train(
+        &ctx,
+        &TrainRequest {
+            datasets: vec![data.to_string()],
+            from: base,
+            replay_fraction: DEFAULT_REPLAY_FRACTION,
+            steps: 1,
+            rank: 4,
+        },
+        &FakeTrainer::knowing(&[ANCHOR, "alpha", "beta", "gamma"]),
+        &CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        (from_base.parent.as_ref(), from_base.replay.as_ref()),
+        (None, None)
+    );
+    let request = ReleaseRequest::new(from_base.candidate);
+    let refused = release(&ctx, &request, &CancelToken::new()).unwrap_err();
+    assert!(refused.is_refusal(), "{refused}");
+    assert!(
+        refused.to_string().contains("trained from the base alone"),
+        "{refused}"
+    );
+}
+
+#[test]
+fn rollback_moves_the_alias_back_and_refuses_without_a_previous_release() {
+    let (scratch, ctx) = gate_context("release-rollback", Brain::Honest);
+    let refused = rollback(&ctx, "default").unwrap_err();
+    assert!(
+        refused.to_string().contains("points at no release"),
+        "{refused}"
+    );
+
+    freeze_anchor(&scratch, &ctx);
+    let first = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let refused = rollback(&ctx, "default").unwrap_err();
+    assert!(
+        refused.to_string().contains("no previous release"),
+        "{refused}"
+    );
+
+    let second = released(&ctx, "beta", &[ANCHOR, "alpha", "beta"]);
+    let listed = list(&ctx).unwrap();
+    let ids: Vec<&ReleaseId> = listed.releases.iter().map(|r| &r.id).collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&&first) && ids.contains(&&second));
+    let line = listed.releases.iter().find(|r| r.id == second).unwrap();
+    assert_eq!(
+        (line.aliases.as_slice(), line.parent.as_ref()),
+        (&["default".to_string()][..], Some(&first))
+    );
+
+    let rolled = rollback(&ctx, "default").unwrap();
+    assert_eq!((rolled.from, rolled.to.clone()), (second, first.clone()));
+    let store = ReleaseStore::open(ctx.root());
+    assert_eq!(store.alias("default").unwrap(), Some(first.clone()));
+    let ModelSelection::Local(weights) = ctx.selection(&policy()).unwrap() else {
+        panic!("local");
+    };
+    assert_eq!(weights.adapter, Some(store.get(&first).unwrap().adapter));
+    assert!(
+        rollback(&ctx, "default").is_err(),
+        "the first release has no previous one"
+    );
+}
+
+#[test]
+fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
+    let (scratch, ctx) = gate_context("release-eval", Brain::Honest);
+    let file = anchor_file(&scratch.0, 4);
+    let freeze = |file: &std::path::Path| {
+        eval(
+            &ctx,
+            &EvalRequest {
+                model: None,
+                suite: SuiteChoice::Anchor,
+                freeze: Some(file.to_path_buf()),
+            },
+            &CancelToken::new(),
+        )
+        .unwrap()
+        .anchor
+        .unwrap()
+    };
+    let first = freeze(&file);
+    assert_eq!((first.version, first.tasks), (1, 4));
+    assert_eq!(
+        freeze(&file).digest,
+        first.digest,
+        "the same tasks are the same version"
+    );
+    let other = scratch.0.join("other");
+    std::fs::create_dir_all(&other).unwrap();
+    let second = freeze(&anchor_file(&other, 5));
+    assert_eq!((second.version, second.tasks), (2, 5));
+
+    let (candidate, _) = candidate(&ctx, "alpha", &["alpha"]);
+    let score = |suite: SuiteChoice| {
+        eval(
+            &ctx,
+            &EvalRequest {
+                model: Some(candidate.candidate.clone()),
+                suite,
+                freeze: None,
+            },
+            &CancelToken::new(),
+        )
+        .unwrap()
+        .scores
+    };
+    let held_out = score(SuiteChoice::HeldOut);
+    assert_eq!((held_out[0].graded, held_out[0].accuracy), (6, Some(1.0)));
+    let anchor = score(SuiteChoice::Anchor);
+    assert_eq!((anchor[0].graded, anchor[0].accuracy), (5, Some(0.0)));
+    let refused = eval(
+        &ctx,
+        &EvalRequest {
+            model: Some("policy:default".into()),
+            suite: SuiteChoice::HeldOut,
+            freeze: None,
+        },
+        &CancelToken::new(),
+    )
+    .unwrap_err();
+    assert!(
+        refused.is_refusal(),
+        "no release, so no held-out suite: {refused}"
+    );
+}

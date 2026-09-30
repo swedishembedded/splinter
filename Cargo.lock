@@ -318,16 +318,22 @@ dependencies = [
  "brain-capability",
  "brain-checkpoint",
  "brain-data",
+ "brain-decide",
  "brain-gpu-core",
  "brain-lfm2",
  "brain-loader",
  "brain-model",
  "brain-modelref",
  "brain-modelstore",
+ "brain-modernbert",
+ "brain-promote",
  "brain-qwen3",
  "brain-qwen35",
  "brain-qwen35moe",
  "brain-rl",
+ "brain-rlcd",
+ "brain-search",
+ "brain-solve",
  "serde",
  "serde_json",
 ]
@@ -507,6 +513,22 @@ dependencies = [
  "unicode-general-category",
  "unicode-normalization",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "brain-decide"
+version = "1.2.0"
+source = "git+https://github.com/swedishembedded/brain#0e4a5063fa0b375c15322d85bcce1e7c65e0b2b2"
+dependencies = [
+ "brain-checkpoint",
+ "brain-data",
+ "brain-gpu-core",
+ "brain-kernels",
+ "brain-model",
+ "brain-optim",
+ "brain-paramstore",
+ "brain-rlcd",
+ "serde_json",
 ]
 
 [[package]]
@@ -745,6 +767,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "brain-modernbert"
+version = "1.2.0"
+source = "git+https://github.com/swedishembedded/brain#0e4a5063fa0b375c15322d85bcce1e7c65e0b2b2"
+dependencies = [
+ "brain-checkpoint",
+ "brain-data",
+ "brain-gpu-core",
+ "brain-kernels",
+ "brain-model",
+ "brain-optim",
+ "brain-paramstore",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "brain-optim"
 version = "1.2.0"
 source = "git+https://github.com/swedishembedded/brain#0e4a5063fa0b375c15322d85bcce1e7c65e0b2b2"
@@ -908,6 +946,31 @@ version = "1.2.0"
 source = "git+https://github.com/swedishembedded/brain#0e4a5063fa0b375c15322d85bcce1e7c65e0b2b2"
 dependencies = [
  "brain-data",
+]
+
+[[package]]
+name = "brain-search"
+version = "1.2.0"
+source = "git+https://github.com/swedishembedded/brain#0e4a5063fa0b375c15322d85bcce1e7c65e0b2b2"
+dependencies = [
+ "brain-data",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "brain-solve"
+version = "1.2.0"
+source = "git+https://github.com/swedishembedded/brain#0e4a5063fa0b375c15322d85bcce1e7c65e0b2b2"
+dependencies = [
+ "brain-checkpoint",
+ "brain-gpu-core",
+ "brain-kernels",
+ "brain-model",
+ "brain-optim",
+ "brain-paramstore",
+ "bytemuck",
+ "serde_json",
 ]
 
 [[package]]

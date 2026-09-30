@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-campaign"
-description = "Splinter's controller: configuration, model references, the front door, and each pipeline stage - sources, tasks, solve, verify, critique, dataset, train - with learn composing them."
+description = "Splinter's controller: configuration, model references, the front door, and each pipeline stage - sources, tasks, solve, verify, critique, dataset, train, release - with learn composing them."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

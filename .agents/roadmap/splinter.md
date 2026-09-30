@@ -51,11 +51,23 @@ the released adapter answers the same questions from plain `brain serve`.
    confidences; code routes them - a confident single reading runs as its
    command, an ambiguous one is asked back, a destructive or network-opting
    one is never run on a guess. The command line is one verb per pipeline
-   stage over content-addressed sets, with `learn` composing them. Open:
-   `release`, `eval`, `lineage` and `rollback`, which come with phase 4.
-4. **Continual policy.** Champion lineage, replay, the four-part release
-   gate, manifests, the default alias, and a default-policy size chosen by
-   measurement (the largest Qwen3 brain's training path fits).
+   stage over content-addressed sets, with `learn` composing them.
+   `release`, `eval` and `rollback` came with phase 4. Open: `lineage`.
+4. **Continual policy.** Done: a candidate continues the champion's
+   adapter and replays a seeded sample of every earlier release's training
+   records; the four-part release gate (brain's paired sign test on the new
+   held-out tasks, per-release retention bounds, a frozen versioned anchor
+   suite, and plain `brain serve --adapter` answering with the candidate's
+   digest and the in-process verdicts); immutable releases with canonical
+   manifests; aliases moved by compare-and-set, resolved once per run;
+   rollback along the lineage. Open: probes decode with the agent's
+   sampling (temperature 0.2), so the serve check's verdict agreement can
+   differ by sampling rather than by serving - the local provider should
+   honour a request's temperature so probes decode greedily on both paths;
+   `policy:<alias>` is pinned per context, so a REPL session keeps the
+   release it first resolved until its own release or rollback; and a
+   default-policy size chosen by measurement (the largest Qwen3 brain's
+   training path fits).
 5. **SDK surfaces**, so Splinter uses only `sven-sdk` and `brain`:
    - brain: done for chat inference (messages, tool schemas, streaming,
      cancellation, tool-call parsing, policy identity), adapter
@@ -63,8 +75,15 @@ the released adapter answers the same questions from plain `brain serve`.
      "not measured" distinct from zero - Splinter depends on `brain` alone.
      Open: base-weight residency shared by inference and training (folding
      an adapter into the base at load prevents it); constrained (JSON)
-     decoding for a request's response format; serving an explicit release
-     instead of the highest-numbered adapter. Also open: trainers that read
+     decoding for a request's response format. `brain::promote` (the
+     paired sign test the release gate uses) is exported only under the
+     `decision` feature, which links the decision-model crates too; the
+     `study` feature already links it through `brain-rl` and should export
+     it. `ChatFineTuneOutcome` does not report the base digest its adapter
+     card records, so Splinter hashes the base checkpoint again for a
+     release manifest. Loading a checkpoint whose safetensors header length
+     is garbage aborts the process on the allocation instead of returning
+     an error. Also open: trainers that read
      a dataset file for the objectives Splinter's views project beyond SFT -
      preference pairs (DPO), rewarded trajectories, raw text for continued
      pretraining, and contrastive pairs for the chat model (the SDK's

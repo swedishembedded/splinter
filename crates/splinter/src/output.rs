@@ -113,7 +113,17 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
             field("repaired")
         ),
         "dataset" => format!("{} record(s) in {}", field("records"), field("dataset")),
-        "train" => format!("candidate {}, not released", field("candidate")),
+        "train" => format!("candidate {}", field("candidate")),
+        "policy" => match &summary["release"] {
+            serde_json::Value::Null => {
+                format!("policy:{} is the base: no release yet", field("alias"))
+            }
+            _ => format!("policy:{} is release {}", field("alias"), field("release")),
+        },
+        "release" => match &summary["release"] {
+            serde_json::Value::Null => "the gate blocked the candidate: not released".into(),
+            _ => format!("released {}", field("release")),
+        },
         _ => summary.to_string(),
     }
 }
@@ -489,15 +499,28 @@ fn loss(value: Option<f32>) -> String {
 
 impl Report for Candidate {
     fn human(&self) -> String {
+        let parent = self
+            .parent
+            .as_ref()
+            .map_or("no release".to_string(), |id| format!("release {id}"));
+        let replay = self.replay.as_ref().map_or("none".to_string(), |r| {
+            format!(
+                "{} record(s) from {} earlier release(s), fraction {}",
+                r.records,
+                r.sources.len(),
+                r.fraction
+            )
+        });
         format!(
-            "candidate {} trained from {} on {} record(s)\n  adapter: {} ({})\n  held-out loss: base {}, candidate {}\n  not released: releasing a candidate is not part of training\n",
+            "candidate {} trained from {} ({parent}) on {} record(s)\n  replayed: {replay}\n  adapter: {} ({})\n  held-out loss: base {}, candidate {}\n  not released: `splinter release {}` runs the gate\n",
             self.candidate,
             self.from,
             self.records,
             self.adapter.display(),
             self.adapter_digest,
             loss(self.base_score.loss),
-            loss(self.tuned_score.loss)
+            loss(self.tuned_score.loss),
+            self.candidate
         )
     }
 }
@@ -555,7 +578,7 @@ impl Report for Status {
     fn human(&self) -> String {
         let c = &self.counts;
         let mut out = format!(
-            "state:  {}\npolicy: {} = {} ({})\nstores: {} source(s), {} task set(s) of {} task(s), {} experience(s) in {} set(s), {} dataset(s), {} candidate(s)\n",
+            "state:  {}\npolicy: {} = {} ({}{})\nstores: {} source(s), {} task set(s) of {} task(s), {} experience(s) in {} set(s), {} dataset(s), {} candidate(s)\n",
             self.state.display(),
             self.policy.reference,
             self.policy.model,
@@ -563,6 +586,10 @@ impl Report for Status {
                 .adapter
                 .as_ref()
                 .map_or("no adapter: nothing is released".into(), |a| a.display().to_string()),
+            self.policy
+                .release
+                .as_ref()
+                .map_or(String::new(), |r| format!(", release {r}")),
             c.sources,
             c.task_sets,
             c.tasks,
@@ -618,6 +645,11 @@ impl Report for LearnReport {
                 let _ = writeln!(out, "{label:<9}{line}");
             }
         };
+        let policy = match &self.policy.release {
+            Some(release) => format!("policy:{} = release {release}\n", self.policy.alias),
+            None => format!("policy:{} = the base: no release yet\n", self.policy.alias),
+        };
+        stage(&mut out, "policy", policy);
         let sources: String = self.sources.iter().map(|s| source_line(s) + "\n").collect();
         stage(&mut out, "sources", sources);
         if let Some(r) = &self.tasks {
@@ -637,6 +669,9 @@ impl Report for LearnReport {
         }
         if let Some(r) = &self.candidate {
             stage(&mut out, "train", r.human());
+        }
+        if let Some(r) = &self.release {
+            stage(&mut out, "release", r.human());
         }
         if let Some(why) = &self.stopped {
             let _ = writeln!(out, "stopped  {why}");

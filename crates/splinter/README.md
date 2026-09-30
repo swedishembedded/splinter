@@ -11,7 +11,7 @@ every command. `splinter <command> --help` is the authoritative reference.
 ```
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
-splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run]
+splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run] [--no-release]
 splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -24,7 +24,10 @@ splinter experiences list | show <ID> [--graph]
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
 splinter dataset export <DATASET-ID> --out DIR
-splinter train <DATASET-ID>... [--from REF] [--replay DATASET-ID] [--steps N] [--rank R]
+splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R]
+splinter release <CANDIDATE-ID> [--alias NAME] | list
+splinter rollback <ALIAS>
+splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
 splinter runs list | show <ID> | cancel <ID>
 
 global: --state DIR  --json  -v  --allow-remote
@@ -39,9 +42,14 @@ Every model is named the same way:
 
 | Reference | Model |
 |---|---|
-| `policy:default` | the configured base (`BRAIN_QWEN_WEIGHTS`, else `Qwen/Qwen3-0.6B` in brain's model store); the champion adapter joins it once releases exist |
+| `policy:default` | the configured base (`BRAIN_QWEN_WEIGHTS`, else `Qwen/Qwen3-0.6B` in brain's model store) with the champion's adapter, the release `default` points at; the base alone before any release |
+| `policy:<alias>` | the base with the adapter of the release `<alias>` points at (`release --alias`) |
 | `local:<checkpoint>[+<adapter>]` | a checkpoint path (absolute, or starting `./` or `../`) or a name in brain's model store, with an optional LoRA adapter file after the first `+` |
 | `remote:<provider>/<name>` | a model reached over the network through sven's provider configuration |
+
+A policy alias is resolved once per command, when it is first used: a
+run keeps the release it started with however the alias moves meanwhile,
+and records it (`learn`'s first stage, a candidate's `parent`).
 
 A remote reference is refused unless `--allow-remote` is given or
 `SPLINTER_ALLOW_REMOTE=1` is set; that is the only way Splinter uses the
@@ -59,6 +67,7 @@ other provider from `BRAIN_API_KEY`.
 | critique | `critique` | an experience set | an experience set of critiques and revisions |
 | dataset | `dataset build` | experience sets | a dataset and its manifest |
 | train | `train` | datasets | a candidate adapter (not released) |
+| release | `release` | a candidate | the gate's numbers; a release and the alias moved, if it passed |
 
 `learn` runs them all as one run on `policy:default` (for instance
 `splinter learn crates/splinter/examples/stm32_datasheet.md`), printing
@@ -67,12 +76,13 @@ each stage as it finishes: the sources are captured; tasks of the requested kind
 code; each is solved in the environment it records; each experience is
 graded by its task kind's verifiers (a judge only through `verify
 --judge`); failures are critiqued and retried once; the first attempts and
-revisions that passed become an `sft-final` dataset; and a candidate is
-trained on it. The candidate is reported and not released. `--budget`
-bounds the whole run's wall-clock time; `--goal` steers what tasks are
-asked for; `--dry-run` prints the plan and writes nothing. A `learn` that
-stops before training (nothing admitted, nothing passed, the budget spent)
-says why and exits 1.
+revisions that passed become an `sft-final` dataset; a candidate is
+trained on it from the champion; and the release gate decides whether it
+is released (`--no-release` stops at the candidate). `--budget` bounds the
+whole run's wall-clock time; `--goal` steers what tasks are asked for;
+`--dry-run` prints the plan and writes nothing. A `learn` that stops
+before training (nothing admitted, nothing passed, the budget spent) or
+whose candidate the gate blocks says why and exits 1.
 
 Task kinds: `recall`, `explain`, `predict`, `construct`, `debug`,
 `counterexample`, `transform`, `classify`, `retrieve`, `multi-turn`,
@@ -92,8 +102,52 @@ default `--min-strength` is `consistency`; `--strip` defaults to `all`
 (preference, contrastive, reward, raw text) need `--export-only`.
 
 `train` concatenates the datasets in order and holds the newest records
-out for scoring; `--replay` mixes a dataset into training whole, never held
-out. `--from local:<checkpoint>+<adapter>` continues training that adapter.
+out for scoring. From `policy:<alias>` (the default) it continues the
+adapter of the release the alias points at - never the base weights once a
+release exists - and replays `--replay-fraction` (default 0.25) of every
+earlier release's trained-on records, a seeded sample that is the same on
+every run and never includes what that release held out; replayed records
+are never held out. `--from local:<checkpoint>+<adapter>` continues that
+adapter instead, with no replay, and such a candidate cannot replace a
+champion.
+
+## Releases
+
+`release <CANDIDATE-ID>` decides a candidate against the release its alias
+(`--alias`, default `default`) points at - the champion, or the base before
+any release - and refuses a candidate that was not trained from it. Both
+are graded closed-book by each task's own verifiers (no judge) on the same
+suites, and the candidate is released only if all four checks pass; each
+is printed with its numbers, and a check that could not be measured fails:
+
+| Check | Passes when |
+|---|---|
+| improvement | on the new datasets' held-out tasks, a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
+| retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
+| anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
+| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint with the same verdicts as in-process |
+
+A release is written once under `<state>/releases/<hex>/`: the adapter
+file, read-only, and `manifest.json` in canonical JSON - the base model and
+its digest, the adapter digest, the parent release, the candidate, the new
+datasets and the replay sample with their digests, the training record
+(brain's included), every gate number with the anchor suite's version and
+digest, and `created_at`. `<hex>` is the manifest's digest: the release
+id. `<state>/releases/aliases/<name>` names the release an alias points
+at; it moves only from the champion the gate measured against. `release
+list` shows every release with its parent and aliases; `rollback <ALIAS>`
+points the alias at the release its current one was trained from, and
+refuses when there is none.
+
+`eval <REF>` grades one model - a candidate id, or a model reference -
+closed-book on `--suite held-out` (the default: a candidate's new data, or
+the release a policy alias points at), `retention` (every earlier release,
+each reported), `anchor`, or a FILE of tasks. The anchor suite is frozen
+from a file with `eval --suite anchor --freeze FILE` (each different file
+is the next version; the same tasks are the same version) and shown with
+`eval --suite anchor`. An anchor file is JSON Lines, `{"instruction",
+"reference", "kind"?}`, `kind` (default `recall`) a closed-book kind a
+formal verifier grades.
 
 ## The front door
 
@@ -123,8 +177,8 @@ print `{"error": string, "refused": bool}`. Commands that record a run add
 `parts` counts files or output streams and `bytes` sums their sizes.
 
 `status`: `{"state", "policy", "recent_runs", "counts"}` - `policy` is
-`{"reference", "model", "base", "adapter"}` (`adapter` is `null` until
-releases exist); `recent_runs` lists up to five runs as `{"id", "command",
+`{"reference", "model", "base", "adapter", "release"}` (`adapter` and
+`release` are `null` until releases exist); `recent_runs` lists up to five runs as `{"id", "command",
 "status", "started_at", "updated_at"}`; `counts` is `{"sources",
 "task_sets", "tasks", "experiences", "experience_sets", "datasets",
 "candidates"}`.
@@ -139,8 +193,17 @@ progress to stop: it stops the model run in progress and the stage at its
 next check, and training at its next optimizer step. A run whose process
 died stays `running`.
 
+`release list`: `{"releases": [{"id", "created_at", "candidate",
+"parent", "adapter_digest", "aliases"}]}`. `release`: `{"run",
+"candidate", "alias", "champion", "gate", "release", "dir"}`, where `gate`
+is `{"config", "improvement", "retention", "anchor", "serve", "passed"}`
+and each check is `{"passed", "measured", "reason"}` (`measured` is `null`
+when it could not be measured). `eval`: `{"model", "reference", "anchor",
+"scores"}` (plus `"run"` when it froze a suite or graded a model).
+
 ## Exit status
 
-0 done; 1 the work failed or stopped short of what was asked; 2 refused
+0 done; 1 the work failed or stopped short of what was asked (a candidate
+the gate blocked included); 2 refused
 before anything ran (usage, an unknown id, a remote model without the
 opt-in); 3 a sentence was asked back.

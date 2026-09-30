@@ -88,10 +88,11 @@ fn status_and_source_list_print_their_documented_fields() {
     assert_eq!(keys(&status), ["counts", "policy", "recent_runs", "state"]);
     assert_eq!(
         keys(&status["policy"]),
-        ["adapter", "base", "model", "reference"]
+        ["adapter", "base", "model", "reference", "release"]
     );
     assert_eq!(status["policy"]["reference"], "policy:default");
     assert_eq!(status["policy"]["adapter"], Value::Null);
+    assert_eq!(status["policy"]["release"], Value::Null);
     assert_eq!(
         keys(&status["counts"]),
         [
@@ -129,4 +130,50 @@ fn a_refusal_is_json_and_exits_two() {
     );
     assert_eq!(code, 2, "{remote}");
     assert!(remote["error"].as_str().unwrap().contains("--allow-remote"));
+}
+
+#[test]
+fn releases_rollback_and_the_anchor_suite_speak_json() {
+    let scratch = Scratch::new("releases");
+    let state = scratch.0.join("state");
+
+    let (code, list) = splinter(&state, &["release", "list"]);
+    assert_eq!(code, 0, "{list}");
+    assert_eq!(keys(&list), ["releases"]);
+    assert_eq!(list["releases"], serde_json::json!([]));
+
+    let (code, refused) = splinter(&state, &["rollback", "default"]);
+    assert_eq!(code, 2, "{refused}");
+    assert!(refused["error"].as_str().unwrap().contains("no release"));
+
+    let (code, refused) = splinter(&state, &["release", "candidate-none"]);
+    assert_eq!(code, 2, "{refused}");
+
+    let anchor = scratch.0.join("anchor.jsonl");
+    std::fs::write(
+        &anchor,
+        "{\"instruction\": \"What is 2 + 2?\", \"reference\": \"4\"}\n",
+    )
+    .unwrap();
+    let (code, frozen) = splinter(
+        &state,
+        &[
+            "eval",
+            "--suite",
+            "anchor",
+            "--freeze",
+            anchor.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{frozen}");
+    assert_eq!(
+        keys(&frozen),
+        ["anchor", "model", "reference", "run", "scores"]
+    );
+    assert_eq!(keys(&frozen["anchor"]), ["digest", "tasks", "version"]);
+    assert_eq!(frozen["anchor"]["version"], 1);
+
+    let (code, shown) = splinter(&state, &["eval", "--suite", "anchor"]);
+    assert_eq!(code, 0, "{shown}");
+    assert_eq!(shown["anchor"]["digest"], frozen["anchor"]["digest"]);
 }

@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements closed-book evaluation suites graded by
+// verifiers the model under test cannot reach, for its clients. If your
+// team needs expertise in model evaluation, you can procure our services
+// by sending an email to info@swedishembedded.com.
+
+//! Suites of tasks a model is probed on, and the grading of one model on
+//! one suite.
+//!
+//! A held-out suite is the tasks of the records training held out: the
+//! datasets are concatenated in order and split by the holdout rule
+//! (`splinter_lab::holdout`), exactly as training split them, and each
+//! held-out record's task is found in the task store (or, for a record of a
+//! revision, in the experience it was projected from). A probe is
+//! closed-book: the model sees the instruction alone. A task that is not
+//! closed-book, or that cannot be found, is excluded and counted.
+//!
+//! Grading is by the task kind's own verifiers, without a judge, and the
+//! store's decision rule over their verdicts: `Some(true)` right,
+//! `Some(false)` wrong, `None` when no verifier decided. Probe answers are
+//! not stored as experiences, so nothing a probe produces can reach a
+//! training set.
+
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+use splinter_agent::solve::{solve, Model, SolveOptions};
+use splinter_lab::holdout::holdout_split;
+use splinter_lab::paired::PairedOutcome;
+use splinter_lab::verifiers::Strongest;
+use splinter_sandbox::ResolvedEnvironment;
+use splinter_store::annotation::decide;
+use splinter_store::digest::Digest;
+use splinter_store::experience::{Environment, ExperienceId, Provenance, Task};
+use splinter_views::DatasetId;
+use sven_sdk::CancelToken;
+
+use crate::context::Context;
+use crate::error::{io, CampaignError};
+use crate::solving::DEFAULT_SOLVE_DEADLINE;
+use crate::verify::verifiers_for;
+
+/// Why a task was left out of a suite: it is not solved closed-book.
+pub const NOT_CLOSED_BOOK: &str = "not_closed_book";
+/// Why a record was left out of a suite: its task cannot be found.
+pub const TASK_UNKNOWN: &str = "task_unknown";
+
+/// Tasks a model is probed on.
+#[derive(Clone, Debug)]
+pub struct Suite {
+    /// What the suite is: `held-out`, `retention:<release>`, `anchor`, or
+    /// a file.
+    pub name: String,
+    /// The tasks, each once, in the order they were found.
+    pub tasks: Vec<Task>,
+    /// Records or tasks left out, by reason.
+    pub excluded: BTreeMap<String, usize>,
+}
+
+/// What a suite was, as a report states it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SuiteSummary {
+    /// Its name.
+    pub name: String,
+    /// Tasks in it.
+    pub tasks: usize,
+    /// Left out, by reason.
+    pub excluded: BTreeMap<String, usize>,
+}
+
+impl Suite {
+    /// What this suite was.
+    #[must_use]
+    pub fn summary(&self) -> SuiteSummary {
+        SuiteSummary {
+            name: self.name.clone(),
+            tasks: self.tasks.len(),
+            excluded: self.excluded.clone(),
+        }
+    }
+
+    /// A suite of `tasks`, excluding (and counting) those not closed-book
+    /// and repeats.
+    #[must_use]
+    pub fn of_tasks(name: impl Into<String>, tasks: Vec<Task>) -> Self {
+        let mut suite = Self {
+            name: name.into(),
+            tasks: Vec::new(),
+            excluded: BTreeMap::new(),
+        };
+        for task in tasks {
+            suite.add(task);
+        }
+        suite
+    }
+
+    fn add(&mut self, task: Task) {
+        if task.environment.kind != Environment::CLOSED_BOOK {
+            *self.excluded.entry(NOT_CLOSED_BOOK.into()).or_default() += 1;
+        } else if !self.tasks.iter().any(|t| t.task.id == task.task.id) {
+            self.tasks.push(task);
+        }
+    }
+}
+
+/// The records of `datasets`, concatenated in order, split as training
+/// splits them: `(trained on, held out)`. A record is a non-blank line.
+pub(crate) fn split_records(
+    ctx: &Context,
+    datasets: &[DatasetId],
+) -> Result<(Vec<String>, Vec<String>), CampaignError> {
+    let mut records = Vec::new();
+    for id in datasets {
+        let stored = ctx.datasets().get(id)?;
+        let text = std::fs::read_to_string(&stored.path).map_err(io(&stored.path))?;
+        records.extend(
+            text.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_string),
+        );
+    }
+    Ok(match holdout_split(&records) {
+        Some((train, held_out)) => (train.to_vec(), held_out.to_vec()),
+        None => (records, Vec::new()),
+    })
+}
+
+/// The held-out suite of `datasets`, named `name`.
+pub fn held_out(
+    ctx: &Context,
+    name: impl Into<String>,
+    datasets: &[DatasetId],
+) -> Result<Suite, CampaignError> {
+    let (_, held_out) = split_records(ctx, datasets)?;
+    let mut suite = Suite::of_tasks(name, Vec::new());
+    for record in &held_out {
+        match record_task(ctx, record)? {
+            Some(task) => suite.add(task),
+            None => *suite.excluded.entry(TASK_UNKNOWN.into()).or_default() += 1,
+        }
+    }
+    Ok(suite)
+}
+
+/// Where a record came from, as its metadata says.
+#[derive(Deserialize)]
+struct RecordLine {
+    metadata: RecordOrigin,
+}
+
+#[derive(Deserialize)]
+struct RecordOrigin {
+    #[serde(default)]
+    task: Option<Digest>,
+    #[serde(default)]
+    experiences: Vec<ExperienceId>,
+}
+
+/// The task the dataset record `line` was projected from, when it can be
+/// found.
+fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, CampaignError> {
+    let Ok(record) = serde_json::from_str::<RecordLine>(line) else {
+        return Ok(None);
+    };
+    if let Some(task) = record.metadata.task.filter(|t| ctx.tasks().contains(t)) {
+        return Ok(Some(ctx.tasks().get(&task)?));
+    }
+    let experiences = ctx.experiences();
+    for id in &record.metadata.experiences {
+        if experiences.contains(id) {
+            return Ok(Some(experiences.get(id)?.to_task()));
+        }
+    }
+    Ok(None)
+}
+
+/// `model`'s outcome on every task of `suite`, in order; see the module
+/// documentation.
+pub fn grade(
+    ctx: &Context,
+    model: &Model,
+    suite: &Suite,
+    cancel: &CancelToken,
+) -> Result<Vec<Option<bool>>, CampaignError> {
+    suite
+        .tasks
+        .iter()
+        .map(|task| grade_one(ctx, model, task, cancel))
+        .collect()
+}
+
+fn grade_one(
+    ctx: &Context,
+    model: &Model,
+    task: &Task,
+    cancel: &CancelToken,
+) -> Result<Option<bool>, CampaignError> {
+    if cancel.is_cancelled() {
+        return Err(CampaignError::Cancelled);
+    }
+    let mut options = SolveOptions::new(DEFAULT_SOLVE_DEADLINE);
+    options.cancel = Some(cancel.clone());
+    options.stream_idle = model.stream_idle;
+    let solution = ctx.block_on(solve(
+        task,
+        &ResolvedEnvironment::ClosedBook,
+        model.provider.clone(),
+        options,
+    ))?;
+    if cancel.is_cancelled() {
+        return Err(CampaignError::Cancelled);
+    }
+    let experience = solution.into_experience(
+        task.clone(),
+        Provenance::new(model.identity.clone(), ctx.clock()),
+    )?;
+    let verifiers: Strongest = verifiers_for(ctx, task, &[], None)?;
+    let verification = verifiers.run(task, &experience)?;
+    Ok(decide(&verification.annotations).map(|d| d.passed))
+}
+
+/// `candidate` and `baseline` outcomes on `suite`'s tasks, paired by task.
+#[must_use]
+pub fn pair(
+    suite: &Suite,
+    candidate: &[Option<bool>],
+    baseline: &[Option<bool>],
+) -> Vec<PairedOutcome> {
+    suite
+        .tasks
+        .iter()
+        .zip(candidate.iter().zip(baseline))
+        .map(|(task, (c, b))| PairedOutcome {
+            item: task.task.id.to_string(),
+            candidate: *c,
+            baseline: *b,
+        })
+        .collect()
+}

@@ -24,9 +24,10 @@ expect_used = "warn"
 #
 # Splinter depends on exactly two upstream crates, their public SDKs:
 # `sven-sdk` and `brain`. `brain` selects only the surfaces used: `text` for
-# chat inference, `study` for fine-tuning and held-out scoring.
+# chat inference, `study` for fine-tuning and held-out scoring, `decision`
+# for `brain::promote`, whose paired sign test decides a release.
 sven-sdk = { git = "https://github.com/swedishembedded/sven" }
-brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study"] }
+brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study", "decision"] }
 
 splinter-lab = { path = "crates/lab" }
 splinter-store = { path = "crates/store" }

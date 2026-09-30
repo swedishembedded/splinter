@@ -12,7 +12,8 @@ use splinter_store::runs::list_runs;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
+use crate::model_ref::{ModelRef, POLICY_DEFAULT};
+use crate::release::ReleaseId;
 use crate::runs::{RunSummary, RECENT_RUNS};
 use crate::train::candidate_count;
 
@@ -27,6 +28,8 @@ pub struct PolicyStatus {
     pub base: PathBuf,
     /// The adapter it serves, if any: `null` until releases exist.
     pub adapter: Option<PathBuf>,
+    /// The release `policy:default` points at: `null` until one exists.
+    pub release: Option<ReleaseId>,
 }
 
 /// How much each store holds.
@@ -82,6 +85,7 @@ pub fn status(ctx: &Context) -> Result<Status, CampaignError> {
             model: selection.identity(),
             base,
             adapter,
+            release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
         },
         recent_runs,
         counts: Counts {

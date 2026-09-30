@@ -8,6 +8,8 @@
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
 
+pub mod gate;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -97,6 +99,7 @@ pub fn config(scratch: &Scratch) -> Config {
         allow_remote: false,
         command_env: BTreeMap::new(),
         working_dir: scratch.0.clone(),
+        brain_binary: None,
     }
 }
 

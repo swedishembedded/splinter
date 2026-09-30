@@ -40,6 +40,10 @@ use splinter_store::experience::{Privileged, PrivilegedKind};
 
 use crate::{Exclusion, ViewError};
 
+/// The domain of `mix:F`'s draw, which picks the subjects that keep their
+/// privileged context.
+const MIX_DOMAIN: &str = "splinter-views/strip-mix";
+
 /// Phrases by which an instruction points at material outside itself.
 /// Matched case-insensitively with runs of whitespace collapsed. The list
 /// errs towards excluding: a false match costs one training record, a
@@ -144,7 +148,8 @@ impl Strip {
                 keep_fraction,
                 seed,
             } => {
-                item.kind != PrivilegedKind::Reference && draw(*seed, subject) < keep_fraction.get()
+                item.kind != PrivilegedKind::Reference
+                    && draw(MIX_DOMAIN, *seed, subject) < keep_fraction.get()
             }
         }
     }
@@ -175,9 +180,10 @@ impl Strip {
     }
 }
 
-/// A uniform draw in `[0, 1)` determined by `seed` and `subject` alone.
-fn draw(seed: u64, subject: &Digest) -> f64 {
-    let hashed = Digest::of(format!("splinter-views/strip-mix\n{seed}\n{subject}").as_bytes());
+/// A uniform draw in `[0, 1)` determined by `domain`, `seed` and `subject`
+/// alone; `domain` keeps two uses of one seed independent.
+pub(crate) fn draw(domain: &str, seed: u64, subject: &Digest) -> f64 {
+    let hashed = Digest::of(format!("{domain}\n{seed}\n{subject}").as_bytes());
     // A digest's hex is 64 validated lowercase hex digits, so every one
     // converts; the first 16 are 64 uniform bits.
     let bits = hashed.hex().chars().take(16).fold(0u64, |acc, c| {

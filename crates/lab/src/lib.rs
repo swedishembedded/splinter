@@ -41,6 +41,8 @@
 //!   schemas, so it is not enough to train on.
 //! * [`holdout`] - the rule that decides which records of a training set
 //!   are held out for scoring.
+//! * [`paired`] - two models graded on the same items, compared only where
+//!   both have a verdict.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
 //!   supervising assistant turns and nothing else, and refusing a transcript
 //!   with a hole in it. [`WireMessage`] is one message of the
@@ -71,6 +73,7 @@ mod episode;
 mod family;
 pub mod holdout;
 mod model_id;
+pub mod paired;
 mod perform;
 mod recorder;
 mod score;

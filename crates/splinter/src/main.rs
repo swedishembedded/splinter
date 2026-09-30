@@ -11,7 +11,8 @@
 //! environment.
 //!
 //! Exit status: 0 on success; 1 when the work failed or did not get as far
-//! as asked (a `learn` that stopped before training, a run that failed) - a
+//! as asked (a `learn` that stopped before training or whose candidate was
+//! not released, a `release` the gate blocked, a run that failed) - a
 //! script must never read either as progress; 2 when the command was
 //! refused before anything ran (a usage error, an unknown id, a remote
 //! model without the opt-in); 3 when a sentence was not clear enough to
@@ -19,6 +20,7 @@
 
 mod cli;
 mod output;
+mod release_output;
 mod session;
 
 use std::process::ExitCode;
