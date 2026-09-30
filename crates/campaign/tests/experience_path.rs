@@ -32,7 +32,7 @@ use splinter_store::experiences::ExperienceStore;
 use splinter_store::source::{CapturedSource, Origin, PartContent};
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
-use splinter_views::{write_dataset, SftFinal, View};
+use splinter_views::{write_dataset, Corpus, SftFinal, View, WriteOptions};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 use sven_sdk::Engine;
 
@@ -173,11 +173,17 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         .annotate(&annotation(&FormalVerifier::new(), &task, &passed).unwrap())
         .unwrap();
     let view = SftFinal::new(Strength::Formal);
-    let notes = store.annotations(&id).unwrap().annotations;
-    let records = view.project(&store.get(&id).unwrap(), &notes).unwrap();
-    assert_eq!(records.len(), 1);
+    let projection = view
+        .project(&Corpus::load(&store, std::slice::from_ref(&id)).unwrap())
+        .unwrap();
+    assert_eq!(projection.records.len(), 1);
 
-    let dataset = write_dataset(&scratch.0.join("sft.jsonl"), &records).unwrap();
+    let dataset = write_dataset(
+        &scratch.0.join("sft.jsonl"),
+        &projection,
+        WriteOptions::default(),
+    )
+    .unwrap();
     let text = std::fs::read_to_string(&dataset.path).unwrap();
     assert_eq!(dataset.digest, Digest::of(text.as_bytes()));
     let line: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
@@ -214,7 +220,10 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
             ..
         }]
     ));
-    assert!(view.project(&failed, &notes).unwrap().is_empty());
+    let projection = view
+        .project(&Corpus::load(&store, std::slice::from_ref(&failed_id)).unwrap())
+        .unwrap();
+    assert!(projection.records.is_empty());
 
     // Re-grading appends; the view changes, the experience does not.
     let object = objects.join(format!("{}.json", id.hex()));
@@ -235,9 +244,9 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         .unwrap();
     let notes = store.annotations(&id).unwrap().annotations;
     assert_eq!(notes.len(), 2);
-    assert!(view
-        .project(&store.get(&id).unwrap(), &notes)
-        .unwrap()
-        .is_empty());
+    let projection = view
+        .project(&Corpus::load(&store, std::slice::from_ref(&id)).unwrap())
+        .unwrap();
+    assert!(projection.records.is_empty());
     assert_eq!(std::fs::read(&object).unwrap(), before, "never rewritten");
 }

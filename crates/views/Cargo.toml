@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-views"
-description = "Views over the experience store: each projects experiences and their annotations into training records for one objective, and writes them as a chat dataset the trainer accepts."
+description = "Views over the experience store: each projects experiences, tasks and sources into training records for one objective, written in the format that objective maps to, with a manifest."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,10 +16,8 @@ splinter-store = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
-
-[dev-dependencies]
 sven-sdk = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

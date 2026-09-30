@@ -59,7 +59,13 @@ the released adapter answers the same questions from plain `brain serve`.
      Open: base-weight residency shared by inference and training (folding
      an adapter into the base at load prevents it); constrained (JSON)
      decoding for a request's response format; serving an explicit release
-     instead of the highest-numbered adapter.
+     instead of the highest-numbered adapter. Also open: trainers that read
+     a dataset file for the objectives Splinter's views project beyond SFT -
+     preference pairs (DPO), rewarded trajectories, raw text for continued
+     pretraining, and contrastive pairs for the chat model (the SDK's
+     contrastive fine-tuner trains one encoder architecture from in-memory
+     pairs). Until then those views are written only in Splinter's
+     export-only format.
    - sven: done for an empty default toolset, explicit toolsets, structured
      outcomes, bounded runs (cancel, deadline, token budget), parked
      questions, history taken from the session, and ATIF trajectories. Open:
@@ -70,7 +76,10 @@ the released adapter answers the same questions from plain `brain serve`.
      (Splinter's environments are closed-book and runtime until then); and
      an approval gate that names the tool call it gates - `HumanGate`
      carries only the capability and a prose prompt, so the solver can
-     approve a capability, not a tool.
+     approve a capability, not a tool. Also open: an ATIF trajectory as
+     chat messages with each agent step's boundary kept, in the SDK - the
+     step-to-message rendering sven has is internal and flattens the steps,
+     so Splinter's views render trajectories themselves.
 6. **Extract sven's learning code**: the learning half of `sven-memory`
    (fact ledger, ingestion, assimilation, rule expansion, the submission
    drain, the brain study submitter, the doctor), the `learn` CLI, the

@@ -14,7 +14,7 @@ mod common;
 
 use common::{experience, python, record, task, verdict, Scratch};
 use splinter_lab::verifiers::executable::{
-    ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
+    evidence_summary, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
 };
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_sandbox::Limits;
@@ -89,6 +89,11 @@ fn a_wrong_solution_or_no_answer_fails() {
     let (outcome, _, evidence) = verdict(&verifier, &task, &experience(&task, Some(WRONG), "s"));
     assert_eq!(outcome, Outcome::Fail, "{evidence}");
     assert_eq!(evidence["checks"][0]["passed"], false);
+    let summary = evidence_summary(&evidence).unwrap();
+    assert!(
+        summary.starts_with("check 1: python") && summary.contains(", exit code 1\n"),
+        "a reader's summary of how the checks ended: {summary}"
+    );
     let (outcome, _, _) = verdict(&verifier, &task, &experience(&task, None, "s"));
     assert_eq!(outcome, Outcome::Fail);
 }
@@ -107,6 +112,7 @@ fn a_solution_stopped_by_the_time_limit_fails_and_says_so() {
     let (outcome, _, evidence) = verdict(&verifier, &task, &experience(&task, Some(SPINS), "s"));
     assert_eq!(outcome, Outcome::Fail);
     assert_eq!(evidence["checks"][0]["timed_out"], true, "{evidence}");
+    assert!(evidence_summary(&evidence).unwrap().contains("timed out"));
 }
 
 #[test]

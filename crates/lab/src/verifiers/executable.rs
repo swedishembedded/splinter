@@ -278,6 +278,33 @@ pub(crate) fn run_evidence(
     })
 }
 
+/// A reader's summary of the evidence an executable verdict carries: one
+/// line per check run, naming the runtime it ran in and how the run ended
+/// (`check 1: python 3.12.1, exit code 1`). Digests are left out: they
+/// identify what ran, they do not describe it. `None` when `evidence` is
+/// not in the shape [`ExecutableVerifier`] records, or no check ran.
+#[must_use]
+pub fn evidence_summary(evidence: &serde_json::Value) -> Option<String> {
+    let checks = evidence.get("checks")?.as_array()?;
+    let mut lines = Vec::with_capacity(checks.len());
+    for (index, check) in checks.iter().enumerate() {
+        let runtime = check.get("runtime")?;
+        let name = runtime.get("name")?.as_str()?;
+        let version = runtime.get("version")?.as_str()?;
+        let ending = if check.get("timed_out")?.as_bool()? {
+            "timed out".to_string()
+        } else if let Some(code) = check.get("exit_code").and_then(serde_json::Value::as_i64) {
+            format!("exit code {code}")
+        } else if let Some(signal) = check.get("signal").and_then(serde_json::Value::as_i64) {
+            format!("ended by signal {signal}")
+        } else {
+            return None;
+        };
+        lines.push(format!("check {}: {name} {version}, {ending}", index + 1));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
 /// Runs a task's authored checks ([`CHECK_KIND`]) against the solver's
 /// code: pass iff every check meets its expectation, fail otherwise or
 /// when there is no answer; abstains on a task with no checks, or whose

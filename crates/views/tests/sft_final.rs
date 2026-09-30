@@ -17,7 +17,9 @@ use splinter_store::clock::FixedClock;
 use splinter_store::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
-use splinter_views::{write_dataset, Objective, SftFinal, View, ViewError};
+use splinter_views::{
+    write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, View, ViewError, WriteOptions,
+};
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const INSTRUCTION: &str = "Restore the passage: brown quick the fox";
@@ -82,6 +84,13 @@ fn verdict(exp: &Experience, outcome: Outcome, strength: Strength) -> Annotation
     }
 }
 
+/// The records `view` projects from `exp` graded by `notes`.
+fn project(view: &SftFinal, exp: &Experience, notes: &[Annotation]) -> Vec<splinter_views::Record> {
+    let mut corpus = Corpus::new();
+    corpus.insert(exp.clone(), notes.to_vec()).unwrap();
+    view.project(&corpus).unwrap().records
+}
+
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("splinter-views-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -93,14 +102,18 @@ fn a_passed_experience_becomes_one_record_supervising_only_the_answer() {
     let exp = experience();
     let view = SftFinal::new(Strength::Formal);
     assert_eq!(view.objective(), Objective::Sft);
-    let records = view
-        .project(&exp, &[verdict(&exp, Outcome::Pass, Strength::Formal)])
-        .unwrap();
+    let records = project(
+        &view,
+        &exp,
+        &[verdict(&exp, Outcome::Pass, Strength::Formal)],
+    );
     let [record] = &records[..] else {
         panic!("one record, got {records:?}")
     };
-    let turns: Vec<(&str, &str, bool)> = record
-        .messages
+    let RecordBody::Chat { messages } = &record.body else {
+        panic!("a chat record, got {record:?}")
+    };
+    let turns: Vec<(&str, &str, bool)> = messages
         .iter()
         .map(|m| (m.role.as_str(), m.content.as_str(), m.train))
         .collect();
@@ -108,7 +121,7 @@ fn a_passed_experience_becomes_one_record_supervising_only_the_answer() {
         turns,
         [("user", INSTRUCTION, false), ("assistant", ANSWER, true)]
     );
-    assert_eq!(record.metadata.experience, exp.id().unwrap());
+    assert_eq!(record.metadata.experiences, [exp.id().unwrap()]);
 
     let text = serde_json::to_string(record).unwrap();
     for secret in [HINT, PASSAGE, "TEACHER-ONLY"] {
@@ -120,19 +133,19 @@ fn a_passed_experience_becomes_one_record_supervising_only_the_answer() {
 fn only_a_pass_decided_at_the_minimum_strength_or_above_is_projected() {
     let exp = experience();
     let view = SftFinal::new(Strength::Formal);
-    let project = |notes: &[Annotation]| view.project(&exp, notes).unwrap().len();
-    assert_eq!(project(&[]), 0, "no verdict");
+    let count = |notes: &[Annotation]| project(&view, &exp, notes).len();
+    assert_eq!(count(&[]), 0, "no verdict");
     assert_eq!(
-        project(&[verdict(&exp, Outcome::Pass, Strength::Judged)]),
+        count(&[verdict(&exp, Outcome::Pass, Strength::Judged)]),
         0,
         "too weak"
     );
     assert_eq!(
-        project(&[verdict(&exp, Outcome::Fail, Strength::Executable)]),
+        count(&[verdict(&exp, Outcome::Fail, Strength::Executable)]),
         0
     );
     assert_eq!(
-        project(&[
+        count(&[
             verdict(&exp, Outcome::Pass, Strength::Formal),
             verdict(&exp, Outcome::Fail, Strength::Executable),
         ]),
@@ -140,14 +153,17 @@ fn only_a_pass_decided_at_the_minimum_strength_or_above_is_projected() {
         "a stronger fail overrules the pass"
     );
     assert_eq!(
-        project(&[verdict(&exp, Outcome::Pass, Strength::Executable)]),
+        count(&[verdict(&exp, Outcome::Pass, Strength::Executable)]),
         1
     );
 
     let mut other = experience();
     other.final_output = Some("something else".into());
     assert!(matches!(
-        view.project(&exp, &[verdict(&other, Outcome::Pass, Strength::Formal)]),
+        Corpus::new().insert(
+            exp.clone(),
+            vec![verdict(&other, Outcome::Pass, Strength::Formal)]
+        ),
         Err(ViewError::ForeignAnnotation { .. })
     ));
 }
@@ -155,14 +171,21 @@ fn only_a_pass_decided_at_the_minimum_strength_or_above_is_projected() {
 #[test]
 fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
     let exp = experience();
-    let records = SftFinal::new(Strength::Formal)
-        .project(&exp, &[verdict(&exp, Outcome::Pass, Strength::Formal)])
+    let mut corpus = Corpus::new();
+    corpus
+        .insert(
+            exp.clone(),
+            vec![verdict(&exp, Outcome::Pass, Strength::Formal)],
+        )
         .unwrap();
+    let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
     let dir = scratch("dataset");
-    let dataset = write_dataset(&dir.join("sft.jsonl"), &records).unwrap();
+    let dataset =
+        write_dataset(&dir.join("sft.jsonl"), &projection, WriteOptions::default()).unwrap();
     let bytes = std::fs::read(&dataset.path).unwrap();
     assert_eq!(dataset.digest, Digest::of(&bytes));
-    assert_eq!((dataset.records, dataset.trained_messages), (1, 1));
+    assert_eq!(dataset.format, Format::GenericMessagesV2);
+    assert_eq!((dataset.records, dataset.trained_messages), (1, Some(1)));
 
     let text = String::from_utf8(bytes).unwrap();
     let line: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
@@ -175,8 +198,10 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
     );
     assert!(!text.contains("TEACHER-ONLY"));
 
+    let mut empty = projection.clone();
+    empty.records.clear();
     assert!(matches!(
-        write_dataset(&dir.join("empty.jsonl"), &[]),
+        write_dataset(&dir.join("empty.jsonl"), &empty, WriteOptions::default()),
         Err(ViewError::Empty)
     ));
     assert!(!dir.join("empty.jsonl").exists());
