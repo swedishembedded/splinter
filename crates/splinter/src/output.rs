@@ -11,7 +11,9 @@ use serde::Serialize;
 use splinter_campaign::ask::Answer;
 use splinter_campaign::critique::Critiqued;
 use splinter_campaign::datasets::{Built, Exported};
-use splinter_campaign::experiences::{ExperienceLine, ExperienceShow, SetList};
+use splinter_campaign::experiences::{
+    CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList,
+};
 use splinter_campaign::front_door::Routed;
 use splinter_campaign::judge::Calibrated;
 use splinter_campaign::learn::{LearnPlan, LearnReport, Learned};
@@ -492,6 +494,35 @@ impl Report for ExperienceShow {
                 out
             }
         }
+    }
+}
+
+impl Report for Replayed {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        for experience in &self.experiences {
+            let verdict = if experience.reproduced {
+                "reproduced"
+            } else {
+                "DIVERGED"
+            };
+            let _ = writeln!(
+                out,
+                "experience {} in {}: {verdict}, {} call(s)",
+                experience.id,
+                experience.environment,
+                experience.calls.len()
+            );
+            for call in &experience.calls {
+                let how = match &call.replay {
+                    CallReplay::Reproduced => "reproduced".to_string(),
+                    CallReplay::Diverged { fields } => format!("diverged in {}", fields.join(", ")),
+                    CallReplay::NotReplayable { reason } => format!("not replayable: {reason}"),
+                };
+                let _ = writeln!(out, "  {}: {how}", call.call_id);
+            }
+        }
+        out
     }
 }
 

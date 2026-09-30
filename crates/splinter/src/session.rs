@@ -344,6 +344,9 @@ impl Session {
             Command::Experiences(ExperiencesCommand::Show { id, graph }) => {
                 emit(json, &experiences::show(ctx, &id, graph)?);
             }
+            Command::Experiences(ExperiencesCommand::Replay { id }) => {
+                emit(json, &experiences::replay(ctx, &id)?);
+            }
             Command::Dataset(DatasetCommand::Build {
                 sets,
                 view,

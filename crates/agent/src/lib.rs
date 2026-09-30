@@ -19,11 +19,14 @@
 //! * [`repair`] - a retry with the critique, graded by the task's
 //!   verifiers, the critique verified by its outcome, the chain recorded as
 //!   relations; and the bounded loop of critique and retry.
+//! * [`replay`] - an experience's code calls run again in the environment
+//!   it records, each result compared with the one it observed.
 
 #![warn(missing_docs)]
 
 pub mod critic;
 pub mod judge;
 pub mod repair;
+pub mod replay;
 pub mod run_code;
 pub mod solve;

@@ -3948,6 +3948,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "serde",
  "serde_json",
  "splinter-lab",
  "splinter-sandbox",

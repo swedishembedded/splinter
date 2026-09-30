@@ -350,6 +350,13 @@ pub enum ExperiencesCommand {
         #[arg(long)]
         graph: bool,
     },
+    /// Run an experience's code calls again in the environment it records
+    /// (or every experience of a set) and compare each result with the one
+    /// it observed.
+    Replay {
+        /// An experience set's or an experience's id, or a unique prefix.
+        id: String,
+    },
 }
 
 /// `dataset ...`.

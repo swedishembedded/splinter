@@ -3,8 +3,9 @@
 
 //! What the experience store holds, for a person to inspect: the sets
 //! stages hand each other, an experience with everything said about it,
-//! and the graph of relations - retries, critiques, preferences - around
-//! one.
+//! the graph of relations - retries, critiques, preferences - around one,
+//! and whether an experience's code calls replay to what it observed
+//! ([`replay`]).
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -16,6 +17,8 @@ use splinter_store::experiences::SetId;
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::ids;
+
+pub use splinter_agent::replay::{CallReplay, ReplayedCall};
 
 /// The most experiences a relation graph shows.
 pub const MAX_GRAPH_NODES: usize = 500;
@@ -267,4 +270,55 @@ pub fn resolve_set(ctx: &Context, id: &str) -> Result<SetId, CampaignError> {
 pub fn resolve_experience(ctx: &Context, id: &str) -> Result<ExperienceId, CampaignError> {
     let stored = ctx.experiences().list()?.into_iter().map(|e| e.0);
     Ok(ExperienceId(ids::resolve("experience", id, stored)?))
+}
+
+/// One experience replayed.
+#[derive(Clone, Debug, Serialize)]
+pub struct ExperienceReplay {
+    /// The experience.
+    pub id: ExperienceId,
+    /// The environment it was replayed in, by kind.
+    pub environment: String,
+    /// Whether no call diverged.
+    pub reproduced: bool,
+    /// Its code calls, in order.
+    pub calls: Vec<ReplayedCall>,
+}
+
+/// What `experiences replay` reports.
+#[derive(Clone, Debug, Serialize)]
+pub struct Replayed {
+    /// Whether every experience reproduced.
+    pub reproduced: bool,
+    /// Each experience, in the order named.
+    pub experiences: Vec<ExperienceReplay>,
+}
+
+/// Replays the code calls of the experience `id` names, or of every member
+/// of the experience set it names, each in the environment it records
+/// ([`splinter_agent::replay`]). An environment that no longer resolves to
+/// the recorded one is refused.
+pub fn replay(ctx: &Context, id: &str) -> Result<Replayed, CampaignError> {
+    let store = ctx.experiences();
+    let members = match resolve_set(ctx, id) {
+        Ok(set) => store.get_set(&set)?.members,
+        Err(CampaignError::NotFound { .. }) => vec![resolve_experience(ctx, id)?],
+        Err(e) => return Err(e),
+    };
+    let mut experiences = Vec::with_capacity(members.len());
+    for member in members {
+        let experience = store.get(&member)?;
+        let environment = ctx.environments().for_record(&experience.environment)?;
+        let replay = splinter_agent::replay::replay(&experience, &environment)?;
+        experiences.push(ExperienceReplay {
+            id: member,
+            environment: experience.environment.kind.clone(),
+            reproduced: replay.reproduced(),
+            calls: replay.calls,
+        });
+    }
+    Ok(Replayed {
+        reproduced: experiences.iter().all(|e| e.reproduced),
+        experiences,
+    })
 }

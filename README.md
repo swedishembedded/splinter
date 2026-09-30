@@ -61,7 +61,9 @@ learned, held a frozen anchor suite of general tasks, and runs on plain
 was trained on (the same question, or a near duplicate, among its
 training records) is left out of those measurements and counted as
 leaked. An executable check passes only when it is seen to run to its
-end, so a solution that exits before its check cannot pass.
+end, so a solution that exits before its check cannot pass, and
+`splinter experiences replay` re-runs an experience's code calls in its
+recorded environment to confirm what it observed.
 Each release is an immutable adapter with a manifest of every number the
 gate measured; `splinter rollback default` returns to the previous one.
 

@@ -11,7 +11,10 @@
 //! offers exactly one, `run_code`, whose real output reaches the model and
 //! the trajectory. A task is never solved in an environment other than the
 //! one it records. A model's stream idle limit reaches sven: a first chunk
-//! slower than the limit fails the run, one within it does not.
+//! slower than the limit fails the run, one within it does not. An
+//! experience's code calls replay in its environment to the results it
+//! recorded; a recorded result that differs is named, field by field, and
+//! a replay anywhere but the recorded environment is refused.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -23,6 +26,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 
+use splinter_agent::replay::{replay, CallReplay, ReplayError};
 use splinter_agent::solve::{solve, SolveError, SolveOptions, RUN_CODE};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
@@ -244,6 +248,40 @@ async fn a_runtime_solve_runs_the_models_code_and_answers_with_its_output() {
     assert!(
         std::fs::read_dir(&scratch.0).unwrap().next().is_none(),
         "every call's directory was removed"
+    );
+
+    // Replayed in its own environment, the call reproduces what it
+    // observed.
+    let replayed = replay(&experience, &environment).unwrap();
+    assert_eq!(replayed.calls.len(), 1);
+    assert_eq!(replayed.calls[0].replay, CallReplay::Reproduced);
+    assert!(replayed.reproduced());
+
+    // A recorded result edited after the fact no longer replays.
+    let mut edited = experience.clone();
+    for entry in edited
+        .trajectory
+        .steps
+        .iter_mut()
+        .filter_map(|s| s.observation.as_mut())
+        .flat_map(|o| o.results.iter_mut())
+    {
+        let text = entry.content.as_ref().unwrap().as_text().unwrap();
+        entry.content = Some(sven_sdk::atif::MessageBody::text(text.replace("42", "41")));
+    }
+    let replayed = replay(&edited, &environment).unwrap();
+    assert_eq!(
+        replayed.calls[0].replay,
+        CallReplay::Diverged {
+            fields: vec!["stdout"]
+        }
+    );
+    assert!(!replayed.reproduced());
+
+    let elsewhere = replay(&experience, &ResolvedEnvironment::ClosedBook);
+    assert!(
+        matches!(elsewhere, Err(ReplayError::EnvironmentMismatch { .. })),
+        "{elsewhere:?}"
     );
 }
 

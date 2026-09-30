@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use splinter_agent::repair::RepairError;
+use splinter_agent::replay::ReplayError;
 use splinter_agent::solve::SolveError;
 use splinter_knowledge::capture::CaptureError;
 use splinter_knowledge::tasks::GenerateError;
@@ -100,6 +101,9 @@ pub enum CampaignError {
     /// A sandbox could not resolve a runtime or run code.
     #[error(transparent)]
     Sandbox(#[from] SandboxError),
+    /// An experience could not be replayed.
+    #[error(transparent)]
+    Replay(#[from] ReplayError),
     /// A task or experience is not valid.
     #[error(transparent)]
     Experience(#[from] ExperienceError),

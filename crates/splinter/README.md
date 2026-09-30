@@ -21,7 +21,7 @@ splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
 splinter judge calibrate <LABELLED-FILE> --judge REF
-splinter experiences list | show <ID> [--graph]
+splinter experiences list | show <ID> [--graph] | replay <ID>
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
 splinter dataset export <DATASET-ID> --out DIR
