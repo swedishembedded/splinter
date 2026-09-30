@@ -35,16 +35,18 @@ splinter-agent = { path = "crates/agent" }
 splinter-knowledge = { path = "crates/knowledge" }
 splinter-campaign = { path = "crates/campaign" }
 splinter-views = { path = "crates/views" }
+splinter-sandbox = { path = "crates/sandbox" }
 
 anyhow = "1"
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
-# Process-group signalling for a timed-out command capture.
+# Process groups, exit polling and resource limits for bounded process runs.
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "process", "signal"] }
 toml = "0.8"

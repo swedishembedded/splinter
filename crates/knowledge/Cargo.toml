@@ -12,15 +12,13 @@ publish.workspace = true
 [dependencies]
 splinter-lab = { workspace = true }
 splinter-policy = { workspace = true }
+splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-
-[target.'cfg(unix)'.dependencies]
-libc = { workspace = true }
 
 [lints]
 workspace = true

@@ -34,6 +34,7 @@ pub use command::{
     DEFAULT_TERM, DEFAULT_TIMEOUT,
 };
 pub use repository::{capture_repository, IGNORED_NAMES};
+pub use splinter_sandbox::process::ProcessError;
 
 /// The default cap on one captured file's size, in bytes: a document
 /// larger than this is refused, a repository file larger than this is
@@ -83,35 +84,9 @@ pub enum CaptureError {
         /// The path, lossily displayed.
         path: PathBuf,
     },
-    /// A command with no program.
-    #[error("the command to capture is empty")]
-    EmptyArgv,
-    /// A command timeout of zero.
-    #[error("the command timeout must be longer than zero")]
-    ZeroTimeout,
-    /// The program could not be started.
-    #[error("cannot start {program:?}: {source}")]
-    Spawn {
-        /// The program.
-        program: String,
-        /// The underlying error.
-        source: std::io::Error,
-    },
-    /// Waiting for the program, or reading its output, failed.
-    #[error("capturing {program:?}: {source}")]
-    Wait {
-        /// The program.
-        program: String,
-        /// The underlying error.
-        source: std::io::Error,
-    },
-    /// The program's output stayed open after it and its process group
-    /// were killed: a process it started left the group and holds it.
-    #[error("the output of {program:?} stayed open after its process group was killed")]
-    OutputNotClosed {
-        /// The program.
-        program: String,
-    },
+    /// The command could not be run.
+    #[error(transparent)]
+    Process(#[from] ProcessError),
     /// A tree with a `.git` entry, and no `git` to read its state with.
     #[error("{path} is a git work tree, and git cannot be run to read its revision: {source}")]
     GitUnavailable {

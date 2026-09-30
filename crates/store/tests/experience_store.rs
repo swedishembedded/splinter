@@ -139,6 +139,40 @@ fn the_id_is_a_canonical_content_address() {
     assert_ne!(id, experience("quick fox").id().unwrap());
 }
 
+/// An environment's snapshot is the digest of everything that determines
+/// its behaviour: any change to its spec changes it, and a record whose
+/// snapshot does not match its spec is refused.
+#[test]
+fn an_environment_snapshot_addresses_its_kind_and_spec() {
+    let closed = Environment::closed_book();
+    assert_eq!(closed.kind, Environment::CLOSED_BOOK);
+    assert_eq!(
+        closed.snapshot,
+        Some(Environment::snapshot_of("closed-book", &json!({})))
+    );
+    let limits = |cpu: u64| Environment::new("runtime:python3", json!({"limits": {"cpu": cpu}}));
+    assert_eq!(limits(5).snapshot, limits(5).snapshot);
+    assert_ne!(limits(5).snapshot, limits(6).snapshot);
+    assert_ne!(limits(5).snapshot, closed.snapshot);
+
+    let mut forged = limits(5);
+    forged.spec = json!({"limits": {"cpu": 600}});
+    let refused = Task::new(
+        "denoise",
+        vec![],
+        forged,
+        "Restore: quick fox brown",
+        vec![],
+    );
+    assert!(
+        matches!(
+            refused,
+            Err(splinter_store::experience::ExperienceError::EnvironmentSnapshot { .. })
+        ),
+        "{refused:?}"
+    );
+}
+
 /// Put is write-once: the same content twice is one object and one id, and
 /// get returns exactly what was put.
 #[test]

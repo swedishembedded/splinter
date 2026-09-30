@@ -3891,13 +3891,17 @@ name = "splinter-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
  "serde",
  "serde_json",
  "sha2",
  "splinter-lab",
  "splinter-policy",
+ "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
+ "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -3925,10 +3929,10 @@ name = "splinter-knowledge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "libc",
  "serde_json",
  "splinter-lab",
  "splinter-policy",
+ "splinter-sandbox",
  "splinter-store",
  "thiserror 2.0.21",
  "tokio",
@@ -3961,6 +3965,18 @@ dependencies = [
  "splinter-lab",
  "sven-sdk",
  "tokio",
+]
+
+[[package]]
+name = "splinter-sandbox"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "splinter-store",
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

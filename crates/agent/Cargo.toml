@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-agent"
-description = "One delegated task attempt through sven: run, trace every observable action, race the limits, verify, and hand back a structured outcome."
+description = "Solving through sven: one delegated task attempt (run, trace every observable action, race the limits, verify, hand back a structured outcome), and a task solved in exactly the environment it records."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,13 +13,19 @@ publish.workspace = true
 sven-sdk = { workspace = true }
 splinter-lab = { workspace = true }
 splinter-policy = { workspace = true }
+splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+futures = { workspace = true }
 
 [lints]
 workspace = true

@@ -31,8 +31,7 @@ pub const SPAN_WORDS: usize = 12;
 /// swapping two still leaves a passage to restore.
 pub const MIN_WORDS: usize = 4;
 
-/// The generator's name in a task's environment spec and an experience's
-/// provenance.
+/// The generator's name in an experience's provenance.
 pub const GENERATOR: &str = "splinter-knowledge/denoise@1";
 
 /// Why no task could be generated.
@@ -148,11 +147,7 @@ impl Denoise {
         Ok(Task::new(
             KIND,
             vec![span.clone()],
-            Environment {
-                kind: "closed-book".into(),
-                spec: serde_json::json!({ "generator": GENERATOR, "seed": self.seed }),
-                snapshot: None,
-            },
+            Environment::closed_book(),
             instruction,
             vec![Privileged {
                 kind: PrivilegedKind::Reference,

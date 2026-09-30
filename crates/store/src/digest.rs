@@ -48,7 +48,26 @@ impl Digest {
     /// The SHA-256 of `bytes`.
     #[must_use]
     pub fn of(bytes: &[u8]) -> Self {
-        let hash = Sha256::digest(bytes);
+        Self::from_hash(&Sha256::digest(bytes))
+    }
+
+    /// The SHA-256 of everything `reader` yields, read in chunks, so a
+    /// large file is hashed without being held in memory.
+    pub fn of_reader(mut reader: impl std::io::Read) -> std::io::Result<Self> {
+        let mut hasher = Sha256::new();
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => hasher.update(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(Self::from_hash(&hasher.finalize()))
+    }
+
+    fn from_hash(hash: &[u8]) -> Self {
         let mut hex = String::with_capacity(PREFIX.len() + HEX_LEN);
         hex.push_str(PREFIX);
         for byte in hash {
@@ -155,6 +174,11 @@ mod tests {
         assert_eq!(
             String::from_utf8(canonical_json(&value).unwrap()).unwrap(),
             r#"{"a":{"c":true,"d":null},"b":[1,2.5,"x\n"]}"#
+        );
+        assert_eq!(
+            Digest::of_reader(&b"abc"[..]).unwrap(),
+            Digest::of(b"abc"),
+            "streaming and whole-buffer hashing agree"
         );
         assert_eq!(
             Digest::of(b"").as_str(),

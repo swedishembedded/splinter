@@ -15,6 +15,11 @@
 [crates.splinter-store]
 internal = []
 
+[crates.splinter-sandbox]
+# Where a solver's code runs; below knowledge (command capture) and agent
+# (the solver's run_code tool), which share its process-running core.
+internal = ["splinter-store"]
+
 [crates.splinter-lab]
 internal = ["splinter-store"]
 
@@ -23,16 +28,16 @@ internal = ["splinter-lab"]
 brain = true
 
 [crates.splinter-agent]
-internal = ["splinter-store", "splinter-lab", "splinter-policy"]
+internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy"]
 
 [crates.splinter-knowledge]
-internal = ["splinter-store", "splinter-lab", "splinter-policy"]
+internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy"]
 
 [crates.splinter-views]
 internal = ["splinter-store", "splinter-lab", "splinter-policy"]
 
 [crates.splinter-campaign]
-internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
+internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
 
 [crates.splinter]
 internal = ["splinter-store", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-campaign"]

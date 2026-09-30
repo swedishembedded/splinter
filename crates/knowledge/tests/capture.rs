@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use splinter_knowledge::capture::{
     capture_command, capture_document, capture_repository, default_environment, CaptureError,
-    CommandSpec, DEFAULT_MAX_FILE_BYTES,
+    CommandSpec, ProcessError, DEFAULT_MAX_FILE_BYTES,
 };
 use splinter_store::clock::FixedClock;
 use splinter_store::experience::Span;
@@ -401,10 +401,10 @@ fn a_command_that_cannot_start_is_an_error() {
             &spec(&["splinter-no-such-program"], &scratch.0),
             &FixedClock::new(AT)
         ),
-        Err(CaptureError::Spawn { .. })
+        Err(CaptureError::Process(ProcessError::Spawn { .. }))
     ));
     assert!(matches!(
         capture_command(&spec(&[], &scratch.0), &FixedClock::new(AT)),
-        Err(CaptureError::EmptyArgv)
+        Err(CaptureError::Process(ProcessError::EmptyArgv))
     ));
 }

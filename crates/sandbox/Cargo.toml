@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-sandbox"
+description = "Where a solver's code runs: bounded process runs (process-group kill, output caps, explicit environment, resource limits), the runtime registry, the process and container sandbox backends, and environments whose snapshot pins everything that determines their behaviour."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+splinter-store = { workspace = true }
+
+libc = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

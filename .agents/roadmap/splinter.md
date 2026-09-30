@@ -65,7 +65,12 @@ the released adapter answers the same questions from plain `brain serve`.
      questions, history taken from the session, and ATIF trajectories. Open:
      the runner still races its own timeout, interrupt and limits around
      `send`; bounding the run with `RunOptions` keeps the kernel state and
-     reports the conclusion instead of dropping the turn.
+     reports the conclusion instead of dropping the turn. Also open: file
+     tools rooted in a given directory, which workspace environments need
+     (Splinter's environments are closed-book and runtime until then); and
+     an approval gate that names the tool call it gates - `HumanGate`
+     carries only the capability and a prose prompt, so the solver can
+     approve a capability, not a tool.
 6. **Extract sven's learning code**: the learning half of `sven-memory`
    (fact ledger, ingestion, assimilation, rule expansion, the submission
    drain, the brain study submitter, the doctor), the `learn` CLI, the

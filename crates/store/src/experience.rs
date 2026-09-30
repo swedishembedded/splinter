@@ -134,15 +134,66 @@ impl Span {
 }
 
 /// Where the solver worked.
+///
+/// The spec records everything that determines how the environment
+/// behaves, and [`Environment::snapshot`] is its digest: two environments
+/// with the same snapshot behave the same, so a solve can be replayed in
+/// the environment a snapshot names. [`Environment::new`] computes it; a
+/// recorded snapshot that does not match the kind and spec is refused.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Environment {
-    /// `closed-book` (no tools, no sources), `runtime:<name>`, `workspace`.
+    /// [`Environment::CLOSED_BOOK`] (no tools), or `runtime:<name>` (one
+    /// tool that runs code in the named runtime).
     pub kind: String,
-    /// The environment's own settings, as its producer defines them.
+    /// Everything that determines the environment's behaviour, as its
+    /// producer defines it.
     pub spec: serde_json::Value,
-    /// A digest of the environment's state when the solve started, when
-    /// there is state to capture.
+    /// The [`Digest`] of the canonical form of `{kind, spec}`; absent only
+    /// in a record written before environments carried one.
     pub snapshot: Option<Digest>,
+}
+
+/// The fields an environment's snapshot is computed over.
+#[derive(Serialize)]
+struct EnvironmentBody<'a> {
+    kind: &'a str,
+    spec: &'a serde_json::Value,
+}
+
+impl Environment {
+    /// The kind of an environment with no tools at all.
+    pub const CLOSED_BOOK: &'static str = "closed-book";
+
+    /// An environment of `kind` whose behaviour `spec` determines, with its
+    /// snapshot computed.
+    #[must_use]
+    pub fn new(kind: impl Into<String>, spec: serde_json::Value) -> Self {
+        let kind = kind.into();
+        let snapshot = Some(Self::snapshot_of(&kind, &spec));
+        Self {
+            kind,
+            spec,
+            snapshot,
+        }
+    }
+
+    /// The closed-book environment: no tools, nothing to configure, so its
+    /// spec is empty and its snapshot the digest of that.
+    #[must_use]
+    pub fn closed_book() -> Self {
+        Self::new(Self::CLOSED_BOOK, serde_json::json!({}))
+    }
+
+    /// The snapshot an environment of `kind` with `spec` has.
+    #[must_use]
+    pub fn snapshot_of(kind: &str, spec: &serde_json::Value) -> Digest {
+        match canonical_json(&EnvironmentBody { kind, spec }) {
+            Ok(bytes) => Digest::of(&bytes),
+            // A string and a JSON value always serialize: a
+            // `serde_json::Value` cannot hold a non-finite float.
+            Err(e) => unreachable!("an environment body serializes: {e}"),
+        }
+    }
 }
 
 /// What kind of privileged information an item is.
@@ -365,6 +416,15 @@ fn validate_task(
             return Err(ExperienceError::Missing(field));
         }
     }
+    if let Some(recorded) = &environment.snapshot {
+        let expected = Environment::snapshot_of(&environment.kind, &environment.spec);
+        if *recorded != expected {
+            return Err(ExperienceError::EnvironmentSnapshot {
+                recorded: recorded.clone(),
+                expected,
+            });
+        }
+    }
     for span in evidence
         .iter()
         .chain(privileged.iter().filter_map(|p| p.span.as_ref()))
@@ -410,6 +470,14 @@ pub enum ExperienceError {
         /// The id the record carries.
         recorded: Digest,
         /// The id its content hashes to.
+        expected: Digest,
+    },
+    /// The environment's snapshot is not the digest of its kind and spec.
+    #[error("environment snapshot {recorded} does not match its kind and spec (they hash to {expected})")]
+    EnvironmentSnapshot {
+        /// The snapshot the record carries.
+        recorded: Digest,
+        /// The digest its kind and spec hash to.
         expected: Digest,
     },
     /// The record cannot be serialized (a float that JSON cannot hold).
