@@ -448,7 +448,7 @@ async fn drive(
     let raced: Option<Status>;
     let mut stop_reason: Option<String> = None;
     tokio::select! {
-        res = agent.send(&task) => { sent = Some(res); raced = None; }
+        res = agent.send(&task) => { sent = Some(res.map(|outcome| outcome.reply)); raced = None; }
         _ = tokio::time::sleep(Duration::from_secs(options.timeout_secs)) => { sent = None; raced = Some(Status::Timeout); }
         _ = tokio::signal::ctrl_c() => { sent = None; raced = Some(Status::Cancelled); }
         (status, reason) = watch_limits(dir, options.budget, &tally, started) => {
