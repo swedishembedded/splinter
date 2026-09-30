@@ -47,13 +47,13 @@ pub struct Limits {
     /// The largest file a call may write (`RLIMIT_FSIZE`); in the container
     /// sandbox also the size of its writable scratch directory.
     pub file_size_bytes: u64,
-    /// Processes and threads. The container sandbox counts the container's
-    /// (`--pids-limit`). The process sandbox can only set `RLIMIT_NPROC`,
-    /// which counts every process and thread of the user id the call runs
-    /// as - so there it is a ceiling on that user, not on the call, and a
-    /// value below what the user already runs keeps the call from starting
-    /// any process or thread at all.
-    pub max_processes: u64,
+    /// Processes and threads of one call, enforced by the container sandbox
+    /// (`--pids-limit`); `None` is no limit. The process sandbox cannot
+    /// bound a call's processes - `RLIMIT_NPROC` counts every process and
+    /// thread of the user, so any value either leaves the call unbounded or
+    /// stops it forking whenever the user already runs that many - and it
+    /// records `None` for what it does not enforce.
+    pub max_processes: Option<u64>,
     /// The most bytes kept of each of standard output and standard error.
     pub output_cap_bytes: u64,
 }
@@ -65,7 +65,7 @@ impl Default for Limits {
             cpu_seconds: DEFAULT_CPU_SECONDS,
             memory_bytes: DEFAULT_MEMORY_BYTES,
             file_size_bytes: DEFAULT_FILE_SIZE_BYTES,
-            max_processes: DEFAULT_MAX_PROCESSES,
+            max_processes: Some(DEFAULT_MAX_PROCESSES),
             output_cap_bytes: DEFAULT_OUTPUT_CAP_BYTES,
         }
     }
@@ -92,7 +92,6 @@ impl Limits {
             cpu_seconds: self.cpu_seconds,
             address_space_bytes: self.memory_bytes,
             file_size_bytes: self.file_size_bytes,
-            max_processes: self.max_processes,
         }
     }
 }

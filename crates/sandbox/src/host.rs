@@ -13,8 +13,10 @@
 //! directory, `HOME` and `TMPDIR`), removed when the call ends; exactly
 //! the environment the sandbox was built with; its standard input from the
 //! call; a wall-clock timeout that kills its whole process group; output
-//! caps; and kernel resource limits (CPU time, address space, file size,
-//! processes) set in the child before the runtime starts.
+//! caps; and kernel resource limits (CPU time, address space, file size)
+//! set in the child before the runtime starts. The number of processes a
+//! call starts is not bounded: the kernel's per-user limit cannot bound
+//! one call, so the sandbox records `max_processes: None`.
 //!
 //! None of that confines the code. It runs as the calling user and can
 //! read and write whatever that user can, reach the network, and leave its
@@ -85,7 +87,10 @@ impl ProcessSandbox {
         Self {
             scratch_root: scratch_root.into(),
             env,
-            limits,
+            limits: Limits {
+                max_processes: None,
+                ..limits
+            },
         }
     }
 

@@ -50,10 +50,6 @@ pub struct ResourceLimits {
     pub address_space_bytes: u64,
     /// The largest file a process may write, in bytes (`RLIMIT_FSIZE`).
     pub file_size_bytes: u64,
-    /// Processes and threads (`RLIMIT_NPROC`). The kernel counts every
-    /// process and thread of the user id, not only the run's, and does not
-    /// enforce the limit for a privileged user.
-    pub max_processes: u64,
 }
 
 impl ResourceLimits {
@@ -76,7 +72,6 @@ impl ResourceLimits {
                 self.file_size_bytes,
                 self.file_size_bytes,
             ),
-            (libc::RLIMIT_NPROC, self.max_processes, self.max_processes),
             (libc::RLIMIT_CORE, 0, 0),
         ] {
             let limit = libc::rlimit {

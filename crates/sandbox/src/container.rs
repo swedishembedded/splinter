@@ -244,8 +244,6 @@ impl ContainerSandbox {
             l.memory_bytes.to_string(),
             "--cpus".into(),
             cpus,
-            "--pids-limit".into(),
-            l.max_processes.to_string(),
             "--ulimit".into(),
             format!("cpu={}:{}", l.cpu_seconds, l.cpu_seconds.saturating_add(1)),
             "--ulimit".into(),
@@ -253,6 +251,9 @@ impl ContainerSandbox {
             "--ulimit".into(),
             "core=0:0".into(),
         ]);
+        if let Some(max) = l.max_processes {
+            flags.extend(["--pids-limit".into(), max.to_string()]);
+        }
         let mut env = self.env.clone();
         env.insert("HOME".into(), WORK_DIR.into());
         env.insert("TMPDIR".into(), WORK_DIR.into());
@@ -450,7 +451,7 @@ mod tests {
             "run --rm --network none --read-only".to_string(),
             "--cap-drop ALL".to_string(),
             format!("--memory {}", limits.memory_bytes),
-            format!("--pids-limit {}", limits.max_processes),
+            format!("--pids-limit {}", limits.max_processes.unwrap_or_default()),
             "--cpus 1.000".to_string(),
             "type=bind,source=/scratch/x/main.py,target=/code/main.py,readonly".to_string(),
             format!("--interactive {image} python3 -I /code/main.py"),

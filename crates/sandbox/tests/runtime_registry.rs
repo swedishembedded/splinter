@@ -105,7 +105,7 @@ fn version_and_executable_digest_land_in_the_snapshot() {
 }
 
 #[test]
-fn changing_any_limit_changes_the_snapshot() {
+fn changing_any_enforced_limit_changes_the_snapshot() {
     let base = python(Limits::default()).record().unwrap().snapshot;
     let d = Limits::default();
     let variants = [
@@ -126,10 +126,6 @@ fn changing_any_limit_changes_the_snapshot() {
             ..d
         },
         Limits {
-            max_processes: d.max_processes + 1,
-            ..d
-        },
-        Limits {
             output_cap_bytes: d.output_cap_bytes + 1,
             ..d
         },
@@ -141,6 +137,13 @@ fn changing_any_limit_changes_the_snapshot() {
             "{limits:?}"
         );
     }
+    // The process sandbox cannot bound a call's processes, so it does not
+    // enforce the setting and it does not move the snapshot.
+    let unenforced = Limits {
+        max_processes: Some(d.max_processes.unwrap_or(0) + 1),
+        ..d
+    };
+    assert_eq!(python(unenforced).record().unwrap().snapshot, base);
     assert_ne!(
         ResolvedEnvironment::ClosedBook.record().unwrap().snapshot,
         base
