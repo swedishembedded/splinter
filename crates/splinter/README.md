@@ -12,11 +12,12 @@ every command. `splinter <command> --help` is the authoritative reference.
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run] [--no-release]
+                         [--no-frontier | --k N [--temperature T] [--top-k N]]
 splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
 splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | list | show <ID>
-splinter solve <TASKSET-ID> [--solver REF]
+splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
 splinter judge calibrate <LABELLED-FILE> --judge REF
@@ -69,6 +70,7 @@ other provider from `BRAIN_API_KEY`.
 | tasks | `tasks generate` | sources | a task set |
 | solve | `solve` | a task set | an experience set |
 | verify | `verify` | an experience set | verdicts on its experiences |
+| frontier | `solve --frontier` | a task set | k graded attempts per task, a pass@k measurement, the frontier's task and experience sets |
 | critique | `critique` | an experience set | an experience set of critiques and revisions |
 | dataset | `dataset build` | experience sets | a dataset and its manifest |
 | train | `train` | datasets | a candidate adapter (not released) |
@@ -77,17 +79,56 @@ other provider from `BRAIN_API_KEY`.
 `learn` runs them all as one run on `policy:default` (for instance
 `splinter learn crates/splinter/examples/stm32_datasheet.md`), printing
 each stage as it finishes: the sources are captured; tasks of the requested kinds
-(default `recall`) are generated from every text part and admitted by
-code; each is solved in the environment it records; each experience is
-graded by its task kind's verifiers (a judge only through `verify
---judge`); failures are critiqued and retried once; the first attempts and
-revisions that passed become an `sft-final` dataset; a candidate is
-trained on it from the champion; and the release gate decides whether it
-is released (`--no-release` stops at the candidate). `--budget` bounds the
-whole run's wall-clock time; `--goal` steers what tasks are asked for;
-`--dry-run` prints the plan and writes nothing. A `learn` that stops
-before training (nothing admitted, nothing passed, the budget spent) or
-whose candidate the gate blocks says why and exits 1.
+(default `recall`) are generated from every text part, and from the
+sections of every concept queued for new tasks, and admitted by code;
+each task is solved k times (`--k`) in the environment it records and
+every attempt is graded by its task kind's verifiers (a judge only
+through `verify --judge`); only the frontier - tasks the policy solves
+sometimes, neither always nor never - goes on; its failed attempts are
+critiqued and retried once; the passing attempts and revisions, near
+duplicates removed and each concept, task kind and verification strength
+capped at its share (`select`), become an `sft-final` dataset; a
+candidate is trained on it from the champion; and the release gate
+decides whether it is released (`--no-release` stops at the candidate).
+`--no-frontier` solves each task once and keeps every task. `--budget`
+bounds the whole run's wall-clock time; `--goal` steers what tasks are
+asked for; `--dry-run` prints the plan and writes nothing. A `learn`
+that stops before training (nothing admitted, no task on the frontier,
+nothing passed, the budget spent) or whose candidate the gate blocks
+says why and exits 1.
+
+## The curriculum
+
+`solve --frontier` measures the solver's pass@k on every task: k solves
+(default 4), each an experience numbered by its attempt, graded by the
+task's own verifiers. A task every graded attempt solved carries no
+signal and one none solved no usable data: both are dropped, as is one
+with no graded attempt (it has no rate; unmeasured is never 0). The rest
+- the frontier - is written as a task set and an experience set of its
+attempts. The measurement is recorded under
+`<state>/curriculum/measurements/`, per task: its kind, concepts,
+attempts, graded attempts, passes, rate and class, with the solver, the
+release `policy:<alias>` was, k and the sampling. A local model samples
+its attempts at temperature 0.8 unless `--temperature`/`--top-k` say
+otherwise; a model whose sampling cannot be set (a remote one) samples as
+its server does, and naming a sampling for it is refused.
+
+A task's concepts: those it declares; otherwise the (source, section)
+pairs its evidence falls in (the section of the source part containing
+each span's first byte); otherwise its task kind. Every solve through
+`policy:<alias>` records the release the alias was (or `base`), and
+`status` ranks concepts by their rolling pass rate (the newest 32 graded
+solves) under the current release, weakest first, with their rates under
+earlier releases. When the release gate's retention check fails on an
+earlier release's suite, the concepts of the tasks the candidate forgot
+are queued under `<state>/curriculum/queue/` (the `release` report lists
+them), and the next `learn` generates new tasks from their sections.
+
+A round's training set is deduplicated with the task generator's own
+near-duplicate rule, strongest verdict first, then capped: a concept may
+take at most a quarter of it, a task kind half, a verification strength
+three quarters - never less than an equal split among the groups the
+pool actually has.
 
 Task kinds: `recall`, `explain`, `predict`, `construct`, `debug`,
 `counterexample`, `transform`, `classify`, `retrieve`, `multi-turn`,
@@ -194,12 +235,15 @@ print `{"error": string, "refused": bool}`. Commands that record a run add
 "exit_code", "timed_out", "stdout_truncated", "stderr_truncated"}`);
 `parts` counts files or output streams and `bytes` sums their sizes.
 
-`status`: `{"state", "policy", "recent_runs", "counts"}` - `policy` is
+`status`: `{"state", "policy", "recent_runs", "counts", "concepts"}` - `policy` is
 `{"reference", "model", "base", "adapter", "release"}` (`adapter` and
 `release` are `null` until releases exist); `recent_runs` lists up to five runs as `{"id", "command",
 "status", "started_at", "updated_at"}`; `counts` is `{"sources",
 "task_sets", "tasks", "experiences", "experience_sets", "datasets",
-"candidates"}`.
+"candidates"}`; `concepts` is `{"policy", "concepts", "measured",
+"weakest", "queued"}`, each of `weakest` `{"concept", "current",
+"releases"}` with `{"release", "graded", "passes", "rate", "since"}` per
+release.
 
 ## Runs
 

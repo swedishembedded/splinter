@@ -105,6 +105,9 @@ impl Report for Released {
             self.alias,
             self.gate.human()
         );
+        for concept in &self.requeued {
+            let _ = writeln!(out, "forgotten, queued for new tasks: {concept}");
+        }
         match &self.release {
             Some(id) => {
                 let _ = writeln!(out, "released {id}; {} points at it", self.alias);

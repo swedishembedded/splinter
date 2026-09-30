@@ -38,6 +38,14 @@ splinter status
 splinter "what baud rate does the console run at?"
 ```
 
+Budget goes where learning happens: before a task's attempts become
+training data, `learn` measures the policy's pass@k on it and keeps only
+the tasks it solves sometimes - neither always (nothing to learn) nor
+never (nothing to learn from); the training set is capped per concept,
+task kind and verification strength; `splinter status` lists the
+concepts the policy has mastered least; and concepts the release gate
+sees forgotten are queued for new tasks.
+
 Every stage stores what it makes under the state root by content address,
 so any stage can be rerun or inspected alone (`splinter runs show`,
 `splinter experiences show --graph`). Every model runs locally unless a

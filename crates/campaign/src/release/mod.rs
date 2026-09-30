@@ -21,6 +21,9 @@
 //! ([`serve`]). Only when every check passes is the release written
 //! ([`store`]) - the adapter copied, the manifest recording every number -
 //! and the alias moved to it, from the champion it was measured against.
+//! Whatever the decision, the concepts of the tasks a failed retention
+//! suite shows forgotten are queued for new tasks
+//! ([`crate::curriculum::queue`]).
 //!
 //! `rollback` points an alias at the release its current one was trained
 //! from, and refuses when there is none.
@@ -35,6 +38,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
+use splinter_knowledge::concepts::Concept;
 use splinter_policy::local::resolve_base;
 use splinter_policy::selection::local_model_name;
 use splinter_store::digest::Digest;
@@ -44,6 +48,7 @@ pub use store::{ReleaseId, ReleaseManifest, ReleaseStore, StoredRelease, RELEASE
 
 use crate::config::Config;
 use crate::context::Context;
+use crate::curriculum::queue::enqueue_retention;
 use crate::error::{io, CampaignError};
 use crate::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use crate::train::{load_candidate, Candidate, TrainingSummary};
@@ -85,6 +90,9 @@ pub struct Released {
     pub champion: Option<ReleaseId>,
     /// The gate, with every number.
     pub gate: GateReport,
+    /// The concepts the candidate forgot on a retention suite that failed,
+    /// queued for new tasks.
+    pub requeued: Vec<Concept>,
     /// The release written; `None` when the gate blocked it.
     pub release: Option<ReleaseId>,
     /// The release's directory.
@@ -154,11 +162,13 @@ pub fn release(
         &request.gate,
         cancel,
     )?;
+    let requeued = enqueue_retention(ctx, &gate)?;
     let mut released = Released {
         candidate: candidate.candidate.clone(),
         alias: request.alias.clone(),
         champion: champion_id.clone(),
         gate,
+        requeued,
         release: None,
         dir: None,
     };

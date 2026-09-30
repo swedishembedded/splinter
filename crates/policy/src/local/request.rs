@@ -18,12 +18,15 @@ use brain::chat::{ToolCall, ToolSchema};
 use brain::{ChatMessage, ChatRequest};
 use sven_sdk::model::{CompletionRequest, ContentPart, Message, MessageContent, Role};
 
-/// The sampling a provider applies to every request.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct Sampling {
+/// How a local model samples each reply: the generation cap for a request
+/// that names none, the temperature and the top-k cut.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Sampling {
     /// Generation cap when the request names none.
     pub max_new_tokens: u32,
+    /// The softmax temperature.
     pub temperature: f32,
+    /// Only the `top_k` most likely tokens are sampled from.
     pub top_k: u32,
 }
 

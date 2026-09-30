@@ -85,7 +85,15 @@ fn status_and_source_list_print_their_documented_fields() {
 
     let (code, status) = splinter(&state, &["status"]);
     assert_eq!(code, 0, "{status}");
-    assert_eq!(keys(&status), ["counts", "policy", "recent_runs", "state"]);
+    assert_eq!(
+        keys(&status),
+        ["concepts", "counts", "policy", "recent_runs", "state"]
+    );
+    assert_eq!(
+        keys(&status["concepts"]),
+        ["concepts", "measured", "policy", "queued", "weakest"]
+    );
+    assert_eq!(status["concepts"]["concepts"], 0, "nothing solved yet");
     assert_eq!(
         keys(&status["policy"]),
         ["adapter", "base", "model", "reference", "release"]

@@ -137,6 +137,10 @@ pub struct RetainedSuite {
     pub drop: Option<f64>,
     /// Whether this suite held.
     pub passed: bool,
+    /// The tasks (by address) the champion got right and the candidate got
+    /// wrong: what the candidate forgot.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lost: Vec<String>,
 }
 
 /// The retention check's numbers.
@@ -287,12 +291,18 @@ pub fn retention(
             }
             Some(_) => true,
         };
+        let lost = outcomes
+            .iter()
+            .filter(|o| o.paired() == Some((false, true)))
+            .map(|o| o.item.clone())
+            .collect();
         retained.push(RetainedSuite {
             release,
             suite,
             comparison,
             drop,
             passed,
+            lost,
         });
     }
     let failure = (!failures.is_empty()).then(|| failures.join("; "));

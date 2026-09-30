@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Near-duplicate instructions within one batch.
+//! Near-duplicate instructions within one batch: the one rule, used by the
+//! generator to admit tasks and by training-set selection to drop repeats.
 //!
 //! Two rules, the cheaper first. An instruction whose normalised form
 //! ([`crate::gates::normalize`]: lower-cased, whitespace collapsed) has the
@@ -19,7 +20,7 @@ use crate::gates::normalize;
 
 /// Why an instruction is not new to the batch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Repeat {
+pub enum Repeat {
     /// Its normalised form is an admitted one's.
     Exact,
     /// Its shingles overlap an admitted one's at or above the threshold.
@@ -27,7 +28,7 @@ pub(crate) enum Repeat {
 }
 
 /// The instructions admitted so far in a batch.
-pub(crate) struct Seen {
+pub struct Seen {
     shingle_words: usize,
     max_overlap: f64,
     digests: HashSet<Digest>,
@@ -35,7 +36,10 @@ pub(crate) struct Seen {
 }
 
 impl Seen {
-    pub(crate) fn new(shingle_words: usize, max_overlap: f64) -> Self {
+    /// Nothing seen yet; shingles of `shingle_words` words, a near
+    /// duplicate at `max_overlap` or more.
+    #[must_use]
+    pub fn new(shingle_words: usize, max_overlap: f64) -> Self {
         Self {
             shingle_words,
             max_overlap,
@@ -45,7 +49,8 @@ impl Seen {
     }
 
     /// Whether `instruction` repeats one admitted so far.
-    pub(crate) fn repeats(&self, instruction: &str) -> Option<Repeat> {
+    #[must_use]
+    pub fn repeats(&self, instruction: &str) -> Option<Repeat> {
         if self.digests.contains(&digest(instruction)) {
             return Some(Repeat::Exact);
         }
@@ -57,7 +62,7 @@ impl Seen {
     }
 
     /// Records `instruction` as admitted.
-    pub(crate) fn admit(&mut self, instruction: &str) {
+    pub fn admit(&mut self, instruction: &str) {
         self.digests.insert(digest(instruction));
         self.shingles
             .push(shingles(instruction, self.shingle_words));

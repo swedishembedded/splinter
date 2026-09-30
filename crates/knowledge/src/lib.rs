@@ -8,6 +8,8 @@
 //!   as an immutable source for the source store.
 //! * [`sections`] - a text split into addressable byte ranges: at headings
 //!   for Markdown, at paragraphs otherwise.
+//! * [`concepts`] - the concepts a task exercises: those it declares, else
+//!   the (source, section) pairs its evidence falls in, else its kind.
 //! * [`gates`] - the text rules a generated task is held to: instruction
 //!   normalisation for duplicate detection, and numbers traceable to the
 //!   evidence.
@@ -20,6 +22,7 @@
 #![warn(missing_docs)]
 
 pub mod capture;
+pub mod concepts;
 pub mod denoise;
 pub mod gates;
 pub mod sections;

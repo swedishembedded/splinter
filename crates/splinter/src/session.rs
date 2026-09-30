@@ -12,6 +12,7 @@ use clap::Parser;
 use serde_json::json;
 use splinter_campaign::ask::ask;
 use splinter_campaign::critique::{critique_set, CritiqueRequest};
+use splinter_campaign::curriculum::frontier::{measure, MeasureRequest};
 use splinter_campaign::datasets::{build, export, BuildRequest};
 use splinter_campaign::eval::{evaluate, EvalRequest};
 use splinter_campaign::experiences::{self, resolve_set};
@@ -205,12 +206,15 @@ impl Session {
         match command {
             Command::Learn(args) => {
                 let request = LearnRequest {
+                    pass_at_k: args.pass_at_k.pass_at_k(),
                     sources: args.sources,
                     goal: args.goal,
                     kinds: args.kinds,
                     budget: args.budget,
                     dry_run: args.dry_run,
                     no_release: args.no_release,
+                    no_frontier: args.no_frontier,
+                    ..LearnRequest::default()
                 };
                 let learned = learn(ctx, &request, &BrainTrainer)?;
                 emit(json, &learned);
@@ -252,6 +256,7 @@ impl Session {
                         ctx,
                         &tasks::Generation {
                             sources: &ids,
+                            sections: &[],
                             kinds: &kinds,
                             generator: &generator,
                             goal: None,
@@ -264,6 +269,29 @@ impl Session {
             }
             Command::Tasks(TasksCommand::List) => emit(json, &tasks::list(ctx)?),
             Command::Tasks(TasksCommand::Show { id }) => emit(json, &tasks::show(ctx, &id)?),
+            Command::Solve(args) if args.frontier => {
+                let set = resolve_task_set(ctx, &args.task_set)?;
+                let pass_at_k = args.pass_at_k.pass_at_k();
+                let arguments = json!({
+                    "task_set": set,
+                    "solver": args.solver,
+                    "frontier": true,
+                    "pass_at_k": pass_at_k,
+                });
+                let measured = record(ctx, "solve", &arguments, |run| {
+                    measure(
+                        ctx,
+                        &MeasureRequest {
+                            task_set: &set,
+                            solver: &args.solver,
+                            pass_at_k,
+                            deadline: None,
+                            cancel: run.cancel_token(),
+                        },
+                    )
+                })?;
+                emit(json, &measured);
+            }
             Command::Solve(args) => {
                 let set = resolve_task_set(ctx, &args.task_set)?;
                 let arguments = json!({ "task_set": set, "solver": args.solver });

@@ -6,9 +6,9 @@
 // your team needs expertise in continual learning or agent evaluation, you
 // can procure our services by sending an email to info@swedishembedded.com.
 
-//! `learn`: sources -> tasks -> solve -> verify -> critique and retry ->
-//! dataset -> train -> release, as one recorded run whose every stage is
-//! also a command of its own.
+//! `learn`: sources -> tasks -> solve -> verify -> frontier -> critique and
+//! retry -> select -> dataset -> train -> release, as one recorded run
+//! whose every stage is also a command of its own.
 //!
 //! Each stage hands the next the content-addressed set it wrote, and its
 //! summary is recorded (and reported) as it finishes, so a stage can be
@@ -16,9 +16,16 @@
 //! `policy:default` - is resolved once, when the run starts, and the
 //! release it resolved to is the run's first recorded stage: the whole run
 //! generates, solves, critiques, retries and trains from that release,
-//! however the alias moves meanwhile. Its tasks are graded by their kinds'
-//! verifiers, never by a judge. The dataset is the `sft-final` view over
-//! the first attempts and the revisions; the candidate trained on it
+//! however the alias moves meanwhile. The tasks stage also generates from
+//! the sections of every concept queued for new tasks
+//! ([`crate::curriculum::queue`]). Each task is solved k times and graded
+//! by its kind's verifiers, never by a judge, and only the frontier - tasks
+//! the policy solves sometimes, neither always nor never - goes on
+//! ([`crate::curriculum::frontier`]; `--no-frontier` solves each task once
+//! and keeps them all). Failed attempts are critiqued and retried; the
+//! passing attempts and revisions are deduplicated and capped per concept,
+//! kind and strength ([`crate::curriculum::quota`]), and the `sft-final`
+//! view over what is selected is the dataset. The candidate trained on it
 //! continues that release, and goes through the release gate, which
 //! releases it only if every check passes (`--no-release` stops at the
 //! candidate).
@@ -36,12 +43,15 @@ use splinter_store::source::SourceId;
 
 use crate::context::Context;
 use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};
-use crate::datasets::{build, BuildRequest, Built, ViewName};
+use crate::curriculum::frontier::{select_frontier, Frontier, PassAtK};
+use crate::curriculum::queue;
+use crate::curriculum::quota::{select_training_set, Quotas, Selected};
+use crate::datasets::{build, BuildRequest, Built, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::error::CampaignError;
 use crate::model_ref::{ModelRef, POLICY_DEFAULT};
 use crate::release::{release, ReleaseId, ReleaseRequest, Released};
 use crate::runs::{record, Recorded, Recorder};
-use crate::solving::{solve_set, Solved};
+use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::sources::{self, SourceSummary, SourceTarget};
 use crate::tasks::{check_kinds, generate, Generation, TasksGenerated, DEFAULT_LEARN_KINDS};
 use crate::train::{
@@ -51,8 +61,9 @@ use crate::train::{
 use crate::verify::{verify_set, Verified};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 9] = [
-    "policy", "sources", "tasks", "solve", "verify", "critique", "dataset", "train", "release",
+pub const STAGES: [&str; 11] = [
+    "policy", "sources", "tasks", "solve", "verify", "frontier", "critique", "select", "dataset",
+    "train", "release",
 ];
 
 /// One `learn`.
@@ -70,6 +81,13 @@ pub struct LearnRequest {
     pub dry_run: bool,
     /// Stop at the candidate: do not run the release gate.
     pub no_release: bool,
+    /// Solve each task once and keep every task, instead of measuring
+    /// pass@k and keeping the frontier.
+    pub no_frontier: bool,
+    /// k and the sampling of the frontier's pass@k.
+    pub pass_at_k: PassAtK,
+    /// The diversity quotas on the training set.
+    pub quotas: Quotas,
 }
 
 /// What a dry run reports: the plan, and nothing written.
@@ -116,8 +134,12 @@ pub struct LearnReport {
     pub solve: Option<Solved>,
     /// The verify stage.
     pub verify: Option<Verified>,
+    /// The frontier stage: pass@k, and the tasks kept.
+    pub frontier: Option<Frontier>,
     /// The critique stage.
     pub critique: Option<Critiqued>,
+    /// The select stage: the training set under the quotas.
+    pub select: Option<Selected>,
     /// The dataset stage.
     pub dataset: Option<Built>,
     /// The candidate trained.
@@ -164,6 +186,10 @@ pub fn learn(
             "name at least one source to learn from".into(),
         ));
     }
+    if !request.no_frontier {
+        request.pass_at_k.validate()?;
+    }
+    request.quotas.validate()?;
     let targets = request
         .sources
         .iter()
@@ -181,6 +207,7 @@ pub fn learn(
             stages: STAGES
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
+                .filter(|stage| !(request.no_frontier && *stage == "frontier"))
                 .collect(),
             dry_run: true,
         }));
@@ -193,6 +220,8 @@ pub fn learn(
         deadline: request.budget.map(|b| Instant::now() + b),
         trainer,
         no_release: request.no_release,
+        frontier: (!request.no_frontier).then_some(request.pass_at_k),
+        quotas: request.quotas,
     };
     let recorded = record(ctx, "learn", request, |run| {
         let mut report = LearnReport::default();
@@ -211,6 +240,9 @@ struct Pipeline<'a> {
     deadline: Option<Instant>,
     trainer: &'a dyn Trainer,
     no_release: bool,
+    /// pass@k's parameters; `None` keeps every task.
+    frontier: Option<PassAtK>,
+    quotas: Quotas,
 }
 
 impl Pipeline<'_> {
@@ -225,6 +257,8 @@ impl Pipeline<'_> {
             deadline,
             trainer,
             no_release,
+            frontier,
+            quotas,
         } = *self;
         let policy = ModelRef::policy_default();
         report.policy = PolicyUsed {
@@ -247,10 +281,16 @@ impl Pipeline<'_> {
         run.stage("sources", &report.sources)?;
 
         run.check_cancelled()?;
+        let queued = queue::pending(ctx)?;
+        let sections: Vec<_> = queued
+            .iter()
+            .flat_map(|q| q.sections.iter().cloned())
+            .collect();
         let generated = generate(
             ctx,
             &Generation {
                 sources: &source_ids,
+                sections: &sections,
                 kinds,
                 generator: &policy,
                 goal,
@@ -259,6 +299,9 @@ impl Pipeline<'_> {
             },
         )?;
         run.stage("tasks", &generated)?;
+        if generated.stopped.is_none() {
+            queue::complete(ctx, &queued)?;
+        }
         let task_set = generated.task_set.clone();
         let tasks = generated.tasks;
         report.tasks = Some(generated);
@@ -271,18 +314,49 @@ impl Pipeline<'_> {
             report.stopped = Some(why);
             return Ok(());
         }
-        let solved = solve_set(ctx, &task_set, &policy, deadline, &run.cancel_token())?;
+        let solved = solve_tasks(
+            ctx,
+            &SolveRequest {
+                task_set: &task_set,
+                solver: &policy,
+                attempts: frontier.map_or(1, |p| p.k),
+                sampling: frontier.map_or(SamplingChoice::Own, |p| p.sampling_choice()),
+                deadline,
+                cancel: run.cancel_token(),
+            },
+        )?;
         run.stage("solve", &solved)?;
-        let first_attempts = solved.experience_set.clone();
-        report.solve = Some(solved);
+        let mut attempts = solved.experience_set.clone();
+        report.solve = Some(solved.clone());
 
         run.check_cancelled()?;
-        let verified = verify_set(ctx, &first_attempts, None, &run.cancel_token())?;
+        let verified = verify_set(ctx, &attempts, None, &run.cancel_token())?;
         run.stage("verify", &verified)?;
-        let failed = verified.failed;
+        let mut failed = verified.failed;
         report.verify = Some(verified);
 
-        let mut sets: Vec<SetId> = vec![first_attempts.clone()];
+        if frontier.is_some() {
+            let kept = select_frontier(ctx, &task_set, &solved)?;
+            run.stage("frontier", &kept)?;
+            attempts = kept.frontier_experience_set.clone();
+            let d = kept.distribution;
+            report.frontier = Some(kept);
+            if d.frontier == 0 {
+                report.stopped = Some(format!(
+                    "no task is on the frontier: {} always solved, {} never solved, {} \
+                     unmeasured of {}",
+                    d.always,
+                    d.never,
+                    d.unmeasured,
+                    d.tasks()
+                ));
+                return Ok(());
+            }
+            // Every frontier task failed at least one attempt.
+            failed = d.frontier;
+        }
+
+        let mut sets: Vec<SetId> = vec![attempts.clone()];
         if failed > 0 {
             if let Some(why) = spent("critique") {
                 report.stopped = Some(why);
@@ -291,7 +365,7 @@ impl Pipeline<'_> {
             let critiqued = critique_set(
                 ctx,
                 &CritiqueRequest {
-                    set: &first_attempts,
+                    set: &attempts,
                     critic: &policy,
                     solver: &policy,
                     retries: DEFAULT_RETRIES,
@@ -305,10 +379,16 @@ impl Pipeline<'_> {
         }
 
         run.check_cancelled()?;
+        let selected = select_training_set(ctx, &sets, DEFAULT_MIN_STRENGTH, &quotas)?;
+        run.stage("select", &selected)?;
+        let training_set = selected.experience_set.clone();
+        report.select = Some(selected);
+
+        run.check_cancelled()?;
         let built = match build(
             ctx,
             &BuildRequest {
-                sets,
+                sets: vec![training_set],
                 view: ViewName::SftFinal,
                 strip: None,
                 min_strength: None,

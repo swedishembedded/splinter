@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! `status`: the policy in use, the most recent runs, and what the stores
-//! hold.
+//! `status`: the policy in use, the most recent runs, what the stores
+//! hold, and the concepts the policy has mastered least.
 
 use std::path::PathBuf;
 
@@ -11,6 +11,7 @@ use splinter_policy::ModelSelection;
 use splinter_store::runs::list_runs;
 
 use crate::context::Context;
+use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
 use crate::error::CampaignError;
 use crate::model_ref::{ModelRef, POLICY_DEFAULT};
 use crate::release::ReleaseId;
@@ -62,6 +63,8 @@ pub struct Status {
     pub recent_runs: Vec<RunSummary>,
     /// What the stores hold.
     pub counts: Counts,
+    /// The weakest concepts under the release the policy is now.
+    pub concepts: MasteryReport,
 }
 
 /// The status of the state root `ctx` works in.
@@ -97,5 +100,6 @@ pub fn status(ctx: &Context) -> Result<Status, CampaignError> {
             datasets: ctx.datasets().list()?.len(),
             candidates: candidate_count(ctx)?,
         },
+        concepts: weakest(ctx, DEFAULT_WEAKEST)?,
     })
 }

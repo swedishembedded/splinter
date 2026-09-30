@@ -43,6 +43,8 @@
 //!   are held out for scoring.
 //! * [`paired`] - two models graded on the same items, compared only where
 //!   both have a verdict.
+//! * [`frontier`] - pass@k: a task's pass rate over k attempts, and whether
+//!   that puts it on the frontier where learning happens.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
 //!   supervising assistant turns and nothing else, and refusing a transcript
 //!   with a hole in it. [`WireMessage`] is one message of the
@@ -71,6 +73,7 @@ pub mod denoise;
 mod endpoint;
 mod episode;
 mod family;
+pub mod frontier;
 pub mod holdout;
 mod model_id;
 pub mod paired;

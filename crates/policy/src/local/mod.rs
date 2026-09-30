@@ -38,7 +38,8 @@ use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 
 use crate::error::PolicyError;
 use events::events_from;
-use request::{chat_request, Sampling};
+use request::chat_request;
+pub use request::Sampling;
 
 /// Sampling defaults for agent work, applied per request. Low temperature:
 /// an agent is executing a procedure, not writing prose; the small models
@@ -47,7 +48,7 @@ use request::{chat_request, Sampling};
 /// one agentic step needs - a completion that has not concluded within a few
 /// hundred tokens is looping, and a larger cap would let one never-ending
 /// generation spend an entire attempt budget.
-const AGENT_SAMPLING: Sampling = Sampling {
+pub const AGENT_SAMPLING: Sampling = Sampling {
     max_new_tokens: 512,
     temperature: 0.2,
     top_k: 20,
@@ -70,6 +71,8 @@ pub struct LocalQwen {
     /// call - exit racing a Vulkan submit is a segfault, not a controlled
     /// outcome.
     live: Arc<AtomicUsize>,
+    /// How each reply is sampled.
+    sampling: Sampling,
 }
 
 /// Where the weights come from and which adapter rides on top.
@@ -114,7 +117,23 @@ impl LocalQwen {
             model_name: model_name.to_string(),
             in_flight: Arc::new(Mutex::new(None)),
             live: Arc::new(AtomicUsize::new(0)),
+            sampling: AGENT_SAMPLING,
         })
+    }
+
+    /// The same loaded model sampling as `sampling` says: the weights, the
+    /// decode lock and the in-flight generation are shared, so a request on
+    /// either waits for (and supersedes) one running on the other, as two
+    /// requests on one model do.
+    #[must_use]
+    pub fn resampled(&self, sampling: Sampling) -> Self {
+        Self {
+            pipeline: Arc::clone(&self.pipeline),
+            model_name: self.model_name.clone(),
+            in_flight: Arc::clone(&self.in_flight),
+            live: Arc::clone(&self.live),
+            sampling,
+        }
     }
 
     /// Cancels the in-flight generation, if any, and waits up to `grace` for
@@ -182,7 +201,7 @@ impl ModelProvider for LocalQwen {
         &self,
         req: CompletionRequest,
     ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-        let request = chat_request(&req, &AGENT_SAMPLING);
+        let request = chat_request(&req, &self.sampling);
         let pipeline = Arc::clone(&self.pipeline);
         let (tx, rx) = tokio::sync::mpsc::channel(16);
         let cancel = CancelToken::armed();

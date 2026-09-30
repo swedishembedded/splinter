@@ -76,6 +76,9 @@ fn learned(test: &str) -> (Scratch, Context, Fixture) {
         &LearnRequest {
             sources: vec![manual.display().to_string()],
             no_release: true,
+            // The scripted policy answers each task the same way every
+            // time: keep every task.
+            no_frontier: true,
             ..LearnRequest::default()
         },
         &FakeTrainer::knowing(&[]),

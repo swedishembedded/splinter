@@ -112,6 +112,27 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
             field("critiqued"),
             field("repaired")
         ),
+        "frontier" => {
+            let d = &summary["distribution"];
+            format!(
+                "{} on the frontier ({} always, {} never, {} unmeasured) in {}",
+                d["frontier"],
+                d["always"],
+                d["never"],
+                d["unmeasured"],
+                field("frontier_task_set")
+            )
+        }
+        "select" => {
+            let s = &summary["selection"];
+            format!(
+                "{} of {} kept ({} repeats dropped) in {}",
+                s["selected"].as_array().map_or(0, Vec::len),
+                s["candidates"],
+                s["duplicates"],
+                field("experience_set")
+            )
+        }
         "dataset" => format!("{} record(s) in {}", field("records"), field("dataset")),
         "train" => format!("candidate {}", field("candidate")),
         "policy" => match &summary["release"] {
@@ -249,6 +270,13 @@ impl Report for TasksGenerated {
                 out,
                 "  {kind}: {} admitted, {} rejected",
                 counts.admitted, counts.rejected
+            );
+        }
+        if self.sections > 0 {
+            let _ = writeln!(
+                out,
+                "  {} queued concept section(s) generated from",
+                self.sections
             );
         }
         if !self.rejected.is_empty() {
@@ -635,6 +663,7 @@ impl Report for Status {
                 run.command
             );
         }
+        out.push_str(&self.concepts.human());
         out
     }
 }
@@ -686,8 +715,14 @@ impl Report for LearnReport {
         if let Some(r) = &self.verify {
             stage(&mut out, "verify", r.human());
         }
+        if let Some(r) = &self.frontier {
+            stage(&mut out, "frontier", r.human());
+        }
         if let Some(r) = &self.critique {
             stage(&mut out, "critique", r.human());
+        }
+        if let Some(r) = &self.select {
+            stage(&mut out, "select", r.human());
         }
         if let Some(r) = &self.dataset {
             stage(&mut out, "dataset", r.human());

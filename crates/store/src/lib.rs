@@ -21,6 +21,7 @@
 //!   releases/aliases/<name>   the release an alias (`default`) points at
 //!   answers/<hex>.json        one answer `ask` gave, and the release it used
 //!   suites/anchor/            the frozen anchor suite's versions
+//!   curriculum/               pass@k measurements and concepts queued for generation
 //!   sandbox/                  the process sandbox's per-call directories
 //! ```
 //!
@@ -145,6 +146,13 @@ impl StateRoot {
     #[must_use]
     pub fn suites(&self) -> PathBuf {
         self.0.join("suites")
+    }
+
+    /// Where the curriculum keeps its pass@k measurements and the concepts
+    /// queued for new tasks.
+    #[must_use]
+    pub fn curriculum(&self) -> PathBuf {
+        self.0.join("curriculum")
     }
 
     /// The process sandbox's scratch root: a directory per code call.

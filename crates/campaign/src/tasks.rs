@@ -11,13 +11,16 @@
 //! Every text part of every source is shown to the generator model a
 //! window of [`SECTIONS_PER_REQUEST`] sections at a time, once per model
 //! kind asked for, and what code admits is stored; the `denoise` kind needs
-//! no model and yields one task per text part. The set records which
-//! generator produced each task, from which prompt.
+//! no model and yields one task per text part. Single sections - those of
+//! concepts queued for new tasks - are shown to the generator model one at
+//! a time. The set records which generator produced each task, from which
+//! prompt.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
 use splinter_knowledge::tasks::{
     Catalogue, GenerateError, GenerationPolicy, ModelTaskGenerator, SourceText, TaskKind,
@@ -84,6 +87,10 @@ pub fn check_kinds(names: &[String]) -> Result<Vec<String>, CampaignError> {
 pub struct Generation<'a> {
     /// The sources to generate from.
     pub sources: &'a [SourceId],
+    /// Single sections to generate from beside them, one request each: the
+    /// sections of concepts queued for new tasks. Only the model kinds
+    /// generate from a section.
+    pub sections: &'a [SectionRef],
     /// The kinds, checked by [`check_kinds`].
     pub kinds: &'a [String],
     /// The generator model.
@@ -118,6 +125,8 @@ pub struct TasksGenerated {
     pub per_kind: BTreeMap<String, KindTally>,
     /// Rejections, by reason.
     pub rejected: BTreeMap<String, usize>,
+    /// Single sections generated from, beside the sources' parts.
+    pub sections: usize,
     /// Why generation stopped before every part was covered, if it did.
     pub stopped: Option<String>,
 }
@@ -168,6 +177,34 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
             }
         }
     }
+    let mut sections = 0;
+    if stopped.is_none() && generator.is_none() && !request.sections.is_empty() {
+        *batch
+            .rejected
+            .entry("no model kind was asked for to generate from a queued section".into())
+            .or_default() += request.sections.len();
+    }
+    if stopped.is_none() {
+        if let Some(generator) = &generator {
+            for section in request.sections {
+                if request.cancel.is_cancelled() {
+                    return Err(CampaignError::Cancelled);
+                }
+                if request.deadline.is_some_and(|d| Instant::now() >= d) {
+                    stopped = Some("the budget was spent before every section was covered".into());
+                    break;
+                }
+                let text = SourceText::load(&ctx.sources(), &section.source, &section.part)?;
+                match text.select(&[section.section]) {
+                    Ok(shown) => {
+                        sections += 1;
+                        generate_part(ctx, generator, &shown, &model_kinds, &mut batch)?;
+                    }
+                    Err(e) => *batch.rejected.entry(format!("{section}: {e}")).or_default() += 1,
+                }
+            }
+        }
+    }
     let set = TaskSet {
         name: set_name(request),
         members: batch.entries,
@@ -179,6 +216,7 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
         parts: batch.parts,
         per_kind: batch.per_kind,
         rejected: batch.rejected,
+        sections,
         stopped,
     })
 }
@@ -301,10 +339,15 @@ impl Batch {
     }
 }
 
-/// What a set is called: its kinds, its sources, and the goal.
+/// What a set is called: its kinds, its sources and sections, and the goal.
 fn set_name(request: &Generation<'_>) -> String {
+    let sections = if request.sections.is_empty() {
+        String::new()
+    } else {
+        format!(" and {} queued section(s)", request.sections.len())
+    };
     let mut name = format!(
-        "{} tasks from {} source(s) by {}",
+        "{} tasks from {} source(s){sections} by {}",
         request.kinds.join("+"),
         request.sources.len(),
         request.generator

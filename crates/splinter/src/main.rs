@@ -19,6 +19,7 @@
 //! act on and was asked back.
 
 mod cli;
+mod curriculum_output;
 mod lineage_output;
 mod output;
 mod release_output;

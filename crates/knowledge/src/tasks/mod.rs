@@ -28,7 +28,8 @@
 //!    evidence counts as material the student does not see;
 //! 5. it is new to the batch: not the same instruction once lower-cased
 //!    with whitespace collapsed, and not overlapping an admitted one's word
-//!    shingles at [`GenerationPolicy::max_overlap`] or more;
+//!    shingles at [`GenerationPolicy::max_overlap`] or more ([`dedup`], the
+//!    one near-duplicate rule, which training-set selection reuses);
 //! 6. it is grounded: a text answer by the evidence's words
 //!    ([`grounding`]); a computed answer by running it - a program
 //!    reference must pass the task's executable checks in the sandbox and
@@ -42,8 +43,9 @@ pub mod generator;
 pub mod grounding;
 pub mod kind;
 
+pub mod dedup;
+
 mod admit;
-mod dedup;
 mod reply;
 
 use std::collections::BTreeMap;

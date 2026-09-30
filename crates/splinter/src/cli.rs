@@ -8,8 +8,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use clap::{ArgAction, Args, Parser, Subcommand};
+use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
 use splinter_campaign::critique::DEFAULT_RETRIES;
+use splinter_campaign::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_campaign::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_campaign::eval::SuiteChoice;
 use splinter_campaign::learn::parse_budget;
@@ -173,6 +174,42 @@ pub struct LearnArgs {
     /// Stop at the trained candidate: do not run the release gate.
     #[arg(long)]
     pub no_release: bool,
+    /// Solve each task once and train on every task, instead of measuring
+    /// pass@k and keeping the frontier (tasks sometimes, not always, solved).
+    #[arg(long, conflicts_with_all = ["k", "temperature", "top_k"])]
+    pub no_frontier: bool,
+    /// How the frontier is measured.
+    #[command(flatten)]
+    pub pass_at_k: PassAtKArgs,
+}
+
+/// pass@k's parameters, for the commands that measure it.
+#[derive(Debug, Args)]
+pub struct PassAtKArgs {
+    /// Attempts per task when measuring pass@k.
+    #[arg(long = "k", default_value_t = DEFAULT_K, value_name = "N")]
+    pub k: usize,
+    /// The policy's sampling temperature for its pass@k attempts.
+    #[arg(long, value_name = "T", help = format!(
+        "The policy's sampling temperature for its pass@k attempts [default for a local \
+         model: {}; a remote model samples as its server does unless this is given]",
+        DEFAULT_SAMPLING.temperature
+    ))]
+    pub temperature: Option<f32>,
+    /// The policy's top-k cut for its pass@k attempts.
+    #[arg(long, value_name = "N", help = format!(
+        "The policy's top-k cut for its pass@k attempts [default for a local model: {}]",
+        DEFAULT_SAMPLING.top_k
+    ))]
+    pub top_k: Option<u32>,
+}
+
+impl PassAtKArgs {
+    /// The parameters.
+    #[must_use]
+    pub fn pass_at_k(&self) -> PassAtK {
+        PassAtK::new(self.k, self.temperature, self.top_k)
+    }
 }
 
 /// `ask`.
@@ -239,6 +276,10 @@ pub enum TasksCommand {
 
 /// `solve`.
 #[derive(Debug, Args)]
+#[command(group = ArgGroup::new("pass_at_k_given")
+    .args(["k", "temperature", "top_k"])
+    .multiple(true)
+    .requires("frontier"))]
 pub struct SolveArgs {
     /// The task set, by id or unique prefix.
     #[arg(value_name = "TASKSET-ID")]
@@ -246,6 +287,13 @@ pub struct SolveArgs {
     /// The model that solves.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub solver: ModelRef,
+    /// Solve each task k times, grade every attempt, and keep the frontier:
+    /// the tasks solved sometimes, neither always nor never.
+    #[arg(long)]
+    pub frontier: bool,
+    /// How the frontier is measured.
+    #[command(flatten)]
+    pub pass_at_k: PassAtKArgs,
 }
 
 /// `verify`.
@@ -458,313 +506,4 @@ pub enum RunsCommand {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use clap::CommandFactory;
-
-    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
-        Cli::try_parse_from(std::iter::once("splinter").chain(args.iter().copied()))
-    }
-
-    fn command(args: &[&str]) -> Command {
-        match parse(args) {
-            Ok(Cli {
-                command: Some(command),
-                ..
-            }) => command,
-            other => panic!("{args:?} is not a command: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn the_grammar_is_consistent() {
-        Cli::command().debug_assert();
-    }
-
-    #[test]
-    fn a_sentence_or_nothing_is_the_front_door() {
-        let cli = parse(&["learn the docs in ./docs"]).unwrap();
-        assert_eq!(cli.sentence.as_deref(), Some("learn the docs in ./docs"));
-        assert!(cli.command.is_none());
-        let repl = parse(&[]).unwrap();
-        assert!(repl.sentence.is_none() && repl.command.is_none());
-        assert!(
-            parse(&["two", "sentences"]).is_err(),
-            "a sentence is one argument"
-        );
-        let sentence = parse(&["--json", "what does X do?"]).unwrap();
-        assert!(sentence.global.json && sentence.sentence.is_some());
-    }
-
-    #[test]
-    fn each_verb_takes_what_it_acts_on_as_positionals() {
-        let Command::Learn(learn) = command(&[
-            "learn",
-            "docs/",
-            "cmd:make --help",
-            "--goal",
-            "flags",
-            "--kinds",
-            "recall,denoise",
-            "--budget",
-            "1h30m",
-            "--dry-run",
-        ]) else {
-            panic!("learn");
-        };
-        assert_eq!(learn.sources, ["docs/", "cmd:make --help"]);
-        assert_eq!(learn.kinds, ["recall", "denoise"]);
-        assert_eq!(learn.budget, Some(Duration::from_secs(5400)));
-        assert!(learn.dry_run);
-        assert!(parse(&["learn"]).is_err(), "learn needs a source");
-        assert!(parse(&["learn", "x", "--budget", "soon"]).is_err());
-
-        let Command::Ask(ask) = command(&["ask", "what does X do?", "--open-book", "ab12"]) else {
-            panic!("ask");
-        };
-        assert_eq!(ask.question, "what does X do?");
-        assert_eq!(
-            ask.policy,
-            ModelRef::policy_default(),
-            "closed-book on the policy"
-        );
-        assert!(matches!(command(&["status"]), Command::Status));
-
-        let Command::Source(SourceCommand::Add { target }) =
-            command(&["source", "add", "cmd:ls", "-la", "/tmp"])
-        else {
-            panic!("source add");
-        };
-        assert_eq!(target, ["cmd:ls", "-la", "/tmp"]);
-        assert!(matches!(
-            command(&["source", "list"]),
-            Command::Source(SourceCommand::List)
-        ));
-        assert!(matches!(
-            command(&["source", "show", "ab12"]),
-            Command::Source(SourceCommand::Show { .. })
-        ));
-
-        let Command::Tasks(TasksCommand::Generate {
-            sources,
-            kinds,
-            generator,
-        }) = command(&[
-            "tasks",
-            "generate",
-            "ab12",
-            "cd34",
-            "--kinds",
-            "recall,construct",
-        ])
-        else {
-            panic!("tasks generate");
-        };
-        assert_eq!((sources.len(), kinds.len()), (2, 2));
-        assert_eq!(generator, ModelRef::policy_default());
-        assert!(
-            parse(&["tasks", "generate", "ab12"]).is_err(),
-            "--kinds is required"
-        );
-
-        let Command::Solve(solve) =
-            command(&["solve", "ab12", "--solver", "local:Qwen/Qwen3-1.7B"])
-        else {
-            panic!("solve");
-        };
-        assert_eq!(solve.solver.to_string(), "local:Qwen/Qwen3-1.7B");
-        assert!(matches!(command(&["verify", "ab12"]), Command::Verify(v) if v.judge.is_none()));
-        let Command::Critique(critique) = command(&["critique", "ab12", "--retry", "3"]) else {
-            panic!("critique");
-        };
-        assert_eq!(critique.retry, 3);
-        assert!(
-            parse(&["judge", "calibrate", "labels.jsonl"]).is_err(),
-            "--judge is required"
-        );
-        assert!(matches!(
-            command(&["judge", "calibrate", "labels.jsonl", "--judge", "local:/j"]),
-            Command::Judge(_)
-        ));
-        assert!(matches!(
-            command(&["experiences", "show", "ab12", "--graph"]),
-            Command::Experiences(ExperiencesCommand::Show { graph: true, .. })
-        ));
-
-        let Command::Dataset(DatasetCommand::Build {
-            sets,
-            view,
-            strip,
-            min_strength,
-            export_only,
-        }) = command(&[
-            "dataset",
-            "build",
-            "ab12",
-            "cd34",
-            "--view",
-            "preference",
-            "--strip",
-            "mix:0.5",
-            "--min-strength",
-            "formal",
-            "--export-only",
-        ])
-        else {
-            panic!("dataset build");
-        };
-        assert_eq!(sets.len(), 2);
-        assert_eq!(view, ViewName::Preference);
-        assert!(matches!(strip, Some(Strip::Mix { .. })));
-        assert_eq!(min_strength, Some(Strength::Formal));
-        assert!(export_only);
-        assert!(parse(&["dataset", "build", "ab12", "--view", "sft"]).is_err());
-        assert!(
-            parse(&["dataset", "export", "ab12"]).is_err(),
-            "--out is required"
-        );
-
-        let Command::Train(train) = command(&[
-            "train",
-            "ab12",
-            "cd34",
-            "--from",
-            "local:./ckpt+a.safetensors",
-            "--replay-fraction",
-            "0.5",
-            "--steps",
-            "10",
-            "--rank",
-            "4",
-            "--beta",
-            "0.2",
-        ]) else {
-            panic!("train");
-        };
-        assert_eq!(train.datasets.len(), 2);
-        assert_eq!((train.steps, train.rank, train.beta), (10, 4, Some(0.2)));
-        assert_eq!(train.replay_fraction, 0.5);
-
-        let Command::Release(release) = command(&["release", "candidate-1", "--alias", "staging"])
-        else {
-            panic!("release");
-        };
-        assert_eq!(release.candidate.as_deref(), Some("candidate-1"));
-        assert_eq!(release.alias, "staging");
-        assert!(release.command.is_none());
-        let Command::Release(listing) = command(&["release", "list"]) else {
-            panic!("release list");
-        };
-        assert!(matches!(listing.command, Some(ReleaseCommand::List)));
-        assert_eq!(listing.alias, POLICY_DEFAULT);
-        assert!(matches!(
-            command(&["rollback", "default"]),
-            Command::Rollback { alias } if alias == "default"
-        ));
-        assert!(parse(&["rollback"]).is_err(), "rollback needs an alias");
-        let Command::Eval(eval) = command(&["eval", "policy:default"]) else {
-            panic!("eval");
-        };
-        assert_eq!(eval.suite, SuiteChoice::HeldOut);
-        let Command::Eval(eval) = command(&["eval", "--suite", "anchor", "--freeze", "a.jsonl"])
-        else {
-            panic!("eval anchor");
-        };
-        assert_eq!((eval.model, eval.suite), (None, SuiteChoice::Anchor));
-        let Command::Eval(eval) = command(&["eval", "c1", "--suite", "tasks.jsonl"]) else {
-            panic!("eval file");
-        };
-        assert_eq!(eval.suite, SuiteChoice::File("tasks.jsonl".into()));
-        let Command::Learn(learn) = command(&["learn", "docs", "--no-release"]) else {
-            panic!("learn");
-        };
-        assert!(learn.no_release);
-        assert!(matches!(
-            command(&["runs", "cancel", "run-1"]),
-            Command::Runs(RunsCommand::Cancel { .. })
-        ));
-        let Command::Lineage(lineage) = command(&["lineage", "ab12"]) else {
-            panic!("lineage");
-        };
-        assert_eq!(
-            (lineage.direction(), lineage.depth),
-            (Direction::Both, None)
-        );
-        let Command::Lineage(lineage) = command(&["lineage", "ab12", "--up", "--depth", "2"])
-        else {
-            panic!("lineage --up");
-        };
-        assert_eq!(
-            (lineage.direction(), lineage.depth),
-            (Direction::Up, Some(2))
-        );
-        assert!(parse(&["lineage", "ab12", "--up", "--down"]).is_err());
-        assert!(parse(&["lineage"]).is_err(), "lineage needs an id");
-    }
-
-    #[test]
-    fn every_command_takes_the_global_flags() {
-        for args in [
-            &["status"][..],
-            &["learn", "docs"],
-            &["ask", "q"],
-            &["source", "list"],
-            &["tasks", "list"],
-            &["solve", "ab12"],
-            &["verify", "ab12"],
-            &["critique", "ab12"],
-            &["judge", "calibrate", "f", "--judge", "policy:default"],
-            &["experiences", "list"],
-            &["dataset", "export", "ab12", "--out", "d"],
-            &["train", "ab12"],
-            &["release", "list"],
-            &["release", "c1"],
-            &["rollback", "default"],
-            &["eval", "c1", "--suite", "anchor"],
-            &["runs", "list"],
-            &["lineage", "ab12"],
-        ] {
-            let flags = ["--json", "-v", "--allow-remote", "--state", "s"];
-            let after: Vec<&str> = args.iter().chain(&flags).copied().collect();
-            let before: Vec<&str> = flags.iter().chain(args).copied().collect();
-            for with_flags in [after, before] {
-                let cli = parse(&with_flags).unwrap_or_else(|e| panic!("{with_flags:?}: {e}"));
-                assert!(cli.command.is_some(), "{with_flags:?}");
-                assert!(cli.global.json && cli.global.allow_remote, "{with_flags:?}");
-                assert_eq!(cli.global.state, Some(PathBuf::from("s")));
-            }
-        }
-    }
-
-    #[test]
-    fn model_references_are_parsed_by_the_one_parser() {
-        let refused = parse(&["solve", "ab12", "--solver", "Qwen3"]).unwrap_err();
-        assert!(
-            refused.to_string().contains("remote:<provider>/<name>"),
-            "{refused}"
-        );
-        assert!(parse(&["ask", "q", "--policy", "policy:Champion"]).is_err());
-        assert!(parse(&["ask", "q", "--policy", "policy:staging"]).is_ok());
-        // Parsing accepts a remote reference; using one needs the opt-in.
-        assert!(parse(&["ask", "q", "--policy", "remote:openrouter/z-ai/glm"]).is_ok());
-    }
-
-    #[test]
-    fn the_old_commands_are_gone() {
-        for removed in [
-            &["run", "--workspace", "w", "--task", "t"][..],
-            &["resume", "--run", "r"],
-            &["show", "--run", "r"],
-            &["cancel", "--run", "r"],
-            &["learn", "--run", "r"],
-            &["train", "--dataset", "d.jsonl"],
-            &["train", "ab12", "--replay", "cd34"],
-            &["explore", "--file", "f.md", "--out", "o.jsonl"],
-            &["ask", "--question", "q"],
-            &["eval-facts", "--dataset", "d", "--out", "o"],
-            &["facts", "--file", "f.md"],
-        ] {
-            assert!(parse(removed).is_err(), "{removed:?} still parses");
-        }
-    }
-}
+mod tests;

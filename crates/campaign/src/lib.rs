@@ -19,6 +19,10 @@
 //! * [`solving`] - a task set becomes an experience set.
 //! * [`verify`] - verdicts appended, by each task kind's verifiers;
 //!   [`judge`] - a judge's calibration.
+//! * [`curriculum`] - budget spent where learning happens: pass@k frontier
+//!   selection, concept mastery across releases, concepts the gate saw
+//!   forgotten queued for new tasks, and diversity quotas on a training
+//!   set.
 //! * [`critique`] - failures critiqued and retried.
 //! * [`datasets`] - experience sets projected into a stored dataset.
 //! * [`train`] - datasets become a candidate adapter, continuing the
@@ -41,6 +45,7 @@ pub mod ask;
 pub mod config;
 pub mod context;
 pub mod critique;
+pub mod curriculum;
 pub mod datasets;
 pub mod error;
 pub mod eval;

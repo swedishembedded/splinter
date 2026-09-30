@@ -17,7 +17,7 @@ use std::time::Duration;
 use sven_sdk::model::ModelProvider;
 
 use crate::error::PolicyError;
-use crate::local::{LocalQwen, LocalWeights};
+use crate::local::{LocalQwen, LocalWeights, Sampling};
 
 /// How long dropping a [`LoadedModel`] waits for a local generation still
 /// running to stop before the process may exit.
@@ -181,6 +181,17 @@ impl LoadedModel {
     #[must_use]
     pub fn identity(&self) -> &str {
         &self.identity
+    }
+
+    /// A provider for the same loaded weights sampling as `sampling` says;
+    /// `None` for a model reached over an API, whose sampling is its
+    /// server's. The provider shares the weights: this model must outlive
+    /// its use, as it must outlive [`Self::provider`]'s.
+    #[must_use]
+    pub fn resampled(&self, sampling: Sampling) -> Option<Arc<dyn ModelProvider>> {
+        self.local
+            .as_ref()
+            .map(|local| Arc::new(local.resampled(sampling)) as Arc<dyn ModelProvider>)
     }
 }
 

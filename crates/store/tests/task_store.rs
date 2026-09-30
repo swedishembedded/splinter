@@ -128,3 +128,40 @@ fn a_task_set_is_content_addressed_and_names_only_stored_tasks() {
     });
     assert!(twice.is_err(), "a task is listed once");
 }
+
+/// A task may declare the concepts it exercises: the declaration is part
+/// of what the task is (its address), survives the store, and is carried by
+/// every experience of it; a task that declares none keeps the address it
+/// had before tasks could declare any.
+#[test]
+fn declared_concepts_are_part_of_the_task() {
+    let scratch = Scratch::new("concepts");
+    let store = scratch.store();
+    let plain = task("At what baud rate does the console run?");
+    let declared = plain
+        .with_concepts(["console", "serial", "console"])
+        .unwrap();
+    assert_eq!(declared.concepts, ["console", "serial"], "each once");
+    assert_ne!(declared.task.id, plain.task.id);
+    assert_eq!(
+        plain.with_concepts(Vec::<String>::new()).unwrap().task.id,
+        plain.task.id,
+        "declaring nothing is the undeclared task"
+    );
+    assert!(plain.with_concepts([" "]).is_err(), "a concept has a name");
+    let text = serde_json::to_string(&plain).unwrap();
+    assert!(!text.contains("concepts"), "{text}");
+
+    store.put(&declared).unwrap();
+    assert_eq!(store.get(&declared.task.id).unwrap(), declared);
+    let reviewed = declared
+        .with_privileged(Privileged {
+            kind: PrivilegedKind::Critique,
+            content: "check the baud rate".into(),
+            span: None,
+        })
+        .unwrap();
+    assert_eq!(reviewed.concepts, declared.concepts);
+    assert!(reviewed.same_apart_from_critiques(&declared));
+    assert!(!plain.same_apart_from_critiques(&declared));
+}

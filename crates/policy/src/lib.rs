@@ -26,5 +26,5 @@ pub mod stats;
 pub mod train;
 
 pub use error::PolicyError;
-pub use local::LocalWeights;
+pub use local::{LocalWeights, Sampling, AGENT_SAMPLING};
 pub use selection::{LoadedModel, ModelSelection, RemoteModel};

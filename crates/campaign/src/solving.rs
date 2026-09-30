@@ -12,13 +12,17 @@
 //! or its runtime in the process sandbox - and refused (and reported) when
 //! that environment is not what it was. Every solve is stored as an
 //! experience, answered or not: a run stopped by its deadline is evidence
-//! too.
+//! too. A task may be solved several times (a pass@k measurement): each
+//! solve is its own experience, its provenance numbering the attempt. A
+//! solve by a policy alias records, as the experience's policy, the release
+//! the alias pointed at (or the base): what concept mastery is tallied by.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use splinter_agent::solve::{solve, SolveError, SolveOptions};
+use splinter_agent::solve::{solve, Model, SolveError, SolveOptions};
+use splinter_policy::Sampling;
 use splinter_store::digest::Digest;
 use splinter_store::experience::Provenance;
 use splinter_store::experiences::{ExperienceSet, SetId};
@@ -26,7 +30,9 @@ use splinter_store::tasks::TaskSetId;
 use sven_sdk::{CancelToken, RunConclusion};
 
 use crate::context::Context;
+use crate::curriculum::policy_label;
 use crate::error::CampaignError;
+use crate::learn::PolicyUsed;
 use crate::model_ref::ModelRef;
 use crate::tasks::remaining;
 
@@ -49,6 +55,13 @@ pub struct Solved {
     pub experience_set: SetId,
     /// The solver's identity.
     pub solver: String,
+    /// The release a policy solver was; `None` for a solver that is not a
+    /// policy alias.
+    pub policy: Option<PolicyUsed>,
+    /// Solves per task.
+    pub attempts: usize,
+    /// How the solver sampled; `None` when it sampled as its provider does.
+    pub sampling: Option<Sampling>,
     /// Experiences recorded.
     pub solved: usize,
     /// Of those, how many gave a final answer.
@@ -61,8 +74,36 @@ pub struct Solved {
     pub stopped: Option<String>,
 }
 
-/// Solves every task of `task_set` with `solver`; no solve starts after
-/// `deadline` or runs past it.
+/// How a solver samples its replies.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SamplingChoice {
+    /// As its provider does.
+    Own,
+    /// As given where the solver's sampling can be set here (a local model
+    /// this context loaded), as its provider does elsewhere.
+    Prefer(Sampling),
+    /// As given; refused where the solver's sampling cannot be set.
+    Require(Sampling),
+}
+
+/// One solve stage's inputs and bounds.
+pub struct SolveRequest<'a> {
+    /// The tasks.
+    pub task_set: &'a TaskSetId,
+    /// The model that solves them.
+    pub solver: &'a ModelRef,
+    /// Solves per task; at least one.
+    pub attempts: usize,
+    /// How the solver samples.
+    pub sampling: SamplingChoice,
+    /// No solve starts after this, and none runs past it.
+    pub deadline: Option<Instant>,
+    /// Stops the stage.
+    pub cancel: CancelToken,
+}
+
+/// Solves every task of `task_set` once with `solver`, as its provider
+/// samples; no solve starts after `deadline` or runs past it.
 pub fn solve_set(
     ctx: &Context,
     task_set: &TaskSetId,
@@ -70,27 +111,74 @@ pub fn solve_set(
     deadline: Option<Instant>,
     cancel: &CancelToken,
 ) -> Result<Solved, CampaignError> {
-    let set = ctx.tasks().get_set(task_set)?;
-    let model = ctx.model(solver)?;
+    solve_tasks(
+        ctx,
+        &SolveRequest {
+            task_set,
+            solver,
+            attempts: 1,
+            sampling: SamplingChoice::Own,
+            deadline,
+            cancel: cancel.clone(),
+        },
+    )
+}
+
+/// The solver `request` names, sampling as it asks, and the sampling
+/// applied (`None`: the provider's own).
+fn sampled_solver(
+    ctx: &Context,
+    request: &SolveRequest<'_>,
+) -> Result<(Model, Option<Sampling>), CampaignError> {
+    let (sampling, required) = match request.sampling {
+        SamplingChoice::Own => return Ok((ctx.model(request.solver)?, None)),
+        SamplingChoice::Prefer(sampling) => (sampling, false),
+        SamplingChoice::Require(sampling) => (sampling, true),
+    };
+    match ctx.resampled(request.solver, sampling)? {
+        Some(model) => Ok((model, Some(sampling))),
+        None if required => Err(CampaignError::Refused(format!(
+            "{} samples as its provider does; its sampling cannot be set here",
+            request.solver
+        ))),
+        None => Ok((ctx.model(request.solver)?, None)),
+    }
+}
+
+/// Solves every task of `request.task_set` `request.attempts` times.
+pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, CampaignError> {
+    if request.attempts == 0 {
+        return Err(CampaignError::Refused(
+            "a task is solved at least once".into(),
+        ));
+    }
+    let set = ctx.tasks().get_set(request.task_set)?;
+    let (model, sampling) = sampled_solver(ctx, request)?;
+    let policy = match request.solver {
+        ModelRef::Policy(alias) => Some(PolicyUsed {
+            alias: alias.clone(),
+            release: ctx.policy_pin(alias)?.map(|pin| pin.release),
+        }),
+        _ => None,
+    };
+    let label = policy.as_ref().map(|p| policy_label(p.release.as_ref()));
+    let attempts = u32::try_from(request.attempts)
+        .map_err(|_| CampaignError::Refused("too many attempts per task".into()))?;
     let store = ctx.experiences();
     let mut members = Vec::new();
     let mut report = Solved {
         experience_set: SetId(Digest::of(b"")),
         solver: model.identity.clone(),
+        policy,
+        attempts: request.attempts,
+        sampling,
         solved: 0,
         answered: 0,
         conclusions: BTreeMap::new(),
         skipped: Vec::new(),
         stopped: None,
     };
-    for entry in &set.members {
-        if cancel.is_cancelled() {
-            return Err(CampaignError::Cancelled);
-        }
-        if deadline.is_some_and(|d| Instant::now() >= d) {
-            report.stopped = Some("the budget was spent before every task was tried".into());
-            break;
-        }
+    'tasks: for entry in &set.members {
         let task = ctx.tasks().get(&entry.task)?;
         let environment = match ctx.environments().for_record(&task.environment) {
             Ok(environment) => environment,
@@ -99,37 +187,56 @@ pub fn solve_set(
                 continue;
             }
         };
-        let mut options = SolveOptions::new(remaining(deadline, DEFAULT_SOLVE_DEADLINE));
-        options.cancel = Some(cancel.clone());
-        options.stream_idle = model.stream_idle;
-        let solution =
-            match ctx.block_on(solve(&task, &environment, model.provider.clone(), options)) {
-                Ok(solution) => solution,
-                Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
-                    report.skipped.push(skip(&entry.task, &e));
-                    continue;
-                }
-                Err(e) => return Err(e.into()),
+        for attempt in 0..attempts {
+            if request.cancel.is_cancelled() {
+                return Err(CampaignError::Cancelled);
+            }
+            if request.deadline.is_some_and(|d| Instant::now() >= d) {
+                report.stopped = Some("the budget was spent before every task was tried".into());
+                break 'tasks;
+            }
+            let mut options =
+                SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
+            options.cancel = Some(request.cancel.clone());
+            options.stream_idle = model.stream_idle;
+            let solution =
+                match ctx.block_on(solve(&task, &environment, model.provider.clone(), options)) {
+                    Ok(solution) => solution,
+                    Err(
+                        e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_)),
+                    ) => {
+                        report.skipped.push(skip(&entry.task, &e));
+                        continue 'tasks;
+                    }
+                    Err(e) => return Err(e.into()),
+                };
+            *report
+                .conclusions
+                .entry(conclusion_name(solution.conclusion))
+                .or_default() += 1;
+            report.answered += usize::from(solution.final_output.is_some());
+            let provenance = Provenance {
+                generator: entry.generator.clone(),
+                policy: label.clone(),
+                prompt_digests: entry.prompt.iter().cloned().collect(),
+                attempt: (attempts > 1).then_some(attempt),
+                ..Provenance::new(model.identity.clone(), ctx.clock())
             };
-        *report
-            .conclusions
-            .entry(conclusion_name(solution.conclusion))
-            .or_default() += 1;
-        report.answered += usize::from(solution.final_output.is_some());
-        let provenance = Provenance {
-            generator: entry.generator.clone(),
-            prompt_digests: entry.prompt.iter().cloned().collect(),
-            ..Provenance::new(model.identity.clone(), ctx.clock())
-        };
-        let experience = solution.into_experience(task, provenance)?;
-        let id = store.put(&experience)?;
-        if !members.contains(&id) {
-            members.push(id);
+            let experience = solution.into_experience(task.clone(), provenance)?;
+            let id = store.put(&experience)?;
+            if !members.contains(&id) {
+                members.push(id);
+            }
         }
     }
     report.solved = members.len();
+    let times = if attempts > 1 {
+        format!(" {attempts} times each")
+    } else {
+        String::new()
+    };
     report.experience_set = store.put_set(&ExperienceSet {
-        name: format!("{} solved by {}", task_set, model.identity),
+        name: format!("{} solved{times} by {}", request.task_set, model.identity),
         members,
     })?;
     Ok(report)

@@ -81,7 +81,8 @@ pub fn knower(topics: &[&str]) -> Model {
     Model::new(Arc::new(scripted), "scripted/knower")
 }
 
-/// A recall task: `question(topic, i)`, referenced by its answer.
+/// A recall task: `question(topic, i)`, referenced by its answer,
+/// declaring its topic as the concept it exercises.
 pub fn fact(topic: &str, i: usize) -> Task {
     Task::new(
         "recall",
@@ -94,6 +95,8 @@ pub fn fact(topic: &str, i: usize) -> Task {
             span: None,
         }],
     )
+    .unwrap()
+    .with_concepts([topic])
     .unwrap()
 }
 

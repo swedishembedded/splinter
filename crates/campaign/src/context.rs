@@ -23,7 +23,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 use splinter_agent::solve::Model;
-use splinter_policy::{LoadedModel, ModelSelection};
+use splinter_policy::{LoadedModel, ModelSelection, Sampling};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
     SandboxError,
@@ -279,6 +279,23 @@ impl Context {
             },
         );
         Ok(model)
+    }
+
+    /// The model `reference` names, sampling as `sampling` says; `None`
+    /// when its sampling cannot be set here: a model reached over an API
+    /// (its server samples) or one handed in rather than loaded.
+    pub fn resampled(
+        &self,
+        reference: &ModelRef,
+        sampling: Sampling,
+    ) -> Result<Option<Model>, CampaignError> {
+        let model = self.model(reference)?;
+        let provider = self
+            .lock_models()
+            .get(reference)
+            .and_then(|held| held.loaded.as_ref())
+            .and_then(|loaded| loaded.resampled(sampling));
+        Ok(provider.map(|provider| Model { provider, ..model }))
     }
 
     /// Runs `future` to completion on the context's runtime. Must not be

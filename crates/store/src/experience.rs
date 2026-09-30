@@ -238,6 +238,13 @@ pub struct Provenance {
     pub policy: Option<String>,
     /// Digests of the prompts involved in producing the experience.
     pub prompt_digests: Vec<Digest>,
+    /// Which of several solves of one task by one solver in one pass this
+    /// is, counted from zero, when the task was solved more than once (a
+    /// pass@k measurement); left out of the canonical form when unset, so
+    /// a single solve has the same address whether or not the reader knows
+    /// the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
     /// When the experience was recorded, from the injected [`Clock`].
     pub created_at: String,
 }
@@ -251,6 +258,7 @@ impl Provenance {
             generator: None,
             policy: None,
             prompt_digests: Vec::new(),
+            attempt: None,
             created_at: clock.utc_now(),
         }
     }
@@ -270,6 +278,13 @@ pub struct Task {
     pub instruction: String,
     /// What only the teacher sees.
     pub privileged: Vec<Privileged>,
+    /// The concepts the task declares it exercises, by name; empty when it
+    /// declares none and its concepts are derived from its kind and
+    /// evidence. Left out of the canonical form when empty, so a task that
+    /// declares none has the same address whether or not the reader knows
+    /// the field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub concepts: Vec<String>,
 }
 
 /// The fields a task's address is computed over, in one place so building
@@ -281,6 +296,8 @@ struct TaskBody<'a> {
     environment: &'a Environment,
     instruction: &'a str,
     privileged: &'a [Privileged],
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    concepts: &'a [String],
 }
 
 impl TaskBody<'_> {
@@ -298,14 +315,31 @@ impl Task {
         instruction: impl Into<String>,
         privileged: Vec<Privileged>,
     ) -> Result<Self, ExperienceError> {
-        let kind = kind.into();
-        let instruction = instruction.into();
+        Self::build(
+            kind.into(),
+            evidence,
+            environment,
+            instruction.into(),
+            privileged,
+            Vec::new(),
+        )
+    }
+
+    fn build(
+        kind: String,
+        evidence: Vec<Span>,
+        environment: Environment,
+        instruction: String,
+        privileged: Vec<Privileged>,
+        concepts: Vec<String>,
+    ) -> Result<Self, ExperienceError> {
         let id = TaskBody {
             kind: &kind,
             evidence: &evidence,
             environment: &environment,
             instruction: &instruction,
             privileged: &privileged,
+            concepts: &concepts,
         }
         .address()?;
         let task = Self {
@@ -314,9 +348,36 @@ impl Task {
             environment,
             instruction,
             privileged,
+            concepts,
         };
         task.validate()?;
         Ok(task)
+    }
+
+    /// This task declaring that it exercises `concepts` (each named once,
+    /// in order, blank names refused): a new task, with its own address.
+    pub fn with_concepts(
+        &self,
+        concepts: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Result<Self, ExperienceError> {
+        let mut declared: Vec<String> = Vec::new();
+        for concept in concepts {
+            let concept = concept.into();
+            if concept.trim().is_empty() {
+                return Err(ExperienceError::Missing("concepts[]"));
+            }
+            if !declared.contains(&concept) {
+                declared.push(concept);
+            }
+        }
+        Self::build(
+            self.task.kind.clone(),
+            self.evidence.clone(),
+            self.environment.clone(),
+            self.instruction.clone(),
+            self.privileged.clone(),
+            declared,
+        )
     }
 
     /// Checks what [`Task::new`] checks on a task that was not built by it
@@ -330,6 +391,7 @@ impl Task {
             &self.environment,
             &self.instruction,
             &self.privileged,
+            &self.concepts,
         )
     }
 
@@ -338,12 +400,13 @@ impl Task {
     pub fn with_privileged(&self, item: Privileged) -> Result<Self, ExperienceError> {
         let mut privileged = self.privileged.clone();
         privileged.push(item);
-        Self::new(
+        Self::build(
             self.task.kind.clone(),
             self.evidence.clone(),
             self.environment.clone(),
             self.instruction.clone(),
             privileged,
+            self.concepts.clone(),
         )
     }
 
@@ -365,6 +428,7 @@ impl Task {
             && self.evidence == other.evidence
             && self.environment == other.environment
             && self.instruction == other.instruction
+            && self.concepts == other.concepts
             && graded(self) == graded(other)
     }
 }
@@ -382,6 +446,9 @@ pub struct Experience {
     pub instruction: String,
     /// What only the teacher saw.
     pub privileged: Vec<Privileged>,
+    /// The concepts the task declares it exercises (see [`Task::concepts`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub concepts: Vec<String>,
     /// What the solver did, as sven exports it.
     pub trajectory: sven_sdk::atif::Trajectory,
     /// The solver's final answer, when it gave one.
@@ -404,6 +471,7 @@ impl Experience {
             environment: task.environment,
             instruction: task.instruction,
             privileged: task.privileged,
+            concepts: task.concepts,
             trajectory,
             final_output,
             provenance,
@@ -421,6 +489,7 @@ impl Experience {
             environment: self.environment.clone(),
             instruction: self.instruction.clone(),
             privileged: self.privileged.clone(),
+            concepts: self.concepts.clone(),
         }
     }
 
@@ -444,6 +513,7 @@ impl Experience {
             &self.environment,
             &self.instruction,
             &self.privileged,
+            &self.concepts,
         )?;
         if self.provenance.solver.trim().is_empty() {
             return Err(ExperienceError::Missing("provenance.solver"));
@@ -461,6 +531,7 @@ fn validate_task(
     environment: &Environment,
     instruction: &str,
     privileged: &[Privileged],
+    concepts: &[String],
 ) -> Result<(), ExperienceError> {
     for (field, value) in [
         ("task.kind", task.kind.as_str()),
@@ -470,6 +541,9 @@ fn validate_task(
         if value.trim().is_empty() {
             return Err(ExperienceError::Missing(field));
         }
+    }
+    if concepts.iter().any(|c| c.trim().is_empty()) {
+        return Err(ExperienceError::Missing("concepts[]"));
     }
     if let Some(recorded) = &environment.snapshot {
         let expected = Environment::snapshot_of(&environment.kind, &environment.spec);
@@ -492,6 +566,7 @@ fn validate_task(
         environment,
         instruction,
         privileged,
+        concepts,
     }
     .address()?;
     if expected != task.id {

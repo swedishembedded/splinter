@@ -93,6 +93,9 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         &LearnRequest {
             sources: vec![manual.display().to_string()],
             goal: Some("know the Frobnicator's electrical limits".into()),
+            // This spec is the pipeline's plumbing over a policy that
+            // answers each task the same way every time: every task stays.
+            no_frontier: true,
             ..LearnRequest::default()
         },
         &trainer,
@@ -162,8 +165,8 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     assert_eq!(
         stages,
         [
-            "policy", "sources", "tasks", "solve", "verify", "critique", "dataset", "train",
-            "release"
+            "policy", "sources", "tasks", "solve", "verify", "critique", "select", "dataset",
+            "train", "release"
         ]
     );
 }
@@ -191,7 +194,11 @@ fn a_dry_run_reports_the_plan_and_writes_nothing() {
     };
     assert!(plan.dry_run);
     assert_eq!(plan.kinds, ["recall", "denoise"]);
-    assert_eq!(plan.stages.len(), 9);
+    assert_eq!(plan.stages.len(), 11);
+    assert!(
+        plan.stages.contains(&"frontier"),
+        "frontier selection is the default"
+    );
     assert!(
         !ctx.root().path().exists(),
         "a dry run writes nothing under the state root"
@@ -272,6 +279,7 @@ fn the_policy_is_resolved_once_when_a_run_starts_and_recorded() {
         &LearnRequest {
             sources: vec![manual.display().to_string()],
             no_release: true,
+            no_frontier: true,
             ..LearnRequest::default()
         },
         &mover,
