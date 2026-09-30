@@ -10,7 +10,9 @@
 //! and pinned by what they resolve to.
 //!
 //! A [`RuntimeSpec`] says how to run a code file (an argv template), what
-//! extension the file gets, and how to ask the runtime its version. A
+//! extension the file gets, how to ask the runtime its version, and how a
+//! program in its language prints one line (the statement a verifier
+//! appends to see that the code before it ran to its end). A
 //! sandbox resolves it to a [`ResolvedRuntime`]: the program it will run,
 //! the version string that program reports, and - where the sandbox can see
 //! the executable - the digest of its content. Those are what an
@@ -36,6 +38,9 @@ pub const EXE: &str = "{exe}";
 /// The placeholder in an argv template for the code file.
 pub const FILE: &str = "{file}";
 
+/// The placeholder in a completion statement for the line it prints.
+pub const LINE: &str = "{line}";
+
 /// How long a version probe may take.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -59,10 +64,21 @@ pub struct RuntimeSpec {
     /// placeholder; `None` for a runtime with no way to ask (`sh`), whose
     /// identity is then its executable's digest alone.
     pub version_argv: Option<Vec<String>>,
+    /// A statement that prints its [`LINE`] placeholder as a line of
+    /// standard output and leaves the program's exit status what the code
+    /// before it made it. The placeholder is replaced by a line of ASCII
+    /// letters, digits, `-` and `:` only, so it may sit inside any quotes.
+    pub completion: String,
 }
 
 impl RuntimeSpec {
-    fn new(name: &str, argv: &[&str], extension: &str, version_argv: Option<&[&str]>) -> Self {
+    fn new(
+        name: &str,
+        argv: &[&str],
+        extension: &str,
+        version_argv: Option<&[&str]>,
+        completion: &str,
+    ) -> Self {
         let owned = |args: &[&str]| args.iter().map(|a| a.to_string()).collect();
         Self {
             name: name.to_string(),
@@ -70,7 +86,14 @@ impl RuntimeSpec {
             argv: owned(argv),
             extension: extension.to_string(),
             version_argv: version_argv.map(owned),
+            completion: completion.to_string(),
         }
+    }
+
+    /// The statement that prints `line`; see [`RuntimeSpec::completion`].
+    #[must_use]
+    pub fn completion_for(&self, line: &str) -> String {
+        self.completion.replace(LINE, line)
     }
 
     /// The command that runs `file` with the executable `exe`.
@@ -109,10 +132,31 @@ impl RuntimeRegistry {
                 &[EXE, "-I", FILE],
                 "py",
                 Some(&[EXE, "--version"]),
+                "print(\"{line}\", flush=True)",
             ),
-            RuntimeSpec::new("lua", &[EXE, FILE], "lua", Some(&[EXE, "-v"])),
-            RuntimeSpec::new("node", &[EXE, FILE], "js", Some(&[EXE, "--version"])),
-            RuntimeSpec::new("sh", &[EXE, FILE], "sh", None),
+            RuntimeSpec::new(
+                "lua",
+                &[EXE, FILE],
+                "lua",
+                Some(&[EXE, "-v"]),
+                "io.write(\"{line}\\n\")",
+            ),
+            RuntimeSpec::new(
+                "node",
+                &[EXE, FILE],
+                "js",
+                Some(&[EXE, "--version"]),
+                "process.stdout.write(\"{line}\\n\");",
+            ),
+            // `$?` is read first: the echo would otherwise make the
+            // script's status its own.
+            RuntimeSpec::new(
+                "sh",
+                &[EXE, FILE],
+                "sh",
+                None,
+                "splinter_status=$?; printf '%s\\n' '{line}'; exit \"$splinter_status\"",
+            ),
         ] {
             registry.register(spec);
         }

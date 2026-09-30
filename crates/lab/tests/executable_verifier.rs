@@ -5,7 +5,8 @@
 //! answer in the environment the task names, passes only when every check
 //! meets its expectation, fails a run a limit stopped, abstains where it
 //! has nothing to run, and records digests of what ran and what came back
-//! rather than the outputs themselves.
+//! rather than the outputs themselves. A solution that ends the program
+//! before its check has run cannot pass: the check must be seen to finish.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -98,6 +99,56 @@ fn a_wrong_solution_or_no_answer_fails() {
     assert_eq!(failed_checks(&evidence), Some(vec![1, 2]));
     let (outcome, _, _) = verdict(&verifier, &task, &experience(&task, None, "s"));
     assert_eq!(outcome, Outcome::Fail);
+}
+
+/// Exits cleanly before the appended check runs, printing what the second
+/// check expects: without proof that the check ran, both would pass.
+const EXITS_EARLY: &str = "import sys\nprint(4)\nsys.exit(0)\n";
+
+#[test]
+fn a_solution_that_ends_the_program_before_its_check_fails() {
+    let scratch = Scratch::new("exec-early-exit");
+    let env = python(&scratch, Limits::default());
+    let task = code_task(&env);
+    let verifier = ExecutableVerifier::new(vec![env]);
+    let (outcome, _, evidence) =
+        verdict(&verifier, &task, &experience(&task, Some(EXITS_EARLY), "s"));
+    assert_eq!(outcome, Outcome::Fail, "{evidence}");
+    for run in evidence["checks"].as_array().unwrap() {
+        assert_eq!(run["check_completed"], false, "{evidence}");
+        assert!(
+            run["unmet"]
+                .as_array()
+                .unwrap()
+                .contains(&"check_not_completed".into()),
+            "{evidence}"
+        );
+    }
+    let (outcome, _, evidence) = verdict(&verifier, &task, &experience(&task, Some(CORRECT), "s"));
+    assert_eq!(outcome, Outcome::Pass, "{evidence}");
+    assert_eq!(evidence["checks"][1]["check_completed"], true, "{evidence}");
+}
+
+/// A check that expects the program to fail may end it early itself, so
+/// completion is not asked of it.
+#[test]
+fn a_check_expecting_a_failing_exit_needs_no_completion() {
+    let scratch = Scratch::new("exec-expect-failure");
+    let env = python(&scratch, Limits::default());
+    let check = ExecutableCheck {
+        code: "import sys\nsys.exit(3 if add(1, 1) == 2 else 0)\n".into(),
+        stdin: None,
+        expect: Expectation::exit_code(3),
+        environment: None,
+    };
+    let task = task("code", record(&env), vec![check.as_check().unwrap()]);
+    let verifier = ExecutableVerifier::new(vec![env]);
+    let (outcome, _, evidence) = verdict(&verifier, &task, &experience(&task, Some(CORRECT), "s"));
+    assert_eq!(outcome, Outcome::Pass, "{evidence}");
+    assert_eq!(
+        evidence["checks"][0]["check_completed"],
+        serde_json::Value::Null
+    );
 }
 
 #[test]

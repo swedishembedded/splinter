@@ -23,6 +23,17 @@
 //! program's digests, the environment snapshot, the runtime's version and
 //! executable digest) and what came back (exit code, signal, timeout, and
 //! digests of the possibly truncated output streams), never the outputs.
+//!
+//! A check must be seen to finish. Otherwise a solution could end the
+//! program before the check runs (`sys.exit(0)`, having printed what the
+//! check expects) and pass. So the verifier appends, after the check, the
+//! runtime's completion statement printing a line derived from the digest
+//! of the program without it - a line the solution cannot know, since the
+//! program holds the check it never saw - and a run passes only when that
+//! line ends its standard output. The line is removed before the output is
+//! compared. A check that expects a failing exit status is exempt: ending
+//! the program early may be exactly what it tests. Completion is recorded
+//! as `check_completed` (`null` where it was not asked).
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -51,7 +62,7 @@ pub const OUTPUT_CHECK_KIND: &str = "output-check";
 pub const PRODUCER: &str = "splinter-lab/executable";
 
 /// The executable verifier's version.
-pub const VERSION: &str = "1";
+pub const VERSION: &str = "2";
 
 /// Code that checks a solution, and what running it must produce.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -101,13 +112,23 @@ impl Expectation {
         }
     }
 
+    /// Whether a run must be seen to finish its check: unless the check
+    /// expects a failing exit status.
+    fn needs_completion(&self) -> bool {
+        self.exit_code.is_none_or(|code| code == 0)
+    }
+
     /// Why a run's `result` does not meet this expectation; empty when it
-    /// does. A run a limit stopped never does, nor does output cut at the
-    /// cap when output is compared.
-    fn unmet(&self, result: &CodeResult) -> Vec<&'static str> {
+    /// does. A run a limit stopped never does, nor one not seen to finish
+    /// its check (`completed` false), nor output cut at the cap when output
+    /// is compared.
+    fn unmet(&self, result: &CodeResult, completed: Option<bool>) -> Vec<&'static str> {
         let mut unmet = Vec::new();
         if result.timed_out {
             unmet.push("timed_out");
+        }
+        if completed == Some(false) {
+            unmet.push("check_not_completed");
         }
         if self.exit_code.is_some() && result.exit_code != self.exit_code {
             unmet.push("exit_code");
@@ -229,8 +250,10 @@ impl Offered {
 
 /// One check run.
 pub(crate) struct CheckRun {
-    /// How the run ended.
+    /// How the run ended, the completion line removed from its output.
     pub(crate) result: CodeResult,
+    /// Whether the check was seen to finish; `None` when it was not asked.
+    pub(crate) completed: Option<bool>,
     /// Which expectations it did not meet.
     pub(crate) unmet: Vec<&'static str>,
 }
@@ -241,18 +264,48 @@ impl CheckRun {
     }
 }
 
-/// Runs `program` as `check` says in `env`.
+/// Runs `program` as `check` says in `env`, followed by the completion
+/// statement when the check needs one (see the module documentation).
 pub(crate) fn run_check(
     env: &RuntimeEnvironment,
     program: String,
     check: &ExecutableCheck,
 ) -> Result<CheckRun, SandboxError> {
-    let result = env.run(&CodeCall {
-        code: program,
+    let line = check.expect.needs_completion().then(|| {
+        format!(
+            "splinter-check-completed-{}",
+            Digest::of(program.as_bytes())
+        )
+    });
+    let code = match &line {
+        Some(line) => assemble(&program, &env.runtime().spec.completion_for(line)),
+        None => program,
+    };
+    let mut result = env.run(&CodeCall {
+        code,
         stdin: check.stdin.clone(),
     })?;
-    let unmet = check.expect.unmet(&result);
-    Ok(CheckRun { result, unmet })
+    let completed = line.map(|line| strip_completion(&mut result.stdout, &line));
+    let unmet = check.expect.unmet(&result, completed);
+    Ok(CheckRun {
+        result,
+        completed,
+        unmet,
+    })
+}
+
+/// Removes `line` from the end of `stdout`, where the completion statement
+/// printed it, and says whether it was there. What precedes it on its line
+/// stays: a check's output need not end with a newline.
+fn strip_completion(stdout: &mut String, line: &str) -> bool {
+    let Some(at) = stdout.rfind(line) else {
+        return false;
+    };
+    if !matches!(&stdout[at + line.len()..], "\n" | "\r\n") {
+        return false;
+    }
+    stdout.truncate(at);
+    true
 }
 
 /// What a check run's evidence records: digests of what ran and of what
@@ -281,6 +334,7 @@ pub(crate) fn run_evidence(
         "stdout_truncated": run.result.stdout_truncated,
         "stderr": Digest::of(run.result.stderr.as_bytes()),
         "stderr_truncated": run.result.stderr_truncated,
+        "check_completed": run.completed,
         "passed": run.passed(),
         "unmet": run.unmet,
     })

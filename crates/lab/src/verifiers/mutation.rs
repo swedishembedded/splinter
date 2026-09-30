@@ -49,7 +49,7 @@ pub const TEST_KIND: &str = "generated-test";
 pub const PRODUCER: &str = "splinter-lab/mutation-validated";
 
 /// The verifier's version.
-pub const VERSION: &str = "1";
+pub const VERSION: &str = "2";
 
 /// The most mutants a test is run against by default.
 pub const DEFAULT_MAX_MUTANTS: usize = 32;
