@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 <!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
 
+![Splinter banner](docs/banner.png)
+
 # Splinter
 
 A learning agent with its own model. Tell it what to learn, in plain
