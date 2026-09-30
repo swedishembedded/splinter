@@ -1,29 +1,78 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Spec: a denoise task is a deterministic function of its source and seed,
-//! grounded in a span of the source, shows the student only the corrupted
-//! passage, and keeps the original as the teacher's reference.
+//! Spec: a denoise task is a deterministic function of its source part and
+//! seed, grounded in a span that resolves through the source store to the
+//! original passage, shows the student only the corrupted passage, and
+//! keeps the original as the teacher's reference.
+
+// Helpers outside a #[test] fn unwrap too: a panic is the failure report.
+#![allow(clippy::unwrap_used)]
+
+use std::path::PathBuf;
 
 use splinter_knowledge::denoise::{Denoise, DenoiseError};
-use splinter_store::experience::{Digest, PrivilegedKind};
+use splinter_store::clock::FixedClock;
+use splinter_store::experience::PrivilegedKind;
+use splinter_store::source::{CapturedSource, Origin, PartContent};
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 
-const SOURCE: &str = "Splinter keeps every experience immutable and content addressed. \
+const PASSAGE: &str = "Splinter keeps every experience immutable and content addressed. \
     Graders append annotations beside an experience and never rewrite it. \
     Training sets are projected from experiences through views.";
 
+fn source(text: &str) -> CapturedSource {
+    CapturedSource::new(
+        Origin::Document {
+            path: "/notes/design.md".into(),
+        },
+        vec![PartContent {
+            name: "design.md".into(),
+            media_type: "text/markdown".into(),
+            bytes: text.as_bytes().to_vec(),
+        }],
+        &FixedClock::new("2026-09-30T08:00:00.000Z"),
+    )
+    .unwrap()
+}
+
+struct Scratch(PathBuf);
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[test]
-fn the_task_is_deterministic_and_grounded_in_a_span_of_the_source() {
-    let digest = Digest::of(SOURCE.as_bytes());
-    let task = Denoise::new(7).generate(SOURCE, &digest).unwrap();
-    assert_eq!(task, Denoise::new(7).generate(SOURCE, &digest).unwrap());
+fn the_task_is_deterministic_and_its_evidence_resolves_through_the_store() {
+    let scratch =
+        Scratch(std::env::temp_dir().join(format!("splinter-denoise-task-{}", std::process::id())));
+    let store = SourceStore::open(&StateRoot::new(&scratch.0));
+    let captured = source(PASSAGE);
+    let id = store.put_source(&captured).unwrap();
+    let stored = store.get_source(&id).unwrap();
+    let bytes = store.read_part(&id, "design.md").unwrap();
+
+    let task = Denoise::new(7)
+        .generate(&stored, "design.md", &bytes)
+        .unwrap();
+    assert_eq!(
+        task,
+        Denoise::new(7)
+            .generate(&stored, "design.md", &bytes)
+            .unwrap()
+    );
     assert_eq!(task.task.kind, splinter_lab::denoise::KIND);
 
     let [span] = &task.evidence[..] else {
         panic!("one evidence span, got {:?}", task.evidence)
     };
-    assert_eq!(span.source, digest);
-    let original = &SOURCE[span.start as usize..span.end as usize];
+    let part = span.part.as_ref().unwrap();
+    assert_eq!((&part.source, part.name.as_str()), (&id, "design.md"));
+    let original = String::from_utf8(store.read_span(span).unwrap()).unwrap();
+    assert!(PASSAGE.contains(&original));
     let [reference] = &task.privileged[..] else {
         panic!("one privileged item")
     };
@@ -31,7 +80,7 @@ fn the_task_is_deterministic_and_grounded_in_a_span_of_the_source() {
     assert_eq!(reference.content, original);
     assert_eq!(reference.span.as_ref(), Some(span));
     assert!(
-        !task.instruction.contains(original),
+        !task.instruction.contains(&original),
         "the student never sees the original: {}",
         task.instruction
     );
@@ -39,7 +88,7 @@ fn the_task_is_deterministic_and_grounded_in_a_span_of_the_source() {
     let other_seeds: Vec<_> = (0..8)
         .map(|seed| {
             Denoise::new(seed)
-                .generate(SOURCE, &digest)
+                .generate(&stored, "design.md", &bytes)
                 .unwrap()
                 .task
                 .id
@@ -52,15 +101,20 @@ fn the_task_is_deterministic_and_grounded_in_a_span_of_the_source() {
 }
 
 #[test]
-fn a_mismatched_digest_or_a_too_short_source_is_refused() {
-    let wrong = Digest::of(b"another text");
+fn mismatched_bytes_an_unknown_part_or_a_too_short_part_are_refused() {
+    let captured = source(PASSAGE);
+    let stored = captured.source();
     assert!(matches!(
-        Denoise::new(1).generate(SOURCE, &wrong),
+        Denoise::new(1).generate(stored, "design.md", b"another text"),
         Err(DenoiseError::Digest { .. })
     ));
-    let short = "two words";
     assert!(matches!(
-        Denoise::new(1).generate(short, &Digest::of(short.as_bytes())),
+        Denoise::new(1).generate(stored, "other.md", PASSAGE.as_bytes()),
+        Err(DenoiseError::UnknownPart { .. })
+    ));
+    let short = source("two words");
+    assert!(matches!(
+        Denoise::new(1).generate(short.source(), "design.md", b"two words"),
         Err(DenoiseError::TooShort { .. })
     ));
 }

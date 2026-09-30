@@ -18,6 +18,7 @@
 //!   train/prepared/           the tokenized dataset of the latest attempt
 //!   adapter.json              the promoted adapter serving reads
 //!   experiences/              the content-addressed experience store
+//!   sources/                  the content-addressed source store
 //! ```
 //!
 //! Every file a reader acts on is written with [`write_atomic`]: a status
@@ -30,16 +31,23 @@
 //! [`experience`], [`annotation`] and [`experiences`] are the experience
 //! store every training set is projected from: immutable experiences under
 //! their content address, append-only annotations beside them, and named
-//! sets of experience ids.
+//! sets of experience ids. [`source`] and [`sources`] are what those
+//! experiences are grounded in: every document, repository and command run
+//! Splinter learns from, its content stored once per digest, so a span of
+//! an experience resolves to the exact bytes it names. [`error`] is the
+//! error both stores report.
 
 #![warn(missing_docs)]
 
 pub mod annotation;
 pub mod clock;
 pub mod digest;
+pub mod error;
 pub mod experience;
 pub mod experiences;
 pub mod runs;
+pub mod source;
+pub mod sources;
 pub mod trace;
 
 use std::fs;
@@ -110,6 +118,12 @@ impl StateRoot {
     #[must_use]
     pub fn experiences(&self) -> PathBuf {
         self.0.join("experiences")
+    }
+
+    /// The source store's directory.
+    #[must_use]
+    pub fn sources(&self) -> PathBuf {
+        self.0.join("sources")
     }
 }
 

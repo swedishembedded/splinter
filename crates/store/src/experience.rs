@@ -26,6 +26,7 @@
 use serde::{Deserialize, Serialize};
 
 pub use crate::digest::{Digest, DigestError};
+pub use crate::source::PartRef;
 use crate::{clock::Clock, digest::canonical_json};
 
 /// The content address of an [`Experience`]: the [`Digest`] of its
@@ -65,21 +66,57 @@ pub struct TaskRef {
     pub kind: String,
 }
 
-/// A byte range `[start, end)` of a source the task is grounded in.
+/// A byte range `[start, end)` of the bytes a task is grounded in.
+///
+/// The offsets index the content whose digest is [`Span::source`]; with a
+/// source store, that is a source part's content (see
+/// [`crate::source::Part::content`]), and the store resolves the span to
+/// its bytes. [`Span::part`] names the source and part those bytes are, so a
+/// span traces back to where they were captured and not only to what they
+/// are: one content can belong to many sources. It is optional, and left
+/// out of the canonical form when unset, so a span that names no part has
+/// the same address whether or not the reader knows the field.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Span {
-    /// The digest of the whole source text the offsets index into.
+    /// The digest of the content the offsets index into.
     pub source: Digest,
     /// First byte of the span.
     pub start: u64,
     /// One past the last byte of the span; `start <= end`.
     pub end: u64,
+    /// The source part whose content [`Span::source`] is, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<PartRef>,
 }
 
 impl Span {
-    /// A span, refused when it ends before it starts.
+    /// A span of the content `source`, refused when it ends before it
+    /// starts.
     pub fn new(source: Digest, start: u64, end: u64) -> Result<Self, ExperienceError> {
-        let span = Self { source, start, end };
+        let span = Self {
+            source,
+            start,
+            end,
+            part: None,
+        };
+        span.validate()?;
+        Ok(span)
+    }
+
+    /// A span of `part`, whose content is `content`, refused when it ends
+    /// before it starts.
+    pub fn in_part(
+        part: PartRef,
+        content: Digest,
+        start: u64,
+        end: u64,
+    ) -> Result<Self, ExperienceError> {
+        let span = Self {
+            source: content,
+            start,
+            end,
+            part: Some(part),
+        };
         span.validate()?;
         Ok(span)
     }

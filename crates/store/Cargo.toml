@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-store"
-description = "Splinter's durable state: the state-root layout, atomic writes, time-ordered ids, the UTC clock, and the content-addressed experience store."
+description = "Splinter's durable state: the state-root layout, atomic writes, time-ordered ids, the UTC clock, and the content-addressed experience and source stores."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

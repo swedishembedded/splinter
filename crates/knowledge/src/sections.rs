@@ -6,87 +6,208 @@
 // from technical documents, you can procure our services by sending an
 // email to info@swedishembedded.com.
 
-//! A document split into the sections a model reads one at a time, and
-//! the subject every section and question is anchored on: the title.
+//! A text split into addressable sections, and the subject every section
+//! and question of a fact sheet is anchored on: the title.
+//!
+//! [`sections`] is the one sectioner: each [`Section`] is a byte range of
+//! the text, so a section of a stored source part is a span of it.
+//! Markdown splits at ATX headings (`#` to `######`, outside fenced code);
+//! any other text splits into blank-line paragraphs. A section starts at
+//! its first non-blank line and ends with its last non-blank line, line
+//! terminator excluded; blank lines between sections belong to none.
+//! [`split_sections`] is the fact-extraction view of the same split: capped
+//! in size, and with the document's title re-attached to every chunk.
 
-/// Splits `text` into sections at markdown headings (`##` / `###`).
-///
-/// Three invariants:
-/// - A table row is never split from its section: a heading line or a
-///   blank line opens a new chunk, and a markdown table contains neither,
-///   so a table always stays whole.
-/// - `chunk_lines` caps a section's size: when a section exceeds the cap,
-///   the next heading starts a fresh chunk (content in flight is kept
-///   with the section that holds it - splitting mid-table is what the
-///   cap must never cause).
-/// - A section that stays over the cap with no heading in sight (the
-///   common fact-sheet shape: one `#`, then bullets) also chunks at the
-///   next blank line. Without this, a heading-less document was ONE
-///   section however large - too much for a small generator to enumerate,
-///   which is how coverage collapses. The split point is a paragraph
-///   boundary, and a heading is never parked alone: if the content in
-///   flight is only a heading, it stays for the paragraph that follows.
-/// - Every section carries the document's title line (the first `#`
-///   heading). Chunking cuts later sections off from the document's
-///   subject, and the generator is told to use the identifiers its
-///   section shows - a chunk that no longer names the device cannot
-///   produce an anchored question about it.
-pub fn split_sections(text: &str, chunk_lines: Option<usize>) -> Vec<String> {
-    let mut sections: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let mut overflow = false;
-    let title = document_title(text);
-    for line in text.lines() {
-        let is_heading = line.starts_with("## ") || line.starts_with("### ");
-        let mut close = is_heading && (!current.trim().is_empty() || overflow);
-        if !close {
-            if let Some(cap) = chunk_lines {
-                let is_blank = line.trim().is_empty();
-                let last_non_empty_is_heading = current
-                    .lines()
-                    .rev()
-                    .find(|l| !l.trim().is_empty())
-                    .is_some_and(|l| l.starts_with('#'));
-                close = is_blank
-                    && !current.trim().is_empty()
-                    && !last_non_empty_is_heading
-                    && current.lines().count() >= cap;
-            }
-        }
-        if close {
-            sections.push(std::mem::take(&mut current));
-            overflow = false;
-        }
-        current.push_str(line);
-        current.push('\n');
-        if let Some(cap) = chunk_lines {
-            if current.lines().count() >= cap {
-                // Over the cap: the next heading or paragraph boundary
-                // MUST open a new chunk.
-                overflow = true;
-            }
-        }
-    }
-    if !current.trim().is_empty() {
-        sections.push(current);
-    }
-    // Re-unite every section with the document's subject, and drop a
-    // section that holds nothing but it - a title with no content gives
-    // the generator no facts to enumerate.
-    if let Some(title) = title {
-        for section in &mut sections {
-            if !section.contains(title) {
-                let content = section.trim_start();
-                *section = format!("{title}\n\n{content}");
-            }
-        }
-        sections.retain(|section| section.lines().any(|l| !l.trim().is_empty() && l != title));
-    }
-    sections
+use std::ops::Range;
+
+/// The media type that splits at headings; every other text splits into
+/// paragraphs.
+pub const MARKDOWN: &str = "text/markdown";
+
+/// One section of a text: the bytes `range` covers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Section {
+    /// Its byte range in the text; both ends are on line boundaries.
+    pub range: Range<usize>,
 }
 
-/// Runs the whole exploration, tracing to its own run dir like `run` does:
-/// manifest, one event per section, and an outcome with the counts.
+impl Section {
+    /// The section's text within `text`, the text it was split from.
+    #[must_use]
+    pub fn text<'a>(&self, text: &'a str) -> Option<&'a str> {
+        text.get(self.range.clone())
+    }
+}
+
+/// Splits `text` of media type `media_type` into sections: at headings for
+/// [`MARKDOWN`], at blank lines otherwise.
+#[must_use]
+pub fn sections(text: &str, media_type: &str) -> Vec<Section> {
+    if media_type == MARKDOWN {
+        markdown_sections(text, None)
+    } else {
+        paragraphs(text)
+    }
+}
+
+/// One line of a text: its byte range without the terminator, and what the
+/// sectioners need to know about it.
+struct Line<'a> {
+    start: usize,
+    end: usize,
+    text: &'a str,
+}
+
+impl Line<'_> {
+    fn is_blank(&self) -> bool {
+        self.text.trim().is_empty()
+    }
+}
+
+fn lines(text: &str) -> impl Iterator<Item = Line<'_>> {
+    let mut offset = 0;
+    text.split_inclusive('\n').map(move |raw| {
+        let start = offset;
+        offset += raw.len();
+        let content = raw.strip_suffix('\n').unwrap_or(raw);
+        let content = content.strip_suffix('\r').unwrap_or(content);
+        Line {
+            start,
+            end: start + content.len(),
+            text: content,
+        }
+    })
+}
+
+/// Whether `line` is an ATX heading: up to three spaces, one to six `#`,
+/// then whitespace or the end of the line.
+fn is_heading(line: &str) -> bool {
+    let indent = line.len() - line.trim_start_matches(' ').len();
+    let rest = &line[indent..];
+    let hashes = rest.len() - rest.trim_start_matches('#').len();
+    indent <= 3
+        && (1..=6).contains(&hashes)
+        && rest[hashes..]
+            .chars()
+            .next()
+            .is_none_or(|c| c == ' ' || c == '\t')
+}
+
+/// The fence a line opens or closes (a run of three or more backticks or
+/// tildes after up to three spaces), as its character and length.
+fn fence(line: &str) -> Option<(char, usize)> {
+    let indent = line.len() - line.trim_start_matches(' ').len();
+    let rest = &line[indent..];
+    let marker = rest.chars().next().filter(|c| *c == '`' || *c == '~')?;
+    let run = rest.len() - rest.trim_start_matches(marker).len();
+    (indent <= 3 && run >= 3).then_some((marker, run))
+}
+
+/// A section being built: the lines so far, and what closing it needs.
+#[derive(Default)]
+struct Open {
+    /// Byte range of its non-blank lines so far.
+    range: Option<Range<usize>>,
+    /// Lines in it, blank ones included.
+    lines: usize,
+    /// Whether its last non-blank line is a heading.
+    ends_in_heading: bool,
+}
+
+impl Open {
+    fn push(&mut self, line: &Line<'_>, heading: bool) {
+        self.lines += 1;
+        if !line.is_blank() {
+            let start = self.range.as_ref().map_or(line.start, |r| r.start);
+            self.range = Some(start..line.end);
+            self.ends_in_heading = heading;
+        }
+    }
+
+    fn close(&mut self, out: &mut Vec<Section>) {
+        if let Some(range) = std::mem::take(self).range {
+            out.push(Section { range });
+        }
+    }
+}
+
+/// Splits Markdown `text` at its headings. A heading always opens a new
+/// section. With `chunk_lines`, a section that reaches that many lines
+/// (blank ones included) also closes at its next blank line, unless all it
+/// holds so far is headings: a heading never ends up alone. Nothing inside
+/// a fenced code block splits it.
+#[must_use]
+pub fn markdown_sections(text: &str, chunk_lines: Option<usize>) -> Vec<Section> {
+    let mut out = Vec::new();
+    let mut open = Open::default();
+    let mut in_fence: Option<(char, usize)> = None;
+    for line in lines(text) {
+        let fenced = in_fence.is_some();
+        match (in_fence, fence(line.text)) {
+            (None, Some(opened)) => in_fence = Some(opened),
+            (Some((c, n)), Some((c2, n2)))
+                if c == c2 && n2 >= n && line.text.trim().len() == n2 =>
+            {
+                in_fence = None;
+            }
+            _ => {}
+        }
+        let heading = !fenced && is_heading(line.text);
+        let overflowing = chunk_lines.is_some_and(|cap| open.lines >= cap);
+        let boundary =
+            heading || (!fenced && line.is_blank() && overflowing && !open.ends_in_heading);
+        if boundary && open.range.is_some() {
+            open.close(&mut out);
+        }
+        open.push(&line, heading);
+    }
+    open.close(&mut out);
+    out
+}
+
+/// Splits `text` into paragraphs: runs of non-blank lines.
+#[must_use]
+pub fn paragraphs(text: &str) -> Vec<Section> {
+    let mut out = Vec::new();
+    let mut open = Open::default();
+    for line in lines(text) {
+        if line.is_blank() {
+            open.close(&mut out);
+        } else {
+            open.push(&line, false);
+        }
+    }
+    open.close(&mut out);
+    out
+}
+
+/// The sections a fact extractor reads: [`markdown_sections`] capped at
+/// `chunk_lines`, as text.
+///
+/// Every section carries the document's title line (the first `#`
+/// heading). Chunking cuts later sections off from the document's subject,
+/// and the extractor is told to use the identifiers its section shows - a
+/// chunk that no longer names the device cannot produce an anchored
+/// question about it. A section that holds nothing but the title gives the
+/// extractor no facts to enumerate, and is dropped.
+#[must_use]
+pub fn split_sections(text: &str, chunk_lines: Option<usize>) -> Vec<String> {
+    let title = document_title(text);
+    markdown_sections(text, chunk_lines)
+        .into_iter()
+        .filter_map(|section| section.text(text))
+        .filter(|section| {
+            section
+                .lines()
+                .any(|l| !l.trim().is_empty() && Some(l) != title)
+        })
+        .map(|section| match title {
+            Some(title) if !section.contains(title) => format!("{title}\n\n{section}\n"),
+            _ => format!("{section}\n"),
+        })
+        .collect()
+}
+
 /// The document's title line - the first level-1 heading - which names
 /// the subject every chunk must carry and every question must anchor on.
 pub fn document_title(text: &str) -> Option<&str> {

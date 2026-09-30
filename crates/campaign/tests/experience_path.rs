@@ -8,9 +8,10 @@
 
 //! Spec: the experience path end to end, with no network and no model.
 //!
-//! source text -> denoise task -> a solve through sven -> experience in the
-//! store -> formal verdict appended -> SFT-final view -> a chat dataset the
-//! trainer's parser accepts. The solver is a scripted in-test model behind
+//! source in the source store -> denoise task -> a solve through sven ->
+//! experience in the store -> formal verdict appended -> SFT-final view -> a
+//! chat dataset the trainer's parser accepts; the task's evidence resolves
+//! back to the source's bytes. The solver is a scripted in-test model behind
 //! sven's `ModelProvider` seam.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
@@ -27,6 +28,8 @@ use splinter_store::experience::{
     Digest, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
 use splinter_store::experiences::ExperienceStore;
+use splinter_store::source::{CapturedSource, Origin, PartContent};
+use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
 use splinter_views::{write_dataset, SftFinal, View};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
@@ -69,10 +72,28 @@ impl Drop for Scratch {
     }
 }
 
-/// The denoise task, with a teacher-only note beside its reference.
-fn task() -> Task {
+/// The denoise task over `SOURCE` stored in `sources`, with a teacher-only
+/// note beside its reference.
+fn task(sources: &SourceStore) -> Task {
+    let captured = CapturedSource::new(
+        Origin::Document {
+            path: "/notes/experience.md".into(),
+        },
+        vec![PartContent {
+            name: "experience.md".into(),
+            media_type: "text/markdown".into(),
+            bytes: SOURCE.as_bytes().to_vec(),
+        }],
+        &FixedClock::new("2026-09-30T07:00:00.000Z"),
+    )
+    .unwrap();
+    let id = sources.put_source(&captured).unwrap();
     let generated = Denoise::new(11)
-        .generate(SOURCE, &Digest::of(SOURCE.as_bytes()))
+        .generate(
+            &sources.get_source(&id).unwrap(),
+            "experience.md",
+            &sources.read_part(&id, "experience.md").unwrap(),
+        )
         .unwrap();
     let mut privileged = generated.privileged;
     privileged.push(Privileged {
@@ -116,9 +137,16 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
     let scratch = Scratch(
         std::env::temp_dir().join(format!("splinter-experience-path-{}", std::process::id())),
     );
-    let store = ExperienceStore::open(&StateRoot::new(&scratch.0));
-    let task = task();
+    let root = StateRoot::new(&scratch.0);
+    let store = ExperienceStore::open(&root);
+    let sources = SourceStore::open(&root);
+    let task = task(&sources);
     let answer = reference(&task);
+    assert_eq!(
+        sources.read_span(&task.evidence[0]).unwrap(),
+        answer.as_bytes(),
+        "the evidence resolves to the passage the reference restores"
+    );
 
     // A solve that restores the passage.
     let passed = solve(task.clone(), &answer).await;

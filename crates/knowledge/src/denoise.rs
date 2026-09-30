@@ -10,22 +10,24 @@
 //! restored.
 //!
 //! [`Denoise::generate`] picks a window of [`SPAN_WORDS`] whitespace
-//! separated words of the source, drops one word and swaps two adjacent
-//! ones, and asks for the original passage back. Everything is a function
-//! of the source and the seed, so a task is reproducible from them alone.
-//! The original passage is the task's evidence span and its privileged
-//! reference - what the verifier compares against and the student never
-//! sees.
+//! separated words of one part of a source, drops one word and swaps two
+//! adjacent ones, and asks for the original passage back. Everything is a
+//! function of the part's content and the seed, so a task is reproducible
+//! from them alone. The original passage is the task's evidence span -
+//! naming the source and part, so the source store resolves it to the
+//! passage's bytes - and its privileged reference: what the verifier
+//! compares against and the student never sees.
 
 use splinter_lab::denoise::KIND;
 use splinter_store::experience::{
     Digest, Environment, ExperienceError, Privileged, PrivilegedKind, Span, Task,
 };
+use splinter_store::source::{PartRef, Source, SourceId};
 
-/// Words in a denoise passage, when the source has that many.
+/// Words in a denoise passage, when the part has that many.
 pub const SPAN_WORDS: usize = 12;
 
-/// The fewest words a source may have: enough that dropping one and
+/// The fewest words a part may have: enough that dropping one and
 /// swapping two still leaves a passage to restore.
 pub const MIN_WORDS: usize = 4;
 
@@ -36,18 +38,34 @@ pub const GENERATOR: &str = "splinter-knowledge/denoise@1";
 /// Why no task could be generated.
 #[derive(Debug, thiserror::Error)]
 pub enum DenoiseError {
-    /// The digest given is not the digest of the text given.
-    #[error("the source hashes to {actual}, not the {claimed} it was given as")]
+    /// The source has no part of the name given.
+    #[error("source {source_id} has no part {part:?}")]
+    UnknownPart {
+        /// The source.
+        source_id: SourceId,
+        /// The part name given.
+        part: String,
+    },
+    /// The content given is not the content of the part.
+    #[error("the content given hashes to {actual}, not to the part's {claimed}")]
     Digest {
-        /// The digest the caller gave.
+        /// The part's content digest.
         claimed: Digest,
-        /// The digest of the text.
+        /// The digest of the content given.
         actual: Digest,
     },
-    /// The source has too few words to corrupt.
-    #[error("the source has {words} word(s); a denoise task needs at least {MIN_WORDS}")]
+    /// The part's content is not UTF-8 text.
+    #[error("part {part:?} of {source_id} is not UTF-8 text")]
+    NotText {
+        /// The source.
+        source_id: SourceId,
+        /// The part.
+        part: String,
+    },
+    /// The part has too few words to corrupt.
+    #[error("the part has {words} word(s); a denoise task needs at least {MIN_WORDS}")]
     TooShort {
-        /// Words in the source.
+        /// Words in the part.
         words: usize,
     },
     /// The task failed validation.
@@ -68,16 +86,45 @@ impl Denoise {
         Self { seed }
     }
 
-    /// A denoise task over `source`, whose digest is `digest` (checked).
-    pub fn generate(&self, source: &str, digest: &Digest) -> Result<Task, DenoiseError> {
-        let actual = Digest::of(source.as_bytes());
-        if actual != *digest {
+    /// A denoise task over part `part` of `source`, whose content is
+    /// `content` (checked against the part's digest).
+    pub fn generate(
+        &self,
+        source: &Source,
+        part: &str,
+        content: &[u8],
+    ) -> Result<Task, DenoiseError> {
+        let found = source.part(part).ok_or_else(|| DenoiseError::UnknownPart {
+            source_id: source.id.clone(),
+            part: part.to_string(),
+        })?;
+        let actual = Digest::of(content);
+        if actual != found.content {
             return Err(DenoiseError::Digest {
-                claimed: digest.clone(),
+                claimed: found.content.clone(),
                 actual,
             });
         }
-        let words = word_ranges(source);
+        let text = std::str::from_utf8(content).map_err(|_| DenoiseError::NotText {
+            source_id: source.id.clone(),
+            part: part.to_string(),
+        })?;
+        let part_ref = PartRef {
+            source: source.id.clone(),
+            name: part.to_string(),
+        };
+        self.generate_text(text, part_ref, &found.content)
+    }
+
+    /// The task over `text`, the content of `part` whose digest is
+    /// `digest`.
+    fn generate_text(
+        &self,
+        text: &str,
+        part: PartRef,
+        digest: &Digest,
+    ) -> Result<Task, DenoiseError> {
+        let words = word_ranges(text);
         if words.len() < MIN_WORDS {
             return Err(DenoiseError::TooShort { words: words.len() });
         }
@@ -87,12 +134,12 @@ impl Denoise {
         let window = &words[first..first + len];
         let (start, end) = (window[0].0, window[len - 1].1);
 
-        let mut corrupted: Vec<&str> = window.iter().map(|&(s, e)| &source[s..e]).collect();
+        let mut corrupted: Vec<&str> = window.iter().map(|&(s, e)| &text[s..e]).collect();
         corrupted.remove(rng.below(corrupted.len()));
         let swap = rng.below(corrupted.len() - 1);
         corrupted.swap(swap, swap + 1);
 
-        let span = Span::new(digest.clone(), start as u64, end as u64)?;
+        let span = Span::in_part(part, digest.clone(), start as u64, end as u64)?;
         let instruction = format!(
             "The passage below was corrupted: one word was dropped and two adjacent words were \
              swapped. Restore the original passage. Reply with the restored passage only.\n\n{}",
@@ -109,7 +156,7 @@ impl Denoise {
             instruction,
             vec![Privileged {
                 kind: PrivilegedKind::Reference,
-                content: source[start..end].to_string(),
+                content: text[start..end].to_string(),
                 span: Some(span),
             }],
         )?)

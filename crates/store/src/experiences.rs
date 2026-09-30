@@ -27,14 +27,16 @@
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use crate::annotation::{Annotation, AnnotationBody};
 use crate::digest::{canonical_json, Digest};
-use crate::experience::{Experience, ExperienceError, ExperienceId};
+pub use crate::error::StoreError;
+use crate::error::{decode, io, read_verified};
+use crate::experience::{Experience, ExperienceId};
 use crate::{sync_dir, write_once, StateRoot};
 
 /// The content address of an [`ExperienceSet`].
@@ -66,70 +68,6 @@ pub struct AnnotationLog {
     /// Lines that could not be read - a line torn by a crash mid-append -
     /// and were skipped.
     pub unreadable: usize,
-}
-
-/// Why a store operation failed.
-#[derive(Debug, thiserror::Error)]
-pub enum StoreError {
-    /// The experience is not valid.
-    #[error("invalid experience: {0}")]
-    Invalid(#[from] ExperienceError),
-    /// An annotation or set is not valid.
-    #[error("invalid {what}: {reason}")]
-    Rejected {
-        /// What was refused.
-        what: &'static str,
-        /// Why.
-        reason: String,
-    },
-    /// The store holds no experience with this id.
-    #[error("no experience {0} in the store")]
-    UnknownExperience(ExperienceId),
-    /// The store holds no set with this id.
-    #[error("no experience set {0} in the store")]
-    UnknownSet(SetId),
-    /// A stored object's bytes do not hash to its address.
-    #[error("{path} is corrupt: it should hash to {expected}, it hashes to {found}")]
-    Corrupt {
-        /// The object file.
-        path: PathBuf,
-        /// Its address.
-        expected: Digest,
-        /// What its bytes hash to.
-        found: Digest,
-    },
-    /// A stored object hashes correctly but does not read back as the
-    /// record it addresses (written by an incompatible schema).
-    #[error("{path} does not decode to the record it addresses: {reason}")]
-    Undecodable {
-        /// The object file.
-        path: PathBuf,
-        /// Why.
-        reason: String,
-    },
-    /// A record cannot be serialized.
-    #[error("cannot serialize {what}: {source}")]
-    Serialize {
-        /// What was being serialized.
-        what: &'static str,
-        /// The serializer's error.
-        source: serde_json::Error,
-    },
-    /// A file operation failed.
-    #[error("{path}: {source}")]
-    Io {
-        /// The file or directory.
-        path: PathBuf,
-        /// The underlying error.
-        source: std::io::Error,
-    },
-}
-
-fn io(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
-    move |source| StoreError::Io {
-        path: path.to_path_buf(),
-        source,
-    }
 }
 
 /// The experience store under one state root.
@@ -332,27 +270,6 @@ impl ExperienceStore {
         let bytes = read_verified(&path, &id.0)?;
         decode(&path, &bytes)
     }
-}
-
-/// The bytes at `path`, refused unless they hash to `address`.
-fn read_verified(path: &Path, address: &Digest) -> Result<Vec<u8>, StoreError> {
-    let bytes = fs::read(path).map_err(io(path))?;
-    let found = Digest::of(&bytes);
-    if found != *address {
-        return Err(StoreError::Corrupt {
-            path: path.to_path_buf(),
-            expected: address.clone(),
-            found,
-        });
-    }
-    Ok(bytes)
-}
-
-fn decode<T: serde::de::DeserializeOwned>(path: &Path, bytes: &[u8]) -> Result<T, StoreError> {
-    serde_json::from_slice(bytes).map_err(|e| StoreError::Undecodable {
-        path: path.to_path_buf(),
-        reason: e.to_string(),
-    })
 }
 
 /// Whether a non-empty `file` lacks its final newline.

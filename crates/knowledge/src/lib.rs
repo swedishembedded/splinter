@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Knowledge intake: a source document becomes question/answer training
-//! records, one stage per module.
+//! Knowledge intake: what Splinter learns from is captured as a source, and
+//! a source becomes tasks and training records, one stage per module.
 //!
-//! * [`sections`] - split at headings and paragraph boundaries; every
-//!   section carries the document's subject.
+//! * [`capture`] - a document, a repository tree or a command run captured
+//!   as an immutable source for the source store.
+//! * [`sections`] - a text split into addressable byte ranges: at headings
+//!   for Markdown, at paragraphs otherwise; the fact extractor's chunks
+//!   each carry the document's subject.
 //! * [`extract`] - ask for every fact in a section; parse the reply strictly.
 //! * [`gates`] - refuse duplicates, questions not anchored on the subject,
 //!   and answers whose numbers the section does not carry.
 //! * [`negatives`] - out-of-scope variants trained toward an abstention.
 //! * [`explore`] - the whole run, traced like an agent attempt.
-//! * [`denoise`] - a passage of a source, corrupted, as a task to restore
-//!   it: the first task generator feeding the experience store.
+//! * [`denoise`] - a passage of a source part, corrupted, as a task to
+//!   restore it: the first task generator feeding the experience store.
 
 #![warn(missing_docs)]
 
+pub mod capture;
 pub mod denoise;
 pub mod explore;
 pub mod extract;
