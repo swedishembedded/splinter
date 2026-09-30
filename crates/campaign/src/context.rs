@@ -12,6 +12,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use splinter_agent::solve::Model;
 use splinter_policy::{LoadedModel, ModelSelection};
@@ -27,13 +28,16 @@ use splinter_store::tasks::TaskStore;
 use splinter_store::StateRoot;
 use splinter_views::DatasetStore;
 
-use crate::config::{allow_slow_local_prefill, Config};
+use crate::config::Config;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
 
-/// How long a local model may stay silent before its first chunk: the
-/// longest single model run a stage makes.
-const LOCAL_STREAM_SILENCE_SECS: u64 = 600;
+/// How long a local model may stay silent between two stream chunks: as
+/// long as its run lasts. sven's idle limit guards a remote wire going
+/// stale; a local provider is silent through its prefill for as long as the
+/// prompt takes, and no chunk in between is honest to invent, so the run's
+/// own deadline is the bound (a solve caps the limit at its deadline).
+const LOCAL_STREAM_IDLE: Duration = Duration::MAX;
 
 /// Receives each stage's summary as it finishes: `(stage, summary)`.
 pub type Progress = Box<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
@@ -161,14 +165,15 @@ impl Context {
             return Ok(held.model.clone());
         }
         let selection = self.selection(reference)?;
-        if selection.local().is_some() {
-            allow_slow_local_prefill(LOCAL_STREAM_SILENCE_SECS);
-        }
+        let local = selection.local().is_some();
         let loaded = selection.load().map_err(|e| CampaignError::Model {
             model: reference.to_string(),
             detail: format!("{e:#}"),
         })?;
-        let model = Model::new(loaded.provider(), loaded.identity());
+        let mut model = Model::new(loaded.provider(), loaded.identity());
+        if local {
+            model = model.with_stream_idle(LOCAL_STREAM_IDLE);
+        }
         self.lock_models().insert(
             reference.clone(),
             Held {

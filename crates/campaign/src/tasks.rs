@@ -216,12 +216,10 @@ fn model_generator(
         deadline: remaining(request.deadline, DEFAULT_REQUEST_DEADLINE),
         ..GenerationPolicy::default()
     };
-    Ok(
-        ModelTaskGenerator::new(model.provider, model.identity, ctx.sources())
-            .with_runtimes(runtimes)
-            .with_policy(policy)
-            .with_cancel(request.cancel.clone()),
-    )
+    Ok(ModelTaskGenerator::new(model, ctx.sources())
+        .with_runtimes(runtimes)
+        .with_policy(policy)
+        .with_cancel(request.cancel.clone()))
 }
 
 /// One text part, a window of sections at a time.

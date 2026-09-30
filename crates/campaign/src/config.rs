@@ -85,16 +85,3 @@ impl Config {
 fn default_model_store(home: &Path) -> PathBuf {
     home.join(".local/share/brain/models")
 }
-
-/// Widens sven's stream watchdog for a local model.
-///
-/// The watchdog declares a connection dead after sven's default idle limit
-/// between chunks - a guard for a REMOTE wire going stale. A local provider
-/// is silent for a different reason: its prefill takes tens of seconds
-/// before the first chunk, and no chunk in between is honest to invent. The
-/// run's own deadline is the bound that matters there, so the watchdog is
-/// raised to it. sven reads this setting only from the environment, so it
-/// is set here, before any engine turn runs.
-pub fn allow_slow_local_prefill(timeout_secs: u64) {
-    std::env::set_var("SVEN_STREAM_CHUNK_TIMEOUT_SECS", timeout_secs.to_string());
-}

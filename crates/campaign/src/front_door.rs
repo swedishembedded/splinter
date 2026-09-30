@@ -30,8 +30,9 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use splinter_agent::solve::SolveOptions;
 use sven_sdk::schemars::JsonSchema;
-use sven_sdk::{Engine, Method, RunOptions, Toolset};
+use sven_sdk::{Engine, Method, Toolset};
 
 use crate::context::Context;
 use crate::error::CampaignError;
@@ -254,15 +255,16 @@ pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, Campaig
         method: "classify_sentence",
         source,
     };
+    let mut bounds = SolveOptions::new(CLASSIFY_DEADLINE);
+    bounds.max_output_tokens = Some(CLASSIFY_MAX_OUTPUT_TOKENS);
+    bounds.stream_idle = model.stream_idle;
     let engine = Engine::builder()
+        .config(bounds.engine_config())
         .model_provider(model.provider)
         .toolset(Toolset::none())
         .build()
         .map_err(call)?;
-    let bounds = RunOptions::new()
-        .deadline(CLASSIFY_DEADLINE)
-        .max_output_tokens(CLASSIFY_MAX_OUTPUT_TOKENS);
-    ctx.block_on(engine.call_with(&method, &Sentence { sentence }, bounds))
+    ctx.block_on(engine.call_with(&method, &Sentence { sentence }, bounds.run_options()))
         .map_err(call)
 }
 

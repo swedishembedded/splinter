@@ -10,7 +10,8 @@
 //! Closed-book offers the model no tools at all; a runtime environment
 //! offers exactly one, `run_code`, whose real output reaches the model and
 //! the trajectory. A task is never solved in an environment other than the
-//! one it records.
+//! one it records. A model's stream idle limit reaches sven: a first chunk
+//! slower than the limit fails the run, one within it does not.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -19,6 +20,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use futures::StreamExt;
 
 use splinter_agent::solve::{solve, SolveError, SolveOptions, RUN_CODE};
 use splinter_sandbox::{
@@ -71,6 +74,32 @@ impl ModelProvider for Scripted {
         Ok(Box::pin(futures::stream::iter(
             events.into_iter().map(Ok).collect::<Vec<_>>(),
         )))
+    }
+}
+
+/// A model whose first chunk arrives only after `silence`, as a local
+/// model's prefill does.
+struct SlowFirstChunk {
+    silence: Duration,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for SlowFirstChunk {
+    fn name(&self) -> &str {
+        "slow"
+    }
+    fn model_name(&self) -> &str {
+        "prefill-1"
+    }
+    async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let silence = self.silence;
+        let first = futures::stream::once(async move {
+            tokio::time::sleep(silence).await;
+            Ok(ResponseEvent::TextDelta("42".into()))
+        });
+        Ok(Box::pin(
+            first.chain(futures::stream::iter([Ok(ResponseEvent::Done)])),
+        ))
     }
 }
 
@@ -231,4 +260,45 @@ async fn a_task_is_never_solved_in_another_environment() {
         "{refused:?}"
     );
     assert!(model.offered().is_empty(), "the model was never asked");
+}
+
+#[tokio::test]
+async fn the_stream_idle_limit_bounds_the_silence_before_a_first_chunk() {
+    let task = task(Environment::closed_book(), "What is six times seven?");
+    let model = Arc::new(SlowFirstChunk {
+        silence: Duration::from_millis(2500),
+    });
+    let with_idle = |limit: Duration| {
+        let mut options = options();
+        options.stream_idle = Some(limit);
+        options
+    };
+
+    let stale = solve(
+        &task,
+        &ResolvedEnvironment::ClosedBook,
+        model.clone(),
+        with_idle(Duration::from_secs(1)),
+    )
+    .await;
+    let failed = match stale {
+        Err(SolveError::Engine(e)) => e.to_string(),
+        Ok(solution) => format!("{:?}: {:?}", solution.conclusion, solution.final_output),
+        Err(e) => format!("{e:?}"),
+    };
+    assert!(
+        failed.contains("idle"),
+        "a first chunk slower than the limit fails the run: {failed}"
+    );
+
+    let patient = solve(
+        &task,
+        &ResolvedEnvironment::ClosedBook,
+        model,
+        with_idle(Duration::from_secs(10)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(patient.conclusion, RunConclusion::Success);
+    assert_eq!(patient.final_output.as_deref(), Some("42"));
 }

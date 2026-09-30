@@ -12,8 +12,9 @@
 //! no tools at all; a runtime environment gets exactly [`RUN_CODE`] - on a
 //! caller-supplied model, runs one agent turn on the task's instruction
 //! bounded by sven's own [`RunOptions`] (deadline, output-token budget,
-//! cancel token), and hands back what an [`Experience`] records: the
-//! trajectory sven exports, the final output, and how the run concluded.
+//! cancel token) and the model's stream idle limit, and hands back what an
+//! [`Experience`] records: the trajectory sven exports, the final output,
+//! and how the run concluded.
 //!
 //! A task records the environment it is to be solved in (its snapshot pins
 //! everything that determines behaviour), and [`solve`] refuses to solve it
@@ -35,6 +36,7 @@ use std::time::Duration;
 use splinter_sandbox::{ResolvedEnvironment, SandboxError};
 use splinter_store::digest::Digest;
 use splinter_store::experience::{Experience, ExperienceError, Provenance, Task};
+use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
 use sven_sdk::tool::ToolCapability;
 use sven_sdk::{
@@ -47,7 +49,8 @@ use crate::run_code::RunCode;
 /// The sven mode a solve runs: the conversational agent loop.
 const SOLVER_MODE: &str = "agent";
 
-/// The bounds of one solve, handed to sven as [`RunOptions`].
+/// The bounds of one solve, handed to sven as its [`RunOptions`] and, for
+/// the stream idle limit, its engine configuration.
 #[derive(Clone, Debug)]
 pub struct SolveOptions {
     /// Wall-clock time the run may take ([`RunConclusion::Timeout`]).
@@ -57,6 +60,11 @@ pub struct SolveOptions {
     pub max_output_tokens: Option<u64>,
     /// Stops the run from outside ([`RunConclusion::Cancelled`]).
     pub cancel: Option<CancelToken>,
+    /// The longest silence between two chunks of the model's stream before
+    /// sven declares it stale and fails the run: the solving model's own
+    /// [`Model::stream_idle`]. `None` keeps sven's default. A limit past
+    /// the deadline is the deadline: no silence outlasts the run.
+    pub stream_idle: Option<Duration>,
 }
 
 impl SolveOptions {
@@ -67,10 +75,13 @@ impl SolveOptions {
             deadline,
             max_output_tokens: None,
             cancel: None,
+            stream_idle: None,
         }
     }
 
-    fn run_options(&self) -> RunOptions {
+    /// The run bounds sven enforces for one run.
+    #[must_use]
+    pub fn run_options(&self) -> RunOptions {
         let mut options = RunOptions::new().deadline(self.deadline);
         if let Some(tokens) = self.max_output_tokens {
             options = options.max_output_tokens(tokens);
@@ -79,6 +90,21 @@ impl SolveOptions {
             options = options.cancel(cancel.clone());
         }
         options
+    }
+
+    /// The sven configuration an engine running these bounds is built with:
+    /// sven's default, with the stream idle limit when one is set, in whole
+    /// seconds rounded up (sven's unit, where zero means its default) and
+    /// capped at the deadline.
+    #[must_use]
+    pub fn engine_config(&self) -> Config {
+        let mut config = Config::default();
+        if let Some(limit) = self.stream_idle {
+            let limit = limit.min(self.deadline);
+            let secs = limit.as_secs() + u64::from(limit.subsec_nanos() > 0);
+            config.agent.stream_idle_timeout_secs = Some(secs.max(1));
+        }
+        config
     }
 }
 
@@ -145,6 +171,11 @@ pub struct Model {
     pub provider: Arc<dyn ModelProvider>,
     /// Its identity.
     pub identity: String,
+    /// The longest silence it may keep between two chunks of a streamed
+    /// reply; `None` keeps sven's default, the guard against a remote wire
+    /// gone stale. A local model is silent through its prefill for as long
+    /// as the prompt takes, so it carries a longer limit.
+    pub stream_idle: Option<Duration>,
 }
 
 impl Model {
@@ -154,7 +185,15 @@ impl Model {
         Self {
             provider,
             identity: identity.into(),
+            stream_idle: None,
         }
+    }
+
+    /// This model, allowed `limit` of silence between two stream chunks.
+    #[must_use]
+    pub fn with_stream_idle(mut self, limit: Duration) -> Self {
+        self.stream_idle = Some(limit);
+        self
     }
 }
 
@@ -162,6 +201,7 @@ impl std::fmt::Debug for Model {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Model")
             .field("identity", &self.identity)
+            .field("stream_idle", &self.stream_idle)
             .finish_non_exhaustive()
     }
 }
@@ -198,7 +238,7 @@ pub async fn solve_prompted(
             offered_snapshot: offered.snapshot,
         });
     }
-    let engine = engine(environment, model)?;
+    let engine = engine(environment, model, options.engine_config())?;
     let mut agent = engine.agent(SOLVER_MODE);
     let outcome = agent.send_with(prompt, options.run_options()).await?;
     let final_output = (outcome.conclusion == RunConclusion::Success).then_some(outcome.reply);
@@ -210,13 +250,15 @@ pub async fn solve_prompted(
     })
 }
 
-/// The engine for `environment`: no built-in tools, and only the
-/// environment's own tool.
+/// The engine for `environment` under `config`: no built-in tools, and
+/// only the environment's own tool.
 fn engine(
     environment: &ResolvedEnvironment,
     model: Arc<dyn ModelProvider>,
+    config: Config,
 ) -> Result<Engine, CallError> {
     let builder = Engine::builder()
+        .config(config)
         .model_provider(model)
         .toolset(Toolset::none());
     match environment {

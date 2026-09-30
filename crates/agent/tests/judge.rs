@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use splinter_agent::judge::JudgeVerifier;
+use splinter_agent::solve::Model;
 use splinter_lab::verifiers::calibration::{calibrate, CalibratedJudge};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
@@ -131,7 +132,11 @@ fn runtime() -> tokio::runtime::Runtime {
 }
 
 fn judge(model: Arc<ScriptedJudge>, rt: &tokio::runtime::Runtime) -> JudgeVerifier {
-    JudgeVerifier::new(model, JUDGE, rt.handle().clone(), Duration::from_secs(60))
+    JudgeVerifier::new(
+        Model::new(model, JUDGE),
+        rt.handle().clone(),
+        Duration::from_secs(60),
+    )
 }
 
 fn outcome(verifier: &dyn Verifier, task: &Task, exp: &Experience) -> (Outcome, serde_json::Value) {

@@ -74,11 +74,10 @@ the released adapter answers the same questions from plain `brain serve`.
    - sven: done for an empty default toolset, explicit toolsets, structured
      outcomes, bounded runs (cancel, deadline, token budget), parked
      questions, history taken from the session, and ATIF trajectories; every
-     model run Splinter makes is bounded through `RunOptions`. Open: the
-     stream watchdog's idle limit is read only from the environment
-     (`SVEN_STREAM_CHUNK_TIMEOUT_SECS`), so a local model's long prefill
-     needs Splinter's configuration to set a process variable instead of
-     passing a value. Also open: file tools rooted in a given directory, which workspace environments need
+     model run Splinter makes is bounded through `RunOptions`, and a local
+     model's stream idle limit is engine configuration
+     (`agent.stream_idle_timeout_secs`) carried on the model. Open: file
+     tools rooted in a given directory, which workspace environments need
      (Splinter's environments are closed-book and runtime until then); and
      an ATIF trajectory as chat messages with each agent step's boundary
      kept, in the SDK - the step-to-message rendering sven has is internal

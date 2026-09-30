@@ -16,9 +16,7 @@
 //! shape in the prompt); a reply that does not parse is rejected whole,
 //! with no second attempt.
 
-use std::sync::Arc;
-
-use splinter_agent::solve::{solve, SolveError, SolveOptions};
+use splinter_agent::solve::{solve, Model, SolveError, SolveOptions};
 use splinter_lab::verifiers::mutation::MutationPolicy;
 use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
 use splinter_store::digest::Digest;
@@ -26,7 +24,6 @@ use splinter_store::error::StoreError;
 use splinter_store::experience::{Environment, ExperienceError, Task};
 use splinter_store::source::{PartRef, SourceId};
 use splinter_store::sources::SourceStore;
-use sven_sdk::model::ModelProvider;
 use sven_sdk::CancelToken;
 
 use super::admit::{Admission, Proposal};
@@ -176,8 +173,7 @@ pub enum GenerateError {
 /// documentation.
 #[derive(Clone)]
 pub struct ModelTaskGenerator {
-    model: Arc<dyn ModelProvider>,
-    identity: String,
+    model: Model,
     store: SourceStore,
     runtimes: Vec<RuntimeEnvironment>,
     policy: GenerationPolicy,
@@ -186,18 +182,13 @@ pub struct ModelTaskGenerator {
 }
 
 impl ModelTaskGenerator {
-    /// A generator on `model`, whose identity is `identity` (the string an
+    /// A generator on `model`, known by its identity (the string an
     /// experience's provenance records for that model), resolving evidence
     /// through `store`, with the default policies and no runtime.
     #[must_use]
-    pub fn new(
-        model: Arc<dyn ModelProvider>,
-        identity: impl Into<String>,
-        store: SourceStore,
-    ) -> Self {
+    pub fn new(model: Model, store: SourceStore) -> Self {
         Self {
             model,
-            identity: identity.into(),
             store,
             runtimes: Vec::new(),
             policy: GenerationPolicy::default(),
@@ -240,7 +231,7 @@ impl ModelTaskGenerator {
     /// The name admitted tasks record as their generator.
     #[must_use]
     pub fn generator_name(&self) -> String {
-        format!("{GENERATOR}:{}", self.identity)
+        format!("{GENERATOR}:{}", self.model.identity)
     }
 
     /// One batch: a request per entry of `kinds`, each for tasks of that
@@ -253,7 +244,7 @@ impl ModelTaskGenerator {
         kinds: &[&TaskKind],
     ) -> Result<GenerationReport, GenerateError> {
         self.policy.validate()?;
-        if self.identity.trim().is_empty() {
+        if self.model.identity.trim().is_empty() {
             return Err(GenerateError::Parameter {
                 name: "identity",
                 reason: "the generator model needs an identity".into(),
@@ -322,10 +313,11 @@ impl ModelTaskGenerator {
         let mut options = SolveOptions::new(self.policy.deadline);
         options.max_output_tokens = self.policy.max_output_tokens;
         options.cancel = self.cancel.clone();
+        options.stream_idle = self.model.stream_idle;
         let solution = solve(
             &request,
             &ResolvedEnvironment::ClosedBook,
-            self.model.clone(),
+            self.model.provider.clone(),
             options,
         )
         .await?;

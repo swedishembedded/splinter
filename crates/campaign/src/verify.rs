@@ -16,7 +16,6 @@
 //! gated by that judge's stored calibration: a verdict stands only where the
 //! judge was measured precise.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -91,12 +90,7 @@ impl Judge {
 
 /// The judged verifier on `model`.
 pub(crate) fn judge_verifier(ctx: &Context, model: &Model) -> JudgeVerifier {
-    JudgeVerifier::new(
-        Arc::clone(&model.provider),
-        model.identity.clone(),
-        ctx.handle(),
-        DEFAULT_JUDGE_DEADLINE,
-    )
+    JudgeVerifier::new(model.clone(), ctx.handle(), DEFAULT_JUDGE_DEADLINE)
 }
 
 /// Where the latest calibration of the judge `producer` is kept.

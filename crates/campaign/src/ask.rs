@@ -71,11 +71,13 @@ pub fn ask(
         instruction,
         vec![],
     )?;
+    let mut options = SolveOptions::new(DEFAULT_ASK_DEADLINE);
+    options.stream_idle = model.stream_idle;
     let solution = ctx.block_on(solve(
         &task,
         &ResolvedEnvironment::ClosedBook,
         model.provider.clone(),
-        SolveOptions::new(DEFAULT_ASK_DEADLINE),
+        options,
     ))?;
     let answer = solution.final_output.ok_or_else(|| CampaignError::Model {
         model: model.identity.clone(),

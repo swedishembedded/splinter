@@ -101,6 +101,7 @@ pub fn solve_set(
         };
         let mut options = SolveOptions::new(remaining(deadline, DEFAULT_SOLVE_DEADLINE));
         options.cancel = Some(cancel.clone());
+        options.stream_idle = model.stream_idle;
         let solution =
             match ctx.block_on(solve(&task, &environment, model.provider.clone(), options)) {
                 Ok(solution) => solution,

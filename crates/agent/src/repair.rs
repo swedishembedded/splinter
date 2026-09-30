@@ -284,6 +284,10 @@ impl Repair<'_> {
             span: None,
         })?;
         let prompt = feedback_prompt(&task.instruction, &critique.text);
+        let options = SolveOptions {
+            stream_idle: self.solver.stream_idle,
+            ..options
+        };
         let solution = self.runtime.block_on(solve_prompted(
             &revision_task,
             &prompt,
@@ -547,6 +551,7 @@ impl<'b> Meter<'b> {
             deadline,
             max_output_tokens,
             cancel: self.budget.cancel.clone(),
+            stream_idle: None,
         })
     }
 }

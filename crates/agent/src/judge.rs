@@ -18,7 +18,6 @@
 //! with [`CalibratedJudge`](splinter_lab::verifiers::calibration::CalibratedJudge)
 //! to make its verdicts stand only where it was measured precise.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
@@ -27,10 +26,9 @@ use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::annotation::{Outcome, Producer, Strength};
 use splinter_store::digest::Digest;
 use splinter_store::experience::{Environment, Experience, PrivilegedKind, Task};
-use sven_sdk::model::ModelProvider;
 use tokio::runtime::Handle;
 
-use crate::solve::{solve, SolveOptions};
+use crate::solve::{solve, Model, SolveOptions};
 
 /// The producer name of a judge's verdicts, before its model identity.
 pub const PRODUCER: &str = "splinter-agent/judge";
@@ -53,27 +51,20 @@ tell - and give your reason on the next line.";
 
 /// A model grading answers closed-book. See the module documentation.
 pub struct JudgeVerifier {
-    model: Arc<dyn ModelProvider>,
-    identity: String,
+    model: Model,
     runtime: Handle,
     deadline: Duration,
 }
 
 impl JudgeVerifier {
-    /// A judge on `model`, whose identity is `identity` (the same string an
+    /// A judge on `model`, known by its identity (the same string an
     /// experience's provenance records for that model), running its solves
     /// on `runtime` within `deadline` each. [`Verifier::verify`] blocks on
     /// `runtime`: call it outside that runtime's async tasks.
     #[must_use]
-    pub fn new(
-        model: Arc<dyn ModelProvider>,
-        identity: impl Into<String>,
-        runtime: Handle,
-        deadline: Duration,
-    ) -> Self {
+    pub fn new(model: Model, runtime: Handle, deadline: Duration) -> Self {
         Self {
             model,
-            identity: identity.into(),
             runtime,
             deadline,
         }
@@ -82,7 +73,7 @@ impl JudgeVerifier {
     /// The judge's model identity.
     #[must_use]
     pub fn identity(&self) -> &str {
-        &self.identity
+        &self.model.identity
     }
 }
 
@@ -130,7 +121,7 @@ fn parse_reply(reply: &str) -> Option<(Outcome, String)> {
 impl Verifier for JudgeVerifier {
     fn producer(&self) -> Producer {
         Producer {
-            name: format!("{PRODUCER}:{}", self.identity),
+            name: format!("{PRODUCER}:{}", self.model.identity),
             version: VERSION.into(),
         }
     }
@@ -150,17 +141,17 @@ impl Verifier for JudgeVerifier {
             });
         }
         let provenance = &exp.provenance;
-        if provenance.solver == self.identity
-            || provenance.policy.as_deref() == Some(&self.identity)
+        if provenance.solver == self.model.identity
+            || provenance.policy.as_deref() == Some(&self.model.identity)
         {
             return Err(VerifyError::SelfJudging {
-                identity: self.identity.clone(),
+                identity: self.model.identity.clone(),
             });
         }
         let Some(answer) = exp.final_output.as_deref() else {
             return Ok(Finding::decided(
                 false,
-                json!({ "judge": self.identity, "output": null }),
+                json!({ "judge": self.model.identity, "output": null }),
             ));
         };
         let prompt = prompt(task, answer);
@@ -171,20 +162,22 @@ impl Verifier for JudgeVerifier {
             prompt.as_str(),
             vec![],
         )?;
+        let mut options = SolveOptions::new(self.deadline);
+        options.stream_idle = self.model.stream_idle;
         let solution = self
             .runtime
             .block_on(solve(
                 &question,
                 &ResolvedEnvironment::ClosedBook,
-                self.model.clone(),
-                SolveOptions::new(self.deadline),
+                self.model.provider.clone(),
+                options,
             ))
             .map_err(|e| VerifyError::Failed {
                 producer: self.producer().name,
                 source: Box::new(e),
             })?;
         let mut evidence = json!({
-            "judge": self.identity,
+            "judge": self.model.identity,
             "prompt": Digest::of(prompt.as_bytes()),
             "conclusion": format!("{:?}", solution.conclusion),
         });
