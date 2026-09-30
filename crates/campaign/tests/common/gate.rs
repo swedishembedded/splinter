@@ -105,11 +105,19 @@ pub fn fact(topic: &str, i: usize) -> Task {
 /// are put in the task store, the only ones a probe looks up: every task
 /// is an fsynced write, and the rest would only slow the specs down.
 pub fn dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
+    dataset_of(ctx, topic, &(0..n).collect::<Vec<_>>())
+}
+
+/// Stores an sft-final dataset of the answers to the facts about `topic`
+/// numbered `facts`, in that order; as with [`dataset`], only the tasks of
+/// the newest tenth are put in the task store.
+pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
+    let n = facts.len();
     let held_out_from = n - (n / 10).max(1);
     let mut records = Vec::new();
-    for i in 0..n {
+    for (position, &i) in facts.iter().enumerate() {
         let task = fact(topic, i);
-        if i >= held_out_from {
+        if position >= held_out_from {
             ctx.tasks().put(&task).unwrap();
         }
         let message = |role: &str, content: String, train: bool| WireMessage {

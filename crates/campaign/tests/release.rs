@@ -15,6 +15,9 @@
 //!   manifest records every number, and `default` points at it.
 //! * Each check that fails - or cannot be measured - blocks the release
 //!   and says why.
+//! * A held-out task the candidate was trained on - the same question, or
+//!   a near duplicate of it, among its training records - measures nothing
+//!   and is left out of the gate's suites, counted as leaked.
 //! * The next candidate trains from the champion, replaying a seeded
 //!   sample of the earlier release's training records.
 //! * `rollback` moves an alias back along its lineage, and refuses with no
@@ -30,8 +33,8 @@
 mod common;
 
 use common::gate::{
-    anchor_file, candidate, dataset, decide, gate_context, policy, question, released, Brain,
-    FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
+    anchor_file, candidate, dataset, dataset_of, decide, gate_context, policy, question, released,
+    Brain, FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
 };
 use common::Scratch;
 use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
@@ -211,6 +214,44 @@ fn each_failing_check_blocks_the_release_and_says_why() {
         why.contains("not measured") && why.contains("no brain binary"),
         "{why}"
     );
+}
+
+#[test]
+fn a_held_out_task_trained_on_is_left_out_of_the_gate() {
+    let (scratch, ctx) = gate_context("release-leak", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    // The newest fact is held out, and a copy of it is trained on first.
+    let mut facts = vec![FACTS - 1];
+    facts.extend(0..FACTS);
+    let leaky = dataset_of(&ctx, "alpha", &facts);
+    let candidate = train(
+        &ctx,
+        &TrainRequest {
+            datasets: vec![leaky.to_string()],
+            from: policy(),
+            replay_fraction: DEFAULT_REPLAY_FRACTION,
+            steps: 1,
+            rank: 4,
+            beta: None,
+        },
+        &FakeTrainer::knowing(&[ANCHOR, "alpha"]),
+        &CancelToken::new(),
+    )
+    .unwrap();
+
+    let gate = decide(&ctx, &candidate).gate;
+    let improvement = gate.improvement.measured.as_ref().unwrap();
+    assert_eq!(
+        improvement.suite.excluded.get("leaked"),
+        Some(&1),
+        "{improvement:#?}"
+    );
+    assert_eq!(
+        improvement.suite.tasks, 5,
+        "six held out, one of them leaked"
+    );
+    assert_eq!(improvement.comparison.candidate_wins, 5);
+    assert!(gate.passed, "the rest still decides: {gate:#?}");
 }
 
 #[test]

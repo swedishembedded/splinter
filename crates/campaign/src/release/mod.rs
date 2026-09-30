@@ -17,7 +17,8 @@
 //! anything is measured. The gate ([`gate`]) grades the candidate and the
 //! champion (the base, before any release) closed-book on the same suites
 //! ([`probe`]): the new data's held-out tasks, every earlier release's, and
-//! the anchor suite ([`anchor`]); then plain brain serves the candidate
+//! the anchor suite ([`anchor`]), each without the tasks the candidate was
+//! trained on ([`leakage`]); then plain brain serves the candidate
 //! ([`serve`]). Only when every check passes is the release written
 //! ([`store`]) - the adapter copied, the manifest recording every number -
 //! and the alias moved to it, from the champion it was measured against.
@@ -30,6 +31,7 @@
 
 pub mod anchor;
 pub mod gate;
+pub mod leakage;
 pub mod probe;
 pub mod serve;
 pub mod store;
@@ -276,7 +278,23 @@ impl Suites {
         candidate: &Candidate,
         champion: Option<&StoredRelease>,
     ) -> Result<Self, CampaignError> {
-        let held_out = soft(probe::held_out(ctx, "held-out", &candidate.datasets))?;
+        let trained = match soft(leakage::trained_prompts(ctx, candidate))? {
+            Ok(trained) => trained,
+            Err(why) => {
+                let why = format!("the candidate's training records: {why}");
+                return Ok(Self {
+                    held_out: Err(why.clone()),
+                    retention: Err(why.clone()),
+                    anchor: Err(why),
+                    anchor_suite: None,
+                });
+            }
+        };
+        let clean = |mut suite: Suite| {
+            leakage::exclude_leaked(&mut suite, &trained);
+            suite
+        };
+        let held_out = soft(probe::held_out(ctx, "held-out", &candidate.datasets))?.map(clean);
         let retention = soft(champion.map_or(Ok(Vec::new()), |champion| {
             ReleaseStore::open(ctx.root())
                 .lineage(&champion.id)?
@@ -284,7 +302,7 @@ impl Suites {
                 .map(|release| {
                     let name = format!("retention {}", release.id);
                     probe::held_out(ctx, name, &release.manifest.datasets)
-                        .map(|suite| (release.id, suite))
+                        .map(|suite| (release.id, clean(suite)))
                 })
                 .collect()
         }))?;
@@ -293,7 +311,7 @@ impl Suites {
             .as_ref()
             .ok()
             .and_then(|a| a.as_ref())
-            .map(anchor::FrozenAnchor::probe_suite);
+            .map(|frozen| clean(frozen.probe_suite()));
         Ok(Self {
             held_out,
             retention,
