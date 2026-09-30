@@ -33,7 +33,11 @@ brain = true
 internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy"]
 
 [crates.splinter-knowledge]
-internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy"]
+# Model-driven task generators ask their generator model through the
+# agent's closed-book solve, the one way a model is run on a task, and hold
+# every generated instruction to the views' self-containment rule, the one
+# rule for what a student may be shown without the material it lacks.
+internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-views"]
 
 [crates.splinter-views]
 internal = ["splinter-store", "splinter-lab", "splinter-policy"]

@@ -169,3 +169,29 @@ fn an_instruction_that_needs_the_dropped_context_is_excluded_and_counted() {
     assert_eq!(kept.records.len(), 2);
     assert_eq!(kept.count(Exclusion::NotSelfContained), 0);
 }
+
+/// Executable checks and generated tests grade the answer, like the
+/// reference: they are never context, so an instruction that shares text
+/// with one (a function signature, say) or names shown code needs no
+/// justification for dropping them.
+#[test]
+fn dropping_checks_and_tests_needs_no_justification() {
+    use splinter_lab::verifiers::executable::{CHECK_KIND, OUTPUT_CHECK_KIND};
+    use splinter_lab::verifiers::mutation::TEST_KIND;
+
+    let signature = "def clamp(value, low, high): return the value clamped";
+    let grading: Vec<Privileged> = [CHECK_KIND, TEST_KIND, OUTPUT_CHECK_KIND]
+        .iter()
+        .map(|kind| privileged(PrivilegedKind::Other((*kind).into()), signature))
+        .collect();
+    let dropped: Vec<&Privileged> = grading.iter().collect();
+    let instruction = format!("Fix the code above so that it passes: {signature}");
+    assert_eq!(check_self_contained(&instruction, &dropped), Ok(()));
+
+    let hint = [privileged(PrivilegedKind::Hint, signature)];
+    let dropped: Vec<&Privileged> = hint.iter().collect();
+    assert!(
+        check_self_contained(&instruction, &dropped).is_err(),
+        "a dropped hint is context"
+    );
+}

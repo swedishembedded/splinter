@@ -76,7 +76,13 @@ the released adapter answers the same questions from plain `brain serve`.
      (Splinter's environments are closed-book and runtime until then); and
      an approval gate that names the tool call it gates - `HumanGate`
      carries only the capability and a prose prompt, so the solver can
-     approve a capability, not a tool. Also open: an ATIF trajectory as
+     approve a capability, not a tool. Also open: typed model-driven
+     methods (`Method`, `Engine::call`) that a run can bound - a call
+     takes no `RunOptions` (deadline, output-token budget, cancel) - and
+     whose derived schema a consumer can satisfy without a direct
+     `schemars` dependency pinned to sven's; until then the task
+     generators ask through the closed-book solve and parse the reply
+     strictly, with no repair turn. Also open: an ATIF trajectory as
      chat messages with each agent step's boundary kept, in the SDK - the
      step-to-message rendering sven has is internal and flattens the steps,
      so Splinter's views render trajectories themselves.

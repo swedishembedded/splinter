@@ -39,6 +39,14 @@ use super::{privileged_of, Finding, Verifier, VerifyError};
 /// The privileged kind an authored check travels as.
 pub const CHECK_KIND: &str = "executable-check";
 
+/// The privileged kind of a check that established a task's reference by
+/// running code the instruction shows (what does this program print): the
+/// code alone, run with no solution before it, must produce the reference.
+/// It proves the reference, it does not grade an answer - an answer is
+/// text, not code to run - so [`ExecutableVerifier`] never reads it as a
+/// check of the solver.
+pub const OUTPUT_CHECK_KIND: &str = "output-check";
+
 /// The producer name the executable verifier's annotations carry.
 pub const PRODUCER: &str = "splinter-lab/executable";
 
@@ -337,7 +345,24 @@ impl Verifier for ExecutableVerifier {
     }
 
     fn verify(&self, task: &Task, exp: &Experience) -> Result<Finding, VerifyError> {
-        let checks = parse_checks(task, CHECK_KIND)?;
+        self.check(task, CHECK_KIND, exp.final_output.as_deref())
+    }
+}
+
+impl ExecutableVerifier {
+    /// Runs the task's checks of privileged kind `kind` against `output`,
+    /// an answer whose code ([`program_text`]) each check is appended to:
+    /// the verdict [`Verifier::verify`] gives for [`CHECK_KIND`] and the
+    /// experience's final output. A generator uses it to admit a task only
+    /// when its reference passes its own checks, and to run an
+    /// [`OUTPUT_CHECK_KIND`] check with an empty answer.
+    pub fn check(
+        &self,
+        task: &Task,
+        kind: &str,
+        output: Option<&str>,
+    ) -> Result<Finding, VerifyError> {
+        let checks = parse_checks(task, kind)?;
         if checks.is_empty() {
             return Ok(Finding::abstain("the task carries no checks", json!({})));
         }
@@ -349,7 +374,7 @@ impl Verifier for ExecutableVerifier {
                 Err(abstain) => return Ok(abstain),
             }
         }
-        let Some(output) = exp.final_output.as_deref() else {
+        let Some(output) = output else {
             return Ok(Finding::decided(
                 false,
                 json!({ "output": null, "checks": [] }),

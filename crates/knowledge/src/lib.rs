@@ -16,6 +16,9 @@
 //! * [`explore`] - the whole run, traced like an agent attempt.
 //! * [`denoise`] - a passage of a source part, corrupted, as a task to
 //!   restore it: the first task generator feeding the experience store.
+//! * [`tasks`] - tasks of many kinds proposed by a generator model and
+//!   admitted by code: grounded in the source, self-contained, checked by
+//!   running them where the answer is computed, and new to their batch.
 
 #![warn(missing_docs)]
 
@@ -26,5 +29,6 @@ pub mod extract;
 pub mod gates;
 pub mod negatives;
 pub mod sections;
+pub mod tasks;
 
 pub use explore::{run, ExploreOptions, ExploreSummary};

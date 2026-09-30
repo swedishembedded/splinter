@@ -3929,11 +3929,17 @@ name = "splinter-knowledge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
+ "serde",
  "serde_json",
+ "splinter-agent",
  "splinter-lab",
  "splinter-policy",
  "splinter-sandbox",
  "splinter-store",
+ "splinter-views",
+ "sven-sdk",
  "thiserror 2.0.21",
  "tokio",
 ]

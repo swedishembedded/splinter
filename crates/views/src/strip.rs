@@ -21,13 +21,17 @@
 //!   choice is the same on every run and in every corpus order.
 //!
 //! The reference answer is the target of a task, not context: dropping it
-//! from the student's turn needs no justification. Dropping any other item
-//! does: the instruction must stand on its own without it.
+//! from the student's turn needs no justification, and neither does
+//! dropping what grades an answer (executable checks, generated tests, and
+//! the check that established a shown program's output). Dropping any other
+//! item does: the instruction must stand on its own without it.
 //! [`check_self_contained`] decides that, and a view excludes an
 //! experience whose instruction fails it, counting it as
 //! [`Exclusion::NotSelfContained`].
 
 use serde::{Deserialize, Serialize};
+use splinter_lab::verifiers::executable::{CHECK_KIND, OUTPUT_CHECK_KIND};
+use splinter_lab::verifiers::mutation::TEST_KIND;
 use splinter_store::digest::Digest;
 use splinter_store::experience::{Privileged, PrivilegedKind};
 
@@ -209,12 +213,25 @@ pub enum NotSelfContained {
     },
 }
 
+/// Whether `item` grades an answer rather than informs it: the reference,
+/// and the executable checks and generated tests the lab's verifiers run.
+fn grades(item: &Privileged) -> bool {
+    match &item.kind {
+        PrivilegedKind::Reference => true,
+        PrivilegedKind::Other(name) => {
+            [CHECK_KIND, TEST_KIND, OUTPUT_CHECK_KIND].contains(&name.as_str())
+        }
+        _ => false,
+    }
+}
+
 /// Whether `instruction` stands on its own once `dropped` - privileged
-/// items left out of the student's turn - are gone. Dropped references do
-/// not count: the reference is the answer, never context. With any other
-/// item dropped, the instruction must neither contain one of
-/// [`REFERRING_PHRASES`] nor quote [`MIN_QUOTED_CHARS`] or more characters
-/// of a dropped item verbatim.
+/// items left out of the student's turn - are gone. Dropped items that
+/// grade the answer do not count (the reference, executable checks,
+/// generated tests): they are never context. With any other item dropped,
+/// the instruction must neither contain one of [`REFERRING_PHRASES`] nor
+/// quote [`MIN_QUOTED_CHARS`] or more characters of a dropped item
+/// verbatim.
 pub fn check_self_contained(
     instruction: &str,
     dropped: &[&Privileged],
@@ -222,7 +239,7 @@ pub fn check_self_contained(
     let context: Vec<&Privileged> = dropped
         .iter()
         .copied()
-        .filter(|item| item.kind != PrivilegedKind::Reference)
+        .filter(|item| !grades(item))
         .collect();
     if context.is_empty() {
         return Ok(());
