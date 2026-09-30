@@ -45,6 +45,15 @@ pub enum CampaignError {
         /// How many stored objects it matches.
         matches: usize,
     },
+    /// An id prefix names artifacts in more than one store, or more than
+    /// one artifact in one.
+    #[error("{id} names {} artifacts: {}; give more of the id", candidates.len(), candidates.join(", "))]
+    AmbiguousArtifact {
+        /// The prefix given.
+        id: String,
+        /// Each artifact it names, as `<kind> <id>`.
+        candidates: Vec<String>,
+    },
     /// A model could not be loaded or reached.
     #[error("model {model} could not be loaded: {detail}")]
     Model {
@@ -122,7 +131,11 @@ impl CampaignError {
     pub fn is_refusal(&self) -> bool {
         matches!(
             self,
-            Self::Ref(_) | Self::Refused(_) | Self::NotFound { .. } | Self::AmbiguousId { .. }
+            Self::Ref(_)
+                | Self::Refused(_)
+                | Self::NotFound { .. }
+                | Self::AmbiguousId { .. }
+                | Self::AmbiguousArtifact { .. }
         )
     }
 }

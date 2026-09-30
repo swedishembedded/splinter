@@ -3,12 +3,14 @@
 
 //! Fixtures the controller specs share: a scripted policy model that
 //! answers from the prompt it is sent, and a context over a scratch state
-//! root that serves it as `policy:default`.
+//! root that serves it as `policy:default`; the release fixtures
+//! ([`gate`]) and the manual `learn` learns from ([`manual`]).
 
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
 
 pub mod gate;
+pub mod manual;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

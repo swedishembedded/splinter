@@ -49,9 +49,10 @@ of general tasks, and runs on plain `brain serve` with the same answers.
 Each release is an immutable adapter with a manifest of every number the
 gate measured; `splinter rollback default` returns to the previous one.
 
-### Not yet
-
-- `lineage` - tracing an answer back to its sources.
+Every artifact traces both ways: `splinter lineage <ID>` walks from an
+answer, a release, a dataset or any other stored artifact up to where it
+came from - down to the source, part and byte range each task is grounded
+in, with the bytes themselves - and down to everything that came from it.
 
 ## Building
 
@@ -76,7 +77,7 @@ checkouts' HEADs; push those commits before sharing the lock. Delete
 `.cargo/config.toml` to go back to the remotes.
 
 Runtime state (sources, tasks, experiences, datasets, candidates,
-releases, runs) lives under `~/.sven/splinter`, Sven's home in a namespace
+releases, answers, runs) lives under `~/.sven/splinter`, Sven's home in a namespace
 of its own (override: `--state DIR` or `SPLINTER_STATE`).
 
 ## License

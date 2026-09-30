@@ -19,6 +19,7 @@
 //!   train/<candidate_id>/     one trained candidate: adapter, scores, record
 //!   releases/<hex>/           one immutable release: its adapter and manifest
 //!   releases/aliases/<name>   the release an alias (`default`) points at
+//!   answers/<hex>.json        one answer `ask` gave, and the release it used
 //!   suites/anchor/            the frozen anchor suite's versions
 //!   sandbox/                  the process sandbox's per-call directories
 //! ```
@@ -132,6 +133,12 @@ impl StateRoot {
     #[must_use]
     pub fn releases(&self) -> PathBuf {
         self.0.join("releases")
+    }
+
+    /// Where the answers `ask` gave are recorded.
+    #[must_use]
+    pub fn answers(&self) -> PathBuf {
+        self.0.join("answers")
     }
 
     /// Where frozen evaluation suites live.

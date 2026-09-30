@@ -4,6 +4,10 @@
 //! `ask`: one question put to a model the way every task is solved -
 //! closed-book by default, so the answer is what the model knows; with
 //! `--open-book` the named source's text rides along in the question.
+//!
+//! Every answer is recorded ([`crate::answers`]) with the model that gave
+//! it and, asked through `policy:<alias>`, the release the alias resolved
+//! to, so an answer traces back to what it was learned from.
 
 use std::time::Duration;
 
@@ -13,9 +17,11 @@ use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::experience::{Environment, Task};
 use splinter_store::source::SourceId;
 
+use crate::answers::{AnswerId, AnswerRecord, AnswerStore, ANSWER_FORMAT};
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
+use crate::release::ReleaseId;
 use crate::solving::conclusion_name;
 use crate::sources;
 
@@ -31,6 +37,8 @@ pub const ASK_TASK_KIND: &str = "ask";
 /// What `ask` reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct Answer {
+    /// The recorded answer's id.
+    pub id: AnswerId,
     /// The question, as asked.
     pub question: String,
     /// The model's answer.
@@ -39,10 +47,13 @@ pub struct Answer {
     pub model: String,
     /// The source shown with the question, if any.
     pub open_book: Option<SourceId>,
+    /// The release a `policy:` reference resolved to; `None` otherwise,
+    /// and for the base before any release.
+    pub release: Option<ReleaseId>,
 }
 
 /// Asks `question` of `policy`, with the text of the source `open_book`
-/// names when one is given.
+/// names when one is given, and records the answer.
 pub fn ask(
     ctx: &Context,
     question: &str,
@@ -62,6 +73,12 @@ pub fn ask(
                 Some(source),
             )
         }
+    };
+    // The pin is the context's for its lifetime, so it names the release
+    // the model below serves.
+    let release = match policy {
+        ModelRef::Policy(alias) => ctx.policy_pin(alias)?.map(|pin| pin.release),
+        _ => None,
     };
     let model = ctx.model(policy)?;
     let task = Task::new(
@@ -86,11 +103,24 @@ pub fn ask(
             conclusion_name(solution.conclusion)
         ),
     })?;
-    Ok(Answer {
+    let record = AnswerRecord {
+        format: ANSWER_FORMAT.into(),
         question: question.to_string(),
         answer,
         model: model.identity,
+        policy: policy.to_string(),
+        release,
         open_book,
+        asked_at: ctx.clock().utc_now(),
+    };
+    let id = AnswerStore::open(ctx.root()).put(&record)?;
+    Ok(Answer {
+        id,
+        question: record.question,
+        answer: record.answer,
+        model: record.model,
+        open_book: record.open_book,
+        release: record.release,
     })
 }
 

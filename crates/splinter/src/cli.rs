@@ -13,6 +13,7 @@ use splinter_campaign::critique::DEFAULT_RETRIES;
 use splinter_campaign::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_campaign::eval::SuiteChoice;
 use splinter_campaign::learn::parse_budget;
+use splinter_campaign::lineage::Direction;
 use splinter_campaign::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_campaign::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS};
 use splinter_store::annotation::Strength;
@@ -115,6 +116,9 @@ pub enum Command {
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
+    /// Trace any artifact up to where it came from (down to source bytes)
+    /// and down to everything that came from it.
+    Lineage(LineageArgs),
 }
 
 /// A model reference, for clap.
@@ -393,6 +397,38 @@ pub struct EvalArgs {
     pub freeze: Option<PathBuf>,
 }
 
+/// `lineage`.
+#[derive(Debug, Args)]
+pub struct LineageArgs {
+    /// Any artifact's id - a source, task, experience, dataset, candidate,
+    /// release, answer, ... - or a unique prefix of it.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// Only where it came from.
+    #[arg(long, conflicts_with_all = ["down", "both"])]
+    pub up: bool,
+    /// Only what came from it.
+    #[arg(long, conflicts_with = "both")]
+    pub down: bool,
+    /// Both ways (the default).
+    #[arg(long)]
+    pub both: bool,
+    /// The most edges walked from it (default: all the way).
+    #[arg(long, value_name = "N")]
+    pub depth: Option<usize>,
+}
+
+impl LineageArgs {
+    /// The direction the flags ask for.
+    pub fn direction(&self) -> Direction {
+        match (self.up, self.down) {
+            (true, _) => Direction::Up,
+            (_, true) => Direction::Down,
+            _ => Direction::Both,
+        }
+    }
+}
+
 /// `runs ...`.
 #[derive(Debug, Subcommand)]
 pub enum RunsCommand {
@@ -634,6 +670,23 @@ mod tests {
             command(&["runs", "cancel", "run-1"]),
             Command::Runs(RunsCommand::Cancel { .. })
         ));
+        let Command::Lineage(lineage) = command(&["lineage", "ab12"]) else {
+            panic!("lineage");
+        };
+        assert_eq!(
+            (lineage.direction(), lineage.depth),
+            (Direction::Both, None)
+        );
+        let Command::Lineage(lineage) = command(&["lineage", "ab12", "--up", "--depth", "2"])
+        else {
+            panic!("lineage --up");
+        };
+        assert_eq!(
+            (lineage.direction(), lineage.depth),
+            (Direction::Up, Some(2))
+        );
+        assert!(parse(&["lineage", "ab12", "--up", "--down"]).is_err());
+        assert!(parse(&["lineage"]).is_err(), "lineage needs an id");
     }
 
     #[test]
@@ -656,6 +709,7 @@ mod tests {
             &["rollback", "default"],
             &["eval", "c1", "--suite", "anchor"],
             &["runs", "list"],
+            &["lineage", "ab12"],
         ] {
             let flags = ["--json", "-v", "--allow-remote", "--state", "s"];
             let after: Vec<&str> = args.iter().chain(&flags).copied().collect();

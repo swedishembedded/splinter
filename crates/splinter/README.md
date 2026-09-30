@@ -29,12 +29,17 @@ splinter release <CANDIDATE-ID> [--alias NAME] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
 splinter runs list | show <ID> | cancel <ID>
+splinter lineage <ID> [--up|--down|--both] [--depth N]
 
 global: --state DIR  --json  -v  --allow-remote
 ```
 
 An id is the full `sha256:<hex>`, the hex alone, or a prefix of at least
 four hex digits that names exactly one stored object.
+
+`ask` records every answer under `<state>/answers/` with the model that
+gave it and, asked through `policy:<alias>`, the release the alias
+resolved to; its report carries the answer's `id` and that `release`.
 
 ## Models
 
@@ -200,6 +205,45 @@ is `{"config", "improvement", "retention", "anchor", "serve", "passed"}`
 and each check is `{"passed", "measured", "reason"}` (`measured` is `null`
 when it could not be measured). `eval`: `{"model", "reference", "anchor",
 "scores"}` (plus `"run"` when it froze a suite or graded a model).
+
+## Lineage
+
+`lineage <ID>` takes any artifact's id - a source, a source part's
+content, a task or task set, an experience or experience set, a dataset, a
+candidate, a replay sample, a release, an adapter digest, an answer - as
+the full id, its hex, or a prefix naming exactly one; a prefix naming
+artifacts in more than one store is refused with every one it names. It
+prints two trees: where the artifact came from (`--up`), down to the source
+part and byte range each task is grounded in with those bytes quoted, and
+what came from it (`--down`): tasks, experiences, datasets, candidates,
+releases and answers. Both by default; `--depth N` stops N edges out. The
+graph is derived from what the stores already record, on every call:
+
+| From | Relation | To |
+|---|---|---|
+| content | `part_of` | the source holding it as a part |
+| span | `span_of` | the source it names a part of, else the content it indexes |
+| task | `evidence` | each span it is grounded in |
+| task set, experience set | `member` | each task, experience |
+| experience | `attempts`, `ran_in`, `solved_by` | its task, environment snapshot, solver model |
+| experience | `critique_of`, `retry_of`, `revision_of`, `preferred_over`, `variant_of` | the experience its relation names |
+| verdict | `verdict_on`, `produced_by` | the experience it grades, the verifier that gave it |
+| dataset | `projected_from` | each experience, task and source content its manifest names |
+| candidate, release | `trained_on`, `trained_from`, `replayed`, `adapter` | its datasets, parent release, replay sample, adapter digest |
+| replay sample | `sampled_from` | each earlier release it drew from |
+| release | `release_of` | its candidate |
+| answer | `answered_with`, `answered_by`, `open_book` | the release, the model, the source shown |
+
+With `--json`: `{"nodes": [{"id", "kind", "label"}], "edges": [{"from",
+"to", "relation"}]}`. The artifact asked about is the first node; every
+node reached follows once, in walk order; an edge means `from` was derived
+from `to`, whichever way it was walked. `kind` is one of `source`,
+`content`, `span`, `task`, `task_set`, `experience`, `experience_set`,
+`environment`, `model`, `verdict`, `producer`, `dataset`, `candidate`,
+`replay`, `release`, `adapter`, `answer`. Artifacts without an address of
+their own have ids of their kind: `span:<content-hex>:<start>-<end>`,
+`model:<identity>`, `verdict:<experience-hex>:<n>`,
+`producer:<name>@<version>`.
 
 ## Exit status
 

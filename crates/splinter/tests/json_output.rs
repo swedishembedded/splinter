@@ -177,3 +177,32 @@ fn releases_rollback_and_the_anchor_suite_speak_json() {
     assert_eq!(code, 0, "{shown}");
     assert_eq!(shown["anchor"]["digest"], frozen["anchor"]["digest"]);
 }
+
+#[test]
+fn lineage_prints_nodes_and_edges_and_refuses_an_unknown_id() {
+    let scratch = Scratch::new("lineage");
+    let state = scratch.0.join("state");
+    let doc = scratch.0.join("manual.md");
+    std::fs::write(&doc, "# Manual\n\nThe console runs at 115200 baud.\n").unwrap();
+    let (code, added) = splinter(&state, &["source", "add", doc.to_str().unwrap()]);
+    assert_eq!(code, 0, "{added}");
+    let source = added["source"]["id"].as_str().unwrap().to_string();
+
+    let (code, lineage) = splinter(&state, &["lineage", &source["sha256:".len()..][..8]]);
+    assert_eq!(code, 0, "{lineage}");
+    assert_eq!(keys(&lineage), ["edges", "nodes"]);
+    let root = &lineage["nodes"][0];
+    assert_eq!(keys(root), ["id", "kind", "label"]);
+    assert_eq!(
+        (root["id"].as_str(), root["kind"].as_str()),
+        (Some(source.as_str()), Some("source"))
+    );
+    let edge = &lineage["edges"][0];
+    assert_eq!(keys(edge), ["from", "relation", "to"]);
+    assert_eq!(edge["relation"], "part_of", "its content is part of it");
+    assert_eq!(edge["to"], source.as_str());
+
+    let (code, refused) = splinter(&state, &["lineage", "0000000000"]);
+    assert_eq!(code, 2, "{refused}");
+    assert!(refused["error"].as_str().unwrap().contains("no artifact"));
+}

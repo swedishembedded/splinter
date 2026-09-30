@@ -28,11 +28,15 @@
 //!   [`eval`] - one model graded on the gate's suites.
 //! * [`learn`] - every stage above, as one run.
 //! * [`runs`] - every command's run record, and cancelling one.
-//! * [`status`], [`experiences`], [`ask`] - inspection and questions.
+//! * [`status`], [`experiences`], [`ask`] - inspection and questions;
+//!   [`answers`] - every answer `ask` gave, and what gave it.
+//! * [`lineage`] - from any artifact, where it came from and what came
+//!   from it.
 //! * [`front_door`] - a sentence becomes a command, decided by code.
 
 #![warn(missing_docs)]
 
+pub mod answers;
 pub mod ask;
 pub mod config;
 pub mod context;
@@ -45,6 +49,7 @@ pub mod front_door;
 mod ids;
 pub mod judge;
 pub mod learn;
+pub mod lineage;
 pub mod model_ref;
 pub mod release;
 pub mod runs;

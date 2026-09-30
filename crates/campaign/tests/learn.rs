@@ -31,8 +31,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use common::gate::{anchor_file, gate_context, put_base, released, Brain, FakeTrainer, ANCHOR};
-use common::{scratch_context, Scripted};
-use serde_json::json;
+use common::manual::{manual_policy as policy, MANUAL};
+use common::scratch_context;
 use splinter_agent::solve::Model;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::model_ref::ModelRef;
@@ -44,50 +44,6 @@ use splinter_policy::ModelSelection;
 use splinter_store::runs::{read_run, RunStatus};
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
-
-const MANUAL: &str = "# Frobnicator manual
-
-The Frobnicator is a bench power controller.
-
-## Console
-
-The console UART of the Frobnicator runs at 115200 baud with eight data bits.
-
-## Power
-
-The Frobnicator draws 40 mA when idle and 900 mA at full load.
-";
-
-/// The policy: writes two recall tasks when asked for tasks, answers the
-/// baud rate right and the idle current wrong until it is given feedback,
-/// and critiques a failed attempt.
-fn policy() -> Scripted {
-    Scripted::new(|prompt| {
-        if prompt.contains("You write training tasks") {
-            json!({ "tasks": [
-                {
-                    "instruction": "At what baud rate does the Frobnicator console UART run?",
-                    "reference": "115200 baud",
-                    "evidence": [{ "section": 1, "quote": "runs at 115200 baud" }]
-                },
-                {
-                    "instruction": "How much current does the Frobnicator draw when idle?",
-                    "reference": "40 mA",
-                    "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
-                }
-            ]})
-            .to_string()
-        } else if prompt.contains("You are reviewing an attempt") {
-            "The idle current is wrong: it is not what the power specification gives.".into()
-        } else if prompt.contains("baud rate") {
-            "115200 baud".into()
-        } else if prompt.contains("Feedback on an earlier attempt") {
-            "40 mA".into()
-        } else {
-            "12 mA".into()
-        }
-    })
-}
 
 /// Training as a test double: keeps what it was handed, and trains the
 /// fixtures' fake adapter.

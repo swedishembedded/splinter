@@ -18,6 +18,7 @@ use splinter_campaign::experiences::{self, resolve_set};
 use splinter_campaign::front_door::{interpret, Routed};
 use splinter_campaign::judge::calibrate_judge;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
+use splinter_campaign::lineage::{lineage, LineageRequest};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{self, ReleaseRequest};
 use splinter_campaign::runs::{self, record};
@@ -396,6 +397,14 @@ impl Session {
             Command::Runs(RunsCommand::List) => emit(json, &runs::list(ctx)?),
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),
             Command::Runs(RunsCommand::Cancel { id }) => emit(json, &runs::cancel(ctx, &id)?),
+            Command::Lineage(args) => {
+                let request = LineageRequest {
+                    direction: args.direction(),
+                    id: args.id,
+                    depth: args.depth,
+                };
+                emit(json, &lineage(ctx, &request)?);
+            }
         }
         Ok(Exit::Ok)
     }
