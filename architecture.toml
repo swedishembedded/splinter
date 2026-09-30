@@ -21,7 +21,9 @@ internal = []
 internal = ["splinter-store"]
 
 [crates.splinter-lab]
-internal = ["splinter-store"]
+# Executable verifiers run checks in the environment a task names, through
+# the sandbox's one bounded runner rather than a second one of their own.
+internal = ["splinter-store", "splinter-sandbox"]
 
 [crates.splinter-policy]
 internal = ["splinter-lab"]

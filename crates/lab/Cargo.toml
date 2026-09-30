@@ -11,6 +11,7 @@ publish.workspace = true
 
 [dependencies]
 sven-sdk = { workspace = true }
+splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }

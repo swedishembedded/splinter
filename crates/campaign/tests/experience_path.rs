@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use splinter_knowledge::denoise::{Denoise, GENERATOR};
 use splinter_lab::denoise::FormalVerifier;
+use splinter_lab::verifiers::annotation;
 use splinter_store::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_store::clock::FixedClock;
 use splinter_store::experience::{
@@ -169,7 +170,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
     assert_eq!(std::fs::read_dir(&objects).unwrap().count(), 1);
 
     store
-        .annotate(&FormalVerifier::new().verify(&passed).unwrap())
+        .annotate(&annotation(&FormalVerifier::new(), &task, &passed).unwrap())
         .unwrap();
     let view = SftFinal::new(Strength::Formal);
     let notes = store.annotations(&id).unwrap().annotations;
@@ -200,7 +201,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
     let failed_id = store.put(&failed).unwrap();
     assert_ne!(failed_id, id);
     store
-        .annotate(&FormalVerifier::new().verify(&failed).unwrap())
+        .annotate(&annotation(&FormalVerifier::new(), &task, &failed).unwrap())
         .unwrap();
     let notes = store.annotations(&failed_id).unwrap().annotations;
     assert!(matches!(

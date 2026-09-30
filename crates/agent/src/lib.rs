@@ -16,6 +16,9 @@
 //!   closed-book with no tools, or a runtime with the one tool
 //!   [`run_code`], bounded by sven's run options; the result is what an
 //!   experience records.
+//! * [`judge`] - the judged verifier: a different model grading an answer
+//!   closed-book through that same solve, from the output and the task's
+//!   reference material alone.
 //!
 //! Everything an attempt produces lands in its run directory under the
 //! state root, so a run is reviewable - and resumable - after the process
@@ -25,6 +28,7 @@
 
 pub mod budget;
 pub mod events;
+pub mod judge;
 pub mod outcome;
 pub mod run_code;
 pub mod runner;

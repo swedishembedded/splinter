@@ -369,6 +369,18 @@ impl Experience {
         Ok(experience)
     }
 
+    /// The task this experience attempted, as its generator emitted it.
+    #[must_use]
+    pub fn to_task(&self) -> Task {
+        Task {
+            task: self.task.clone(),
+            evidence: self.evidence.clone(),
+            environment: self.environment.clone(),
+            instruction: self.instruction.clone(),
+            privileged: self.privileged.clone(),
+        }
+    }
+
     /// The canonical form the id is computed over.
     pub fn canonical(&self) -> Result<Vec<u8>, ExperienceError> {
         Ok(canonical_json(self)?)

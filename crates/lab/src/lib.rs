@@ -47,6 +47,10 @@
 //!   supervising assistant turns and nothing else, and refusing a transcript
 //!   with a hole in it. [`WireMessage`] is one message of the
 //!   `generic-messages-v2` format those records are written in.
+//! * [`verifiers`] - verifiers by strength (executable, formal, consistency,
+//!   judged), each grading an experience from its output and the task's
+//!   privileged material alone, and the composite that annotates every
+//!   verdict so the store's decision rule lets the strongest decide.
 //! * [`denoise`] - the denoise task family's formal verifier, grading an
 //!   experience against the reference passage it never showed the solver.
 //!
@@ -74,6 +78,7 @@ pub mod promotion;
 mod recorder;
 mod score;
 mod verdict;
+pub mod verifiers;
 
 pub use dataset::{
     record_from_episode, record_from_requests, records_from_performance, to_jsonl, Excluded,
