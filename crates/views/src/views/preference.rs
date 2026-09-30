@@ -11,7 +11,9 @@
 //!    relation is the judgement, so no verdict is required. It is a
 //!    candidate, excluded when the rejected experience is not in the
 //!    corpus, the two attempted different tasks, either lacks a final
-//!    output, or the outputs are identical.
+//!    output, or the outputs are identical. A retry that was given a
+//!    critique of the other attempt still attempted the same task, so
+//!    tasks that differ only in critiques count as one task here.
 //! 2. Derived pairs: within one task, every experience decided pass paired
 //!    with every experience decided fail at the same strength, that
 //!    strength at or above the view's minimum. The same strength is what
@@ -67,7 +69,12 @@ impl Preference {
         chosen: &Entry,
         rejected: &Entry,
     ) -> Result<(RecordBody, Provenance), Exclusion> {
-        if chosen.experience.task.id != rejected.experience.task.id {
+        if chosen.experience.task.id != rejected.experience.task.id
+            && !chosen
+                .experience
+                .to_task()
+                .same_apart_from_critiques(&rejected.experience.to_task())
+        {
             return Err(Exclusion::DifferentTask);
         }
         let (Some(better), Some(worse)) = (

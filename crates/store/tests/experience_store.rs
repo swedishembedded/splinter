@@ -176,6 +176,36 @@ fn an_environment_snapshot_addresses_its_kind_and_spec() {
 /// Put is write-once: the same content twice is one object and one id, and
 /// get returns exactly what was put.
 #[test]
+fn a_critique_added_for_a_retry_leaves_the_task_the_same_task() {
+    let original = task(json!({}));
+    let critique = Privileged {
+        kind: PrivilegedKind::Critique,
+        content: "the words are out of order".into(),
+        span: None,
+    };
+    let retried = original.with_privileged(critique).unwrap();
+    assert_ne!(
+        retried.task.id, original.task.id,
+        "a new task, addressed anew"
+    );
+    assert_eq!(retried.instruction, original.instruction);
+    assert!(retried.same_apart_from_critiques(&original));
+    assert!(original.same_apart_from_critiques(&retried));
+
+    let hinted = original
+        .with_privileged(Privileged {
+            kind: PrivilegedKind::Hint,
+            content: "start with quick".into(),
+            span: None,
+        })
+        .unwrap();
+    assert!(
+        !hinted.same_apart_from_critiques(&original),
+        "any other teacher-only item makes it another task"
+    );
+}
+
+#[test]
 fn put_is_write_once_and_get_round_trips() {
     let scratch = Scratch::new("put");
     let store = scratch.store();

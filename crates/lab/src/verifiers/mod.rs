@@ -22,6 +22,10 @@
 //! | [`Strength::Consistency`] | [`consistency::AgreementVerifier`] over independent answers |
 //! | [`Strength::Judged`] | a judge model, gated by [`calibration::CalibratedJudge`] |
 //!
+//! A critique is graded by what it achieved rather than by a verifier of
+//! its text: [`critique::critique_verdict`] passes it when the retry that
+//! received it passes where the critiqued attempt failed.
+//!
 //! [`Strongest`] runs several and returns every verdict; the store's
 //! [`decide`](splinter_store::annotation::decide) lets the strongest
 //! agreeing ones decide, so no verdict is dropped here to reach that.
@@ -32,6 +36,7 @@
 
 pub mod calibration;
 pub mod consistency;
+pub mod critique;
 pub mod executable;
 pub mod formal;
 pub mod mutation;

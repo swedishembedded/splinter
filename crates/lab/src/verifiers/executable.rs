@@ -313,6 +313,22 @@ pub fn evidence_summary(evidence: &serde_json::Value) -> Option<String> {
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
+/// The checks in the evidence an executable verdict carries that did not
+/// meet their expectation, numbered from 1 in the order they ran, as
+/// [`evidence_summary`] numbers them. `None` when `evidence` is not in the
+/// shape [`ExecutableVerifier`] records.
+#[must_use]
+pub fn failed_checks(evidence: &serde_json::Value) -> Option<Vec<usize>> {
+    let checks = evidence.get("checks")?.as_array()?;
+    let mut failed = Vec::new();
+    for (index, check) in checks.iter().enumerate() {
+        if !check.get("passed")?.as_bool()? {
+            failed.push(index + 1);
+        }
+    }
+    Some(failed)
+}
+
 /// Runs a task's authored checks ([`CHECK_KIND`]) against the solver's
 /// code: pass iff every check meets its expectation, fail otherwise or
 /// when there is no answer; abstains on a task with no checks, or whose

@@ -324,6 +324,41 @@ impl Task {
         )?;
         Ok(task)
     }
+
+    /// This task with `item` added to what only the teacher sees: a new
+    /// task, with its own address.
+    pub fn with_privileged(&self, item: Privileged) -> Result<Self, ExperienceError> {
+        let mut privileged = self.privileged.clone();
+        privileged.push(item);
+        Self::new(
+            self.task.kind.clone(),
+            self.evidence.clone(),
+            self.environment.clone(),
+            self.instruction.clone(),
+            privileged,
+        )
+    }
+
+    /// Whether `self` and `other` are one task apart from critiques: the
+    /// same kind, evidence, environment, instruction and privileged items
+    /// once every [`PrivilegedKind::Critique`] is set aside. A critique is
+    /// feedback on an earlier attempt, handed to a retry; it changes
+    /// neither what the task asks nor what grades an answer to it.
+    #[must_use]
+    pub fn same_apart_from_critiques(&self, other: &Task) -> bool {
+        let graded = |task: &'_ Task| -> Vec<Privileged> {
+            task.privileged
+                .iter()
+                .filter(|p| p.kind != PrivilegedKind::Critique)
+                .cloned()
+                .collect()
+        };
+        self.task.kind == other.task.kind
+            && self.evidence == other.evidence
+            && self.environment == other.environment
+            && self.instruction == other.instruction
+            && graded(self) == graded(other)
+    }
 }
 
 /// One solved (or attempted) task, immutable once stored.

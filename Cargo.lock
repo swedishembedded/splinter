@@ -3900,6 +3900,7 @@ dependencies = [
  "splinter-policy",
  "splinter-sandbox",
  "splinter-store",
+ "splinter-views",
  "sven-sdk",
  "thiserror 2.0.21",
  "tokio",

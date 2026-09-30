@@ -14,7 +14,8 @@ mod common;
 
 use common::{experience, python, record, task, verdict, Scratch};
 use splinter_lab::verifiers::executable::{
-    evidence_summary, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
+    evidence_summary, failed_checks, ExecutableCheck, ExecutableVerifier, Expectation,
+    ExpectedStdout,
 };
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_sandbox::Limits;
@@ -94,6 +95,7 @@ fn a_wrong_solution_or_no_answer_fails() {
         summary.starts_with("check 1: python") && summary.contains(", exit code 1\n"),
         "a reader's summary of how the checks ended: {summary}"
     );
+    assert_eq!(failed_checks(&evidence), Some(vec![1, 2]));
     let (outcome, _, _) = verdict(&verifier, &task, &experience(&task, None, "s"));
     assert_eq!(outcome, Outcome::Fail);
 }

@@ -25,6 +25,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+splinter-views = { workspace = true }
+
 futures = { workspace = true }
 
 [lints]

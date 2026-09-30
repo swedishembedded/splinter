@@ -19,6 +19,14 @@
 //! * [`judge`] - the judged verifier: a different model grading an answer
 //!   closed-book through that same solve, from the output and the task's
 //!   reference material alone.
+//! * [`critic`] - a model saying what is wrong with a failed attempt and
+//!   why, closed-book through that same solve, from the instruction, the
+//!   answer and the verifiers' evidence summaries, never the task's
+//!   teacher-only material; the critique stored as an experience of its
+//!   own.
+//! * [`repair`] - a retry with the critique, graded by the task's
+//!   verifiers, the critique verified by its outcome, the chain recorded as
+//!   relations; and the bounded loop of critique and retry.
 //!
 //! Everything an attempt produces lands in its run directory under the
 //! state root, so a run is reviewable - and resumable - after the process
@@ -27,9 +35,11 @@
 #![warn(missing_docs)]
 
 pub mod budget;
+pub mod critic;
 pub mod events;
 pub mod judge;
 pub mod outcome;
+pub mod repair;
 pub mod run_code;
 pub mod runner;
 pub mod solve;

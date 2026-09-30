@@ -30,7 +30,10 @@ internal = ["splinter-lab"]
 brain = true
 
 [crates.splinter-agent]
-internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy"]
+# splinter-views as a dev-dependency only: the critique-and-retry specs
+# check that the chain the repair loop records is what the critic, decision
+# and preference views read. The views never depend on the agent.
+internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-views"]
 
 [crates.splinter-knowledge]
 # Model-driven task generators ask their generator model through the

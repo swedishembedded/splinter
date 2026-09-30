@@ -137,9 +137,54 @@ pub enum SolveError {
     Engine(#[from] CallError),
 }
 
+/// A model and the identity experiences record it by (the string an
+/// experience's provenance names as its solver).
+#[derive(Clone)]
+pub struct Model {
+    /// The model.
+    pub provider: Arc<dyn ModelProvider>,
+    /// Its identity.
+    pub identity: String,
+}
+
+impl Model {
+    /// `provider`, known as `identity`.
+    #[must_use]
+    pub fn new(provider: Arc<dyn ModelProvider>, identity: impl Into<String>) -> Self {
+        Self {
+            provider,
+            identity: identity.into(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Model {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Model")
+            .field("identity", &self.identity)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Solves `task` in `environment` on `model`, within `options`.
 pub async fn solve(
     task: &Task,
+    environment: &ResolvedEnvironment,
+    model: Arc<dyn ModelProvider>,
+    options: SolveOptions,
+) -> Result<Solution, SolveError> {
+    solve_prompted(task, &task.instruction, environment, model, options).await
+}
+
+/// Solves `task` as [`solve`] does, prompting the solver with `prompt`
+/// instead of the bare instruction: the instruction with teacher-only
+/// material the task carries beside it, such as a critique of an earlier
+/// attempt. The trajectory records the prompt the solver was sent; a view
+/// replaces that turn with what the student may see, so the experience's
+/// instruction stays the task's own.
+pub async fn solve_prompted(
+    task: &Task,
+    prompt: &str,
     environment: &ResolvedEnvironment,
     model: Arc<dyn ModelProvider>,
     options: SolveOptions,
@@ -155,9 +200,7 @@ pub async fn solve(
     }
     let engine = engine(environment, model)?;
     let mut agent = engine.agent(SOLVER_MODE);
-    let outcome = agent
-        .send_with(&task.instruction, options.run_options())
-        .await?;
+    let outcome = agent.send_with(prompt, options.run_options()).await?;
     let final_output = (outcome.conclusion == RunConclusion::Success).then_some(outcome.reply);
     Ok(Solution {
         trajectory: agent.trajectory(),
