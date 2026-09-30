@@ -111,6 +111,9 @@ pub struct Trained {
     /// `sha256:<hex>` of the adapter file - the digest brain reports for it
     /// when it serves it.
     pub adapter_digest: String,
+    /// `sha256:<hex>` of the base checkpoint the adapter was trained on -
+    /// the digest its card records, which brain checks when it serves it.
+    pub base_digest: String,
     /// brain's training record for the adapter, beside it.
     pub training_record: PathBuf,
     /// Records in the dataset.
@@ -254,6 +257,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         adapter_digest: outcome
             .adapter_digest
             .ok_or_else(|| incomplete("adapter digest"))?,
+        base_digest: outcome
+            .base_digest
+            .ok_or_else(|| incomplete("base digest"))?,
         training_record: outcome
             .record
             .ok_or_else(|| incomplete("training record"))?,
@@ -335,6 +341,9 @@ pub struct TrainedPreference {
     pub adapter: PathBuf,
     /// `sha256:<hex>` of the adapter file.
     pub adapter_digest: String,
+    /// `sha256:<hex>` of the base checkpoint the adapter was trained on -
+    /// the digest its card records, which brain checks when it serves it.
+    pub base_digest: String,
     /// brain's training record for the adapter, beside it.
     pub training_record: PathBuf,
     /// Pairs in the dataset, trained and held out together.
@@ -394,6 +403,9 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         adapter_digest: outcome
             .adapter_digest
             .ok_or_else(|| incomplete("adapter digest"))?,
+        base_digest: outcome
+            .base_digest
+            .ok_or_else(|| incomplete("base digest"))?,
         training_record: outcome
             .record
             .ok_or_else(|| incomplete("training record"))?,

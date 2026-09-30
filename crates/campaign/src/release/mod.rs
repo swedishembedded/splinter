@@ -177,7 +177,7 @@ pub fn release(
     if !released.gate.passed {
         return Ok(released);
     }
-    let manifest = manifest(ctx, &candidate, &base_file, &released.gate)?;
+    let manifest = manifest(ctx, &candidate, &released.gate)?;
     let stored = store.put(&manifest, &candidate.adapter)?;
     store.move_alias(&request.alias, champion_id.as_ref(), &stored.id)?;
     ctx.repin_policy(&request.alias);
@@ -186,15 +186,17 @@ pub fn release(
     Ok(released)
 }
 
-/// The manifest of `candidate` released after `gate`.
+/// The manifest of `candidate` released after `gate`. The base digest is
+/// the one training recorded on the adapter's card: the serve check has
+/// just had brain bind the adapter to the base on disk, which it refuses
+/// for any other base, so it is the base the release runs on.
 fn manifest(
     ctx: &Context,
     candidate: &Candidate,
-    base_file: &Path,
     gate: &GateReport,
 ) -> Result<ReleaseManifest, CampaignError> {
-    let base = std::fs::File::open(base_file).map_err(io(base_file))?;
-    let base_digest = Digest::of_reader(base).map_err(io(base_file))?;
+    let base_digest = Digest::parse(&candidate.base_digest)
+        .map_err(|e| CampaignError::Refused(format!("candidate {}: {e}", candidate.candidate)))?;
     let adapter_digest = Digest::parse(&candidate.adapter_digest)
         .map_err(|e| CampaignError::Refused(format!("candidate {}: {e}", candidate.candidate)))?;
     let record_path = &candidate.training_record;

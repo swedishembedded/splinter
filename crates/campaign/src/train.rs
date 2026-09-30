@@ -243,6 +243,8 @@ pub struct Candidate {
     pub adapter: PathBuf,
     /// Its digest.
     pub adapter_digest: String,
+    /// The digest of the base it was trained on, as its card records it.
+    pub base_digest: String,
     /// brain's training record for it.
     pub training_record: PathBuf,
     /// Optimizer steps.
@@ -453,6 +455,7 @@ pub fn train(
         replay,
         adapter: trained.adapter,
         adapter_digest: trained.adapter_digest,
+        base_digest: trained.base_digest,
         training_record: trained.training_record,
         steps: request.steps,
         rank: request.rank,
@@ -475,6 +478,7 @@ pub fn train(
 struct Outcome {
     adapter: PathBuf,
     adapter_digest: String,
+    base_digest: String,
     training_record: PathBuf,
     records: usize,
     base_score: Option<HeldOutScore>,
@@ -487,6 +491,7 @@ impl From<Trained> for Outcome {
         Self {
             adapter: t.adapter,
             adapter_digest: t.adapter_digest,
+            base_digest: t.base_digest,
             training_record: t.training_record,
             records: t.records,
             base_score: Some(t.base),
@@ -501,6 +506,7 @@ impl From<TrainedPreference> for Outcome {
         Self {
             adapter: t.adapter,
             adapter_digest: t.adapter_digest,
+            base_digest: t.base_digest,
             training_record: t.training_record,
             records: t.records,
             base_score: None,

@@ -410,6 +410,7 @@ impl Trainer for FakeTrainer {
         Ok(Trained {
             adapter: fake.adapter,
             adapter_digest: fake.digest,
+            base_digest: Digest::of(BASE_BYTES).to_string(),
             training_record: fake.record,
             records: fake.records,
             block: 0,
@@ -429,6 +430,7 @@ impl Trainer for FakeTrainer {
         Ok(TrainedPreference {
             adapter: fake.adapter,
             adapter_digest: fake.digest,
+            base_digest: Digest::of(BASE_BYTES).to_string(),
             training_record: fake.record,
             records: fake.records,
             block: 0,
