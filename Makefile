@@ -18,6 +18,10 @@ CARGO ?= cargo
 # unoptimised, and one profile means one set of compiled dependencies.
 PROFILE := --release
 
+# Splinter's own Rust sources: tracked or new, and present in the working
+# tree (a tracked file deleted there is no longer a source file).
+RUST_SOURCES = $(wildcard $(shell git ls-files --cached --others --exclude-standard '*.rs'))
+
 .PHONY: help local lock build test fmt check check/gates check/fmt check/clippy \
 	hooks/install experiments/tool-syntax/audit
 
@@ -43,7 +47,7 @@ test:
 
 ## fmt - format Splinter's own sources (never a dependency's)
 fmt:
-	rustfmt --edition 2021 $$(git ls-files --cached --others --exclude-standard '*.rs')
+	rustfmt --edition 2021 $(RUST_SOURCES)
 
 ## check - every gate over the whole tree (what the hooks check per commit)
 check: check/gates check/fmt check/clippy
@@ -67,7 +71,7 @@ check/gates:
 
 ## check/fmt - formatting of Splinter's own sources
 check/fmt:
-	rustfmt --edition 2021 --check $$(git ls-files --cached --others --exclude-standard '*.rs')
+	rustfmt --edition 2021 --check $(RUST_SOURCES)
 
 ## check/clippy - clippy on every target, warnings denied
 check/clippy:

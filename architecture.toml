@@ -8,9 +8,9 @@
 #
 # Every workspace package must be listed. `internal` names the Splinter
 # crates it may depend on (normal, build and dev dependencies alike).
-# `brain` says whether it may depend on any brain crate: only the policy
-# crate may, so the day brain's SDK covers what Splinter needs, one crate
-# changes.
+# `brain` says whether it may depend on brain: only the policy crate may, and
+# only on brain's public SDK, the `brain` crate - never an internal
+# `brain-*` crate.
 
 [crates.splinter-store]
 internal = []
@@ -21,17 +21,6 @@ internal = []
 [crates.splinter-policy]
 internal = ["splinter-lab"]
 brain = true
-# brain crates reached past brain's public SDK (`brain`). Each entry is a
-# surface the SDK does not publish yet; the list may only shrink, and the
-# gate refuses both a new internal crate and an entry nothing uses.
-brain_internal = [
-    "brain-capability",
-    "brain-checkpoint",
-    "brain-data",
-    "brain-gpu-core",
-    "brain-model",
-    "brain-qwen3",
-]
 
 [crates.splinter-agent]
 internal = ["splinter-store", "splinter-lab", "splinter-policy"]

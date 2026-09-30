@@ -6,9 +6,8 @@
 #
 #   1. Every workspace package is listed, and depends only on the Splinter
 #      crates its entry allows - normal, build and dev dependencies alike.
-#   2. Only a package marked `brain = true` depends on any brain crate, and
-#      beyond brain's public SDK only on the crates its `brain_internal`
-#      ratchet lists - which may only shrink.
+#   2. Only a package marked `brain = true` depends on brain, and only on
+#      brain's public SDK (`brain`): an internal `brain-*` crate is refused.
 #   3. No tracked .rs file exceeds `max_file_lines`.
 #
 # The graph comes from `cargo metadata --no-deps`, the manifests cargo
@@ -20,7 +19,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 cargo metadata --no-deps --offline --format-version 1 2>/dev/null | python3 -c '
-import json, subprocess, sys, tomllib
+import json, os, subprocess, sys, tomllib
 
 arch = tomllib.load(open("architecture.toml", "rb"))
 allowed = arch["crates"]
@@ -39,12 +38,8 @@ for pkg in meta["packages"]:
             failures.append(f"{name} -> {target}: not an allowed edge")
         if (target == "brain" or target.startswith("brain-")) and not rule.get("brain", False):
             failures.append(f"{name} -> {target}: only a crate marked brain = true may depend on brain")
-        if target.startswith("brain-") and rule.get("brain", False) and target not in rule.get("brain_internal", []):
-            failures.append(f"{name} -> {target}: a brain crate beyond the public SDK; use `brain` or list it in brain_internal")
-    used = {d["name"] for d in pkg["dependencies"]}
-    for stale in rule.get("brain_internal", []):
-        if stale not in used:
-            failures.append(f"{name}: brain_internal lists {stale}, which it no longer uses - remove the entry")
+        if target.startswith("brain-"):
+            failures.append(f"{name} -> {target}: a brain crate beyond the public SDK; use `brain`, and publish what it lacks in the brain SDK")
 for listed in allowed:
     if listed not in members:
         failures.append(f"{listed}: listed in architecture.toml but not a workspace package")
@@ -53,6 +48,9 @@ limit = arch["limits"]["max_file_lines"]
 files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.rs"],
                        capture_output=True, text=True, check=True).stdout.split()
 for path in files:
+    # A tracked file deleted in the working tree is no longer a source file.
+    if not os.path.isfile(path):
+        continue
     with open(path, encoding="utf-8") as fh:
         lines = sum(1 for _ in fh)
     if lines > limit:

@@ -267,10 +267,9 @@ mod tests {
             learn_run(&root, "loop-learn-dup").unwrap(),
             Learned::AlreadyRecorded
         );
-        let records = splinter_policy::train::read_dataset(&root.experience_pool()).unwrap();
+        let pool = splinter_policy::train::validate_dataset(&root.experience_pool()).unwrap();
         assert_eq!(
-            records.len(),
-            1,
+            pool.records, 1,
             "a repeated learn must not weight the run twice"
         );
         let _ = std::fs::remove_dir_all(root.path());
@@ -295,9 +294,13 @@ mod tests {
         );
         learn_run(&root, "loop-learn-p1").unwrap();
         learn_run(&root, "loop-learn-p2").unwrap();
-        let samples = splinter_policy::train::read_dataset(&root.experience_pool()).unwrap();
-        assert_eq!(samples.len(), 2);
-        assert!(samples[0].messages[1].train);
+        // The trainer's own parser accepts the pool as it stands...
+        let pool = splinter_policy::train::validate_dataset(&root.experience_pool()).unwrap();
+        assert_eq!(pool.records, 2);
+        // ...and supervises the reply, the record's second message.
+        let text = std::fs::read_to_string(root.experience_pool()).unwrap();
+        let first: serde_json::Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
+        assert_eq!(first["messages"][1]["train"], serde_json::json!(true));
         let _ = std::fs::remove_dir_all(root.path());
     }
 }

@@ -22,17 +22,11 @@ expect_used = "warn"
 # Cargo.lock. A local build against sibling checkouts is a gitignored
 # override written by `make local`; it never edits this file or the lock.
 #
-# Only `sven-sdk` and `brain` are meant to be depended on. Every other brain
-# crate listed here is a surface brain's SDK does not publish yet, and each
-# one is an item in the roadmap's SDK phase to remove.
+# Splinter depends on exactly two upstream crates, their public SDKs:
+# `sven-sdk` and `brain`. `brain` selects only the surfaces used: `text` for
+# chat inference, `study` for fine-tuning and held-out scoring.
 sven-sdk = { git = "https://github.com/swedishembedded/sven" }
-brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["study"] }
-brain-qwen3 = { git = "https://github.com/swedishembedded/brain" }
-brain-data = { git = "https://github.com/swedishembedded/brain" }
-brain-checkpoint = { git = "https://github.com/swedishembedded/brain" }
-brain-capability = { git = "https://github.com/swedishembedded/brain" }
-brain-model = { git = "https://github.com/swedishembedded/brain" }
-brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
+brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study"] }
 
 splinter-lab = { path = "crates/lab" }
 splinter-store = { path = "crates/store" }

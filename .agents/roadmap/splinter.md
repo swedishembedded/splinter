@@ -52,16 +52,20 @@ the released adapter answers the same questions from plain `brain serve`.
    gate, manifests, the default alias, and a default-policy size chosen by
    measurement (the largest Qwen3 brain's training path fits).
 5. **SDK surfaces**, so Splinter uses only `sven-sdk` and `brain`:
-   - brain: chat inference with messages, tool schemas, streaming,
-     cancellation, tool-call parsing and policy identity; base-weight
-     residency shared by inference and training (folding an adapter into the
-     base at load prevents it); adapter train/export/save/load; resumable
-     training checkpoints with optimizer state; "not measured" distinct from
-     zero; serving an explicit release instead of the highest-numbered
-     adapter.
-   - sven: an empty default toolset, explicit toolsets, structured outcomes,
-     cancellation, and history taken from the session rather than a lossy
-     event stream.
+   - brain: done for chat inference (messages, tool schemas, streaming,
+     cancellation, tool-call parsing, policy identity), adapter
+     train/export/save/load, resumable training with optimizer state and
+     "not measured" distinct from zero - Splinter depends on `brain` alone.
+     Open: base-weight residency shared by inference and training (folding
+     an adapter into the base at load prevents it); constrained (JSON)
+     decoding for a request's response format; serving an explicit release
+     instead of the highest-numbered adapter.
+   - sven: done for an empty default toolset, explicit toolsets, structured
+     outcomes, bounded runs (cancel, deadline, token budget), parked
+     questions, history taken from the session, and ATIF trajectories. Open:
+     the runner still races its own timeout, interrupt and limits around
+     `send`; bounding the run with `RunOptions` keeps the kernel state and
+     reports the conclusion instead of dropping the turn.
 6. **Extract sven's learning code**: the learning half of `sven-memory`
    (fact ledger, ingestion, assimilation, rule expansion, the submission
    drain, the brain study submitter, the doctor), the `learn` CLI, the

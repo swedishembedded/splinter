@@ -54,15 +54,16 @@ pub fn run(root: &StateRoot, options: &TrainOptions) -> anyhow::Result<(Decision
         model_dir: &options.model_dir,
         dataset: &dataset,
         attempt_dir: &out,
-        prepared_dir: &prepared_dir(root)?,
         steps: options.steps,
         rank: options.rank,
         alpha: options.alpha,
     })?;
 
+    // An unscored held-out set has no loss; the gate rejects a non-finite
+    // score, so an unmeasured one can never promote.
     let scores = Scores {
-        base_loss: trained.base.loss,
-        tuned_loss: trained.tuned.loss,
+        base_loss: trained.base.loss.unwrap_or(f32::NAN),
+        tuned_loss: trained.tuned.loss.unwrap_or(f32::NAN),
     };
     // The standing champion's scores, from the pointer: beats-base is not
     // enough when a better adapter already serves. Only a champion scored
@@ -81,6 +82,8 @@ pub fn run(root: &StateRoot, options: &TrainOptions) -> anyhow::Result<(Decision
         "tuned": trained.tuned,
         "decision": match decision { Decision::Promoted => "promoted", Decision::Rejected => "rejected" },
         "adapter": trained.adapter,
+        "adapter_digest": trained.adapter_digest,
+        "training_record": trained.training_record,
     });
     let decision_record = out.join("decision.json");
     write_atomic(&decision_record, &serde_json::to_string_pretty(&record)?)?;
@@ -127,12 +130,6 @@ fn attempt_dir(root: &StateRoot) -> anyhow::Result<PathBuf> {
     let dir = root
         .train()
         .join(splinter_store::new_id_with_prefix("train"));
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
-fn prepared_dir(root: &StateRoot) -> anyhow::Result<PathBuf> {
-    let dir = root.train().join("prepared");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

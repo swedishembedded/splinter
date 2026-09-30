@@ -7,79 +7,59 @@
 // provider abstractions, you can procure our services by sending an email
 // to info@swedishembedded.com.
 
-//! The local model provider: brain's Qwen3 stack, linked in-process.
+//! The local model provider: brain's chat pipeline, linked in-process.
 //!
 //! sven's [`ModelProvider`] seam is what remote providers (OpenAI,
 //! Anthropic, OpenRouter) hang off; this module hangs a LOCAL model off the
 //! same seam, so the loop agent runs the same engine the wire providers do
 //! (same tool loop, same event stream, same usage accounting) with no HTTP
 //! hop and no dependency on a separately running, separately versioned
-//! `brain serve`: Splinter is built against the brain crates it links,
-//! and loads weights and adapters directly from disk at startup.
+//! `brain serve`: Splinter is built against the brain SDK it links, and
+//! loads weights and adapters directly from disk at startup.
 //!
-//! The generation path is the one brain's own serving uses for a single
-//! sequence: chat-template render (`qwen3::chat`), KV-cached decode
-//! (`qwen3::sample`), tool-call scanning (`ChatScanner` via `SeqState`).
-//! A trained LoRA adapter is folded into the base tensors before the model
-//! is built (`qwen3::lora::fold_adapter_into`), the same fold
-//! `qwen3::eval::score_chat` uses, so a served adapter is numerically the
-//! model it was trained to be.
+//! The generation is [`brain::ChatPipeline`]'s: the chat template, tool
+//! schemas, KV-cached decode, chunked prefill, the reasoning and tool-call
+//! scanner and cooperative cancellation are brain's, the same functions its
+//! served chat endpoint runs. A LoRA adapter is folded into the base at load
+//! by brain, the fold its held-out scorer uses, so a served adapter is
+//! numerically the model it was trained to be. This module maps sven's
+//! request onto a [`brain::ChatRequest`] and the reply back onto sven's
+//! event stream.
 
-mod generate;
+mod events;
 mod request;
 
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
-use capability::CancelToken;
-use checkpoint::weightio::WeightReader;
-use data::qwen_tokenizer::QwenBpe;
-use data::tokenizer::Tokenizer;
-use qwen3::lora;
-use qwen3::model::Qwen;
+use brain::{CancelToken, ChatPipeline, TextGenerationPipeline};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 
-use generate::{events_from, generate_once, Generation};
-use request::invocation_from;
+use events::events_from;
+use request::{chat_request, Sampling};
 
 /// Sampling defaults for agent work, applied per request. Low temperature:
 /// an agent is executing a procedure, not writing prose; the small models
 /// this provider serves drift into repetition well before they drift into
 /// creativity at higher temperatures. The generation cap is bounded to what
 /// one agentic step needs - a completion that has not concluded within a few
-/// hundred tokens is looping, and at this hardware's measured decode rate a
-/// larger cap would spend an entire attempt budget on one never-ending
-/// generation.
-const DEFAULT_MAX_NEW_TOKENS: usize = 512;
-const DEFAULT_TEMPERATURE: f64 = 0.2;
+/// hundred tokens is looping, and a larger cap would let one never-ending
+/// generation spend an entire attempt budget.
+const AGENT_SAMPLING: Sampling = Sampling {
+    max_new_tokens: 512,
+    temperature: 0.2,
+    top_k: 20,
+};
 
-/// Prefill chunk size, in prompt tokens. Prefill runs in chunks of this many
-/// tokens so a cancellation lands within one chunk instead of after the
-/// whole prompt: at this device's measured prefill rate a 5000-token agent
-/// prompt is minutes of one uninterruptible device wait when prefilled in a
-/// single call, which is what hung an abandoned timeout run until it
-/// finished - and made the process exit under it crash. 512 chunks keep the
-/// extra readbacks noise against the per-chunk compute while bounding the
-/// cancellation latency to well under half a minute.
-const PREFILL_CHUNK_TOKENS: usize = 512;
-
-/// A loaded Qwen3 model (optionally with a folded LoRA adapter) plus its
-/// tokenizer, ready to complete. One sequence decodes at a time - the model
-/// itself carries the KV cache across a generation - so requests serialize
-/// behind a lock; that is the shape of a single-user local agent, not a
-/// serving fleet.
+/// A loaded chat model (optionally with a folded LoRA adapter), ready to
+/// complete. One sequence decodes at a time - the model carries its KV
+/// cache across a generation - so requests serialize behind a lock; that is
+/// the shape of a single-user local agent, not a serving fleet.
 pub struct LocalQwen {
-    model: Arc<Mutex<Qwen>>,
-    head: Arc<Vec<f32>>,
-    tok: Arc<QwenBpe>,
-    eos: Arc<Vec<u32>>,
+    pipeline: Arc<Mutex<ChatPipeline>>,
     model_name: String,
-    max_new_tokens: usize,
-    temperature: f64,
-    /// Inline context budget: the KV cache is sized for exactly this many
-    /// tokens, so a prompt plus its generation must fit inside it.
-    context_tokens: u32,
     /// The in-flight generation's cancel token, if one is running. The
     /// runner arms it - through [`Self::stop_generation`] - when the attempt
     /// ends before the turn does, so a decode stops within one prefill chunk
@@ -97,10 +77,12 @@ pub struct LocalQwen {
 pub struct LocalWeights {
     /// Checkpoint directory (or file) - the same layout brain's model store
     /// uses. A directory resolves to the checkpoint inside it.
-    pub base: std::path::PathBuf,
-    /// Optional LoRA adapter file, folded in at load.
-    pub adapter: Option<std::path::PathBuf>,
-    /// Inline context budget (tokens).
+    pub base: PathBuf,
+    /// Optional LoRA adapter file (or a promotion pointer naming one),
+    /// folded in at load.
+    pub adapter: Option<PathBuf>,
+    /// Inline context budget (tokens): the KV cache is built for exactly
+    /// this many, so a prompt plus its generation must fit inside it.
     pub context_tokens: u32,
 }
 
@@ -111,60 +93,26 @@ impl LocalQwen {
     pub fn load(weights: &LocalWeights, model_name: &str) -> anyhow::Result<Self> {
         let base = resolve_base(&weights.base)
             .with_context(|| format!("resolving weights at {}", weights.base.display()))?;
-        let base = base.to_string_lossy().into_owned();
-        let reader = WeightReader::open(&base).map_err(|e| anyhow::anyhow!("{base}: {e}"))?;
-        // Tokenizer precedence, matching brain's own resident loader: an
-        // explicit sibling tokenizer.json wins; a GGUF carries one embedded.
-        let tokenizer_path = weights.base.join("tokenizer.json");
-        let tok = if tokenizer_path.is_file() {
-            let path = tokenizer_path.to_string_lossy().into_owned();
-            QwenBpe::from_file(&path).map_err(|e| anyhow::anyhow!("{path}: {e}"))?
-        } else if let Some(gt) = reader.tokenizer() {
-            QwenBpe::from_gguf(&gt)
-                .map_err(|e| anyhow::anyhow!("loading tokenizer from GGUF metadata: {e}"))?
-        } else {
-            anyhow::bail!(
-                "no tokenizer: expected {} beside the checkpoint",
-                tokenizer_path.display()
-            )
-        };
-        let eos = tok
-            .encode("<|im_end|>")
-            .first()
-            .copied()
-            .map(|t| vec![t])
-            .unwrap_or_default();
-
-        let ctx = weights.context_tokens.max(1);
-        // Adapter serving is the `from_tensors_decode` path - the fold the
-        // qwen3 crate documents for exactly this. Base-only stays on the
-        // mmap streaming load, which never materializes the whole model on
-        // the host.
-        let model = if let Some(adapter) = &weights.adapter {
-            let adapter = resolve_adapter_file(adapter)?;
-            let adapter = adapter.to_string_lossy().into_owned();
-            let mut tensors = checkpoint::load(&base).into_by_role("");
-            lora::fold_adapter_into(&mut tensors, &adapter)
-                .map_err(|e| anyhow::anyhow!("folding adapter {adapter}: {e}"))?;
-            let mut cfg = qwen3::config::QwenConfig::from_json(&reader.config());
-            cfg.lora = None;
-            Qwen::from_tensors_decode(cfg, &tensors, ctx)
-        } else {
-            Qwen::from_reader_decode(&reader, ctx)
-        };
-        // The (tied) LM head is applied host-side by the sampler; read it
-        // once here, off the built model, so both load paths - including the
-        // adapter fold - go through one head derivation.
-        let head = model.read_weight(model.cfg.head_weight());
+        let mut builder =
+            TextGenerationPipeline::builder(utf8(&base)?).capacity(weights.context_tokens.max(1));
+        // A brain-format checkpoint carries no tokenizer; the one beside it
+        // is the one it was trained with. A GGUF embeds its own.
+        if let Some(tokenizer) = base
+            .parent()
+            .map(|dir| dir.join("tokenizer.json"))
+            .filter(|path| path.is_file())
+        {
+            builder = builder.tokenizer(utf8(&tokenizer)?);
+        }
+        if let Some(adapter) = &weights.adapter {
+            builder = builder.adapter(utf8(&resolve_adapter_file(adapter)?)?);
+        }
+        let pipeline = builder
+            .load()
+            .map_err(|e| anyhow::anyhow!("loading {}: {e}", base.display()))?;
         Ok(Self {
-            model: Arc::new(Mutex::new(model)),
-            head: Arc::new(head),
-            tok: Arc::new(tok),
-            eos: Arc::new(eos),
+            pipeline: Arc::new(Mutex::new(ChatPipeline::from(pipeline))),
             model_name: model_name.to_string(),
-            max_new_tokens: DEFAULT_MAX_NEW_TOKENS,
-            temperature: DEFAULT_TEMPERATURE,
-            context_tokens: ctx,
             in_flight: Arc::new(Mutex::new(None)),
             live: Arc::new(AtomicUsize::new(0)),
         })
@@ -173,7 +121,7 @@ impl LocalQwen {
     /// Cancels the in-flight generation, if any, and waits up to `grace` for
     /// it to actually stop. The runner calls this on a raced attempt end -
     /// timeout, interrupt - so the process exits AFTER the device is quiet:
-    /// exiting under a live prefill or decode crashed the process instead of
+    /// exiting under a live prefill or decode crashes the process instead of
     /// ending it. Returns whether every generation has stopped; on `false`
     /// the caller should treat the exit as best-effort (the generation is
     /// cancelling and will stop, just not inside the grace window).
@@ -195,12 +143,18 @@ impl LocalQwen {
     }
 }
 
+/// `path` as the UTF-8 string brain's loaders take, or an error naming it.
+fn utf8(path: &Path) -> anyhow::Result<&str> {
+    path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("{} is not valid UTF-8", path.display()))
+}
+
 /// The adapter to fold: `--adapter` names either a LoRA safetensors file
 /// directly or the loop's own promotion pointer (`train`'s `adapter.json`,
 /// which names the currently promoted adapter). Accepting the pointer is
 /// the whole point of writing it: a serving invocation keeps working as
 /// adapters are re-trained, without being rewritten per promotion.
-fn resolve_adapter_file(specified: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
+fn resolve_adapter_file(specified: &Path) -> anyhow::Result<PathBuf> {
     if specified.extension().and_then(|e| e.to_str()) != Some("json") {
         return Ok(specified.to_path_buf());
     }
@@ -218,7 +172,7 @@ fn resolve_adapter_file(specified: &std::path::Path) -> anyhow::Result<std::path
                 specified.display()
             )
         })?;
-    let target = std::path::PathBuf::from(target);
+    let target = PathBuf::from(target);
     anyhow::ensure!(
         target.is_file(),
         "adapter pointer {} names {} which does not exist",
@@ -230,7 +184,7 @@ fn resolve_adapter_file(specified: &std::path::Path) -> anyhow::Result<std::path
 
 /// A directory pointing at a checkpoint resolves to the checkpoint inside
 /// it; a file passes through. Mirrors brain's own `resolve_base`.
-pub fn resolve_base(specified: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
+pub fn resolve_base(specified: &Path) -> anyhow::Result<PathBuf> {
     if specified.is_file() {
         return Ok(specified.to_path_buf());
     }
@@ -259,74 +213,57 @@ impl ModelProvider for LocalQwen {
         &self,
         req: CompletionRequest,
     ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-        // A caller may ask for more output than the default (explore wants
-        // one WHOLE JSON object per section). Give it all the room the KV
-        // cache allows: clamped here, where the context size is known, so a
-        // big ask degrades to "every token the engine can still hold"
-        // instead of failing generate_once's prompt+max_new check.
-        let mut bounded = req;
-        if let Some(n) = bounded.max_output_tokens_override {
-            bounded.max_output_tokens_override = Some(n.min(self.context_tokens));
-        }
-        let invocation = invocation_from(&bounded, self.max_new_tokens, self.temperature)?;
-        // Generation owns the model's KV cache; hold the lock across the
-        // whole decode, off the async runtime's threads. The Arcs make the
-        // generation closure `'static` without copying the (hundreds-of-MB)
-        // head per request.
-        let (model, head, tok, eos) = (
-            Arc::clone(&self.model),
-            Arc::clone(&self.head),
-            Arc::clone(&self.tok),
-            Arc::clone(&self.eos),
-        );
-        let ctx = self.context_tokens;
+        let request = chat_request(&req, &AGENT_SAMPLING);
+        let pipeline = Arc::clone(&self.pipeline);
         let (tx, rx) = tokio::sync::mpsc::channel(16);
         let cancel = CancelToken::armed();
         // Register this generation so a raced attempt end can stop it
         // through `stop_generation`, and account it in `live` for that
-        // method's bounded wait.
-        if let Some(slot) = self
-            .in_flight
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
+        // method's bounded wait. A generation still registered is
+        // superseded: this request would queue behind it on the lock.
         {
-            slot.cancel();
+            let mut slot = self.in_flight.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(previous) = slot.as_ref() {
+                previous.cancel();
+            }
+            *slot = Some(cancel.clone());
         }
-        *self.in_flight.lock().unwrap_or_else(|e| e.into_inner()) = Some(cancel.clone());
         self.live.fetch_add(1, Ordering::SeqCst);
         let live = Arc::clone(&self.live);
         // Generation runs on an OS thread the async runtime does not own and
         // never joins. A `spawn_blocking` task would make the runtime's
         // shutdown wait for a decode to run to its cap - an abandoned turn
-        // (timeout, interrupt) hung the process for minutes inside
+        // (timeout, interrupt) would hang the process inside
         // `Runtime::drop`. Here an abandoned stream is what arms the cancel:
         // its receiver is gone, the next send fails, and the decode stops at
-        // the next step boundary. The runner additionally calls
-        // `stop_generation` before exiting, so the device is quiet - not
-        // merely abandoned - when the process ends.
-        std::thread::Builder::new()
+        // the next token. The runner additionally calls `stop_generation`
+        // before exiting, so the device is quiet - not merely abandoned -
+        // when the process ends.
+        let spawned = std::thread::Builder::new()
             .name("loop-generate".to_string())
             .spawn(move || {
                 // A device error surfaces as a panic (brain's backend reports
                 // wgpu errors that way); catch it here so it reaches the
                 // consumer as a failed stream instead of a dead thread.
                 let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let model = model
+                    let pipeline = pipeline
                         .lock()
-                        .map_err(|e| anyhow::anyhow!("model lock poisoned: {e}"))?;
-                    let gen = Generation {
-                        head: &head,
-                        tok: &tok,
-                        eos: &eos,
-                        context_tokens: ctx,
-                        tx: &tx,
-                        cancel: &cancel,
-                    };
-                    generate_once(&model, &invocation, &gen)
+                        .map_err(|e| anyhow::anyhow!("chat pipeline lock poisoned: {e}"))?;
+                    pipeline
+                        .generate_stream(&request, &cancel, |delta| {
+                            let Some(event) = events::delta_event(delta) else {
+                                return;
+                            };
+                            // A failed send means the consumer is gone - the
+                            // turn was abandoned above this stream - so stop.
+                            if tx.blocking_send(Ok(event)).is_err() {
+                                cancel.cancel();
+                            }
+                        })
+                        .map_err(|e| anyhow::anyhow!("{e}"))
                 }));
                 let tail = match run {
-                    Ok(Ok(outcome)) => events_from(outcome),
+                    Ok(Ok(response)) => events_from(response),
                     Ok(Err(e)) => vec![Err(anyhow::anyhow!("generation failed: {e:#}"))],
                     Err(panic) => vec![Err(anyhow::anyhow!(
                         "device panic during generation: {}",
@@ -334,22 +271,27 @@ impl ModelProvider for LocalQwen {
                     ))],
                 };
                 for event in tail {
-                    let _ = tx.blocking_send(event);
+                    if tx.blocking_send(event).is_err() {
+                        break;
+                    }
                 }
                 // Drop the live count - `stop_generation`'s wait condition.
                 // The slot itself keeps the (now-finished) token: cancelling
                 // a finished generation is a no-op, and the next request
                 // replaces the slot wholesale.
                 live.fetch_sub(1, Ordering::SeqCst);
-            })
-            .map_err(|e| anyhow::anyhow!("spawning the generation thread: {e}"))?;
+            });
+        if let Err(e) = spawned {
+            self.live.fetch_sub(1, Ordering::SeqCst);
+            anyhow::bail!("spawning the generation thread: {e}");
+        }
         Ok(Box::pin(Events(rx)))
     }
 }
 
 /// The generation thread's events as sven's `ResponseStream`: the receiving
 /// half of the channel the decode streams through. Dropping it is the
-/// abandon signal - the sender sees a failed send and arms the cancel token.
+/// abandon signal - the sender sees a failed send and fires the cancel token.
 struct Events(tokio::sync::mpsc::Receiver<anyhow::Result<ResponseEvent>>);
 
 impl futures::Stream for Events {

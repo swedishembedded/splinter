@@ -28,8 +28,8 @@ pub async fn complete_text(provider: &dyn ModelProvider, prompt: &str) -> anyhow
         // such a turn at `MaxTokens` with zero visible text. One section
         // asking for EVERY fact needs room for the reasoning AND the
         // object, so the completion carries its own cap. The local
-        // provider ignores the override (its 512-token budget and
-        // context check are its own), so this stays remote-only.
+        // provider honours it up to what its context leaves after the
+        // prompt.
         max_output_tokens_override: Some(32_768),
         // Observed drift: a full-sheet extraction prompt once drew a
         // markdown answer despite the JSON-only instruction. Drivers that

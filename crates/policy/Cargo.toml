@@ -12,12 +12,6 @@ publish.workspace = true
 [dependencies]
 sven-sdk = { workspace = true }
 brain = { workspace = true }
-brain-qwen3 = { workspace = true }
-brain-data = { workspace = true }
-brain-checkpoint = { workspace = true }
-brain-capability = { workspace = true }
-brain-model = { workspace = true }
-brain-gpu-core = { workspace = true }
 splinter-lab = { workspace = true }
 
 anyhow = { workspace = true }

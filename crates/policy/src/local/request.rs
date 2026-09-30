@@ -7,105 +7,117 @@
 // provider abstractions, you can procure our services by sending an email
 // to info@swedishembedded.com.
 
-//! sven's completion request as the invocation brain's chat parser reads:
-//! OpenAI-shaped messages and tools, the output budget and sampling.
+//! sven's completion request as a [`brain::ChatRequest`]: typed messages
+//! and tools, the output budget and sampling.
+//!
+//! A request's `response_format` has no counterpart: brain's chat pipeline
+//! has no constrained decoding, and sven's contract is that a driver which
+//! cannot constrain the reply ignores the field while the caller post-parses.
 
-use anyhow::Context;
-use capability::Invocation;
-use sven_sdk::model::{CompletionRequest, ContentPart, Message, MessageContent, Role, ToolSchema};
+use brain::chat::{ToolCall, ToolSchema};
+use brain::{ChatMessage, ChatRequest};
+use sven_sdk::model::{CompletionRequest, ContentPart, Message, MessageContent, Role};
 
-/// Top-k for agent work: see the sampling defaults in the parent module.
-const DEFAULT_TOP_K: i64 = 20;
+/// The sampling a provider applies to every request.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Sampling {
+    /// Generation cap when the request names none.
+    pub max_new_tokens: u32,
+    pub temperature: f32,
+    pub top_k: u32,
+}
 
-/// Maps sven's request onto the invocation brain's chat parser reads. The
-/// message/tool shapes are the OpenAI wire shapes brain's
-/// `parse_chat_messages`/`parse_tools` accept - sven's types are serialized
-/// into those shapes rather than re-invented here.
-pub(super) fn invocation_from(
-    req: &CompletionRequest,
-    max_new: usize,
-    temperature: f64,
-) -> anyhow::Result<Invocation> {
-    // The request's output budget is a contract: a caller asking for more
-    // than the default (explore wants one WHOLE JSON object per section)
-    // must get it. complete() clamps the ask to the KV cache first; what
-    // survives to here is what the engine will be told.
-    let max_new = req
-        .max_output_tokens_override
-        .map_or(max_new, |n| n as usize);
-    let messages: Vec<serde_json::Value> = req.messages.iter().map(message_json).collect();
-    let tools: Vec<serde_json::Value> = req.tools.iter().map(tool_json).collect();
-    let mut inv = Invocation::new();
-    if !messages.is_empty() {
-        inv = inv.set(
-            "messages",
-            serde_json::Value::String(
-                serde_json::to_string(&messages).context("serializing messages")?,
-            ),
-        );
-    }
-    if !tools.is_empty() {
-        inv = inv.set(
-            "tools",
-            serde_json::Value::String(serde_json::to_string(&tools).context("serializing tools")?),
-        );
-    }
-    inv = inv
-        .set("max_new", serde_json::json!(max_new))
-        .set("temp", serde_json::json!(temperature))
-        .set("top_k", serde_json::json!(DEFAULT_TOP_K))
+/// Maps sven's request onto brain's. The output budget is the request's own
+/// when it names one - a caller asking for more than the default (explore
+/// wants one WHOLE JSON object per section) must get it - and brain bounds
+/// it by what the prompt leaves of the context, so a big ask degrades to
+/// "every token the engine can still hold" rather than failing.
+pub(super) fn chat_request(req: &CompletionRequest, sampling: &Sampling) -> ChatRequest {
+    ChatRequest::new(chat_messages(&req.messages))
+        .tools(req.tools.iter().map(tool_schema).collect())
+        .max_tokens(output_budget(req, sampling))
+        .temperature(sampling.temperature)
+        .top_k(sampling.top_k)
         // Agent work wants the answer, not a reasoning preamble it cannot
         // use as tool input.
-        .set("enable_thinking", serde_json::json!(false));
-    Ok(inv)
+        .thinking(false)
 }
 
-/// One sven message as brain's chat parser reads it. A tool result rides in
-/// as `role: "tool"` with its call id; an assistant tool request rides out
-/// as `tool_calls`, so the template renders the exchange the model itself
-/// produced.
-#[must_use]
-fn message_json(message: &Message) -> serde_json::Value {
-    let role = match message.role {
-        Role::System => "system",
-        Role::User => "user",
-        Role::Assistant => "assistant",
-        Role::Tool => "tool",
-    };
-    let mut value = serde_json::json!({
-        "role": role,
-        "content": content_text(message),
-    });
-    match &message.content {
-        MessageContent::ToolCall {
-            tool_call_id,
-            function,
-        } => {
-            value["tool_calls"] = serde_json::json!([{
-                "id": tool_call_id,
-                "function": {"name": function.name, "arguments": function.arguments},
-            }]);
-            value["content"] = serde_json::Value::String(String::new());
+/// The most tokens the reply may take: the request's override, else the
+/// provider default.
+fn output_budget(req: &CompletionRequest, sampling: &Sampling) -> u32 {
+    req.max_output_tokens_override
+        .unwrap_or(sampling.max_new_tokens)
+}
+
+/// sven's messages as brain's conversation. sven records one assistant turn
+/// as its text followed by one message per tool call; those fold back into
+/// the single assistant turn the model produced, so the template renders the
+/// exchange as the model wrote it - and as training renders it.
+fn chat_messages(messages: &[Message]) -> Vec<ChatMessage> {
+    let mut out: Vec<ChatMessage> = Vec::with_capacity(messages.len());
+    // The assistant turn being assembled: its text and the calls so far.
+    let mut assistant: Option<(String, Vec<ToolCall>)> = None;
+    let flush = |out: &mut Vec<ChatMessage>, turn: Option<(String, Vec<ToolCall>)>| {
+        if let Some((text, calls)) = turn {
+            out.push(ChatMessage::assistant(text).with_tool_calls(calls));
         }
-        MessageContent::ToolResult {
-            tool_call_id,
-            content,
-        } => {
-            value["tool_call_id"] = serde_json::json!(tool_call_id);
-            if let Some(text) = content.as_text() {
-                value["content"] = serde_json::json!(text);
+    };
+    for message in messages {
+        match (&message.role, &message.content) {
+            (
+                Role::Assistant,
+                MessageContent::ToolCall {
+                    tool_call_id,
+                    function,
+                },
+            ) => {
+                let call = ToolCall {
+                    id: tool_call_id.clone(),
+                    name: function.name.clone(),
+                    arguments: function.arguments.clone(),
+                };
+                assistant
+                    .get_or_insert_with(|| (String::new(), Vec::new()))
+                    .1
+                    .push(call);
+            }
+            (Role::Assistant, _) => {
+                flush(&mut out, assistant.take());
+                assistant = Some((content_text(&message.content), Vec::new()));
+            }
+            (role, content) => {
+                flush(&mut out, assistant.take());
+                out.push(match (role, content) {
+                    (
+                        _,
+                        MessageContent::ToolResult {
+                            tool_call_id,
+                            content,
+                        },
+                    ) => ChatMessage::tool(
+                        tool_call_id.clone(),
+                        // sven's SDK names no type for a result's parts, so
+                        // only a plain-text result carries text here.
+                        content.as_text().unwrap_or_default(),
+                    ),
+                    (Role::System, _) => ChatMessage::system(content_text(content)),
+                    // A tool message without a result shape has no call id
+                    // to pair it with; it keeps its role.
+                    (Role::Tool, _) => ChatMessage::tool(String::new(), content_text(content)),
+                    _ => ChatMessage::user(content_text(content)),
+                });
             }
         }
-        _ => {}
     }
-    value
+    flush(&mut out, assistant);
+    out
 }
 
-/// The message's text content: plain text verbatim, mixed parts joined. A
-/// tool-result part array keeps its text rather than disappearing.
-#[must_use]
-fn content_text(message: &Message) -> String {
-    match &message.content {
+/// A message's text: plain text verbatim, mixed parts' text joined. Parts
+/// the text model cannot read (images, audio) are left out.
+fn content_text(content: &MessageContent) -> String {
+    match content {
         MessageContent::Text(text) => text.clone(),
         MessageContent::ContentParts(parts) => parts
             .iter()
@@ -113,133 +125,137 @@ fn content_text(message: &Message) -> String {
                 ContentPart::Text { text } => Some(text.as_str()),
                 _ => None,
             })
-            .collect::<Vec<_>>()
-            .join(""),
-        _ => String::new(),
+            .collect(),
+        MessageContent::ToolCall { .. } | MessageContent::ToolResult { .. } => String::new(),
     }
 }
 
-/// One sven tool schema as an OpenAI-shaped function object, the shape
-/// brain's tool parser accepts.
-#[must_use]
-fn tool_json(tool: &ToolSchema) -> serde_json::Value {
-    serde_json::json!({
-        "type": "function",
-        "function": {
-            "name": tool.name,
-            "description": tool.description,
-            "parameters": tool.parameters,
-        },
-    })
+/// One sven tool schema as brain's.
+fn tool_schema(tool: &sven_sdk::model::ToolSchema) -> ToolSchema {
+    ToolSchema::new(&tool.name, &tool.description, tool.parameters.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qwen3::chat;
     use sven_sdk::model::{FunctionCall, ToolResultContent};
 
     fn message(role: Role, content: MessageContent) -> Message {
         Message { role, content }
     }
 
-    /// The provider's default generation cap, as the parent module sets it.
-    const DEFAULT_MAX_NEW_TOKENS: usize = super::super::DEFAULT_MAX_NEW_TOKENS;
+    fn user(text: &str) -> Message {
+        message(Role::User, MessageContent::Text(text.into()))
+    }
+
+    const SAMPLING: Sampling = super::super::AGENT_SAMPLING;
 
     /// A request's output budget is a contract with the caller: `explore`
     /// asks for 32k because a section's facts reply must arrive as ONE
     /// complete JSON object - a reply truncated at the provider's own
     /// default mid-string is a parse failure and the section's facts are
     /// lost (observed: "EOF while parsing a string"). The override must
-    /// reach the engine, clamped to what the KV cache can hold.
+    /// reach the engine; brain bounds it by the context.
     #[test]
-    fn a_requests_output_budget_reaches_the_invocation() {
+    fn a_requests_output_budget_overrides_the_provider_default() {
         let req = CompletionRequest {
-            messages: vec![message(Role::User, MessageContent::Text("q".into()))],
+            messages: vec![user("q")],
             max_output_tokens_override: Some(32_768),
             ..CompletionRequest::default()
         };
-        let inv = invocation_from(&req, DEFAULT_MAX_NEW_TOKENS, 0.7).unwrap();
         assert_eq!(
-            inv.params.get("max_new"),
-            Some(&serde_json::json!(32_768)),
+            output_budget(&req, &SAMPLING),
+            32_768,
             "the request's output budget must override the provider default"
         );
         // No override: the provider default stands.
         let plain = CompletionRequest {
-            messages: vec![message(Role::User, MessageContent::Text("q".into()))],
+            messages: vec![user("q")],
             ..CompletionRequest::default()
         };
-        let inv = invocation_from(&plain, DEFAULT_MAX_NEW_TOKENS, 0.7).unwrap();
-        assert_eq!(
-            inv.params.get("max_new"),
-            Some(&serde_json::json!(DEFAULT_MAX_NEW_TOKENS))
-        );
+        assert_eq!(output_budget(&plain, &SAMPLING), SAMPLING.max_new_tokens);
     }
 
+    /// The whole tool exchange reaches the prompt brain renders: the
+    /// assistant's text and call as one turn, the result paired with it,
+    /// and the tools on offer.
     #[test]
-    fn sven_messages_map_onto_the_openai_shapes_brains_parser_reads() {
-        let user = message(Role::User, MessageContent::Text("do the thing".into()));
-        let assistant = message(
-            Role::Assistant,
-            MessageContent::ToolCall {
-                tool_call_id: "call_1".into(),
-                function: FunctionCall {
-                    name: "write".into(),
-                    arguments: r#"{"path":"a.txt"}"#.into(),
-                },
-            },
-        );
-        let tool = message(
-            Role::Tool,
-            MessageContent::ToolResult {
-                tool_call_id: "call_1".into(),
-                content: ToolResultContent::Text("wrote 5 bytes".into()),
-            },
-        );
-        let mapped: Vec<serde_json::Value> = [&user, &assistant, &tool]
-            .iter()
-            .map(|m| message_json(m))
-            .collect();
-        assert_eq!(mapped[0]["role"], "user");
-        assert_eq!(mapped[1]["tool_calls"][0]["function"]["name"], "write");
-        assert_eq!(mapped[2]["role"], "tool");
-        assert_eq!(mapped[2]["tool_call_id"], "call_1");
-        assert_eq!(mapped[2]["content"], "wrote 5 bytes");
-        // Round-trip through brain's own parser - the consumer this feeds.
-        let raw = serde_json::to_string(&mapped).unwrap();
-        let parsed = chat::parse_chat_messages(&raw, None).unwrap();
-        assert_eq!(parsed.len(), 3);
-        assert_eq!(parsed[1].tool_calls[0].name, "write");
-        assert_eq!(parsed[1].tool_calls[0].arguments, r#"{"path":"a.txt"}"#);
-        assert_eq!(parsed[2].role, data::qwen_chat::Role::Tool);
-        assert_eq!(parsed[2].tool_call_id.as_deref(), Some("call_1"));
-    }
-
-    #[test]
-    fn sven_tool_schemas_map_onto_openai_function_objects() {
-        let tool = ToolSchema {
-            name: "read".into(),
-            description: "read a file".into(),
-            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}}}),
-            is_mcp: false,
+    fn a_tool_exchange_renders_as_the_model_produced_it() {
+        let req = CompletionRequest {
+            messages: vec![
+                message(Role::System, MessageContent::Text("be terse".into())),
+                user("do the thing"),
+                message(Role::Assistant, MessageContent::Text("writing it".into())),
+                message(
+                    Role::Assistant,
+                    MessageContent::ToolCall {
+                        tool_call_id: "call_1".into(),
+                        function: FunctionCall {
+                            name: "write".into(),
+                            arguments: r#"{"path":"a.txt"}"#.into(),
+                        },
+                    },
+                ),
+                message(
+                    Role::Tool,
+                    MessageContent::ToolResult {
+                        tool_call_id: "call_1".into(),
+                        content: ToolResultContent::Text("wrote 5 bytes".into()),
+                    },
+                ),
+            ],
+            tools: vec![sven_sdk::model::ToolSchema {
+                name: "read".into(),
+                description: "read a file".into(),
+                parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string"}}}),
+                is_mcp: false,
+            }],
+            ..CompletionRequest::default()
         };
-        let mapped = tool_json(&tool);
-        // The tools param is the whole array, as the invocation builds it.
-        let raw = serde_json::to_string(&vec![mapped]).unwrap();
-        let parsed = chat::parse_tools(Some(&raw)).unwrap();
-        assert_eq!(parsed.len(), 1);
-        assert!(parsed[0].contains("read"));
+        let messages = chat_messages(&req.messages);
+        assert_eq!(
+            messages.len(),
+            4,
+            "system, user, one assistant turn, tool result: {messages:?}"
+        );
+        assert_eq!(
+            messages[2],
+            ChatMessage::assistant("writing it").with_tool_calls(vec![ToolCall {
+                id: "call_1".into(),
+                name: "write".into(),
+                arguments: r#"{"path":"a.txt"}"#.into(),
+            }])
+        );
+        assert_eq!(messages[3], ChatMessage::tool("call_1", "wrote 5 bytes"));
+
+        // Rendered by brain's own template - the consumer this feeds.
+        let prompt = chat_request(&req, &SAMPLING).render_prompt().unwrap();
+        for expected in [
+            "be terse",
+            "do the thing",
+            "writing it",
+            r#""name": "write""#,
+            "a.txt",
+            "wrote 5 bytes",
+            "read a file",
+        ] {
+            assert!(
+                prompt.contains(expected),
+                "{expected:?} missing from the prompt:\n{prompt}"
+            );
+        }
     }
 
     #[test]
     fn mixed_content_parts_keep_their_text() {
-        let message = message(
-            Role::User,
-            MessageContent::ContentParts(vec![ContentPart::Text {
+        let content = MessageContent::ContentParts(vec![
+            ContentPart::Text {
                 text: "see ".into(),
-            }]),
-        );
-        assert_eq!(content_text(&message), "see ");
+            },
+            ContentPart::Text {
+                text: "this".into(),
+            },
+        ]);
+        assert_eq!(content_text(&content), "see this");
     }
 }
