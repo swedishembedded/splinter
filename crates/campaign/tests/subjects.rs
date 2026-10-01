@@ -15,6 +15,8 @@
 //!   asked of another subject is a different question and is kept.
 //! * A task whose set records no subject is not reworded, since nothing
 //!   holds a rewording to what it is about.
+//! * A source shown with a question (`ask --open-book`) is shown under
+//!   what it is: output captured from a command names the command.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -23,10 +25,13 @@ mod common;
 
 use common::{scratch_context, Scripted};
 use serde_json::json;
+use splinter_campaign::ask::ask;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::tasks::{generate, Generation};
 use splinter_campaign::variants::{generate_variants, VariantsRequest};
+use splinter_store::clock::FixedClock;
+use splinter_store::source::{CapturedSource, Origin, PartContent};
 use splinter_store::tasks::{TaskEntry, TaskSet};
 use sven_sdk::CancelToken;
 
@@ -139,4 +144,39 @@ fn contradictory_answers_to_one_question_of_one_subject_are_left_out_of_the_set(
     .unwrap();
     assert_eq!(variants.tasks, 0);
     assert_eq!(variants.ineligible.get("no_subject"), Some(&1));
+}
+
+#[test]
+fn an_open_book_question_is_shown_which_command_printed_its_material() {
+    let policy = Scripted::new(|_| "It frobs verbosely.".into());
+    let prompts = policy.prompts.clone();
+    let (_scratch, ctx) = scratch_context("subjects-open-book", policy, false);
+    let captured = CapturedSource::new(
+        Origin::Command {
+            argv: vec!["frob".into(), "--help".into()],
+            cwd: "/work".into(),
+            exit_code: Some(0),
+            timed_out: false,
+            stdout_truncated: false,
+            stderr_truncated: false,
+        },
+        vec![PartContent {
+            name: "stdout".into(),
+            media_type: "text/plain".into(),
+            bytes: b"-v  frob verbosely\n".to_vec(),
+        }],
+        &FixedClock::new("2026-09-30T08:00:00.000Z"),
+    )
+    .unwrap();
+    let source = ctx.sources().put_source(&captured).unwrap();
+
+    ask(
+        &ctx,
+        "What does -v do in frob?",
+        Some(source.as_str()),
+        &ModelRef::policy_default(),
+    )
+    .unwrap();
+    let prompt = prompts.lock().unwrap().join("\n");
+    assert!(prompt.contains("--- `frob --help` stdout ---"), "{prompt}");
 }

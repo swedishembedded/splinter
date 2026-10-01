@@ -5,7 +5,9 @@
 //! closed-book by default, so the answer is what the model knows; with
 //! `--open-book` the named source's text is shown before the question, as
 //! a teacher is shown a task's grounding material
-//! ([`splinter_agent::solve::open_book_prompt`]).
+//! ([`splinter_agent::solve::open_book_prompt`]), each part under what the
+//! source is ([`SourceIdentity::label`]): output captured from a command
+//! says nothing of which program printed it.
 //!
 //! Every answer is recorded ([`crate::answers`]) with the model that gave
 //! it and, asked through `policy:<alias>`, the release the alias resolved
@@ -15,6 +17,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use splinter_agent::solve::{open_book_prompt, solve, SolveOptions};
+use splinter_knowledge::tasks::SourceIdentity;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::experience::{Environment, Task};
 use splinter_store::source::SourceId;
@@ -137,7 +140,9 @@ fn material(ctx: &Context, id: &SourceId) -> Result<Vec<String>, CampaignError> 
         .filter(|p| p.media_type.starts_with("text/"))
     {
         let bytes = store.read_blob(&part.content)?;
-        let piece = format!("--- {} ---\n{}", part.name, String::from_utf8_lossy(&bytes));
+        let text = String::from_utf8_lossy(&bytes);
+        let identity = SourceIdentity::of(&source.origin, &part.name, &text, &part.media_type);
+        let piece = format!("--- {} ---\n{text}", identity.label());
         bytes_shown += piece.len();
         if bytes_shown > MAX_OPEN_BOOK_BYTES {
             return Err(CampaignError::Refused(format!(

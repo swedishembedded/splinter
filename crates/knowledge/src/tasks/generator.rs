@@ -102,6 +102,26 @@ impl SourceIdentity {
         }
     }
 
+    /// The identity in one line: the name, the part when it is not the
+    /// name, and the version (`manual.md`, `` `tool --help` stdout ``,
+    /// `quark-q1 guide/manual.md at 3f2a9c1`).
+    #[must_use]
+    pub fn label(&self) -> String {
+        let mut label = match self.kind {
+            "command" => format!("`{}`", self.name),
+            _ => self.name.clone(),
+        };
+        if self.part != self.name {
+            label.push(' ');
+            label.push_str(&self.part);
+        }
+        if let Some(version) = &self.version {
+            label.push_str(" at ");
+            label.push_str(version);
+        }
+        label
+    }
+
     /// Every name the identity holds.
     pub(crate) fn names(&self) -> impl Iterator<Item = &str> {
         [Some(self.name.as_str()), Some(self.part.as_str())]
