@@ -40,6 +40,13 @@ pub enum Target {
     Record(RecordId),
     /// A content-addressed entity: a task instance, a state, a family.
     Entity(ContentId),
+    /// A span of an episode, on the episode's clock.
+    Span {
+        /// The episode.
+        episode: RecordId,
+        /// The span.
+        interval: super::stream::TimeRange,
+    },
 }
 
 /// Who evaluated, and with which version, so a bad evaluator can be

@@ -36,6 +36,7 @@ pub mod manifest;
 pub mod model;
 pub mod overlay;
 pub mod query;
+pub mod timeline;
 pub mod train;
 pub mod view;
 

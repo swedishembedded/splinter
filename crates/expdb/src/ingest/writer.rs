@@ -112,6 +112,11 @@ impl Writer {
         &mut self.blobs
     }
 
+    /// What the blob store has written so far.
+    pub fn blob_stats(&self) -> crate::blob::BlobStats {
+        self.blobs.stats()
+    }
+
     /// Buffers a record, sealing first if the buffer is full.
     pub fn push(&mut self, record: Record) -> Result<RecordId> {
         let id = record.id;

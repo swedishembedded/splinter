@@ -187,3 +187,200 @@ pub fn skill(name: &str) -> splinter_expdb::model::Skill {
         prerequisites: vec![],
     }
 }
+
+pub const SEC: i64 = 1_000_000_000;
+
+/// Deterministic bytes that do not compress away.
+pub fn noise(len: usize, seed: u64) -> Vec<u8> {
+    let mut state = seed | 1;
+    (0..len)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 24) as u8
+        })
+        .collect()
+}
+
+/// A robot making breakfast: synchronised video, audio, IMU and joint streams
+/// on two clocks, an instruction, actions, a contact that worked and one that
+/// did not, and a reward.
+pub struct RobotEpisode {
+    pub episode: RecordId,
+    pub experiment_clock: ContentId,
+    pub imu_clock: ContentId,
+    pub video: RecordId,
+    pub audio: RecordId,
+    pub imu: RecordId,
+    pub joints: RecordId,
+    pub audio_chunks: Vec<Vec<u8>>,
+}
+
+pub const AUDIO_HZ: f64 = 8000.0;
+pub const IMU_HZ: f64 = 200.0;
+pub const JOINT_HZ: f64 = 100.0;
+
+pub fn robot_episode(
+    c: &mut splinter_expdb::ingest::Collector,
+    label: &str,
+    seed: u64,
+) -> RobotEpisode {
+    use splinter_expdb::model::*;
+    let experiment_clock = c
+        .register_clock(&ClockDomain {
+            name: "experiment".into(),
+            description: String::new(),
+        })
+        .unwrap();
+    let imu_clock = c
+        .register_clock(&ClockDomain {
+            name: "imu-mcu".into(),
+            description: "robot MCU".into(),
+        })
+        .unwrap();
+    c.map_clock(ClockMapping {
+        source: imu_clock,
+        destination: experiment_clock,
+        src_ref_ns: 0,
+        dst_ref_ns: -SEC / 2,
+        slope: 1.0,
+        uncertainty_ns: 85_000,
+    })
+    .unwrap();
+    let episode = c
+        .start_episode(EpisodeKind::Interactive, label, experiment_clock)
+        .unwrap();
+
+    let video = c
+        .add_stream(
+            episode,
+            &StreamSpec::new(
+                "camera",
+                &ModalitySchema::builtin("video/rgb").unwrap(),
+                experiment_clock,
+            )
+            .rate(30.0),
+        )
+        .unwrap();
+    let audio = c
+        .add_stream(
+            episode,
+            &StreamSpec::new(
+                "mic",
+                &ModalitySchema::builtin("audio/pcm").unwrap(),
+                experiment_clock,
+            )
+            .rate(AUDIO_HZ),
+        )
+        .unwrap();
+    let imu = c
+        .add_stream(
+            episode,
+            &StreamSpec::new(
+                "imu",
+                &ModalitySchema::builtin("sensor/imu").unwrap(),
+                imu_clock,
+            )
+            .rate(IMU_HZ),
+        )
+        .unwrap();
+    let joints = c
+        .add_stream(
+            episode,
+            &StreamSpec::new(
+                "joints",
+                &ModalitySchema::builtin("robot/joint_state").unwrap(),
+                experiment_clock,
+            )
+            .rate(JOINT_HZ),
+        )
+        .unwrap();
+
+    let mut audio_chunks = Vec::new();
+    for s in 0..10i64 {
+        let whole = TimeRange::new(s * SEC, (s + 1) * SEC).unwrap();
+        c.add_chunk(episode, video, whole, 30, &noise(2_000, seed + s as u64))
+            .unwrap();
+        let pcm = noise(AUDIO_HZ as usize * 4, seed * 100 + s as u64);
+        c.add_chunk(episode, audio, whole, AUDIO_HZ as u64, &pcm)
+            .unwrap();
+        audio_chunks.push(pcm);
+        c.add_chunk(
+            episode,
+            joints,
+            whole,
+            JOINT_HZ as u64,
+            &noise(JOINT_HZ as usize * 28, seed + 7 * s as u64),
+        )
+        .unwrap();
+    }
+    // The IMU runs on its own clock, started half a second before the experiment.
+    for s in 0..12i64 {
+        let device = TimeRange::new(s * SEC, (s + 1) * SEC).unwrap();
+        c.add_chunk(
+            episode,
+            imu,
+            device,
+            IMU_HZ as u64,
+            &noise(IMU_HZ as usize * 24, seed + 13 * s as u64),
+        )
+        .unwrap();
+    }
+
+    let at = |ms: i64| ms * 1_000_000;
+    c.add_event(
+        episode,
+        Event::at("instruction", at(1_000), experiment_clock)
+            .payload(serde_json::json!({ "text": "pick up the cup" })),
+    )
+    .unwrap();
+    c.add_action(
+        episode,
+        ActionSegment::new(
+            ActionKind::Continuous,
+            "move_arm",
+            TimeRange::new(at(2_000), at(4_000)).unwrap(),
+            experiment_clock,
+        ),
+    )
+    .unwrap();
+    c.add_action(
+        episode,
+        ActionSegment::new(
+            ActionKind::Discrete,
+            "close_gripper",
+            TimeRange::new(at(3_400), at(3_700)).unwrap(),
+            experiment_clock,
+        ),
+    )
+    .unwrap();
+    c.add_event(
+        episode,
+        Event::at("contact", at(3_693), experiment_clock).value(1.0),
+    )
+    .unwrap();
+    c.add_event(episode, Event::at("lifted", at(4_200), experiment_clock))
+        .unwrap();
+    c.add_event(
+        episode,
+        Event::at("contact", at(7_200), experiment_clock).value(0.0),
+    )
+    .unwrap();
+    c.add_event(
+        episode,
+        Event::at("reward", at(9_900), experiment_clock).value(1.0),
+    )
+    .unwrap();
+    c.flush().unwrap();
+    RobotEpisode {
+        episode,
+        experiment_clock,
+        imu_clock,
+        video,
+        audio,
+        imu,
+        joints,
+        audio_chunks,
+    }
+}

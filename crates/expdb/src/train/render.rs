@@ -20,7 +20,7 @@ use crate::manifest::Snapshot;
 use crate::model::{Body, Content, Decision, Record, RecordKind};
 
 impl Snapshot {
-    fn blob_store(&self) -> Result<Arc<BlobStore>> {
+    pub(crate) fn blob_store(&self) -> Result<Arc<BlobStore>> {
         if let Some(found) = locked(&self.cache().blobs).as_ref() {
             return Ok(Arc::clone(found));
         }
@@ -30,13 +30,18 @@ impl Snapshot {
         Ok(store)
     }
 
-    fn entity(&self, id: &ContentId) -> Result<Option<RecordId>> {
+    pub(crate) fn entity(&self, id: &ContentId) -> Result<Option<RecordId>> {
         if let Some(found) = locked(&self.cache().entities).as_ref() {
             return Ok(found.get(id).copied());
         }
         let index = self.index()?;
         let mut map = HashMap::new();
-        for kind in [RecordKind::TaskDefinition, RecordKind::TaskInstance] {
+        for kind in [
+            RecordKind::TaskDefinition,
+            RecordKind::TaskInstance,
+            RecordKind::ModalitySchema,
+            RecordKind::ClockDomain,
+        ] {
             for record_id in index.by_kind(kind) {
                 if let Some(record) = self.get(record_id)? {
                     if let Some(entity) = record.body.entity_id()? {

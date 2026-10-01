@@ -13,6 +13,7 @@
 mod aggregator;
 mod collector;
 mod derive;
+mod episode;
 mod run;
 mod writer;
 

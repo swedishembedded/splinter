@@ -42,6 +42,7 @@ pub(crate) struct SnapshotCache {
     pub(crate) evaluations: Mutex<Option<Arc<crate::analyze::EvalSet>>>,
     pub(crate) blobs: Mutex<Option<Arc<crate::blob::BlobStore>>>,
     pub(crate) entities: Mutex<Option<Arc<HashMap<ContentId, RecordId>>>>,
+    pub(crate) timeline: Mutex<Option<Arc<crate::timeline::TimelineData>>>,
 }
 
 impl SnapshotCache {

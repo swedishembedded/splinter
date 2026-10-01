@@ -20,6 +20,10 @@ use super::interpret::{
     Evaluation, Experiment, ExperimentResult, ModelNode, Retraction, Skill, SkillEvidence,
     TrainingRun,
 };
+use super::stream::{
+    ActionSegment, ClockDomain, ClockMapping, Correspondence, Episode, Event, ModalitySchema,
+    Stream, StreamChunk, StreamOrigin,
+};
 use crate::id::RecordId;
 
 macro_rules! kinds {
@@ -53,6 +57,8 @@ kinds! {
     Decision = 6, Transition = 7, AttemptEnd = 8, Evaluation = 9, Retraction = 10,
     CounterfactualSet = 11, Skill = 12, SkillEvidence = 13, Credit = 14, Derivation = 15,
     Experiment = 16, ExperimentResult = 17, Dataset = 18, TrainingRun = 19, Model = 20,
+    ModalitySchema = 21, ClockDomain = 22, ClockMapping = 23, Episode = 24, Stream = 25, StreamChunk = 26,
+    Event = 27, ActionSegment = 28, Correspondence = 29,
 }
 
 /// What a record says.
@@ -106,6 +112,24 @@ pub enum Body {
     TrainingRun(TrainingRun),
     /// A model.
     Model(ModelNode),
+    /// A registered kind of sample.
+    ModalitySchema(ModalitySchema),
+    /// A source of timestamps.
+    ClockDomain(ClockDomain),
+    /// How two clocks relate.
+    ClockMapping(ClockMapping),
+    /// A stretch of synchronised experience.
+    Episode(Episode),
+    /// A stream of samples.
+    Stream(Stream),
+    /// A piece of a stream.
+    StreamChunk(StreamChunk),
+    /// Something that happened.
+    Event(Event),
+    /// An action over an interval.
+    ActionSegment(ActionSegment),
+    /// A claimed relationship between spans.
+    Correspondence(Correspondence),
 }
 
 impl Body {
@@ -133,6 +157,15 @@ impl Body {
             Body::Dataset(_) => RecordKind::Dataset,
             Body::TrainingRun(_) => RecordKind::TrainingRun,
             Body::Model(_) => RecordKind::Model,
+            Body::ModalitySchema(_) => RecordKind::ModalitySchema,
+            Body::ClockDomain(_) => RecordKind::ClockDomain,
+            Body::ClockMapping(_) => RecordKind::ClockMapping,
+            Body::Episode(_) => RecordKind::Episode,
+            Body::Stream(_) => RecordKind::Stream,
+            Body::StreamChunk(_) => RecordKind::StreamChunk,
+            Body::Event(_) => RecordKind::Event,
+            Body::ActionSegment(_) => RecordKind::ActionSegment,
+            Body::Correspondence(_) => RecordKind::Correspondence,
         }
     }
 
@@ -146,6 +179,9 @@ impl Body {
             | Body::Derivation(_)
             | Body::ExperimentResult(_) => Epistemic::Derived,
             Body::Skill(_) => Epistemic::Hypothesis,
+            Body::Stream(stream) if stream.origin == StreamOrigin::Derived => Epistemic::Derived,
+            Body::Event(event) => event.epistemic,
+            Body::Correspondence(_) => Epistemic::Annotation,
             _ => Epistemic::Fact,
         }
     }
