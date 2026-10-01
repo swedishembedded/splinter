@@ -84,6 +84,9 @@ pub enum Material {
 pub enum VerifierKind {
     /// Exact match with the reference under a normalisation.
     Formal,
+    /// The answer states the reference: contains it, as whole words, in a
+    /// bounded answer. For short facts a model answers in a sentence.
+    Stated,
     /// The task's executable checks run against the answer.
     Executable,
     /// The task's generated tests, admitted by mutation, run against it.
@@ -254,14 +257,14 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
 }
 
 fn builtin_kinds() -> Vec<TaskKind> {
-    use VerifierKind::{Consistency, Executable, Formal, Judged, MutationValidated};
+    use VerifierKind::{Consistency, Executable, Formal, Judged, MutationValidated, Stated};
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
         text(
             "recall",
             "Write up to {count} questions, each asking for one fact the sections state. The \
              reference is the fact, as short as it can be while complete.",
-            &[Formal, Judged],
+            &[Stated, Judged],
         ),
         text(
             "explain",

@@ -26,7 +26,7 @@ use splinter_lab::denoise::{FormalVerifier, KIND as DENOISE_KIND};
 use splinter_lab::verifiers::calibration::{CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION};
 use splinter_lab::verifiers::consistency::AgreementVerifier;
 use splinter_lab::verifiers::executable::ExecutableVerifier;
-use splinter_lab::verifiers::formal::ExactMatchVerifier;
+use splinter_lab::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifier};
 use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
@@ -45,6 +45,13 @@ pub const FORMAL_PRODUCER: &str = "splinter-lab/exact-match:lenient";
 
 /// The formal verifier's version: bumped with its normalisation.
 pub const FORMAL_VERSION: &str = "1";
+
+/// The producer of the stated-reference verifier's verdicts.
+pub const STATED_PRODUCER: &str = "splinter-lab/reference-stated:lenient";
+
+/// The stated-reference verifier's version: bumped with its normalisation
+/// or its bound on the answer's length.
+pub const STATED_VERSION: &str = "1";
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -156,6 +163,13 @@ pub(crate) fn verifiers_for(
                 Producer {
                     name: FORMAL_PRODUCER.into(),
                     version: FORMAL_VERSION.into(),
+                },
+                Normalisation::LENIENT,
+            ))),
+            VerifierKind::Stated => verifiers.push(Box::new(StatedReferenceVerifier::new(
+                Producer {
+                    name: STATED_PRODUCER.into(),
+                    version: STATED_VERSION.into(),
                 },
                 Normalisation::LENIENT,
             ))),

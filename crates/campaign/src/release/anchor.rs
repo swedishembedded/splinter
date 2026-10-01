@@ -145,7 +145,8 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, CampaignError> {
         let kind = parsed.kind.unwrap_or_else(|| DEFAULT_ANCHOR_KIND.into());
         let gradable = catalogue.get(&kind).is_some_and(|spec| {
             spec.environment == splinter_knowledge::tasks::SolverEnvironment::ClosedBook
-                && spec.verifiers.contains(&VerifierKind::Formal)
+                && (spec.verifiers.contains(&VerifierKind::Formal)
+                    || spec.verifiers.contains(&VerifierKind::Stated))
         });
         if !gradable {
             return Err(refuse(format!(
