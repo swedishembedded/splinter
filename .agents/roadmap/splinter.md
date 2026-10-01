@@ -115,3 +115,8 @@ the released adapter answers the same questions from plain `brain serve`.
    learning configuration and its wiring in the runtime builder. (The
    learning design notes that lived in sven and brain are already in
    `.agents/research/`.)
+7. **Experience graph database.** In progress: `crates/expdb` is built
+   standalone (blob packs, segments, manifests, ingest, indexes, queries,
+   training views, compaction). Open: replace `splinter-store` with it,
+   wire it into the campaign, decide where sources, tasks and run records
+   live, and remove the store.

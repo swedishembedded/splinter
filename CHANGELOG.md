@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`splinter-expdb`.** A new standalone crate for a versioned experience graph
+  database. It is not yet used by any other crate.
+
 ## [0.1.0] - 2026-10-01
 
 First release. Splinter is a learning agent with its own model: it is told

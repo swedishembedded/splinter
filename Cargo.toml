@@ -37,6 +37,7 @@ splinter-knowledge = { path = "crates/knowledge" }
 splinter-campaign = { path = "crates/campaign" }
 splinter-views = { path = "crates/views" }
 splinter-sandbox = { path = "crates/sandbox" }
+splinter-expdb = { path = "crates/expdb" }
 
 anyhow = "1"
 async-trait = "0.1"

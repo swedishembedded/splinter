@@ -15,6 +15,11 @@
 [crates.splinter-store]
 internal = []
 
+[crates.splinter-expdb]
+# The experience graph database. Standalone: it owns its digest, atomic-write
+# and clock primitives so it can replace splinter-store without depending on it.
+internal = []
+
 [crates.splinter-sandbox]
 # Where a solver's code runs; below knowledge (command capture) and agent
 # (the solver's run_code tool), which share its process-running core.
