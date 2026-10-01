@@ -214,7 +214,7 @@ dependencies = [
 [[package]]
 name = "atif"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "chrono",
  "libc",
@@ -4092,7 +4092,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sven-audio"
 version = "1.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "base64 0.22.1",
  "thiserror 1.0.69",
@@ -4101,13 +4101,14 @@ dependencies = [
 [[package]]
 name = "sven-bootstrap"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
  "async-trait",
  "futures",
  "futures-util",
+ "serde",
  "serde_json",
  "sven-config",
  "sven-executors",
@@ -4124,8 +4125,10 @@ dependencies = [
  "sven-tools-ctx",
  "sven-tools-exec",
  "sven-tools-fs",
+ "sven-tools-gdb",
  "sven-tools-web",
  "sven-turn",
+ "sven-vocab",
  "sven-workspace",
  "tokio",
  "tokio-util",
@@ -4136,7 +4139,7 @@ dependencies = [
 [[package]]
 name = "sven-chain"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "chrono",
  "serde",
@@ -4149,23 +4152,20 @@ dependencies = [
 [[package]]
 name = "sven-config"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
- "clap",
  "dirs 5.0.1",
  "serde",
- "serde_json",
  "serde_yaml",
  "shellexpand",
- "sven-vocab",
  "tracing",
 ]
 
 [[package]]
 name = "sven-executors"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4175,7 +4175,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "sven-chain",
- "sven-config",
  "sven-hsm",
  "sven-kernel",
  "sven-model",
@@ -4190,7 +4189,7 @@ dependencies = [
 [[package]]
 name = "sven-hsm"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "serde",
  "serde_json",
@@ -4203,7 +4202,7 @@ dependencies = [
 [[package]]
 name = "sven-image"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -4215,7 +4214,7 @@ dependencies = [
 [[package]]
 name = "sven-kernel"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4228,7 +4227,7 @@ dependencies = [
 [[package]]
 name = "sven-machines"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "chrono",
  "serde",
@@ -4241,7 +4240,7 @@ dependencies = [
 [[package]]
 name = "sven-mcp-client"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4265,7 +4264,7 @@ dependencies = [
 [[package]]
 name = "sven-model"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4278,7 +4277,7 @@ dependencies = [
 [[package]]
 name = "sven-model-catalog"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -4290,7 +4289,7 @@ dependencies = [
 [[package]]
 name = "sven-model-drivers"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4317,7 +4316,7 @@ dependencies = [
 [[package]]
 name = "sven-model-mock"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4333,7 +4332,7 @@ dependencies = [
 [[package]]
 name = "sven-sdk"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "atif",
@@ -4341,7 +4340,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sven-bootstrap",
- "sven-config",
  "sven-hsm",
  "sven-machines",
  "sven-model",
@@ -4358,7 +4356,7 @@ dependencies = [
 [[package]]
 name = "sven-sdk-macros"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4368,7 +4366,7 @@ dependencies = [
 [[package]]
 name = "sven-session-model"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "serde",
  "serde_json",
@@ -4382,7 +4380,7 @@ dependencies = [
 [[package]]
 name = "sven-session-store"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "atif",
@@ -4403,12 +4401,11 @@ dependencies = [
 [[package]]
 name = "sven-tool-api"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "async-trait",
  "serde",
  "serde_json",
- "sven-config",
  "sven-hsm",
  "sven-vocab",
 ]
@@ -4416,10 +4413,9 @@ dependencies = [
 [[package]]
 name = "sven-tool-registry"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "regex",
- "sven-config",
  "sven-hsm",
  "sven-tool-api",
  "sven-vocab",
@@ -4429,7 +4425,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-agent"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4437,8 +4433,8 @@ dependencies = [
  "regex",
  "serde_json",
  "serde_yaml",
- "sven-config",
  "sven-hsm",
+ "sven-mcp-client",
  "sven-tool-api",
  "sven-vocab",
  "sven-workspace",
@@ -4449,7 +4445,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-android"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "async-trait",
  "hex",
@@ -4467,17 +4463,19 @@ dependencies = [
 [[package]]
 name = "sven-tools-ctx"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
  "dirs 5.0.1",
  "memmap2",
  "regex",
+ "serde",
  "serde_json",
  "sven-config",
  "sven-hsm",
  "sven-tool-api",
+ "sven-vocab",
  "sven-workspace",
  "tokio",
  "tracing",
@@ -4486,7 +4484,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-exec"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "async-trait",
  "libc",
@@ -4501,11 +4499,12 @@ dependencies = [
 [[package]]
 name = "sven-tools-fs"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
  "regex",
+ "serde",
  "serde_json",
  "similar",
  "sven-audio",
@@ -4515,6 +4514,7 @@ dependencies = [
  "sven-model",
  "sven-model-drivers",
  "sven-tool-api",
+ "sven-vocab",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -4523,17 +4523,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "sven-tools-gdb"
+version = "2.0.0"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "libc",
+ "regex",
+ "serde",
+ "serde_json",
+ "sven-config",
+ "sven-hsm",
+ "sven-tool-api",
+ "sven-tool-registry",
+ "sven-vocab",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sven-tools-web"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
  "hex",
  "html2text",
  "reqwest",
+ "serde",
  "serde_json",
  "sha2",
+ "sven-config",
  "sven-hsm",
  "sven-tool-api",
  "sven-vocab",
@@ -4544,14 +4566,14 @@ dependencies = [
 [[package]]
 name = "sven-turn"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "async-trait",
  "futures",
  "regex",
+ "serde",
  "serde_json",
- "sven-config",
  "sven-model",
  "sven-session-model",
  "sven-tool-api",
@@ -4566,7 +4588,7 @@ dependencies = [
 [[package]]
 name = "sven-vocab"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "clap",
  "hex",
@@ -4578,7 +4600,7 @@ dependencies = [
 [[package]]
 name = "sven-workspace"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/sven#6013008ca5214450871060f3edffe28de1bac5cd"
+source = "git+https://github.com/swedishembedded/sven#45defb0d1a2f58e05c84bc376ba2ed402f36cd9a"
 dependencies = [
  "anyhow",
  "chrono",
