@@ -101,6 +101,13 @@ Builds then compile the checkouts' working trees, offline, without touching
 checkouts' HEADs; push those commits before sharing the lock. Delete
 `.cargo/config.toml` to go back to the remotes.
 
+The policy is Qwen3-0.6B from brain's model store by default
+(`BRAIN_QWEN_WEIGHTS` names another checkpoint). One 24 GB GPU holds its
+base for serving and trains LoRA adapters on it at agent-trajectory
+lengths - tens of thousands of tokens per record - which is what learning
+from agent experience needs. Qwen3-1.7B also trains on one such GPU, at
+shorter records; larger bases need more memory than one card has.
+
 Runtime state (sources, tasks, experiences, datasets, candidates,
 releases, answers, runs) lives under `~/.sven/splinter`, Sven's home in a namespace
 of its own (override: `--state DIR` or `SPLINTER_STATE`).

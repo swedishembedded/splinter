@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use splinter_knowledge::capture::DEFAULT_ENV_ALLOWLIST;
 use splinter_store::StateRoot;
 
-/// The model Splinter trains by default, as brain's model store names it.
+/// The model Splinter trains by default, as brain's model store names it:
+/// the size whose base serves and whose adapters train, at agent-trajectory
+/// lengths, on one 24 GB GPU.
 pub const DEFAULT_POLICY_MODEL: &str = "Qwen/Qwen3-0.6B";
 
 /// The settings every command reads.
