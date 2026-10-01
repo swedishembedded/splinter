@@ -45,6 +45,7 @@ impl Database {
         config: Config,
         clock: Arc<dyn Clock>,
     ) -> Result<Self> {
+        config.validate()?;
         let marker = Key::new(Kind::Ref, FORMAT_NAME)?;
         if !backend.write_once(&marker, FORMAT_TEXT)? && backend.read(&marker)? != FORMAT_TEXT {
             return Err(Error::corrupt(

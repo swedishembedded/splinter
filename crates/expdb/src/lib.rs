@@ -21,6 +21,7 @@
 #![warn(missing_docs)]
 
 pub mod backend;
+pub mod blob;
 mod clock;
 mod config;
 mod database;

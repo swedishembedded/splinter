@@ -11,6 +11,8 @@
 
 use std::time::Duration;
 
+use crate::error::{Error, Result};
+
 /// Smallest chunk a large object is split into.
 pub const DEFAULT_CHUNK_MIN: u32 = 16 * 1024;
 /// Target chunk size for content-defined chunking.
@@ -67,6 +69,34 @@ pub struct Config {
     pub orphan_grace: Duration,
     /// Compaction stops merging a tier once a segment reaches this size.
     pub compact_target_bytes: usize,
+}
+
+impl Config {
+    /// Refuses settings the chunker or the formats cannot honour.
+    pub fn validate(&self) -> Result<()> {
+        let chunk_ok = (64..=1 << 20).contains(&self.chunk_min)
+            && (256..=1 << 22).contains(&self.chunk_avg)
+            && (1024..=1 << 24).contains(&self.chunk_max)
+            && self.chunk_min <= self.chunk_avg
+            && self.chunk_avg <= self.chunk_max;
+        if !chunk_ok {
+            return Err(Error::invalid(
+                "chunk sizes",
+                format!(
+                    "min {} avg {} max {} must be ordered and within the chunker's bounds",
+                    self.chunk_min, self.chunk_avg, self.chunk_max
+                ),
+            ));
+        }
+        if self.block_records == 0 || self.max_buffered_records == 0 || self.pack_target_bytes == 0
+        {
+            return Err(Error::invalid(
+                "config",
+                "block, buffer and pack sizes must be positive",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl Default for Config {
