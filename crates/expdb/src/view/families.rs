@@ -26,8 +26,10 @@ pub struct AttemptView {
     pub seed: Option<u64>,
     /// How the environment said it ended, if it ended.
     pub outcome: Option<Outcome>,
-    /// The reward: 1 for a pass, 0 for a fail, absent for an attempt that
-    /// was aborted or has not ended.
+    /// The reward the attempt stands at: the confidence-weighted score of
+    /// its standing task-completion evaluations if it has any, else 1 for a
+    /// pass and 0 for a fail. Absent for an attempt that was aborted or has
+    /// not ended and was never evaluated.
     pub reward: Option<f64>,
 }
 
@@ -64,10 +66,11 @@ impl FamilyView {
         Some(rewards.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / rewards.len() as f64)
     }
 
-    /// Whether some attempts passed and some failed.
+    /// Whether some attempts stand at a pass (reward of at least one half)
+    /// and some at a fail.
     pub fn has_both_outcomes(&self) -> bool {
-        let has = |wanted| self.attempts.iter().any(|a| a.outcome == Some(wanted));
-        has(Outcome::Pass) && has(Outcome::Fail)
+        let rewards = self.rewards();
+        rewards.iter().any(|r| *r >= 0.5) && rewards.iter().any(|r| *r < 0.5)
     }
 }
 
@@ -81,17 +84,18 @@ impl Snapshot {
                 outcomes.insert(attempt, outcome);
             }
         }
+        let evaluated = self.attempt_rewards()?;
         let mut attempts: BTreeMap<ContentId, Vec<AttemptView>> = BTreeMap::new();
         for id in index.by_kind(RecordKind::Attempt) {
             let Some(Body::Attempt(a)) = self.get(id)?.map(|r| r.body) else {
                 continue;
             };
             let outcome = outcomes.get(&id).copied();
-            let reward = match outcome {
+            let reward = evaluated.get(&id).copied().or(match outcome {
                 Some(Outcome::Pass) => Some(1.0),
                 Some(Outcome::Fail) => Some(0.0),
                 Some(Outcome::Aborted) | None => None,
-            };
+            });
             attempts.entry(a.family).or_default().push(AttemptView {
                 attempt: id,
                 policy: a.policy,

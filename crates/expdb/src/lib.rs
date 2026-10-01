@@ -20,6 +20,7 @@
 //! There are no file locks on the write path: each writer owns a unique id.
 #![warn(missing_docs)]
 
+pub mod analyze;
 pub mod backend;
 pub mod blob;
 mod clock;

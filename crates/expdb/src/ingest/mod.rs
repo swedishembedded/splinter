@@ -12,6 +12,7 @@
 
 mod aggregator;
 mod collector;
+mod derive;
 mod run;
 mod writer;
 

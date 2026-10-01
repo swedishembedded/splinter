@@ -42,6 +42,7 @@ pub(crate) struct SnapshotCache {
     blocks: Mutex<HashMap<(ContentId, u32), Arc<Block>>>,
     pub(crate) blocks_read: Arc<AtomicU64>,
     segments_opened: AtomicU64,
+    pub(crate) evaluations: Mutex<Option<Arc<crate::analyze::EvalSet>>>,
 }
 
 impl SnapshotCache {

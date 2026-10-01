@@ -171,3 +171,16 @@ pub fn attempt(
     run.finish(outcome).unwrap();
     (decisions, attempt)
 }
+
+/// A skill body with a distinctive name.
+pub fn skill(name: &str) -> splinter_expdb::model::Skill {
+    splinter_expdb::model::Skill {
+        name: name.into(),
+        description: format!("{name}: do it before anything else"),
+        trigger: "an asynchronous operation fails".into(),
+        action_pattern: "inspect the event source".into(),
+        expected_effect: "the failing layer is found first".into(),
+        parents: vec![],
+        prerequisites: vec![],
+    }
+}
