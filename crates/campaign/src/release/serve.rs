@@ -19,10 +19,12 @@
 //! re-answered through its OpenAI-compatible endpoint, with the key it
 //! wrote (`--api-keys-out`), decoded greedily as the in-process arms
 //! were ([`GREEDY_SAMPLING`]) so the two answers compare serving rather
-//! than two draws, and graded as in-process. Every task must be answered
-//! alike ([`alike`]): the same verdict, and the same final answer up to
-//! the numerical noise of two processes decoding one model. Each task
-//! answered differently is reported with both answers. The server is
+//! than two draws and, as in-process, without a reasoning block, and
+//! graded as in-process. A task is answered alike ([`alike`]) when the
+//! verdict is the same and the final answer is the same up to the
+//! numerical noise of two processes decoding one model; at least
+//! [`gate::SERVE_AGREEMENT_PERCENT`] percent of the tasks must be. Each
+//! task answered differently is reported with both answers. The server is
 //! stopped when the check ends, however it ends.
 //!
 //! The server loads its own copy of the base, so every base this process

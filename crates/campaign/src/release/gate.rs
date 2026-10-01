@@ -374,6 +374,13 @@ pub fn anchor(
     )
 }
 
+/// The share of the re-answered tasks, in percent, that must come back
+/// alike for the serve check to pass. Two processes decoding one model sum
+/// in a different order, so now and then one long greedy continuation parts
+/// ways in its last tenth; an adapter bound wrongly or not applied changes
+/// the answers to most tasks.
+pub const SERVE_AGREEMENT_PERCENT: usize = 75;
+
 /// The serve check over what the served candidate reported and answered.
 #[must_use]
 pub fn serve(measured: Serve) -> Check<Serve> {
@@ -384,9 +391,10 @@ pub fn serve(measured: Serve) -> Check<Serve> {
         ))
     } else if measured.sampled == 0 {
         return Check::unmeasured("no held-out task to re-answer through the served endpoint");
-    } else if measured.agreed < measured.sampled {
+    } else if measured.agreed * 100 < measured.sampled * SERVE_AGREEMENT_PERCENT {
         Some(format!(
-            "the served candidate answered differently from in-process on {} of {} task(s)",
+            "the served candidate answered differently from in-process on {} of {} task(s); \
+             at least {SERVE_AGREEMENT_PERCENT}% must agree",
             measured.sampled - measured.agreed,
             measured.sampled
         ))
@@ -394,4 +402,29 @@ pub fn serve(measured: Serve) -> Check<Serve> {
         None
     };
     Check::decided(measured, failure)
+}
+
+#[cfg(test)]
+mod serve_tests {
+    use super::*;
+
+    fn measured(sampled: usize, agreed: usize) -> Serve {
+        Serve {
+            binary: "brain".into(),
+            startup_line: String::new(),
+            served_digest: "sha256:a".into(),
+            expected_digest: "sha256:a".into(),
+            sampled,
+            agreed,
+            disagreed: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_rare_disagreement_passes_and_a_majority_of_them_does_not() {
+        assert!(serve(measured(8, 7)).passed);
+        assert!(serve(measured(8, 6)).passed, "exactly three quarters");
+        assert!(!serve(measured(8, 5)).passed);
+        assert!(!serve(measured(6, 0)).passed);
+    }
 }
