@@ -18,7 +18,9 @@ mod model;
 mod persist;
 mod read;
 mod run;
+mod search;
 
 pub use model::{Index, Loc};
 pub use read::ScanStats;
 pub(crate) use read::SnapshotCache;
+pub(crate) use run::run_covers;

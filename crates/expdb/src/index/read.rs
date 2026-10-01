@@ -44,6 +44,12 @@ pub(crate) struct SnapshotCache {
     segments_opened: AtomicU64,
 }
 
+impl SnapshotCache {
+    pub(crate) fn has_index(&self) -> bool {
+        locked(&self.index).is_some()
+    }
+}
+
 fn locked<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }

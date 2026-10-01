@@ -32,6 +32,7 @@ pub mod index;
 pub mod ingest;
 pub mod manifest;
 pub mod model;
+pub mod query;
 pub mod view;
 
 pub use clock::{Clock, StepClock, SystemClock};

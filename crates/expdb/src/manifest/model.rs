@@ -26,6 +26,10 @@ pub enum ObjectKind {
     BlobPack,
     /// An index run.
     Index,
+    /// A shard of embedding vectors.
+    Vector,
+    /// A shard of an inverted text index.
+    Text,
 }
 
 /// One immutable file a manifest adds or removes.
@@ -48,6 +52,8 @@ impl ObjectRef {
             ObjectKind::Segment => Key::new(Kind::Segment, &format!("{}.seg", self.id)),
             ObjectKind::BlobPack => Key::new(Kind::BlobPack, &format!("{}.pack", self.id)),
             ObjectKind::Index => Key::new(Kind::Index, &format!("{}.idx", self.id)),
+            ObjectKind::Vector => Key::new(Kind::Index, &format!("{}.vec", self.id)),
+            ObjectKind::Text => Key::new(Kind::Index, &format!("{}.txt", self.id)),
         }
     }
 

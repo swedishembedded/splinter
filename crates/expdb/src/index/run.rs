@@ -277,3 +277,11 @@ impl Run {
         merged
     }
 }
+
+/// The segments a stored run covers.
+pub(crate) fn run_covers(
+    backend: &dyn crate::backend::StorageBackend,
+    id: &ContentId,
+) -> Result<Vec<ContentId>> {
+    Ok(Run::load(backend, id)?.covers)
+}
