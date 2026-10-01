@@ -21,6 +21,6 @@ mod refs;
 mod resolve;
 mod snapshot;
 
-pub use collect::GcReport;
+pub use collect::{AbsorbReport, GcReport};
 pub use model::{Manifest, ObjectKind, ObjectRef};
 pub use snapshot::Snapshot;

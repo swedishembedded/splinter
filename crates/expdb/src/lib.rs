@@ -25,6 +25,7 @@ pub mod backend;
 pub mod blob;
 pub mod cache;
 mod clock;
+pub mod compact;
 mod config;
 mod database;
 mod error;

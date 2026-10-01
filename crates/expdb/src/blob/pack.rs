@@ -167,3 +167,32 @@ pub(crate) fn read_index(backend: &dyn StorageBackend, name: &ContentId) -> Resu
     }
     Ok(entries)
 }
+
+/// Every entry of a pack, each checked: a raw entry must hash to its id.
+pub(crate) fn read_all(
+    backend: &dyn StorageBackend,
+    name: &ContentId,
+) -> Result<Vec<(ContentId, EntryKind, Vec<u8>)>> {
+    let rows = read_index(backend, name)?;
+    let file = backend.read(&pack_key(name)?)?;
+    let mut entries = Vec::with_capacity(rows.len());
+    for (id, offset, len, kind) in rows {
+        let data = file
+            .get(offset as usize..offset as usize + len as usize)
+            .ok_or_else(|| {
+                Error::corrupt(
+                    format!("blob pack {name}"),
+                    "an entry runs past the end of the file",
+                )
+            })?
+            .to_vec();
+        if kind == EntryKind::Raw && ContentId::of(&data) != id {
+            return Err(Error::corrupt(
+                format!("blob pack {name}"),
+                format!("entry {id} holds different bytes"),
+            ));
+        }
+        entries.push((id, kind, data));
+    }
+    Ok(entries)
+}

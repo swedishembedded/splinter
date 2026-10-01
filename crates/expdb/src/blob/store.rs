@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use super::chunker::chunks;
-use super::pack::{pack_key, read_index, EntryKind, Location, PackBuilder};
+use super::pack::{pack_key, read_all, read_index, EntryKind, Location, PackBuilder};
 use crate::backend::{Kind, StorageBackend};
 use crate::config::Config;
 use crate::database::Database;
@@ -95,6 +95,24 @@ impl BlobStore {
             });
         }
         Ok(())
+    }
+
+    /// Writes one pack holding every entry of `packs`, each once, and returns
+    /// the reference a manifest publishes it by. The inputs are left as they
+    /// are; removing them is the manifest's business.
+    pub fn repack(db: &Database, packs: &[ContentId]) -> Result<crate::manifest::ObjectRef> {
+        let mut builder = PackBuilder::default();
+        for pack in packs {
+            for (id, kind, data) in read_all(db.backend(), pack)? {
+                builder.add(id, kind, data);
+            }
+        }
+        let (name, file, _) = builder.finish();
+        db.backend().write_once(&pack_key(&name)?, &file)?;
+        Ok(crate::manifest::ObjectRef::blob_pack(
+            name,
+            file.len() as u64,
+        ))
     }
 
     /// What this store has written.

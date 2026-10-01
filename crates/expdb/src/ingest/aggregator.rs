@@ -97,7 +97,7 @@ impl Aggregator {
             ));
         }
         self.db
-            .publish(&format!("aggregator-{job}"), objects, Vec::new())?;
+            .publish_once(&format!("aggregator-{job}"), objects, Vec::new())?;
         for key in keys {
             backend.remove(&key)?;
         }

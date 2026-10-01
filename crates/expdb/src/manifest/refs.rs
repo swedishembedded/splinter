@@ -71,6 +71,14 @@ impl Database {
         add: Vec<ObjectRef>,
         remove: Vec<ObjectRef>,
     ) -> Result<ContentId> {
+        if add.iter().any(|a| remove.contains(a)) {
+            // A removal is permanent, so adding what is removed in the same
+            // breath would delete it for good.
+            return Err(crate::error::Error::invalid(
+                "manifest",
+                "a file cannot be added and removed together",
+            ));
+        }
         let ref_name = format!("{JOBS_PREFIX}{job}");
         let parents = self.get_ref(&ref_name)?.into_iter().collect();
         let manifest = Manifest::new(
@@ -85,12 +93,54 @@ impl Database {
         Ok(id)
     }
 
+    /// Publishes on a ref of its own, so any number of processes can do it at
+    /// once. [`publish`](Database::publish) chains each manifest after the
+    /// job's previous one and so needs a single publisher per job name; two
+    /// publishers on one name could overwrite each other's head. Maintenance
+    /// tasks that any process may run (indexing, compaction, search shards)
+    /// use this instead.
+    pub fn publish_once(
+        &self,
+        prefix: &str,
+        add: Vec<ObjectRef>,
+        remove: Vec<ObjectRef>,
+    ) -> Result<ContentId> {
+        static CALL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let mut unique = Vec::new();
+        unique.extend_from_slice(&self.clock().now_ns().to_le_bytes());
+        unique.extend_from_slice(&u64::from(std::process::id()).to_le_bytes());
+        unique.extend_from_slice(
+            &CALL
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                .to_le_bytes(),
+        );
+        let tag = &ContentId::of(&unique).to_string()[..16];
+        self.publish(&format!("{prefix}-{tag}"), add, remove)
+    }
+
     /// Merges the catalog and every job head into the catalog ref. If two
     /// processes merge at once their manifests are identical, and a merge
     /// that loses the race to move the ref is picked up by the next one.
+    ///
+    /// Merging when the catalog already holds every head changes nothing, so
+    /// merging twice in a row gives the same catalog.
     pub fn merge_catalog(&self) -> Result<ContentId> {
-        let mut heads = self.job_heads()?;
-        heads.extend(self.get_ref(CATALOG_REF)?);
+        let catalog = self.get_ref(CATALOG_REF)?;
+        let known = match catalog {
+            Some(head) => self.resolve(&[head])?.manifests,
+            None => Default::default(),
+        };
+        let mut heads: Vec<ContentId> = self
+            .job_heads()?
+            .into_iter()
+            .filter(|h| !known.contains(h))
+            .collect();
+        if heads.is_empty() {
+            if let Some(head) = catalog {
+                return Ok(head);
+            }
+        }
+        heads.extend(catalog);
         let id = self.merged_head(heads)?;
         self.set_ref(CATALOG_REF, id)?;
         Ok(id)

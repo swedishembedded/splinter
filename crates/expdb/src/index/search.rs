@@ -140,7 +140,7 @@ impl Database {
             encode(VECTOR_MAGIC, "vector shard", &shard, self)?,
             items.len() as u64,
         )?;
-        self.publish(SEARCH_JOB, vec![object.clone()], Vec::new())?;
+        self.publish_once(SEARCH_JOB, vec![object.clone()], Vec::new())?;
         Ok(object)
     }
 
@@ -178,7 +178,8 @@ impl Database {
             encode(VECTOR_MAGIC, "vector shard", &merged, self)?,
             merged.ids.len() as u64,
         )?;
-        self.publish(SEARCH_JOB, vec![object.clone()], old)?;
+        let removed = old.into_iter().filter(|o| o.id != object.id).collect();
+        self.publish_once(SEARCH_JOB, vec![object.clone()], removed)?;
         Ok(Some(object.id))
     }
 
@@ -205,7 +206,7 @@ impl Database {
             encode(TEXT_MAGIC, "text shard", &postings, self)?,
             items.len() as u64,
         )?;
-        self.publish(SEARCH_JOB, vec![object.clone()], Vec::new())?;
+        self.publish_once(SEARCH_JOB, vec![object.clone()], Vec::new())?;
         Ok(object)
     }
 }

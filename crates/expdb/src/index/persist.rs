@@ -53,7 +53,7 @@ impl Database {
             return Ok(None);
         }
         let object = self.store_run(&Run::scan(&segments)?)?;
-        self.publish(INDEXER_JOB, vec![object.clone()], Vec::new())?;
+        self.publish_once(INDEXER_JOB, vec![object.clone()], Vec::new())?;
         Ok(Some(object.id))
     }
 
@@ -72,7 +72,8 @@ impl Database {
             .map(|o| Run::load(self.backend(), &o.id))
             .collect::<Result<Vec<_>>>()?;
         let object = self.store_run(&Run::merge(&runs, &live))?;
-        self.publish(INDEXER_JOB, vec![object.clone()], old)?;
+        let removed = old.into_iter().filter(|o| o.id != object.id).collect();
+        self.publish_once(INDEXER_JOB, vec![object.clone()], removed)?;
         Ok(Some(object.id))
     }
 }
