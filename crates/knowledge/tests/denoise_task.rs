@@ -118,3 +118,28 @@ fn mismatched_bytes_an_unknown_part_or_a_too_short_part_are_refused() {
         Err(DenoiseError::TooShort { .. })
     ));
 }
+
+/// One seed generates the tasks of every part of a run, so the corruption
+/// must follow the content too: were it the seed's alone, every task would
+/// drop the word at the same position and swap the same pair, and a
+/// student could learn the position instead of the text.
+#[test]
+fn parts_of_different_content_are_corrupted_at_different_positions() {
+    let dropped: std::collections::BTreeSet<usize> = (0..16)
+        .map(|n| {
+            // Twelve distinct words: the window is the whole passage.
+            let words: Vec<String> = (0..12).map(|i| format!("w{n}x{i}")).collect();
+            let text = words.join(" ");
+            let captured = source(&text);
+            let task = Denoise::new(0)
+                .generate(captured.source(), "design.md", text.as_bytes())
+                .unwrap();
+            let shown = task.instruction.rsplit("\n\n").next().unwrap().to_string();
+            words
+                .iter()
+                .position(|w| !shown.split(' ').any(|s| s == w))
+                .unwrap()
+        })
+        .collect();
+    assert!(dropped.len() > 1, "every task dropped word {dropped:?}");
+}

@@ -12,11 +12,13 @@
 //! [`Denoise::generate`] picks a window of [`SPAN_WORDS`] whitespace
 //! separated words of one part of a source, drops one word and swaps two
 //! adjacent ones, and asks for the original passage back. Everything is a
-//! function of the part's content and the seed, so a task is reproducible
-//! from them alone. The original passage is the task's evidence span -
-//! naming the source and part, so the source store resolves it to the
-//! passage's bytes - and its privileged reference: what the verifier
-//! compares against and the student never sees.
+//! function of the part's content and the seed - the random draws are
+//! seeded by both, so one seed corrupts different parts at different
+//! positions - and a task is reproducible from them alone. The original
+//! passage is the task's evidence span - naming the source and part, so
+//! the source store resolves it to the passage's bytes - and its
+//! privileged reference: what the verifier compares against and the
+//! student never sees.
 
 use splinter_lab::denoise::KIND;
 use splinter_store::experience::{
@@ -32,7 +34,7 @@ pub const SPAN_WORDS: usize = 12;
 pub const MIN_WORDS: usize = 4;
 
 /// The generator's name in an experience's provenance.
-pub const GENERATOR: &str = "splinter-knowledge/denoise@1";
+pub const GENERATOR: &str = "splinter-knowledge/denoise@2";
 
 /// Why no task could be generated.
 #[derive(Debug, thiserror::Error)]
@@ -127,7 +129,7 @@ impl Denoise {
         if words.len() < MIN_WORDS {
             return Err(DenoiseError::TooShort { words: words.len() });
         }
-        let mut rng = SplitMix64(self.seed);
+        let mut rng = SplitMix64(self.seed ^ digest_bits(digest));
         let len = SPAN_WORDS.min(words.len());
         let first = rng.below(words.len() - len + 1);
         let window = &words[first..first + len];
@@ -176,6 +178,15 @@ fn word_ranges(text: &str) -> Vec<(usize, usize)> {
         words.push((s, text.len()));
     }
     words
+}
+
+/// The first 64 bits of `digest`, which mix the content into the draws.
+fn digest_bits(digest: &Digest) -> u64 {
+    digest
+        .hex()
+        .get(..16)
+        .and_then(|hex| u64::from_str_radix(hex, 16).ok())
+        .unwrap_or(0)
 }
 
 /// SplitMix64: a small, fixed, well-mixed generator, so a seed means the
