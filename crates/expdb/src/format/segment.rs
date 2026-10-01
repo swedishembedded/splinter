@@ -51,8 +51,8 @@ pub struct SegmentInfo {
 }
 
 /// The key a segment is stored under.
-pub(crate) fn segment_key(id: &ContentId) -> Result<Key> {
-    Key::new(Kind::Segment, &format!("{id}.seg"))
+pub(crate) fn segment_key(kind: Kind, id: &ContentId) -> Result<Key> {
+    Key::new(kind, &format!("{id}.seg"))
 }
 
 /// Encodes a segment: its content id and its bytes.
@@ -129,14 +129,27 @@ pub fn seal_segment(
     edges: &[Edge],
     config: &Config,
 ) -> Result<ContentId> {
+    seal_segment_in(backend, Kind::Segment, records, edges, config)
+}
+
+/// Like [`seal_segment`], into another kind of storage: a writer's spool
+/// holds segments that are not yet part of the database.
+pub fn seal_segment_in(
+    backend: &dyn StorageBackend,
+    kind: Kind,
+    records: &[Record],
+    edges: &[Edge],
+    config: &Config,
+) -> Result<ContentId> {
     let (id, bytes) = encode_segment(records, edges, config)?;
-    backend.write_once(&segment_key(&id)?, &bytes)?;
+    backend.write_once(&segment_key(kind, &id)?, &bytes)?;
     Ok(id)
 }
 
 /// An open segment: its directory is read, its blocks on demand.
 pub struct Segment {
     backend: Arc<dyn StorageBackend>,
+    kind: Kind,
     id: ContentId,
     info: SegmentInfo,
 }
@@ -145,7 +158,12 @@ impl Segment {
     /// Opens a segment, checking its tail and footer. Blocks are checked as
     /// they are read.
     pub fn open(backend: Arc<dyn StorageBackend>, id: ContentId) -> Result<Self> {
-        let key = segment_key(&id)?;
+        Self::open_in(backend, Kind::Segment, id)
+    }
+
+    /// Opens a segment held in another kind of storage, such as a spool.
+    pub fn open_in(backend: Arc<dyn StorageBackend>, kind: Kind, id: ContentId) -> Result<Self> {
+        let key = segment_key(kind, &id)?;
         let what = format!("segment {id}");
         let len = backend.len(&key)?;
         if len < (MAGIC.len() + TAIL) as u64 {
@@ -176,7 +194,12 @@ impl Segment {
             what: format!("footer of {what}"),
             source,
         })?;
-        Ok(Self { backend, id, info })
+        Ok(Self {
+            backend,
+            kind,
+            id,
+            info,
+        })
     }
 
     /// The segment's content id.
@@ -189,7 +212,7 @@ impl Segment {
         Ok(crate::manifest::ObjectRef {
             kind: crate::manifest::ObjectKind::Segment,
             id: self.id,
-            bytes: self.backend.len(&segment_key(&self.id)?)?,
+            bytes: self.backend.len(&segment_key(self.kind, &self.id)?)?,
             records: self.info.records,
         })
     }
@@ -200,7 +223,7 @@ impl Segment {
     }
 
     fn raw(&self, what: &str, block: &BlockInfo) -> Result<Vec<u8>> {
-        let key = segment_key(&self.id)?;
+        let key = segment_key(self.kind, &self.id)?;
         let bytes = self
             .backend
             .read_range(&key, block.offset, block.len as usize)?;
@@ -241,7 +264,7 @@ impl Segment {
     /// Reads every byte and checks it against the segment's content id and
     /// every block against its checksum.
     pub fn verify(&self) -> Result<()> {
-        let key = segment_key(&self.id)?;
+        let key = segment_key(self.kind, &self.id)?;
         let bytes = self.backend.read(&key)?;
         if ContentId::of(&bytes) != self.id {
             return Err(Error::corrupt(

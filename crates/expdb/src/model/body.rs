@@ -150,6 +150,22 @@ impl Body {
         }
     }
 
+    /// The content id of a content-addressed entity this body defines: a
+    /// task definition, task instance, state or episode family. Other bodies
+    /// have none.
+    pub fn entity_id(&self) -> crate::error::Result<Option<crate::id::ContentId>> {
+        Ok(match self {
+            Body::TaskDefinition(d) => Some(d.id()?),
+            Body::TaskInstance(i) => Some(i.id()?),
+            Body::State(s) => Some(s.id()?),
+            Body::Family(f) => Some(super::entities::family_key(
+                &f.task_instance,
+                &f.initial_state,
+            )),
+            _ => None,
+        })
+    }
+
     /// The conclusion of an experiment result, when this is one.
     pub fn conclusion(&self) -> Option<Conclusion> {
         match self {

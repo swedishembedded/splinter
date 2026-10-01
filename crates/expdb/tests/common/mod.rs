@@ -122,3 +122,18 @@ impl Scratch {
         Database::open(self.dir.path(), config).unwrap()
     }
 }
+
+/// A task definition, instance and initial state for a coding task.
+pub fn coding_task(n: u64) -> (TaskDefinition, splinter_expdb::model::TaskInstance, State) {
+    let definition = TaskDefinition {
+        name: "fix the bug".into(),
+        description: "make the failing test pass".into(),
+        domain: "coding".into(),
+    };
+    let instance = splinter_expdb::model::TaskInstance {
+        definition: definition.id().unwrap(),
+        params: serde_json::json!({ "issue": n }),
+        environment: None,
+    };
+    (definition, instance, state("repo@abc123"))
+}

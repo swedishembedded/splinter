@@ -28,6 +28,7 @@ mod database;
 mod error;
 pub mod format;
 mod id;
+pub mod ingest;
 pub mod manifest;
 pub mod model;
 
