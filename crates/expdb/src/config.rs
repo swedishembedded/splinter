@@ -31,6 +31,8 @@ pub const DEFAULT_INLINE_PAYLOAD_LIMIT: usize = 4096;
 pub const DEFAULT_CHECKPOINT_EVERY: usize = 32;
 /// Compaction stops merging a tier once a segment reaches this size.
 pub const DEFAULT_COMPACT_TARGET_BYTES: usize = 1024 * 1024 * 1024;
+/// Decoded record blocks a snapshot keeps for single-record reads.
+pub const DEFAULT_BLOCK_CACHE_BLOCKS: usize = 256;
 /// An unpublished file younger than this is never collected.
 pub const DEFAULT_ORPHAN_GRACE: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -69,6 +71,8 @@ pub struct Config {
     pub orphan_grace: Duration,
     /// Compaction stops merging a tier once a segment reaches this size.
     pub compact_target_bytes: usize,
+    /// Decoded record blocks a snapshot keeps for single-record reads.
+    pub block_cache_blocks: usize,
 }
 
 impl Config {
@@ -113,6 +117,7 @@ impl Default for Config {
             compression: Compression::Zstd(3),
             orphan_grace: DEFAULT_ORPHAN_GRACE,
             compact_target_bytes: DEFAULT_COMPACT_TARGET_BYTES,
+            block_cache_blocks: DEFAULT_BLOCK_CACHE_BLOCKS,
         }
     }
 }

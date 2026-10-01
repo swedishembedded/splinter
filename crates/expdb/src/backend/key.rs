@@ -27,6 +27,10 @@ pub enum Kind {
     Pin,
     /// A microsegment waiting for an aggregator.
     Spool,
+    /// A trainer's mutable replay state, kept apart from the experience.
+    Overlay,
+    /// A cache of data derived from experience, keyed by what it came from.
+    Cache,
 }
 
 impl Kind {
@@ -40,6 +44,8 @@ impl Kind {
             Kind::Ref => "refs",
             Kind::Pin => "pins",
             Kind::Spool => "spool",
+            Kind::Overlay => "overlay",
+            Kind::Cache => "cache",
         }
     }
 
@@ -53,7 +59,7 @@ impl Kind {
     }
 
     /// Every kind.
-    pub const ALL: [Kind; 7] = [
+    pub const ALL: [Kind; 9] = [
         Kind::Segment,
         Kind::BlobPack,
         Kind::Manifest,
@@ -61,6 +67,8 @@ impl Kind {
         Kind::Ref,
         Kind::Pin,
         Kind::Spool,
+        Kind::Overlay,
+        Kind::Cache,
     ];
 }
 

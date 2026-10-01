@@ -21,9 +21,6 @@ use crate::id::{ContentId, RecordId};
 use crate::manifest::{ObjectKind, ObjectRef, Snapshot};
 use crate::model::Record;
 
-/// Blocks kept decoded for single-record reads.
-const BLOCK_CACHE: usize = 64;
-
 /// What reading a snapshot has cost, so tests and operators can see whether
 /// an index or a zone map saved a scan.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -43,6 +40,8 @@ pub(crate) struct SnapshotCache {
     pub(crate) blocks_read: Arc<AtomicU64>,
     segments_opened: AtomicU64,
     pub(crate) evaluations: Mutex<Option<Arc<crate::analyze::EvalSet>>>,
+    pub(crate) blobs: Mutex<Option<Arc<crate::blob::BlobStore>>>,
+    pub(crate) entities: Mutex<Option<Arc<HashMap<ContentId, RecordId>>>>,
 }
 
 impl SnapshotCache {
@@ -51,7 +50,7 @@ impl SnapshotCache {
     }
 }
 
-fn locked<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(crate) fn locked<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -114,13 +113,13 @@ impl Snapshot {
         Ok(index)
     }
 
-    fn block(&self, segment: ContentId, block: u32) -> Result<Arc<Block>> {
+    pub(crate) fn block(&self, segment: ContentId, block: u32) -> Result<Arc<Block>> {
         if let Some(found) = locked(&self.cache().blocks).get(&(segment, block)) {
             return Ok(Arc::clone(found));
         }
         let decoded = Arc::new(self.segment(segment)?.read_block(block as usize)?);
         let mut cache = locked(&self.cache().blocks);
-        if cache.len() >= BLOCK_CACHE {
+        if cache.len() >= self.database().config().block_cache_blocks {
             cache.clear();
         }
         cache.insert((segment, block), Arc::clone(&decoded));

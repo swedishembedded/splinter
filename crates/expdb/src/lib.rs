@@ -23,6 +23,7 @@
 pub mod analyze;
 pub mod backend;
 pub mod blob;
+pub mod cache;
 mod clock;
 mod config;
 mod database;
@@ -33,7 +34,9 @@ pub mod index;
 pub mod ingest;
 pub mod manifest;
 pub mod model;
+pub mod overlay;
 pub mod query;
+pub mod train;
 pub mod view;
 
 pub use clock::{Clock, StepClock, SystemClock};

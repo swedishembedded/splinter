@@ -22,5 +22,5 @@ mod search;
 
 pub use model::{Index, Loc};
 pub use read::ScanStats;
-pub(crate) use read::SnapshotCache;
+pub(crate) use read::{locked, SnapshotCache};
 pub(crate) use run::run_covers;

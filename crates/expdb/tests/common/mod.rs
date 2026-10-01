@@ -162,7 +162,10 @@ pub fn attempt(
     for step in 0..chain {
         let d = run
             .decision()
-            .commit(Action::new("act", serde_json::json!({ "step": step })))
+            .commit(Action::new(
+                "act",
+                serde_json::json!({ "step": step, "policy": policy }),
+            ))
             .unwrap();
         run.transition(&d, &state(&format!("{policy}-{task}-{step}")), None, None)
             .unwrap();
