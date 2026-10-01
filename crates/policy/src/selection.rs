@@ -150,16 +150,7 @@ pub fn served_model(
     temperature: Option<f32>,
 ) -> Result<LoadedModel, PolicyError> {
     let spec = format!("openai/{model}");
-    let remote = RemoteModel {
-        spec: spec.clone(),
-        base_url: Some(base_url.to_string()),
-        api_key: Some(api_key.to_string()),
-    };
-    let mut config = sven_sdk::config::Config::default();
-    remote.apply_to(&mut config)?;
-    if temperature.is_some() {
-        config.model.temperature = temperature;
-    }
+    let config = served_config(&spec, base_url, api_key, temperature)?;
     let driver =
         sven_sdk::drivers::from_config(&config.model).map_err(|e| PolicyError::Remote {
             spec: spec.clone(),
@@ -170,6 +161,33 @@ pub fn served_model(
         identity: format!("{spec}@{base_url}"),
         local: None,
     })
+}
+
+/// The configuration [`served_model`] builds its driver from. Every
+/// request asks the server not to open with a reasoning block
+/// (`chat_template_kwargs.enable_thinking: false`), as an in-process
+/// generation does ([`crate::local`]), so a served answer and an
+/// in-process one are produced from the same prompt.
+fn served_config(
+    spec: &str,
+    base_url: &str,
+    api_key: &str,
+    temperature: Option<f32>,
+) -> Result<sven_sdk::config::Config, PolicyError> {
+    let remote = RemoteModel {
+        spec: spec.to_string(),
+        base_url: Some(base_url.to_string()),
+        api_key: Some(api_key.to_string()),
+    };
+    let mut config = sven_sdk::config::Config::default();
+    remote.apply_to(&mut config)?;
+    if temperature.is_some() {
+        config.model.temperature = temperature;
+    }
+    config.model.driver_options = serde_json::json!({
+        "chat_template_kwargs": { "enable_thinking": false }
+    });
+    Ok(config)
 }
 
 /// A model loaded for the length of a command: the provider every engine
@@ -254,6 +272,16 @@ pub fn local_model_name(base: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_served_model_is_asked_to_answer_without_a_reasoning_block_and_greedily() {
+        let config = served_config("openai/m", "http://127.0.0.1:1/v1", "k", Some(0.0)).unwrap();
+        assert_eq!(
+            config.model.driver_options["chat_template_kwargs"]["enable_thinking"],
+            serde_json::json!(false)
+        );
+        assert_eq!(config.model.temperature, Some(0.0));
+    }
+
     use super::*;
     use std::path::PathBuf;
 
