@@ -64,6 +64,7 @@ fn entry(task: &Task) -> TaskEntry {
         task: task.task.id.clone(),
         generator: Some("splinter-knowledge/model-tasks@1:scripted".into()),
         prompt: Some(Digest::of(b"prompt")),
+        variant_of: None,
     }
 }
 
@@ -164,4 +165,58 @@ fn declared_concepts_are_part_of_the_task() {
     assert_eq!(reviewed.concepts, declared.concepts);
     assert!(reviewed.same_apart_from_critiques(&declared));
     assert!(!plain.same_apart_from_critiques(&declared));
+}
+
+/// A variant is the same fact asked in other words: everything but the
+/// instruction is the original's, and the set records which task it varies
+/// without changing the address of a set that records none.
+#[test]
+fn a_variant_asks_in_other_words_and_a_set_records_what_it_varies() {
+    let scratch = Scratch::new("variants");
+    let store = scratch.store();
+    let original = task("At what baud rate does the console run?")
+        .with_concepts(["console"])
+        .unwrap();
+    let variant = original
+        .with_instruction("Which baud rate is the console set to?")
+        .unwrap();
+    assert_ne!(variant.task.id, original.task.id);
+    assert_eq!(variant.task.kind, original.task.kind);
+    assert_eq!(variant.privileged, original.privileged);
+    assert_eq!(variant.concepts, original.concepts);
+    assert!(variant.with_instruction(" ").is_err(), "a blank question");
+
+    store.put(&original).unwrap();
+    store.put(&variant).unwrap();
+    let plain = TaskSet {
+        name: "originals".into(),
+        members: vec![entry(&original)],
+    };
+    let varied = TaskSet {
+        name: "originals".into(),
+        members: vec![TaskEntry {
+            variant_of: Some(original.task.id.clone()),
+            ..entry(&variant)
+        }],
+    };
+    let id = store.put_set(&varied).unwrap();
+    assert_eq!(store.get_set(&id).unwrap(), varied);
+    let canonical = |set: &TaskSet| serde_json::to_string(set).unwrap();
+    assert!(!canonical(&plain).contains("variant_of"));
+    assert!(canonical(&varied).contains("variant_of"));
+}
+
+#[test]
+fn a_retry_task_returns_to_the_task_it_retried_without_its_critiques() {
+    let original = task("At what baud rate does the console run?");
+    let retried = original
+        .with_privileged(Privileged {
+            kind: PrivilegedKind::Critique,
+            content: "The rate is wrong.".into(),
+            span: None,
+        })
+        .unwrap();
+    assert_ne!(retried.task.id, original.task.id);
+    assert_eq!(retried.without_critiques().unwrap(), original);
+    assert_eq!(original.without_critiques().unwrap(), original);
 }

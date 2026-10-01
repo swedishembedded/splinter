@@ -151,6 +151,14 @@ pub enum GenerateError {
         /// The runtime it names.
         runtime: String,
     },
+    /// A task cannot be varied; see [`super::can_vary`].
+    #[error("task {task} cannot be varied: {reason}")]
+    NotVaryable {
+        /// The task.
+        task: Digest,
+        /// Why not.
+        reason: &'static str,
+    },
     /// The source part is not UTF-8 text.
     #[error("part {part:?} of {source_id} is not UTF-8 text")]
     NotText {
@@ -191,11 +199,11 @@ pub enum GenerateError {
 /// documentation.
 #[derive(Clone)]
 pub struct ModelTaskGenerator {
-    model: Model,
-    store: SourceStore,
+    pub(super) model: Model,
+    pub(super) store: SourceStore,
     runtimes: Vec<RuntimeEnvironment>,
-    policy: GenerationPolicy,
-    mutation: MutationPolicy,
+    pub(super) policy: GenerationPolicy,
+    pub(super) mutation: MutationPolicy,
     cancel: Option<CancelToken>,
 }
 
@@ -277,7 +285,7 @@ impl ModelTaskGenerator {
             let runtime = self.runtime_for(kind)?;
             let brief = brief(kind, self.policy.tasks_per_request);
             let shown = shown(source);
-            let reply = self.request(&brief, &shown).await?;
+            let reply = self.request(GENERATION_METHOD, &brief, &shown).await?;
             proposals.push(Proposal {
                 kind: (*kind).clone(),
                 runtime,
@@ -319,19 +327,20 @@ impl ModelTaskGenerator {
             })
     }
 
-    /// The model's reply to `brief` over `shown`: the tasks it proposed,
-    /// or why there are none - no reply before a bound stopped the call,
+    /// The model's reply to `brief` over `shown`, asked as the typed call
+    /// `method`: the tasks it proposed, or why there are none - no reply before a bound stopped the call,
     /// or a reply still malformed after correction.
-    async fn request(
+    pub(super) async fn request<I: Serialize + ?Sized>(
         &self,
+        method: &str,
         brief: &str,
-        shown: &Sections<'_>,
+        shown: &I,
     ) -> Result<Result<Reply, Refusal>, GenerateError> {
         let mut options = SolveOptions::new(self.policy.deadline);
         options.max_output_tokens = self.policy.max_output_tokens;
         options.cancel = self.cancel.clone();
         options.stream_idle = self.model.stream_idle;
-        let method = Method::<Reply>::new(GENERATION_METHOD)
+        let method = Method::<Reply>::new(method)
             .task(brief)
             .role(ROLE)
             .max_repairs(self.policy.repairs);
@@ -377,7 +386,7 @@ fn shown(source: &SourceText) -> Sections<'_> {
 
 /// The digest of what one request showed the model: the brief and the
 /// sections.
-fn prompt_digest(brief: &str, shown: &Sections<'_>) -> Digest {
+pub(super) fn prompt_digest<I: Serialize + ?Sized>(brief: &str, shown: &I) -> Digest {
     let sections = serde_json::to_string(shown).unwrap_or_else(|e| {
         // Integers and strings always serialize.
         unreachable!("sections serialize: {e}")

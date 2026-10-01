@@ -33,6 +33,10 @@ use sven_sdk::schemars::JsonSchema;
 /// a schema's references.
 pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what baud rate does the console UART run?", "reference": "115200 baud", "evidence": [{"section": 0}], "material": null}]}"#;
 
+/// One reply to a request for variants, shown to the model beside the
+/// schema: the same shape, each task repeating the reference.
+pub(crate) const VARIANTS_EXAMPLE: &str = r#"{"tasks": [{"instruction": "Which baud rate is the console UART set to?", "reference": "115200 baud", "evidence": [{"section": 0}]}]}"#;
+
 /// A generator model's reply.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -115,6 +119,8 @@ mod tests {
     #[test]
     fn the_example_shown_to_the_model_is_a_reply() {
         let example: Result<Reply, _> = serde_json::from_str(REPLY_EXAMPLE);
+        assert!(example.is_ok_and(|r| r.tasks.len() == 1));
+        let example: Result<Reply, _> = serde_json::from_str(VARIANTS_EXAMPLE);
         assert!(example.is_ok_and(|r| r.tasks.len() == 1));
     }
 }

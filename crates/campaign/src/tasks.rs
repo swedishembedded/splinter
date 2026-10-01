@@ -347,6 +347,7 @@ impl Batch {
                 task: id,
                 generator: Some(generator.to_string()),
                 prompt,
+                variant_of: None,
             });
         }
         Ok(())
@@ -359,7 +360,7 @@ impl Batch {
 }
 
 /// A rejection reason as the report names it: its serialized form.
-fn reason_name(reason: &Rejection) -> String {
+pub(crate) fn reason_name(reason: &Rejection) -> String {
     serde_json::to_value(reason)
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))

@@ -115,7 +115,9 @@ pub(crate) fn word(value: &impl Serialize) -> String {
 }
 
 /// Counts by name, as `name n, name n`.
-fn tally<K: Serialize, V: std::fmt::Display>(counts: impl IntoIterator<Item = (K, V)>) -> String {
+pub(crate) fn tally<K: Serialize, V: std::fmt::Display>(
+    counts: impl IntoIterator<Item = (K, V)>,
+) -> String {
     let parts: Vec<String> = counts
         .into_iter()
         .map(|(k, v)| format!("{} {v}", word(&k)))

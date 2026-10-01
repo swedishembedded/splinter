@@ -16,7 +16,7 @@ splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-ru
 splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
-splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | list | show <ID>
+splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
 splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N] [--teacher REF]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
@@ -71,6 +71,7 @@ other provider from `BRAIN_API_KEY`.
 | solve | `solve` | a task set | an experience set |
 | verify | `verify` | an experience set | verdicts on its experiences |
 | frontier | `solve --frontier` | a task set | k graded attempts per task, a teacher's graded open-book solve of each task never solved, a pass@k measurement, the kept tasks' task and experience sets |
+| variants | `tasks variants` | a task set | a task set of the same facts asked in other words, each recording the task it varies; measured by the gate, never trained on |
 | critique | `critique` | an experience set | an experience set of critiques and revisions |
 | dataset | `dataset build` | experience sets | a dataset and its manifest |
 | train | `train` | datasets | a candidate adapter (not released) |
@@ -88,7 +89,14 @@ once more by the teacher (`teach`: the policy, or the model `--teacher`
 names) open-book - shown its grounding material - and graded the same
 way; only the tasks worth training on go on: those the policy fails at
 least sometimes and has a verified answer to, its own (the frontier) or
-the teacher's (taught); their failed attempts are critiqued and retried
+the teacher's (taught); the model that wrote the tasks writes up to three
+differently worded questions about each task kept (`variants`: one
+request per task, shown the section its evidence falls in, replying in the
+shape the tasks come in; each variant keeps the task's reference and
+evidence, so the same verifiers grade it, and must state the reference,
+stand on its own and be no repeat of the question or of a sibling) - the
+same facts in other words, which the gate measures and nothing trains on;
+their failed attempts are critiqued and retried
 once; the passing attempts, verified teacher answers and revisions, near
 duplicates removed and each concept, task kind and verification strength
 capped at its share (`select`), become an `sft-final` dataset; a
@@ -204,10 +212,25 @@ is printed with its numbers, and a check that could not be measured fails:
 
 | Check | Passes when |
 |---|---|
-| improvement | on the new datasets' held-out tasks, a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
+| improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
 | retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
 | anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
 | serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily, with the same answers as in-process (the same verdict, and answers that agree over their first nine tenths, runs of whitespace aside); each task answered differently is reported with both answers |
+
+The improvement check measures whether the candidate learned the facts it
+was trained on, on questions it was not trained on: the held-out records
+(a tenth of the new data, the newest) alone are too few for a sign test to
+reach significance, and questions about other facts cannot improve for a
+campaign that teaches facts. So the suite is completed with the stored
+variants of the tasks the candidate's trained-on records were projected
+from (`learn` writes them; `tasks variants` writes them for any task
+set). A variant of a task that was held out measures nothing the
+candidate learned and is not used. A variant whose wording the candidate
+trained on - the same question, a near duplicate, or its words inside a
+longer training prompt - is left out like any leaked held-out task. The
+gate prints how many variants were measured and how many were left out,
+by reason; the manifest records them. Retention, anchor and serve are
+measured as before.
 
 A release is written once under `<state>/releases/<hex>/`: the adapter
 file, read-only, and `manifest.json` in canonical JSON - the base model and

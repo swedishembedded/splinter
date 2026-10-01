@@ -111,6 +111,22 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--kinds is required"
     );
 
+    let Command::Tasks(TasksCommand::Variants {
+        task_set,
+        generator,
+        per_task,
+    }) = command(&["tasks", "variants", "ab12"])
+    else {
+        panic!("tasks variants");
+    };
+    assert_eq!(task_set, "ab12");
+    assert_eq!(generator, ModelRef::policy_default());
+    assert_eq!(per_task, DEFAULT_VARIANTS_PER_TASK);
+    assert!(matches!(
+        command(&["tasks", "variants", "ab12", "--per-task", "5"]),
+        Command::Tasks(TasksCommand::Variants { per_task: 5, .. })
+    ));
+
     let Command::Solve(solve) = command(&["solve", "ab12", "--solver", "local:Qwen/Qwen3-1.7B"])
     else {
         panic!("solve");

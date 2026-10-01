@@ -16,7 +16,8 @@
 //! champion exists, or from a champion since replaced, is refused before
 //! anything is measured. The gate ([`gate`]) grades the candidate and the
 //! champion (the base, before any release) closed-book on the same suites
-//! ([`probe`]): the new data's held-out tasks, every earlier release's, and
+//! ([`probe`]): the new data's held-out tasks - the records training held
+//! out and the variants of the tasks it trained on - every earlier release's, and
 //! the anchor suite ([`anchor`]), each without the tasks the candidate was
 //! trained on ([`leakage`]); then plain brain serves the candidate
 //! ([`serve`]). Only when every check passes is the release written
@@ -55,7 +56,7 @@ use crate::error::{io, CampaignError};
 use crate::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use crate::train::{load_candidate, Candidate, TrainingSummary};
 use gate::{Check, GateConfig, GateReport};
-use probe::{pair, Probe, Suite};
+use probe::{pair, Probe, Suite, SuiteSummary};
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]
@@ -272,6 +273,8 @@ fn grade_arm(
 /// The suites the gate grades on, each built or with why it could not be.
 struct Suites {
     held_out: Result<Suite, String>,
+    /// The variants among the held-out suite, when any were written.
+    variants: Option<SuiteSummary>,
     retention: Result<Vec<(ReleaseId, Suite)>, String>,
     anchor: Result<Option<anchor::FrozenAnchor>, String>,
     anchor_suite: Option<Suite>,
@@ -289,6 +292,7 @@ impl Suites {
                 let why = format!("the candidate's training records: {why}");
                 return Ok(Self {
                     held_out: Err(why.clone()),
+                    variants: None,
                     retention: Err(why.clone()),
                     anchor: Err(why),
                     anchor_suite: None,
@@ -299,7 +303,24 @@ impl Suites {
             leakage::exclude_leaked(&mut suite, &trained);
             suite
         };
-        let held_out = soft(probe::held_out(ctx, "held-out", &candidate.datasets))?.map(clean);
+        let improvement = soft((|| {
+            let held_out = clean(probe::held_out(ctx, "held-out", &candidate.datasets)?);
+            let variants = clean(probe::trained_variants(
+                ctx,
+                "variants",
+                &candidate.datasets,
+            )?);
+            Ok::<_, CampaignError>((held_out, variants))
+        })())?;
+        let (held_out, variants) = match improvement {
+            Ok((mut held_out, variants)) => {
+                let summary = (!variants.tasks.is_empty() || !variants.excluded.is_empty())
+                    .then(|| variants.summary());
+                held_out.absorb(variants);
+                (Ok(held_out), summary)
+            }
+            Err(why) => (Err(why), None),
+        };
         let retention = soft(champion.map_or(Ok(Vec::new()), |champion| {
             ReleaseStore::open(ctx.root())
                 .lineage(&champion.id)?
@@ -319,6 +340,7 @@ impl Suites {
             .map(|frozen| clean(frozen.probe_suite()));
         Ok(Self {
             held_out,
+            variants,
             retention,
             anchor,
             anchor_suite,
@@ -366,7 +388,12 @@ fn run_gate(
         Ok(suite) => match next() {
             Err(why) => Check::unmeasured(why),
             Ok((c, b)) => {
-                let check = gate::improvement(suite.summary(), &pair(suite, &c, &b), config.alpha);
+                let check = gate::improvement(
+                    suite.summary(),
+                    suites.variants.clone(),
+                    &pair(suite, &c, &b),
+                    config.alpha,
+                );
                 in_process = Some(c);
                 check
             }

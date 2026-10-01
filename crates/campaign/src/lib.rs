@@ -16,6 +16,8 @@
 //! * [`model_ref`] - the one way a command names a model.
 //! * [`sources`] - capture and inspect sources.
 //! * [`tasks`] - sources become a task set.
+//! * [`variants`] - the tasks kept for training asked again in other
+//!   words, to be measured and never trained on.
 //! * [`solving`] - a task set becomes an experience set.
 //! * [`verify`] - verdicts appended, by each task kind's verifiers;
 //!   [`judge`] - a judge's calibration.
@@ -63,6 +65,7 @@ pub mod sources;
 pub mod status;
 pub mod tasks;
 pub mod train;
+pub mod variants;
 pub mod verify;
 
 pub use config::Config;

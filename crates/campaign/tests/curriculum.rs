@@ -90,6 +90,7 @@ fn task_set(ctx: &Context, tasks: &[Task]) -> TaskSetId {
             task: ctx.tasks().put(task).unwrap(),
             generator: None,
             prompt: None,
+            variant_of: None,
         })
         .collect();
     ctx.tasks()

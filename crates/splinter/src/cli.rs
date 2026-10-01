@@ -19,6 +19,7 @@ use splinter_campaign::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_campaign::train::{
     DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
 };
+use splinter_campaign::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_store::annotation::Strength;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
@@ -272,6 +273,21 @@ pub enum TasksCommand {
         /// The model that writes the tasks.
         #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
         generator: ModelRef,
+    },
+    /// Write differently worded questions about each task of a task set,
+    /// into a task set of their own: the same facts, to be measured and
+    /// never trained on.
+    Variants {
+        /// The task set, by id or unique prefix.
+        #[arg(value_name = "TASKSET-ID")]
+        task_set: String,
+        /// The model that writes the variants (the one that wrote the
+        /// tasks).
+        #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
+        generator: ModelRef,
+        /// The most variants one task is given.
+        #[arg(long, default_value_t = DEFAULT_VARIANTS_PER_TASK, value_name = "N")]
+        per_task: usize,
     },
     /// List the stored task sets.
     List,

@@ -134,7 +134,9 @@ pub enum RelationKind {
     CritiqueOf,
     /// This experience revises the other.
     RevisionOf,
-    /// This experience is a variant of the other.
+    /// This experience is a variant of the other. (A task set records the
+    /// same relation between tasks, which are not experiences, on its
+    /// entries.)
     VariantOf,
 }
 

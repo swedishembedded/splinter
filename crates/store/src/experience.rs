@@ -408,6 +408,42 @@ impl Task {
         )
     }
 
+    /// This task asking `instruction` instead, everything else kept - the
+    /// kind, evidence, environment, reference and other privileged items,
+    /// declared concepts - so the answer that grades one grades the other:
+    /// a new task, with its own address.
+    pub fn with_instruction(
+        &self,
+        instruction: impl Into<String>,
+    ) -> Result<Self, ExperienceError> {
+        Self::build(
+            self.task.kind.clone(),
+            self.evidence.clone(),
+            self.environment.clone(),
+            instruction.into(),
+            self.privileged.clone(),
+            self.concepts.clone(),
+        )
+    }
+
+    /// This task without the critiques an earlier attempt's retry was
+    /// handed: the task as it was generated, whose address a retry's task
+    /// leaves. The same task when it carries none.
+    pub fn without_critiques(&self) -> Result<Self, ExperienceError> {
+        Self::build(
+            self.task.kind.clone(),
+            self.evidence.clone(),
+            self.environment.clone(),
+            self.instruction.clone(),
+            self.privileged
+                .iter()
+                .filter(|p| p.kind != PrivilegedKind::Critique)
+                .cloned()
+                .collect(),
+            self.concepts.clone(),
+        )
+    }
+
     /// This task with `item` added to what only the teacher sees: a new
     /// task, with its own address.
     pub fn with_privileged(&self, item: Privileged) -> Result<Self, ExperienceError> {

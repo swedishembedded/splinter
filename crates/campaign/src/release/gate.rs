@@ -9,8 +9,11 @@
 //! The release gate's four checks, the numbers each records, and how each
 //! is decided. A candidate is released only when all four pass:
 //!
-//! 1. **Improvement** on the new data's held-out tasks: brain's one-sided
-//!    paired sign test over the tasks both models were graded on,
+//! 1. **Improvement** on the new data's held-out tasks - the records
+//!    training held out, and the variants of the tasks it trained on (the
+//!    same fact in other words, which is what shows a fact was learned) -
+//!    brain's one-sided paired sign test over the tasks both models were
+//!    graded on,
 //!    candidate right and champion wrong against the reverse, significant
 //!    at `alpha` ([`DEFAULT_ALPHA`]). Ties and unpaired tasks carry no
 //!    evidence; they are excluded and counted.
@@ -115,8 +118,13 @@ impl<T> Check<T> {
 /// The improvement check's numbers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Improvement {
-    /// The new data's held-out suite.
+    /// The new data's held-out suite: the records training held out and
+    /// the variants of the tasks it trained on.
     pub suite: SuiteSummary,
+    /// The variants among them: how many were measured and how many were
+    /// left out, by reason; `None` when no variant was written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variants: Option<SuiteSummary>,
     /// Candidate against champion on it.
     pub comparison: Comparison,
     /// The sign test over the paired tasks.
@@ -251,6 +259,7 @@ impl GateReport {
 #[must_use]
 pub fn improvement(
     suite: SuiteSummary,
+    variants: Option<SuiteSummary>,
     outcomes: &[PairedOutcome],
     alpha: f64,
 ) -> Check<Improvement> {
@@ -276,6 +285,7 @@ pub fn improvement(
     Check::decided(
         Improvement {
             suite,
+            variants,
             comparison,
             sign_test: test,
             alpha,

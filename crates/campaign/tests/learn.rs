@@ -165,8 +165,8 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     assert_eq!(
         stages,
         [
-            "policy", "sources", "tasks", "solve", "verify", "teach", "critique", "select",
-            "dataset", "train", "release"
+            "policy", "sources", "tasks", "solve", "verify", "teach", "variants", "critique",
+            "select", "dataset", "train", "release"
         ]
     );
 }
@@ -194,7 +194,8 @@ fn a_dry_run_reports_the_plan_and_writes_nothing() {
     };
     assert!(plan.dry_run);
     assert_eq!(plan.kinds, ["recall", "denoise"]);
-    assert_eq!(plan.stages.len(), 12);
+    assert_eq!(plan.stages.len(), 13);
+    assert!(plan.stages.contains(&"variants"));
     assert!(
         plan.stages.contains(&"frontier"),
         "frontier selection is the default"

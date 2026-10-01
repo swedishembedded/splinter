@@ -44,6 +44,7 @@ pub mod grounding;
 pub mod kind;
 
 pub mod dedup;
+pub mod variants;
 
 mod admit;
 mod reply;
@@ -59,6 +60,7 @@ pub use generator::{GenerateError, ModelTaskGenerator, SourceText};
 pub use kind::{
     AnswerForm, Catalogue, KindError, Material, SolverEnvironment, TaskKind, VerifierKind,
 };
+pub use variants::{can_vary, DEFAULT_VARIANTS_PER_TASK};
 
 /// The generator's name in a task's provenance, before the model identity.
 pub const GENERATOR: &str = "splinter-knowledge/model-tasks@1";
@@ -184,6 +186,9 @@ pub enum Rejection {
     Duplicate,
     /// The instruction nearly repeats an admitted one.
     NearDuplicate,
+    /// A variant's reference is not the original's: it asks about another
+    /// fact.
+    ReferenceChanged,
     /// The task fails the store's validation (an empty instruction).
     Invalid,
 }

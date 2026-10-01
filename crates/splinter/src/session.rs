@@ -28,6 +28,7 @@ use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::status::status;
 use splinter_campaign::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_campaign::train::{train, BrainTrainer, TrainRequest};
+use splinter_campaign::variants;
 use splinter_campaign::verify::{verify_set, Judge};
 use splinter_campaign::{CampaignError, Config, Context};
 
@@ -269,6 +270,28 @@ impl Session {
                     )
                 })?;
                 emit(json, &generated);
+            }
+            Command::Tasks(TasksCommand::Variants {
+                task_set,
+                generator,
+                per_task,
+            }) => {
+                let set = resolve_task_set(ctx, &task_set)?;
+                let arguments =
+                    json!({ "task_set": set, "generator": generator, "per_task": per_task });
+                let varied = record(ctx, "tasks variants", &arguments, |run| {
+                    variants::generate_variants(
+                        ctx,
+                        &variants::VariantsRequest {
+                            task_set: &set,
+                            generator: &generator,
+                            per_task,
+                            deadline: None,
+                            cancel: run.cancel_token(),
+                        },
+                    )
+                })?;
+                emit(json, &varied);
             }
             Command::Tasks(TasksCommand::List) => emit(json, &tasks::list(ctx)?),
             Command::Tasks(TasksCommand::Show { id }) => emit(json, &tasks::show(ctx, &id)?),

@@ -52,6 +52,14 @@ pub struct TaskEntry {
     pub generator: Option<String>,
     /// The digest of the prompt its generator was sent, when there was one.
     pub prompt: Option<Digest>,
+    /// The task this one is a variant of - the same fact asked in other
+    /// words, to be graded by the same verifiers and never trained on;
+    /// the task-level form of
+    /// [`RelationKind::VariantOf`](crate::annotation::RelationKind::VariantOf).
+    /// Left out of the canonical form when `None`, so a set of tasks that
+    /// are no variants keeps its address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant_of: Option<Digest>,
 }
 
 /// A named, ordered list of stored tasks.

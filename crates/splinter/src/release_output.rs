@@ -10,7 +10,7 @@ use splinter_campaign::eval::{EvalReport, Evaluated};
 use splinter_campaign::release::gate::{Check, GateReport};
 use splinter_campaign::release::{ReleaseList, Released, RolledBack};
 
-use crate::output::Report;
+use crate::output::{tally, Report};
 
 fn share(value: Option<f64>) -> String {
     value.map_or("not measured".into(), |v| format!("{v:.3}"))
@@ -45,6 +45,20 @@ impl Report for GateReport {
                 c.unpaired,
                 m.sign_test.p_value,
                 m.alpha
+            );
+        }
+        if let Some(v) = self
+            .improvement
+            .measured
+            .as_ref()
+            .and_then(|m| m.variants.as_ref())
+        {
+            let _ = writeln!(
+                out,
+                "               {} of them variant(s) of what it trained on, {} left out ({})",
+                v.tasks,
+                v.excluded.values().sum::<usize>(),
+                tally(&v.excluded)
             );
         }
         let _ = writeln!(out, "  retention    {}", verdict(&self.retention));

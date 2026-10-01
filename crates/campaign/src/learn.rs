@@ -7,7 +7,7 @@
 // can procure our services by sending an email to info@swedishembedded.com.
 
 //! `learn`: sources -> tasks -> solve -> verify -> teach -> frontier ->
-//! critique and retry -> select -> dataset -> train -> release, as one
+//! variants -> critique and retry -> select -> dataset -> train -> release, as one
 //! recorded run whose every stage is also a command of its own.
 //!
 //! Each stage hands the next the content-addressed set it wrote, and its
@@ -26,7 +26,10 @@
 //! the tasks worth training on go on: those the student fails at least
 //! sometimes and that have a verified answer, its own or the teacher's
 //! ([`crate::curriculum::frontier`]; `--no-frontier` solves each task once
-//! and keeps them all). Failed attempts are critiqued and retried; the
+//! and keeps them all). The generator model then writes differently worded
+//! questions about each task kept ([`crate::variants`]): the same facts,
+//! asked in other words, that the release gate measures the candidate on
+//! and that are never trained on. Failed attempts are critiqued and retried; the
 //! passing attempts, verified teacher answers and revisions are
 //! deduplicated and capped per concept, kind and strength
 //! ([`crate::curriculum::quota`]), and the `sft-final` view over what is
@@ -65,12 +68,15 @@ use crate::train::{
     train, Candidate, TrainRequest, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION,
     DEFAULT_STEPS,
 };
+use crate::variants::{
+    generate_variants, VariantsGenerated, VariantsRequest, DEFAULT_VARIANTS_PER_TASK,
+};
 use crate::verify::{verify_set, Verified};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 12] = [
-    "policy", "sources", "tasks", "solve", "verify", "teach", "frontier", "critique", "select",
-    "dataset", "train", "release",
+pub const STAGES: [&str; 13] = [
+    "policy", "sources", "tasks", "solve", "verify", "teach", "frontier", "variants", "critique",
+    "select", "dataset", "train", "release",
 ];
 
 /// One `learn`.
@@ -155,6 +161,8 @@ pub struct LearnReport {
     pub teach: Option<Taught>,
     /// The frontier stage: pass@k, and the tasks kept.
     pub frontier: Option<Frontier>,
+    /// The variants stage: the tasks kept, asked in other words.
+    pub variants: Option<VariantsGenerated>,
     /// The critique stage.
     pub critique: Option<Critiqued>,
     /// The select stage: the training set under the quotas.
@@ -381,10 +389,12 @@ impl Pipeline<'_> {
         )?;
         run.stage("teach", &taught)?;
         let mut sets: Vec<SetId> = Vec::new();
+        let kept_tasks;
         if frontier.is_some() {
             let kept = select_frontier(ctx, &task_set, &solved, &taught)?;
             run.stage("frontier", &kept)?;
             attempts = kept.frontier_experience_set.clone();
+            kept_tasks = kept.frontier_task_set.clone();
             let d = kept.distribution;
             report.teach = Some(taught);
             report.frontier = Some(kept);
@@ -403,9 +413,27 @@ impl Pipeline<'_> {
             failed = d.kept();
         } else {
             // Every task is kept, and the teacher's verified answers with it.
+            kept_tasks = task_set.clone();
             sets.push(taught.solve.experience_set.clone());
             report.teach = Some(taught);
         }
+
+        if let Some(why) = spent("variants") {
+            report.stopped = Some(why);
+            return Ok(());
+        }
+        let varied = generate_variants(
+            ctx,
+            &VariantsRequest {
+                task_set: &kept_tasks,
+                generator,
+                per_task: DEFAULT_VARIANTS_PER_TASK,
+                deadline,
+                cancel: run.cancel_token(),
+            },
+        )?;
+        run.stage("variants", &varied)?;
+        report.variants = Some(varied);
 
         sets.insert(0, attempts.clone());
         if failed > 0 {

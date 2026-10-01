@@ -17,6 +17,12 @@
 //! closed-book: the model sees the instruction alone. A task that is not
 //! closed-book, or that cannot be found, is excluded and counted.
 //!
+//! The variants suite is the same fact asked in other words: the stored
+//! variants ([`crate::variants`]) of the tasks the datasets' trained-on
+//! records were projected from. It is built from what training trained on,
+//! so only the facts the candidate learned are measured; a variant of a
+//! held-out record's task measures nothing it learned.
+//!
 //! A model is probed decoding greedily where its sampling can be set here
 //! ([`greedy`]), so a verdict is the weights', not one draw's.
 //!
@@ -30,7 +36,7 @@
 //! Probe answers are not stored as experiences, so nothing a probe
 //! produces can reach a training set.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::solve::{solve, Model, SolveOptions};
@@ -49,6 +55,7 @@ use crate::context::Context;
 use crate::error::{io, CampaignError};
 use crate::model_ref::ModelRef;
 use crate::solving::DEFAULT_SOLVE_DEADLINE;
+use crate::variants::stored_variants;
 use crate::verify::verifiers_for;
 
 /// Why a task was left out of a suite: it is not solved closed-book.
@@ -105,7 +112,17 @@ impl Suite {
         suite
     }
 
-    fn add(&mut self, task: Task) {
+    /// This suite and `other`'s tasks, and what each left out.
+    pub(crate) fn absorb(&mut self, other: Suite) {
+        for task in other.tasks {
+            self.add(task);
+        }
+        for (reason, count) in other.excluded {
+            *self.excluded.entry(reason).or_default() += count;
+        }
+    }
+
+    pub(crate) fn add(&mut self, task: Task) {
         if task.environment.kind != Environment::CLOSED_BOOK {
             *self.excluded.entry(NOT_CLOSED_BOOK.into()).or_default() += 1;
         } else if !self.tasks.iter().any(|t| t.task.id == task.task.id) {
@@ -152,6 +169,42 @@ pub fn held_out(
         }
     }
     Ok(suite)
+}
+
+/// The variants suite of `datasets`, named `name`: the stored variants of
+/// every task a trained-on record was projected from. A record's task is
+/// known by the address it was generated under, the task of a retry
+/// without its critiques.
+pub fn trained_variants(
+    ctx: &Context,
+    name: impl Into<String>,
+    datasets: &[DatasetId],
+) -> Result<Suite, CampaignError> {
+    let (trained_on, _) = split_records(ctx, datasets)?;
+    let mut trained = BTreeSet::new();
+    for line in &trained_on {
+        if let Some(task) = trained_task(ctx, line)? {
+            trained.insert(task);
+        }
+    }
+    let mut suite = Suite::of_tasks(name, Vec::new());
+    for (variant, original) in stored_variants(ctx)? {
+        if trained.contains(&original) {
+            suite.add(ctx.tasks().get(&variant)?);
+        }
+    }
+    Ok(suite)
+}
+
+/// The address of the task the record `line` was trained from: its task
+/// as generated when that can be found, else the one its metadata names.
+fn trained_task(ctx: &Context, line: &str) -> Result<Option<Digest>, CampaignError> {
+    if let Some(task) = record_task(ctx, line)? {
+        return Ok(Some(task.without_critiques()?.task.id));
+    }
+    Ok(serde_json::from_str::<RecordLine>(line)
+        .ok()
+        .and_then(|record| record.metadata.task))
 }
 
 /// Where a record came from, as its metadata says.

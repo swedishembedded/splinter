@@ -75,7 +75,9 @@ A trained candidate continues the current release (the champion) - by
 supervised fine-tuning with a replay of what earlier releases learned, or
 by DPO on pairs preferring a verified answer over a failed one - and
 becomes the policy only if the release gate measures that it improved on
-the new material's held-out questions, kept what earlier releases
+the new material's held-out questions - the facts it was trained on asked
+in other words, which `learn` has the generator model write for each task
+kept and which are never trained on - kept what earlier releases
 learned, held a frozen anchor suite of general tasks, and runs on plain
 `brain serve` with the same answers (to within the numerical noise of
 two processes decoding one model). A held-out question

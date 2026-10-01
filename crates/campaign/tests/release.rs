@@ -9,7 +9,9 @@
 //! Spec: a candidate becomes the policy only through the release gate.
 //!
 //! * It is released when it beats the champion on the new data's held-out
-//!   tasks (a significant sign test), keeps every earlier release's
+//!   tasks - the records training held out, and the variants (the same
+//!   fact in other words) of the tasks it trained on - by a significant
+//!   sign test, keeps every earlier release's
 //!   held-out tasks, holds the anchor suite, and serves on plain brain with
 //!   its own digest and the same answers, graded the same; the release is
 //!   immutable, its manifest records every number, and `default` points at
@@ -22,6 +24,9 @@
 //! * A held-out task the candidate was trained on - the same question, or
 //!   a near duplicate of it, among its training records - measures nothing
 //!   and is left out of the gate's suites, counted as leaked.
+//! * The variants are counted: how many were measured, and how many were
+//!   left out and why. A variant of a task that was held out, not trained
+//!   on, is not a measure of what was learned.
 //! * The next candidate trains from the champion, replaying a seeded
 //!   sample of the earlier release's training records.
 //! * `rollback` moves an alias back along its lineage, and refuses with no
@@ -37,8 +42,9 @@
 mod common;
 
 use common::gate::{
-    anchor_file, candidate, dataset, dataset_of, decide, gate_context, policy, question, released,
-    Brain, FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
+    anchor_file, candidate, candidate_on, dataset, dataset_of, decide, gate_context, policy,
+    question, released, variant_asking, variant_set, variant_set_of, Brain, FakeTrainer, ANCHOR,
+    BASE_BYTES, FACTS, NOW,
 };
 use common::Scratch;
 use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
@@ -501,4 +507,65 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
         refused.is_refusal(),
         "no release, so no held-out suite: {refused}"
     );
+}
+
+#[test]
+fn variants_of_the_trained_facts_give_the_sign_test_enough_tasks() {
+    let (scratch, ctx) = gate_context("release-variants", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    // Twenty facts: two held out, so a sign test over the records alone
+    // can never reach significance (two wins is p = 0.25).
+    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 20), &[ANCHOR, "alpha"]);
+    let alone = blocked(&ctx, &candidate).gate;
+    assert!(!alone.improvement.passed, "{alone:#?}");
+    let measured = alone.improvement.measured.as_ref().unwrap();
+    assert_eq!(measured.suite.tasks, 2);
+    assert_eq!(measured.variants, None, "no variant was written");
+
+    // Nine variants of three trained facts; a variant of the held-out
+    // fact (not learned from); and a variant whose wording is a question
+    // the candidate trained on.
+    variant_set(&ctx, "alpha", &[0, 1, 2], 3);
+    variant_set(&ctx, "alpha", &[19], 3);
+    variant_set_of(
+        &ctx,
+        "alpha",
+        vec![(3, variant_asking(&ctx, "alpha", 3, &question("alpha", 4)))],
+    );
+
+    let decided = decide(&ctx, &candidate);
+    let gate = &decided.gate;
+    assert!(gate.passed, "{gate:#?}");
+    let improvement = gate.improvement.measured.as_ref().unwrap();
+    assert_eq!(
+        improvement.suite.tasks,
+        2 + 9,
+        "held-out records and variants"
+    );
+    assert_eq!(improvement.comparison.candidate_wins, 11);
+    assert!(improvement.sign_test.p_value < improvement.alpha);
+    let variants = improvement.variants.as_ref().unwrap();
+    assert_eq!(variants.tasks, 9, "{variants:#?}");
+    assert_eq!(
+        variants.excluded.iter().collect::<Vec<_>>(),
+        [(&"leaked".to_string(), &1)],
+        "the question trained on measures nothing"
+    );
+    assert!(decided.release.is_some());
+}
+
+#[test]
+fn variants_of_what_the_candidate_did_not_learn_do_not_count_as_evidence() {
+    let (scratch, ctx) = gate_context("release-variants-unlearned", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    // It learned nothing of "alpha": its variants stay wrong, like its
+    // held-out records, so the extra tasks add ties, not wins.
+    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 20), &[ANCHOR]);
+    variant_set(&ctx, "alpha", &[0, 1, 2], 3);
+
+    let gate = blocked(&ctx, &candidate).gate;
+    let improvement = gate.improvement.measured.as_ref().unwrap();
+    assert_eq!(improvement.variants.as_ref().unwrap().tasks, 9);
+    assert_eq!(improvement.sign_test.discordant, 0);
+    assert!(!gate.improvement.passed);
 }

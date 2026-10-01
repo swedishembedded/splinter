@@ -7,8 +7,9 @@
 use std::fmt::Write as _;
 
 use splinter_campaign::learn::{LearnPlan, LearnReport, Learned};
+use splinter_campaign::variants::VariantsGenerated;
 
-use crate::output::{source_line, word, Report};
+use crate::output::{source_line, tally, word, Report};
 
 /// One line saying what a finished `learn` stage did, from its summary.
 pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
@@ -54,6 +55,15 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
                 field("frontier_task_set")
             )
         }
+        "variants" => format!(
+            "{} variant(s) of {} task(s){}",
+            field("variants"),
+            field("tasks"),
+            match &summary["variant_set"] {
+                serde_json::Value::String(set) => format!(" in {set}"),
+                _ => String::new(),
+            }
+        ),
         "select" => {
             let s = &summary["selection"];
             format!(
@@ -77,6 +87,28 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
             _ => format!("released {}", field("release")),
         },
         _ => summary.to_string(),
+    }
+}
+
+impl Report for VariantsGenerated {
+    fn human(&self) -> String {
+        let mut out = match &self.variant_set {
+            Some(set) => format!(
+                "task set {set}: {} variant(s) of {} task(s)\n",
+                self.variants, self.tasks
+            ),
+            None => format!("no variant admitted for {} task(s)\n", self.tasks),
+        };
+        if !self.ineligible.is_empty() {
+            let _ = writeln!(out, "  not varied: {}", tally(&self.ineligible));
+        }
+        if !self.rejected.is_empty() {
+            let _ = writeln!(out, "  rejected: {}", tally(&self.rejected));
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "  stopped: {why}");
+        }
+        out
     }
 }
 
@@ -128,6 +160,9 @@ impl Report for LearnReport {
         }
         if let Some(r) = &self.frontier {
             stage(&mut out, "frontier", r.human());
+        }
+        if let Some(r) = &self.variants {
+            stage(&mut out, "variants", r.human());
         }
         if let Some(r) = &self.critique {
             stage(&mut out, "critique", r.human());

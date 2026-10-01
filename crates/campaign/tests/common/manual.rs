@@ -30,10 +30,52 @@ pub const BAUD_QUOTE: &str = "runs at 115200 baud";
 /// The baud-rate question the policy answers right.
 pub const BAUD_QUESTION: &str = "At what baud rate does the Frobnicator console UART run?";
 
-/// The policy; see the module documentation.
+/// The idle-current question the policy answers wrong until it is given
+/// feedback.
+pub const IDLE_QUESTION: &str = "How much current does the Frobnicator draw when idle?";
+
+/// Other words for [`BAUD_QUESTION`].
+pub const BAUD_VARIANTS: [&str; 3] = [
+    "Which baud rate is the Frobnicator's console UART set to?",
+    "What speed, in baud, does the Frobnicator console serial line use?",
+    "Tell me the console UART baud rate of the Frobnicator.",
+];
+
+/// Other words for [`IDLE_QUESTION`].
+pub const IDLE_VARIANTS: [&str; 3] = [
+    "What is the Frobnicator's idle current draw?",
+    "How many milliamps does the idle Frobnicator consume?",
+    "Tell me the Frobnicator's current consumption when idle.",
+];
+
+/// A generator's reply to a request for variants of the question it is
+/// shown: the three other wordings, repeating the answer; `None` when the
+/// prompt is no such request.
+pub fn variants_reply(prompt: &str) -> Option<String> {
+    if !prompt.contains("differently worded questions") {
+        return None;
+    }
+    let (wordings, reference) = if prompt.contains(BAUD_QUESTION) {
+        (BAUD_VARIANTS, "115200 baud")
+    } else {
+        (IDLE_VARIANTS, "40 mA")
+    };
+    let tasks: Vec<_> = wordings
+        .iter()
+        .map(
+            |w| json!({ "instruction": w, "reference": reference, "evidence": [{ "section": 0 }] }),
+        )
+        .collect();
+    Some(json!({ "tasks": tasks }).to_string())
+}
+
+/// The policy; see the module documentation. It writes the variants of the
+/// tasks it wrote when asked.
 pub fn manual_policy() -> Scripted {
     Scripted::new(|prompt| {
-        if prompt.contains("You write training tasks") {
+        if let Some(variants) = variants_reply(prompt) {
+            variants
+        } else if prompt.contains("You write training tasks") {
             json!({ "tasks": [
                 {
                     "instruction": BAUD_QUESTION,
@@ -41,7 +83,7 @@ pub fn manual_policy() -> Scripted {
                     "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
                 },
                 {
-                    "instruction": "How much current does the Frobnicator draw when idle?",
+                    "instruction": IDLE_QUESTION,
                     "reference": "40 mA",
                     "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
                 }

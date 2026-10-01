@@ -38,6 +38,7 @@ use splinter_store::annotation::Strength;
 use splinter_store::clock::FixedClock;
 use splinter_store::digest::Digest;
 use splinter_store::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use splinter_views::{
     DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, WriteOptions,
 };
@@ -290,7 +291,11 @@ pub fn fast_gate() -> GateConfig {
 /// Trains a candidate knowing `knows` on [`FACTS`] facts about `topic`,
 /// from the policy.
 pub fn candidate(ctx: &Context, topic: &str, knows: &[&str]) -> (Candidate, FakeTrainer) {
-    let data = dataset(ctx, topic, FACTS);
+    candidate_on(ctx, dataset(ctx, topic, FACTS), knows)
+}
+
+/// Trains a candidate knowing `knows` on `data`, from the policy.
+pub fn candidate_on(ctx: &Context, data: DatasetId, knows: &[&str]) -> (Candidate, FakeTrainer) {
     let trainer = FakeTrainer::knowing(knows);
     let candidate = train(
         ctx,
@@ -307,6 +312,61 @@ pub fn candidate(ctx: &Context, topic: &str, knows: &[&str]) -> (Candidate, Fake
     )
     .unwrap();
     (candidate, trainer)
+}
+
+/// The ways a variant of a fact is worded: each keeps the question's own
+/// words, so a scripted model that knows the topic answers it, and adds
+/// enough others to be no near duplicate of the question.
+const WORDINGS: [&str; 3] = [
+    "Please answer this question:",
+    "Here is a question for you:",
+    "Quick one before we go on:",
+];
+
+/// `fact(topic, i)` asked in other words ([`WORDINGS`]), stored.
+pub fn variant_of_fact(ctx: &Context, topic: &str, i: usize, wording: usize) -> Task {
+    let instruction = format!("{} {}", WORDINGS[wording], question(topic, i));
+    variant_asking(ctx, topic, i, &instruction)
+}
+
+/// `fact(topic, i)` asking `instruction`, stored.
+pub fn variant_asking(ctx: &Context, topic: &str, i: usize, instruction: &str) -> Task {
+    let variant = fact(topic, i).with_instruction(instruction).unwrap();
+    ctx.tasks().put(&variant).unwrap();
+    variant
+}
+
+/// Stores a task set of variants: `variants` of the facts about `topic`
+/// numbered `facts`, each in the first `wordings` ways, each recorded as a
+/// variant of its fact.
+pub fn variant_set(ctx: &Context, topic: &str, facts: &[usize], wordings: usize) -> TaskSetId {
+    let mut members = Vec::new();
+    for &i in facts {
+        for wording in 0..wordings {
+            members.push((i, variant_of_fact(ctx, topic, i, wording)));
+        }
+    }
+    variant_set_of(ctx, topic, members)
+}
+
+/// Stores a task set of `variants`, each with the fact about `topic` it is
+/// a variant of.
+pub fn variant_set_of(ctx: &Context, topic: &str, variants: Vec<(usize, Task)>) -> TaskSetId {
+    let members = variants
+        .into_iter()
+        .map(|(i, task)| TaskEntry {
+            task: task.task.id,
+            generator: Some("scripted/generator".into()),
+            prompt: None,
+            variant_of: Some(fact(topic, i).task.id),
+        })
+        .collect();
+    ctx.tasks()
+        .put_set(&TaskSet {
+            name: format!("variants of {topic} facts"),
+            members,
+        })
+        .unwrap()
 }
 
 /// Runs the gate on `candidate` under `default`; a release it writes is
