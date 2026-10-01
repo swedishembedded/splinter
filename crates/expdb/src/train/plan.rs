@@ -16,7 +16,7 @@ use crate::blob::BlobRef;
 use crate::error::{Error, Result};
 use crate::id::{ContentId, RecordId};
 use crate::manifest::Snapshot;
-use crate::model::DatasetNode;
+use crate::model::{DatasetNode, TimeRange};
 
 /// Data a sample refers to, resolved to text only when it is needed.
 /// Siblings refer to the same context, so it is stored once.
@@ -54,6 +54,33 @@ pub enum DataRef {
         /// Where they are.
         blob: BlobRef,
     },
+    /// What a stream held over an interval of its episode's clock.
+    Window {
+        /// The stream.
+        stream: RecordId,
+        /// The span, on the episode's clock.
+        interval: TimeRange,
+    },
+    /// An action over an interval, with its payload.
+    ActionSegment {
+        /// The action record.
+        record: RecordId,
+    },
+    /// The text or details an event carries.
+    EventPayload {
+        /// The event record.
+        record: RecordId,
+    },
+}
+
+/// A negative example and whether it was chosen to be hard.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Negative {
+    /// What is not a match.
+    pub data: DataRef,
+    /// Whether it was taken from nearby in time, where telling it from the
+    /// positive takes more than noticing the moment is different.
+    pub hard: bool,
 }
 
 /// One attempt of a group and how it compares with the rest.
@@ -127,6 +154,40 @@ pub enum SampleBody {
         score: f64,
         /// How sure the evaluator is.
         confidence: f64,
+    },
+    /// Predict `target` from `context` and `actions`.
+    WorldModel {
+        /// The past, a window of each stream.
+        context: Vec<DataRef>,
+        /// The actions that began in the span predicted.
+        actions: Vec<DataRef>,
+        /// The future, a window of each stream.
+        target: Vec<DataRef>,
+    },
+    /// `positive` goes with `anchor`; `negatives` do not.
+    Contrastive {
+        /// A window of one modality.
+        anchor: DataRef,
+        /// The same moment of the other.
+        positive: DataRef,
+        /// Other moments, near and far.
+        negatives: Vec<Negative>,
+    },
+    /// Fill in `masked` from `visible`.
+    Masked {
+        /// What is shown.
+        visible: Vec<DataRef>,
+        /// What is hidden.
+        masked: DataRef,
+    },
+    /// Produce `actions` from what was seen and said.
+    ActionChunk {
+        /// The recent past of each observation stream.
+        observations: Vec<DataRef>,
+        /// What the robot was told, if it was told.
+        instruction: Option<DataRef>,
+        /// The actions that followed.
+        actions: Vec<DataRef>,
     },
 }
 
@@ -212,6 +273,10 @@ impl Snapshot {
             Objective::Grpo => self.compile_grpo(recipe)?,
             Objective::Ppo => self.compile_ppo(recipe)?,
             Objective::Prm => self.compile_prm(recipe)?,
+            Objective::WorldModel => self.compile_world_model(recipe)?,
+            Objective::Contrastive => self.compile_contrastive(recipe)?,
+            Objective::Masked => self.compile_masked(recipe)?,
+            Objective::ActionChunk => self.compile_action_chunk(recipe)?,
         };
         Ok(TrainingPlan {
             snapshot: self.id(),

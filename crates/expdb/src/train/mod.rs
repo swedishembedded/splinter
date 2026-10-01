@@ -14,10 +14,16 @@
 //! together with the snapshot it ran on. Exports and token caches are only
 //! ever derived from it.
 
+mod action_chunk;
+mod contrastive;
 mod dpo;
 mod export;
+mod flow;
 mod grpo;
 mod loader;
+mod masked;
+mod mm;
+mod mm_select;
 mod plan;
 mod ppo;
 mod prm;
@@ -26,9 +32,12 @@ mod render;
 mod rng;
 mod select;
 mod sft;
+mod world;
 
 pub use export::{Materialized, MaterializedRollout};
+pub use flow::{flow_matching, FlowSample};
 pub use loader::{Loader, LoaderConfig};
-pub use plan::{DataRef, Rollout, Sample, SampleBody, TrainingPlan};
-pub use recipe::{Objective, Recipe};
+pub use mm::{MaterializedNegative, MaterializedSpan};
+pub use plan::{DataRef, Negative, Rollout, Sample, SampleBody, TrainingPlan};
+pub use recipe::{MmSpec, Objective, Recipe};
 pub use rng::Rng;

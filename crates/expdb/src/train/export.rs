@@ -12,6 +12,7 @@ use std::io::Write;
 
 use serde::Serialize;
 
+use super::mm::{MaterializedNegative, MaterializedSpan};
 use super::plan::{Sample, SampleBody, TrainingPlan};
 use crate::error::{Error, Result};
 use crate::id::ContentId;
@@ -89,9 +90,47 @@ pub enum Materialized {
         /// How sure the evaluator is.
         confidence: f64,
     },
+    /// Predict `target` from `context` and `actions`.
+    WorldModel {
+        /// The past of each stream.
+        context: Vec<MaterializedSpan>,
+        /// The actions that began in the span predicted.
+        actions: Vec<MaterializedSpan>,
+        /// The future of each stream.
+        target: Vec<MaterializedSpan>,
+    },
+    /// `positive` goes with `anchor`; `negatives` do not.
+    Contrastive {
+        /// A window of one modality.
+        anchor: MaterializedSpan,
+        /// The same moment of the other.
+        positive: MaterializedSpan,
+        /// Other moments, near and far.
+        negatives: Vec<MaterializedNegative>,
+    },
+    /// Fill in `masked` from `visible`.
+    Masked {
+        /// What is shown.
+        visible: Vec<MaterializedSpan>,
+        /// What is hidden.
+        masked: MaterializedSpan,
+    },
+    /// Produce `actions` from what was seen and said.
+    ActionChunk {
+        /// The recent past of each observation stream.
+        observations: Vec<MaterializedSpan>,
+        /// What the robot was told, if it was told.
+        instruction: Option<String>,
+        /// The actions that followed.
+        actions: Vec<MaterializedSpan>,
+    },
 }
 
 impl Snapshot {
+    fn spans(&self, refs: &[super::plan::DataRef]) -> Result<Vec<MaterializedSpan>> {
+        refs.iter().map(|r| self.read_span(r)).collect()
+    }
+
     /// Resolves a sample's references to text.
     pub fn materialize(&self, sample: &Sample) -> Result<Materialized> {
         Ok(match &sample.body {
@@ -157,6 +196,51 @@ impl Snapshot {
                 step: self.render(step)?,
                 score: *score,
                 confidence: *confidence,
+            },
+            SampleBody::WorldModel {
+                context,
+                actions,
+                target,
+            } => Materialized::WorldModel {
+                context: self.spans(context)?,
+                actions: self.spans(actions)?,
+                target: self.spans(target)?,
+            },
+            SampleBody::Contrastive {
+                anchor,
+                positive,
+                negatives,
+            } => Materialized::Contrastive {
+                anchor: self.read_span(anchor)?,
+                positive: self.read_span(positive)?,
+                negatives: negatives
+                    .iter()
+                    .map(|n| {
+                        Ok(MaterializedNegative {
+                            span: self.read_span(&n.data)?,
+                            hard: n.hard,
+                        })
+                    })
+                    .collect::<Result<_>>()?,
+            },
+            SampleBody::Masked { visible, masked } => Materialized::Masked {
+                visible: self.spans(visible)?,
+                masked: self.read_span(masked)?,
+            },
+            SampleBody::ActionChunk {
+                observations,
+                instruction,
+                actions,
+            } => Materialized::ActionChunk {
+                observations: self.spans(observations)?,
+                instruction: instruction
+                    .as_ref()
+                    .map(|i| {
+                        self.read_span(i)
+                            .map(|s| String::from_utf8_lossy(&s.bytes).into_owned())
+                    })
+                    .transpose()?,
+                actions: self.spans(actions)?,
             },
         })
     }

@@ -24,6 +24,64 @@ pub enum Objective {
     Ppo,
     /// Learn a score for each step.
     Prm,
+    /// Predict the future of the streams from their past and an action.
+    WorldModel,
+    /// Align two modalities of one moment, against nearby and far moments.
+    Contrastive,
+    /// Predict one hidden stream from everything around it.
+    Masked,
+    /// Produce the actions that follow, from observations and an instruction.
+    ActionChunk,
+}
+
+/// What a multimodal objective windows over. Times are nanoseconds on the
+/// episode's clock.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MmSpec {
+    /// Observation streams by name; empty means every recorded stream.
+    pub streams: Vec<String>,
+    /// How much of the past is context.
+    pub past_ns: i64,
+    /// How much of the future is the target.
+    pub future_ns: i64,
+    /// The spacing of anchors when no action sets them.
+    pub stride_ns: i64,
+    /// The width of a contrastive or masked window.
+    pub window_ns: i64,
+    /// Contrastive: the two modalities, by stream name.
+    pub pair: Option<(String, String)>,
+    /// Contrastive: how far in time a hard negative is taken.
+    pub hard_shift_ns: i64,
+    /// Contrastive: negatives per sample, the hard one included.
+    pub negatives: usize,
+    /// Masked: the stream that is hidden.
+    pub target_stream: Option<String>,
+    /// Masked: how much of the surroundings is shown.
+    pub context_ns: i64,
+    /// Action chunk: how far ahead the actions reach.
+    pub horizon_ns: i64,
+    /// Action chunk: the event that carries the instruction.
+    pub instruction_event: String,
+}
+
+impl Default for MmSpec {
+    fn default() -> Self {
+        const SECOND: i64 = 1_000_000_000;
+        Self {
+            streams: Vec::new(),
+            past_ns: SECOND,
+            future_ns: SECOND,
+            stride_ns: SECOND,
+            window_ns: SECOND,
+            pair: None,
+            hard_shift_ns: 5 * SECOND,
+            negatives: 2,
+            target_stream: None,
+            context_ns: SECOND,
+            horizon_ns: SECOND,
+            instruction_event: "instruction".into(),
+        }
+    }
 }
 
 /// What is wanted from the experience. Settings an objective does not use
@@ -62,6 +120,8 @@ pub struct Recipe {
     pub terminal_reward: bool,
     /// PRM: the evaluation criterion that labels steps.
     pub criterion: String,
+    /// Multimodal objectives: what to window over.
+    pub mm: MmSpec,
 }
 
 impl Recipe {
@@ -83,6 +143,7 @@ impl Recipe {
             require_mixed: true,
             terminal_reward: true,
             criterion: "reasoning_quality".into(),
+            mm: MmSpec::default(),
         }
     }
 
@@ -109,6 +170,26 @@ impl Recipe {
     /// Step labels from evaluations.
     pub fn prm() -> Self {
         Self::new(Objective::Prm)
+    }
+
+    /// Predicting the future of streams from their past and an action.
+    pub fn world_model() -> Self {
+        Self::new(Objective::WorldModel)
+    }
+
+    /// Aligning two modalities.
+    pub fn contrastive() -> Self {
+        Self::new(Objective::Contrastive)
+    }
+
+    /// Predicting a hidden stream from everything around it.
+    pub fn masked() -> Self {
+        Self::new(Objective::Masked)
+    }
+
+    /// Producing actions from observations and an instruction.
+    pub fn action_chunk() -> Self {
+        Self::new(Objective::ActionChunk)
     }
 
     /// Only attempts by this policy.
@@ -198,6 +279,80 @@ impl Recipe {
     /// PRM: the criterion that labels steps.
     pub fn criterion(mut self, criterion: &str) -> Self {
         self.criterion = criterion.into();
+        self
+    }
+}
+
+impl Recipe {
+    /// Multimodal: the observation streams to window, by name.
+    pub fn streams(mut self, names: &[&str]) -> Self {
+        self.mm.streams = names.iter().map(|n| (*n).to_owned()).collect();
+        self
+    }
+
+    /// Multimodal: how much of the past is context.
+    pub fn past_ns(mut self, ns: i64) -> Self {
+        self.mm.past_ns = ns;
+        self
+    }
+
+    /// Multimodal: how much of the future is the target.
+    pub fn future_ns(mut self, ns: i64) -> Self {
+        self.mm.future_ns = ns;
+        self
+    }
+
+    /// Multimodal: the spacing of anchors.
+    pub fn stride_ns(mut self, ns: i64) -> Self {
+        self.mm.stride_ns = ns;
+        self
+    }
+
+    /// Multimodal: the width of a window.
+    pub fn window_ns(mut self, ns: i64) -> Self {
+        self.mm.window_ns = ns;
+        self
+    }
+
+    /// Contrastive: the two modalities to align, by stream name.
+    pub fn pair(mut self, a: &str, b: &str) -> Self {
+        self.mm.pair = Some((a.into(), b.into()));
+        self
+    }
+
+    /// Contrastive: how far in time a hard negative is taken.
+    pub fn hard_shift_ns(mut self, ns: i64) -> Self {
+        self.mm.hard_shift_ns = ns;
+        self
+    }
+
+    /// Contrastive: negatives per sample, the hard one included.
+    pub fn negatives(mut self, n: usize) -> Self {
+        self.mm.negatives = n;
+        self
+    }
+
+    /// Masked: the stream to hide.
+    pub fn target_stream(mut self, name: &str) -> Self {
+        self.mm.target_stream = Some(name.into());
+        self
+    }
+
+    /// Masked: how much of the surroundings to show.
+    pub fn context_ns(mut self, ns: i64) -> Self {
+        self.mm.context_ns = ns;
+        self
+    }
+
+    /// Action chunk: how far ahead the actions reach.
+    pub fn horizon_ns(mut self, ns: i64) -> Self {
+        self.mm.horizon_ns = ns;
+        self
+    }
+
+    /// Action chunk: the event that carries the instruction.
+    pub fn instruction_event(mut self, name: &str) -> Self {
+        self.mm.instruction_event = name.into();
         self
     }
 }

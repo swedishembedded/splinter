@@ -150,6 +150,12 @@ impl Snapshot {
             DataRef::Blob { blob } => {
                 Ok(String::from_utf8_lossy(&self.blob_store()?.get(blob)?).into_owned())
             }
+            DataRef::Window { .. }
+            | DataRef::ActionSegment { .. }
+            | DataRef::EventPayload { .. } => Err(Error::invalid(
+                "data reference",
+                "it is not text; read it as a span",
+            )),
             DataRef::Context { decision } => {
                 let (record, d) = self.decision(*decision)?;
                 let mut lines = Vec::new();
