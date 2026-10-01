@@ -62,9 +62,10 @@ pub struct TaskEntry {
     pub variant_of: Option<Digest>,
     /// What the task's question is about - the product, document, tool,
     /// component or version its instruction names - as its generator
-    /// admitted it: what a variant must keep naming. `None` for a task
-    /// that names no subject; left out of the canonical form then, so a
-    /// set recorded before subjects were keeps its address.
+    /// admitted it: what a variant must keep naming, and what two tasks
+    /// must share before their answers can contradict each other. `None`
+    /// for a task that names no subject; left out of the canonical form
+    /// then, so a set recorded before subjects were keeps its address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
 }

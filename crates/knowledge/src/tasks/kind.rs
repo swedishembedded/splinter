@@ -27,7 +27,9 @@
 //! | `min_sections` | distinct sections the evidence must span |
 //!
 //! Whether a task of the kind must name its subject follows from these
-//! fields ([`TaskKind::names_subject`]).
+//! fields ([`TaskKind::names_subject`]), as does whether two different
+//! references to one question contradict each other
+//! ([`TaskKind::exact_answer`]).
 
 use std::collections::BTreeMap;
 
@@ -207,6 +209,21 @@ impl TaskKind {
     #[must_use]
     pub fn names_subject(&self) -> bool {
         !self.answer.is_computed() && !self.shows_material
+    }
+
+    /// Whether the kind's answer is one exact fact taken from the source -
+    /// a text graded by matching the reference ([`VerifierKind::Formal`],
+    /// [`VerifierKind::Stated`]) - so two tasks asking the same question
+    /// with different references contradict each other. Answers a judge
+    /// grades (an explanation, a dialogue reply) may be worded differently
+    /// and still agree; a computed answer is established by running code.
+    #[must_use]
+    pub fn exact_answer(&self) -> bool {
+        !self.answer.is_computed()
+            && self
+                .verifiers
+                .iter()
+                .any(|v| matches!(v, VerifierKind::Formal | VerifierKind::Stated))
     }
 }
 

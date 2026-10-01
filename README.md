@@ -41,7 +41,8 @@ splinter "what baud rate does the P100 console run at?"
 Every question Splinter writes names what it is about - the product,
 document, tool or version - so that someone who has never seen the source
 gets exactly one answer. A question whose answer would differ for another
-product is refused.
+product is refused, and so are two tasks that give one question different
+answers.
 
 Budget goes where learning happens: before a task's attempts become
 training data, `learn` measures the policy's pass@k on it closed-book.

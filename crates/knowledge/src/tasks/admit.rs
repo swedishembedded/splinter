@@ -27,7 +27,7 @@ use splinter_views::check_self_contained;
 
 use crate::gates::normalize;
 
-use super::dedup::{Repeat, Seen};
+use super::dedup::{contradicts, Asked, Repeat, Seen};
 use super::generator::{GenerateError, SourceText};
 use super::grounding::{content_words, support};
 use super::kind::{AnswerForm, Material, SolverEnvironment, TaskKind};
@@ -56,6 +56,49 @@ pub(crate) struct Admission {
 
 /// A rejection: why, and what exactly failed.
 pub(crate) type Refusal = (Rejection, String);
+
+/// A question as admission compares it with the others of its batch.
+struct Question {
+    instruction: String,
+    subject: Option<String>,
+    reference: String,
+}
+
+impl Question {
+    fn asked(&self) -> Asked<'_> {
+        Asked {
+            instruction: &self.instruction,
+            subject: self.subject.as_deref(),
+            reference: &self.reference,
+        }
+    }
+}
+
+/// A candidate admitted: its task, and the question it asks.
+struct Accepted {
+    task: Task,
+    question: Question,
+}
+
+/// A question admitted earlier in the batch, which a later one may
+/// contradict.
+struct Admitted {
+    /// Its kind, and its position in that kind's reply.
+    kind: String,
+    index: usize,
+    /// Its task's address.
+    task: Digest,
+    question: Question,
+}
+
+/// Why a candidate is not admitted.
+enum Refused {
+    /// One check failed.
+    Because(Refusal),
+    /// It contradicts the questions at these positions of the admitted
+    /// ones, which are taken back with it.
+    Contradicts(Question, Vec<usize>),
+}
 
 /// The subject `candidate` names, when its kind must name one; see the
 /// module documentation of [`super`].
@@ -119,6 +162,7 @@ impl Admission {
     ) -> Result<GenerationReport, GenerateError> {
         let mut report = GenerationReport::default();
         let mut seen = Seen::new(self.policy.shingle_words, self.policy.max_overlap);
+        let mut asked: Vec<Admitted> = Vec::new();
         for proposal in proposals {
             let name = proposal.kind.name.as_str();
             let parsed = match proposal.reply {
@@ -146,53 +190,86 @@ impl Admission {
                     report.reject(name, index, Rejection::OverCount, detail);
                     continue;
                 }
-                match self.candidate(&context, candidate, &seen)? {
-                    Ok((task, subject)) => {
+                match self.candidate(&context, candidate, &seen, &asked)? {
+                    Ok(Accepted { task, question }) => {
                         seen.admit(&task.instruction);
                         let generated = GeneratedTask {
-                            subject,
+                            subject: question.subject.clone(),
                             task,
                             generator: self.generator.clone(),
                             prompt: proposal.prompt.clone(),
                         };
+                        if proposal.kind.exact_answer() {
+                            asked.push(Admitted {
+                                kind: name.to_string(),
+                                index,
+                                task: generated.task.task.id.clone(),
+                                question,
+                            });
+                        }
                         report.admit(name, generated);
                     }
-                    Err((reason, detail)) => report.reject(name, index, reason, detail),
+                    Err(Refused::Contradicts(question, contradicted)) => {
+                        for earlier in contradicted.iter().map(|&at| &asked[at]) {
+                            report.withdraw(
+                                &earlier.kind,
+                                earlier.index,
+                                &earlier.task,
+                                Rejection::Contradiction,
+                                format!(
+                                    "{:?} answers {:?} where a later task answers {:?}",
+                                    earlier.question.instruction,
+                                    earlier.question.reference,
+                                    question.reference
+                                ),
+                            );
+                        }
+                        let detail = format!(
+                            "{:?} answers {:?}, contradicting an admitted task of subject {:?}",
+                            question.instruction,
+                            question.reference,
+                            question.subject.as_deref().unwrap_or_default()
+                        );
+                        report.reject(name, index, Rejection::Contradiction, detail);
+                    }
+                    Err(Refused::Because((reason, detail))) => {
+                        report.reject(name, index, reason, detail);
+                    }
                 }
             }
         }
         Ok(report)
     }
 
-    /// One candidate admitted as a task with the subject it names, or
-    /// refused; an error only when a check could not be run at all.
+    /// One candidate admitted as a task, or refused; an error only when a
+    /// check could not be run at all. `asked` are the questions admitted so
+    /// far that a later one may contradict.
     fn candidate(
         &self,
         context: &Context<'_>,
         candidate: Candidate,
         seen: &Seen,
-    ) -> Result<Result<(Task, Option<String>), Refusal>, GenerateError> {
+        asked: &[Admitted],
+    ) -> Result<Result<Accepted, Refused>, GenerateError> {
         let kind = context.kind;
+        let refuse = |refusal: Refusal| Ok(Err(Refused::Because(refusal)));
         let evidence = match evidence(context, &candidate) {
             Ok(evidence) => evidence,
-            Err(refusal) => return Ok(Err(refusal)),
+            Err(refusal) => return refuse(refusal),
         };
         let mut texts = Vec::with_capacity(evidence.len());
         for span in &evidence {
             match self.store.read_span(span).map(String::from_utf8) {
                 Ok(Ok(text)) => texts.push(text),
                 Ok(Err(_)) => {
-                    return Ok(Err((
-                        Rejection::Unresolved,
-                        "a span is not UTF-8 text".into(),
-                    )))
+                    return refuse((Rejection::Unresolved, "a span is not UTF-8 text".into()))
                 }
-                Err(e) => return Ok(Err((Rejection::Unresolved, e.to_string()))),
+                Err(e) => return refuse((Rejection::Unresolved, e.to_string())),
             }
         }
         let privileged = match privileged(context, &candidate, &evidence) {
             Ok(privileged) => privileged,
-            Err(refusal) => return Ok(Err(refusal)),
+            Err(refusal) => return refuse(refusal),
         };
 
         // The student sees the instruction alone: for a closed-book kind the
@@ -212,22 +289,62 @@ impl Admission {
         };
         let dropped: Vec<&Privileged> = hidden.iter().chain(&privileged).collect();
         if let Err(why) = check_self_contained(&candidate.instruction, &dropped) {
-            return Ok(Err((Rejection::NotSelfContained, why.to_string())));
+            return refuse((Rejection::NotSelfContained, why.to_string()));
         }
 
         let subject = match subject(context, &candidate) {
             Ok(subject) => subject,
-            Err(refusal) => return Ok(Err(refusal)),
+            Err(refusal) => return refuse(refusal),
+        };
+        let question = Question {
+            instruction: candidate.instruction.clone(),
+            subject,
+            reference: candidate.reference.clone(),
+        };
+        let grounded_text = || {
+            let found = support(&candidate.reference, &texts.join("\n"));
+            if found.holds(self.policy.min_support) {
+                Ok(())
+            } else {
+                Err((
+                    Rejection::Ungrounded,
+                    format!(
+                        "content words supported: {:?} (at least {} needed); numbers \
+                         traceable: {}",
+                        found.share, self.policy.min_support, found.numbers_traceable
+                    ),
+                ))
+            }
         };
 
-        match seen.repeats(&candidate.instruction) {
-            Some(Repeat::Exact) => {
-                return Ok(Err((Rejection::Duplicate, candidate.instruction)));
+        if let Some(repeat) = seen.repeats(&candidate.instruction) {
+            // A repeat whose grounded answer disagrees is a contradiction,
+            // not a harmless duplicate: the earlier task is wrong too.
+            let contradicted: Vec<usize> = if kind.exact_answer() {
+                asked
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, earlier)| {
+                        contradicts(
+                            &earlier.question.asked(),
+                            &question.asked(),
+                            self.policy.shingle_words,
+                            self.policy.max_overlap,
+                        )
+                    })
+                    .map(|(at, _)| at)
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            if !contradicted.is_empty() && grounded_text().is_ok() {
+                return Ok(Err(Refused::Contradicts(question, contradicted)));
             }
-            Some(Repeat::Near) => {
-                return Ok(Err((Rejection::NearDuplicate, candidate.instruction)));
-            }
-            None => {}
+            let reason = match repeat {
+                Repeat::Exact => Rejection::Duplicate,
+                Repeat::Near => Rejection::NearDuplicate,
+            };
+            return refuse((reason, candidate.instruction));
         }
 
         let environment = match kind.environment {
@@ -246,29 +363,18 @@ impl Admission {
             privileged,
         ) {
             Ok(task) => task,
-            Err(e) => return Ok(Err((Rejection::Invalid, e.to_string()))),
+            Err(e) => return refuse((Rejection::Invalid, e.to_string())),
         };
 
         let grounded = match kind.answer {
-            AnswerForm::Text => {
-                let found = support(&candidate.reference, &texts.join("\n"));
-                if found.holds(self.policy.min_support) {
-                    Ok(())
-                } else {
-                    Err((
-                        Rejection::Ungrounded,
-                        format!(
-                            "content words supported: {:?} (at least {} needed); numbers \
-                             traceable: {}",
-                            found.share, self.policy.min_support, found.numbers_traceable
-                        ),
-                    ))
-                }
-            }
+            AnswerForm::Text => grounded_text(),
             AnswerForm::Program => self.program_passes(context, &task, &candidate)?,
             AnswerForm::Output => run_checks(context, &task, OUTPUT_CHECK_KIND, "")?,
         };
-        Ok(grounded.map(|()| (task, subject)))
+        Ok(match grounded {
+            Ok(()) => Ok(Accepted { task, question }),
+            Err(refusal) => Err(Refused::Because(refusal)),
+        })
     }
 
     /// Whether a program reference passes its checks, and every generated

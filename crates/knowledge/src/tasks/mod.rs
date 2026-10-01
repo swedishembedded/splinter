@@ -37,7 +37,11 @@
 //! 6. it is new to the batch: not the same instruction once lower-cased
 //!    with whitespace collapsed, and not overlapping an admitted one's word
 //!    shingles at [`GenerationPolicy::max_overlap`] or more ([`dedup`], the
-//!    one near-duplicate rule, which training-set selection reuses);
+//!    one near-duplicate rule, which training-set selection reuses). A
+//!    repeat of an admitted question of the same subject whose grounded
+//!    reference disagrees with it is a contradiction: both are refused
+//!    ([`dedup::contradicts`], for kinds with one exact answer,
+//!    [`TaskKind::exact_answer`]);
 //! 7. it is grounded: a text answer by the evidence's words
 //!    ([`grounding`]); a computed answer by running it - a program
 //!    reference must pass the task's executable checks in the sandbox and
@@ -201,6 +205,9 @@ pub enum Rejection {
     /// subject the instruction does not contain, or one neither the source
     /// nor the cited sections name. A variant must keep the original's.
     NoSubject,
+    /// It asks an admitted question of the same subject and gives another
+    /// answer; both are refused, since at least one of them is wrong.
+    Contradiction,
     /// The task fails the store's validation (an empty instruction).
     Invalid,
 }
@@ -268,6 +275,24 @@ impl GenerationReport {
     fn admit(&mut self, kind: &str, task: GeneratedTask) {
         self.per_kind.entry(kind.to_string()).or_default().admitted += 1;
         self.admitted.push(task);
+    }
+
+    /// Takes back the admitted task `id`, proposed at `index` of a reply
+    /// for `kind`, now refused for `reason`.
+    fn withdraw(
+        &mut self,
+        kind: &str,
+        index: usize,
+        id: &Digest,
+        reason: Rejection,
+        detail: String,
+    ) {
+        let Some(at) = self.admitted.iter().position(|g| &g.task.task.id == id) else {
+            return;
+        };
+        self.admitted.remove(at);
+        self.per_kind.entry(kind.to_string()).or_default().admitted -= 1;
+        self.reject(kind, index, reason, detail);
     }
 
     fn reject(&mut self, kind: &str, index: usize, reason: Rejection, detail: String) {

@@ -85,7 +85,8 @@ sections of every concept queued for new tasks, and admitted by code
 (the generator is shown what the source is - its file, directory or
 command, its title and recorded commit - beside the sections, and every
 question answered from the source must name its subject, which that
-identity or a cited section must name);
+identity or a cited section must name; two tasks of the set that ask one
+question of one subject with different answers are both left out);
 each task is solved k times (`--k`) in the environment it records and
 every attempt is graded by its task kind's verifiers (a judge only
 through `verify --judge`); each task no graded attempt solved is solved

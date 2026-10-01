@@ -16,6 +16,15 @@
 //! third rule: text admitted may be longer than the item (an instruction
 //! with its passage), so an item whose words, in order, lie inside an
 //! admitted text's is an exact repeat too.
+//!
+//! A repeat with another answer is worse than a repeat: training on both
+//! teaches a model two answers to one question. [`contradictions`] finds
+//! them among questions that name a subject: two that name the same
+//! subject (case and whitespace aside) and ask the same question, by the
+//! two rules above, while their references disagree
+//! ([`references_agree`]). Two that name no subject contradict only when
+//! their instructions are the same, since such an instruction shows all its
+//! answer depends on and a near copy of it may well have another answer.
 
 use std::collections::{BTreeSet, HashSet};
 
@@ -89,6 +98,72 @@ impl Seen {
     }
 }
 
+/// A question as the contradiction rule compares it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Asked<'a> {
+    /// What the student is asked.
+    pub instruction: &'a str,
+    /// What it is about; `None` for a question of a kind that names none.
+    pub subject: Option<&'a str>,
+    /// Its reference answer.
+    pub reference: &'a str,
+}
+
+/// Whether two references state the same answer: equal once lower-cased,
+/// whitespace collapsed and closing punctuation dropped, or the words of
+/// one, in order, inside the other's (`115200` and `115200 baud`).
+#[must_use]
+pub fn references_agree(a: &str, b: &str) -> bool {
+    let canonical = |text: &str| {
+        normalize(text)
+            .trim_end_matches(|c: char| c.is_ascii_punctuation())
+            .to_string()
+    };
+    if canonical(a) == canonical(b) {
+        return true;
+    }
+    let (a, b) = (spaced_words(a), spaced_words(b));
+    a.trim() != "" && b.trim() != "" && (a.contains(&b) || b.contains(&a))
+}
+
+/// Whether `a` and `b` ask the same question of the same subject and
+/// disagree on its answer; see the module documentation.
+#[must_use]
+pub fn contradicts(a: &Asked<'_>, b: &Asked<'_>, shingle_words: usize, max_overlap: f64) -> bool {
+    let same_question = match (a.subject, b.subject) {
+        (Some(x), Some(y)) => {
+            normalize(x) == normalize(y)
+                && (digest(a.instruction) == digest(b.instruction)
+                    || jaccard(
+                        &shingles(a.instruction, shingle_words),
+                        &shingles(b.instruction, shingle_words),
+                    ) >= max_overlap)
+        }
+        (None, None) => digest(a.instruction) == digest(b.instruction),
+        _ => false,
+    };
+    same_question && !references_agree(a.reference, b.reference)
+}
+
+/// Every pair `(i, j)`, `i < j`, of `items` that contradict each other
+/// ([`contradicts`]).
+#[must_use]
+pub fn contradictions(
+    items: &[Asked<'_>],
+    shingle_words: usize,
+    max_overlap: f64,
+) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::new();
+    for (i, a) in items.iter().enumerate() {
+        for (j, b) in items.iter().enumerate().skip(i + 1) {
+            if contradicts(a, b, shingle_words, max_overlap) {
+                pairs.push((i, j));
+            }
+        }
+    }
+    pairs
+}
+
 fn digest(instruction: &str) -> Digest {
     Digest::of(normalize(instruction).as_bytes())
 }
@@ -139,6 +214,44 @@ mod tests {
             Some(Repeat::Near)
         );
         assert_eq!(seen.repeats("How much current does the board draw?"), None);
+    }
+
+    #[test]
+    fn the_same_question_of_the_same_subject_with_another_answer_contradicts() {
+        let asked = |instruction, subject, reference| Asked {
+            instruction,
+            subject,
+            reference,
+        };
+        let items = [
+            asked(
+                "At what baud rate does the Frobnicator console UART run?",
+                Some("Frobnicator"),
+                "115200 baud",
+            ),
+            // The same question and subject, another answer.
+            asked(
+                "At what baud rate does the  frobnicator console UART run?",
+                Some("frobnicator"),
+                "9600 baud",
+            ),
+            // The same answer, worded more briefly: no contradiction.
+            asked(
+                "At what baud rate does the Frobnicator console UART run, exactly?",
+                Some("Frobnicator"),
+                "115200",
+            ),
+            // Another subject may have another answer.
+            asked(
+                "At what baud rate does the Widget console UART run?",
+                Some("Widget"),
+                "9600 baud",
+            ),
+            // Questions that name no subject repeat only when identical.
+            asked("What does this print?\n\nprint(1 + 2)", None, "3"),
+            asked("What does this print?\n\nprint(1 + 3)", None, "4"),
+        ];
+        assert_eq!(contradictions(&items, 3, 0.8), [(0, 1), (1, 2)]);
     }
 
     #[test]

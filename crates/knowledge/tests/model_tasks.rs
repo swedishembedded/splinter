@@ -13,8 +13,9 @@
 //! and its generated tests must survive mutation validation); its
 //! instruction must stand on its own and, for a question answered from the
 //! source, name its subject - what it is about, as the source or a cited
-//! section names it - so that it has one answer; a malformed reply is
-//! sent back for one correction, and one still malformed is rejected; duplicates are
+//! section names it - so that it has one answer; two answers to one
+//! question of one subject are both refused; a malformed reply is sent back for
+//! one correction, and one still malformed is rejected; duplicates are
 //! rejected and counted by reason; a kind is data, so a new one needs no
 //! generator code.
 
@@ -338,6 +339,7 @@ async fn duplicates_within_a_batch_are_dropped() {
         [
             entry(question, "115200 baud", 1, None),
             entry(question, "115200 baud", 1, None),
+            // The same answer, more briefly: a repeat, not a contradiction.
             entry(
                 "  at what BAUD rate does the Frobnicator console UART   run? ",
                 "115200",
@@ -532,6 +534,47 @@ async fn the_generator_is_shown_what_the_source_is_and_may_name_it_as_the_subjec
     ] {
         assert!(prompt.contains(named), "{named} is shown: {prompt}");
     }
+}
+
+#[tokio::test]
+async fn two_answers_to_one_question_of_one_subject_are_both_refused() {
+    let scratch = Scratch::new("model-tasks-contradiction");
+    let manual = "# Frobnicator manual
+
+## Ports
+
+The console UART of the Frobnicator runs at 115200 baud. Its debug UART runs at 9600 baud.
+
+## Power
+
+The Frobnicator draws 40 mA when idle.
+";
+    let (store, _, source) = stored(&scratch, manual);
+    let question = "At what baud rate does the Frobnicator UART run?";
+    let model = Scripted::new(vec![reply(
+        [
+            entry(question, "115200 baud", 1, None),
+            entry(question, "9600 baud", 1, None),
+            entry(
+                "How much current does the Frobnicator draw when idle?",
+                "40 mA",
+                2,
+                None,
+            ),
+        ]
+        .into_iter()
+        .map(|task| about(task, "Frobnicator"))
+        .collect(),
+    )]);
+    let report = generator(model, store, vec![])
+        .generate(&source, &[&kind("recall")])
+        .await
+        .unwrap();
+    assert_eq!(report.count(Rejection::Contradiction), 2, "{report:#?}");
+    assert_eq!(report.admitted.len(), 1, "{report:#?}");
+    assert!(report.admitted[0].task.instruction.contains("idle"));
+    assert_eq!(report.per_kind["recall"].admitted, 1);
+    assert_eq!(report.per_kind["recall"].rejected, 2);
 }
 
 #[test]

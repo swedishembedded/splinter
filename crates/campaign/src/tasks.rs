@@ -15,6 +15,11 @@
 //! concepts queued for new tasks - are shown to the generator model one at
 //! a time. The set records which generator produced each task, from which
 //! prompt, and what its question is about.
+//!
+//! Across the whole set, two tasks that ask the same question of the same
+//! subject with answers that disagree are both left out
+//! ([`splinter_knowledge::tasks::dedup::contradictions`]): two sources may
+//! well disagree, and a model trained on both answers learns neither.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
@@ -22,13 +27,14 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
+use splinter_knowledge::tasks::dedup::{contradictions, Asked};
 use splinter_knowledge::tasks::{
     Catalogue, GenerateError, GenerationPolicy, ModelTaskGenerator, Rejection, SourceText,
     TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_lab::denoise::KIND as DENOISE_KIND;
 use splinter_store::digest::Digest;
-use splinter_store::experience::Task;
+use splinter_store::experience::{PrivilegedKind, Task};
 use splinter_store::source::SourceId;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
@@ -228,6 +234,7 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
             }
         }
     }
+    batch.drop_contradictions(&catalogue);
     let set = TaskSet {
         name: set_name(request),
         members: batch.entries,
@@ -338,11 +345,22 @@ struct Provenance<'a> {
     subject: Option<String>,
 }
 
+/// A question of the set as the contradiction rule compares it.
+struct Question {
+    task: Digest,
+    kind: String,
+    instruction: String,
+    subject: Option<String>,
+    reference: String,
+}
+
 /// The tasks admitted so far, and the tallies.
 #[derive(Default)]
 struct Batch {
     entries: Vec<TaskEntry>,
     seen: BTreeSet<Digest>,
+    /// The admitted questions whose answers can contradict one another.
+    questions: Vec<Question>,
     parts: usize,
     per_kind: BTreeMap<String, KindTally>,
     rejected: BTreeMap<String, usize>,
@@ -361,6 +379,20 @@ impl Batch {
         let id = ctx.tasks().put(&task)?;
         if self.seen.insert(id.clone()) {
             self.per_kind.entry(kind.to_string()).or_default().admitted += 1;
+            let reference = task
+                .privileged
+                .iter()
+                .find(|p| p.kind == PrivilegedKind::Reference)
+                .map(|p| p.content.clone());
+            if let Some(reference) = reference {
+                self.questions.push(Question {
+                    task: id.clone(),
+                    kind: kind.to_string(),
+                    instruction: task.instruction,
+                    subject: provenance.subject.clone(),
+                    reference,
+                });
+            }
             self.entries.push(TaskEntry {
                 task: id,
                 generator: Some(provenance.generator.to_string()),
@@ -375,6 +407,61 @@ impl Batch {
     fn reject(&mut self, kind: &str, reason: &str) {
         self.per_kind.entry(kind.to_string()).or_default().rejected += 1;
         *self.rejected.entry(reason.to_string()).or_default() += 1;
+    }
+
+    /// Leaves out every task that asks the same question of the same
+    /// subject as another and answers it differently, of the kinds whose
+    /// answer is one exact fact ([`TaskKind::exact_answer`]).
+    fn drop_contradictions(&mut self, catalogue: &Catalogue) {
+        let policy = GenerationPolicy::default();
+        let questions: Vec<&Question> = self
+            .questions
+            .iter()
+            .filter(|q| catalogue.get(&q.kind).is_some_and(TaskKind::exact_answer))
+            .collect();
+        let asked: Vec<Asked<'_>> = questions
+            .iter()
+            .map(|q| Asked {
+                instruction: &q.instruction,
+                subject: q.subject.as_deref(),
+                reference: &q.reference,
+            })
+            .collect();
+        let mut dropped: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for (i, j) in contradictions(&asked, policy.shingle_words, policy.max_overlap) {
+            dropped.entry(i).or_default().push(j);
+            dropped.entry(j).or_default().push(i);
+        }
+        if dropped.is_empty() {
+            return;
+        }
+        let reason = reason_name(&Rejection::Contradiction);
+        let mut gone = BTreeSet::new();
+        for (at, others) in &dropped {
+            let question = questions[*at];
+            let answers: Vec<String> = others
+                .iter()
+                .map(|&o| format!("{:?}", questions[o].reference))
+                .collect();
+            let tally = self.per_kind.entry(question.kind.clone()).or_default();
+            tally.admitted -= 1;
+            tally.rejected += 1;
+            *self.rejected.entry(reason.clone()).or_default() += 1;
+            self.rejections.push(RejectionNote {
+                kind: question.kind.clone(),
+                reason: reason.clone(),
+                detail: format!(
+                    "{:?} answers {:?}; another task of the set asks it of {:?} and answers {}",
+                    question.instruction,
+                    question.reference,
+                    question.subject.as_deref().unwrap_or_default(),
+                    answers.join(", ")
+                ),
+            });
+            gone.insert(question.task.clone());
+        }
+        self.entries.retain(|entry| !gone.contains(&entry.task));
+        self.questions.retain(|q| !gone.contains(&q.task));
     }
 }
 
