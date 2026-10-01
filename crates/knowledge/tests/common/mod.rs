@@ -132,6 +132,12 @@ pub fn entry(instruction: &str, reference: &str, section: usize, quote: Option<&
     })
 }
 
+/// `task` naming `subject` as what it is about.
+pub fn about(mut task: Value, subject: &str) -> Value {
+    task["subject"] = json!(subject);
+    task
+}
+
 /// The model's reply holding `tasks`.
 pub fn reply(tasks: Vec<Value>) -> String {
     json!({ "tasks": tasks }).to_string()

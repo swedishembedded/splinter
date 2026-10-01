@@ -26,11 +26,19 @@
 //! 4. its instruction stands on its own
 //!    ([`splinter_views::check_self_contained`]): for a closed-book kind the
 //!    evidence counts as material the student does not see;
-//! 5. it is new to the batch: not the same instruction once lower-cased
+//! 5. it names its subject, when its kind must
+//!    ([`TaskKind::names_subject`]): `subject` is the product, document,
+//!    tool, component or version the question is about, it is in the
+//!    instruction (case and whitespace aside), and the source's identity
+//!    ([`SourceIdentity`]) or a cited section names it. A question that
+//!    does not say what it is about has a different answer for every
+//!    product, and a model trained on one of them answers it wrongly for
+//!    the rest;
+//! 6. it is new to the batch: not the same instruction once lower-cased
 //!    with whitespace collapsed, and not overlapping an admitted one's word
 //!    shingles at [`GenerationPolicy::max_overlap`] or more ([`dedup`], the
 //!    one near-duplicate rule, which training-set selection reuses);
-//! 6. it is grounded: a text answer by the evidence's words
+//! 7. it is grounded: a text answer by the evidence's words
 //!    ([`grounding`]); a computed answer by running it - a program
 //!    reference must pass the task's executable checks in the sandbox and
 //!    every generated test must be admitted by mutation validation, and
@@ -56,7 +64,7 @@ use serde::Serialize;
 use splinter_store::digest::Digest;
 use splinter_store::experience::Task;
 
-pub use generator::{GenerateError, ModelTaskGenerator, SourceText};
+pub use generator::{GenerateError, ModelTaskGenerator, SourceIdentity, SourceText};
 pub use kind::{
     AnswerForm, Catalogue, KindError, Material, SolverEnvironment, TaskKind, VerifierKind,
 };
@@ -189,6 +197,10 @@ pub enum Rejection {
     /// A variant's reference is not the original's: it asks about another
     /// fact.
     ReferenceChanged,
+    /// The instruction does not name what it is about: no subject, a
+    /// subject the instruction does not contain, or one neither the source
+    /// nor the cited sections name. A variant must keep the original's.
+    NoSubject,
     /// The task fails the store's validation (an empty instruction).
     Invalid,
 }
@@ -198,6 +210,9 @@ pub enum Rejection {
 pub struct GeneratedTask {
     /// The task.
     pub task: Task,
+    /// What it is about, as its instruction names it; `None` for a kind
+    /// that names no subject ([`TaskKind::names_subject`]).
+    pub subject: Option<String>,
     /// Who generated it: [`GENERATOR`] and the model identity, as an
     /// experience's provenance records a generator.
     pub generator: String,

@@ -14,8 +14,9 @@
 //! candidate learned a fact is the same fact asked differently. For each
 //! task of a task set the generator model - the one that wrote the tasks -
 //! writes up to [`DEFAULT_VARIANTS_PER_TASK`] differently worded questions
-//! about the same fact, one request per task, showing it the section the
-//! task's evidence falls in ([`splinter_knowledge::tasks::variants`]). What
+//! about the same fact, each naming the subject the original names, one
+//! request per task, showing it the section the task's evidence falls in
+//! ([`splinter_knowledge::tasks::variants`]). What
 //! code admits is stored as a task set of its own: each member a task with
 //! the original's kind, evidence and reference, its entry recording the
 //! original it is a variant of.
@@ -108,14 +109,22 @@ pub fn generate_variants(
             *out.ineligible.entry(reason.to_string()).or_default() += 1;
             continue;
         }
-        out.tasks += 1;
-        let report = match ctx.block_on(generator.variants(&original, request.per_task)) {
+        // A variant must keep naming what the original is about; a task
+        // whose set records no subject has nothing to hold it to.
+        let Some(subject) = entry.subject.as_deref() else {
+            *out.ineligible.entry("no_subject".to_string()).or_default() += 1;
+            continue;
+        };
+        let report = match ctx.block_on(generator.variants(&original, subject, request.per_task)) {
             Ok(report) => report,
-            Err(e @ GenerateError::NotVaryable { .. }) => {
-                unreachable!("can_vary admitted the task: {e}")
+            // The recorded subject is not in the instruction.
+            Err(GenerateError::NotVaryable { reason, .. }) => {
+                *out.ineligible.entry(reason.to_string()).or_default() += 1;
+                continue;
             }
             Err(e) => return Err(e.into()),
         };
+        out.tasks += 1;
         for (reason, count) in &report.rejected {
             *out.rejected.entry(reason_name(reason)).or_default() += count;
         }
@@ -133,6 +142,7 @@ pub fn generate_variants(
                     generator: Some(generated.generator),
                     prompt: Some(generated.prompt),
                     variant_of: Some(entry.task.clone()),
+                    subject: generated.subject,
                 });
             }
         }

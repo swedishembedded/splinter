@@ -61,11 +61,13 @@ fn open_book_only_policy() -> Scripted {
             json!({ "tasks": [
                 {
                     "instruction": BAUD_QUESTION,
+                    "subject": "Frobnicator",
                     "reference": "115200 baud",
                     "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
                 },
                 {
                     "instruction": IDLE_QUESTION,
+                    "subject": "Frobnicator",
                     "reference": "40 mA",
                     "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
                 }

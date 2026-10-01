@@ -9,10 +9,11 @@
 //! Variants: the same fact asked in other words.
 //!
 //! [`ModelTaskGenerator::variants`] shows the generator model one task -
-//! its question, its answer, and the source sections its evidence falls in
-//! ([`crate::material::teacher_material`]), by position - and asks for up to
-//! `count` differently worded questions in the reply shape generation uses.
-//! Nothing the model says is trusted. A candidate is admitted only when:
+//! its question, the subject it names, its answer, and the source sections
+//! its evidence falls in ([`crate::material::teacher_material`]), by
+//! position - and asks for up to `count` differently worded questions in
+//! the reply shape generation uses, each naming the same subject. Nothing
+//! the model says is trusted. A candidate is admitted only when:
 //!
 //! 1. it is within the requested count;
 //! 2. it cites at least one section it was shown, and only those;
@@ -20,7 +21,9 @@
 //!    punctuation aside): a question with another answer asks about another
 //!    fact;
 //! 4. its instruction stands on its own ([`splinter_views::check_self_contained`]);
-//! 5. it is new: not the original's instruction, nor a sibling's, by the
+//! 5. it still names the original's subject (case and whitespace aside):
+//!    a rewording that drops it asks a question with many answers;
+//! 6. it is new: not the original's instruction, nor a sibling's, by the
 //!    rule generation uses ([`super::dedup`]).
 //!
 //! An admitted variant is the original task asking the new question
@@ -94,6 +97,7 @@ fn same_answer(a: &str, b: &str) -> bool {
 #[derive(Serialize)]
 struct Shown<'a> {
     question: &'a str,
+    subject: &'a str,
     answer: &'a str,
     sections: Vec<ShownSection<'a>>,
 }
@@ -105,13 +109,15 @@ struct ShownSection<'a> {
 }
 
 impl ModelTaskGenerator {
-    /// Up to `count` variants of `original`; every proposal admitted or
-    /// rejected, as [`Self::generate`] reports them (the report's kind is
-    /// the original's). Refused when `original` cannot be varied
-    /// ([`can_vary`]) or `count` is zero.
+    /// Up to `count` variants of `original`, which names `subject`; every
+    /// proposal admitted or rejected, as [`Self::generate`] reports them
+    /// (the report's kind is the original's, and each variant's subject is
+    /// `subject`). Refused when `original` cannot be varied ([`can_vary`]),
+    /// its instruction does not name `subject`, or `count` is zero.
     pub async fn variants(
         &self,
         original: &Task,
+        subject: &str,
         count: usize,
     ) -> Result<GenerationReport, GenerateError> {
         self.policy.validate()?;
@@ -127,12 +133,20 @@ impl ModelTaskGenerator {
                 reason,
             });
         }
+        let subject = subject.trim();
+        if subject.is_empty() || !normalize(&original.instruction).contains(&normalize(subject)) {
+            return Err(GenerateError::NotVaryable {
+                task: original.task.id.clone(),
+                reason: "no_subject",
+            });
+        }
         let Some(answer) = reference(original) else {
             unreachable!("can_vary checked the reference");
         };
         let passages = teacher_material(&self.store, original)?;
         let shown = Shown {
             question: &original.instruction,
+            subject,
             answer,
             sections: passages
                 .iter()
@@ -140,7 +154,7 @@ impl ModelTaskGenerator {
                 .map(|(position, text)| ShownSection { position, text })
                 .collect(),
         };
-        let brief = brief(count);
+        let brief = brief(count, subject);
         let kind = original.task.kind.as_str();
         let mut report = GenerationReport::default();
         let reply = match self.request(VARIANTS_METHOD, &brief, &shown).await? {
@@ -190,6 +204,13 @@ impl ModelTaskGenerator {
                 refuse(Rejection::NotSelfContained, why.to_string());
                 continue;
             }
+            if !normalize(&candidate.instruction).contains(&normalize(subject)) {
+                refuse(
+                    Rejection::NoSubject,
+                    format!("the variant no longer names the subject {subject:?}"),
+                );
+                continue;
+            }
             match seen.repeats(&candidate.instruction) {
                 Some(Repeat::Exact) => {
                     refuse(Rejection::Duplicate, candidate.instruction);
@@ -208,6 +229,7 @@ impl ModelTaskGenerator {
                         kind,
                         GeneratedTask {
                             task,
+                            subject: Some(subject.to_string()),
                             generator: self.generator_name(),
                             prompt: prompt.clone(),
                         },
@@ -220,14 +242,17 @@ impl ModelTaskGenerator {
     }
 }
 
-/// The brief for up to `count` variants of the question shown.
-fn brief(count: usize) -> String {
+/// The brief for up to `count` variants of the question shown, which
+/// names `subject`.
+fn brief(count: usize, subject: &str) -> String {
     format!(
         "You write differently worded questions about one fact.\n\nThe input holds a question, \
-         its answer, and the sections the answer comes from. Write up to {count} other \
-         questions that ask for the same fact in different words, so that the same answer is \
-         correct for each.\n\nRules:\n\
+         the subject it is about, its answer, and the sections the answer comes from. Write up \
+         to {count} other questions that ask for the same fact in different words, so that the \
+         same answer is correct for each.\n\nRules:\n\
          - Write at most {count} tasks.\n\
+         - Every question names its subject, {subject:?}, as the original does: without it the \
+         question has a different answer for every product or version. Put it in `subject`.\n\
          - Each instruction is everything the student sees: it must stand on its own. Never \
          refer to the sections, a passage, a document or text the student is not shown, and \
          do not copy long runs of the sections into it.\n\

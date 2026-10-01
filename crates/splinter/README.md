@@ -81,7 +81,11 @@ other provider from `BRAIN_API_KEY`.
 `splinter learn crates/splinter/examples/stm32_datasheet.md`), printing
 each stage as it finishes: the sources are captured; tasks of the requested kinds
 (default `recall`) are generated from every text part, and from the
-sections of every concept queued for new tasks, and admitted by code;
+sections of every concept queued for new tasks, and admitted by code
+(the generator is shown what the source is - its file, directory or
+command, its title and recorded commit - beside the sections, and every
+question answered from the source must name its subject, which that
+identity or a cited section must name);
 each task is solved k times (`--k`) in the environment it records and
 every attempt is graded by its task kind's verifiers (a judge only
 through `verify --judge`); each task no graded attempt solved is solved
@@ -94,7 +98,8 @@ differently worded questions about each task kept (`variants`: one
 request per task, shown the section its evidence falls in, replying in the
 shape the tasks come in; each variant keeps the task's reference and
 evidence, so the same verifiers grade it, and must state the reference,
-stand on its own and be no repeat of the question or of a sibling) - the
+stand on its own, still name the task's subject and be no repeat of the
+question or of a sibling) - the
 same facts in other words, which the gate measures and nothing trains on;
 their failed attempts are critiqued and retried
 once; the passing attempts, verified teacher answers and revisions, near
@@ -161,6 +166,12 @@ Task kinds: `recall`, `explain`, `predict`, `construct`, `debug`,
 `counterexample`, `transform`, `classify`, `retrieve`, `multi-turn`,
 `combine` (written by the generator model) and `denoise` (a corrupted
 passage to restore, no model needed). Kinds that run code need `python3`.
+A question answered from the source (`recall`, `explain`,
+`counterexample`, `classify`, `retrieve`, `multi-turn`, `combine`) names
+its subject - the product, document, tool, component or version it is
+about - so that it has exactly one answer; a kind whose instruction shows
+its material or whose answer is computed by running code carries what its
+answer depends on and names none.
 
 `verify` appends verdicts from each task kind's own verifiers: formal
 (exact match, lenient), executable checks, mutation-validated tests,

@@ -65,6 +65,7 @@ fn entry(task: &Task) -> TaskEntry {
         generator: Some("splinter-knowledge/model-tasks@1:scripted".into()),
         prompt: Some(Digest::of(b"prompt")),
         variant_of: None,
+        subject: None,
     }
 }
 
@@ -196,6 +197,7 @@ fn a_variant_asks_in_other_words_and_a_set_records_what_it_varies() {
         name: "originals".into(),
         members: vec![TaskEntry {
             variant_of: Some(original.task.id.clone()),
+            subject: Some("console".into()),
             ..entry(&variant)
         }],
     };
@@ -203,6 +205,7 @@ fn a_variant_asks_in_other_words_and_a_set_records_what_it_varies() {
     assert_eq!(store.get_set(&id).unwrap(), varied);
     let canonical = |set: &TaskSet| serde_json::to_string(set).unwrap();
     assert!(!canonical(&plain).contains("variant_of"));
+    assert!(!canonical(&plain).contains("subject"));
     assert!(canonical(&varied).contains("variant_of"));
 }
 

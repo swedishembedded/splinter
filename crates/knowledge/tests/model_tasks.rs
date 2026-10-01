@@ -11,8 +11,10 @@
 //! resolve to the source's bytes and support its reference (or, for a
 //! computed answer, its reference must pass its own checks in the sandbox
 //! and its generated tests must survive mutation validation); its
-//! instruction must stand on its own; a malformed reply is sent back for
-//! one correction, and one still malformed is rejected; duplicates are
+//! instruction must stand on its own and, for a question answered from the
+//! source, name its subject - what it is about, as the source or a cited
+//! section names it - so that it has one answer; a malformed reply is
+//! sent back for one correction, and one still malformed is rejected; duplicates are
 //! rejected and counted by reason; a kind is data, so a new one needs no
 //! generator code.
 
@@ -21,12 +23,16 @@
 
 mod common;
 
-use common::{entry, generator, python, reply, stored, Scratch, Scripted, PART};
+use common::{about, entry, generator, python, reply, stored, Scratch, Scripted, PART};
 use serde_json::json;
-use splinter_knowledge::tasks::{Catalogue, Rejection, TaskKind};
+use splinter_knowledge::tasks::{Catalogue, Rejection, SourceText, TaskKind};
 use splinter_lab::verifiers::executable::CHECK_KIND;
 use splinter_lab::verifiers::mutation::TEST_KIND;
+use splinter_store::clock::FixedClock;
 use splinter_store::experience::{Environment, PrivilegedKind};
+use splinter_store::source::{CapturedSource, Origin, PartContent, Revision};
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 use sven_sdk::model::ResponseFormat;
 
 const MANUAL: &str = "# Frobnicator manual
@@ -73,17 +79,23 @@ async fn a_grounded_recall_task_is_admitted_and_an_ungrounded_one_rejected() {
     let scratch = Scratch::new("model-tasks-recall");
     let (store, id, source) = stored(&scratch, MANUAL);
     let model = Scripted::new(vec![reply(vec![
-        entry(
-            "At what baud rate does the Frobnicator console UART run?",
-            "115200 baud",
-            1,
-            Some("runs at 115200 baud"),
+        about(
+            entry(
+                "At what baud rate does the Frobnicator console UART run?",
+                "115200 baud",
+                1,
+                Some("runs at 115200 baud"),
+            ),
+            "Frobnicator",
         ),
-        entry(
-            "How much current does the Frobnicator draw in standby?",
-            "12 mA over USB-C",
-            2,
-            None,
+        about(
+            entry(
+                "How much current does the Frobnicator draw in standby?",
+                "12 mA over USB-C",
+                2,
+                None,
+            ),
+            "Frobnicator",
         ),
     ])]);
     let generator = generator(model, store.clone(), vec![]);
@@ -120,6 +132,7 @@ async fn a_grounded_recall_task_is_admitted_and_an_ungrounded_one_rejected() {
     assert!(report.admitted[0]
         .generator
         .ends_with("scripted/generator-1"));
+    assert_eq!(report.admitted[0].subject.as_deref(), Some("Frobnicator"));
 }
 
 #[tokio::test]
@@ -270,11 +283,14 @@ async fn a_malformed_reply_corrected_on_request_is_admitted() {
     let recall = kind("recall");
     let model = Scripted::new(vec![
         "Sure! Here are some tasks.".to_string(),
-        reply(vec![entry(
-            "At what baud rate does the Frobnicator console UART run?",
-            "115200 baud",
-            1,
-            Some("115200 baud"),
+        reply(vec![about(
+            entry(
+                "At what baud rate does the Frobnicator console UART run?",
+                "115200 baud",
+                1,
+                Some("115200 baud"),
+            ),
+            "Frobnicator",
         )]),
     ]);
     let generator = generator(model.clone(), store, vec![]);
@@ -318,28 +334,33 @@ async fn duplicates_within_a_batch_are_dropped() {
     let scratch = Scratch::new("model-tasks-dedup");
     let (store, _, source) = stored(&scratch, MANUAL);
     let question = "At what baud rate does the Frobnicator console UART run?";
-    let model = Scripted::new(vec![reply(vec![
-        entry(question, "115200 baud", 1, None),
-        entry(question, "115200 baud", 1, None),
-        entry(
-            "  at what BAUD rate does the Frobnicator console UART   run? ",
-            "115200",
-            1,
-            None,
-        ),
-        entry(
-            "At what baud rate does the Frobnicator console UART run, exactly?",
-            "115200 baud",
-            1,
-            None,
-        ),
-        entry(
-            "How much current does the Frobnicator draw when idle?",
-            "40 mA",
-            2,
-            None,
-        ),
-    ])]);
+    let model = Scripted::new(vec![reply(
+        [
+            entry(question, "115200 baud", 1, None),
+            entry(question, "115200 baud", 1, None),
+            entry(
+                "  at what BAUD rate does the Frobnicator console UART   run? ",
+                "115200",
+                1,
+                None,
+            ),
+            entry(
+                "At what baud rate does the Frobnicator console UART run, exactly?",
+                "115200 baud",
+                1,
+                None,
+            ),
+            entry(
+                "How much current does the Frobnicator draw when idle?",
+                "40 mA",
+                2,
+                None,
+            ),
+        ]
+        .into_iter()
+        .map(|task| about(task, "Frobnicator"))
+        .collect(),
+    )]);
     let report = generator(model, store, vec![])
         .generate(&source, &[&kind("recall")])
         .await
@@ -368,11 +389,14 @@ async fn a_kind_defined_as_data_at_runtime_generates_tasks() {
     .unwrap();
     let mut catalogue = Catalogue::builtin();
     catalogue.insert(definition).unwrap();
-    let model = Scripted::new(vec![reply(vec![entry(
-        "How much current does the Frobnicator draw at full load?",
-        "900 mA",
-        2,
-        None,
+    let model = Scripted::new(vec![reply(vec![about(
+        entry(
+            "How much current does the Frobnicator draw at full load?",
+            "900 mA",
+            2,
+            None,
+        ),
+        "Frobnicator",
     )])]);
     let generator = generator(model.clone(), store, vec![]);
     let report = generator
@@ -386,6 +410,128 @@ async fn a_kind_defined_as_data_at_runtime_generates_tasks() {
         prompt.contains("one measured quantity the section states"),
         "the kind's brief reaches the model"
     );
+}
+
+/// The baud-rate question as the model writes it, naming `subject`.
+fn baud(instruction: &str, subject: Option<&str>) -> serde_json::Value {
+    let task = entry(instruction, "115200 baud", 1, Some("runs at 115200 baud"));
+    match subject {
+        Some(subject) => about(task, subject),
+        None => task,
+    }
+}
+
+#[tokio::test]
+async fn a_question_answered_from_the_source_must_name_a_subject_the_source_names() {
+    let scratch = Scratch::new("model-tasks-subject");
+    let (store, _, source) = stored(&scratch, MANUAL);
+    let model = Scripted::new(vec![reply(vec![
+        // Which console? Every board has its own baud rate.
+        baud("At what baud rate does the console UART run?", None),
+        baud("At what baud rate does the console UART run?", Some("  ")),
+        baud(
+            "At what baud rate does the console UART run?",
+            Some("Frobnicator"),
+        ),
+        baud(
+            "At what baud rate does the Nucleo-64 console UART run?",
+            Some("Nucleo-64"),
+        ),
+        baud(
+            "At what baud rate does the console UART of the Frobnicator run?",
+            Some("the"),
+        ),
+        baud(
+            "At what baud rate does the console UART of the  frobnicator run?",
+            Some("Frobnicator"),
+        ),
+    ])]);
+    let report = generator(model, store, vec![])
+        .generate(&source, &[&kind("recall")])
+        .await
+        .unwrap();
+    assert_eq!(report.count(Rejection::NoSubject), 5, "{report:#?}");
+    assert_eq!(report.admitted.len(), 1, "{report:#?}");
+    assert_eq!(report.admitted[0].subject.as_deref(), Some("Frobnicator"));
+    let details: Vec<&str> = report
+        .rejections
+        .iter()
+        .map(|r| r.detail.as_str())
+        .collect();
+    assert!(details[0].contains("no subject"), "{details:?}");
+    assert!(details[3].contains("Nucleo-64"), "{details:?}");
+
+    // Code shown in the instruction carries what its answer depends on.
+    let scratch = Scratch::new("model-tasks-subject-code");
+    let (store, _, source) = stored(&scratch, CLAMP_SPEC);
+    let mut task = entry(
+        "What does this Python program print?\n\nprint(min(max(12, 0), 10))",
+        "10",
+        1,
+        None,
+    );
+    task["material"] = json!("print(min(max(12, 0), 10))");
+    let model = Scripted::new(vec![reply(vec![task])]);
+    let report = generator(model, store, vec![python(&scratch)])
+        .generate(&source, &[&kind("predict")])
+        .await
+        .unwrap();
+    assert_eq!(report.admitted.len(), 1, "{report:#?}");
+    assert_eq!(report.admitted[0].subject, None);
+}
+
+#[tokio::test]
+async fn the_generator_is_shown_what_the_source_is_and_may_name_it_as_the_subject() {
+    let scratch = Scratch::new("model-tasks-identity");
+    let store = SourceStore::open(&StateRoot::new(scratch.0.join("state")));
+    let manual =
+        "# Quark Q1 reference manual\n\n## Console\n\nThe console UART runs at 57600 baud.\n";
+    let captured = CapturedSource::new(
+        Origin::Repository {
+            path: "/work/quark-q1".into(),
+            revision: Some(Revision {
+                commit: Some("3f2a9c1".into()),
+                dirty: false,
+            }),
+            skipped: vec![],
+        },
+        vec![PartContent {
+            name: "guide/manual.md".into(),
+            media_type: "text/markdown".into(),
+            bytes: manual.as_bytes().to_vec(),
+        }],
+        &FixedClock::new("2026-09-30T08:00:00.000Z"),
+    )
+    .unwrap();
+    let id = store.put_source(&captured).unwrap();
+    // Only the console section: it never says which board it is about.
+    let shown = SourceText::load(&store, &id, "guide/manual.md")
+        .unwrap()
+        .select(&[1])
+        .unwrap();
+    let model = Scripted::new(vec![reply(vec![about(
+        entry(
+            "At what baud rate does the console UART of the Quark Q1 run?",
+            "57600 baud",
+            0,
+            None,
+        ),
+        "Quark Q1",
+    )])]);
+    let report = generator(model.clone(), store, vec![])
+        .generate(&shown, &[&kind("recall")])
+        .await
+        .unwrap();
+    assert_eq!(report.admitted.len(), 1, "{report:#?}");
+    let prompt = format!("{:?}", model.seen.lock().unwrap()[0].messages);
+    for named in [
+        "Quark Q1 reference manual",
+        "quark-q1",
+        "guide/manual.md",
+        "3f2a9c1",
+    ] {
+        assert!(prompt.contains(named), "{named} is shown: {prompt}");
+    }
 }
 
 #[test]

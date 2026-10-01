@@ -14,9 +14,15 @@
 //! budget that cover every attempt: the kind's brief and rules are the
 //! call's task, followed by [`Reply`]'s schema as the reply's shape
 //! (shown in the prompt, since a local model cannot be constrained to
-//! it), and the sections its input. sven reads the reply as that shape and sends one
-//! that is not back for correction, up to `repairs` times; a reply still
-//! malformed after that is rejected whole.
+//! it), and its input the source's identity ([`SourceIdentity`]) and the
+//! sections. sven reads the reply as that shape and sends one that is not
+//! back for correction, up to `repairs` times; a reply still malformed
+//! after that is rejected whole.
+//!
+//! The identity is shown because a question is only worth training on when
+//! it names what it is about: the sections of a window often never say
+//! which product or document they belong to, and "what baud rate does the
+//! console run at?" has a different answer for every board.
 
 use serde::Serialize;
 use splinter_agent::solve::{Model, SolveOptions};
@@ -25,7 +31,7 @@ use splinter_sandbox::RuntimeEnvironment;
 use splinter_store::digest::Digest;
 use splinter_store::error::StoreError;
 use splinter_store::experience::ExperienceError;
-use splinter_store::source::{PartRef, SourceId};
+use splinter_store::source::{Origin, PartRef, SourceId};
 use splinter_store::sources::SourceStore;
 use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
@@ -33,7 +39,7 @@ use super::admit::{Admission, Proposal, Refusal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
 use super::reply::{Reply, REPLY_EXAMPLE};
 use super::{GenerationPolicy, GenerationReport, Rejection, GENERATOR};
-use crate::sections::{sections, Section};
+use crate::sections::{sections, title, Section};
 
 /// The name of the typed call a generator model is sent.
 pub const GENERATION_METHOD: &str = "generate_tasks";
@@ -41,10 +47,68 @@ pub const GENERATION_METHOD: &str = "generate_tasks";
 /// The role the generator model is given.
 const ROLE: &str = "You write training tasks from source material, exactly as briefed.";
 
-/// What the generator model is shown: the sections, by position.
+/// What the generator model is shown: what the source is, and the
+/// sections, by position.
 #[derive(Serialize)]
 struct Sections<'a> {
+    source: &'a SourceIdentity,
     sections: Vec<ShownSection<'a>>,
+}
+
+/// What a source is, as far as it records it: the names a task's subject
+/// may come from when the sections do not name one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SourceIdentity {
+    /// `document`, `repository` or `command`.
+    pub kind: &'static str,
+    /// A document's file name, a repository's directory name, or the
+    /// command line that was run.
+    pub name: String,
+    /// The part the sections are from: a file's path in the source, or an
+    /// output stream.
+    pub part: String,
+    /// The part's title: its first Markdown heading, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The version the source records: a repository's commit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+}
+
+impl SourceIdentity {
+    /// `origin`'s identity for its part `part`, whose text is `text` of
+    /// media type `media_type`.
+    #[must_use]
+    pub fn of(origin: &Origin, part: &str, text: &str, media_type: &str) -> Self {
+        let file_name = |path: &str| {
+            std::path::Path::new(path)
+                .file_name()
+                .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned())
+        };
+        let (name, version) = match origin {
+            Origin::Document { path } => (file_name(path), None),
+            Origin::Repository { path, revision, .. } => (
+                file_name(path),
+                revision.as_ref().and_then(|r| r.commit.clone()),
+            ),
+            Origin::Command { argv, .. } => (argv.join(" "), None),
+        };
+        Self {
+            kind: origin.kind(),
+            name,
+            part: part.to_string(),
+            title: title(text, media_type),
+            version,
+        }
+    }
+
+    /// Every name the identity holds.
+    pub(crate) fn names(&self) -> impl Iterator<Item = &str> {
+        [Some(self.name.as_str()), Some(self.part.as_str())]
+            .into_iter()
+            .chain([self.title.as_deref(), self.version.as_deref()])
+            .flatten()
+    }
 }
 
 #[derive(Serialize)]
@@ -58,6 +122,7 @@ struct ShownSection<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceText {
     pub(crate) part: PartRef,
+    pub(crate) identity: SourceIdentity,
     pub(crate) content: Digest,
     pub(crate) text: String,
     pub(crate) sections: Vec<Section>,
@@ -85,6 +150,7 @@ impl SourceText {
                 source: source.clone(),
                 name: part.to_string(),
             },
+            identity: SourceIdentity::of(&stored.origin, part, &text, &found.media_type),
             content: found.content.clone(),
             text,
             sections: split,
@@ -114,6 +180,12 @@ impl SourceText {
     #[must_use]
     pub fn part(&self) -> &PartRef {
         &self.part
+    }
+
+    /// What the source is, as the generator model is shown it.
+    #[must_use]
+    pub fn identity(&self) -> &SourceIdentity {
+        &self.identity
     }
 
     /// The sections the model is shown, by position.
@@ -372,9 +444,11 @@ impl ModelTaskGenerator {
     }
 }
 
-/// The sections of `source`, by position, as the model is shown them.
+/// The identity and sections of `source`, by position, as the model is
+/// shown them.
 fn shown(source: &SourceText) -> Sections<'_> {
     Sections {
+        source: &source.identity,
         sections: (0..source.sections.len())
             .map(|position| ShownSection {
                 position,
@@ -384,8 +458,8 @@ fn shown(source: &SourceText) -> Sections<'_> {
     }
 }
 
-/// The digest of what one request showed the model: the brief and the
-/// sections.
+/// The digest of what one request showed the model: the brief and its
+/// input (the source's identity and the sections, or the task to vary).
 pub(super) fn prompt_digest<I: Serialize + ?Sized>(brief: &str, shown: &I) -> Digest {
     let sections = serde_json::to_string(shown).unwrap_or_else(|e| {
         // Integers and strings always serialize.
@@ -412,6 +486,16 @@ fn brief(kind: &TaskKind, count: usize) -> String {
         "Cite the evidence for each task: the position of each section the answer comes from."
             .to_string(),
     ];
+    if kind.names_subject() {
+        rules.push(
+            "Every instruction names its subject: the specific product, document, tool, \
+             component or version it is about, as the sections or the `source` name it. Put \
+             that name in `subject`, written exactly as the instruction writes it. Someone who \
+             has never seen the source must get exactly one answer: a question whose answer \
+             would differ for another product or version is wrong."
+                .to_string(),
+        );
+    }
     if kind.min_sections > 1 {
         rules.push(format!(
             "Each task must cite at least {} different sections.",

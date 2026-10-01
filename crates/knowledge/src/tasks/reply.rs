@@ -6,6 +6,7 @@
 //! ```json
 //! {"tasks": [{
 //!   "instruction": "...",
+//!   "subject": "...",
 //!   "reference": "...",
 //!   "evidence": [{"section": 0, "quote": "verbatim text of section 0"}],
 //!   "material": "...",
@@ -15,10 +16,12 @@
 //! }]}
 //! ```
 //!
-//! `quote`, `material`, `hints`, `checks`, `tests`, `stdin`, `exit_code`
-//! and `stdout` may be left out. Anything else - a missing or mistyped
-//! field, a field the shape does not name - makes the whole reply
-//! malformed. The generator asks for it as a typed call ([`Reply`]'s JSON
+//! `subject`, `quote`, `material`, `hints`, `checks`, `tests`, `stdin`,
+//! `exit_code` and `stdout` may be left out; admission refuses a task of a
+//! kind that must name its subject when `subject` is missing
+//! ([`super::kind::TaskKind::names_subject`]). Anything else - a missing
+//! or mistyped field, a field the shape does not name - makes the whole
+//! reply malformed. The generator asks for it as a typed call ([`Reply`]'s JSON
 //! schema is the shape the model is shown), so sven parses the reply and
 //! sends a malformed one back for correction.
 
@@ -30,12 +33,14 @@ use sven_sdk::schemars::JsonSchema;
 
 /// One reply of the shape [`Reply`] parses, shown to the model beside the
 /// schema: a small model copies an example far more reliably than it reads
-/// a schema's references.
-pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what baud rate does the console UART run?", "reference": "115200 baud", "evidence": [{"section": 0}], "material": null}]}"#;
+/// a schema's references. Its subject is a made-up board, so a task copied
+/// from the example names a subject no source grounds and is refused.
+pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what baud rate does the console UART of the Zelkor K4 board run?", "subject": "Zelkor K4 board", "reference": "115200 baud", "evidence": [{"section": 0}], "material": null}]}"#;
 
 /// One reply to a request for variants, shown to the model beside the
-/// schema: the same shape, each task repeating the reference.
-pub(crate) const VARIANTS_EXAMPLE: &str = r#"{"tasks": [{"instruction": "Which baud rate is the console UART set to?", "reference": "115200 baud", "evidence": [{"section": 0}]}]}"#;
+/// schema: the same shape, each task keeping the subject and repeating the
+/// reference.
+pub(crate) const VARIANTS_EXAMPLE: &str = r#"{"tasks": [{"instruction": "Which baud rate is the Zelkor K4 board's console UART set to?", "subject": "Zelkor K4 board", "reference": "115200 baud", "evidence": [{"section": 0}]}]}"#;
 
 /// A generator model's reply.
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -51,6 +56,10 @@ pub(crate) struct Reply {
 #[schemars(crate = "sven_sdk::schemars")]
 pub(crate) struct Candidate {
     pub(crate) instruction: String,
+    /// What the instruction is about - a product, document, tool,
+    /// component or version - as the source names it.
+    #[serde(default)]
+    pub(crate) subject: Option<String>,
     pub(crate) reference: String,
     pub(crate) evidence: Vec<Citation>,
     #[serde(default)]

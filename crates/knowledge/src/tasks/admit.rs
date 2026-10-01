@@ -25,9 +25,11 @@ use splinter_store::experience::{Environment, Privileged, PrivilegedKind, Span, 
 use splinter_store::sources::SourceStore;
 use splinter_views::check_self_contained;
 
+use crate::gates::normalize;
+
 use super::dedup::{Repeat, Seen};
 use super::generator::{GenerateError, SourceText};
-use super::grounding::support;
+use super::grounding::{content_words, support};
 use super::kind::{AnswerForm, Material, SolverEnvironment, TaskKind};
 use super::reply::{Candidate, Reply};
 use super::{GeneratedTask, GenerationPolicy, GenerationReport, Rejection};
@@ -54,6 +56,49 @@ pub(crate) struct Admission {
 
 /// A rejection: why, and what exactly failed.
 pub(crate) type Refusal = (Rejection, String);
+
+/// The subject `candidate` names, when its kind must name one; see the
+/// module documentation of [`super`].
+fn subject(context: &Context<'_>, candidate: &Candidate) -> Result<Option<String>, Refusal> {
+    if !context.kind.names_subject() {
+        return Ok(None);
+    }
+    let refuse = |detail: String| Err((Rejection::NoSubject, detail));
+    let Some(subject) = candidate
+        .subject
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return refuse("no subject is named: say what the question is about".into());
+    };
+    if content_words(subject).is_empty() {
+        return refuse(format!("{subject:?} names nothing in particular"));
+    }
+    let wanted = normalize(subject);
+    if !normalize(&candidate.instruction).contains(&wanted) {
+        return refuse(format!(
+            "the instruction does not name its subject {subject:?}"
+        ));
+    }
+    let source = context.source;
+    let named_by_source = source
+        .identity
+        .names()
+        .any(|name| normalize(name).contains(&wanted));
+    let named_by_section = candidate
+        .evidence
+        .iter()
+        .filter_map(|citation| source.section_text(citation.section))
+        .any(|text| normalize(text).contains(&wanted));
+    if !named_by_source && !named_by_section {
+        return refuse(format!(
+            "{subject:?} is named neither by the source ({}) nor by a cited section",
+            source.identity.names().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    Ok(Some(subject.to_string()))
+}
 
 /// Everything a candidate's checks are judged in.
 struct Context<'a> {
@@ -102,9 +147,10 @@ impl Admission {
                     continue;
                 }
                 match self.candidate(&context, candidate, &seen)? {
-                    Ok(task) => {
+                    Ok((task, subject)) => {
                         seen.admit(&task.instruction);
                         let generated = GeneratedTask {
+                            subject,
                             task,
                             generator: self.generator.clone(),
                             prompt: proposal.prompt.clone(),
@@ -118,14 +164,14 @@ impl Admission {
         Ok(report)
     }
 
-    /// One candidate admitted as a task, or refused; an error only when a
-    /// check could not be run at all.
+    /// One candidate admitted as a task with the subject it names, or
+    /// refused; an error only when a check could not be run at all.
     fn candidate(
         &self,
         context: &Context<'_>,
         candidate: Candidate,
         seen: &Seen,
-    ) -> Result<Result<Task, Refusal>, GenerateError> {
+    ) -> Result<Result<(Task, Option<String>), Refusal>, GenerateError> {
         let kind = context.kind;
         let evidence = match evidence(context, &candidate) {
             Ok(evidence) => evidence,
@@ -168,6 +214,11 @@ impl Admission {
         if let Err(why) = check_self_contained(&candidate.instruction, &dropped) {
             return Ok(Err((Rejection::NotSelfContained, why.to_string())));
         }
+
+        let subject = match subject(context, &candidate) {
+            Ok(subject) => subject,
+            Err(refusal) => return Ok(Err(refusal)),
+        };
 
         match seen.repeats(&candidate.instruction) {
             Some(Repeat::Exact) => {
@@ -217,7 +268,7 @@ impl Admission {
             AnswerForm::Program => self.program_passes(context, &task, &candidate)?,
             AnswerForm::Output => run_checks(context, &task, OUTPUT_CHECK_KIND, "")?,
         };
-        Ok(grounded.map(|()| task))
+        Ok(grounded.map(|()| (task, subject)))
     }
 
     /// Whether a program reference passes its checks, and every generated

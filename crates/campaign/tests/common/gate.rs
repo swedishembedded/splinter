@@ -359,6 +359,7 @@ pub fn variant_set_of(ctx: &Context, topic: &str, variants: Vec<(usize, Task)>) 
             generator: Some("scripted/generator".into()),
             prompt: None,
             variant_of: Some(fact(topic, i).task.id),
+            subject: None,
         })
         .collect();
     ctx.tasks()

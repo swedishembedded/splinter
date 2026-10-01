@@ -14,7 +14,7 @@
 //! no model and yields one task per text part. Single sections - those of
 //! concepts queued for new tasks - are shown to the generator model one at
 //! a time. The set records which generator produced each task, from which
-//! prompt.
+//! prompt, and what its question is about.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
@@ -181,7 +181,16 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
             if denoise {
                 let content = ctx.sources().read_blob(&part.content)?;
                 match Denoise::new(DENOISE_SEED).generate(&source, &part.name, &content) {
-                    Ok(task) => batch.admit(ctx, DENOISE_KIND, task, DENOISE_GENERATOR, None)?,
+                    Ok(task) => batch.admit(
+                        ctx,
+                        DENOISE_KIND,
+                        task,
+                        Provenance {
+                            generator: DENOISE_GENERATOR,
+                            prompt: None,
+                            subject: None,
+                        },
+                    )?,
                     Err(e) => batch.reject(DENOISE_KIND, &e.to_string()),
                 }
             }
@@ -311,12 +320,22 @@ fn generate_part(
                 ctx,
                 &kind,
                 generated.task,
-                &generated.generator,
-                Some(generated.prompt),
+                Provenance {
+                    generator: &generated.generator,
+                    prompt: Some(generated.prompt),
+                    subject: generated.subject,
+                },
             )?;
         }
     }
     Ok(())
+}
+
+/// How an admitted task came to be, as its set entry records it.
+struct Provenance<'a> {
+    generator: &'a str,
+    prompt: Option<Digest>,
+    subject: Option<String>,
 }
 
 /// The tasks admitted so far, and the tallies.
@@ -337,17 +356,17 @@ impl Batch {
         ctx: &Context,
         kind: &str,
         task: Task,
-        generator: &str,
-        prompt: Option<Digest>,
+        provenance: Provenance<'_>,
     ) -> Result<(), CampaignError> {
         let id = ctx.tasks().put(&task)?;
         if self.seen.insert(id.clone()) {
             self.per_kind.entry(kind.to_string()).or_default().admitted += 1;
             self.entries.push(TaskEntry {
                 task: id,
-                generator: Some(generator.to_string()),
-                prompt,
+                generator: Some(provenance.generator.to_string()),
+                prompt: provenance.prompt,
                 variant_of: None,
+                subject: provenance.subject,
             });
         }
         Ok(())

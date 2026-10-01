@@ -25,6 +25,9 @@
 //! | `requires` | privileged material every task must carry beyond the reference: `hints`, `checks`, `tests`, `checks_or_tests` |
 //! | `verifiers` | which verifiers grade an answer: `formal`, `executable`, `mutation_validated`, `consistency`, `judged` |
 //! | `min_sections` | distinct sections the evidence must span |
+//!
+//! Whether a task of the kind must name its subject follows from these
+//! fields ([`TaskKind::names_subject`]).
 
 use std::collections::BTreeMap;
 
@@ -190,6 +193,20 @@ impl TaskKind {
             return refuse("the mutation-validated verifier needs generated tests");
         }
         Ok(())
+    }
+
+    /// Whether every task of the kind must name its subject: the product,
+    /// document, tool, component or version it is about, in its
+    /// instruction. A closed-book text answer is recalled from the source,
+    /// so a question that does not say which source it is about has as many
+    /// answers as there are products. A kind whose instruction shows its
+    /// material (code to predict, a snippet to fix, an excerpt to
+    /// transform, and the denoise kind's corrupted passage), or whose
+    /// answer is computed and checked by running it, carries everything its
+    /// answer depends on and names no subject.
+    #[must_use]
+    pub fn names_subject(&self) -> bool {
+        !self.answer.is_computed() && !self.shows_material
     }
 }
 

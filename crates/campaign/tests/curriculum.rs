@@ -91,6 +91,7 @@ fn task_set(ctx: &Context, tasks: &[Task]) -> TaskSetId {
             generator: None,
             prompt: None,
             variant_of: None,
+            subject: None,
         })
         .collect();
     ctx.tasks()
@@ -347,11 +348,13 @@ fn unsure_manual_policy() -> Scripted {
             json!({ "tasks": [
                 {
                     "instruction": BAUD_QUESTION,
+                    "subject": "Frobnicator",
                     "reference": "115200 baud",
                     "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
                 },
                 {
                     "instruction": "How much current does the Frobnicator draw when idle?",
+                    "subject": "Frobnicator",
                     "reference": "40 mA",
                     "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
                 }

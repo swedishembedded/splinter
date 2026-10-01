@@ -33,10 +33,15 @@ dataset, train, release - and `learn` runs them all as one recorded run:
 
 ```bash
 splinter eval --suite anchor --freeze general.jsonl   # once: the anchor suite
-splinter learn docs/manual.md --goal "the console and power limits"
+splinter learn docs/p100-manual.md --goal "the P100 console and power limits"
 splinter status
-splinter "what baud rate does the console run at?"
+splinter "what baud rate does the P100 console run at?"
 ```
+
+Every question Splinter writes names what it is about - the product,
+document, tool or version - so that someone who has never seen the source
+gets exactly one answer. A question whose answer would differ for another
+product is refused.
 
 Budget goes where learning happens: before a task's attempts become
 training data, `learn` measures the policy's pass@k on it closed-book.

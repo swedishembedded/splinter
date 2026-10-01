@@ -63,7 +63,7 @@ pub fn variants_reply(prompt: &str) -> Option<String> {
     let tasks: Vec<_> = wordings
         .iter()
         .map(
-            |w| json!({ "instruction": w, "reference": reference, "evidence": [{ "section": 0 }] }),
+            |w| json!({ "instruction": w, "subject": "Frobnicator", "reference": reference, "evidence": [{ "section": 0 }] }),
         )
         .collect();
     Some(json!({ "tasks": tasks }).to_string())
@@ -79,11 +79,13 @@ pub fn manual_policy() -> Scripted {
             json!({ "tasks": [
                 {
                     "instruction": BAUD_QUESTION,
+                    "subject": "Frobnicator",
                     "reference": "115200 baud",
                     "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
                 },
                 {
                     "instruction": IDLE_QUESTION,
+                    "subject": "Frobnicator",
                     "reference": "40 mA",
                     "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
                 }

@@ -47,6 +47,28 @@ pub fn sections(text: &str, media_type: &str) -> Vec<Section> {
     }
 }
 
+/// A Markdown text's title: its first heading, without the `#` marks
+/// around it; `None` for any other media type, or a text with no heading.
+#[must_use]
+pub fn title(text: &str, media_type: &str) -> Option<String> {
+    if media_type != MARKDOWN {
+        return None;
+    }
+    let heading = markdown_sections(text)
+        .iter()
+        .filter_map(|section| section.text(text)?.lines().next())
+        .find(|line| is_heading(line))?;
+    let words = heading.trim().trim_start_matches('#').trim();
+    // A closing run of `#` counts only after a space: `C#` keeps its mark.
+    let open = words.trim_end_matches('#');
+    let words = if open.is_empty() || open.ends_with([' ', '\t']) {
+        open.trim_end()
+    } else {
+        words
+    };
+    (!words.is_empty()).then(|| words.to_string())
+}
+
 /// One line of a text: its byte range without the terminator, and what the
 /// sectioners need to know about it.
 struct Line<'a> {
