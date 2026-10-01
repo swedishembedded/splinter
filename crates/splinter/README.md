@@ -227,7 +227,7 @@ is printed with its numbers, and a check that could not be measured fails:
 | improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
 | retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
 | anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
-| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and answers that agree over their first nine tenths, runs of whitespace aside); each task answered differently is reported with both answers |
+| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`), with the base checkpoint the candidate was trained on as its `BRAIN_QWEN_WEIGHTS`, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and answers that agree over their first nine tenths, runs of whitespace aside); each task answered differently is reported with both answers |
 
 The improvement check measures whether the candidate learned the facts it
 was trained on, on questions it was not trained on: the held-out records
@@ -255,6 +255,19 @@ at; it moves only from the champion the gate measured against. `release
 list` shows every release with its parent and aliases; `rollback <ALIAS>`
 points the alias at the release its current one was trained from, and
 refuses when there is none.
+
+An adapter belongs to one base model. To serve a release without
+Splinter, name that base - the manifest's `base_model` and `base_digest`
+say which checkpoint it is - and the release's adapter, as the serve check
+does:
+
+```bash
+BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter <state>/releases/<hex>/adapter.safetensors
+```
+
+brain serves the adapter on that one Qwen3 base, as the model
+`brain/qwen3`, and refuses to start when the base's digest is not the one
+the adapter records.
 
 `eval <REF>` grades one model - a candidate id, or a model reference -
 closed-book on `--suite held-out` (the default: a candidate's new data, or
