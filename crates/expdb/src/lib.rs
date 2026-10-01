@@ -19,3 +19,16 @@
 //! reader pinned to a manifest sees the same data for as long as it holds it.
 //! There are no file locks on the write path: each writer owns a unique id.
 #![warn(missing_docs)]
+
+pub mod backend;
+mod clock;
+mod config;
+mod database;
+mod error;
+mod id;
+
+pub use clock::{Clock, StepClock, SystemClock};
+pub use config::{Compression, Config};
+pub use database::Database;
+pub use error::{Error, Result};
+pub use id::{ContentId, RecordId, WriterId, WriterIdentity};

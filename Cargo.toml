@@ -40,15 +40,23 @@ splinter-sandbox = { path = "crates/sandbox" }
 splinter-expdb = { path = "crates/expdb" }
 
 anyhow = "1"
+# Content hashing for the experience database.
+blake3 = "1"
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 # Process groups, exit polling and resource limits for bounded process runs.
 libc = "0.2"
+# Content-defined chunking, so a small edit to a large object re-stores a few chunks.
+fastcdc = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
+# Checksums for sealed files and compression of record blocks.
+crc32fast = "1"
+zstd = "0.13"
+proptest = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "process", "signal"] }
 toml = "0.8"

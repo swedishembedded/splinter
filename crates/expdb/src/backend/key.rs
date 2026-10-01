@@ -1,0 +1,113 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements storage engines for machine-learning
+// experience data for its clients. If your team needs expertise in
+// versioned, content-addressed databases or parallel-filesystem I/O, you can
+// procure our services by sending an email to info@swedishembedded.com.
+
+//! Object keys: a kind and a validated name.
+
+use crate::error::{Error, Result};
+
+/// What an object is, which decides where a backend puts it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Kind {
+    /// A sealed segment of records.
+    Segment,
+    /// A pack of content-addressed blob chunks.
+    BlobPack,
+    /// An immutable manifest.
+    Manifest,
+    /// An immutable index run.
+    Index,
+    /// A named pointer to a manifest, replaced atomically.
+    Ref,
+    /// A marker that keeps a manifest's files alive.
+    Pin,
+    /// A microsegment waiting for an aggregator.
+    Spool,
+}
+
+impl Kind {
+    /// The directory the kind lives in.
+    pub fn dir(self) -> &'static str {
+        match self {
+            Kind::Segment => "segments",
+            Kind::BlobPack => "blobs",
+            Kind::Manifest => "manifests",
+            Kind::Index => "indexes",
+            Kind::Ref => "refs",
+            Kind::Pin => "pins",
+            Kind::Spool => "spool",
+        }
+    }
+
+    /// Whether names are spread over two-character subdirectories, so no
+    /// directory grows without bound. Pointer kinds may nest by `/` instead.
+    pub fn fans_out(self) -> bool {
+        matches!(
+            self,
+            Kind::Segment | Kind::BlobPack | Kind::Manifest | Kind::Spool
+        )
+    }
+
+    /// Every kind.
+    pub const ALL: [Kind; 7] = [
+        Kind::Segment,
+        Kind::BlobPack,
+        Kind::Manifest,
+        Kind::Index,
+        Kind::Ref,
+        Kind::Pin,
+        Kind::Spool,
+    ];
+}
+
+/// The address of one object.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Key {
+    kind: Kind,
+    name: String,
+}
+
+impl Key {
+    /// A key, refusing names that could leave the root or collide with a
+    /// temporary file.
+    pub fn new(kind: Kind, name: &str) -> Result<Self> {
+        let valid_part = |part: &str| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && !part.starts_with('.')
+                && part
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+        };
+        let ok = if kind.fans_out() {
+            valid_part(name)
+        } else {
+            name.split('/').all(valid_part)
+        };
+        if !ok {
+            return Err(Error::invalid(
+                "object name",
+                format!("`{name}` is not a valid {} name", kind.dir()),
+            ));
+        }
+        Ok(Self {
+            kind,
+            name: name.to_owned(),
+        })
+    }
+
+    /// The kind.
+    pub fn kind(&self) -> Kind {
+        self.kind
+    }
+
+    /// The name within the kind.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
