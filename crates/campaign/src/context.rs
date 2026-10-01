@@ -10,6 +10,14 @@
 //! before the process exits. A caller that already holds a model - a test's
 //! scripted one - hands it in with [`Context::with_model`] instead.
 //!
+//! Local models go on the context's [`Residency`]: one resident copy of
+//! each base, shared by every model on it - the policy and the release
+//! gate's two arms differ only by adapter, and never hold two bases. Work
+//! that needs the device for itself - a fine-tune, which loads its own
+//! copy, and the gate's serve check, a separate process - first releases
+//! every resident base ([`Context::release_bases`]); the next generation of
+//! a model reloads its base.
+//!
 //! `policy:<alias>` is resolved once per context, on first use: the
 //! release the alias points at then is the one every stage of the command
 //! uses, however the alias moves meanwhile ([`Context::policy_pin`]). Only
@@ -23,7 +31,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 use splinter_agent::solve::Model;
-use splinter_policy::{LoadedModel, ModelSelection, Sampling};
+use splinter_policy::{LoadedModel, ModelSelection, Residency, Sampling};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
     SandboxError,
@@ -77,6 +85,7 @@ pub struct Context {
     clock: Box<dyn Clock + Send + Sync>,
     runtime: tokio::runtime::Runtime,
     models: Mutex<HashMap<ModelRef, Held>>,
+    residency: Residency,
     pins: Mutex<BTreeMap<String, Option<PolicyPin>>>,
     environments: Environments,
     progress: Option<Progress>,
@@ -94,6 +103,7 @@ impl Context {
             clock: Box::new(SystemClock),
             runtime,
             models: Mutex::new(HashMap::new()),
+            residency: Residency::default(),
             pins: Mutex::new(BTreeMap::new()),
             environments,
             progress: None,
@@ -119,16 +129,34 @@ impl Context {
         );
     }
 
-    /// Unloads the model `reference` names, if this context loaded it,
-    /// freeing its device memory; a model handed in stays.
-    pub fn unload(&self, reference: &ModelRef) {
-        let mut models = self.lock_models();
-        if models
-            .get(reference)
-            .is_some_and(|held| held.loaded.is_some())
-        {
-            models.remove(reference);
+    /// The same context keeping its local models' bases on `residency`
+    /// instead of loading them with brain: a spec's scripted bases.
+    #[must_use]
+    pub fn with_residency(mut self, residency: Residency) -> Self {
+        self.residency = residency;
+        self
+    }
+
+    /// How many bases are resident on the device for this context's
+    /// models right now.
+    #[must_use]
+    pub fn resident_bases(&self) -> usize {
+        self.residency.resident()
+    }
+
+    /// Frees every resident base for work that needs the device for
+    /// itself: each loaded model's running generation is stopped first
+    /// (and waited for, as dropping the model does), and the models stay,
+    /// their next generation loading the base again.
+    pub fn release_bases(&self) {
+        for held in self.lock_models().values() {
+            if let Some(loaded) = &held.loaded {
+                // Best effort, as on drop: a generation outliving the grace
+                // is cancelling, and the release waits for it to end.
+                let _ = loaded.quiesce();
+            }
         }
+        self.residency.release_all();
     }
 
     /// The same context stamping records with `clock`.
@@ -253,7 +281,18 @@ impl Context {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(alias);
-        self.unload(&ModelRef::Policy(alias.to_string()));
+        // A model handed in stays; one this context loaded is dropped,
+        // and its base with it once no other model uses it.
+        // Dropped outside the lock: dropping quiesces a running generation.
+        let reference = ModelRef::Policy(alias.to_string());
+        let dropped = {
+            let mut models = self.lock_models();
+            let loaded = models
+                .get(&reference)
+                .is_some_and(|held| held.loaded.is_some());
+            loaded.then(|| models.remove(&reference))
+        };
+        drop(dropped);
     }
 
     /// The model `reference` names, loaded on first use.
@@ -263,10 +302,12 @@ impl Context {
         }
         let selection = self.selection(reference)?;
         let local = selection.local().is_some();
-        let loaded = selection.load().map_err(|e| CampaignError::Model {
-            model: reference.to_string(),
-            detail: format!("{e:#}"),
-        })?;
+        let loaded = selection
+            .load(&self.residency)
+            .map_err(|e| CampaignError::Model {
+                model: reference.to_string(),
+                detail: format!("{e:#}"),
+            })?;
         let mut model = Model::new(loaded.provider(), loaded.identity());
         if local {
             model = model.with_stream_idle(LOCAL_STREAM_IDLE);

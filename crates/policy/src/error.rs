@@ -29,6 +29,26 @@ pub enum PolicyError {
         /// brain's error.
         reason: String,
     },
+    /// A resident base refused to switch to a model's adapter.
+    #[error("{} on {path}: {reason}", adapter.as_ref().map_or_else(|| "detaching the adapter".to_string(), |a| format!("attaching {}", a.display())))]
+    Adapter {
+        /// The base checkpoint.
+        path: PathBuf,
+        /// The adapter asked for; `None` for the plain base.
+        adapter: Option<PathBuf>,
+        /// brain's error.
+        reason: String,
+    },
+    /// A generation on a resident base failed.
+    #[error("generating on {path}{}: {reason}", adapter.as_ref().map_or_else(String::new, |a| format!(" with {}", a.display())))]
+    Generate {
+        /// The base checkpoint.
+        path: PathBuf,
+        /// The adapter attached; `None` for the plain base.
+        adapter: Option<PathBuf>,
+        /// brain's error.
+        reason: String,
+    },
     /// A remote model could not be configured or reached.
     #[error("remote model {spec}: {reason}")]
     Remote {

@@ -11,7 +11,10 @@
 //! one when asked to lie), writes its API key and ready marker, and answers
 //! the OpenAI-compatible chat route from what the adapter file says the
 //! candidate knows - when asked to decode greedily (temperature zero); a
-//! sampled request gets a draw that agrees with nothing. It tests the serve check's plumbing, not brain.
+//! sampled request gets a draw that agrees with nothing. Like brain on one
+//! device, it does not start while another process holds the device: while
+//! the file [`device_lock`] names exists. It tests the serve check's
+//! plumbing, not brain.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -229,6 +232,15 @@ pub enum Brain {
     WrongDigest,
 }
 
+/// The file standing for the device being held: while it exists, the
+/// `brain` stand-in in `scratch` refuses to start.
+pub fn device_lock(scratch: &Scratch) -> PathBuf {
+    scratch.0.join(DEVICE_LOCK)
+}
+
+/// [`device_lock`]'s name in the scratch directory.
+const DEVICE_LOCK: &str = "device.lock";
+
 /// Facts per dataset: a tenth, six, are held out - enough for six
 /// discordant wins to be significant at the default alpha (1/64 < 0.05).
 pub const FACTS: usize = 60;
@@ -332,7 +344,8 @@ pub fn serve_release(ctx: &Context, id: &ReleaseId) {
 /// A trainer double for both regimes: its adapter file is JSON naming the
 /// topics its candidate knows, and it hands the context a scripted model
 /// knowing them under the candidate's arm. Keeps every plan it was given,
-/// and which of its methods trained it.
+/// which of its methods trained it, and how many bases were resident when
+/// it started.
 pub struct FakeTrainer {
     knows: Vec<String>,
     /// The plans it trained.
@@ -340,6 +353,8 @@ pub struct FakeTrainer {
     /// The regime of each method called, in order: `train` is SFT,
     /// `train_preference` DPO.
     pub called: Mutex<Vec<Regime>>,
+    /// The context's resident bases as each training started.
+    pub resident_at_start: Mutex<Vec<usize>>,
 }
 
 impl FakeTrainer {
@@ -349,6 +364,7 @@ impl FakeTrainer {
             knows: topics.iter().map(|t| t.to_string()).collect(),
             plans: Mutex::new(Vec::new()),
             called: Mutex::new(Vec::new()),
+            resident_at_start: Mutex::new(Vec::new()),
         }
     }
 }
@@ -375,6 +391,10 @@ struct FakeAdapter {
 impl FakeTrainer {
     /// Writes the adapter and training record for `plan` and serves it.
     fn fake(&self, ctx: &Context, plan: &TrainPlan) -> FakeAdapter {
+        self.resident_at_start
+            .lock()
+            .unwrap()
+            .push(ctx.resident_bases());
         self.plans.lock().unwrap().push(plan.clone());
         let adapter = plan.dir.join("adapter.safetensors");
         let bytes =
@@ -450,7 +470,9 @@ pub fn policy() -> ModelRef {
 /// Writes the `brain` stand-in into `dir`; see the module documentation.
 fn fake_brain(dir: &Path, wrong_digest: bool) -> PathBuf {
     let path = dir.join("brain");
-    let script = FAKE_BRAIN.replace("@WRONG@", if wrong_digest { "True" } else { "False" });
+    let script = FAKE_BRAIN
+        .replace("@WRONG@", if wrong_digest { "True" } else { "False" })
+        .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string());
     std::fs::write(&path, script).unwrap();
     #[cfg(unix)]
     {
@@ -462,8 +484,11 @@ fn fake_brain(dir: &Path, wrong_digest: bool) -> PathBuf {
 
 const FAKE_BRAIN: &str = r#"#!/usr/bin/env python3
 # A test double of `brain serve`: see the fixtures' module documentation.
-import hashlib, http.server, json, re, sys
+import hashlib, http.server, json, os, re, sys
 
+if os.path.exists("@DEVICE@"):
+    print("the device is held by another process", file=sys.stderr, flush=True)
+    sys.exit(1)
 args = sys.argv[1:]
 assert args[0] == "serve", args
 opts = dict(zip(args[1::2], args[2::2]))

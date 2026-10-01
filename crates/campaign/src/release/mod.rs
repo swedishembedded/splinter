@@ -249,8 +249,9 @@ fn soft<T>(result: Result<T, CampaignError>) -> Result<Result<T, String>, Campai
 /// The model `reference` names graded on each of `suites`, decoding
 /// greedily ([`probe::greedy`]) where its sampling can be set here - a
 /// verdict is then the weights', not a draw's, and the served candidate is
-/// asked the same way - then unloaded so the other arm and the served
-/// candidate have the device.
+/// asked the same way. The arms differ only by adapter, so the second one
+/// graded runs on the base the first one loaded; the serve check releases
+/// it before the served candidate starts.
 fn grade_arm(
     ctx: &Context,
     reference: &ModelRef,
@@ -265,7 +266,6 @@ fn grade_arm(
     for suite in suites {
         graded.push(soft(probe::grade(ctx, &model, suite, cancel))?);
     }
-    ctx.unload(reference);
     Ok(graded)
 }
 

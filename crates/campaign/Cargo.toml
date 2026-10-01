@@ -25,6 +25,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+# The scripted base loader: the residency specs run without weights.
+splinter-policy = { workspace = true, features = ["scripted"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }

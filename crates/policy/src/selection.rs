@@ -18,6 +18,7 @@ use sven_sdk::model::ModelProvider;
 
 use crate::error::PolicyError;
 use crate::local::{LocalQwen, LocalWeights, Sampling};
+use crate::residency::Residency;
 
 /// How long dropping a [`LoadedModel`] waits for a local generation still
 /// running to stop before the process may exit.
@@ -97,9 +98,10 @@ impl ModelSelection {
     }
 
     /// This selection loaded: a provider for it, known by its
-    /// [`Self::identity`]. Loading local weights is the expensive step -
-    /// load once per command, not per request.
-    pub fn load(&self) -> Result<LoadedModel, PolicyError> {
+    /// [`Self::identity`]. Local weights go on `residency`'s copy of their
+    /// base, loaded there if no other model holds it - the expensive step,
+    /// so load once per command, not per request.
+    pub fn load(&self, residency: &Residency) -> Result<LoadedModel, PolicyError> {
         let identity = self.identity();
         match self {
             Self::Remote(remote) => {
@@ -117,7 +119,11 @@ impl ModelSelection {
                 })
             }
             Self::Local(weights) => {
-                let local = Arc::new(LocalQwen::load(weights, &local_model_name(&weights.base))?);
+                let local = Arc::new(LocalQwen::load(
+                    residency,
+                    weights,
+                    &local_model_name(&weights.base),
+                )?);
                 Ok(LoadedModel {
                     provider: local.clone(),
                     identity,
@@ -189,6 +195,16 @@ impl LoadedModel {
         &self.identity
     }
 
+    /// Stops a local generation still running and waits up to
+    /// [`QUIESCE_GRACE`] for it to end, as dropping the model does, while
+    /// keeping the model: before its base is released for other work.
+    /// Returns whether every generation has stopped.
+    pub fn quiesce(&self) -> bool {
+        self.local
+            .as_ref()
+            .is_none_or(|local| local.stop_generation(QUIESCE_GRACE))
+    }
+
     /// A provider for the same loaded weights sampling as `sampling` says;
     /// `None` for a model reached over an API, whose sampling is its
     /// server's. The provider shares the weights: this model must outlive
@@ -211,11 +227,9 @@ impl std::fmt::Debug for LoadedModel {
 
 impl Drop for LoadedModel {
     fn drop(&mut self) {
-        if let Some(local) = &self.local {
-            // Best effort by contract: a generation that outlives the grace
-            // is cancelling and stops on its own.
-            let _ = local.stop_generation(QUIESCE_GRACE);
-        }
+        // Best effort by contract: a generation that outlives the grace is
+        // cancelling and stops on its own.
+        let _ = self.quiesce();
     }
 }
 

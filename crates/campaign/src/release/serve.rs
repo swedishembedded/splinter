@@ -22,6 +22,9 @@
 //! than two draws, and graded as in-process; every verdict must be the
 //! same. The server is stopped when the check ends, however it ends.
 //!
+//! The server loads its own copy of the base, so every base this process
+//! keeps resident is released before it starts.
+//!
 //! Without a `brain` binary, or when it does not start, the check is not
 //! measured - and the gate fails.
 
@@ -66,6 +69,9 @@ pub fn check(
             "no brain binary: none on PATH and SPLINTER_BRAIN_BIN is not set",
         ));
     };
+    // `brain serve` is another process loading its own copy of the base:
+    // this one holds none while it runs.
+    ctx.release_bases();
     let work = ctx.root().sandbox().join(format!(
         "serve-check-{}",
         splinter_store::new_id_with_prefix("gate")

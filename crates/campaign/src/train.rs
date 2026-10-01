@@ -440,6 +440,9 @@ pub fn train(
         rank: request.rank,
         beta,
     };
+    // A fine-tune loads its own copy of the base: the device holds no
+    // other while it trains.
+    ctx.release_bases();
     let trained = match regime {
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),

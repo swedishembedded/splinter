@@ -22,5 +22,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 
+[features]
+# The scripted base loader (`residency::scripted`): specs above this crate
+# exercise residency with it where no weights are available.
+scripted = []
+
 [lints]
 workspace = true

@@ -51,6 +51,13 @@ so any stage can be rerun or inspected alone (`splinter runs show`,
 `splinter experiences show --graph`). Every model runs locally unless a
 `remote:` model is named with `--allow-remote`.
 
+Local models share the device: the policy, a candidate and the champion
+it is measured against are one base with different LoRA adapters, so one
+copy of the base is resident and each generation runs with its own
+model's adapter attached. Training and the release gate's `brain serve`
+check load their own copy, so every resident base is released before
+either starts and loaded again by the next model use.
+
 A trained candidate continues the current release (the champion) - by
 supervised fine-tuning with a replay of what earlier releases learned, or
 by DPO on pairs preferring a verified answer over a failed one - and

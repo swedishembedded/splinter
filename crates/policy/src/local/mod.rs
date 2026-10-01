@@ -20,11 +20,11 @@
 //! The generation is [`brain::ChatPipeline`]'s: the chat template, tool
 //! schemas, KV-cached decode, chunked prefill, the reasoning and tool-call
 //! scanner and cooperative cancellation are brain's, the same functions its
-//! served chat endpoint runs. A LoRA adapter is folded into the base at load
-//! by brain, the fold its held-out scorer uses, so a served adapter is
-//! numerically the model it was trained to be. This module maps sven's
-//! request onto a [`brain::ChatRequest`] and the reply back onto sven's
-//! event stream.
+//! served chat endpoint runs. The base is the [`crate::residency`]'s: one
+//! resident copy per checkpoint, shared by every model on it, with the
+//! model's LoRA adapter attached before each of its generations. This
+//! module maps sven's request onto a [`brain::ChatRequest`] and the reply
+//! back onto sven's event stream.
 
 mod events;
 mod request;
@@ -33,10 +33,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use brain::{CancelToken, ChatPipeline, TextGenerationPipeline};
+use brain::CancelToken;
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 
 use crate::error::PolicyError;
+use crate::residency::{Residency, Resident};
 use events::events_from;
 use request::chat_request;
 pub use request::Sampling;
@@ -63,12 +64,15 @@ pub const GREEDY_SAMPLING: Sampling = Sampling {
     ..AGENT_SAMPLING
 };
 
-/// A loaded chat model (optionally with a folded LoRA adapter), ready to
-/// complete. One sequence decodes at a time - the model carries its KV
-/// cache across a generation - so requests serialize behind a lock; that is
-/// the shape of a single-user local agent, not a serving fleet.
+/// A chat model on a resident base, with its optional LoRA adapter,
+/// ready to complete. One sequence decodes at a time on a base - it carries
+/// its KV cache and attached adapter across a generation - so requests on
+/// every model sharing it serialize behind its lock; that is the shape of a
+/// single-user local agent, not a serving fleet.
 pub struct LocalQwen {
-    pipeline: Arc<Mutex<ChatPipeline>>,
+    resident: Arc<Resident>,
+    /// The adapter attached before each generation; `None` for the base.
+    adapter: Option<PathBuf>,
     model_name: String,
     /// The in-flight generation's cancel token, if one is running.
     /// [`Self::stop_generation`] arms it when the work using the model ends
@@ -90,7 +94,7 @@ pub struct LocalWeights {
     /// Checkpoint directory (or file) - the same layout brain's model store
     /// uses. A directory resolves to the checkpoint inside it.
     pub base: PathBuf,
-    /// Optional LoRA adapter file, folded in at load.
+    /// Optional LoRA adapter file, attached to the base.
     pub adapter: Option<PathBuf>,
     /// Inline context budget (tokens): the KV cache is built for exactly
     /// this many, so a prompt plus its generation must fit inside it.
@@ -98,31 +102,21 @@ pub struct LocalWeights {
 }
 
 impl LocalQwen {
-    /// Loads weights, tokenizer and (optionally) an adapter, and builds the
-    /// decode engine. This is the expensive step - do it once, at startup,
-    /// not per request.
-    pub fn load(weights: &LocalWeights, model_name: &str) -> Result<Self, PolicyError> {
+    /// The model `weights` names, on `residency`'s copy of its base: loaded
+    /// if no other model holds it - the expensive step, done once per
+    /// base, not per request - with the adapter attached, so an adapter
+    /// that does not fit the base is refused here.
+    pub fn load(
+        residency: &Residency,
+        weights: &LocalWeights,
+        model_name: &str,
+    ) -> Result<Self, PolicyError> {
         let base = resolve_base(&weights.base)?;
-        let mut builder =
-            TextGenerationPipeline::builder(utf8(&base)?).capacity(weights.context_tokens.max(1));
-        // A brain-format checkpoint carries no tokenizer; the one beside it
-        // is the one it was trained with. A GGUF embeds its own.
-        if let Some(tokenizer) = base
-            .parent()
-            .map(|dir| dir.join("tokenizer.json"))
-            .filter(|path| path.is_file())
-        {
-            builder = builder.tokenizer(utf8(&tokenizer)?);
-        }
-        if let Some(adapter) = &weights.adapter {
-            builder = builder.adapter(utf8(adapter)?);
-        }
-        let pipeline = builder.load().map_err(|e| PolicyError::Load {
-            path: base.clone(),
-            reason: e.to_string(),
-        })?;
+        let resident =
+            residency.acquire(&base, weights.context_tokens, weights.adapter.as_deref())?;
         Ok(Self {
-            pipeline: Arc::new(Mutex::new(ChatPipeline::from(pipeline))),
+            resident,
+            adapter: weights.adapter.clone(),
             model_name: model_name.to_string(),
             in_flight: Arc::new(Mutex::new(None)),
             live: Arc::new(AtomicUsize::new(0)),
@@ -130,14 +124,15 @@ impl LocalQwen {
         })
     }
 
-    /// The same loaded model sampling as `sampling` says: the weights, the
-    /// decode lock and the in-flight generation are shared, so a request on
-    /// either waits for (and supersedes) one running on the other, as two
+    /// The same model sampling as `sampling` says: the base, the adapter
+    /// and the in-flight generation are shared, so a request on either
+    /// waits for (and supersedes) one running on the other, as two
     /// requests on one model do.
     #[must_use]
     pub fn resampled(&self, sampling: Sampling) -> Self {
         Self {
-            pipeline: Arc::clone(&self.pipeline),
+            resident: Arc::clone(&self.resident),
+            adapter: self.adapter.clone(),
             model_name: self.model_name.clone(),
             in_flight: Arc::clone(&self.in_flight),
             live: Arc::clone(&self.live),
@@ -168,13 +163,6 @@ impl LocalQwen {
         }
         self.live.load(Ordering::SeqCst) == 0
     }
-}
-
-/// `path` as the UTF-8 string brain's loaders take, or an error naming it.
-fn utf8(path: &Path) -> Result<&str, PolicyError> {
-    path.to_str().ok_or_else(|| PolicyError::NotUtf8 {
-        path: path.to_path_buf(),
-    })
 }
 
 /// A directory pointing at a checkpoint resolves to the checkpoint inside
@@ -211,7 +199,8 @@ impl ModelProvider for LocalQwen {
         req: CompletionRequest,
     ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
         let request = chat_request(&req, &self.sampling);
-        let pipeline = Arc::clone(&self.pipeline);
+        let resident = Arc::clone(&self.resident);
+        let adapter = self.adapter.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(16);
         let cancel = CancelToken::armed();
         // Register this generation so a raced attempt end can stop it
@@ -242,12 +231,12 @@ impl ModelProvider for LocalQwen {
                 // A device error surfaces as a panic (brain's backend reports
                 // wgpu errors that way); catch it here so it reaches the
                 // consumer as a failed stream instead of a dead thread.
+                // The resident's lock is held for the whole generation, its
+                // adapter switched to this model's first; the thread's own
+                // handle keeps the base loaded until the generation ends.
                 let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let pipeline = pipeline
-                        .lock()
-                        .map_err(|e| anyhow::anyhow!("chat pipeline lock poisoned: {e}"))?;
-                    pipeline
-                        .generate_stream(&request, &cancel, |delta| {
+                    resident.generate(adapter.as_deref(), |engine| {
+                        engine.generate_stream(&request, &cancel, &mut |delta| {
                             let Some(event) = events::delta_event(delta) else {
                                 return;
                             };
@@ -257,11 +246,11 @@ impl ModelProvider for LocalQwen {
                                 cancel.cancel();
                             }
                         })
-                        .map_err(|e| anyhow::anyhow!("{e}"))
+                    })
                 }));
                 let tail = match run {
                     Ok(Ok(response)) => events_from(response),
-                    Ok(Err(e)) => vec![Err(anyhow::anyhow!("generation failed: {e:#}"))],
+                    Ok(Err(e)) => vec![Err(anyhow::anyhow!("generation failed: {e}"))],
                     Err(panic) => vec![Err(anyhow::anyhow!(
                         "device panic during generation: {}",
                         panic_message(&panic)
