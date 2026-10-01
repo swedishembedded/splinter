@@ -16,8 +16,8 @@
 //! could not carry out is a tool error naming why.
 //!
 //! The tool declares [`ToolCapability::ExecuteShell`], which is what it
-//! does, so sven's permission gate asks before it runs; the solver answers
-//! that gate (see [`crate::solve`]).
+//! does: a session under manual approval asks before each call, and the
+//! solver's sessions run under automatic approval (see [`crate::solve`]).
 
 use sven_sdk::tool::{ApprovalPolicy, Tool, ToolCall, ToolCapability, ToolOutput};
 

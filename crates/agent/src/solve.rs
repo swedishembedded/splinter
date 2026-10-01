@@ -20,13 +20,12 @@
 //! everything that determines behaviour), and [`solve`] refuses to solve it
 //! in any other: a replay runs where the original ran, or not at all.
 //!
-//! Approval: `run_code` declares `ExecuteShell`, so sven asks before each
-//! call. The solver approves a gate only when the call it gates is
-//! `run_code` and refuses every other gate. That is safe because the
-//! engine has no built-in tools, so nothing else can raise the gate; and
-//! what a call may do is contained by its sandbox backend's limits (and,
-//! for the container backend, its isolation), not by a person reading the
-//! code. With nobody to ask, a question the agent puts is answered empty.
+//! Approval: the engine runs under sven's default automatic approval. It
+//! has no built-in tools, so the only call a solver can make is
+//! `run_code`, and what that call may do is contained by its sandbox
+//! backend's limits (and, for the container backend, its isolation), not
+//! by a person reading the code. With nobody to ask, sven answers a
+//! question the agent puts with its no-user answer.
 
 pub use crate::run_code::RUN_CODE;
 
@@ -38,11 +37,7 @@ use splinter_store::digest::Digest;
 use splinter_store::experience::{Experience, ExperienceError, Provenance, Task};
 use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
-use sven_sdk::tool::ToolCapability;
-use sven_sdk::{
-    atif, ApprovalPolicy, CallError, CancelToken, Engine, HumanGate, RunConclusion, RunOptions,
-    Toolset, Usage,
-};
+use sven_sdk::{atif, CallError, CancelToken, Engine, RunConclusion, RunOptions, Toolset, Usage};
 
 use crate::run_code::RunCode;
 
@@ -262,31 +257,9 @@ fn engine(
         .model_provider(model)
         .toolset(Toolset::none());
     match environment {
-        ResolvedEnvironment::ClosedBook => builder.approvals(ApprovalPolicy::Deny).build(),
+        ResolvedEnvironment::ClosedBook => builder.build(),
         ResolvedEnvironment::Runtime(runtime) => builder
             .tool(Arc::new(RunCode::new(runtime.clone())))
-            .approvals(ApprovalPolicy::ask(approve_run_code_only))
             .build(),
-    }
-}
-
-/// Approves a `run_code` call and nothing else, by the call it gates;
-/// see the module documentation for why that is safe.
-fn approve_run_code_only(gate: HumanGate) {
-    // A dropped receiver means the turn already ended; nothing waits for
-    // the answer.
-    match gate {
-        HumanGate::Approval {
-            capability,
-            call,
-            reply_tx,
-            ..
-        } => {
-            let is_run_code = call.is_some_and(|call| call.name == RUN_CODE);
-            let _ = reply_tx.send(is_run_code && capability == ToolCapability::ExecuteShell);
-        }
-        HumanGate::Question { reply_tx, .. } => {
-            let _ = reply_tx.send(String::new());
-        }
     }
 }

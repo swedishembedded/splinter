@@ -31,7 +31,7 @@ use splinter_lab::{
     baseline_effective, capture_path, records_from_performance, run_verifier, run_witness,
     to_jsonl, upstream_of, Action, ArmScore, Episode, Family, Outcome, Recorder, ServedModel,
 };
-use sven_sdk::{config, ApprovalPolicy, Engine, SessionEvent};
+use sven_sdk::{config, Engine, SessionEvent};
 
 const USAGE: &str = "\
 usage: splinter-tool-syntax <command> [options]
@@ -376,7 +376,6 @@ async fn run_agent(
 
     let engine = Engine::builder()
         .config(settings)
-        .approvals(ApprovalPolicy::AutoApprove)
         .build()
         .map_err(|e| anyhow::anyhow!("building the engine: {e}"))?;
 
