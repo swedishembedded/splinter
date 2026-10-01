@@ -216,6 +216,7 @@ impl Session {
                     no_release: args.no_release,
                     no_frontier: args.no_frontier,
                     teacher: args.teacher,
+                    generator: args.generator,
                     ..LearnRequest::default()
                 };
                 let learned = learn(ctx, &request, &BrainTrainer)?;

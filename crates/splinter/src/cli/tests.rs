@@ -294,6 +294,14 @@ fn pass_at_k_is_asked_for_where_it_is_measured() {
         panic!("learn --teacher");
     };
     assert_eq!(learn.teacher, Some("local:./big".parse().unwrap()));
+    assert_eq!(
+        learn.generator, None,
+        "the policy writes the tasks by default"
+    );
+    let Command::Learn(learn) = command(&["learn", "docs", "--generator", "local:./big"]) else {
+        panic!("learn --generator");
+    };
+    assert_eq!(learn.generator, Some("local:./big".parse().unwrap()));
 }
 
 #[test]

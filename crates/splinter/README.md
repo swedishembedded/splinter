@@ -12,7 +12,7 @@ every command. `splinter <command> --help` is the authoritative reference.
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run] [--no-release]
-                         [--no-frontier | --k N [--temperature T] [--top-k N]] [--teacher REF]
+                         [--no-frontier | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF]
 splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>

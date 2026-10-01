@@ -183,6 +183,9 @@ pub struct LearnArgs {
     /// material, the tasks the policy never solves (default: the policy).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub teacher: Option<ModelRef>,
+    /// The model that writes the tasks (default: the policy).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub generator: Option<ModelRef>,
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,

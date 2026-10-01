@@ -84,13 +84,14 @@ impl Report for LearnPlan {
     fn human(&self) -> String {
         let sources: Vec<String> = self.sources.iter().map(word).collect();
         format!(
-            "dry run - nothing written under {}\n  sources: {}\n  kinds:   {}\n  goal:    {}\n  budget:  {}\n  policy:  {}\n  teacher: {}\n  stages:  {}\n",
+            "dry run - nothing written under {}\n  sources: {}\n  kinds:   {}\n  goal:    {}\n  budget:  {}\n  policy:  {}\n  writer:  {}\n  teacher: {}\n  stages:  {}\n",
             self.state.display(),
             sources.join(", "),
             self.kinds.join(", "),
             self.goal.as_deref().unwrap_or("-"),
             self.budget_secs.map_or("none".into(), |s| format!("{s}s")),
             self.policy,
+            self.generator,
             self.teacher,
             self.stages.join(" -> ")
         )

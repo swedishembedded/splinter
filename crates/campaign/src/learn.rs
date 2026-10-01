@@ -94,6 +94,8 @@ pub struct LearnRequest {
     /// The model that teaches what the policy never solves; `None`: the
     /// policy itself.
     pub teacher: Option<ModelRef>,
+    /// The model that writes the tasks; `None`: the policy itself.
+    pub generator: Option<ModelRef>,
     /// k and the sampling of the frontier's pass@k.
     pub pass_at_k: PassAtK,
     /// The diversity quotas on the training set.
@@ -113,8 +115,10 @@ pub struct LearnPlan {
     pub goal: Option<String>,
     /// The budget, in seconds.
     pub budget_secs: Option<u64>,
-    /// The model that generates, solves, critiques and retries.
+    /// The model that solves, critiques and retries.
     pub policy: String,
+    /// The model that writes the tasks.
+    pub generator: String,
     /// The model that teaches what the policy never solves.
     pub teacher: String,
     /// The stages, in order.
@@ -180,7 +184,7 @@ impl LearnReport {
 #[serde(untagged)]
 pub enum Learned {
     /// A dry run's plan.
-    Planned(LearnPlan),
+    Planned(Box<LearnPlan>),
     /// A run and its report.
     Ran(Box<Recorded<LearnReport>>),
 }
@@ -212,8 +216,9 @@ pub fn learn(
         .collect::<Result<Vec<_>, _>>()?;
     let policy = ModelRef::policy_default();
     let teacher = request.teacher.clone().unwrap_or_else(|| policy.clone());
+    let generator = request.generator.clone().unwrap_or_else(|| policy.clone());
     if request.dry_run {
-        return Ok(Learned::Planned(LearnPlan {
+        return Ok(Learned::Planned(Box::new(LearnPlan {
             state: ctx.root().path().to_path_buf(),
             sources: targets,
             kinds,
@@ -221,13 +226,14 @@ pub fn learn(
             budget_secs: request.budget.map(|b| b.as_secs()),
             policy: ctx.selection(&policy)?.identity(),
             teacher: ctx.selection(&teacher)?.identity(),
+            generator: ctx.selection(&generator)?.identity(),
             stages: STAGES
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
                 .filter(|stage| !(request.no_frontier && *stage == "frontier"))
                 .collect(),
             dry_run: true,
-        }));
+        })));
     }
     let pipeline = Pipeline {
         ctx,
@@ -237,6 +243,7 @@ pub fn learn(
         deadline: request.budget.map(|b| Instant::now() + b),
         trainer,
         teacher: &teacher,
+        generator: &generator,
         no_release: request.no_release,
         frontier: (!request.no_frontier).then_some(request.pass_at_k),
         quotas: request.quotas,
@@ -258,6 +265,7 @@ struct Pipeline<'a> {
     deadline: Option<Instant>,
     trainer: &'a dyn Trainer,
     teacher: &'a ModelRef,
+    generator: &'a ModelRef,
     no_release: bool,
     /// pass@k's parameters; `None` keeps every task.
     frontier: Option<PassAtK>,
@@ -276,6 +284,7 @@ impl Pipeline<'_> {
             deadline,
             trainer,
             teacher,
+            generator,
             no_release,
             frontier,
             quotas,
@@ -312,7 +321,7 @@ impl Pipeline<'_> {
                 sources: &source_ids,
                 sections: &sections,
                 kinds,
-                generator: &policy,
+                generator,
                 goal,
                 deadline,
                 cancel: run.cancel_token(),
