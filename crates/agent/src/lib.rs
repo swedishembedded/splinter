@@ -21,6 +21,8 @@
 //!   relations; and the bounded loop of critique and retry.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
+//! * [`typed`] - a typed sven call whose prompt describes the JSON schema
+//!   of its reply, for a model that cannot be constrained to it.
 
 #![warn(missing_docs)]
 
@@ -30,3 +32,4 @@ pub mod repair;
 pub mod replay;
 pub mod run_code;
 pub mod solve;
+pub mod typed;

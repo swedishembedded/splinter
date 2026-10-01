@@ -23,8 +23,8 @@ use serde::Serialize;
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
 use splinter_knowledge::tasks::{
-    Catalogue, GenerateError, GenerationPolicy, ModelTaskGenerator, SourceText, TaskKind,
-    DEFAULT_REQUEST_DEADLINE,
+    Catalogue, GenerateError, GenerationPolicy, ModelTaskGenerator, Rejection, SourceText,
+    TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_lab::denoise::KIND as DENOISE_KIND;
 use splinter_store::digest::Digest;
@@ -112,6 +112,17 @@ pub struct KindTally {
     pub rejected: usize,
 }
 
+/// One proposal turned away, and exactly why.
+#[derive(Clone, Debug, Serialize)]
+pub struct RejectionNote {
+    /// The kind it was proposed as.
+    pub kind: String,
+    /// The reason, as [`TasksGenerated::rejected`] counts it.
+    pub reason: String,
+    /// What failed: for a malformed reply, the reply itself.
+    pub detail: String,
+}
+
 /// What the tasks stage reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct TasksGenerated {
@@ -125,6 +136,8 @@ pub struct TasksGenerated {
     pub per_kind: BTreeMap<String, KindTally>,
     /// Rejections, by reason.
     pub rejected: BTreeMap<String, usize>,
+    /// Every rejection of a model's proposal, with what failed.
+    pub rejections: Vec<RejectionNote>,
     /// Single sections generated from, beside the sources' parts.
     pub sections: usize,
     /// Why generation stopped before every part was covered, if it did.
@@ -216,6 +229,7 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
         parts: batch.parts,
         per_kind: batch.per_kind,
         rejected: batch.rejected,
+        rejections: batch.rejections,
         sections,
         stopped,
     })
@@ -281,12 +295,15 @@ fn generate_part(
             batch.per_kind.entry(kind.clone()).or_default().rejected += counts.rejected;
         }
         for (reason, count) in &report.rejected {
-            let name = serde_json::to_value(reason)
-                .ok()
-                .and_then(|v| v.as_str().map(str::to_string))
-                .unwrap_or_else(|| format!("{reason:?}"));
-            *batch.rejected.entry(name).or_default() += count;
+            *batch.rejected.entry(reason_name(reason)).or_default() += count;
         }
+        batch
+            .rejections
+            .extend(report.rejections.into_iter().map(|r| RejectionNote {
+                reason: reason_name(&r.reason),
+                kind: r.kind,
+                detail: r.detail,
+            }));
         for generated in report.admitted {
             let kind = generated.task.task.kind.clone();
             batch.admit(
@@ -309,6 +326,7 @@ struct Batch {
     parts: usize,
     per_kind: BTreeMap<String, KindTally>,
     rejected: BTreeMap<String, usize>,
+    rejections: Vec<RejectionNote>,
 }
 
 impl Batch {
@@ -337,6 +355,14 @@ impl Batch {
         self.per_kind.entry(kind.to_string()).or_default().rejected += 1;
         *self.rejected.entry(reason.to_string()).or_default() += 1;
     }
+}
+
+/// A rejection reason as the report names it: its serialized form.
+fn reason_name(reason: &Rejection) -> String {
+    serde_json::to_value(reason)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_else(|| format!("{reason:?}"))
 }
 
 /// What a set is called: its kinds, its sources and sections, and the goal.

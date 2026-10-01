@@ -51,6 +51,12 @@ fn classifier() -> Scripted {
                 },
                 "confidence": 0.97
             }]})
+        } else if prompt.contains("explain the flags") {
+            // A verb no command has, however often it is corrected.
+            json!({ "candidates": [{
+                "intent": { "verb": "explain", "question": "the flags" },
+                "confidence": 0.9
+            }]})
         } else if prompt.contains("stop that run") {
             json!({ "candidates": [{
                 "intent": { "verb": "cancel_run", "run": "run-1" },
@@ -128,4 +134,40 @@ fn a_destructive_reading_is_confirmed_not_run() {
         panic!("a cancel is never run on a guess");
     };
     assert_eq!(question.candidates[0].command, ["runs", "cancel", "run-1"]);
+}
+
+/// A local policy has no constrained decoding: it learns the shape of a
+/// classification, and how a sentence maps onto one, only from its prompt.
+#[test]
+fn the_policy_is_shown_the_classification_schema() {
+    let policy = classifier();
+    let (_scratch, ctx) = scratch_context("front-door-schema", policy.clone(), false);
+    interpret(&ctx, "learn ./docs").unwrap();
+    let prompts = policy.prompts.lock().unwrap();
+    // Names only the schema carries: the verbs, as the reply must spell them.
+    for name in [
+        "add_source",
+        "list_sources",
+        "cancel_run",
+        "cmd:<tool> --help",
+    ] {
+        assert!(
+            prompts[0].contains(name),
+            "{name} is not shown: {}",
+            prompts[0]
+        );
+    }
+}
+
+/// A reply the policy cannot shape into a classification, even after
+/// correction, is no reading: it is asked back, as a sentence that matches
+/// no command is, never an error.
+#[test]
+fn an_unreadable_classification_is_a_question_not_a_failure() {
+    let (_scratch, ctx) = scratch_context("front-door-unreadable", classifier(), false);
+    let Routed::Clarify(question) = interpret(&ctx, "explain the flags").unwrap() else {
+        panic!("an unreadable reply is a question");
+    };
+    assert!(question.candidates.is_empty());
+    assert!(question.reason.contains("explain"), "{}", question.reason);
 }

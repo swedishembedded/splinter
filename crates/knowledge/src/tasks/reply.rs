@@ -28,6 +28,11 @@ use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_store::experience::Environment;
 use sven_sdk::schemars::JsonSchema;
 
+/// One reply of the shape [`Reply`] parses, shown to the model beside the
+/// schema: a small model copies an example far more reliably than it reads
+/// a schema's references.
+pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what baud rate does the console UART run?", "reference": "115200 baud", "evidence": [{"section": 0, "quote": "runs at 115200 baud"}], "material": null}]}"#;
+
 /// A generator model's reply.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -100,5 +105,16 @@ impl Check {
             },
             environment,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_example_shown_to_the_model_is_a_reply() {
+        let example: Result<Reply, _> = serde_json::from_str(REPLY_EXAMPLE);
+        assert!(example.is_ok_and(|r| r.tasks.len() == 1));
     }
 }

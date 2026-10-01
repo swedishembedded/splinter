@@ -31,8 +31,9 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::solve::SolveOptions;
+use splinter_agent::typed::with_schema;
 use sven_sdk::schemars::JsonSchema;
-use sven_sdk::{Engine, Method, Toolset};
+use sven_sdk::{CallError, Engine, Method, Toolset};
 
 use crate::context::Context;
 use crate::error::CampaignError;
@@ -59,7 +60,8 @@ pub enum Intent {
     /// Learn from sources: files, directories, or `cmd:<command>` whose
     /// output is captured; runs the whole pipeline.
     Learn {
-        /// What to learn from, exactly as the sentence names it.
+        /// What to learn from, exactly as the sentence names it; a
+        /// command-line tool is learned from its help, `cmd:<tool> --help`.
         sources: Vec<String>,
         /// What the learner is after, if the sentence says.
         #[serde(default)]
@@ -120,6 +122,24 @@ const TASK: &str = "Classify the sentence as one of Splinter's commands. Give ev
 that fits, most likely first, each with its arguments taken from the sentence and a confidence \
 from 0 to 1. Keep paths, commands and questions exactly as written. Give no candidates when \
 nothing fits, and lower confidences when the sentence could mean several things.";
+
+/// Sentences shown to the model with their classifications: a small
+/// model copies an example far more reliably than it reads a schema's
+/// references.
+const EXAMPLES: [(&str, &str); 3] = [
+    (
+        "Learn everything in the manual at ./manuals/pump.md",
+        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./manuals/pump.md"], "goal": "everything in the manual"}, "confidence": 0.9}]}"#,
+    ),
+    (
+        "Learn what the tar command line can do",
+        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["cmd:tar --help"], "goal": "what the tar command line can do"}, "confidence": 0.9}]}"#,
+    ),
+    (
+        "Explain the tar flags from what you know",
+        r#"{"candidates": [{"intent": {"verb": "ask", "question": "Explain the tar flags"}, "confidence": 0.9}]}"#,
+    ),
+];
 
 /// Who the model is while it classifies.
 const ROLE: &str = "You route a person's sentence to the command of a learning system that \
@@ -231,16 +251,36 @@ impl Intent {
 }
 
 /// Classifies `sentence` with the policy model and routes the result.
+///
+/// A reply the policy could not shape into a [`Classification`], even
+/// after sven's corrections, is no reading: it is asked back, as a
+/// sentence that matches no command is, with what was wrong with it.
 pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, CampaignError> {
-    Ok(route(&classify(ctx, sentence)?, ctx.allow_remote()))
+    match classify(ctx, sentence) {
+        Ok(classification) => Ok(route(&classification, ctx.allow_remote())),
+        Err(CampaignError::Call {
+            source: CallError::Invalid { detail, .. } | CallError::Postcondition { detail, .. },
+            ..
+        }) => Ok(Routed::Clarify(Clarification {
+            reason: format!(
+                "the sentence could not be read as a command ({detail}); name one \
+                 (splinter --help)"
+            ),
+            candidates: Vec::new(),
+        })),
+        Err(e) => Err(e),
+    }
 }
 
 /// The policy model's readings of `sentence`.
 pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, CampaignError> {
     let model = ctx.model(&ModelRef::policy_default())?;
-    let method = Method::<Classification>::new("classify_sentence")
+    let mut task = format!("{TASK}\n\nFor example:");
+    for (example, classified) in EXAMPLES {
+        task.push_str(&format!("\n{example:?} is classified as {classified}"));
+    }
+    let method = with_schema(Method::<Classification>::new("classify_sentence"), &task)
         .role(ROLE)
-        .task(TASK)
         .postcondition(|c: &Classification| {
             if c.candidates
                 .iter()
@@ -325,5 +365,21 @@ pub fn route(classification: &Classification, allow_remote: bool) -> Routed {
     match top.intent.needs_confirmation(remote) {
         Some(reason) => clarify(format!("{reason}; confirm by running it"), &ranked[..1]),
         None => Routed::Execute(top.intent.clone()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_examples_shown_to_the_model_are_classifications() {
+        for (_, classified) in EXAMPLES {
+            let example: Result<Classification, _> = serde_json::from_str(classified);
+            assert!(
+                example.is_ok_and(|c| c.candidates.len() == 1),
+                "{classified}"
+            );
+        }
     }
 }

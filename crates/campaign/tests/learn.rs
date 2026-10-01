@@ -316,3 +316,38 @@ fn the_policy_is_resolved_once_when_a_run_starts_and_recorded() {
     assert_eq!(recorded.stages[0].summary["release"], first.to_string());
     assert!(recorded.stages.iter().all(|s| s.stage != "release"));
 }
+
+/// A run that admits no task says why each proposal was turned away, down
+/// to the model's own reply, not only how many were.
+#[test]
+fn a_run_that_admits_nothing_reports_why_each_proposal_was_rejected() {
+    let unparseable = common::Scripted::new(|_| "Sure! Here are some tasks.".into());
+    let (scratch, ctx) = scratch_context("learn-rejections", unparseable, false);
+    let manual = scratch.0.join("manual.md");
+    std::fs::write(&manual, MANUAL).unwrap();
+    let learned = learn(
+        &ctx,
+        &LearnRequest {
+            sources: vec![manual.display().to_string()],
+            ..LearnRequest::default()
+        },
+        &RecordingTrainer::default(),
+    )
+    .unwrap();
+    let Learned::Ran(run) = learned else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let tasks = run.report.tasks.as_ref().unwrap();
+    assert_eq!(tasks.tasks, 0, "{tasks:#?}");
+    assert!(!tasks.rejections.is_empty(), "{tasks:#?}");
+    for rejection in &tasks.rejections {
+        assert_eq!(
+            (rejection.kind.as_str(), rejection.reason.as_str()),
+            ("recall", "malformed")
+        );
+        assert!(
+            rejection.detail.contains("Sure! Here are some tasks."),
+            "{rejection:#?}"
+        );
+    }
+}

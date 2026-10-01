@@ -27,6 +27,7 @@ use splinter_knowledge::tasks::{Catalogue, Rejection, TaskKind};
 use splinter_lab::verifiers::executable::CHECK_KIND;
 use splinter_lab::verifiers::mutation::TEST_KIND;
 use splinter_store::experience::{Environment, PrivilegedKind};
+use sven_sdk::model::ResponseFormat;
 
 const MANUAL: &str = "# Frobnicator manual
 
@@ -281,6 +282,35 @@ async fn a_malformed_reply_corrected_on_request_is_admitted() {
     assert_eq!(report.admitted.len(), 1, "{report:#?}");
     assert_eq!(report.count(Rejection::Malformed), 0, "{report:#?}");
     assert_eq!(model.seen.lock().unwrap().len(), 2, "one correction round");
+}
+
+/// A local model has no constrained decoding: it learns the reply's shape
+/// only from the prompt, so the prompt carries the schema the provider is
+/// asked to constrain to.
+#[tokio::test]
+async fn the_model_is_shown_the_reply_schema_in_its_prompt() {
+    let scratch = Scratch::new("model-tasks-schema");
+    let (store, _, source) = stored(&scratch, MANUAL);
+    let model = Scripted::new(vec![reply(vec![])]);
+    let generator = generator(model.clone(), store, vec![]);
+    generator
+        .generate(&source, &[&kind("recall")])
+        .await
+        .unwrap();
+    let seen = model.seen.lock().unwrap();
+    let request = &seen[0];
+    let Some(ResponseFormat::JsonSchema { schema, .. }) = &request.response_format else {
+        panic!(
+            "a typed call names its schema: {:?}",
+            request.response_format
+        );
+    };
+    let prompt = format!("{:?}", request.messages);
+    let shown = format!("{:?}", schema.to_string());
+    assert!(
+        prompt.contains(shown.trim_matches('"')),
+        "the prompt shows the schema {schema}: {prompt}"
+    );
 }
 
 #[tokio::test]

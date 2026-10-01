@@ -284,12 +284,22 @@ impl Report for TasksGenerated {
         if !self.rejected.is_empty() {
             let _ = writeln!(out, "  rejected: {}", tally(&self.rejected));
         }
+        // The first few say why; `--json` carries every one, whole.
+        for r in self.rejections.iter().take(REJECTIONS_SHOWN) {
+            let detail: String = r.detail.chars().take(REJECTION_DETAIL_CHARS).collect();
+            let _ = writeln!(out, "    {} {}: {}", r.kind, r.reason, detail.trim());
+        }
         if let Some(why) = &self.stopped {
             let _ = writeln!(out, "  stopped: {why}");
         }
         out
     }
 }
+
+/// Rejections a task report shows with their detail.
+const REJECTIONS_SHOWN: usize = 3;
+/// Characters of a rejection's detail shown.
+const REJECTION_DETAIL_CHARS: usize = 300;
 
 impl Report for TaskSetList {
     fn human(&self) -> String {

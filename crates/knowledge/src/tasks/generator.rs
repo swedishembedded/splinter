@@ -12,13 +12,15 @@
 //! The model is asked through a typed sven call ([`Engine::call_with`])
 //! with no tools, bounded by a deadline and an optional output-token
 //! budget that cover every attempt: the kind's brief and rules are the
-//! call's task, the sections its input, and the reply's shape is
-//! [`Reply`]'s schema. sven reads the reply as that shape and sends one
+//! call's task, followed by [`Reply`]'s schema as the reply's shape
+//! (shown in the prompt, since a local model cannot be constrained to
+//! it), and the sections its input. sven reads the reply as that shape and sends one
 //! that is not back for correction, up to `repairs` times; a reply still
 //! malformed after that is rejected whole.
 
 use serde::Serialize;
 use splinter_agent::solve::{Model, SolveOptions};
+use splinter_agent::typed::with_schema;
 use splinter_lab::verifiers::mutation::MutationPolicy;
 use splinter_sandbox::RuntimeEnvironment;
 use splinter_store::digest::Digest;
@@ -30,7 +32,7 @@ use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
 use super::admit::{Admission, Proposal, Refusal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
-use super::reply::Reply;
+use super::reply::{Reply, REPLY_EXAMPLE};
 use super::{GenerationPolicy, GenerationReport, Rejection, GENERATOR};
 use crate::sections::{sections, Section};
 
@@ -330,9 +332,8 @@ impl ModelTaskGenerator {
         options.max_output_tokens = self.policy.max_output_tokens;
         options.cancel = self.cancel.clone();
         options.stream_idle = self.model.stream_idle;
-        let method = Method::<Reply>::new(GENERATION_METHOD)
+        let method = with_schema(Method::<Reply>::new(GENERATION_METHOD), brief)
             .role(ROLE)
-            .task(brief)
             .max_repairs(self.policy.repairs);
         let engine = Engine::builder()
             .config(options.engine_config())
@@ -444,5 +445,8 @@ fn brief(kind: &TaskKind, count: usize) -> String {
         out.push_str(&rule);
         out.push('\n');
     }
+    out.push_str("\nA reply looks like this:\n");
+    out.push_str(REPLY_EXAMPLE);
+    out.push('\n');
     out
 }
