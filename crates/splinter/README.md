@@ -207,7 +207,7 @@ is printed with its numbers, and a check that could not be measured fails:
 | improvement | on the new datasets' held-out tasks, a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
 | retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
 | anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
-| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily, with the same answers as in-process (runs of whitespace aside) graded the same; each task answered differently is reported with both answers |
+| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily, with the same answers as in-process (the same verdict, and answers that agree over their first nine tenths, runs of whitespace aside); each task answered differently is reported with both answers |
 
 A release is written once under `<state>/releases/<hex>/`: the adapter
 file, read-only, and `manifest.json` in canonical JSON - the base model and

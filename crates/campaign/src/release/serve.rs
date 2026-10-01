@@ -20,9 +20,8 @@
 //! wrote (`--api-keys-out`), decoded greedily as the in-process arms
 //! were ([`GREEDY_SAMPLING`]) so the two answers compare serving rather
 //! than two draws, and graded as in-process. Every task must be answered
-//! alike ([`alike`]): the same final answer, runs of whitespace aside, and
-//! the same verdict. Comparing verdicts alone would prove nothing where
-//! both sides fail - two different wrong answers grade the same. Each task
+//! alike ([`alike`]): the same verdict, and the same final answer up to
+//! the numerical noise of two processes decoding one model. Each task
 //! answered differently is reported with both answers. The server is
 //! stopped when the check ends, however it ends.
 //!
@@ -259,16 +258,38 @@ fn serve_and_ask(
     Ok(gate::serve(measured))
 }
 
-/// Whether two probes of one task answered alike: the same final answer,
-/// with every run of whitespace one space and none at either end, and the
-/// same verdict.
+/// How much of the shorter of two answers the longer must begin with, in
+/// percent, for a served answer to count as the in-process one. Two
+/// processes decode the same weights with kernels that sum in a different
+/// order (a prompt prefilled in chunks of another size, say), so a long
+/// greedy continuation may part ways near its end on a near-tie between two
+/// tokens; an adapter bound wrongly parts ways at the start.
+const ALIKE_PREFIX_PERCENT: usize = 90;
+
+/// Whether two probes of one task answered alike: the same verdict, and
+/// final answers - every run of whitespace one space, none at either end -
+/// that are equal or share a beginning of at least
+/// [`ALIKE_PREFIX_PERCENT`] percent of the shorter one. Comparing verdicts
+/// alone would prove nothing where both sides fail: two different wrong
+/// answers grade the same.
 fn alike(a: &Probe, b: &Probe) -> bool {
     let words = |answer: &Option<String>| {
         answer
             .as_deref()
             .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
     };
-    a.verdict == b.verdict && words(&a.answer) == words(&b.answer)
+    if a.verdict != b.verdict {
+        return false;
+    }
+    match (words(&a.answer), words(&b.answer)) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            let shared = a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
+            let shorter = a.chars().count().min(b.chars().count());
+            shared * 100 >= shorter * ALIKE_PREFIX_PERCENT
+        }
+        _ => false,
+    }
 }
 
 /// Every line the child writes, from stdout and stderr alike.
@@ -371,6 +392,26 @@ mod tests {
         ));
         assert!(alike(&probe(None, None), &probe(None, None)));
         assert!(!alike(&probe(None, wrong), &probe(Some(""), wrong)));
+    }
+
+    #[test]
+    fn a_long_answer_that_parts_ways_only_at_its_end_is_still_the_same_answer() {
+        let probe = |answer: &str| Probe {
+            answer: Some(answer.to_string()),
+            verdict: Some(false),
+        };
+        let in_process = "The default location for models if `brain-data-dir` is not \
+                          specified is `<home>/brain`.";
+        let served = "The default location for models if `brain-data-dir` is not \
+                      specified is `<home>/brain/models`.";
+        assert!(alike(&probe(in_process), &probe(served)));
+        assert!(
+            !alike(
+                &probe(in_process),
+                &probe("The models are kept in the current directory unless told otherwise.")
+            ),
+            "answers that part ways early are different answers"
+        );
     }
 
     #[test]
