@@ -28,6 +28,7 @@ mod database;
 mod error;
 pub mod format;
 mod id;
+pub mod manifest;
 pub mod model;
 
 pub use clock::{Clock, StepClock, SystemClock};

@@ -184,6 +184,16 @@ impl Segment {
         self.id
     }
 
+    /// The reference a manifest uses to add or remove this segment.
+    pub fn object_ref(&self) -> Result<crate::manifest::ObjectRef> {
+        Ok(crate::manifest::ObjectRef {
+            kind: crate::manifest::ObjectKind::Segment,
+            id: self.id,
+            bytes: self.backend.len(&segment_key(&self.id)?)?,
+            records: self.info.records,
+        })
+    }
+
     /// The segment's directory.
     pub fn info(&self) -> &SegmentInfo {
         &self.info

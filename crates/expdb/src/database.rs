@@ -8,13 +8,16 @@
 
 //! The database handle: a backend, the settings and a clock.
 
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::backend::{Key, Kind, PosixBackend, StorageBackend};
 use crate::clock::{Clock, SystemClock};
 use crate::config::Config;
 use crate::error::{Error, Result};
+use crate::id::ContentId;
+use crate::manifest::Manifest;
 
 /// The marker that says a directory is a database, and of which format.
 const FORMAT_NAME: &str = "format";
@@ -26,6 +29,7 @@ pub struct Database {
     backend: Arc<dyn StorageBackend>,
     config: Arc<Config>,
     clock: Arc<dyn Clock>,
+    manifests: Arc<Mutex<HashMap<ContentId, Arc<Manifest>>>>,
 }
 
 impl Database {
@@ -57,6 +61,7 @@ impl Database {
             backend,
             config: Arc::new(config),
             clock,
+            manifests: Arc::default(),
         })
     }
 
@@ -73,6 +78,15 @@ impl Database {
     /// The settings.
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// Manifests are immutable, so a handle remembers the ones it has read.
+    pub(crate) fn manifest_cache(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<ContentId, Arc<Manifest>>> {
+        self.manifests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// The clock records are stamped with.
