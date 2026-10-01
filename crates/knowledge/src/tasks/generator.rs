@@ -400,8 +400,7 @@ fn brief(kind: &TaskKind, count: usize) -> String {
          refer to the sections, a passage, a document or text the student is not shown, and do \
          not copy long runs of the sections into it."
             .to_string(),
-        "Cite the evidence for each task: the position of each section used and, where the \
-         answer rests on part of it, a quote copied exactly from that section."
+        "Cite the evidence for each task: the position of each section the answer comes from."
             .to_string(),
     ];
     if kind.min_sections > 1 {

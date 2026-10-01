@@ -31,7 +31,7 @@ use sven_sdk::schemars::JsonSchema;
 /// One reply of the shape [`Reply`] parses, shown to the model beside the
 /// schema: a small model copies an example far more reliably than it reads
 /// a schema's references.
-pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what baud rate does the console UART run?", "reference": "115200 baud", "evidence": [{"section": 0, "quote": "runs at 115200 baud"}], "material": null}]}"#;
+pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what baud rate does the console UART run?", "reference": "115200 baud", "evidence": [{"section": 0}], "material": null}]}"#;
 
 /// A generator model's reply.
 #[derive(Debug, Deserialize, JsonSchema)]

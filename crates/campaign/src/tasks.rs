@@ -39,8 +39,9 @@ use crate::ids;
 use crate::model_ref::ModelRef;
 
 /// Sections one generation request shows the model: enough context for
-/// tasks that combine sections, few enough that the prompt stays small.
-pub const SECTIONS_PER_REQUEST: usize = 8;
+/// tasks that combine sections, few enough that a small model keeps its
+/// answers tied to what it was shown instead of to the reply example.
+pub const SECTIONS_PER_REQUEST: usize = 3;
 
 /// The seed denoise tasks are generated with, so the same part always
 /// yields the same task.
