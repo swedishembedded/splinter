@@ -26,7 +26,9 @@ mod clock;
 mod config;
 mod database;
 mod error;
+pub mod format;
 mod id;
+pub mod model;
 
 pub use clock::{Clock, StepClock, SystemClock};
 pub use config::{Compression, Config};
