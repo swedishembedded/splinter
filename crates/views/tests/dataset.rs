@@ -22,6 +22,7 @@ use common::*;
 use serde_json::json;
 use std::collections::BTreeMap;
 
+use splinter_lab::SYSTEM_PROMPT;
 use splinter_store::annotation::{Outcome, Strength};
 use splinter_store::experience::{Digest, PrivilegedKind};
 use splinter_views::{
@@ -127,7 +128,10 @@ fn a_preference_dataset_is_generic_preference_v1_which_brain_parses() {
     assert_eq!(
         line,
         json!({
-            "prompt": [{"role": "user", "content": "What is two plus two?"}],
+            "prompt": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": "What is two plus two?"}
+            ],
             "chosen": {"role": "assistant", "content": "4"},
             "rejected": {"role": "assistant", "content": "5"},
             "metadata": {

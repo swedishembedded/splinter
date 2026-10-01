@@ -16,12 +16,22 @@
 //! solve is its own experience, its provenance numbering the attempt. A
 //! solve by a policy alias records, as the experience's policy, the release
 //! the alias pointed at (or the base): what concept mastery is tallied by.
+//!
+//! A teacher's solve ([`SolveRequest::teacher`]) is the same solve,
+//! open-book: the solver is prompted with the task's grounding material
+//! ([`splinter_knowledge::material`]) before its instruction, and the
+//! experience's provenance marks it the teacher's. The experience records
+//! the task as it is - its own instruction, its own environment - so its
+//! verdicts are the task's verifiers' and a view of it shows the student
+//! the instruction alone. A task grounded in nothing a teacher could be
+//! shown is skipped.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use splinter_agent::solve::{solve, Model, SolveError, SolveOptions};
+use splinter_agent::solve::{open_book_prompt, solve_prompted, Model, SolveError, SolveOptions};
+use splinter_knowledge::material::teacher_material;
 use splinter_policy::Sampling;
 use splinter_store::digest::Digest;
 use splinter_store::experience::Provenance;
@@ -60,6 +70,9 @@ pub struct Solved {
     pub policy: Option<PolicyUsed>,
     /// Solves per task.
     pub attempts: usize,
+    /// Whether the solver was the teacher, shown each task's grounding
+    /// material.
+    pub teacher: bool,
     /// How the solver sampled; `None` when it sampled as its provider does.
     pub sampling: Option<Sampling>,
     /// Experiences recorded.
@@ -96,6 +109,10 @@ pub struct SolveRequest<'a> {
     pub attempts: usize,
     /// How the solver samples.
     pub sampling: SamplingChoice,
+    /// Whether the solver is the teacher: prompted with each task's
+    /// grounding material before its instruction, open-book; see the module
+    /// documentation.
+    pub teacher: bool,
     /// No solve starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops the stage.
@@ -118,6 +135,7 @@ pub fn solve_set(
             solver,
             attempts: 1,
             sampling: SamplingChoice::Own,
+            teacher: false,
             deadline,
             cancel: cancel.clone(),
         },
@@ -171,6 +189,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         solver: model.identity.clone(),
         policy,
         attempts: request.attempts,
+        teacher: request.teacher,
         sampling,
         solved: 0,
         answered: 0,
@@ -187,6 +206,16 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 continue;
             }
         };
+        let prompt = if request.teacher {
+            let material = teacher_material(&ctx.sources(), &task)?;
+            if material.is_empty() {
+                report.skipped.push(skip(&entry.task, &NOTHING_TO_SHOW));
+                continue;
+            }
+            open_book_prompt(&task.instruction, &material)
+        } else {
+            task.instruction.clone()
+        };
         for attempt in 0..attempts {
             if request.cancel.is_cancelled() {
                 return Err(CampaignError::Cancelled);
@@ -199,17 +228,20 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
             options.cancel = Some(request.cancel.clone());
             options.stream_idle = model.stream_idle;
-            let solution =
-                match ctx.block_on(solve(&task, &environment, model.provider.clone(), options)) {
-                    Ok(solution) => solution,
-                    Err(
-                        e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_)),
-                    ) => {
-                        report.skipped.push(skip(&entry.task, &e));
-                        continue 'tasks;
-                    }
-                    Err(e) => return Err(e.into()),
-                };
+            let solution = match ctx.block_on(solve_prompted(
+                &task,
+                &prompt,
+                &environment,
+                model.provider.clone(),
+                options,
+            )) {
+                Ok(solution) => solution,
+                Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
+                    report.skipped.push(skip(&entry.task, &e));
+                    continue 'tasks;
+                }
+                Err(e) => return Err(e.into()),
+            };
             *report
                 .conclusions
                 .entry(conclusion_name(solution.conclusion))
@@ -220,6 +252,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 policy: label.clone(),
                 prompt_digests: entry.prompt.iter().cloned().collect(),
                 attempt: (attempts > 1).then_some(attempt),
+                teacher: request.teacher,
                 ..Provenance::new(model.identity.clone(), ctx.clock())
             };
             let experience = solution.into_experience(task.clone(), provenance)?;
@@ -235,12 +268,21 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     } else {
         String::new()
     };
+    let by = if request.teacher {
+        "taught open-book"
+    } else {
+        "solved"
+    };
     report.experience_set = store.put_set(&ExperienceSet {
-        name: format!("{} solved{times} by {}", request.task_set, model.identity),
+        name: format!("{} {by}{times} by {}", request.task_set, model.identity),
         members,
     })?;
     Ok(report)
 }
+
+/// Why a teacher's solve of a task was skipped: it has nothing to show.
+const NOTHING_TO_SHOW: &str =
+    "nothing to show a teacher: the task has no evidence passage and no hint";
 
 fn skip(task: &Digest, why: &dyn std::fmt::Display) -> Skipped {
     Skipped {

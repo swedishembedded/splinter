@@ -55,7 +55,7 @@ fn tool_solve(task: &Task, at: &str) -> Experience {
 
 fn chat(record: &Record) -> &[WireMessage] {
     match &record.body {
-        RecordBody::Chat { messages } => messages,
+        RecordBody::Chat { messages } => after_system(messages),
         other => panic!("a chat record, got {other:?}"),
     }
 }
@@ -291,9 +291,11 @@ fn outcome_pairs_a_trajectory_with_its_reward_and_skips_the_unmeasured() {
         .records
         .iter()
         .map(|r| match &r.body {
-            RecordBody::Rewarded { messages, reward } => {
-                (r.metadata.experiences.clone(), *reward, messages.len())
-            }
+            RecordBody::Rewarded { messages, reward } => (
+                r.metadata.experiences.clone(),
+                *reward,
+                after_system(messages).len(),
+            ),
             other => panic!("a rewarded record, got {other:?}"),
         })
         .collect();

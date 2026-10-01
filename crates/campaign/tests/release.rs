@@ -11,8 +11,12 @@
 //! * It is released when it beats the champion on the new data's held-out
 //!   tasks (a significant sign test), keeps every earlier release's
 //!   held-out tasks, holds the anchor suite, and serves on plain brain with
-//!   its own digest and the same verdicts; the release is immutable, its
-//!   manifest records every number, and `default` points at it.
+//!   its own digest and the same answers, graded the same; the release is
+//!   immutable, its manifest records every number, and `default` points at
+//!   it.
+//! * A served candidate that answers in other words than in-process is not
+//!   released, however its answers are graded: each disagreement is
+//!   reported with both answers.
 //! * Each check that fails - or cannot be measured - blocks the release
 //!   and says why.
 //! * A held-out task the candidate was trained on - the same question, or
@@ -214,6 +218,36 @@ fn each_failing_check_blocks_the_release_and_says_why() {
         why.contains("not measured") && why.contains("no brain binary"),
         "{why}"
     );
+}
+
+#[test]
+fn a_served_candidate_that_answers_in_other_words_is_not_released() {
+    let (scratch, ctx) = gate_context("release-divergent", Brain::Divergent);
+    freeze_anchor(&scratch, &ctx);
+    let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+
+    let decided = decide(&ctx, &good);
+    let gate = &decided.gate;
+    assert!(
+        gate.improvement.passed && gate.retention.passed && gate.anchor.passed,
+        "{gate:#?}"
+    );
+    assert!(!gate.serve.passed && decided.release.is_none(), "{gate:#?}");
+    let serve = gate.serve.measured.as_ref().unwrap();
+    assert_eq!(serve.served_digest, good.adapter_digest);
+    assert_eq!((serve.sampled, serve.agreed), (6, 0));
+    let first = &serve.disagreed[0];
+    assert_eq!(
+        (first.in_process.as_deref(), first.served.as_deref()),
+        (Some("alpha-54"), Some("ALPHA-54."))
+    );
+    assert_eq!(
+        (first.in_process_verdict, first.served_verdict),
+        (Some(true), Some(true)),
+        "graded the same, answered differently"
+    );
+    let why = gate.serve.reason.as_deref().unwrap();
+    assert!(why.contains("answered differently"), "{why}");
 }
 
 #[test]

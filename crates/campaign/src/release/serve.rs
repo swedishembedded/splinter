@@ -19,8 +19,12 @@
 //! re-answered through its OpenAI-compatible endpoint, with the key it
 //! wrote (`--api-keys-out`), decoded greedily as the in-process arms
 //! were ([`GREEDY_SAMPLING`]) so the two answers compare serving rather
-//! than two draws, and graded as in-process; every verdict must be the
-//! same. The server is stopped when the check ends, however it ends.
+//! than two draws, and graded as in-process. Every task must be answered
+//! alike ([`alike`]): the same final answer, runs of whitespace aside, and
+//! the same verdict. Comparing verdicts alone would prove nothing where
+//! both sides fail - two different wrong answers grade the same. Each task
+//! answered differently is reported with both answers. The server is
+//! stopped when the check ends, however it ends.
 //!
 //! The server loads its own copy of the base, so every base this process
 //! keeps resident is released before it starts.
@@ -40,8 +44,8 @@ use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::release::gate::{self, Check, Serve};
-use crate::release::probe::{grade, Suite};
+use crate::release::gate::{self, Check, Disagreement, Serve};
+use crate::release::probe::{grade, Probe, Suite};
 
 /// What starts every line naming the adapter brain serves.
 const STARTUP_PREFIX: &str = "brain serve: ";
@@ -49,7 +53,7 @@ const STARTUP_PREFIX: &str = "brain serve: ";
 const KEPT_LINES: usize = 20;
 
 /// Starts `binary` serving `adapter` on `base`, and re-answers `sample`
-/// (whose in-process verdicts are `in_process`, one per task) through it.
+/// (whose in-process answers are `in_process`, one per task) through it.
 /// An error is returned only for a cancelled check; every other failure is
 /// the check's result.
 #[allow(clippy::too_many_arguments)]
@@ -60,7 +64,7 @@ pub fn check(
     adapter: &Path,
     adapter_digest: &str,
     sample: &Suite,
-    in_process: &[Option<bool>],
+    in_process: &[Probe],
     startup: Duration,
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, CampaignError> {
@@ -133,7 +137,7 @@ fn serve_and_ask(
     server: &Server<'_>,
     adapter_digest: &str,
     sample: &Suite,
-    in_process: &[Option<bool>],
+    in_process: &[Probe],
     startup: Duration,
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, Failure> {
@@ -239,14 +243,32 @@ fn serve_and_ask(
     })?;
     measured.sampled = sample.tasks.len();
     for ((task, served), local) in sample.tasks.iter().zip(&answers).zip(in_process) {
-        if served == local {
+        if alike(served, local) {
             measured.agreed += 1;
         } else {
-            measured.disagreed.push(task.task.id.to_string());
+            measured.disagreed.push(Disagreement {
+                task: task.task.id.to_string(),
+                in_process: local.answer.clone(),
+                served: served.answer.clone(),
+                in_process_verdict: local.verdict,
+                served_verdict: served.verdict,
+            });
         }
     }
     drop(running);
     Ok(gate::serve(measured))
+}
+
+/// Whether two probes of one task answered alike: the same final answer,
+/// with every run of whitespace one space and none at either end, and the
+/// same verdict.
+fn alike(a: &Probe, b: &Probe) -> bool {
+    let words = |answer: &Option<String>| {
+        answer
+            .as_deref()
+            .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
+    };
+    a.verdict == b.verdict && words(&a.answer) == words(&b.answer)
 }
 
 /// Every line the child writes, from stdout and stderr alike.
@@ -324,6 +346,32 @@ fn free_port() -> std::io::Result<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn answers_alike_are_the_same_text_whitespace_aside_and_graded_the_same() {
+        let probe = |answer: Option<&str>, verdict: Option<bool>| Probe {
+            answer: answer.map(str::to_string),
+            verdict,
+        };
+        let wrong = Some(false);
+        assert!(alike(
+            &probe(Some("115200  baud\n"), wrong),
+            &probe(Some(" 115200 baud"), wrong)
+        ));
+        assert!(
+            !alike(
+                &probe(Some("9600 baud"), wrong),
+                &probe(Some("I do not know."), wrong)
+            ),
+            "two wrong answers are not the same answer"
+        );
+        assert!(!alike(
+            &probe(Some("115200 baud"), Some(true)),
+            &probe(Some("115200 baud"), None)
+        ));
+        assert!(alike(&probe(None, None), &probe(None, None)));
+        assert!(!alike(&probe(None, wrong), &probe(Some(""), wrong)));
+    }
 
     #[test]
     fn the_startup_line_names_the_model_and_the_adapter_digest() {

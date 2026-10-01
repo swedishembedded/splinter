@@ -43,12 +43,16 @@
 //!   are held out for scoring.
 //! * [`paired`] - two models graded on the same items, compared only where
 //!   both have a verdict.
-//! * [`frontier`] - pass@k: a task's pass rate over k attempts, and whether
-//!   that puts it on the frontier where learning happens.
+//! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
+//!   a teacher's answer to it was verified, and whether that makes it worth
+//!   training on.
 //! * [`record_from_episode`] - training data from a VERIFIED episode only,
 //!   supervising assistant turns and nothing else, and refusing a transcript
 //!   with a hole in it. [`WireMessage`] is one message of the
 //!   `generic-messages-v2` format those records are written in.
+//! * [`SYSTEM_PROMPT`] - the one system turn every model run on a task is
+//!   sent and every chat record starts with, so what the policy is trained
+//!   on is what it sees when it answers.
 //! * [`verifiers`] - verifiers by strength (executable, formal, consistency,
 //!   judged), each grading an experience from its output and the task's
 //!   privileged material alone, and the composite that annotates every
@@ -80,6 +84,7 @@ pub mod paired;
 mod perform;
 mod recorder;
 mod score;
+mod system_prompt;
 mod verdict;
 pub mod verifiers;
 
@@ -95,4 +100,5 @@ pub use model_id::ServedModel;
 pub use perform::{perform, perform_all, Action, PerformError, Performed};
 pub use recorder::{capture_path, upstream_of, Recorder};
 pub use score::{ArmScore, Outcome};
+pub use system_prompt::SYSTEM_PROMPT;
 pub use verdict::{PredicateSet, Unevaluated, Verdict};

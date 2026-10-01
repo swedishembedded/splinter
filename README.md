@@ -39,12 +39,25 @@ splinter "what baud rate does the console run at?"
 ```
 
 Budget goes where learning happens: before a task's attempts become
-training data, `learn` measures the policy's pass@k on it and keeps only
-the tasks it solves sometimes - neither always (nothing to learn) nor
-never (nothing to learn from); the training set is capped per concept,
-task kind and verification strength; `splinter status` lists the
-concepts the policy has mastered least; and concepts the release gate
-sees forgotten are queued for new tasks.
+training data, `learn` measures the policy's pass@k on it closed-book.
+A task it never solves is solved once more by a teacher - the same
+policy unless `--teacher` names another model - shown the source
+sections the task is grounded in; the teacher's answer, once the task's
+verifiers pass it, is what the policy learns a new fact from. `learn`
+keeps the tasks the policy fails at least sometimes and has a verified
+answer to - its own or the teacher's - and drops those it always solves
+(nothing to learn) and those nobody answered verifiably (nothing to learn
+from). The training records are the student's: the instruction alone and
+the verified answer, never the passage the teacher saw. The training set
+is capped per concept, task kind and verification strength; `splinter
+status` lists the concepts the policy has mastered least, from its
+closed-book solves alone; and concepts the release gate sees forgotten are
+queued for new tasks.
+
+What the policy is trained on is what it sees when it answers: every
+solve, `ask`, judge, critique and gate probe runs under one short system
+prompt of Splinter's own, and every training record starts with that same
+system turn.
 
 Every stage stores what it makes under the state root by content address,
 so any stage can be rerun or inspected alone (`splinter runs show`,
@@ -64,10 +77,10 @@ by DPO on pairs preferring a verified answer over a failed one - and
 becomes the policy only if the release gate measures that it improved on
 the new material's held-out questions, kept what earlier releases
 learned, held a frozen anchor suite of general tasks, and runs on plain
-`brain serve` with the same answers. A held-out question the candidate
-was trained on (the same question, or a near duplicate, among its
-training records) is left out of those measurements and counted as
-leaked. An executable check passes only when it is seen to run to its
+`brain serve` with the same answers, word for word. A held-out question
+the candidate was trained on (the same question, or a near duplicate,
+among its training records) is left out of those measurements and
+counted as leaked. An executable check passes only when it is seen to run to its
 end, so a solution that exits before its check cannot pass, and
 `splinter experiences replay` re-runs an experience's code calls in its
 recorded environment to confirm what it observed.

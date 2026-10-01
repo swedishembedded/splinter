@@ -20,6 +20,7 @@
 
 mod cli;
 mod curriculum_output;
+mod learn_output;
 mod lineage_output;
 mod output;
 mod release_output;

@@ -87,6 +87,19 @@ impl Report for GateReport {
                 m.agreed,
                 m.sampled
             );
+            let answer = |a: &Option<String>| {
+                a.as_deref()
+                    .map_or("no answer".into(), |a| format!("{a:?}"))
+            };
+            for d in &m.disagreed {
+                let _ = writeln!(
+                    out,
+                    "               {}: in-process {}, served {}",
+                    d.task,
+                    answer(&d.in_process),
+                    answer(&d.served)
+                );
+            }
         }
         out
     }

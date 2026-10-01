@@ -20,7 +20,7 @@ use splinter_agent::solve::Model;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::{Config, Context};
 use splinter_store::StateRoot;
-use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
+use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream, Role};
 
 /// The identity the scripted policy is recorded under.
 pub const POLICY: &str = "scripted/policy-1";
@@ -28,11 +28,12 @@ pub const POLICY: &str = "scripted/policy-1";
 type Script = dyn Fn(&str) -> String + Send + Sync;
 
 /// A model whose every reply is a function of the whole prompt it is sent,
-/// and which keeps the prompts.
+/// and which keeps the prompts and the system turns each was sent under.
 #[derive(Clone)]
 pub struct Scripted {
     reply: Arc<Script>,
     pub prompts: Arc<Mutex<Vec<String>>>,
+    pub systems: Arc<Mutex<Vec<Vec<String>>>>,
 }
 
 impl Scripted {
@@ -41,6 +42,7 @@ impl Scripted {
         Self {
             reply: Arc::new(reply),
             prompts: Arc::new(Mutex::new(Vec::new())),
+            systems: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -57,6 +59,13 @@ impl ModelProvider for Scripted {
         let prompt = format!("{:?}", req.messages);
         let reply = (self.reply)(&prompt);
         self.prompts.lock().unwrap().push(prompt);
+        self.systems.lock().unwrap().push(
+            req.messages
+                .iter()
+                .filter(|m| m.role == Role::System)
+                .map(|m| m.as_text().unwrap_or_default().to_string())
+                .collect(),
+        );
         Ok(Box::pin(futures::stream::iter(vec![
             Ok(ResponseEvent::TextDelta(reply)),
             Ok(ResponseEvent::Done),

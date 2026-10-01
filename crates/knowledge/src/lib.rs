@@ -10,6 +10,9 @@
 //!   for Markdown, at paragraphs otherwise.
 //! * [`concepts`] - the concepts a task exercises: those it declares, else
 //!   the (source, section) pairs its evidence falls in, else its kind.
+//! * [`material`] - what a teacher is shown of a task: the source
+//!   sections its evidence falls in, its passages and hints - never its
+//!   reference.
 //! * [`gates`] - the text rules a generated task is held to: instruction
 //!   normalisation for duplicate detection, and numbers traceable to the
 //!   evidence.
@@ -25,5 +28,6 @@ pub mod capture;
 pub mod concepts;
 pub mod denoise;
 pub mod gates;
+pub mod material;
 pub mod sections;
 pub mod tasks;

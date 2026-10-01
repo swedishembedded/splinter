@@ -6,23 +6,28 @@
 // expertise in curriculum design or agent evaluation, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! Frontier selection by pass@k.
+//! Frontier selection by pass@k, and by a teacher's verified answer.
 //!
 //! [`measure`] solves every task of a set k times with the policy (the
 //! solve stage, [`PassAtK::k`] attempts each, sampling as
-//! [`PassAtK::sampling`] says), grades every attempt with its task kind's
-//! own verifiers (the verify stage, no judge), and hands the verified set
-//! to [`select_frontier`], which tallies each task's graded attempts
-//! ([`splinter_lab::frontier`]) and keeps the tasks strictly between never
-//! and always solved. Every attempt stays in the store as an experience
-//! with its verdicts: a frontier task's passing attempts are training
-//! data, its failed ones feed critique and preference views.
+//! [`PassAtK::sampling`] says) and grades every attempt with its task
+//! kind's own verifiers (the verify stage, no judge); a teacher solves,
+//! open-book, each task no graded attempt solved, and is graded the same
+//! way ([`super::teacher`]); [`select_frontier`] tallies each task's
+//! graded attempts and the teacher's ([`splinter_lab::frontier`]) and
+//! keeps the tasks worth training on: those the student fails at least
+//! sometimes and that have a verified answer - a passing attempt of its
+//! own (the frontier proper) or a teacher's (taught). Every attempt stays
+//! in the store as an experience with its verdicts: a kept task's passing
+//! attempts and verified teacher answers are training data, its failed
+//! ones feed critique and preference views.
 //!
 //! The measurement is recorded under
 //! `<root>/curriculum/measurements/<hex>.json`, content-addressed: per task
 //! its kind, concepts, attempts, graded attempts, passes and rate (absent,
-//! never `0`, with no graded attempt), with the solver, the release the
-//! policy was, k and the sampling.
+//! never `0`, with no graded attempt), the teacher's attempts, graded
+//! attempts and passes, and its class, with the solver, the teacher, the
+//! release the policy was, k and the sampling.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -42,6 +47,7 @@ use splinter_store::write_once;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
+use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::error::{io, CampaignError};
 use crate::learn::PolicyUsed;
 use crate::model_ref::ModelRef;
@@ -145,7 +151,9 @@ pub struct TaskPassRate {
     pub passes: usize,
     /// `passes / graded`; `None` with no graded attempt.
     pub rate: Option<f64>,
-    /// Where the rate places it.
+    /// The teacher's solves of it: none unless no graded attempt passed.
+    pub teacher: PassCount,
+    /// Where the rate and the teacher's verified answer place it.
     pub class: FrontierClass,
 }
 
@@ -164,6 +172,10 @@ pub struct Measurement {
     pub sampling: Option<Sampling>,
     /// Every attempt, graded.
     pub experience_set: SetId,
+    /// The teacher's identity.
+    pub teacher: String,
+    /// Every teacher's solve, graded.
+    pub teacher_experience_set: SetId,
     /// Each task of the set, in its order.
     pub tasks: Vec<TaskPassRate>,
     /// Tasks by class.
@@ -191,32 +203,49 @@ pub struct Frontier {
     pub k: usize,
     /// How the solver sampled; `None`: as its provider does.
     pub sampling: Option<Sampling>,
-    /// Tasks by class: always solved, never solved, on the frontier,
-    /// unmeasured.
+    /// The teacher's identity.
+    pub teacher: String,
+    /// Tasks by class: always solved, on the frontier, taught, never
+    /// solved with no verified answer, unmeasured.
     pub distribution: Distribution,
-    /// The frontier's tasks (`solve <frontier_task_set>`).
+    /// The tasks kept: on the frontier, or taught (`solve
+    /// <frontier_task_set>`).
     pub frontier_task_set: TaskSetId,
-    /// The frontier's attempts (`critique`, `dataset build`).
+    /// Their attempts and verified teacher answers (`critique`, `dataset
+    /// build`).
     pub frontier_experience_set: SetId,
 }
 
-/// Tallies the verified attempts `solved` recorded for `task_set`, keeps
-/// the frontier, and records the measurement.
+/// Each task's graded solves in `set`: how many, how many graded, how many
+/// passed, and the experiences.
+pub(crate) fn tally(
+    ctx: &Context,
+    set: &SetId,
+) -> Result<BTreeMap<Digest, (PassCount, Vec<ExperienceId>)>, CampaignError> {
+    let store = ctx.experiences();
+    let mut tallied: BTreeMap<Digest, (PassCount, Vec<ExperienceId>)> = BTreeMap::new();
+    for id in store.get_set(set)?.members {
+        let experience = store.get(&id)?;
+        let outcome = decide(&store.annotations(&id)?.annotations).map(|d| d.passed);
+        let (count, ids) = tallied.entry(experience.task.id).or_default();
+        count.record(outcome);
+        ids.push(id);
+    }
+    Ok(tallied)
+}
+
+/// Tallies the verified attempts `solved` recorded for `task_set` and the
+/// teacher's `taught`, keeps the tasks worth training on, and records the
+/// measurement.
 pub fn select_frontier(
     ctx: &Context,
     task_set: &TaskSetId,
     solved: &Solved,
+    taught: &Taught,
 ) -> Result<Frontier, CampaignError> {
     let set = ctx.tasks().get_set(task_set)?;
-    let store = ctx.experiences();
-    let mut attempts: BTreeMap<Digest, (PassCount, Vec<ExperienceId>)> = BTreeMap::new();
-    for id in store.get_set(&solved.experience_set)?.members {
-        let experience = store.get(&id)?;
-        let outcome = decide(&store.annotations(&id)?.annotations).map(|d| d.passed);
-        let (count, ids) = attempts.entry(experience.task.id).or_default();
-        count.record(outcome);
-        ids.push(id);
-    }
+    let mut attempts = tally(ctx, &solved.experience_set)?;
+    let mut teacher = tally(ctx, &taught.solve.experience_set)?;
     let mut resolver = ConceptResolver::new(ctx.sources());
     let mut tasks = Vec::with_capacity(set.members.len());
     let mut distribution = Distribution::default();
@@ -225,11 +254,13 @@ pub fn select_frontier(
     for entry in &set.members {
         let task = ctx.tasks().get(&entry.task)?;
         let (count, ids) = attempts.remove(&entry.task).unwrap_or_default();
-        let class = count.class();
+        let (taught_count, taught_ids) = teacher.remove(&entry.task).unwrap_or_default();
+        let class = count.class(taught_count.passes > 0);
         distribution.add(class);
-        if class == FrontierClass::Frontier {
+        if class.kept() {
             frontier_tasks.push(entry.clone());
             frontier_attempts.extend(ids);
+            frontier_attempts.extend(taught_ids);
         }
         tasks.push(TaskPassRate {
             concepts: resolver.concepts(&task)?,
@@ -239,6 +270,7 @@ pub fn select_frontier(
             graded: count.graded,
             passes: count.passes,
             rate: count.rate(),
+            teacher: taught_count,
             class,
         });
     }
@@ -246,7 +278,7 @@ pub fn select_frontier(
         name: format!("frontier of {task_set} by pass@{}", solved.attempts),
         members: frontier_tasks,
     })?;
-    let frontier_experience_set = store.put_set(&ExperienceSet {
+    let frontier_experience_set = ctx.experiences().put_set(&ExperienceSet {
         name: format!(
             "frontier attempts of {task_set} by pass@{}",
             solved.attempts
@@ -260,6 +292,8 @@ pub fn select_frontier(
         k: solved.attempts,
         sampling: solved.sampling,
         experience_set: solved.experience_set.clone(),
+        teacher: taught.solve.solver.clone(),
+        teacher_experience_set: taught.solve.experience_set.clone(),
         tasks,
         distribution,
         frontier_task_set: frontier_task_set.clone(),
@@ -274,6 +308,7 @@ pub fn select_frontier(
         policy: measurement.policy,
         k: measurement.k,
         sampling: measurement.sampling,
+        teacher: measurement.teacher,
         distribution,
         frontier_task_set,
         frontier_experience_set,
@@ -302,6 +337,9 @@ pub struct MeasureRequest<'a> {
     pub task_set: &'a TaskSetId,
     /// The policy measured.
     pub solver: &'a ModelRef,
+    /// The model that teaches what the policy never solves; `None`: the
+    /// policy itself.
+    pub teacher: Option<&'a ModelRef>,
     /// k and the sampling.
     pub pass_at_k: PassAtK,
     /// No solve starts after this, and none runs past it.
@@ -310,19 +348,23 @@ pub struct MeasureRequest<'a> {
     pub cancel: CancelToken,
 }
 
-/// What `solve --frontier` reports: the solve, the grading, the frontier.
+/// What `solve --frontier` reports: the solve, the grading, the teacher,
+/// the frontier.
 #[derive(Clone, Debug, Serialize)]
 pub struct Measured {
     /// The k attempts per task.
     pub solve: Solved,
     /// Their verdicts.
     pub verify: Verified,
-    /// The frontier kept.
+    /// The teacher's graded solves of the tasks never solved.
+    pub teach: Taught,
+    /// The tasks kept.
     pub frontier: Frontier,
 }
 
 /// Solves each task of `request.task_set` k times, grades every attempt,
-/// and keeps the frontier; see the module documentation.
+/// has the teacher solve each task never solved, and keeps the tasks worth
+/// training on; see the module documentation.
 pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, CampaignError> {
     request.pass_at_k.validate()?;
     let solve = solve_tasks(
@@ -332,15 +374,27 @@ pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, 
             solver: request.solver,
             attempts: request.pass_at_k.k,
             sampling: request.pass_at_k.sampling_choice(),
+            teacher: false,
             deadline: request.deadline,
             cancel: request.cancel.clone(),
         },
     )?;
     let verify = verify_set(ctx, &solve.experience_set, None, &request.cancel)?;
-    let frontier = select_frontier(ctx, request.task_set, &solve)?;
+    let teach = teach(
+        ctx,
+        &TeachRequest {
+            task_set: request.task_set,
+            attempts: &solve.experience_set,
+            teacher: request.teacher.unwrap_or(request.solver),
+            deadline: request.deadline,
+            cancel: request.cancel.clone(),
+        },
+    )?;
+    let frontier = select_frontier(ctx, request.task_set, &solve, &teach)?;
     Ok(Measured {
         solve,
         verify,
+        teach,
         frontier,
     })
 }

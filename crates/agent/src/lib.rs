@@ -6,8 +6,11 @@
 //!
 //! * [`solve`] - a task solved in exactly the environment it records:
 //!   closed-book with no tools, or a runtime with the one tool
-//!   [`run_code`], bounded by sven's run options; the result is what an
-//!   experience records.
+//!   [`run_code`], bounded by sven's run options, under Splinter's own
+//!   system prompt ([`solve::SYSTEM_PROMPT`]) - the one its training
+//!   records show; the result is what an experience records. A teacher's
+//!   solve is the same solve with the task's grounding material shown
+//!   beside the instruction ([`solve::open_book_prompt`]).
 //! * [`judge`] - the judged verifier: a different model grading an answer
 //!   closed-book through that same solve, from the output and the task's
 //!   reference material alone.
@@ -21,8 +24,6 @@
 //!   relations; and the bounded loop of critique and retry.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
-//! * [`typed`] - a typed sven call whose prompt describes the JSON schema
-//!   of its reply, for a model that cannot be constrained to it.
 
 #![warn(missing_docs)]
 
@@ -32,4 +33,4 @@ pub mod repair;
 pub mod replay;
 pub mod run_code;
 pub mod solve;
-pub mod typed;
+mod system_prompt;

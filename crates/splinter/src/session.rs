@@ -35,6 +35,7 @@ use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, ReleaseCommand,
     RunsCommand, SourceCommand, TasksCommand,
 };
+use crate::learn_output;
 use crate::output::{self, emit, shell_words};
 
 /// How an invocation ended; see the crate documentation.
@@ -76,7 +77,7 @@ impl Session {
                 if verbose {
                     eprintln!("[{stage}] {summary}");
                 } else {
-                    eprintln!("[{stage}] {}", output::stage_line(stage, summary));
+                    eprintln!("[{stage}] {}", learn_output::stage_line(stage, summary));
                 }
             },
         ));
@@ -214,6 +215,7 @@ impl Session {
                     dry_run: args.dry_run,
                     no_release: args.no_release,
                     no_frontier: args.no_frontier,
+                    teacher: args.teacher,
                     ..LearnRequest::default()
                 };
                 let learned = learn(ctx, &request, &BrainTrainer)?;
@@ -275,6 +277,7 @@ impl Session {
                 let arguments = json!({
                     "task_set": set,
                     "solver": args.solver,
+                    "teacher": args.teacher,
                     "frontier": true,
                     "pass_at_k": pass_at_k,
                 });
@@ -284,6 +287,7 @@ impl Session {
                         &MeasureRequest {
                             task_set: &set,
                             solver: &args.solver,
+                            teacher: args.teacher.as_ref(),
                             pass_at_k,
                             deadline: None,
                             cancel: run.cancel_token(),

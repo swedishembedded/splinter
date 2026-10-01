@@ -20,11 +20,15 @@
 //! A model is probed decoding greedily where its sampling can be set here
 //! ([`greedy`]), so a verdict is the weights', not one draw's.
 //!
-//! Grading is by the task kind's own verifiers, without a judge, and the
-//! store's decision rule over their verdicts: `Some(true)` right,
-//! `Some(false)` wrong, `None` when no verifier decided. Probe answers are
-//! not stored as experiences, so nothing a probe produces can reach a
-//! training set.
+//! A probe runs under the one system prompt every solve runs under and
+//! every training record shows (`splinter_lab::SYSTEM_PROMPT`). Grading is
+//! by the task kind's own verifiers, without a judge, and the store's
+//! decision rule over their verdicts: `Some(true)` right, `Some(false)`
+//! wrong, `None` when no verifier decided. Each [`Probe`] keeps the answer
+//! beside its verdict, so two models - or one model on two serving paths -
+//! can be compared on what they said, not only on how it was graded.
+//! Probe answers are not stored as experiences, so nothing a probe
+//! produces can reach a training set.
 
 use std::collections::BTreeMap;
 
@@ -192,14 +196,24 @@ pub fn greedy(ctx: &Context, reference: &ModelRef) -> Result<Model, CampaignErro
     }
 }
 
-/// `model`'s outcome on every task of `suite`, in order; see the module
-/// documentation.
+/// What a model answered to one task of a suite, and how that was graded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Probe {
+    /// Its final answer; `None` when its run ended without one.
+    pub answer: Option<String>,
+    /// The verdict: `Some(true)` right, `Some(false)` wrong, `None` when
+    /// no verifier decided.
+    pub verdict: Option<bool>,
+}
+
+/// `model`'s answer and outcome on every task of `suite`, in order; see
+/// the module documentation.
 pub fn grade(
     ctx: &Context,
     model: &Model,
     suite: &Suite,
     cancel: &CancelToken,
-) -> Result<Vec<Option<bool>>, CampaignError> {
+) -> Result<Vec<Probe>, CampaignError> {
     suite
         .tasks
         .iter()
@@ -212,7 +226,7 @@ fn grade_one(
     model: &Model,
     task: &Task,
     cancel: &CancelToken,
-) -> Result<Option<bool>, CampaignError> {
+) -> Result<Probe, CampaignError> {
     if cancel.is_cancelled() {
         return Err(CampaignError::Cancelled);
     }
@@ -234,24 +248,23 @@ fn grade_one(
     )?;
     let verifiers: Strongest = verifiers_for(ctx, task, &[], None)?;
     let verification = verifiers.run(task, &experience)?;
-    Ok(decide(&verification.annotations).map(|d| d.passed))
+    Ok(Probe {
+        verdict: decide(&verification.annotations).map(|d| d.passed),
+        answer: experience.final_output,
+    })
 }
 
 /// `candidate` and `baseline` outcomes on `suite`'s tasks, paired by task.
 #[must_use]
-pub fn pair(
-    suite: &Suite,
-    candidate: &[Option<bool>],
-    baseline: &[Option<bool>],
-) -> Vec<PairedOutcome> {
+pub fn pair(suite: &Suite, candidate: &[Probe], baseline: &[Probe]) -> Vec<PairedOutcome> {
     suite
         .tasks
         .iter()
         .zip(candidate.iter().zip(baseline))
         .map(|(task, (c, b))| PairedOutcome {
             item: task.task.id.to_string(),
-            candidate: *c,
-            baseline: *b,
+            candidate: c.verdict,
+            baseline: b.verdict,
         })
         .collect()
 }

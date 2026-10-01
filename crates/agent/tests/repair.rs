@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use splinter_agent::critic::{Critic, CRITIQUE_TASK_KIND};
 use splinter_agent::repair::{Repair, RepairBudget, RepairError, RepairReport, Stop};
-use splinter_agent::solve::{solve, Model, SolveOptions};
+use splinter_agent::solve::{solve, Model, SolveOptions, SYSTEM_PROMPT};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest};
 use splinter_sandbox::{
@@ -325,12 +325,18 @@ fn repaired(bench: &Bench) -> Chain {
     }
 }
 
+/// A chat record's turns after its first, which is the system turn every
+/// solve in the chain ran under.
 fn chat(body: &RecordBody) -> Vec<(String, String)> {
     match body {
-        RecordBody::Chat { messages } => messages
-            .iter()
-            .map(|m| (m.role.clone(), m.content.clone()))
-            .collect(),
+        RecordBody::Chat { messages } => {
+            let turns: Vec<(String, String)> = messages
+                .iter()
+                .map(|m| (m.role.clone(), m.content.clone()))
+                .collect();
+            assert_eq!(turns[0], ("system".into(), SYSTEM_PROMPT.into()));
+            turns[1..].to_vec()
+        }
         other => panic!("a chat record, got {other:?}"),
     }
 }
@@ -441,7 +447,10 @@ fn a_failed_construct_task_is_critiqued_retried_and_the_chain_feeds_the_views() 
             chosen,
             rejected,
         } => {
-            assert_eq!(prompt[0].content, INSTRUCTION);
+            assert_eq!(
+                (prompt[0].content.as_str(), prompt[1].content.as_str()),
+                (SYSTEM_PROMPT, INSTRUCTION)
+            );
             assert_eq!(chosen.content, CORRECT);
             assert_eq!(rejected.content, WRONG);
         }

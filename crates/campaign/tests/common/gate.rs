@@ -11,7 +11,10 @@
 //! one when asked to lie), writes its API key and ready marker, and answers
 //! the OpenAI-compatible chat route from what the adapter file says the
 //! candidate knows - when asked to decode greedily (temperature zero); a
-//! sampled request gets a draw that agrees with nothing. Like brain on one
+//! sampled request gets a draw that agrees with nothing. An honest one
+//! answers what the in-process candidate answers, with a trailing newline
+//! (whitespace a comparison of answers ignores); a divergent one answers in
+//! other words that grade the same (upper case, a full stop). Like brain on one
 //! device, it does not start while another process holds the device: while
 //! the file [`device_lock`] names exists. It tests the serve check's
 //! plumbing, not brain.
@@ -230,6 +233,9 @@ pub enum Brain {
     Honest,
     /// The stand-in, reporting a digest that is not the adapter's.
     WrongDigest,
+    /// The stand-in, reporting the real digest and answering in other
+    /// words than the candidate in-process, graded the same.
+    Divergent,
 }
 
 /// The file standing for the device being held: while it exists, the
@@ -260,8 +266,9 @@ pub fn gate_context(test: &str, brain: Brain) -> (Scratch, Context) {
     let mut config = config(&scratch);
     config.brain_binary = match brain {
         Brain::Missing => None,
-        Brain::Honest => Some(fake_brain(&scratch.0, false)),
-        Brain::WrongDigest => Some(fake_brain(&scratch.0, true)),
+        Brain::Honest | Brain::WrongDigest | Brain::Divergent => {
+            Some(fake_brain(&scratch.0, brain))
+        }
     };
     let base = arm(&config, None);
     let ctx = Context::new(config, false)
@@ -468,10 +475,12 @@ pub fn policy() -> ModelRef {
 }
 
 /// Writes the `brain` stand-in into `dir`; see the module documentation.
-fn fake_brain(dir: &Path, wrong_digest: bool) -> PathBuf {
+fn fake_brain(dir: &Path, brain: Brain) -> PathBuf {
     let path = dir.join("brain");
+    let python = |yes: bool| if yes { "True" } else { "False" };
     let script = FAKE_BRAIN
-        .replace("@WRONG@", if wrong_digest { "True" } else { "False" })
+        .replace("@WRONG@", python(brain == Brain::WrongDigest))
+        .replace("@DIVERGENT@", python(brain == Brain::Divergent))
         .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string());
     std::fs::write(&path, script).unwrap();
     #[cfg(unix)]
@@ -504,8 +513,12 @@ print("brain serve: brain/qwen3 adapter=local/test:splinter:candidate digest=" +
 def reply(text):
     m = re.search(r"What is the (\S+) code number (\d+)\?", text)
     if m and m.group(1) in knows:
-        return m.group(1) + "-" + m.group(2)
-    return "I do not know."
+        answer = m.group(1) + "-" + m.group(2)
+    else:
+        answer = "I do not know."
+    if @DIVERGENT@:
+        return answer.upper().rstrip(".") + "."
+    return answer + "\n"
 
 def text_of(content):
     if isinstance(content, list):

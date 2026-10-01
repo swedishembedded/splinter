@@ -12,12 +12,12 @@ every command. `splinter <command> --help` is the authoritative reference.
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run] [--no-release]
-                         [--no-frontier | --k N [--temperature T] [--top-k N]]
+                         [--no-frontier | --k N [--temperature T] [--top-k N]] [--teacher REF]
 splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
 splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | list | show <ID>
-splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N]]
+splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N] [--teacher REF]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
 splinter judge calibrate <LABELLED-FILE> --judge REF
@@ -70,7 +70,7 @@ other provider from `BRAIN_API_KEY`.
 | tasks | `tasks generate` | sources | a task set |
 | solve | `solve` | a task set | an experience set |
 | verify | `verify` | an experience set | verdicts on its experiences |
-| frontier | `solve --frontier` | a task set | k graded attempts per task, a pass@k measurement, the frontier's task and experience sets |
+| frontier | `solve --frontier` | a task set | k graded attempts per task, a teacher's graded open-book solve of each task never solved, a pass@k measurement, the kept tasks' task and experience sets |
 | critique | `critique` | an experience set | an experience set of critiques and revisions |
 | dataset | `dataset build` | experience sets | a dataset and its manifest |
 | train | `train` | datasets | a candidate adapter (not released) |
@@ -83,32 +83,50 @@ each stage as it finishes: the sources are captured; tasks of the requested kind
 sections of every concept queued for new tasks, and admitted by code;
 each task is solved k times (`--k`) in the environment it records and
 every attempt is graded by its task kind's verifiers (a judge only
-through `verify --judge`); only the frontier - tasks the policy solves
-sometimes, neither always nor never - goes on; its failed attempts are
-critiqued and retried once; the passing attempts and revisions, near
+through `verify --judge`); each task no graded attempt solved is solved
+once more by the teacher (`teach`: the policy, or the model `--teacher`
+names) open-book - shown its grounding material - and graded the same
+way; only the tasks worth training on go on: those the policy fails at
+least sometimes and has a verified answer to, its own (the frontier) or
+the teacher's (taught); their failed attempts are critiqued and retried
+once; the passing attempts, verified teacher answers and revisions, near
 duplicates removed and each concept, task kind and verification strength
 capped at its share (`select`), become an `sft-final` dataset; a
 candidate is trained on it from the champion; and the release gate
 decides whether it is released (`--no-release` stops at the candidate).
-`--no-frontier` solves each task once and keeps every task. `--budget`
-bounds the whole run's wall-clock time; `--goal` steers what tasks are
-asked for; `--dry-run` prints the plan and writes nothing. A `learn`
-that stops before training (nothing admitted, no task on the frontier,
-nothing passed, the budget spent) or whose candidate the gate blocks
-says why and exits 1.
+`--no-frontier` solves each task once, has the teacher solve each one
+that failed, and keeps every task. `--budget` bounds the whole run's
+wall-clock time; `--goal` steers what tasks are asked for; `--dry-run`
+prints the plan and writes nothing. A `learn` that stops before training
+(nothing admitted, no task worth training on, nothing passed, the budget
+spent) or whose candidate the gate blocks says why and exits 1.
 
 ## The curriculum
 
 `solve --frontier` measures the solver's pass@k on every task: k solves
 (default 4), each an experience numbered by its attempt, graded by the
-task's own verifiers. A task every graded attempt solved carries no
-signal and one none solved no usable data: both are dropped, as is one
-with no graded attempt (it has no rate; unmeasured is never 0). The rest
-- the frontier - is written as a task set and an experience set of its
-attempts. The measurement is recorded under
+task's own verifiers. Each task no graded attempt solved is then solved
+once by a teacher - the solver, or the model `--teacher` names -
+open-book: its prompt shows, before the instruction, the task's
+grounding material (the source section each evidence span falls in, its
+passages and hints; never its reference). The teacher's solve is an
+experience of the task like any other, graded by the same verifiers, its
+provenance marked `teacher`; a task grounded in nothing a teacher could
+be shown is skipped. A task is worth training on when the solver fails it
+at least sometimes and a verified answer exists: on the frontier (some
+attempts passed) or taught (none passed, the teacher's did). A task
+every graded attempt solved carries no signal, and one with no verified
+answer nothing to learn from: both are dropped, as is one with no graded
+attempt (it has no rate; unmeasured is never 0). The tasks kept are
+written as a task set and an experience set of their attempts and
+verified teacher answers. The measurement is recorded under
 `<state>/curriculum/measurements/`, per task: its kind, concepts,
-attempts, graded attempts, passes, rate and class, with the solver, the
-release `policy:<alias>` was, k and the sampling. A local model samples
+attempts, graded attempts, passes, rate, the teacher's attempts, graded
+attempts and passes, and class (`always`, `frontier`, `taught`, `never`,
+`unmeasured`), with the solver, the teacher, the release `policy:<alias>`
+was, k and the sampling. The teacher's solves are training data, never a
+measurement of the policy: they count toward neither a task's rate nor
+concept mastery. A local model samples
 its attempts at temperature 0.8 unless `--temperature`/`--top-k` say
 otherwise; a model whose sampling cannot be set (a remote one) samples as
 its server does, and naming a sampling for it is refused.
@@ -119,9 +137,10 @@ each span's first byte); otherwise its task kind. Every solve through
 `policy:<alias>` records the release the alias was (or `base`), and
 `status` ranks concepts by their rolling pass rate (the newest 32 graded
 solves) under the current release, weakest first, with their rates under
-earlier releases. When the release gate's retention check fails on an
-earlier release's suite, the concepts of the tasks the candidate forgot
-are queued under `<state>/curriculum/queue/` (the `release` report lists
+earlier releases; a teacher's open-book solve and a retry helped by a
+critique are not counted. When the release gate's retention check fails
+on an earlier release's suite, the concepts of the tasks the candidate
+forgot are queued under `<state>/curriculum/queue/` (the `release` report lists
 them), and the next `learn` generates new tasks from their sections.
 
 A round's training set is deduplicated with the task generator's own
@@ -144,7 +163,11 @@ Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 `dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
 `verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
-(the student sees only the instruction). Chat views are written as
+(the student sees only the instruction - also for a teacher's solve,
+whatever it was shown). Every conversation starts with the system turn
+every solve, `ask` and probe runs under: one short system prompt of
+Splinter's own, in place of sven's coding-agent prompt, so the policy is
+trained under the prompt it answers under. Chat views are written as
 brain's `generic-messages-v2`, `preference` as brain's
 `generic-preference-v1` (one pair per line: the student's prompt, the
 chosen and the rejected answer), each checked by brain's own parser.
@@ -184,7 +207,7 @@ is printed with its numbers, and a check that could not be measured fails:
 | improvement | on the new datasets' held-out tasks, a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
 | retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
 | anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
-| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint with the same verdicts as in-process |
+| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`) starts, reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily, with the same answers as in-process (runs of whitespace aside) graded the same; each task answered differently is reported with both answers |
 
 A release is written once under `<state>/releases/<hex>/`: the adapter
 file, read-only, and `manifest.json` in canonical JSON - the base model and

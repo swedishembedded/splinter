@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 
 use serde_json::json;
+use splinter_lab::{WireMessage, SYSTEM_PROMPT};
 use splinter_store::annotation::{
     Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
 };
@@ -188,4 +189,18 @@ impl Drop for Scratch {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
     }
+}
+
+/// `messages` after their first turn, which must be the system turn every
+/// solve runs under, unsupervised.
+pub fn after_system(messages: &[WireMessage]) -> &[WireMessage] {
+    let [system, rest @ ..] = messages else {
+        panic!("a conversation, got none");
+    };
+    assert_eq!(
+        (system.role.as_str(), system.content.as_str(), system.train),
+        ("system", SYSTEM_PROMPT, false),
+        "every conversation starts with the solver's system turn"
+    );
+    rest
 }

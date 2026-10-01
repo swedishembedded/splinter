@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! What the curriculum prints as text: a pass@k measurement and the
-//! frontier it kept, a training set's quotas, and the weakest concepts.
+//! What the curriculum prints as text: a pass@k measurement, the teacher's
+//! solves and the tasks kept, a training set's quotas, and the weakest
+//! concepts.
 
 use std::fmt::Write as _;
 
 use splinter_campaign::curriculum::frontier::{Frontier, Measured};
 use splinter_campaign::curriculum::mastery::{MasteryReport, ReleaseMastery};
 use splinter_campaign::curriculum::quota::Selected;
+use splinter_campaign::curriculum::teacher::Taught;
 
 use crate::output::Report;
 
@@ -38,13 +40,17 @@ impl Report for Frontier {
             format!("temperature {}, top-k {}", s.temperature, s.top_k)
         });
         format!(
-            "pass@{} of {} ({sampling}) over {} task(s): {} on the frontier, {} always solved \
-             (no signal), {} never solved (no data), {} unmeasured\n  frontier task set {} \
-             (attempts: {})\n  measurement {} at {}\n",
+            "pass@{} of {} ({sampling}) over {} task(s), taught by {}: {} kept - {} on the \
+             frontier, {} taught; {} always solved (no signal), {} never solved with no \
+             verified answer, {} unmeasured\n  frontier task set {} (attempts and verified \
+             answers: {})\n  measurement {} at {}\n",
             self.k,
             measured,
             d.tasks(),
+            self.teacher,
+            d.kept(),
             d.frontier,
+            d.taught,
             d.always,
             d.never,
             d.unmeasured,
@@ -56,12 +62,24 @@ impl Report for Frontier {
     }
 }
 
+impl Report for Taught {
+    fn human(&self) -> String {
+        format!(
+            "open-book, the tasks never solved closed-book ({}):\n{}{}",
+            self.task_set,
+            self.solve.human(),
+            self.verify.human()
+        )
+    }
+}
+
 impl Report for Measured {
     fn human(&self) -> String {
         format!(
-            "{}{}{}",
+            "{}{}{}{}",
             self.solve.human(),
             self.verify.human(),
+            self.teach.human(),
             self.frontier.human()
         )
     }

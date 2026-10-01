@@ -175,9 +175,14 @@ pub struct LearnArgs {
     #[arg(long)]
     pub no_release: bool,
     /// Solve each task once and train on every task, instead of measuring
-    /// pass@k and keeping the frontier (tasks sometimes, not always, solved).
+    /// pass@k and keeping the tasks worth training on (failed at least
+    /// sometimes, with a verified answer).
     #[arg(long, conflicts_with_all = ["k", "temperature", "top_k"])]
     pub no_frontier: bool,
+    /// The model that solves open-book, shown each task's grounding
+    /// material, the tasks the policy never solves (default: the policy).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub teacher: Option<ModelRef>,
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,
@@ -277,7 +282,7 @@ pub enum TasksCommand {
 /// `solve`.
 #[derive(Debug, Args)]
 #[command(group = ArgGroup::new("pass_at_k_given")
-    .args(["k", "temperature", "top_k"])
+    .args(["k", "temperature", "top_k", "teacher"])
     .multiple(true)
     .requires("frontier"))]
 pub struct SolveArgs {
@@ -287,10 +292,15 @@ pub struct SolveArgs {
     /// The model that solves.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub solver: ModelRef,
-    /// Solve each task k times, grade every attempt, and keep the frontier:
-    /// the tasks solved sometimes, neither always nor never.
+    /// Solve each task k times, grade every attempt, have a teacher solve
+    /// open-book each task never solved, and keep the tasks worth training
+    /// on: failed at least sometimes, with a verified answer.
     #[arg(long)]
     pub frontier: bool,
+    /// With --frontier: the model that solves open-book the tasks the
+    /// solver never solves (default: the solver).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub teacher: Option<ModelRef>,
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,

@@ -3,7 +3,9 @@
 
 //! `ask`: one question put to a model the way every task is solved -
 //! closed-book by default, so the answer is what the model knows; with
-//! `--open-book` the named source's text rides along in the question.
+//! `--open-book` the named source's text is shown before the question, as
+//! a teacher is shown a task's grounding material
+//! ([`splinter_agent::solve::open_book_prompt`]).
 //!
 //! Every answer is recorded ([`crate::answers`]) with the model that gave
 //! it and, asked through `policy:<alias>`, the release the alias resolved
@@ -12,7 +14,7 @@
 use std::time::Duration;
 
 use serde::Serialize;
-use splinter_agent::solve::{solve, SolveOptions};
+use splinter_agent::solve::{open_book_prompt, solve, SolveOptions};
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::experience::{Environment, Task};
 use splinter_store::source::SourceId;
@@ -68,10 +70,7 @@ pub fn ask(
         Some(id) => {
             let source = sources::resolve(ctx, id)?;
             let material = material(ctx, &source)?;
-            (
-                format!("{question}\n\nReference material:\n\n{material}"),
-                Some(source),
-            )
+            (open_book_prompt(question, &material), Some(source))
         }
     };
     // The pin is the context's for its lifetime, so it names the release
@@ -127,30 +126,31 @@ pub fn ask(
 /// The source's text parts, each under its name; refused past
 /// [`MAX_OPEN_BOOK_BYTES`] rather than cut, since a cut would silently
 /// change what the model was shown.
-fn material(ctx: &Context, id: &SourceId) -> Result<String, CampaignError> {
+fn material(ctx: &Context, id: &SourceId) -> Result<Vec<String>, CampaignError> {
     let store = ctx.sources();
     let source = store.get_source(id)?;
-    let mut text = String::new();
+    let mut parts = Vec::new();
+    let mut bytes_shown = 0;
     for part in source
         .parts
         .iter()
         .filter(|p| p.media_type.starts_with("text/"))
     {
         let bytes = store.read_blob(&part.content)?;
-        text.push_str(&format!("--- {} ---\n", part.name));
-        text.push_str(&String::from_utf8_lossy(&bytes));
-        text.push('\n');
-        if text.len() > MAX_OPEN_BOOK_BYTES {
+        let piece = format!("--- {} ---\n{}", part.name, String::from_utf8_lossy(&bytes));
+        bytes_shown += piece.len();
+        if bytes_shown > MAX_OPEN_BOOK_BYTES {
             return Err(CampaignError::Refused(format!(
                 "source {id} holds more than {MAX_OPEN_BOOK_BYTES} bytes of text, more than one \
                  question can carry"
             )));
         }
+        parts.push(piece);
     }
-    if text.is_empty() {
+    if parts.is_empty() {
         return Err(CampaignError::Refused(format!(
             "source {id} has no text part to show"
         )));
     }
-    Ok(text)
+    Ok(parts)
 }

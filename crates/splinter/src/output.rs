@@ -16,7 +16,6 @@ use splinter_campaign::experiences::{
 };
 use splinter_campaign::front_door::Routed;
 use splinter_campaign::judge::Calibrated;
-use splinter_campaign::learn::{LearnPlan, LearnReport, Learned};
 use splinter_campaign::runs::{CancelRequested, Recorded, RunList};
 use splinter_campaign::solving::Solved;
 use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
@@ -87,70 +86,6 @@ pub fn routed(json: bool, routed: &Routed) {
     }
 }
 
-/// One line saying what a finished `learn` stage did, from its summary.
-pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
-    let field = |name: &str| match &summary[name] {
-        serde_json::Value::Null => "?".to_string(),
-        serde_json::Value::String(s) => s.clone(),
-        other => other.to_string(),
-    };
-    match stage {
-        "sources" => format!("{} source(s)", summary.as_array().map_or(0, Vec::len)),
-        "tasks" => format!("{} task(s) in {}", field("tasks"), field("task_set")),
-        "solve" => format!(
-            "{} solved, {} answered, in {}",
-            field("solved"),
-            field("answered"),
-            field("experience_set")
-        ),
-        "verify" => format!(
-            "{} passed, {} failed, {} undecided",
-            field("passed"),
-            field("failed"),
-            field("undecided")
-        ),
-        "critique" => format!(
-            "{} critiqued, {} repaired",
-            field("critiqued"),
-            field("repaired")
-        ),
-        "frontier" => {
-            let d = &summary["distribution"];
-            format!(
-                "{} on the frontier ({} always, {} never, {} unmeasured) in {}",
-                d["frontier"],
-                d["always"],
-                d["never"],
-                d["unmeasured"],
-                field("frontier_task_set")
-            )
-        }
-        "select" => {
-            let s = &summary["selection"];
-            format!(
-                "{} of {} kept ({} repeats dropped) in {}",
-                s["selected"].as_array().map_or(0, Vec::len),
-                s["candidates"],
-                s["duplicates"],
-                field("experience_set")
-            )
-        }
-        "dataset" => format!("{} record(s) in {}", field("records"), field("dataset")),
-        "train" => format!("candidate {}", field("candidate")),
-        "policy" => match &summary["release"] {
-            serde_json::Value::Null => {
-                format!("policy:{} is the base: no release yet", field("alias"))
-            }
-            _ => format!("policy:{} is release {}", field("alias"), field("release")),
-        },
-        "release" => match &summary["release"] {
-            serde_json::Value::Null => "the gate blocked the candidate: not released".into(),
-            _ => format!("released {}", field("release")),
-        },
-        _ => summary.to_string(),
-    }
-}
-
 /// Arguments as a person would type them, each quoted when it has to be.
 pub fn shell_words(words: &[String]) -> String {
     words
@@ -171,7 +106,7 @@ pub fn shell_words(words: &[String]) -> String {
 
 /// A serializable value as a short word: a string as itself, anything else
 /// as compact JSON.
-fn word(value: &impl Serialize) -> String {
+pub(crate) fn word(value: &impl Serialize) -> String {
     match serde_json::to_value(value) {
         Ok(serde_json::Value::String(s)) => s,
         Ok(other) => other.to_string(),
@@ -214,7 +149,7 @@ fn origin(origin: &Origin) -> String {
     }
 }
 
-fn source_line(source: &SourceSummary) -> String {
+pub(crate) fn source_line(source: &SourceSummary) -> String {
     format!(
         "{}  {:<10}  {} part(s), {} bytes  {}",
         source.id,
@@ -712,80 +647,5 @@ impl Report for Status {
 impl Report for Answer {
     fn human(&self) -> String {
         format!("{}\n", self.answer.trim_end())
-    }
-}
-
-impl Report for LearnPlan {
-    fn human(&self) -> String {
-        let sources: Vec<String> = self.sources.iter().map(word).collect();
-        format!(
-            "dry run - nothing written under {}\n  sources: {}\n  kinds:   {}\n  goal:    {}\n  budget:  {}\n  policy:  {}\n  stages:  {}\n",
-            self.state.display(),
-            sources.join(", "),
-            self.kinds.join(", "),
-            self.goal.as_deref().unwrap_or("-"),
-            self.budget_secs.map_or("none".into(), |s| format!("{s}s")),
-            self.policy,
-            self.stages.join(" -> ")
-        )
-    }
-}
-
-impl Report for LearnReport {
-    fn human(&self) -> String {
-        let mut out = String::new();
-        let stage = |out: &mut String, name: &str, body: String| {
-            for (i, line) in body.lines().enumerate() {
-                let label = if i == 0 { name } else { "" };
-                let _ = writeln!(out, "{label:<9}{line}");
-            }
-        };
-        let policy = match &self.policy.release {
-            Some(release) => format!("policy:{} = release {release}\n", self.policy.alias),
-            None => format!("policy:{} = the base: no release yet\n", self.policy.alias),
-        };
-        stage(&mut out, "policy", policy);
-        let sources: String = self.sources.iter().map(|s| source_line(s) + "\n").collect();
-        stage(&mut out, "sources", sources);
-        if let Some(r) = &self.tasks {
-            stage(&mut out, "tasks", r.human());
-        }
-        if let Some(r) = &self.solve {
-            stage(&mut out, "solve", r.human());
-        }
-        if let Some(r) = &self.verify {
-            stage(&mut out, "verify", r.human());
-        }
-        if let Some(r) = &self.frontier {
-            stage(&mut out, "frontier", r.human());
-        }
-        if let Some(r) = &self.critique {
-            stage(&mut out, "critique", r.human());
-        }
-        if let Some(r) = &self.select {
-            stage(&mut out, "select", r.human());
-        }
-        if let Some(r) = &self.dataset {
-            stage(&mut out, "dataset", r.human());
-        }
-        if let Some(r) = &self.candidate {
-            stage(&mut out, "train", r.human());
-        }
-        if let Some(r) = &self.release {
-            stage(&mut out, "release", r.human());
-        }
-        if let Some(why) = &self.stopped {
-            let _ = writeln!(out, "stopped  {why}");
-        }
-        out
-    }
-}
-
-impl Report for Learned {
-    fn human(&self) -> String {
-        match self {
-            Self::Planned(plan) => plan.human(),
-            Self::Ran(run) => run.human(),
-        }
     }
 }

@@ -14,7 +14,9 @@
 //! slower than the limit fails the run, one within it does not. An
 //! experience's code calls replay in its environment to the results it
 //! recorded; a recorded result that differs is named, field by field, and
-//! a replay anywhere but the recorded environment is refused.
+//! a replay anywhere but the recorded environment is refused. Every
+//! request a solve sends carries Splinter's own system prompt as its one
+//! system turn, whatever the environment, with nothing appended to it.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -27,14 +29,16 @@ use std::time::Duration;
 use futures::StreamExt;
 
 use splinter_agent::replay::{replay, CallReplay, ReplayError};
-use splinter_agent::solve::{solve, SolveError, SolveOptions, RUN_CODE};
+use splinter_agent::solve::{
+    solve, solve_prompted, SolveError, SolveOptions, RUN_CODE, SYSTEM_PROMPT,
+};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
 use splinter_store::clock::FixedClock;
 use splinter_store::experience::{Environment, Provenance, Task};
 use sven_sdk::model::{
-    CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream,
+    CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
 };
 use sven_sdk::RunConclusion;
 
@@ -339,4 +343,40 @@ async fn the_stream_idle_limit_bounds_the_silence_before_a_first_chunk() {
     .unwrap();
     assert_eq!(patient.conclusion, RunConclusion::Success);
     assert_eq!(patient.final_output.as_deref(), Some("42"));
+}
+
+#[tokio::test]
+async fn every_request_runs_under_splinters_system_prompt() {
+    let model = Scripted::new(|_| text("42"));
+    let task = task(Environment::closed_book(), "What is six times seven?");
+    solve(
+        &task,
+        &ResolvedEnvironment::ClosedBook,
+        model.clone(),
+        options(),
+    )
+    .await
+    .unwrap();
+    solve_prompted(
+        &task,
+        "Six sevens are forty-two.\n\nWhat is six times seven?",
+        &ResolvedEnvironment::ClosedBook,
+        model.clone(),
+        options(),
+    )
+    .await
+    .unwrap();
+    let seen = model.seen.lock().unwrap();
+    assert_eq!(seen.len(), 2, "one request per solve");
+    for request in seen.iter() {
+        let system: Vec<&str> = request
+            .messages
+            .iter()
+            .filter(|m| m.role == Role::System)
+            .map(|m| m.as_text().unwrap_or_default())
+            .collect();
+        assert_eq!(system, [SYSTEM_PROMPT], "{:?}", request.messages);
+        assert_eq!(request.messages[0].role, Role::System);
+        assert_eq!(request.system_dynamic_suffix, None);
+    }
 }

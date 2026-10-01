@@ -10,10 +10,11 @@
 //!
 //! Mastery is read from the experience store, never kept beside it: every
 //! experience the solve stage recorded for a policy alias names, as its
-//! policy, the release the alias pointed at (or the base). Only those
-//! count - a critic's retry is helped, a probe is not stored, another
-//! model is not the policy - and only when their verdicts decide pass or
-//! fail. Per concept (the rule of [`splinter_knowledge::concepts`]) and
+//! policy, the release the alias pointed at (or the base). Only the
+//! student's closed-book solves among those count - a critic's retry is
+//! helped, a teacher's solve was shown the material, a probe is not
+//! stored, another model is not the policy - and only when their verdicts
+//! decide pass or fail. Per concept (the rule of [`splinter_knowledge::concepts`]) and
 //! per release, the rolling pass rate is over the newest
 //! [`DEFAULT_MASTERY_WINDOW`] decided attempts; a concept with none under a
 //! release has no rate there, never `0`.
@@ -108,11 +109,12 @@ pub fn mastery(
         else {
             continue;
         };
-        if experience
-            .privileged
-            .iter()
-            .any(|p| p.kind == PrivilegedKind::Critique)
-        {
+        let helped = experience.provenance.teacher
+            || experience
+                .privileged
+                .iter()
+                .any(|p| p.kind == PrivilegedKind::Critique);
+        if helped {
             continue;
         }
         let Some(decision) = decide(&store.annotations(&id)?.annotations) else {

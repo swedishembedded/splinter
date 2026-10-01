@@ -6,29 +6,35 @@
 // your team needs expertise in continual learning or agent evaluation, you
 // can procure our services by sending an email to info@swedishembedded.com.
 
-//! `learn`: sources -> tasks -> solve -> verify -> frontier -> critique and
-//! retry -> select -> dataset -> train -> release, as one recorded run
-//! whose every stage is also a command of its own.
+//! `learn`: sources -> tasks -> solve -> verify -> teach -> frontier ->
+//! critique and retry -> select -> dataset -> train -> release, as one
+//! recorded run whose every stage is also a command of its own.
 //!
 //! Each stage hands the next the content-addressed set it wrote, and its
 //! summary is recorded (and reported) as it finishes, so a stage can be
 //! inspected, or rerun alone, from what the run records. The policy -
 //! `policy:default` - is resolved once, when the run starts, and the
 //! release it resolved to is the run's first recorded stage: the whole run
-//! generates, solves, critiques, retries and trains from that release,
-//! however the alias moves meanwhile. The tasks stage also generates from
-//! the sections of every concept queued for new tasks
-//! ([`crate::curriculum::queue`]). Each task is solved k times and graded
-//! by its kind's verifiers, never by a judge, and only the frontier - tasks
-//! the policy solves sometimes, neither always nor never - goes on
+//! generates, solves, teaches, critiques, retries and trains from that
+//! release, however the alias moves meanwhile. The tasks stage also
+//! generates from the sections of every concept queued for new tasks
+//! ([`crate::curriculum::queue`]). Each task is solved k times closed-book
+//! and graded by its kind's verifiers, never by a judge; each task no
+//! graded attempt solved is solved once more by the teacher - the policy,
+//! or the model `--teacher` names - open-book, with its grounding material
+//! shown, and graded the same way ([`crate::curriculum::teacher`]). Only
+//! the tasks worth training on go on: those the student fails at least
+//! sometimes and that have a verified answer, its own or the teacher's
 //! ([`crate::curriculum::frontier`]; `--no-frontier` solves each task once
 //! and keeps them all). Failed attempts are critiqued and retried; the
-//! passing attempts and revisions are deduplicated and capped per concept,
-//! kind and strength ([`crate::curriculum::quota`]), and the `sft-final`
-//! view over what is selected is the dataset. The candidate trained on it
-//! continues that release, and goes through the release gate, which
-//! releases it only if every check passes (`--no-release` stops at the
-//! candidate).
+//! passing attempts, verified teacher answers and revisions are
+//! deduplicated and capped per concept, kind and strength
+//! ([`crate::curriculum::quota`]), and the `sft-final` view over what is
+//! selected is the dataset - the student's records: the instruction alone,
+//! whatever the solver was shown. The candidate trained on it continues
+//! that release, and goes through the release gate, which grades it
+//! closed-book and releases it only if every check passes (`--no-release`
+//! stops at the candidate).
 //!
 //! The pipeline stops early, and says why, when a stage leaves the next
 //! nothing to work on or the budget is spent; `--dry-run` resolves the
@@ -46,6 +52,7 @@ use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES}
 use crate::curriculum::frontier::{select_frontier, Frontier, PassAtK};
 use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas, Selected};
+use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::datasets::{build, BuildRequest, Built, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::error::CampaignError;
 use crate::model_ref::{ModelRef, POLICY_DEFAULT};
@@ -61,9 +68,9 @@ use crate::train::{
 use crate::verify::{verify_set, Verified};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 11] = [
-    "policy", "sources", "tasks", "solve", "verify", "frontier", "critique", "select", "dataset",
-    "train", "release",
+pub const STAGES: [&str; 12] = [
+    "policy", "sources", "tasks", "solve", "verify", "teach", "frontier", "critique", "select",
+    "dataset", "train", "release",
 ];
 
 /// One `learn`.
@@ -84,6 +91,9 @@ pub struct LearnRequest {
     /// Solve each task once and keep every task, instead of measuring
     /// pass@k and keeping the frontier.
     pub no_frontier: bool,
+    /// The model that teaches what the policy never solves; `None`: the
+    /// policy itself.
+    pub teacher: Option<ModelRef>,
     /// k and the sampling of the frontier's pass@k.
     pub pass_at_k: PassAtK,
     /// The diversity quotas on the training set.
@@ -105,6 +115,8 @@ pub struct LearnPlan {
     pub budget_secs: Option<u64>,
     /// The model that generates, solves, critiques and retries.
     pub policy: String,
+    /// The model that teaches what the policy never solves.
+    pub teacher: String,
     /// The stages, in order.
     pub stages: Vec<&'static str>,
     /// Always `true`: nothing was written.
@@ -134,6 +146,9 @@ pub struct LearnReport {
     pub solve: Option<Solved>,
     /// The verify stage.
     pub verify: Option<Verified>,
+    /// The teach stage: the teacher's graded solves of the tasks never
+    /// solved.
+    pub teach: Option<Taught>,
     /// The frontier stage: pass@k, and the tasks kept.
     pub frontier: Option<Frontier>,
     /// The critique stage.
@@ -196,6 +211,7 @@ pub fn learn(
         .map(|s| SourceTarget::from_learn_arg(s))
         .collect::<Result<Vec<_>, _>>()?;
     let policy = ModelRef::policy_default();
+    let teacher = request.teacher.clone().unwrap_or_else(|| policy.clone());
     if request.dry_run {
         return Ok(Learned::Planned(LearnPlan {
             state: ctx.root().path().to_path_buf(),
@@ -204,6 +220,7 @@ pub fn learn(
             goal: request.goal.clone(),
             budget_secs: request.budget.map(|b| b.as_secs()),
             policy: ctx.selection(&policy)?.identity(),
+            teacher: ctx.selection(&teacher)?.identity(),
             stages: STAGES
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
@@ -219,6 +236,7 @@ pub fn learn(
         goal: request.goal.as_deref(),
         deadline: request.budget.map(|b| Instant::now() + b),
         trainer,
+        teacher: &teacher,
         no_release: request.no_release,
         frontier: (!request.no_frontier).then_some(request.pass_at_k),
         quotas: request.quotas,
@@ -239,6 +257,7 @@ struct Pipeline<'a> {
     goal: Option<&'a str>,
     deadline: Option<Instant>,
     trainer: &'a dyn Trainer,
+    teacher: &'a ModelRef,
     no_release: bool,
     /// pass@k's parameters; `None` keeps every task.
     frontier: Option<PassAtK>,
@@ -256,6 +275,7 @@ impl Pipeline<'_> {
             goal,
             deadline,
             trainer,
+            teacher,
             no_release,
             frontier,
             quotas,
@@ -321,6 +341,7 @@ impl Pipeline<'_> {
                 solver: &policy,
                 attempts: frontier.map_or(1, |p| p.k),
                 sampling: frontier.map_or(SamplingChoice::Own, |p| p.sampling_choice()),
+                teacher: false,
                 deadline,
                 cancel: run.cancel_token(),
             },
@@ -335,16 +356,33 @@ impl Pipeline<'_> {
         let mut failed = verified.failed;
         report.verify = Some(verified);
 
+        if let Some(why) = spent("teach") {
+            report.stopped = Some(why);
+            return Ok(());
+        }
+        let taught = teach(
+            ctx,
+            &TeachRequest {
+                task_set: &task_set,
+                attempts: &attempts,
+                teacher,
+                deadline,
+                cancel: run.cancel_token(),
+            },
+        )?;
+        run.stage("teach", &taught)?;
+        let mut sets: Vec<SetId> = Vec::new();
         if frontier.is_some() {
-            let kept = select_frontier(ctx, &task_set, &solved)?;
+            let kept = select_frontier(ctx, &task_set, &solved, &taught)?;
             run.stage("frontier", &kept)?;
             attempts = kept.frontier_experience_set.clone();
             let d = kept.distribution;
+            report.teach = Some(taught);
             report.frontier = Some(kept);
-            if d.frontier == 0 {
+            if d.kept() == 0 {
                 report.stopped = Some(format!(
-                    "no task is on the frontier: {} always solved, {} never solved, {} \
-                     unmeasured of {}",
+                    "no task is worth training on: {} always solved, {} never solved with no \
+                     verified answer, {} unmeasured of {}",
                     d.always,
                     d.never,
                     d.unmeasured,
@@ -352,11 +390,15 @@ impl Pipeline<'_> {
                 ));
                 return Ok(());
             }
-            // Every frontier task failed at least one attempt.
-            failed = d.frontier;
+            // Every task kept failed at least one attempt.
+            failed = d.kept();
+        } else {
+            // Every task is kept, and the teacher's verified answers with it.
+            sets.push(taught.solve.experience_set.clone());
+            report.teach = Some(taught);
         }
 
-        let mut sets: Vec<SetId> = vec![attempts.clone()];
+        sets.insert(0, attempts.clone());
         if failed > 0 {
             if let Some(why) = spent("critique") {
                 report.stopped = Some(why);

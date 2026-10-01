@@ -21,7 +21,10 @@
 //! saw: [`Experience::instruction`] is the user turn a training record may
 //! show; [`Experience::privileged`] (a reference answer, a hint, the source
 //! passage) is for generators and verifiers, and a view must never put it
-//! into a record.
+//! into a record. A teacher's solve ([`Provenance::teacher`]) was prompted
+//! with the task's grounding material; its experience still records the
+//! task's own instruction, so the record a view makes of it is the
+//! student's: closed-book.
 
 use serde::{Deserialize, Serialize};
 
@@ -245,6 +248,15 @@ pub struct Provenance {
     /// the field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attempt: Option<u32>,
+    /// Whether the solver was the teacher: prompted open-book, with the
+    /// task's grounding material (its evidence passages and hints) beside
+    /// the instruction, where a student sees the instruction alone. A
+    /// teacher's verified answer is training data for the student; it says
+    /// nothing about what the student knows closed-book. Left out of the
+    /// canonical form when false, so a student's solve has the same address
+    /// whether or not the reader knows the field.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub teacher: bool,
     /// When the experience was recorded, from the injected [`Clock`].
     pub created_at: String,
 }
@@ -259,6 +271,7 @@ impl Provenance {
             policy: None,
             prompt_digests: Vec::new(),
             attempt: None,
+            teacher: false,
             created_at: clock.utc_now(),
         }
     }

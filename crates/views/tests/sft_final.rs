@@ -2,9 +2,10 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! Spec: the SFT-final view turns a passed experience into one chat record
-//! the student can learn from - the instruction as the user turn, the final
-//! output as the only supervised turn - and nothing the teacher alone saw
-//! ever reaches the record or the dataset written from it.
+//! the student can learn from - the system prompt every solve runs under,
+//! the instruction as the user turn, the final output as the only
+//! supervised turn - and nothing the teacher alone saw ever reaches the
+//! record or the dataset written from it.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -12,6 +13,7 @@
 use std::path::PathBuf;
 
 use serde_json::json;
+use splinter_lab::SYSTEM_PROMPT;
 use splinter_store::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_store::clock::FixedClock;
 use splinter_store::experience::{
@@ -119,7 +121,11 @@ fn a_passed_experience_becomes_one_record_supervising_only_the_answer() {
         .collect();
     assert_eq!(
         turns,
-        [("user", INSTRUCTION, false), ("assistant", ANSWER, true)]
+        [
+            ("system", SYSTEM_PROMPT, false),
+            ("user", INSTRUCTION, false),
+            ("assistant", ANSWER, true)
+        ]
     );
     assert_eq!(record.metadata.experiences, [exp.id().unwrap()]);
 
@@ -192,6 +198,7 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
     assert_eq!(
         line["messages"],
         json!([
+            {"role": "system", "content": SYSTEM_PROMPT, "train": false},
             {"role": "user", "content": INSTRUCTION, "train": false},
             {"role": "assistant", "content": ANSWER, "train": true},
         ])

@@ -61,7 +61,7 @@ fn student_turns(corpus: &Corpus, strip: Strip) -> Vec<String> {
         .records
         .iter()
         .map(|r| match &r.body {
-            RecordBody::Chat { messages } => messages[0].content.clone(),
+            RecordBody::Chat { messages } => after_system(messages)[0].content.clone(),
             other => panic!("a chat record, got {other:?}"),
         })
         .collect()

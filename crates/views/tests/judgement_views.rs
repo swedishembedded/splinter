@@ -30,7 +30,7 @@ const INSTRUCTION: &str = "What is two plus two? Reply with the number only.";
 
 fn chat_turns(body: &RecordBody) -> Vec<(String, String, bool)> {
     match body {
-        RecordBody::Chat { messages } => messages
+        RecordBody::Chat { messages } => after_system(messages)
             .iter()
             .map(|m| (m.role.clone(), m.content.clone(), m.train))
             .collect(),
@@ -163,7 +163,7 @@ fn preference_pairs_recorded_preferences_and_comparable_pass_fail_decisions() {
                 rejected,
             } => (
                 r.metadata.experiences.clone(),
-                prompt[0].content.clone(),
+                after_system(prompt)[0].content.clone(),
                 chosen.content.clone(),
                 rejected.content.clone(),
             ),

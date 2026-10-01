@@ -268,6 +268,17 @@ fn pass_at_k_is_asked_for_where_it_is_measured() {
         parse(&["solve", "ab12", "--k", "8"]).is_err(),
         "pass@k parameters need --frontier"
     );
+    let Command::Solve(taught) =
+        command(&["solve", "ab12", "--frontier", "--teacher", "local:./big"])
+    else {
+        panic!("solve --frontier --teacher");
+    };
+    assert_eq!(taught.teacher, Some("local:./big".parse().unwrap()));
+    assert_eq!(plain.teacher, None, "the solver teaches by default");
+    assert!(
+        parse(&["solve", "ab12", "--teacher", "local:./big"]).is_err(),
+        "a teacher needs --frontier"
+    );
 
     let Command::Learn(learn) = command(&["learn", "docs", "--k", "6"]) else {
         panic!("learn --k");
@@ -279,6 +290,10 @@ fn pass_at_k_is_asked_for_where_it_is_measured() {
     };
     assert!(learn.no_frontier);
     assert!(parse(&["learn", "docs", "--no-frontier", "--k", "6"]).is_err());
+    let Command::Learn(learn) = command(&["learn", "docs", "--teacher", "local:./big"]) else {
+        panic!("learn --teacher");
+    };
+    assert_eq!(learn.teacher, Some("local:./big".parse().unwrap()));
 }
 
 #[test]

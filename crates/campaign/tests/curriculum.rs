@@ -11,10 +11,13 @@
 //!
 //! * Before its attempts become training data, a task's pass@k is
 //!   measured: k solves, each graded by the task's own verifiers and kept
-//!   as an experience. A task the policy always solves is dropped (no
-//!   signal), one it never solves is dropped (no data), one it solves
-//!   sometimes is kept; the distribution is reported and the measurement
-//!   recorded per task.
+//!   as an experience. A task the policy never solves is solved once more
+//!   by a teacher, open-book, shown the task's grounding material. A task
+//!   the policy always solves is dropped (no signal), one it solves
+//!   sometimes is kept, one it never solves is kept when the teacher's
+//!   answer is verified (taught) and dropped otherwise (nothing to learn
+//!   from); the distribution is reported and the measurement recorded per
+//!   task.
 //! * `learn` measures the frontier by default.
 //! * Concept mastery is tallied per release from the policy's recorded
 //!   solves, and `status` lists the weakest concepts.
@@ -39,6 +42,7 @@ use common::gate::{
 use common::manual::{BAUD_QUESTION, BAUD_QUOTE, MANUAL};
 use common::{scratch_context, Scripted, POLICY};
 use serde_json::json;
+use splinter_agent::solve::Model;
 use splinter_campaign::curriculum::frontier::{measure, MeasureRequest, PassAtK};
 use splinter_campaign::curriculum::mastery::weakest;
 use splinter_campaign::curriculum::queue::{enqueue_retention, pending};
@@ -112,20 +116,69 @@ fn uneven_policy() -> Scripted {
     })
 }
 
+/// The passage the speed-of-light task is grounded in, which only its
+/// teacher is shown.
+const LIGHT_PASSAGE: &str = "Light travels through a vacuum at 299792458 m/s.";
+
+/// A teacher that answers the speed of light when it is shown the
+/// passage, and nothing else.
+fn light_teacher() -> Scripted {
+    Scripted::new(|prompt| {
+        if prompt.contains(LIGHT_PASSAGE) {
+            "299792458 m/s".into()
+        } else {
+            "I do not know.".into()
+        }
+    })
+}
+
 #[test]
-fn pass_at_k_keeps_the_frontier_and_records_every_attempt() {
+fn pass_at_k_keeps_the_frontier_and_the_taught_and_records_every_attempt() {
     let (_scratch, ctx) = scratch_context("curriculum-frontier", uneven_policy(), false);
     let always = recall("What is the capital of France?", "Paris");
     let never = recall("What is the mass of the moon?", "7.35e22 kg");
     let sometimes = recall("What is the boiling point of water at sea level?", "100 C");
-    let set = task_set(&ctx, &[always.clone(), never.clone(), sometimes.clone()]);
+    let taught = Task::new(
+        "recall",
+        Vec::new(),
+        Environment::closed_book(),
+        "How fast does light travel in a vacuum?",
+        vec![
+            Privileged {
+                kind: PrivilegedKind::Reference,
+                content: "299792458 m/s".into(),
+                span: None,
+            },
+            Privileged {
+                kind: PrivilegedKind::Passage,
+                content: LIGHT_PASSAGE.into(),
+                span: None,
+            },
+        ],
+    )
+    .unwrap();
+    let set = task_set(
+        &ctx,
+        &[
+            always.clone(),
+            never.clone(),
+            sometimes.clone(),
+            taught.clone(),
+        ],
+    );
     let policy = ModelRef::policy_default();
+    let teacher: ModelRef = "local:./teacher".parse().unwrap();
+    ctx.add_model(
+        teacher.clone(),
+        Model::new(Arc::new(light_teacher()), "scripted/teacher"),
+    );
 
     let measured = measure(
         &ctx,
         &MeasureRequest {
             task_set: &set,
             solver: &policy,
+            teacher: Some(&teacher),
             pass_at_k: PassAtK::default(),
             deadline: None,
             cancel: CancelToken::new(),
@@ -136,20 +189,50 @@ fn pass_at_k_keeps_the_frontier_and_records_every_attempt() {
     let frontier = &measured.frontier;
     assert_eq!(frontier.k, 4);
     let d = frontier.distribution;
-    assert_eq!((d.always, d.never, d.frontier, d.unmeasured), (1, 1, 1, 0));
+    assert_eq!(
+        (d.always, d.never, d.frontier, d.taught, d.unmeasured),
+        (1, 1, 1, 1, 0)
+    );
     assert_eq!(
         frontier.sampling, None,
         "a model handed in samples as its provider does"
     );
     let kept = ctx.tasks().get_set(&frontier.frontier_task_set).unwrap();
     let kept: Vec<&Digest> = kept.members.iter().map(|e| &e.task).collect();
-    assert_eq!(kept, [&sometimes.task.id], "only the frontier is kept");
+    assert_eq!(
+        kept,
+        [&sometimes.task.id, &taught.task.id],
+        "the frontier and the taught are kept"
+    );
+
+    // The teacher named solved, open-book, the two tasks never solved:
+    // the one with a passage it answered verifiably; the one grounded in
+    // nothing it was not asked.
+    let teach = &measured.teach;
+    assert_eq!(
+        (frontier.teacher.as_str(), teach.solve.solver.as_str()),
+        ("scripted/teacher", "scripted/teacher")
+    );
+    assert_eq!(
+        (teach.solve.solved, teach.verify.passed),
+        (1, 1),
+        "{teach:#?}"
+    );
+    let [skipped] = &teach.solve.skipped[..] else {
+        panic!("one task skipped: {teach:#?}")
+    };
+    assert_eq!(skipped.task, never.task.id);
+    let store = ctx.experiences();
+    for id in store.get_set(&teach.solve.experience_set).unwrap().members {
+        let experience = store.get(&id).unwrap();
+        assert!(experience.provenance.teacher);
+        assert_eq!(experience.task.id, taught.task.id);
+    }
 
     // Every attempt is an experience with its verdicts, numbered and
     // labelled with the release the policy was: the base.
-    let store = ctx.experiences();
     let attempts = store.get_set(&measured.solve.experience_set).unwrap();
-    assert_eq!(attempts.members.len(), 12, "k solves of each of 3 tasks");
+    assert_eq!(attempts.members.len(), 16, "k solves of each of 4 tasks");
     let mut numbered = Vec::new();
     for id in &attempts.members {
         let experience = store.get(id).unwrap();
@@ -164,7 +247,11 @@ fn pass_at_k_keeps_the_frontier_and_records_every_attempt() {
     numbered.sort_unstable();
     assert_eq!(numbered, [0, 1, 2, 3]);
     let frontier_attempts = store.get_set(&frontier.frontier_experience_set).unwrap();
-    assert_eq!(frontier_attempts.members.len(), 4);
+    assert_eq!(
+        frontier_attempts.members.len(),
+        9,
+        "the frontier task's attempts, the taught task's and its verified answer"
+    );
 
     // The measurement is recorded per task: attempts, passes, rate, and
     // the release measured.
@@ -198,6 +285,20 @@ fn pass_at_k_keeps_the_frontier_and_records_every_attempt() {
         (&row(&never)["rate"], &row(&never)["class"]),
         (&json!(0.0), &json!("never"))
     );
+    let taught_row = row(&taught);
+    assert_eq!(
+        (
+            &taught_row["passes"],
+            &taught_row["teacher"],
+            &taught_row["class"]
+        ),
+        (
+            &json!(0),
+            &json!({ "attempts": 1, "graded": 1, "passes": 1 }),
+            &json!("taught")
+        )
+    );
+    assert_eq!(recorded["teacher"], "scripted/teacher");
     assert_eq!(
         sometimes_row["concepts"],
         json!([{ "concept": "kind", "kind": "recall" }]),
@@ -210,6 +311,7 @@ fn pass_at_k_keeps_the_frontier_and_records_every_attempt() {
         &MeasureRequest {
             task_set: &set,
             solver: &policy,
+            teacher: None,
             pass_at_k: PassAtK::new(4, Some(1.0), None),
             deadline: None,
             cancel: CancelToken::new(),
@@ -223,6 +325,7 @@ fn pass_at_k_keeps_the_frontier_and_records_every_attempt() {
             &MeasureRequest {
                 task_set: &set,
                 solver: &policy,
+                teacher: None,
                 pass_at_k: PassAtK::new(1, None, None),
                 deadline: None,
                 cancel: CancelToken::new(),

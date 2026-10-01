@@ -236,7 +236,10 @@ pub fn eval(
     let model = probe::greedy(ctx, &subject.reference)?;
     let mut scores = Vec::with_capacity(suites.len());
     for (release, suite) in &suites {
-        let outcomes = probe::grade(ctx, &model, suite, cancel)?;
+        let outcomes: Vec<Option<bool>> = probe::grade(ctx, &model, suite, cancel)?
+            .into_iter()
+            .map(|probe| probe.verdict)
+            .collect();
         let (accuracy, graded) = accuracy(&outcomes);
         scores.push(SuiteScore {
             suite: suite.summary(),

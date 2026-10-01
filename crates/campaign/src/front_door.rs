@@ -31,7 +31,6 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::solve::SolveOptions;
-use splinter_agent::typed::with_schema;
 use sven_sdk::schemars::JsonSchema;
 use sven_sdk::{CallError, Engine, Method, Toolset};
 
@@ -279,7 +278,8 @@ pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, Campaig
     for (example, classified) in EXAMPLES {
         task.push_str(&format!("\n{example:?} is classified as {classified}"));
     }
-    let method = with_schema(Method::<Classification>::new("classify_sentence"), &task)
+    let method = Method::<Classification>::new("classify_sentence")
+        .task(task)
         .role(ROLE)
         .postcondition(|c: &Classification| {
             if c.candidates

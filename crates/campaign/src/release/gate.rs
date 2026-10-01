@@ -23,7 +23,9 @@
 //!    kind of bound, `anchor_bound` ([`DEFAULT_ANCHOR_BOUND`]).
 //! 4. **Serve**: plain `brain serve --adapter` loads the candidate, reports
 //!    its digest, and re-answers a sample of the held-out tasks with the
-//!    same verdicts as in-process.
+//!    same answers as in-process (whitespace aside), graded the same. Both
+//!    sides decode greedily, so the same weights give the same text; a
+//!    verdict alone would let two different wrong answers agree.
 //!
 //! A check that could not be measured - no task graded by both models, no
 //! anchor suite, no brain binary - fails, and says why: an unmeasured
@@ -183,10 +185,27 @@ pub struct Serve {
     /// Held-out tasks re-answered through the served endpoint; `0` when
     /// the digest did not match and nothing was asked.
     pub sampled: usize,
-    /// Of those, the ones graded the same as in-process.
+    /// Of those, the ones answered alike in-process and served: the same
+    /// answer, whitespace aside, graded the same.
     pub agreed: usize,
-    /// The tasks graded differently.
-    pub disagreed: Vec<String>,
+    /// The tasks answered differently, with both answers.
+    pub disagreed: Vec<Disagreement>,
+}
+
+/// One held-out task the served candidate answered differently from the
+/// candidate in-process.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Disagreement {
+    /// The task.
+    pub task: String,
+    /// The answer in-process; `None` when there was none.
+    pub in_process: Option<String>,
+    /// The answer through `brain serve`; `None` when there was none.
+    pub served: Option<String>,
+    /// How the answer in-process was graded.
+    pub in_process_verdict: Option<bool>,
+    /// How the served answer was graded.
+    pub served_verdict: Option<bool>,
 }
 
 /// The whole gate: every check with its numbers, and the decision.
@@ -357,7 +376,7 @@ pub fn serve(measured: Serve) -> Check<Serve> {
         return Check::unmeasured("no held-out task to re-answer through the served endpoint");
     } else if measured.agreed < measured.sampled {
         Some(format!(
-            "the served candidate was graded differently from in-process on {} of {} task(s)",
+            "the served candidate answered differently from in-process on {} of {} task(s)",
             measured.sampled - measured.agreed,
             measured.sampled
         ))

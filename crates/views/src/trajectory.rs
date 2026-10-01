@@ -8,9 +8,9 @@
 //!   shown what the strip policy allows (see [`crate::Strip`]). A second
 //!   user step is not representable: an experience records one
 //!   instruction.
-//! * System steps are left out, as sft-final leaves out the system
-//!   prompt: the student is trained under whichever system prompt it is
-//!   served with.
+//! * System steps are left out: every record starts with the one system
+//!   turn every solve runs under (`splinter_lab::SYSTEM_PROMPT`), which
+//!   the projection puts first.
 //! * An agent step is one assistant message - its text and every tool
 //!   call it made, in `generic-messages-v2`'s tool-call form with the
 //!   arguments JSON-encoded - followed by one `tool` message per

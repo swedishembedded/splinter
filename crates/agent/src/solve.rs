@@ -20,6 +20,10 @@
 //! everything that determines behaviour), and [`solve`] refuses to solve it
 //! in any other: a replay runs where the original ran, or not at all.
 //!
+//! Every request the solver's model receives runs under [`SYSTEM_PROMPT`],
+//! Splinter's own short system prompt, in place of sven's coding-agent
+//! one: what the policy answers under is what its training records show.
+//!
 //! Approval: the engine runs under sven's default automatic approval. It
 //! has no built-in tools, so the only call a solver can make is
 //! `run_code`, and what that call may do is contained by its sandbox
@@ -28,6 +32,7 @@
 //! question the agent puts with its no-user answer.
 
 pub use crate::run_code::RUN_CODE;
+pub use splinter_lab::SYSTEM_PROMPT;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,6 +45,7 @@ use sven_sdk::model::ModelProvider;
 use sven_sdk::{atif, CallError, CancelToken, Engine, RunConclusion, RunOptions, Toolset, Usage};
 
 use crate::run_code::RunCode;
+use crate::system_prompt::UnderSystemPrompt;
 
 /// The sven mode a solve runs: the conversational agent loop.
 const SOLVER_MODE: &str = "agent";
@@ -211,10 +217,35 @@ pub async fn solve(
     solve_prompted(task, &task.instruction, environment, model, options).await
 }
 
+/// Introduces the material an open-book prompt shows before the
+/// instruction.
+pub const MATERIAL_HEADING: &str = "Reference material:";
+
+/// The prompt of an open-book solve - a teacher's, shown a task's grounding
+/// material, or an `ask` shown a source: [`MATERIAL_HEADING`], each piece of
+/// `material` after a blank line, then a blank line and `instruction`, the
+/// way a student view renders the privileged items it keeps. With no
+/// material it is the instruction alone.
+#[must_use]
+pub fn open_book_prompt(instruction: &str, material: &[String]) -> String {
+    if material.is_empty() {
+        return instruction.to_string();
+    }
+    let mut prompt = String::from(MATERIAL_HEADING);
+    for piece in material {
+        prompt.push_str("\n\n");
+        prompt.push_str(piece.trim_end());
+    }
+    prompt.push_str("\n\n");
+    prompt.push_str(instruction);
+    prompt
+}
+
 /// Solves `task` as [`solve`] does, prompting the solver with `prompt`
 /// instead of the bare instruction: the instruction with teacher-only
-/// material the task carries beside it, such as a critique of an earlier
-/// attempt. The trajectory records the prompt the solver was sent; a view
+/// material beside it, such as a critique of an earlier attempt or, for a
+/// teacher's solve, the task's grounding material
+/// ([`open_book_prompt`]). The trajectory records the prompt the solver was sent; a view
 /// replaces that turn with what the student may see, so the experience's
 /// instruction stays the task's own.
 pub async fn solve_prompted(
@@ -254,7 +285,7 @@ fn engine(
 ) -> Result<Engine, CallError> {
     let builder = Engine::builder()
         .config(config)
-        .model_provider(model)
+        .model_provider(UnderSystemPrompt::wrap(model))
         .toolset(Toolset::none());
     match environment {
         ResolvedEnvironment::ClosedBook => builder.build(),

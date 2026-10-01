@@ -29,8 +29,12 @@
 //! | [`DenoiseView`] | SFT | a denoise task's corrupted passage and its original |
 //! | [`Cpt`] | continued pretraining | the raw text of source parts |
 //!
-//! What a student sees is decided by a [`Strip`] policy: by default only
-//! the instruction, never what only the teacher saw. A view drops
+//! Every conversation a view projects starts with [`SYSTEM_PROMPT`], the
+//! system turn every model run on a task is sent: the policy is trained
+//! under the prompt it answers under. What a student sees in its own turn
+//! is decided by a [`Strip`] policy: by default only the instruction, never
+//! what only the teacher saw - also when the experience is a teacher's
+//! solve, prompted with the task's grounding material. A view drops
 //! privileged context only from an instruction [`check_self_contained`]
 //! accepts; see [`strip`](Strip) for the rules.
 //!
@@ -57,7 +61,7 @@ mod views;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use splinter_lab::WireMessage;
+use splinter_lab::{WireMessage, SYSTEM_PROMPT};
 use splinter_store::annotation::{decide, Strength};
 use splinter_store::digest::Digest;
 use splinter_store::experience::{ExperienceError, ExperienceId};
@@ -321,10 +325,12 @@ impl Projection {
         *self.excluded.entry(reason).or_insert(0) += 1;
     }
 
-    /// Adds a record with this projection's view and objective.
+    /// Adds a record with this projection's view and objective, a
+    /// conversation starting with the system turn (see
+    /// [`under_system_prompt`]).
     fn push(&mut self, body: RecordBody, provenance: Provenance) {
         self.records.push(Record {
-            body,
+            body: under_system_prompt(body),
             metadata: RecordMetadata {
                 experiences: provenance.experiences,
                 task: provenance.task,
@@ -341,6 +347,41 @@ impl Projection {
             Ok((body, provenance)) => self.push(body, provenance),
             Err(reason) => self.exclude(reason),
         }
+    }
+}
+
+/// `body` with [`SYSTEM_PROMPT`] as the first turn of its conversation -
+/// a chat record's messages, a rewarded trajectory's, a preference pair's
+/// prompt - the system turn every model run on a task is sent, so a record
+/// shows the policy what it sees when it answers. Other shapes are not
+/// conversations and are returned as they are.
+fn under_system_prompt(body: RecordBody) -> RecordBody {
+    let system = || render::message("system", SYSTEM_PROMPT, false);
+    match body {
+        RecordBody::Chat { mut messages } => {
+            messages.insert(0, system());
+            RecordBody::Chat { messages }
+        }
+        RecordBody::Rewarded {
+            mut messages,
+            reward,
+        } => {
+            messages.insert(0, system());
+            RecordBody::Rewarded { messages, reward }
+        }
+        RecordBody::Preference {
+            mut prompt,
+            chosen,
+            rejected,
+        } => {
+            prompt.insert(0, system());
+            RecordBody::Preference {
+                prompt,
+                chosen,
+                rejected,
+            }
+        }
+        other @ (RecordBody::Contrastive { .. } | RecordBody::Text { .. }) => other,
     }
 }
 

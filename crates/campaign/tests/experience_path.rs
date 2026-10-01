@@ -23,6 +23,7 @@ use std::sync::Arc;
 use splinter_knowledge::denoise::{Denoise, GENERATOR};
 use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::annotation;
+use splinter_lab::SYSTEM_PROMPT;
 use splinter_store::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_store::clock::FixedClock;
 use splinter_store::experience::{
@@ -187,12 +188,15 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
     let text = std::fs::read_to_string(&dataset.path).unwrap();
     assert_eq!(dataset.digest, Digest::of(text.as_bytes()));
     let line: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
-    assert_eq!(line["messages"][0]["role"], "user");
-    assert_eq!(line["messages"][0]["content"], task.instruction.as_str());
+    assert_eq!(line["messages"][0]["role"], "system");
+    assert_eq!(line["messages"][0]["content"], SYSTEM_PROMPT);
     assert_eq!(line["messages"][0]["train"], false);
-    assert_eq!(line["messages"][1]["role"], "assistant");
-    assert_eq!(line["messages"][1]["content"], answer.as_str());
-    assert_eq!(line["messages"][1]["train"], true);
+    assert_eq!(line["messages"][1]["role"], "user");
+    assert_eq!(line["messages"][1]["content"], task.instruction.as_str());
+    assert_eq!(line["messages"][1]["train"], false);
+    assert_eq!(line["messages"][2]["role"], "assistant");
+    assert_eq!(line["messages"][2]["content"], answer.as_str());
+    assert_eq!(line["messages"][2]["train"], true);
     assert!(
         !text.contains("TEACHER-ONLY"),
         "privileged content leaked: {text}"

@@ -55,7 +55,7 @@ use crate::error::{io, CampaignError};
 use crate::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use crate::train::{load_candidate, Candidate, TrainingSummary};
 use gate::{Check, GateConfig, GateReport};
-use probe::{pair, Suite};
+use probe::{pair, Probe, Suite};
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]
@@ -230,8 +230,8 @@ fn manifest(
     })
 }
 
-/// One model's outcome on each task of a suite.
-type Outcomes = Vec<Option<bool>>;
+/// One model's answer and outcome on each task of a suite.
+type Outcomes = Vec<Probe>;
 
 /// A suite's outcomes for one model, or why there are none.
 type Graded = Result<Outcomes, String>;
@@ -408,7 +408,7 @@ fn run_gate(
         },
     };
     let serve = match (&suites.held_out, &in_process) {
-        (Ok(held_out), Some(verdicts)) => {
+        (Ok(held_out), Some(probes)) => {
             let take = config.serve_sample.min(held_out.tasks.len());
             let sample = Suite::of_tasks(
                 format!("{} (served sample)", held_out.name),
@@ -421,7 +421,7 @@ fn run_gate(
                 &candidate.adapter,
                 &candidate.adapter_digest,
                 &sample,
-                &verdicts[..take],
+                &probes[..take],
                 Duration::from_secs(config.serve_startup_secs),
                 cancel,
             )?

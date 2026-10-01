@@ -20,7 +20,6 @@
 
 use serde::Serialize;
 use splinter_agent::solve::{Model, SolveOptions};
-use splinter_agent::typed::with_schema;
 use splinter_lab::verifiers::mutation::MutationPolicy;
 use splinter_sandbox::RuntimeEnvironment;
 use splinter_store::digest::Digest;
@@ -332,7 +331,8 @@ impl ModelTaskGenerator {
         options.max_output_tokens = self.policy.max_output_tokens;
         options.cancel = self.cancel.clone();
         options.stream_idle = self.model.stream_idle;
-        let method = with_schema(Method::<Reply>::new(GENERATION_METHOD), brief)
+        let method = Method::<Reply>::new(GENERATION_METHOD)
+            .task(brief)
             .role(ROLE)
             .max_repairs(self.policy.repairs);
         let engine = Engine::builder()

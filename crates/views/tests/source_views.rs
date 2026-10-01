@@ -158,7 +158,7 @@ fn denoise_restores_the_passage_of_each_task_once_without_a_solve() {
         .map(|r| match &r.body {
             RecordBody::Chat { messages } => (
                 r.metadata.task.clone(),
-                messages
+                after_system(messages)
                     .iter()
                     .map(|m| (m.role.clone(), m.content.clone(), m.train))
                     .collect(),
