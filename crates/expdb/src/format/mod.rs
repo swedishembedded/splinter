@@ -16,7 +16,7 @@
 //! ```
 
 mod columns;
-mod frame;
+pub(crate) mod frame;
 mod segment;
 mod zone;
 

@@ -137,3 +137,37 @@ pub fn coding_task(n: u64) -> (TaskDefinition, splinter_expdb::model::TaskInstan
     };
     (definition, instance, state("repo@abc123"))
 }
+
+/// Records one attempt of `chain` decisions, each followed by a transition,
+/// ending as `outcome`. Returns the decisions made and the attempt id.
+pub fn attempt(
+    collector: &mut splinter_expdb::ingest::Collector,
+    task: u64,
+    policy: &str,
+    chain: usize,
+    outcome: Outcome,
+) -> (Vec<splinter_expdb::ingest::DecisionRef>, RecordId) {
+    let (definition, instance, initial) = coding_task(task);
+    let mut run = collector
+        .start_attempt(
+            &definition,
+            &instance,
+            &initial,
+            &PolicyRef::new(policy, "1"),
+            None,
+        )
+        .unwrap();
+    let attempt = run.attempt();
+    let mut decisions = Vec::new();
+    for step in 0..chain {
+        let d = run
+            .decision()
+            .commit(Action::new("act", serde_json::json!({ "step": step })))
+            .unwrap();
+        run.transition(&d, &state(&format!("{policy}-{task}-{step}")), None, None)
+            .unwrap();
+        decisions.push(d);
+    }
+    run.finish(outcome).unwrap();
+    (decisions, attempt)
+}

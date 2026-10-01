@@ -152,6 +152,7 @@ pub struct Segment {
     kind: Kind,
     id: ContentId,
     info: SegmentInfo,
+    blocks_read: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
 
 impl Segment {
@@ -199,7 +200,13 @@ impl Segment {
             kind,
             id,
             info,
+            blocks_read: None,
         })
+    }
+
+    /// Counts every block this segment reads into `counter`.
+    pub fn count_blocks_in(&mut self, counter: Arc<std::sync::atomic::AtomicU64>) {
+        self.blocks_read = Some(counter);
     }
 
     /// The segment's content id.
@@ -235,6 +242,9 @@ impl Segment {
         let info = self.info.blocks.get(index).ok_or_else(|| Error::NotFound {
             what: format!("block {index} of segment {}", self.id),
         })?;
+        if let Some(counter) = &self.blocks_read {
+            counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         Block::decode(&self.raw(&format!("block {index}"), info)?)
     }
 

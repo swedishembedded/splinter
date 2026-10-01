@@ -26,6 +26,7 @@ pub struct Snapshot {
     id: ContentId,
     heads: Vec<ContentId>,
     live: Vec<ObjectRef>,
+    cache: std::sync::Arc<crate::index::SnapshotCache>,
 }
 
 impl Database {
@@ -75,6 +76,7 @@ impl Snapshot {
             id,
             heads,
             live: resolved.live.into_iter().collect(),
+            cache: Default::default(),
         })
     }
 
@@ -98,6 +100,14 @@ impl Snapshot {
         self.of_kind(ObjectKind::BlobPack)
     }
 
+    pub(crate) fn cache(&self) -> &crate::index::SnapshotCache {
+        &self.cache
+    }
+
+    pub(crate) fn objects(&self, kind: ObjectKind) -> Vec<ObjectRef> {
+        self.of_kind(kind)
+    }
+
     fn of_kind(&self, kind: ObjectKind) -> Vec<ObjectRef> {
         self.live
             .iter()
@@ -108,7 +118,9 @@ impl Snapshot {
 
     /// Opens one of the snapshot's segments.
     pub fn open_segment(&self, object: &ObjectRef) -> Result<Segment> {
-        Segment::open(self.db.backend_arc(), object.id)
+        let mut segment = Segment::open(self.db.backend_arc(), object.id)?;
+        segment.count_blocks_in(std::sync::Arc::clone(&self.cache.blocks_read));
+        Ok(segment)
     }
 
     /// Keeps the snapshot's files alive under `holder`'s name until

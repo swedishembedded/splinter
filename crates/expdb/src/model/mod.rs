@@ -15,12 +15,14 @@
 //! can be replaced without touching what actually happened.
 
 mod body;
+mod context;
 mod edge;
 mod entities;
 mod interpret;
 mod record;
 
 pub use body::{Body, RecordKind};
+pub use context::ContextLog;
 pub use edge::{Edge, Rel};
 pub use entities::{
     family_key, Action, Attempt, Content, Decision, EpisodeFamily, Observation, Outcome, PolicyRef,

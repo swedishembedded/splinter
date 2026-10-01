@@ -28,9 +28,11 @@ mod database;
 mod error;
 pub mod format;
 mod id;
+pub mod index;
 pub mod ingest;
 pub mod manifest;
 pub mod model;
+pub mod view;
 
 pub use clock::{Clock, StepClock, SystemClock};
 pub use config::{Compression, Config};

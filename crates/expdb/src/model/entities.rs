@@ -99,6 +99,14 @@ pub enum ReproLevel {
     Live,
 }
 
+impl ReproLevel {
+    /// The weakest of several levels, which bounds how far anything built on
+    /// all of them can be trusted. `None` if there are none.
+    pub fn weakest(levels: impl IntoIterator<Item = ReproLevel>) -> Option<ReproLevel> {
+        levels.into_iter().max()
+    }
+}
+
 /// A point in the world: everything needed to restore it, as content ids of
 /// its parts (file tree, container, conversation, tool state, memory).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
