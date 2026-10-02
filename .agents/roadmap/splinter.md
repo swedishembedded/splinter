@@ -116,7 +116,15 @@ the released adapter answers the same questions from plain `brain serve`.
    learning design notes that lived in sven and brain are already in
    `.agents/research/`.)
 7. **Experience graph database.** In progress: `crates/expdb` is built
-   standalone (blob packs, segments, manifests, ingest, indexes, queries,
-   training views, compaction). Open: replace `splinter-store` with it,
-   wire it into the campaign, decide where sources, tasks and run records
-   live, and remove the store.
+   (blob packs, segments, manifests, ingest, indexes, queries, training
+   views, compaction, application entities, sessions, signals) and
+   `splinter-store` has become `splinter-record`, which keeps sources, tasks,
+   experiences, annotations and sets in it. Open: record runs as events with
+   the cancel request as a signal; project each experience into the graph
+   (attempt, one decision per trajectory step) so recipes, credit and
+   counterfactuals apply to Splinter's own experience, and move the training
+   views onto them; record datasets, training runs and models as lineage
+   nodes with the snapshot each run read pinned; decide whether releases,
+   datasets and suites stay files (adapters need a path); a `splinter state`
+   command for compaction, collection and absorption; measure the cost of
+   opening a large database per command.
