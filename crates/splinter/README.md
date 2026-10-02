@@ -318,13 +318,33 @@ release.
 
 ## Runs
 
-Every command that writes pipeline state records a run under
-`<state>/runs/<run-id>/run.json`: the command and its arguments, each
-stage as it finishes, its status (`running`, `completed`, `failed`,
-`cancelled`) and what it produced. `runs cancel <ID>` asks a run in
-progress to stop: it stops the model run in progress and the stage at its
-next check, and training at its next optimizer step. A run whose process
-died stays `running`.
+Every command that writes pipeline state records a run in the experience
+database: the command and its arguments, each stage as it finishes, its
+status (`running`, `completed`, `failed`, `cancelled`) and what it
+produced. `runs cancel <ID>` asks a run in progress to stop, by raising a
+signal any process can see: it stops the model run in progress and the stage
+at its next check, and training at its next optimizer step. A run whose
+process died stays `running`.
+
+## State
+
+Sources, tasks, experiences, annotations, experience sets and runs are kept in
+one experience database under `<state>/expdb`; datasets, candidates, releases,
+answers and suites are files beside it. Every experience is also an attempt in
+the database's graph, a verdict is evidence about that attempt, and a dataset
+records the experience it came from and pins the database as it was, so
+`lineage` and the database can trace a release back to what it learned from.
+
+`state status` reports what the database holds as files: `{"state",
+"storage": {"segments", "blob_packs", "index_runs", "pins"}}`. Every commit
+leaves small files behind, and a command that opens the database reads them
+all, so `state maintain` merges them, indexes what is not indexed and retires
+finished writers; nothing stored changes, and it is safe beside a running
+command. `state maintain --collect` also deletes files nothing reaches that are
+past their grace period (a snapshot a dataset pinned is never touched). Its
+report is `{"run", "before", "after", "segment_groups", "blob_groups",
+"writers_retired", "removed"}` with `removed` `null` unless `--collect` was
+given. State written before the experience database is not read: regenerate it.
 
 `release list`: `{"releases": [{"id", "created_at", "candidate",
 "parent", "adapter_digest", "aliases"}]}`. `release`: `{"run",

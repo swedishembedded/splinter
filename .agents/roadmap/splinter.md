@@ -115,16 +115,14 @@ the released adapter answers the same questions from plain `brain serve`.
    learning configuration and its wiring in the runtime builder. (The
    learning design notes that lived in sven and brain are already in
    `.agents/research/`.)
-7. **Experience graph database.** In progress: `crates/expdb` is built
-   (blob packs, segments, manifests, ingest, indexes, queries, training
-   views, compaction, application entities, sessions, signals) and
-   `splinter-store` has become `splinter-record`, which keeps sources, tasks,
-   experiences, annotations and sets in it. Open: record runs as events with
-   the cancel request as a signal; project each experience into the graph
-   (attempt, one decision per trajectory step) so recipes, credit and
-   counterfactuals apply to Splinter's own experience, and move the training
-   views onto them; record datasets, training runs and models as lineage
-   nodes with the snapshot each run read pinned; decide whether releases,
-   datasets and suites stay files (adapters need a path); a `splinter state`
-   command for compaction, collection and absorption; measure the cost of
-   opening a large database per command.
+7. **Experience graph database.** Done for the store: `splinter-store` is now
+   `splinter-record` and keeps sources, tasks, experiences, annotations, sets
+   and runs in `crates/expdb`; each experience is also an attempt in its graph,
+   verdicts are ranked evidence about it, and datasets, training runs and
+   releases record where they came from. Open: the training views still decide
+   and render from whole experience values (a view reports why it left each
+   candidate out, which a recipe does not); moving objectives onto recipes
+   needs a mode that carries exclusion reasons. Releases, datasets, suites and
+   answers are still files because brain needs a path to an adapter. The
+   read model is in memory, so opening a very large database costs time
+   proportional to its size; `splinter state maintain` keeps it down.

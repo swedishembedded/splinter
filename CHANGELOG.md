@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   database: immutable files, manifests as the transaction layer, snapshots,
   modality-neutral episodes of streams, queries and training views, with its
   storage protocol model-checked in TLA+.
+- `splinter state status` and `splinter state maintain [--collect]`: what the
+  experience database holds as files, and the merging, indexing and collection
+  that keep it small and quick to open.
+- Every experience is also an attempt in the database's graph, a verdict is
+  ranked evidence about that attempt, and a dataset, training run and release
+  record where they came from, so a release traces back to the experience it
+  learned from.
 
 ### Changed
 - **`splinter-store` is now `splinter-record`**, and keeps sources, tasks,
@@ -23,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edge. Splinter's own content addresses are blake3 (`blake3:<hex>`); digests a
   tool reports, such as an adapter's, stay `sha256:`. State written by earlier
   builds is not read: regenerate it.
+- Run records are events in the experience database and a cancel request is a
+  signal, instead of files in a run directory.
+- A bulk stage (solve, verify, critique) commits its writes in groups instead of
+  once per record.
 
 ## [0.1.0] - 2026-10-01
 
