@@ -1,0 +1,182 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements storage engines for machine-learning
+// experience data for its clients. If your team needs expertise in
+// versioned, content-addressed databases or parallel-filesystem I/O, you can
+// procure our services by sending an email to info@swedishembedded.com.
+
+//! The workspace: the one open experience database of a process, shared by
+//! every store that reads and writes it.
+//!
+//! Each store used to own its directory. They now share a [`Workspace`], so
+//! one process is one writer however many stores it opens, and what one
+//! store wrote another reads at once.
+//!
+//! # Durability
+//!
+//! A write is made durable and visible to other processes before the call
+//! returns, unless the workspace is in a [`Batch`]: bulk ingest groups its
+//! writes and commits them once, at the end or on [`Batch::commit`]. A crash
+//! inside a batch loses the uncommitted part and nothing else; a record is
+//! never half written.
+
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use splinter_expdb::{Config, Database, Session, WriterIdentity};
+
+use crate::error::StoreError;
+use crate::StateRoot;
+
+struct Shared {
+    root: StateRoot,
+    session: Mutex<Option<Session>>,
+    batches: Mutex<usize>,
+}
+
+impl Drop for Shared {
+    fn drop(&mut self) {
+        // Best effort: a writer that is going away must not lose what it
+        // was asked to keep, and a destructor has nowhere to report a failure.
+        if let Some(session) = self
+            .session
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_mut()
+        {
+            let _ = session.flush();
+        }
+    }
+}
+
+/// An open experience database. Cheap to clone; clones are the same writer.
+#[derive(Clone)]
+pub struct Workspace {
+    shared: Arc<Shared>,
+}
+
+impl std::fmt::Debug for Workspace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Workspace")
+    }
+}
+
+/// Writes made while it lives are committed together when it ends.
+#[must_use = "a batch commits when it is dropped; hold it for the writes it should group"]
+pub struct Batch {
+    workspace: Workspace,
+    done: bool,
+}
+
+impl Batch {
+    /// Commits the batch now and reports a failure, which dropping cannot.
+    pub fn commit(mut self) -> Result<(), StoreError> {
+        self.done = true;
+        self.workspace.leave_batch()
+    }
+}
+
+impl Drop for Batch {
+    fn drop(&mut self) {
+        if !self.done {
+            let _ = self.workspace.leave_batch();
+        }
+    }
+}
+
+fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+impl Workspace {
+    /// The database under `root`. Nothing is opened or created until the
+    /// first read or write, so a command that only plans leaves the root
+    /// untouched.
+    #[must_use]
+    pub fn at(root: &StateRoot) -> Self {
+        Self {
+            shared: Arc::new(Shared {
+                root: root.clone(),
+                session: Mutex::new(None),
+                batches: Mutex::new(0),
+            }),
+        }
+    }
+
+    /// Runs `f` against the session, opening the database first if this is
+    /// the first use.
+    fn with_session<R>(
+        &self,
+        f: impl FnOnce(&mut Session) -> splinter_expdb::Result<R>,
+    ) -> Result<R, StoreError> {
+        let mut slot = locked(&self.shared.session);
+        if slot.is_none() {
+            let db = Database::open(self.shared.root.expdb(), Config::default())?;
+            let identity = WriterIdentity::new("splinter", "state", "local", 0);
+            *slot = Some(Session::open(&db, &identity)?);
+        }
+        match slot.as_mut() {
+            Some(session) => Ok(f(session)?),
+            None => unreachable!("the session was opened above"),
+        }
+    }
+
+    /// Groups the writes made until the returned guard is dropped (or
+    /// committed) into one commit.
+    pub fn batch(&self) -> Batch {
+        *locked(&self.shared.batches) += 1;
+        Batch {
+            workspace: self.clone(),
+            done: false,
+        }
+    }
+
+    fn leave_batch(&self) -> Result<(), StoreError> {
+        let mut batches = locked(&self.shared.batches);
+        *batches = batches.saturating_sub(1);
+        if *batches == 0 {
+            if let Some(session) = locked(&self.shared.session).as_mut() {
+                session.flush()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Makes everything written so far durable and visible to other
+    /// processes.
+    pub fn commit(&self) -> Result<(), StoreError> {
+        if let Some(session) = locked(&self.shared.session).as_mut() {
+            session.flush()?;
+        }
+        Ok(())
+    }
+
+    /// Reads other processes' commits from now on.
+    pub fn refresh(&self) -> Result<(), StoreError> {
+        self.with_session(Session::refresh)
+    }
+
+    /// Runs `f` against the session, for a read.
+    pub(crate) fn read<R>(
+        &self,
+        f: impl FnOnce(&mut Session) -> splinter_expdb::Result<R>,
+    ) -> Result<R, StoreError> {
+        self.with_session(f)
+    }
+
+    /// Runs `f` against the session, for a write, committing it unless a
+    /// batch is open.
+    pub(crate) fn write<R>(
+        &self,
+        f: impl FnOnce(&mut Session) -> splinter_expdb::Result<R>,
+    ) -> Result<R, StoreError> {
+        let batching = *locked(&self.shared.batches) > 0;
+        self.with_session(|session| {
+            let out = f(session)?;
+            if !batching {
+                session.flush()?;
+            }
+            Ok(out)
+        })
+    }
+}

@@ -140,7 +140,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         std::env::temp_dir().join(format!("splinter-experience-path-{}", std::process::id())),
     );
     let root = StateRoot::new(&scratch.0);
-    let store = ExperienceStore::open(&root);
+    let store = ExperienceStore::new(&splinter_record::workspace::Workspace::at(&root));
     let sources = SourceStore::open(&root);
     let task = task(&sources);
     let answer = reference(&task);
@@ -167,8 +167,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         passed,
         "the trajectory round-trips"
     );
-    let objects = scratch.0.join("experiences/objects");
-    assert_eq!(std::fs::read_dir(&objects).unwrap().count(), 1);
+    assert_eq!(store.list().unwrap().len(), 1);
 
     store
         .annotate(&annotation(&FormalVerifier::new(), &task, &passed).unwrap())
@@ -230,8 +229,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
     assert!(projection.records.is_empty());
 
     // Re-grading appends; the view changes, the experience does not.
-    let object = objects.join(format!("{}.json", id.hex()));
-    let before = std::fs::read(&object).unwrap();
+    let before = store.get(&id).unwrap();
     store
         .annotate(&Annotation {
             experience: id.clone(),
@@ -252,5 +250,5 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         .project(&Corpus::load(&store, std::slice::from_ref(&id)).unwrap())
         .unwrap();
     assert!(projection.records.is_empty());
-    assert_eq!(std::fs::read(&object).unwrap(), before, "never rewritten");
+    assert_eq!(store.get(&id).unwrap(), before, "never rewritten");
 }

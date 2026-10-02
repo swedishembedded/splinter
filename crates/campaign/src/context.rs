@@ -37,6 +37,7 @@ use splinter_record::experience::Environment;
 use splinter_record::experiences::ExperienceStore;
 use splinter_record::sources::SourceStore;
 use splinter_record::tasks::TaskStore;
+use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
@@ -81,6 +82,7 @@ pub struct PolicyPin {
 /// See the module documentation.
 pub struct Context {
     config: Config,
+    workspace: Workspace,
     allow_remote: bool,
     clock: Box<dyn Clock + Send + Sync>,
     runtime: tokio::runtime::Runtime,
@@ -97,8 +99,10 @@ impl Context {
     pub fn new(config: Config, allow_remote: bool) -> Result<Self, CampaignError> {
         let runtime = tokio::runtime::Runtime::new().map_err(CampaignError::Runtime)?;
         let environments = Environments::process(&config.state_root);
+        let workspace = Workspace::at(&config.state_root);
         Ok(Self {
             config,
+            workspace,
             allow_remote,
             clock: Box::new(SystemClock),
             runtime,
@@ -179,6 +183,12 @@ impl Context {
         &self.config
     }
 
+    /// The experience database every store reads and writes.
+    #[must_use]
+    pub fn workspace(&self) -> &Workspace {
+        &self.workspace
+    }
+
     /// The state root.
     #[must_use]
     pub fn root(&self) -> &StateRoot {
@@ -212,7 +222,7 @@ impl Context {
     /// The experience store.
     #[must_use]
     pub fn experiences(&self) -> ExperienceStore {
-        ExperienceStore::open(self.root())
+        ExperienceStore::new(&self.workspace)
     }
 
     /// The dataset store.

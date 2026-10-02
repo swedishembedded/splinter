@@ -232,7 +232,7 @@ fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, CampaignError>
     }
     let experiences = ctx.experiences();
     for id in &record.metadata.experiences {
-        if experiences.contains(id) {
+        if experiences.contains(id)? {
             return Ok(Some(experiences.get(id)?.to_task()));
         }
     }

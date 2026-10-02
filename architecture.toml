@@ -13,7 +13,8 @@
 # `brain-*` crate.
 
 [crates.splinter-record]
-internal = []
+# The vocabulary and the typed stores over the experience database.
+internal = ["splinter-expdb"]
 
 [crates.splinter-expdb]
 # The experience graph database. Standalone: it owns its digest, atomic-write

@@ -18,6 +18,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::json;
+use splinter_expdb::model::{Entity, RecordKind};
+use splinter_expdb::query::Query;
+use splinter_expdb::{Config, Database, Session, WriterIdentity};
 use splinter_record::annotation::{
     reward, Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
 };
@@ -26,6 +29,7 @@ use splinter_record::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_record::experiences::{ExperienceSet, ExperienceStore, StoreError};
+use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
@@ -43,8 +47,14 @@ impl Scratch {
         let _ = fs::remove_dir_all(&path);
         Self(path)
     }
+    /// A store over a newly opened workspace: a separate writer on the same
+    /// database, as another process would be.
     fn store(&self) -> ExperienceStore {
-        ExperienceStore::open(&StateRoot::new(&self.0))
+        ExperienceStore::new(&self.workspace())
+    }
+
+    fn workspace(&self) -> Workspace {
+        Workspace::at(&StateRoot::new(&self.0))
     }
 }
 
@@ -211,38 +221,82 @@ fn put_is_write_once_and_get_round_trips() {
     let store = scratch.store();
     let exp = experience("quick brown fox");
     let first = store.put(&exp).unwrap();
-    let object = scratch
-        .0
-        .join("experiences/objects")
-        .join(format!("{}.json", first.hex()));
-    let written = fs::read(&object).unwrap();
-    let second = store.put(&exp).unwrap();
-    assert_eq!(first, second);
-    assert_eq!(fs::read(&object).unwrap(), written, "never rewritten");
-    assert_eq!(fs::read_dir(object.parent().unwrap()).unwrap().count(), 1);
+    assert_eq!(store.put(&exp).unwrap(), first);
+    assert_eq!(
+        scratch.store().put(&exp).unwrap(),
+        first,
+        "another writer storing the same content agrees on the id"
+    );
+    let db = Database::open(StateRoot::new(&scratch.0).expdb(), Config::default()).unwrap();
+    let stored = db
+        .snapshot()
+        .unwrap()
+        .query(&Query::all().kind(RecordKind::Entity))
+        .unwrap();
+    assert_eq!(
+        stored.records.len(),
+        1,
+        "one record however often it is put"
+    );
     assert_eq!(store.get(&first).unwrap(), exp);
 }
 
-/// A stored object whose bytes no longer hash to its address is an error on
-/// read, and a later put of the true content does not paper over it.
+/// A stored object that no longer matches its address is an error on read,
+/// and a later put of the true content does not paper over it.
 #[test]
-fn corruption_is_an_error_not_silently_accepted() {
+fn an_object_that_no_longer_matches_its_address_is_an_error_not_silently_accepted() {
     let scratch = Scratch::new("corrupt");
+    let id = experience("quick brown fox").id().unwrap();
+    // Something else stored under the true content's address.
+    let db = Database::open(StateRoot::new(&scratch.0).expdb(), Config::default()).unwrap();
+    let mut session = Session::open(&db, &WriterIdentity::new("test", "forge", "node", 0)).unwrap();
+    let forged = serde_json::to_value(experience("quick brown cat")).unwrap();
+    session
+        .put_entity(&Entity::keyed(
+            "experience",
+            id.0.content_id().unwrap(),
+            forged,
+        ))
+        .unwrap();
+    session.flush().unwrap();
+
     let store = scratch.store();
-    let id = store.put(&experience("quick brown fox")).unwrap();
-    let object = scratch
-        .0
-        .join("experiences/objects")
-        .join(format!("{}.json", id.hex()));
-    let text = fs::read_to_string(&object)
-        .unwrap()
-        .replace("quick brown fox", "quick brown cat");
-    fs::write(&object, text).unwrap();
-    assert!(matches!(store.get(&id), Err(StoreError::Corrupt { .. })));
+    assert!(matches!(store.get(&id), Err(StoreError::Altered { .. })));
     assert!(matches!(
         store.put(&experience("quick brown fox")),
-        Err(StoreError::Corrupt { .. })
+        Err(StoreError::Altered { .. })
     ));
+}
+
+/// Damage to the files under the database is an error, never a quietly wrong
+/// read.
+#[test]
+fn damaged_storage_is_an_error_not_a_wrong_answer() {
+    let scratch = Scratch::new("damaged");
+    let id = scratch.store().put(&experience("quick brown fox")).unwrap();
+    let segments: Vec<_> = walk(&scratch.0.join("expdb/segments"));
+    assert!(!segments.is_empty());
+    for path in segments {
+        let mut bytes = fs::read(&path).unwrap();
+        let middle = bytes.len() / 2;
+        bytes[middle] ^= 0xff;
+        fs::write(&path, bytes).unwrap();
+    }
+    let outcome = ExperienceStore::new(&Workspace::at(&StateRoot::new(&scratch.0))).get(&id);
+    assert!(outcome.is_err());
+}
+
+fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(walk(&path));
+        } else {
+            found.push(path);
+        }
+    }
+    found
 }
 
 /// Input is validated at the boundary: a span that ends before it starts
@@ -304,7 +358,6 @@ fn annotations_append_in_order_and_are_refused_for_unknown_experiences() {
     }
     let log = scratch.store().annotations(&id).unwrap();
     assert_eq!(log.annotations, notes);
-    assert_eq!(log.unreadable, 0);
     assert!(scratch
         .store()
         .annotations(&other)
@@ -318,38 +371,39 @@ fn annotations_append_in_order_and_are_refused_for_unknown_experiences() {
     );
 }
 
-/// A crash mid-append leaves a torn final line: it is skipped and counted,
-/// never a panic, and a later append is not glued onto it.
+/// Writes made in a batch are committed together: another writer sees none
+/// of them until the batch ends, and all of them after.
 #[test]
-fn a_torn_final_line_is_counted_not_fatal() {
-    let scratch = Scratch::new("torn");
-    let store = scratch.store();
-    let id = store.put(&experience("quick brown fox")).unwrap();
-    store
-        .annotate(&verdict(&id, Outcome::Pass, Strength::Formal))
-        .unwrap();
-    let log_path = scratch
-        .0
-        .join("experiences/annotations")
-        .join(format!("{}.jsonl", id.hex()));
-    let mut text = fs::read_to_string(&log_path).unwrap();
-    text.push_str("{\"experience\":\"sha256:");
-    fs::write(&log_path, text).unwrap();
+fn a_batch_commits_its_writes_together() {
+    let scratch = Scratch::new("batch");
+    let workspace = scratch.workspace();
+    let store = ExperienceStore::new(&workspace);
+    let reader = scratch.store();
 
-    let log = store.annotations(&id).unwrap();
-    assert_eq!(log.annotations.len(), 1);
-    assert_eq!(log.unreadable, 1);
-
+    let batch = workspace.batch();
+    let first = store.put(&experience("quick brown fox")).unwrap();
+    let second = store.put(&experience("quick fox")).unwrap();
     store
-        .annotate(&verdict(&id, Outcome::Fail, Strength::Executable))
+        .annotate(&verdict(&first, Outcome::Pass, Strength::Formal))
         .unwrap();
-    let log = store.annotations(&id).unwrap();
     assert_eq!(
-        log.annotations.len(),
-        2,
-        "the next append stands on its own line"
+        store.annotations(&first).unwrap().annotations.len(),
+        1,
+        "the writer reads its own"
     );
-    assert_eq!(log.unreadable, 1);
+    assert!(
+        reader.list().unwrap().is_empty(),
+        "no one else sees a thing"
+    );
+    batch.commit().unwrap();
+
+    let reader_workspace = scratch.workspace();
+    reader_workspace.refresh().unwrap();
+    let after = ExperienceStore::new(&reader_workspace);
+    let mut both = vec![first.clone(), second];
+    both.sort();
+    assert_eq!(after.list().unwrap(), both);
+    assert_eq!(after.annotations(&first).unwrap().annotations.len(), 1);
 }
 
 /// Reward is derived: the strongest non-abstaining verdicts decide, a

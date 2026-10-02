@@ -7,37 +7,30 @@
 // services by sending an email to info@swedishembedded.com.
 
 //! The experience store: immutable experiences under their content
-//! address, append-only annotations beside them, and named sets of ids.
+//! address, the annotations written about them, and named sets of ids, all
+//! kept in the experience database.
 //!
-//! ```text
-//! <root>/experiences/
-//!   objects/<hex>.json         one experience, its canonical form; written once
-//!   annotations/<hex>.jsonl    its annotations, one JSON object per line, appended
-//!   sets/<hex>.json            one experience set, its canonical form; written once
-//! ```
-//!
-//! `<hex>` is the hex part of the content address, so a file's name is
-//! also the digest its bytes must hash to; [`ExperienceStore::get`] checks
-//! that on every read. An object is created with [`write_once`] and never
-//! replaced. An annotation is appended with a single write and fsynced
-//! before [`ExperienceStore::annotate`] returns. Appends are serialized
-//! within one store handle; separate processes appending to one log rely on
-//! the file being opened in append mode, and nothing coordinates them
-//! beyond that.
-
-use std::fs::{self, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
-use std::sync::Mutex;
+//! An experience is an entity keyed by its content address, so the id a
+//! caller holds is the id the database finds it by, and [`ExperienceStore::get`]
+//! checks on every read that what comes back still hashes to it. An
+//! annotation is an evaluation of that entity (a verdict also carries its
+//! ranked ruling, a relation also an edge to the other experience), with the
+//! whole annotation kept as its evidence so it reads back exactly as written.
+//! Nothing is ever rewritten: re-grading is a new evaluation.
 
 use serde::{Deserialize, Serialize};
+use splinter_expdb::analyze::EvalFilter;
+use splinter_expdb::model::{Entity, Evaluation, EvaluatorRef, Target};
+use splinter_expdb::ContentId;
 
-use crate::annotation::{Annotation, AnnotationBody};
+use crate::annotation::{Annotation, AnnotationBody, Label, Outcome};
 use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
-use crate::error::{decode, io, object_digests, read_verified};
 use crate::experience::{Experience, ExperienceId};
-use crate::{sync_dir, write_once, StateRoot};
+use crate::workspace::Workspace;
+
+const EXPERIENCE: &str = "experience";
+const EXPERIENCE_SET: &str = "experience_set";
 
 /// The content address of an [`ExperienceSet`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -60,92 +53,98 @@ pub struct ExperienceSet {
     pub members: Vec<ExperienceId>,
 }
 
-/// An experience's annotations, as far as they could be read.
+/// An experience's annotations.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AnnotationLog {
-    /// The readable annotations, in append order.
+    /// The annotations, in the order they were written.
     pub annotations: Vec<Annotation>,
-    /// Lines that could not be read - a line torn by a crash mid-append -
-    /// and were skipped.
-    pub unreadable: usize,
 }
 
-/// The experience store under one state root.
-#[derive(Debug)]
+/// The experience store: immutable experiences under their content address,
+/// the annotations written about them, and named sets of experience ids.
+#[derive(Clone, Debug)]
 pub struct ExperienceStore {
-    dir: PathBuf,
-    append: Mutex<()>,
+    workspace: Workspace,
+}
+
+fn content_id(address: &Digest) -> Result<ContentId, StoreError> {
+    address.content_id().ok_or_else(|| StoreError::Rejected {
+        what: "address",
+        reason: format!("{address} is not a content address"),
+    })
+}
+
+fn undecodable(what: String, reason: impl ToString) -> StoreError {
+    StoreError::UndecodableObject {
+        what,
+        reason: reason.to_string(),
+    }
 }
 
 impl ExperienceStore {
-    /// The store under `root`. Nothing is created until something is
-    /// written.
+    /// The store over `workspace`.
     #[must_use]
-    pub fn open(root: &StateRoot) -> Self {
+    pub fn new(workspace: &Workspace) -> Self {
         Self {
-            dir: root.experiences(),
-            append: Mutex::new(()),
+            workspace: workspace.clone(),
         }
     }
 
-    fn object(&self, id: &ExperienceId) -> PathBuf {
-        self.dir.join("objects").join(format!("{}.json", id.hex()))
+    fn entity(&self, class: &str, id: &Digest) -> Result<Option<Entity>, StoreError> {
+        let cid = content_id(id)?;
+        let found = self.workspace.read(|s| s.entity(&cid))?;
+        Ok(found.filter(|e| e.class == class))
     }
 
-    fn log(&self, id: &ExperienceId) -> PathBuf {
-        self.dir
-            .join("annotations")
-            .join(format!("{}.jsonl", id.hex()))
-    }
-
-    fn set(&self, id: &SetId) -> PathBuf {
-        self.dir.join("sets").join(format!("{}.json", id.0.hex()))
-    }
-
-    /// Stores `experience` and returns its id. Write-once: storing the same
-    /// content again is a no-op returning the same id; an existing object
-    /// is never replaced, and one that no longer matches its address is
-    /// reported as corrupt rather than overwritten.
+    /// Stores `experience` and returns its id. Storing the same content
+    /// again writes nothing and returns the same id; one that no longer
+    /// matches its address is reported as altered rather than replaced.
     pub fn put(&self, experience: &Experience) -> Result<ExperienceId, StoreError> {
         experience.validate()?;
         let bytes = experience.canonical()?;
         let id = ExperienceId(Digest::of(&bytes));
-        let path = self.object(&id);
-        if !write_once(&path, &bytes).map_err(io(&path))? {
-            read_verified(&path, &id.0)?;
+        if self.entity(EXPERIENCE, &id.0)?.is_some() {
+            self.get(&id)?;
+            return Ok(id);
         }
+        let value = serde_json::to_value(experience).map_err(|source| StoreError::Serialize {
+            what: "experience",
+            source,
+        })?;
+        let entity = Entity::keyed(EXPERIENCE, content_id(&id.0)?, value);
+        self.workspace.write(|s| s.put_entity(&entity))?;
         Ok(id)
     }
 
     /// Whether the store holds `id` (without verifying its content).
-    #[must_use]
-    pub fn contains(&self, id: &ExperienceId) -> bool {
-        self.object(id).is_file()
+    pub fn contains(&self, id: &ExperienceId) -> Result<bool, StoreError> {
+        Ok(self.entity(EXPERIENCE, &id.0)?.is_some())
     }
 
     /// The experience stored under `id`, verified against its address.
     pub fn get(&self, id: &ExperienceId) -> Result<Experience, StoreError> {
-        let path = self.object(id);
-        if !path.is_file() {
-            return Err(StoreError::UnknownExperience(id.clone()));
-        }
-        let bytes = read_verified(&path, &id.0)?;
-        let experience: Experience = decode(&path, &bytes)?;
-        // The address must be the address of the value handed back, not
-        // only of the bytes: a field this build does not know would be
-        // dropped on decode, and the caller would hold a different record.
-        if experience.canonical()? != bytes {
-            return Err(StoreError::Undecodable {
-                path,
-                reason: "it does not re-encode to its stored form".into(),
+        let entity = self
+            .entity(EXPERIENCE, &id.0)?
+            .ok_or_else(|| StoreError::UnknownExperience(id.clone()))?;
+        let experience: Experience = serde_json::from_value(entity.value)
+            .map_err(|e| undecodable(format!("experience {id}"), e))?;
+        // The address must be the address of the value handed back: a field
+        // this build does not know would be dropped on decode, and the caller
+        // would hold a different record.
+        let found = Digest::of(&experience.canonical()?);
+        if found != id.0 {
+            return Err(StoreError::Altered {
+                what: format!("experience {id}"),
+                expected: id.0.clone(),
+                found,
             });
         }
         Ok(experience)
     }
 
-    /// Appends `note` to its experience's log. Refused for an experience
-    /// the store does not hold (or a relation to one). Durable once this
-    /// returns.
+    /// Records `note` about its experience. Refused for an experience the
+    /// store does not hold (or a relation to one). Durable once this
+    /// returns, unless the workspace is in a batch.
     pub fn annotate(&self, note: &Annotation) -> Result<(), StoreError> {
         let rejected = |reason: &str| StoreError::Rejected {
             what: "annotation",
@@ -154,78 +153,72 @@ impl ExperienceStore {
         if note.producer.name.trim().is_empty() || note.producer.version.trim().is_empty() {
             return Err(rejected("the producer's name and version are required"));
         }
-        if !self.contains(&note.experience) {
+        if !self.contains(&note.experience)? {
             return Err(StoreError::UnknownExperience(note.experience.clone()));
         }
         if let AnnotationBody::Relation { other, .. } = &note.body {
             if *other == note.experience {
                 return Err(rejected("an experience cannot be related to itself"));
             }
-            if !self.contains(other) {
+            if !self.contains(other)? {
                 return Err(StoreError::UnknownExperience(other.clone()));
             }
         }
-        let mut line = serde_json::to_vec(note).map_err(|source| StoreError::Serialize {
+        let subject = content_id(&note.experience.0)?;
+        let json = serde_json::to_vec(note).map_err(|source| StoreError::Serialize {
             what: "annotation",
             source,
         })?;
-        line.push(b'\n');
-
-        let path = self.log(&note.experience);
-        // A poisoned lock only means another append panicked; the file is
-        // still the source of truth, so carry on.
-        let _guard = self
-            .append
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let parent = self.dir.join("annotations");
-        fs::create_dir_all(&parent).map_err(io(&parent))?;
-        let created = !path.exists();
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .read(true)
-            .open(&path)
-            .map_err(io(&path))?;
-        // A crash mid-append leaves a line without its newline; start on a
-        // fresh line so the torn fragment stays its own unreadable line
-        // instead of corrupting this one.
-        if ends_torn(&mut file).map_err(io(&path))? {
-            line.insert(0, b'\n');
-        }
-        file.write_all(&line).map_err(io(&path))?;
-        file.sync_data().map_err(io(&path))?;
-        if created {
-            sync_dir(&parent).map_err(io(&parent))?;
-        }
-        Ok(())
+        let (criterion, score, confidence, verdict) = describe(&note.body);
+        let other = match &note.body {
+            AnnotationBody::Relation { kind, other } => Some((kind.edge(), content_id(&other.0)?)),
+            _ => None,
+        };
+        let producer = EvaluatorRef::new(&note.producer.name, &note.producer.version);
+        self.workspace.write(|s| {
+            let mut evaluation = Evaluation::new(
+                Target::Entity(subject),
+                producer,
+                &criterion,
+                score,
+                confidence,
+            );
+            evaluation.evidence = Some(s.put_blob(&json)?);
+            evaluation.verdict = verdict;
+            s.evaluate(evaluation)?;
+            if let Some((rel, other)) = other {
+                s.link(&subject, rel, &other)?;
+            }
+            Ok(())
+        })
     }
 
-    /// `id`'s annotations in append order. Lines that cannot be read are
-    /// skipped and counted in [`AnnotationLog::unreadable`]; an annotation
-    /// that names a different experience is corruption, and an error.
+    /// `id`'s annotations in the order they were written.
     pub fn annotations(&self, id: &ExperienceId) -> Result<AnnotationLog, StoreError> {
-        if !self.contains(id) {
+        if !self.contains(id)? {
             return Err(StoreError::UnknownExperience(id.clone()));
         }
-        let path = self.log(id);
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(e) => return Err(io(&path)(e)),
-        };
-        let mut log = AnnotationLog::default();
-        for line in text.lines().filter(|l| !l.trim().is_empty()) {
-            match serde_json::from_str::<Annotation>(line) {
-                Ok(note) if note.experience == *id => log.annotations.push(note),
-                Ok(note) => {
-                    return Err(StoreError::Undecodable {
-                        path,
-                        reason: format!("it holds an annotation of {}", note.experience),
-                    })
+        let subject = content_id(&id.0)?;
+        let raw = self.workspace.read(|s| {
+            let mut raw = Vec::new();
+            for view in s.evaluations(&EvalFilter::new().target(Target::Entity(subject)))? {
+                if let Some(blob) = view.evaluation.evidence {
+                    raw.push(s.read_blob(&blob.id)?);
                 }
-                Err(_) => log.unreadable += 1,
             }
+            Ok(raw)
+        })?;
+        let mut log = AnnotationLog::default();
+        for bytes in raw {
+            let note: Annotation = serde_json::from_slice(&bytes)
+                .map_err(|e| undecodable(format!("an annotation of {id}"), e))?;
+            if note.experience != *id {
+                return Err(undecodable(
+                    format!("an annotation of {id}"),
+                    format!("it is about {}", note.experience),
+                ));
+            }
+            log.annotations.push(note);
         }
         Ok(log)
     }
@@ -245,7 +238,7 @@ impl ExperienceStore {
             if !seen.insert(member) {
                 return Err(rejected(format!("{member} is listed twice")));
             }
-            if !self.contains(member) {
+            if !self.contains(member)? {
                 return Err(StoreError::UnknownExperience(member.clone()));
             }
         }
@@ -254,26 +247,54 @@ impl ExperienceStore {
             source,
         })?;
         let id = SetId(Digest::of(&bytes));
-        let path = self.set(&id);
-        if !write_once(&path, &bytes).map_err(io(&path))? {
-            read_verified(&path, &id.0)?;
+        if self.entity(EXPERIENCE_SET, &id.0)?.is_none() {
+            let value = serde_json::to_value(set).map_err(|source| StoreError::Serialize {
+                what: "experience set",
+                source,
+            })?;
+            let entity = Entity::keyed(EXPERIENCE_SET, content_id(&id.0)?, value);
+            self.workspace.write(|s| s.put_entity(&entity))?;
         }
         Ok(id)
     }
 
     /// The set stored under `id`, verified against its address.
     pub fn get_set(&self, id: &SetId) -> Result<ExperienceSet, StoreError> {
-        let path = self.set(id);
-        if !path.is_file() {
-            return Err(StoreError::UnknownSet(id.clone()));
+        let entity = self
+            .entity(EXPERIENCE_SET, &id.0)?
+            .ok_or_else(|| StoreError::UnknownSet(id.clone()))?;
+        let set: ExperienceSet = serde_json::from_value(entity.value)
+            .map_err(|e| undecodable(format!("experience set {id}"), e))?;
+        let bytes = canonical_json(&set).map_err(|source| StoreError::Serialize {
+            what: "experience set",
+            source,
+        })?;
+        let found = Digest::of(&bytes);
+        if found != id.0 {
+            return Err(StoreError::Altered {
+                what: format!("experience set {id}"),
+                expected: id.0.clone(),
+                found,
+            });
         }
-        let bytes = read_verified(&path, &id.0)?;
-        decode(&path, &bytes)
+        Ok(set)
+    }
+
+    fn list_class(&self, class: &str) -> Result<Vec<Digest>, StoreError> {
+        let mut ids: Vec<Digest> = self
+            .workspace
+            .read(|s| s.entities(class))?
+            .into_iter()
+            .map(|stored| Digest::from(stored.id))
+            .collect();
+        ids.sort();
+        Ok(ids)
     }
 
     /// Every stored experience's id, in id order (without verifying them).
     pub fn list(&self) -> Result<Vec<ExperienceId>, StoreError> {
-        Ok(object_digests(&self.dir.join("objects"))?
+        Ok(self
+            .list_class(EXPERIENCE)?
             .into_iter()
             .map(ExperienceId)
             .collect())
@@ -281,20 +302,48 @@ impl ExperienceStore {
 
     /// Every stored set's id, in id order (without verifying them).
     pub fn list_sets(&self) -> Result<Vec<SetId>, StoreError> {
-        Ok(object_digests(&self.dir.join("sets"))?
+        Ok(self
+            .list_class(EXPERIENCE_SET)?
             .into_iter()
             .map(SetId)
             .collect())
     }
 }
 
-/// Whether a non-empty `file` lacks its final newline.
-fn ends_torn(file: &mut fs::File) -> std::io::Result<bool> {
-    if file.metadata()?.len() == 0 {
-        return Ok(false);
+/// How an annotation is recorded as an evaluation: its criterion, a score,
+/// how much the score is worth, and the ranked verdict when it is one.
+fn describe(body: &AnnotationBody) -> (String, f64, f64, Option<splinter_expdb::model::Verdict>) {
+    use splinter_expdb::model::{Ruling, Verdict};
+    match body {
+        AnnotationBody::Verdict {
+            outcome, strength, ..
+        } => {
+            let (ruling, score, confidence) = match outcome {
+                Outcome::Pass => (Ruling::Pass, 1.0, 1.0),
+                Outcome::Fail => (Ruling::Fail, 0.0, 1.0),
+                Outcome::Abstain => (Ruling::Abstain, 0.0, 0.0),
+            };
+            (
+                "verdict".to_owned(),
+                score,
+                confidence,
+                Some(Verdict::new(ruling, strength.rank())),
+            )
+        }
+        AnnotationBody::StepLabel { step, label, .. } => {
+            let score = match label {
+                Label::Good => 1.0,
+                Label::Bad => 0.0,
+                Label::Neutral => 0.5,
+            };
+            (format!("step_label:{step}"), score, 1.0, None)
+        }
+        AnnotationBody::Relation { kind, .. } => {
+            let name = serde_json::to_value(kind)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            (format!("relation:{name}"), 1.0, 1.0, None)
+        }
     }
-    file.seek(SeekFrom::End(-1))?;
-    let mut last = [0u8; 1];
-    file.read_exact(&mut last)?;
-    Ok(last[0] != b'\n')
 }

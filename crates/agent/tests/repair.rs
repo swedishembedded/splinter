@@ -38,6 +38,7 @@ use splinter_record::annotation::{decide, AnnotationBody, RelationKind, Strength
 use splinter_record::clock::Clock;
 use splinter_record::experience::{ExperienceId, Privileged, PrivilegedKind, Provenance, Task};
 use splinter_record::experiences::ExperienceStore;
+use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
@@ -210,7 +211,7 @@ impl Bench {
             ],
         )
         .unwrap();
-        let store = ExperienceStore::open(&StateRoot::new(scratch.0.join("state")));
+        let store = ExperienceStore::new(&Workspace::at(&StateRoot::new(scratch.0.join("state"))));
         let verifiers = Strongest::new(vec![Box::new(ExecutableVerifier::new(vec![env.clone()]))]);
         Self {
             _scratch: scratch,

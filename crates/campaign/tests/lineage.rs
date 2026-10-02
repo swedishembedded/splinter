@@ -336,7 +336,7 @@ fn a_critique_chain_shows_its_relations() {
         .find(|e| e.relation == Relation::CritiqueOf)
         .unwrap();
     let critic = ExperienceId(Digest::parse(&critique.from).unwrap());
-    assert!(ctx.experiences().contains(&critic));
+    assert!(ctx.experiences().contains(&critic).unwrap());
 }
 
 #[test]

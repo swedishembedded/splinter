@@ -53,6 +53,7 @@ pub mod runs;
 pub mod source;
 pub mod sources;
 pub mod tasks;
+pub mod workspace;
 
 use std::fs;
 use std::io::Write;
@@ -110,6 +111,12 @@ impl StateRoot {
     #[must_use]
     pub fn experiences(&self) -> PathBuf {
         self.0.join("experiences")
+    }
+
+    /// The experience database's directory.
+    #[must_use]
+    pub fn expdb(&self) -> PathBuf {
+        self.0.join("expdb")
     }
 
     /// Where datasets and their manifests live.

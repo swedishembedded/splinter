@@ -110,6 +110,14 @@ pub enum Strength {
     Executable,
 }
 
+impl Strength {
+    /// The rank the experience database orders this evidence by.
+    #[must_use]
+    pub fn rank(self) -> u8 {
+        self as u8
+    }
+}
+
 /// A step label.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -140,6 +148,21 @@ pub enum RelationKind {
     VariantOf,
 }
 
+impl RelationKind {
+    /// The edge kind the experience database records this relation as.
+    #[must_use]
+    pub fn edge(self) -> splinter_expdb::model::Rel {
+        use splinter_expdb::model::Rel;
+        match self {
+            RelationKind::PreferredOver => Rel::PreferredOver,
+            RelationKind::RetryOf => Rel::RetryOf,
+            RelationKind::CritiqueOf => Rel::CritiqueOf,
+            RelationKind::RevisionOf => Rel::RevisionOf,
+            RelationKind::VariantOf => Rel::VariantOf,
+        }
+    }
+}
+
 /// The verdict the annotations add up to under the module's decision rule.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Decision {
@@ -153,28 +176,36 @@ pub struct Decision {
 /// verdict, or the strongest ones conflict.
 #[must_use]
 pub fn decide(notes: &[Annotation]) -> Option<Decision> {
-    let verdicts = notes.iter().filter_map(|note| match &note.body {
-        AnnotationBody::Verdict {
-            outcome: Outcome::Pass,
-            strength,
-            ..
-        } => Some((true, *strength)),
-        AnnotationBody::Verdict {
-            outcome: Outcome::Fail,
-            strength,
-            ..
-        } => Some((false, *strength)),
-        _ => None,
-    });
-    let strongest = verdicts.clone().map(|(_, s)| s).max()?;
-    let mut deciding = verdicts.filter(|(_, s)| *s == strongest).map(|(p, _)| p);
-    let passed = deciding.next()?;
-    if deciding.any(|p| p != passed) {
-        return None;
-    }
+    use splinter_expdb::analyze::resolve_verdicts;
+    use splinter_expdb::model::{Ruling, Verdict};
+    let verdicts: Vec<Verdict> = notes
+        .iter()
+        .filter_map(|note| match &note.body {
+            AnnotationBody::Verdict {
+                outcome, strength, ..
+            } => Some(Verdict::new(
+                match outcome {
+                    Outcome::Pass => Ruling::Pass,
+                    Outcome::Fail => Ruling::Fail,
+                    Outcome::Abstain => Ruling::Abstain,
+                },
+                strength.rank(),
+            )),
+            _ => None,
+        })
+        .collect();
+    let resolved = resolve_verdicts(&verdicts)?;
+    let strength = [
+        Strength::Judged,
+        Strength::Consistency,
+        Strength::Formal,
+        Strength::Executable,
+    ]
+    .into_iter()
+    .find(|s| s.rank() == resolved.rank)?;
     Some(Decision {
-        passed,
-        strength: strongest,
+        passed: resolved.passed,
+        strength,
     })
 }
 

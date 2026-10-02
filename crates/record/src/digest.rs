@@ -118,6 +118,15 @@ impl Digest {
         Self::parse(&format!("{BLAKE3}{hex}"))
     }
 
+    /// The database id of the object this digest addresses, when it is a
+    /// content address (`blake3:`); a digest a tool reported has none.
+    #[must_use]
+    pub fn content_id(&self) -> Option<splinter_expdb::ContentId> {
+        self.0
+            .strip_prefix(BLAKE3)
+            .and_then(|hex| splinter_expdb::ContentId::parse(hex).ok())
+    }
+
     /// The whole digest, `<algorithm>:<hex>`.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -135,6 +144,12 @@ impl Digest {
 impl std::fmt::Display for Digest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl From<splinter_expdb::ContentId> for Digest {
+    fn from(id: splinter_expdb::ContentId) -> Self {
+        Self(format!("{BLAKE3}{id}"))
     }
 }
 

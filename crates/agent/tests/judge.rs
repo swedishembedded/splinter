@@ -26,6 +26,7 @@ use splinter_record::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
 use splinter_record::experiences::ExperienceStore;
+use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
@@ -264,7 +265,7 @@ fn an_executable_pass_outranks_a_judged_fail_through_the_store() {
         vec![check.as_check().unwrap()],
     );
     let exp = experience(&task, "def answer():\n    return 2 + 3\n", SOLVER);
-    let store = ExperienceStore::open(&StateRoot::new(scratch.0.join("state")));
+    let store = ExperienceStore::new(&Workspace::at(&StateRoot::new(scratch.0.join("state"))));
     let id = store.put(&exp).unwrap();
 
     let rt = runtime();

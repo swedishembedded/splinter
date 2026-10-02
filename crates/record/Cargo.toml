@@ -10,6 +10,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+splinter-expdb = { workspace = true }
 sven-sdk = { workspace = true }
 
 blake3 = { workspace = true }

@@ -147,7 +147,9 @@ writer's pause between sealing and publishing, and one collection.
   each other's head, so each writer gets its own ref and maintenance tasks
   publish on refs of their own. The catalog is a set of head files that is
   never overwritten.
-- Concurrency is tested with independent database handles in threads, not with
-  separate processes.
+- Concurrency is tested with independent database handles in threads, and with
+  separate processes writing one database and one dying before it flushes. The
+  processes run on one machine; behaviour across nodes of a parallel filesystem
+  is the modelled protocol, not something these tests exercise.
 - Embeddings are supplied by the caller and searched exactly. Computing them,
   credit assignment and skill extraction belong to the model runtime.

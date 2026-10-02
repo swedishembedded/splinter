@@ -4123,6 +4123,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "splinter-expdb",
  "sven-sdk",
  "thiserror 2.0.21",
 ]

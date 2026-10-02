@@ -112,6 +112,27 @@ pub enum StoreError {
         /// Why.
         reason: String,
     },
+    /// A stored object no longer matches the address it is stored under.
+    #[error("{what} hashes to {found}, not the {expected} it is stored under")]
+    Altered {
+        /// The object.
+        what: String,
+        /// Its address.
+        expected: Digest,
+        /// What its content hashes to.
+        found: Digest,
+    },
+    /// A stored object does not read back as the record it is stored as.
+    #[error("{what} does not decode: {reason}")]
+    UndecodableObject {
+        /// The object.
+        what: String,
+        /// Why.
+        reason: String,
+    },
+    /// The experience database failed.
+    #[error("experience database: {0}")]
+    Database(#[from] splinter_expdb::Error),
     /// A record cannot be serialized.
     #[error("cannot serialize {what}: {source}")]
     Serialize {
