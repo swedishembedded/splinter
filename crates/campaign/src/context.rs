@@ -210,13 +210,13 @@ impl Context {
     /// The source store.
     #[must_use]
     pub fn sources(&self) -> SourceStore {
-        SourceStore::open(self.root())
+        SourceStore::new(&self.workspace)
     }
 
     /// The task store.
     #[must_use]
     pub fn tasks(&self) -> TaskStore {
-        TaskStore::open(self.root())
+        TaskStore::new(&self.workspace)
     }
 
     /// The experience store.

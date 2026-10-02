@@ -87,7 +87,9 @@ pub const PART: &str = "notes.md";
 /// `text` stored as a Markdown document in a source store under `scratch`;
 /// the store and the loaded text of its one part.
 pub fn stored(scratch: &Scratch, text: &str) -> (SourceStore, SourceId, SourceText) {
-    let store = SourceStore::open(&StateRoot::new(scratch.0.join("state")));
+    let store = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        scratch.0.join("state"),
+    )));
     let captured = CapturedSource::new(
         Origin::Document {
             path: "/notes/notes.md".into(),

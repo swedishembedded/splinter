@@ -5,7 +5,6 @@
 //! verified read they share: an object is only ever handed back after its
 //! bytes were checked against the address it is stored under.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::digest::Digest;
@@ -157,43 +156,6 @@ pub(crate) fn io(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ 
         path: path.to_path_buf(),
         source,
     }
-}
-
-/// The bytes at `path`, refused unless they hash to `address`.
-pub(crate) fn read_verified(path: &Path, address: &Digest) -> Result<Vec<u8>, StoreError> {
-    let bytes = fs::read(path).map_err(io(path))?;
-    let found = Digest::of(&bytes);
-    if found != *address {
-        return Err(StoreError::Corrupt {
-            path: path.to_path_buf(),
-            expected: address.clone(),
-            found,
-        });
-    }
-    Ok(bytes)
-}
-
-/// The digests named by the `<64 hex>.json` files directly in `dir`, in
-/// digest order; empty when `dir` does not exist. Anything else in it (a
-/// write-once temporary file) is not a stored object and is skipped.
-pub(crate) fn object_digests(dir: &Path) -> Result<Vec<Digest>, StoreError> {
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(io(dir)(e)),
-    };
-    let mut digests = Vec::new();
-    for entry in entries {
-        let name = entry.map_err(io(dir))?.file_name();
-        let Some(hex) = name.to_str().and_then(|n| n.strip_suffix(".json")) else {
-            continue;
-        };
-        if let Ok(digest) = Digest::from_content_hex(hex) {
-            digests.push(digest);
-        }
-    }
-    digests.sort();
-    Ok(digests)
 }
 
 /// `bytes` decoded as the record stored at `path`.

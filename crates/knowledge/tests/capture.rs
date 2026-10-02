@@ -49,7 +49,9 @@ impl Scratch {
         Self(path)
     }
     fn store(&self) -> SourceStore {
-        SourceStore::open(&StateRoot::new(self.0.join("state")))
+        SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+            self.0.join("state"),
+        )))
     }
     fn write(&self, rel: &str, bytes: &[u8]) -> PathBuf {
         let path = self.0.join(rel);
@@ -57,10 +59,16 @@ impl Scratch {
         fs::write(&path, bytes).unwrap();
         path
     }
+    /// How many distinct contents the stored sources' parts hold.
     fn blobs(&self) -> usize {
-        fs::read_dir(self.0.join("state/sources/blobs"))
-            .unwrap()
-            .count()
+        let store = self.store();
+        let mut contents = std::collections::BTreeSet::new();
+        for id in store.list().unwrap() {
+            for part in store.get_source(&id).unwrap().parts {
+                contents.insert(part.content);
+            }
+        }
+        contents.len()
     }
 }
 

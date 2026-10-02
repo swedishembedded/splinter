@@ -175,7 +175,7 @@ pub fn add(ctx: &Context, target: &SourceTarget) -> Result<SourceAdded, Campaign
             capture_command(&spec, ctx.clock())?
         }
     };
-    let new = !store.contains(&captured.source().id);
+    let new = !store.contains(&captured.source().id)?;
     let id = store.put_source(&captured)?;
     Ok(SourceAdded {
         source: SourceSummary::from(&store.get_source(&id)?),

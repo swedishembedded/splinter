@@ -11,9 +11,8 @@
 //! ```text
 //! <root>/
 //!   runs/<run_id>/            one command's run record and cancel request
-//!   sources/                  the content-addressed source store
-//!   tasks/                    the content-addressed task store
-//!   experiences/              the content-addressed experience store
+//!   expdb/                    the experience database: sources, tasks,
+//!                             experiences, annotations and sets
 //!   datasets/<id>/            one dataset and its manifest
 //!   calibrations/             each judge's latest calibration
 //!   train/<candidate_id>/     one trained candidate: adapter, scores, record
@@ -30,6 +29,10 @@
 //! object is written with [`write_once`], which never replaces a file.
 //! [`runs`] holds a command's run record, readable and cancellable from any
 //! process.
+//!
+//! Sources, tasks and experiences live in the experience database under
+//! `expdb/`, through one shared [`workspace::Workspace`]; the other
+//! directories are files.
 //!
 //! [`source`] and [`sources`] are what Splinter learns from: every
 //! document, repository and command run, its content stored once per

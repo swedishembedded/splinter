@@ -82,7 +82,7 @@ pub fn enqueue_retention(ctx: &Context, gate: &GateReport) -> Result<Vec<Concept
             let Ok(task_id) = Digest::parse(lost) else {
                 continue;
             };
-            if !ctx.tasks().contains(&task_id) {
+            if !ctx.tasks().contains(&task_id)? {
                 continue;
             }
             let task = ctx.tasks().get(&task_id)?;

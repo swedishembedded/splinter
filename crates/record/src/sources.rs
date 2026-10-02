@@ -9,62 +9,54 @@
 //! The source store: sources under their address, and their parts' content
 //! stored once per digest.
 //!
-//! ```text
-//! <root>/sources/
-//!   blobs/<hex>            one content, its raw bytes; written once, shared
-//!                          by every source part with that digest
-//!   objects/<hex>.json     one source, its canonical form; written once
-//! ```
-//!
-//! A blob's name is the digest of its bytes, and every read checks it. A
-//! source object's name is its [`SourceId`], which addresses its origin and
-//! parts but not its capture time, so a read decodes it and recomputes the
-//! address instead of hashing the file. [`SourceStore::put_source`] writes
-//! the blobs before the object, so an object never names content the store
-//! lacks; a crash between the two leaves unreferenced blobs, which the next
-//! capture of the same content reuses.
+//! A source is an entity keyed by its [`SourceId`], which addresses its origin
+//! and parts but not its capture time, so a read decodes it and recomputes the
+//! address. Each part's bytes are stored once per digest in the blob store and
+//! the source entity names them; [`SourceStore::put_source`] stores both in one
+//! commit, so a source never names content the store lacks.
 
-use std::fs;
-use std::path::PathBuf;
+use splinter_expdb::model::Entity;
 
 use crate::digest::Digest;
 use crate::error::StoreError;
-use crate::error::{decode, io, object_digests, read_verified};
 use crate::experience::Span;
 use crate::source::{CapturedSource, Source, SourceId};
-use crate::{write_once, StateRoot};
+use crate::workspace::{content_id, Workspace};
 
-/// The source store under one state root.
+const SOURCE: &str = "source";
+
+/// The source store: sources, and their parts' content stored once per
+/// digest.
 #[derive(Clone, Debug)]
 pub struct SourceStore {
-    dir: PathBuf,
+    workspace: Workspace,
 }
 
 impl SourceStore {
-    /// The store under `root`. Nothing is created until something is
-    /// written.
+    /// The store over `workspace`.
     #[must_use]
-    pub fn open(root: &StateRoot) -> Self {
+    pub fn new(workspace: &Workspace) -> Self {
         Self {
-            dir: root.sources(),
+            workspace: workspace.clone(),
         }
     }
 
-    fn blob(&self, digest: &Digest) -> PathBuf {
-        self.dir.join("blobs").join(digest.hex())
-    }
-
-    fn object(&self, id: &SourceId) -> PathBuf {
-        self.dir.join("objects").join(format!("{}.json", id.hex()))
-    }
-
-    /// Stores `captured` and returns its id. Write-once: content already
-    /// stored is not written again, and a source already stored keeps its
-    /// first capture time. An existing blob or object that no longer
-    /// matches its address is reported as corrupt rather than replaced.
+    /// Stores `captured` and returns its id. Content already stored is not
+    /// written again, and a source already stored keeps its first capture
+    /// time. One already stored that no longer matches its address is
+    /// reported rather than replaced.
     pub fn put_source(&self, captured: &CapturedSource) -> Result<SourceId, StoreError> {
         let source = captured.source();
         source.validate()?;
+        if self.contains(&source.id)? {
+            self.get_source(&source.id)?;
+            return Ok(source.id.clone());
+        }
+        let value = serde_json::to_value(source).map_err(|source| StoreError::Serialize {
+            what: "source",
+            source,
+        })?;
+        let mut parts = Vec::with_capacity(source.parts.len());
         for part in &source.parts {
             let bytes = captured
                 .content(&part.name)
@@ -72,46 +64,56 @@ impl SourceStore {
                     source_id: source.id.clone(),
                     part: part.name.clone(),
                 })?;
-            let path = self.blob(&part.content);
-            if !write_once(&path, bytes).map_err(io(&path))? {
-                read_verified(&path, &part.content)?;
+            parts.push((part.content.clone(), bytes));
+        }
+        let key = content_id(&source.id.0)?;
+        self.workspace.write(|s| {
+            let mut blobs = Vec::with_capacity(parts.len());
+            for (_, bytes) in &parts {
+                blobs.push(s.put_blob(bytes)?);
             }
-        }
-        let bytes = source.canonical()?;
-        let path = self.object(&source.id);
-        if !write_once(&path, &bytes).map_err(io(&path))? {
-            self.get_source(&source.id)?;
-        }
+            s.put_entity(&Entity::keyed(SOURCE, key, value.clone()).with_blobs(blobs))
+                .map(|_| ())
+        })?;
         Ok(source.id.clone())
     }
 
     /// Whether the store holds `id` (without verifying it).
-    #[must_use]
-    pub fn contains(&self, id: &SourceId) -> bool {
-        self.object(id).is_file()
+    pub fn contains(&self, id: &SourceId) -> Result<bool, StoreError> {
+        Ok(self.workspace.find(SOURCE, &id.0)?.is_some())
     }
 
     /// The source stored under `id`, verified against its address.
     pub fn get_source(&self, id: &SourceId) -> Result<Source, StoreError> {
-        let path = self.object(id);
-        if !path.is_file() {
-            return Err(StoreError::UnknownSource(id.clone()));
-        }
-        let bytes = fs::read(&path).map_err(io(&path))?;
-        let source: Source = decode(&path, &bytes)?;
+        let entity = self
+            .workspace
+            .find(SOURCE, &id.0)?
+            .ok_or_else(|| StoreError::UnknownSource(id.clone()))?;
+        let source: Source = serde_json::from_value(entity.value.clone()).map_err(|e| {
+            StoreError::UndecodableObject {
+                what: format!("source {id}"),
+                reason: e.to_string(),
+            }
+        })?;
         if source.id != *id {
-            return Err(StoreError::Corrupt {
-                path,
+            return Err(StoreError::Altered {
+                what: format!("source {id}"),
                 expected: id.0.clone(),
                 found: source.id.0,
             });
         }
         source.validate()?;
-        // As for an experience: the value handed back must be the record
-        // stored, not what survived decoding it.
-        if source.canonical()? != bytes {
-            return Err(StoreError::Undecodable {
-                path,
+        // The value handed back must be the record stored, not what
+        // survived decoding it.
+        let stored = crate::digest::canonical_json(&entity.value).map_err(|source| {
+            StoreError::Serialize {
+                what: "source",
+                source,
+            }
+        })?;
+        if source.canonical()? != stored {
+            return Err(StoreError::UndecodableObject {
+                what: format!("source {id}"),
                 reason: "it does not re-encode to its stored form".into(),
             });
         }
@@ -120,11 +122,16 @@ impl SourceStore {
 
     /// The content stored under `digest`, verified.
     pub fn read_blob(&self, digest: &Digest) -> Result<Vec<u8>, StoreError> {
-        let path = self.blob(digest);
-        if !path.is_file() {
+        let Some(id) = digest.content_id() else {
             return Err(StoreError::UnknownBlob(digest.clone()));
+        };
+        match self.workspace.read(|s| s.read_blob(&id)) {
+            Ok(bytes) => Ok(bytes),
+            Err(StoreError::Database(splinter_expdb::Error::NotFound { .. })) => {
+                Err(StoreError::UnknownBlob(digest.clone()))
+            }
+            Err(other) => Err(other),
         }
-        read_verified(&path, digest)
     }
 
     /// The content of part `name` of source `id`, verified.
@@ -174,7 +181,9 @@ impl SourceStore {
 
     /// Every stored source's id, in id order (without verifying them).
     pub fn list(&self) -> Result<Vec<SourceId>, StoreError> {
-        Ok(object_digests(&self.dir.join("objects"))?
+        Ok(self
+            .workspace
+            .ids_of(SOURCE)?
             .into_iter()
             .map(SourceId)
             .collect())

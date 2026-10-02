@@ -29,6 +29,7 @@ use std::time::{Duration, Instant};
 
 use splinter_expdb::{Config, Database, Session, WriterIdentity};
 
+use crate::digest::Digest;
 use crate::error::StoreError;
 use crate::StateRoot;
 
@@ -104,6 +105,14 @@ fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The database id of the object `address` names.
+pub(crate) fn content_id(address: &Digest) -> Result<splinter_expdb::ContentId, StoreError> {
+    address.content_id().ok_or_else(|| StoreError::Rejected {
+        what: "address",
+        reason: format!("{address} is not a content address"),
+    })
+}
+
 impl Workspace {
     /// The database under `root`. Nothing is opened or created until the
     /// first read or write, so a command that only plans leaves the root
@@ -139,6 +148,28 @@ impl Workspace {
             Some(session) => Ok(f(session)?),
             None => unreachable!("the session was opened above"),
         }
+    }
+
+    /// The entity of `class` whose address is `id`.
+    pub(crate) fn find(
+        &self,
+        class: &str,
+        id: &Digest,
+    ) -> Result<Option<splinter_expdb::model::Entity>, StoreError> {
+        let cid = content_id(id)?;
+        let found = self.read(|s| s.entity(&cid))?;
+        Ok(found.filter(|e| e.class == class))
+    }
+
+    /// The addresses of every entity of `class`, in address order.
+    pub(crate) fn ids_of(&self, class: &str) -> Result<Vec<Digest>, StoreError> {
+        let mut ids: Vec<Digest> = self
+            .read(|s| s.entities(class))?
+            .into_iter()
+            .map(|stored| Digest::from(stored.id))
+            .collect();
+        ids.sort();
+        Ok(ids)
     }
 
     /// Groups the writes made until the returned guard is dropped (or

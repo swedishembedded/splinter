@@ -21,13 +21,12 @@
 use serde::{Deserialize, Serialize};
 use splinter_expdb::analyze::EvalFilter;
 use splinter_expdb::model::{Entity, Evaluation, EvaluatorRef, Target};
-use splinter_expdb::ContentId;
 
 use crate::annotation::{Annotation, AnnotationBody, Label, Outcome};
 use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
 use crate::experience::{Experience, ExperienceId};
-use crate::workspace::Workspace;
+use crate::workspace::{content_id, Workspace};
 
 const EXPERIENCE: &str = "experience";
 const EXPERIENCE_SET: &str = "experience_set";
@@ -67,13 +66,6 @@ pub struct ExperienceStore {
     workspace: Workspace,
 }
 
-fn content_id(address: &Digest) -> Result<ContentId, StoreError> {
-    address.content_id().ok_or_else(|| StoreError::Rejected {
-        what: "address",
-        reason: format!("{address} is not a content address"),
-    })
-}
-
 fn undecodable(what: String, reason: impl ToString) -> StoreError {
     StoreError::UndecodableObject {
         what,
@@ -90,12 +82,6 @@ impl ExperienceStore {
         }
     }
 
-    fn entity(&self, class: &str, id: &Digest) -> Result<Option<Entity>, StoreError> {
-        let cid = content_id(id)?;
-        let found = self.workspace.read(|s| s.entity(&cid))?;
-        Ok(found.filter(|e| e.class == class))
-    }
-
     /// Stores `experience` and returns its id. Storing the same content
     /// again writes nothing and returns the same id; one that no longer
     /// matches its address is reported as altered rather than replaced.
@@ -103,7 +89,7 @@ impl ExperienceStore {
         experience.validate()?;
         let bytes = experience.canonical()?;
         let id = ExperienceId(Digest::of(&bytes));
-        if self.entity(EXPERIENCE, &id.0)?.is_some() {
+        if self.workspace.find(EXPERIENCE, &id.0)?.is_some() {
             self.get(&id)?;
             return Ok(id);
         }
@@ -118,13 +104,14 @@ impl ExperienceStore {
 
     /// Whether the store holds `id` (without verifying its content).
     pub fn contains(&self, id: &ExperienceId) -> Result<bool, StoreError> {
-        Ok(self.entity(EXPERIENCE, &id.0)?.is_some())
+        Ok(self.workspace.find(EXPERIENCE, &id.0)?.is_some())
     }
 
     /// The experience stored under `id`, verified against its address.
     pub fn get(&self, id: &ExperienceId) -> Result<Experience, StoreError> {
         let entity = self
-            .entity(EXPERIENCE, &id.0)?
+            .workspace
+            .find(EXPERIENCE, &id.0)?
             .ok_or_else(|| StoreError::UnknownExperience(id.clone()))?;
         let experience: Experience = serde_json::from_value(entity.value)
             .map_err(|e| undecodable(format!("experience {id}"), e))?;
@@ -247,7 +234,7 @@ impl ExperienceStore {
             source,
         })?;
         let id = SetId(Digest::of(&bytes));
-        if self.entity(EXPERIENCE_SET, &id.0)?.is_none() {
+        if self.workspace.find(EXPERIENCE_SET, &id.0)?.is_none() {
             let value = serde_json::to_value(set).map_err(|source| StoreError::Serialize {
                 what: "experience set",
                 source,
@@ -261,7 +248,8 @@ impl ExperienceStore {
     /// The set stored under `id`, verified against its address.
     pub fn get_set(&self, id: &SetId) -> Result<ExperienceSet, StoreError> {
         let entity = self
-            .entity(EXPERIENCE_SET, &id.0)?
+            .workspace
+            .find(EXPERIENCE_SET, &id.0)?
             .ok_or_else(|| StoreError::UnknownSet(id.clone()))?;
         let set: ExperienceSet = serde_json::from_value(entity.value)
             .map_err(|e| undecodable(format!("experience set {id}"), e))?;
@@ -280,21 +268,11 @@ impl ExperienceStore {
         Ok(set)
     }
 
-    fn list_class(&self, class: &str) -> Result<Vec<Digest>, StoreError> {
-        let mut ids: Vec<Digest> = self
-            .workspace
-            .read(|s| s.entities(class))?
-            .into_iter()
-            .map(|stored| Digest::from(stored.id))
-            .collect();
-        ids.sort();
-        Ok(ids)
-    }
-
     /// Every stored experience's id, in id order (without verifying them).
     pub fn list(&self) -> Result<Vec<ExperienceId>, StoreError> {
         Ok(self
-            .list_class(EXPERIENCE)?
+            .workspace
+            .ids_of(EXPERIENCE)?
             .into_iter()
             .map(ExperienceId)
             .collect())
@@ -303,7 +281,8 @@ impl ExperienceStore {
     /// Every stored set's id, in id order (without verifying them).
     pub fn list_sets(&self) -> Result<Vec<SetId>, StoreError> {
         Ok(self
-            .list_class(EXPERIENCE_SET)?
+            .workspace
+            .ids_of(EXPERIENCE_SET)?
             .into_iter()
             .map(SetId)
             .collect())

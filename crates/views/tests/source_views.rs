@@ -64,7 +64,9 @@ fn span_of(source: &SourceId, needle: &str) -> Span {
 #[test]
 fn retrieval_pairs_the_instruction_with_the_span_it_is_grounded_in() {
     let scratch = Scratch::new("retrieval");
-    let sources = SourceStore::open(&StateRoot::new(&scratch.0));
+    let sources = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        &scratch.0,
+    )));
     let source = capture(&sources, "/notes.txt", &[("notes.txt", TEXT.as_bytes())]);
     let used = "Annotations are appended.";
     let other = "Views project them.";
@@ -192,7 +194,9 @@ fn denoise_restores_the_passage_of_each_task_once_without_a_solve() {
 #[test]
 fn cpt_yields_each_texts_content_once() {
     let scratch = Scratch::new("cpt");
-    let sources = SourceStore::open(&StateRoot::new(&scratch.0));
+    let sources = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        &scratch.0,
+    )));
     let first = capture(
         &sources,
         "/a",

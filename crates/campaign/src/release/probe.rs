@@ -227,8 +227,10 @@ fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, CampaignError>
     let Ok(record) = serde_json::from_str::<RecordLine>(line) else {
         return Ok(None);
     };
-    if let Some(task) = record.metadata.task.filter(|t| ctx.tasks().contains(t)) {
-        return Ok(Some(ctx.tasks().get(&task)?));
+    if let Some(task) = record.metadata.task {
+        if ctx.tasks().contains(&task)? {
+            return Ok(Some(ctx.tasks().get(&task)?));
+        }
     }
     let experiences = ctx.experiences();
     for id in &record.metadata.experiences {

@@ -40,10 +40,20 @@ impl Scratch {
         Self(path)
     }
     fn store(&self) -> SourceStore {
-        SourceStore::open(&StateRoot::new(&self.0))
+        SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+            &self.0,
+        )))
     }
+    /// How many distinct contents the stored sources' parts hold.
     fn blobs(&self) -> usize {
-        fs::read_dir(self.0.join("sources/blobs")).unwrap().count()
+        let store = self.store();
+        let mut contents = std::collections::BTreeSet::new();
+        for id in store.list().unwrap() {
+            for part in store.get_source(&id).unwrap().parts {
+                contents.insert(part.content);
+            }
+        }
+        contents.len()
     }
 }
 
@@ -172,23 +182,45 @@ fn identical_content_is_one_source_and_blobs_are_shared_across_sources() {
 }
 
 #[test]
-fn corrupted_bytes_are_refused_on_read() {
+fn damaged_storage_is_refused_on_read() {
     let scratch = Scratch::new("corrupt");
     let store = scratch.store();
     let id = store
         .put_source(&repository("2026-09-30T08:00:00.000Z", NOTES))
         .unwrap();
-    let digest = Digest::of(NOTES.as_bytes());
-    let blob = scratch.0.join("sources/blobs").join(digest.hex());
-    fs::write(&blob, b"tampered").unwrap();
-    assert!(matches!(
-        store.read_part(&id, "notes.txt"),
-        Err(StoreError::Corrupt { .. })
-    ));
     assert!(matches!(
         store.read_part(&id, "missing.txt"),
         Err(StoreError::UnknownPart { .. })
     ));
+    assert!(matches!(
+        store.read_blob(&Digest::of(b"never stored")),
+        Err(StoreError::UnknownBlob(_))
+    ));
+
+    for pack in files_under(&scratch.0.join("expdb/blobs")) {
+        let mut bytes = fs::read(&pack).unwrap();
+        for byte in &mut bytes {
+            *byte ^= 0xff;
+        }
+        fs::write(&pack, bytes).unwrap();
+    }
+    assert!(
+        scratch.store().read_part(&id, "notes.txt").is_err(),
+        "damaged content is an error, never different bytes"
+    );
+}
+
+fn files_under(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(files_under(&path));
+        } else {
+            found.push(path);
+        }
+    }
+    found
 }
 
 #[test]

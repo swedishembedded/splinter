@@ -49,7 +49,9 @@ impl Drop for Scratch {
 fn the_task_is_deterministic_and_its_evidence_resolves_through_the_store() {
     let scratch =
         Scratch(std::env::temp_dir().join(format!("splinter-denoise-task-{}", std::process::id())));
-    let store = SourceStore::open(&StateRoot::new(&scratch.0));
+    let store = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        &scratch.0,
+    )));
     let captured = source(PASSAGE);
     let id = store.put_source(&captured).unwrap();
     let stored = store.get_source(&id).unwrap();

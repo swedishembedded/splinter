@@ -34,7 +34,9 @@ impl Scratch {
     }
 
     fn store(&self) -> TaskStore {
-        TaskStore::open(&StateRoot::new(&self.0))
+        TaskStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+            &self.0,
+        )))
     }
 }
 
@@ -81,15 +83,28 @@ fn a_task_is_stored_once_and_read_back_verified() {
     assert_eq!(store.list().unwrap(), vec![id.clone()]);
 
     // A stored task whose content no longer addresses it is corruption.
-    let path = scratch
-        .0
-        .join("tasks/objects")
-        .join(format!("{}.json", id.hex()));
-    let tampered = fs::read_to_string(&path)
-        .unwrap()
-        .replace("console", "modem");
-    fs::write(&path, tampered).unwrap();
-    assert!(store.get(&id).is_err(), "a tampered task is refused");
+    let other = task("At what baud rate does the modem run?");
+    let db = splinter_expdb::Database::open(
+        StateRoot::new(&scratch.0).expdb(),
+        splinter_expdb::Config::default(),
+    )
+    .unwrap();
+    let mut forger = splinter_expdb::Session::open(
+        &db,
+        &splinter_expdb::WriterIdentity::new("test", "forge", "node", 0),
+    )
+    .unwrap();
+    let forged = splinter_expdb::model::Entity::keyed(
+        "task",
+        other.task.id.content_id().unwrap(),
+        serde_json::to_value(&baud).unwrap(),
+    );
+    forger.put_entity(&forged).unwrap();
+    forger.flush().unwrap();
+    assert!(
+        scratch.store().get(&other.task.id).is_err(),
+        "a task stored under another task's address is refused"
+    );
 
     let unknown = Digest::of(b"no such task");
     assert!(matches!(

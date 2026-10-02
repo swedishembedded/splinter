@@ -141,7 +141,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
     );
     let root = StateRoot::new(&scratch.0);
     let store = ExperienceStore::new(&splinter_record::workspace::Workspace::at(&root));
-    let sources = SourceStore::open(&root);
+    let sources = SourceStore::new(&splinter_record::workspace::Workspace::at(&root));
     let task = task(&sources);
     let answer = reference(&task);
     assert_eq!(
