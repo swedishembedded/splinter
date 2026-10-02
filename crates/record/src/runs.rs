@@ -1,41 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements learning pipelines whose every run is
-// inspectable and stoppable from any process, for its clients. If your
-// team needs expertise in durable operating state for agent systems, you
-// can procure our services by sending an email to info@swedishembedded.com.
+// Swedish Embedded AB implements durable, content-addressed experience
+// stores for learning agents, for its clients. If your team needs expertise
+// in training-data lineage or crash-safe storage, you can procure our
+// services by sending an email to info@swedishembedded.com.
 
-//! A run: one command's pipeline work, recorded so it can be inspected -
-//! and stopped - from any process.
+//! Run records: what a command was asked to do, the stages it finished and
+//! how it ended, kept for every command that writes pipeline state.
 //!
-//! ```text
-//! runs/<run_id>/
-//!   run.json          the record: command, arguments, stages, status,
-//!                     outputs; rewritten atomically at every change
-//!   cancel.request    present once a cancel was requested
-//! ```
-//!
-//! A [`RunLog`] is the writing side: [`RunLog::start`] records the run as
-//! running, [`RunLog::stage`] appends each stage's summary as it finishes,
-//! and [`RunLog::finish`] records how it ended and what it produced. A
-//! process that dies before finishing leaves its run recorded as running;
-//! nothing here can tell a live run from a dead one.
-
-use std::fs;
-use std::path::{Path, PathBuf};
+//! A run is a sequence of events in the experience database, never an
+//! updated record: it starts, finishes stages, and ends, and what a reader
+//! sees is those events folded in order. A cancel request is a signal, which
+//! any process can raise and the running one polls without reading anything
+//! else. A run's id is claimed with a signal too, so two processes starting in
+//! the same instant never share one.
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use splinter_expdb::model::Entity;
 
 use crate::clock::Clock;
-use crate::error::{decode, io, StoreError};
-use crate::{new_id_with_prefix, write_atomic, StateRoot};
+use crate::error::StoreError;
+use crate::new_id_with_prefix;
+use crate::workspace::Workspace;
 
-/// The file a run's record is kept in, inside its directory.
-const RECORD: &str = "run.json";
+const RUN_EVENT: &str = "run_event";
 
-/// The file whose presence asks a run to stop, inside its directory.
-const CANCEL_REQUEST: &str = "cancel.request";
+/// How many times a run asks for an id before giving up.
+const ID_ATTEMPTS: usize = 16;
 
 /// Where a run stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,7 +71,7 @@ pub struct RunStage {
 /// A run's record.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Run {
-    /// The run's id, which also names its directory.
+    /// The run's id.
     pub id: String,
     /// The command that started it.
     pub command: String,
@@ -101,42 +94,69 @@ pub struct Run {
 /// The writing side of one run. See the module documentation.
 #[derive(Debug)]
 pub struct RunLog {
-    dir: PathBuf,
+    workspace: Workspace,
     run: Run,
+    events: u64,
+}
+
+fn event(run: &str, seq: u64, kind: &str, at: &str, body: serde_json::Value) -> Entity {
+    Entity::new(
+        RUN_EVENT,
+        json!({ "run": run, "seq": seq, "kind": kind, "at": at, "body": body }),
+    )
 }
 
 impl RunLog {
     /// Records a new run of `command` with `arguments`, running, stamped by
     /// `clock`.
     pub fn start(
-        root: &StateRoot,
+        workspace: &Workspace,
         command: &str,
         arguments: serde_json::Value,
         clock: &dyn Clock,
     ) -> Result<Self, StoreError> {
-        let id = new_id_with_prefix("run");
-        let dir = root.run_dir(&id);
-        let runs = root.runs();
-        fs::create_dir_all(&runs).map_err(io(&runs))?;
         // Exclusive: an id is never reused, even by a racing process.
-        fs::create_dir(&dir).map_err(io(&dir))?;
+        let mut claimed = None;
+        for _ in 0..ID_ATTEMPTS {
+            let id = new_id_with_prefix("run");
+            if workspace.signal(&format!("run/{id}"), command)? {
+                claimed = Some(id);
+                break;
+            }
+            std::thread::yield_now();
+        }
+        let id = claimed.ok_or_else(|| StoreError::Rejected {
+            what: "run",
+            reason: "no unused run id could be claimed".into(),
+        })?;
         let now = clock.utc_now();
         let log = Self {
-            dir,
+            workspace: workspace.clone(),
             run: Run {
-                id,
+                id: id.clone(),
                 command: command.to_string(),
-                arguments,
+                arguments: arguments.clone(),
                 status: RunStatus::Running,
                 started_at: now.clone(),
-                updated_at: now,
+                updated_at: now.clone(),
                 stages: Vec::new(),
                 outputs: serde_json::Value::Null,
                 error: None,
             },
+            events: 1,
         };
-        log.write()?;
+        log.append(&event(
+            &id,
+            0,
+            "start",
+            &now,
+            json!({ "command": command, "arguments": arguments }),
+        ))?;
         Ok(log)
+    }
+
+    fn append(&self, entity: &Entity) -> Result<(), StoreError> {
+        self.workspace.write(|s| s.put_entity(entity).map(|_| ()))
     }
 
     /// The run's id.
@@ -153,13 +173,21 @@ impl RunLog {
         clock: &dyn Clock,
     ) -> Result<(), StoreError> {
         let now = clock.utc_now();
+        self.append(&event(
+            &self.run.id,
+            self.events,
+            "stage",
+            &now,
+            json!({ "stage": stage, "summary": summary }),
+        ))?;
+        self.events += 1;
         self.run.stages.push(RunStage {
             stage: stage.to_string(),
             finished_at: now.clone(),
             summary,
         });
         self.run.updated_at = now;
-        self.write()
+        Ok(())
     }
 
     /// Records how the run ended - `status`, what it produced, and why it
@@ -171,81 +199,121 @@ impl RunLog {
         error: Option<String>,
         clock: &dyn Clock,
     ) -> Result<Run, StoreError> {
+        let now = clock.utc_now();
+        self.append(&event(
+            &self.run.id,
+            self.events,
+            "finish",
+            &now,
+            json!({ "status": status, "outputs": outputs, "error": error }),
+        ))?;
         self.run.status = status;
         self.run.outputs = outputs;
         self.run.error = error;
-        self.run.updated_at = clock.utc_now();
-        self.write()?;
+        self.run.updated_at = now;
         Ok(self.run)
     }
-
-    fn write(&self) -> Result<(), StoreError> {
-        let text =
-            serde_json::to_string_pretty(&self.run).map_err(|source| StoreError::Serialize {
-                what: "run",
-                source,
-            })?;
-        let path = self.dir.join(RECORD);
-        write_atomic(&path, &text).map_err(io(&path))
-    }
 }
 
-/// Whether a cancel was requested for the run whose directory is `dir`.
+/// The signal that asks run `run_id` to stop.
+fn cancel_signal(run_id: &str) -> String {
+    format!("cancel/{run_id}")
+}
+
+/// Whether a cancel was requested for `run_id`. A signal that cannot be read
+/// is no request: a run is never stopped by a failure to look.
 #[must_use]
-pub fn cancel_requested(dir: &Path) -> bool {
-    dir.join(CANCEL_REQUEST).is_file()
+pub fn cancel_requested(workspace: &Workspace, run_id: &str) -> bool {
+    workspace.signalled(&cancel_signal(run_id)).unwrap_or(false)
 }
 
-/// Asks the process running `run_id` to stop. The request is a file in the
-/// run's directory, so it works from any process; the run polls for it.
-/// Refused for a run that is not recorded or not in progress.
-pub fn request_cancel(root: &StateRoot, run_id: &str) -> Result<PathBuf, StoreError> {
-    let run = read_run(root, run_id)?;
+/// Asks the process running `run_id` to stop, by raising a signal any process
+/// can see; the run polls for it. Returns the signal's name. Refused for a run
+/// that is not recorded or not in progress.
+pub fn request_cancel(workspace: &Workspace, run_id: &str) -> Result<String, StoreError> {
+    let run = read_run(workspace, run_id)?;
     if run.status != RunStatus::Running {
         return Err(StoreError::RunNotInProgress {
             run: run_id.to_string(),
             status: run.status.as_str().to_string(),
         });
     }
-    let path = root.run_dir(run_id).join(CANCEL_REQUEST);
-    write_atomic(&path, &crate::clock::utc_now()).map_err(io(&path))?;
-    Ok(path)
+    let signal = cancel_signal(run_id);
+    workspace.signal(&signal, &crate::clock::utc_now())?;
+    Ok(signal)
 }
 
-/// The record of `run_id`.
-pub fn read_run(root: &StateRoot, run_id: &str) -> Result<Run, StoreError> {
-    // A run id names a directory: anything that could step out of `runs/`
-    // is no run.
-    if run_id.is_empty() || run_id.contains(['/', '\\']) || run_id.starts_with('.') {
-        return Err(StoreError::UnknownRun(run_id.to_string()));
-    }
-    let path = root.run_dir(run_id).join(RECORD);
-    let bytes = match fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(StoreError::UnknownRun(run_id.to_string()))
-        }
-        Err(e) => return Err(io(&path)(e)),
-    };
-    decode(&path, &bytes)
-}
-
-/// Every recorded run, oldest first. A directory without a readable record
-/// is not a run and is skipped.
-pub fn list_runs(root: &StateRoot) -> Result<Vec<Run>, StoreError> {
-    let dir = root.runs();
-    let entries = match fs::read_dir(&dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(io(&dir)(e)),
-    };
-    let mut runs = Vec::new();
-    for entry in entries {
-        let name = entry.map_err(io(&dir))?.file_name();
-        if let Some(run) = name.to_str().and_then(|id| read_run(root, id).ok()) {
-            runs.push(run);
+/// The events of every run, each run's in order.
+fn events_by_run(
+    workspace: &Workspace,
+) -> Result<std::collections::BTreeMap<String, Vec<serde_json::Value>>, StoreError> {
+    workspace.refresh()?;
+    let stored = workspace.read(|s| s.entities(RUN_EVENT))?;
+    let mut runs: std::collections::BTreeMap<String, Vec<serde_json::Value>> = Default::default();
+    for found in stored {
+        if let Some(run) = found.entity.value.get("run").and_then(|r| r.as_str()) {
+            runs.entry(run.to_string())
+                .or_default()
+                .push(found.entity.value);
         }
     }
-    runs.sort_by(|a, b| a.id.cmp(&b.id));
+    for events in runs.values_mut() {
+        events.sort_by_key(|e| e.get("seq").and_then(serde_json::Value::as_u64));
+    }
     Ok(runs)
+}
+
+/// A run's record from its events; `None` when it has no start.
+fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
+    let start = events.iter().find(|e| e["kind"] == "start")?;
+    let text = |v: &serde_json::Value| v.as_str().unwrap_or_default().to_string();
+    let mut run = Run {
+        id: id.to_string(),
+        command: text(&start["body"]["command"]),
+        arguments: start["body"]["arguments"].clone(),
+        status: RunStatus::Running,
+        started_at: text(&start["at"]),
+        updated_at: text(&start["at"]),
+        stages: Vec::new(),
+        outputs: serde_json::Value::Null,
+        error: None,
+    };
+    for e in events {
+        match e["kind"].as_str() {
+            Some("stage") => {
+                run.stages.push(RunStage {
+                    stage: text(&e["body"]["stage"]),
+                    finished_at: text(&e["at"]),
+                    summary: e["body"]["summary"].clone(),
+                });
+                run.updated_at = text(&e["at"]);
+            }
+            Some("finish") => {
+                run.status = serde_json::from_value(e["body"]["status"].clone())
+                    .unwrap_or(RunStatus::Failed);
+                run.outputs = e["body"]["outputs"].clone();
+                run.error = e["body"]["error"].as_str().map(str::to_string);
+                run.updated_at = text(&e["at"]);
+            }
+            _ => {}
+        }
+    }
+    Some(run)
+}
+
+/// The record of `run_id`, as of every event any process has committed.
+pub fn read_run(workspace: &Workspace, run_id: &str) -> Result<Run, StoreError> {
+    events_by_run(workspace)?
+        .get(run_id)
+        .and_then(|events| fold(run_id, events))
+        .ok_or_else(|| StoreError::UnknownRun(run_id.to_string()))
+}
+
+/// Every recorded run, oldest first. Events with no start are not a run and
+/// are skipped.
+pub fn list_runs(workspace: &Workspace) -> Result<Vec<Run>, StoreError> {
+    Ok(events_by_run(workspace)?
+        .iter()
+        .filter_map(|(id, events)| fold(id, events))
+        .collect())
 }

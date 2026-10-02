@@ -279,7 +279,7 @@ fn learn_measures_the_candidate_on_variants_of_what_it_trained_on() {
 
     // The stage sits between the tasks being kept and the training set
     // being selected, and is part of the plan.
-    let stages: Vec<String> = read_run(ctx.root(), &run.run)
+    let stages: Vec<String> = read_run(ctx.workspace(), &run.run)
         .unwrap()
         .stages
         .into_iter()

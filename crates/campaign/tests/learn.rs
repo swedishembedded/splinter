@@ -159,7 +159,7 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     assert!(gated.gate.serve.measured.is_none());
     assert!(!report.finished(true) && report.finished(false));
 
-    let recorded = read_run(ctx.root(), &run.run).unwrap();
+    let recorded = read_run(ctx.workspace(), &run.run).unwrap();
     assert_eq!(recorded.status, RunStatus::Completed);
     let stages: Vec<&str> = recorded.stages.iter().map(|s| s.stage.as_str()).collect();
     assert_eq!(
@@ -312,7 +312,7 @@ fn the_policy_is_resolved_once_when_a_run_starts_and_recorded() {
     );
     assert!(run.report.release.is_none(), "--no-release");
 
-    let recorded = read_run(ctx.root(), &run.run).unwrap();
+    let recorded = read_run(ctx.workspace(), &run.run).unwrap();
     assert_eq!(recorded.stages[0].stage, "policy");
     assert_eq!(recorded.stages[0].summary["release"], first.to_string());
     assert!(recorded.stages.iter().all(|s| s.stage != "release"));

@@ -75,7 +75,7 @@ pub fn status(ctx: &Context) -> Result<Status, CampaignError> {
         ModelSelection::Local(weights) => (weights.base.clone(), weights.adapter.clone()),
         ModelSelection::Remote(_) => (PathBuf::new(), None),
     };
-    let runs = list_runs(ctx.root())?;
+    let runs = list_runs(ctx.workspace())?;
     let recent_runs = runs
         .iter()
         .skip(runs.len().saturating_sub(RECENT_RUNS))

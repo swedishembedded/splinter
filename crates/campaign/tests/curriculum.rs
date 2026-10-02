@@ -423,7 +423,7 @@ fn learn_keeps_the_frontier_by_default_and_generates_for_queued_concepts() {
         "the passing attempts of one task are one example: {select:#?}"
     );
     assert!(select.selection.duplicates >= 1, "{select:#?}");
-    let stages: Vec<String> = splinter_record::runs::read_run(ctx.root(), &run.run)
+    let stages: Vec<String> = splinter_record::runs::read_run(ctx.workspace(), &run.run)
         .unwrap()
         .stages
         .into_iter()

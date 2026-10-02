@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use splinter_record::runs::{self, list_runs, read_run, Run, RunLog, RunStatus};
+use splinter_record::workspace::Workspace;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
@@ -79,11 +80,16 @@ pub fn record<R: Serialize>(
     work: impl FnOnce(&mut Recorder<'_>) -> Result<R, CampaignError>,
 ) -> Result<Recorded<R>, CampaignError> {
     let arguments = to_json("arguments", arguments)?;
-    let log = RunLog::start(ctx.root(), command, arguments, ctx.clock())?;
+    let log = RunLog::start(ctx.workspace(), command, arguments, ctx.clock())?;
     let run = log.id().to_string();
     let cancel = CancelToken::new();
     let done = Arc::new(AtomicBool::new(false));
-    let watcher = watch_for_cancel(ctx.root().run_dir(&run), cancel.clone(), Arc::clone(&done));
+    let watcher = watch_for_cancel(
+        ctx.workspace().clone(),
+        run.clone(),
+        cancel.clone(),
+        Arc::clone(&done),
+    );
     let mut recorder = Recorder {
         ctx,
         log,
@@ -116,16 +122,17 @@ pub fn record<R: Serialize>(
     }
 }
 
-/// A thread that fires `cancel` once a cancel request appears in `dir`,
+/// A thread that fires `cancel` once a cancel request for `run` appears,
 /// until `done`.
 fn watch_for_cancel(
-    dir: std::path::PathBuf,
+    workspace: Workspace,
+    run: String,
     cancel: CancelToken,
     done: Arc<AtomicBool>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         while !done.load(Ordering::Relaxed) {
-            if runs::cancel_requested(&dir) {
+            if runs::cancel_requested(&workspace, &run) {
                 cancel.cancel();
                 return;
             }
@@ -183,7 +190,7 @@ pub struct RunList {
 /// Every recorded run.
 pub fn list(ctx: &Context) -> Result<RunList, CampaignError> {
     Ok(RunList {
-        runs: list_runs(ctx.root())?
+        runs: list_runs(ctx.workspace())?
             .iter()
             .map(RunSummary::from)
             .collect(),
@@ -192,7 +199,7 @@ pub fn list(ctx: &Context) -> Result<RunList, CampaignError> {
 
 /// The run `id`'s whole record.
 pub fn show(ctx: &Context, id: &str) -> Result<Run, CampaignError> {
-    Ok(read_run(ctx.root(), id)?)
+    Ok(read_run(ctx.workspace(), id)?)
 }
 
 /// What `runs cancel` reports.
@@ -200,13 +207,13 @@ pub fn show(ctx: &Context, id: &str) -> Result<Run, CampaignError> {
 pub struct CancelRequested {
     /// The run asked to stop.
     pub run: String,
-    /// The request file its process polls for.
-    pub request: std::path::PathBuf,
+    /// The signal its process polls for.
+    pub request: String,
 }
 
 /// Asks the run `id` to stop; refused for a run not in progress.
 pub fn cancel(ctx: &Context, id: &str) -> Result<CancelRequested, CampaignError> {
-    let request = runs::request_cancel(ctx.root(), id)?;
+    let request = runs::request_cancel(ctx.workspace(), id)?;
     Ok(CancelRequested {
         run: id.to_string(),
         request,

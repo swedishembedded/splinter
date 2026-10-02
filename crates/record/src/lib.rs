@@ -10,9 +10,8 @@
 //!
 //! ```text
 //! <root>/
-//!   runs/<run_id>/            one command's run record and cancel request
 //!   expdb/                    the experience database: sources, tasks,
-//!                             experiences, annotations and sets
+//!                             experiences, annotations, sets and runs
 //!   datasets/<id>/            one dataset and its manifest
 //!   calibrations/             each judge's latest calibration
 //!   train/<candidate_id>/     one trained candidate: adapter, scores, record
@@ -28,7 +27,7 @@
 //! half-written by a crash must never read as a status. A content-addressed
 //! object is written with [`write_once`], which never replaces a file.
 //! [`runs`] holds a command's run record, readable and cancellable from any
-//! process.
+//! process, in the experience database.
 //!
 //! Sources, tasks and experiences live in the experience database under
 //! `expdb/`, through one shared [`workspace::Workspace`]; the other
@@ -84,36 +83,6 @@ impl StateRoot {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.0
-    }
-
-    /// The directory holding every run.
-    #[must_use]
-    pub fn runs(&self) -> PathBuf {
-        self.0.join("runs")
-    }
-
-    /// One run's directory.
-    #[must_use]
-    pub fn run_dir(&self, run_id: &str) -> PathBuf {
-        self.runs().join(run_id)
-    }
-
-    /// The source store's directory.
-    #[must_use]
-    pub fn sources(&self) -> PathBuf {
-        self.0.join("sources")
-    }
-
-    /// The task store's directory.
-    #[must_use]
-    pub fn tasks(&self) -> PathBuf {
-        self.0.join("tasks")
-    }
-
-    /// The experience store's directory.
-    #[must_use]
-    pub fn experiences(&self) -> PathBuf {
-        self.0.join("experiences")
     }
 
     /// The experience database's directory.
@@ -284,7 +253,6 @@ mod tests {
         let home = Path::new("home-dir");
         let root = StateRoot::under_home(home);
         assert_eq!(root.path(), home.join(".sven").join("splinter"));
-        assert_eq!(root.run_dir("r1"), root.path().join("runs").join("r1"));
     }
 
     #[test]

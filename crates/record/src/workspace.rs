@@ -47,6 +47,7 @@ struct Group {
 
 struct Shared {
     root: StateRoot,
+    database: Mutex<Option<Database>>,
     session: Mutex<Option<Session>>,
     group: Mutex<Group>,
 }
@@ -122,6 +123,7 @@ impl Workspace {
         Self {
             shared: Arc::new(Shared {
                 root: root.clone(),
+                database: Mutex::new(None),
                 session: Mutex::new(None),
                 group: Mutex::new(Group {
                     open_batches: 0,
@@ -132,6 +134,28 @@ impl Workspace {
         }
     }
 
+    /// The database, opened on first use. It is not behind the session's
+    /// lock, so a process polling a signal never waits for a write.
+    fn database(&self) -> Result<Database, StoreError> {
+        let mut slot = locked(&self.shared.database);
+        if let Some(db) = slot.as_ref() {
+            return Ok(db.clone());
+        }
+        let db = Database::open(self.shared.root.expdb(), Config::default())?;
+        *slot = Some(db.clone());
+        Ok(db)
+    }
+
+    /// Raises the signal `name` with `note`; whether this call raised it.
+    pub fn signal(&self, name: &str, note: &str) -> Result<bool, StoreError> {
+        Ok(self.database()?.signal(name, note)?)
+    }
+
+    /// Whether the signal `name` has been raised, by any process.
+    pub fn signalled(&self, name: &str) -> Result<bool, StoreError> {
+        Ok(self.database()?.signalled(name)?)
+    }
+
     /// Runs `f` against the session, opening the database first if this is
     /// the first use.
     fn with_session<R>(
@@ -140,7 +164,7 @@ impl Workspace {
     ) -> Result<R, StoreError> {
         let mut slot = locked(&self.shared.session);
         if slot.is_none() {
-            let db = Database::open(self.shared.root.expdb(), Config::default())?;
+            let db = self.database()?;
             let identity = WriterIdentity::new("splinter", "state", "local", 0);
             *slot = Some(Session::open(&db, &identity)?);
         }

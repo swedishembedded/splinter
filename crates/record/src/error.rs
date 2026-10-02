@@ -5,7 +5,7 @@
 //! verified read they share: an object is only ever handed back after its
 //! bytes were checked against the address it is stored under.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::digest::Digest;
 use crate::experience::{ExperienceError, ExperienceId};
@@ -148,23 +148,4 @@ pub enum StoreError {
         /// The underlying error.
         source: std::io::Error,
     },
-}
-
-/// Wraps an I/O error on `path`.
-pub(crate) fn io(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
-    move |source| StoreError::Io {
-        path: path.to_path_buf(),
-        source,
-    }
-}
-
-/// `bytes` decoded as the record stored at `path`.
-pub(crate) fn decode<T: serde::de::DeserializeOwned>(
-    path: &Path,
-    bytes: &[u8],
-) -> Result<T, StoreError> {
-    serde_json::from_slice(bytes).map_err(|e| StoreError::Undecodable {
-        path: path.to_path_buf(),
-        reason: e.to_string(),
-    })
 }
