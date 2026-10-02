@@ -9,28 +9,22 @@
 //! The answers `ask` gave, recorded so an answer traces back to the model
 //! and the release that gave it.
 //!
-//! ```text
-//! <root>/answers/<hex>.json    one answer in canonical JSON; <hex> is its digest
-//! ```
-//!
-//! An [`AnswerId`] is the digest of the record's canonical form (see
-//! `splinter_record::digest`), the time it was asked included, so asking the
-//! same question twice records two answers. A record is written once and
-//! checked against its address on every read. Every record carries
-//! [`ANSWER_FORMAT`]; a later format adds fields beside it rather than
-//! changing what these mean.
-
-use std::fs;
-use std::path::PathBuf;
+//! An answer is a document in the experience database. An [`AnswerId`] is the
+//! digest of the record's canonical form (see `splinter_record::digest`), the
+//! time it was asked included, so asking the same question twice records two
+//! answers. A record is stored once and checked against its address on every
+//! read. Every record carries [`ANSWER_FORMAT`]; a later format adds fields
+//! beside it rather than changing what these mean.
 
 use serde::{Deserialize, Serialize};
-use splinter_record::digest::{canonical_json, Digest};
-use splinter_record::experiences::StoreError;
+use splinter_record::digest::Digest;
 use splinter_record::source::SourceId;
-use splinter_record::{write_once, StateRoot};
+use splinter_record::workspace::Workspace;
 
-use crate::error::{io, CampaignError};
+use crate::error::CampaignError;
 use crate::release::ReleaseId;
+
+const ANSWER: &str = "answer";
 
 /// The `format` every answer record carries.
 pub const ANSWER_FORMAT: &str = "splinter-answer-v1";
@@ -76,86 +70,44 @@ pub struct AnswerRecord {
     pub asked_at: String,
 }
 
-/// The recorded answers under one state root.
+/// The recorded answers.
 #[derive(Clone, Debug)]
 pub struct AnswerStore {
-    dir: PathBuf,
+    workspace: Workspace,
 }
 
 impl AnswerStore {
-    /// The store under `root`; nothing is created until something is
-    /// written.
+    /// The store over `workspace`.
     #[must_use]
-    pub fn open(root: &StateRoot) -> Self {
+    pub fn new(workspace: &Workspace) -> Self {
         Self {
-            dir: root.answers(),
+            workspace: workspace.clone(),
         }
     }
 
-    fn path(&self, id: &AnswerId) -> PathBuf {
-        self.dir.join(format!("{}.json", id.0.hex()))
-    }
-
-    /// Records `record` and returns its id; recording the same record
-    /// again is a no-op, and an existing file that no longer matches its
-    /// address is reported as corrupt rather than replaced.
+    /// Records `record` and returns its id; recording the same record again is
+    /// a no-op.
     pub fn put(&self, record: &AnswerRecord) -> Result<AnswerId, CampaignError> {
-        let bytes = canonical_json(record).map_err(|source| CampaignError::Json {
-            what: "answer record".into(),
-            source,
-        })?;
-        let id = AnswerId(Digest::of(&bytes));
-        let path = self.path(&id);
-        if !write_once(&path, &bytes).map_err(io(&path))? {
-            self.get(&id)?;
-        }
-        Ok(id)
+        Ok(AnswerId(self.workspace.put_document(ANSWER, record)?))
     }
 
     /// The answer `id`, verified against its address.
     pub fn get(&self, id: &AnswerId) -> Result<AnswerRecord, CampaignError> {
-        let path = self.path(id);
-        if !path.is_file() {
-            return Err(CampaignError::NotFound {
+        self.workspace
+            .get_document(ANSWER, &id.0)?
+            .ok_or_else(|| CampaignError::NotFound {
                 what: "answer",
                 id: id.to_string(),
-            });
-        }
-        let bytes = fs::read(&path).map_err(io(&path))?;
-        let found = Digest::of(&bytes);
-        if found != id.0 {
-            return Err(CampaignError::Store(StoreError::Corrupt {
-                path,
-                expected: id.0.clone(),
-                found,
-            }));
-        }
-        serde_json::from_slice(&bytes).map_err(|source| CampaignError::Json {
-            what: path.display().to_string(),
-            source,
-        })
+            })
     }
 
-    /// Every recorded answer's id, in id order (without verifying them).
+    /// Every recorded answer's id, in id order.
     pub fn list(&self) -> Result<Vec<AnswerId>, CampaignError> {
-        let entries = match fs::read_dir(&self.dir) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(io(&self.dir)(e)),
-        };
-        let mut ids = Vec::new();
-        for entry in entries {
-            let name = entry.map_err(io(&self.dir))?.file_name();
-            // Only `<64 hex>.json` is a record; a write-once temporary is not.
-            let digest = name
-                .to_str()
-                .and_then(|n| n.strip_suffix(".json"))
-                .and_then(|hex| Digest::from_content_hex(hex).ok());
-            if let Some(digest) = digest {
-                ids.push(AnswerId(digest));
-            }
-        }
-        ids.sort();
-        Ok(ids)
+        Ok(self
+            .workspace
+            .document_ids(ANSWER)?
+            .into_iter()
+            .map(AnswerId)
+            .collect())
     }
 }

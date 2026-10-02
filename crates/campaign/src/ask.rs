@@ -22,7 +22,7 @@ use splinter_record::experience::{Environment, Task};
 use splinter_record::source::SourceId;
 use splinter_sandbox::ResolvedEnvironment;
 
-use crate::answers::{AnswerId, AnswerRecord, AnswerStore, ANSWER_FORMAT};
+use crate::answers::{AnswerId, AnswerRecord, ANSWER_FORMAT};
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
@@ -115,7 +115,7 @@ pub fn ask(
         open_book,
         asked_at: ctx.clock().utc_now(),
     };
-    let id = AnswerStore::open(ctx.root()).put(&record)?;
+    let id = ctx.answers().put(&record)?;
     Ok(Answer {
         id,
         question: record.question,

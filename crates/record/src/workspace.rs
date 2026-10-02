@@ -206,6 +206,12 @@ impl Workspace {
         Ok(self.database()?.signal(name, note)?)
     }
 
+    /// Every signal whose name starts with `prefix`, with its note, in name
+    /// order.
+    pub fn signals(&self, prefix: &str) -> Result<Vec<(String, String)>, StoreError> {
+        Ok(self.database()?.signals(prefix)?)
+    }
+
     /// The note the signal `name` was raised with, if it has been raised.
     pub fn signal_note(&self, name: &str) -> Result<Option<String>, StoreError> {
         Ok(self.database()?.signal_note(name)?)

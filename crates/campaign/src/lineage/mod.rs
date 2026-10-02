@@ -302,6 +302,8 @@ impl Lineage {
 
 /// The lineage of the artifact `request.id` names.
 pub fn lineage(ctx: &Context, request: &LineageRequest) -> Result<Lineage, CampaignError> {
+    // What other processes committed since this one last looked.
+    ctx.workspace().refresh()?;
     let graph = load::load(ctx)?;
     let root = graph.resolve(&request.id)?.id.clone();
     let mut walk = Walk {

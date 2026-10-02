@@ -45,6 +45,7 @@ use splinter_sandbox::{
 };
 use splinter_views::DatasetStore;
 
+use crate::answers::AnswerStore;
 use crate::config::Config;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
@@ -223,6 +224,12 @@ impl Context {
     #[must_use]
     pub fn experiences(&self) -> ExperienceStore {
         ExperienceStore::new(&self.workspace)
+    }
+
+    /// The answers `ask` gave.
+    #[must_use]
+    pub fn answers(&self) -> AnswerStore {
+        AnswerStore::new(&self.workspace)
     }
 
     /// The dataset store.

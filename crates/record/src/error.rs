@@ -64,6 +64,16 @@ pub enum StoreError {
         /// The part name asked for.
         part: String,
     },
+    /// A pointer was moved from a value it no longer has.
+    #[error("{pointer} no longer points at {expected:?}: it points at {found:?}")]
+    PointerConflict {
+        /// The pointer.
+        pointer: String,
+        /// What the caller believed it pointed at.
+        expected: Option<String>,
+        /// What it points at.
+        found: Option<String>,
+    },
     /// The database holds no artifact with this digest.
     #[error("no artifact {0} is recorded")]
     UnknownArtifact(Digest),

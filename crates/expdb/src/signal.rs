@@ -28,6 +28,19 @@ impl Database {
         self.backend().exists(&Key::new(Kind::Signal, name)?)
     }
 
+    /// Every signal whose name starts with `prefix`, with its note, in name
+    /// order.
+    pub fn signals(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let mut found = Vec::new();
+        for key in self.backend().list(Kind::Signal)? {
+            if key.name().starts_with(prefix) {
+                let note = String::from_utf8_lossy(&self.backend().read(&key)?).into_owned();
+                found.push((key.name().to_owned(), note));
+            }
+        }
+        Ok(found)
+    }
+
     /// The note `name` was raised with, if it has been raised.
     pub fn signal_note(&self, name: &str) -> Result<Option<String>> {
         let key = Key::new(Kind::Signal, name)?;

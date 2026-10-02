@@ -17,7 +17,6 @@ use splinter_record::experiences::StoreError;
 use splinter_record::source::Origin;
 use splinter_record::sources::SourceStore;
 
-use crate::answers::AnswerStore;
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::release::{ReleaseStore, StoredRelease};
@@ -401,7 +400,7 @@ fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
 }
 
 fn answers(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
-    let store = AnswerStore::open(ctx.root());
+    let store = ctx.answers();
     for id in store.list()? {
         let record = store.get(&id)?;
         let answer = id.as_str();
