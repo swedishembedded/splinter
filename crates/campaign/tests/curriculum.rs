@@ -257,8 +257,11 @@ fn pass_at_k_keeps_the_frontier_and_the_taught_and_records_every_attempt() {
 
     // The measurement is recorded per task: attempts, passes, rate, and
     // the release measured.
-    let recorded: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&frontier.path).unwrap()).unwrap();
+    let recorded: serde_json::Value = ctx
+        .workspace()
+        .get_document("frontier_measurement", &frontier.measurement)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         recorded["policy"],
         json!({ "alias": "default", "release": null })
@@ -397,8 +400,11 @@ fn learn_keeps_the_frontier_by_default_and_generates_for_queued_concepts() {
     let frontier = report.frontier.as_ref().unwrap();
     let d = frontier.distribution;
     assert_eq!((d.always, d.never, d.frontier), (0, 1, 1), "{frontier:#?}");
-    let recorded: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&frontier.path).unwrap()).unwrap();
+    let recorded: serde_json::Value = ctx
+        .workspace()
+        .get_document("frontier_measurement", &frontier.measurement)
+        .unwrap()
+        .unwrap();
     let baud = recorded["tasks"]
         .as_array()
         .unwrap()

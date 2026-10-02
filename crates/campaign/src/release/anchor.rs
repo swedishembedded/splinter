@@ -10,14 +10,11 @@
 //! The anchor suite: a frozen, versioned set of general tasks every release
 //! is held to, so learning one thing does not cost general behaviour.
 //!
-//! ```text
-//! <root>/suites/anchor/<hex>.json   one version, canonical JSON; <hex> is its digest
-//! <root>/suites/anchor/current      `blake3:<hex>` of the version in force
-//! ```
-//!
-//! A version is frozen from a file ([`freeze`]) and never changes; freezing
-//! other tasks makes the next version, and freezing the tasks already in
-//! force changes nothing. A release records the version and digest it was
+//! A version is a document in the experience database, named by its digest,
+//! and the pointer `anchor` names the version in force, so which version was in
+//! force when is on record. A version is frozen from a file ([`freeze`]) and
+//! never changes; freezing other tasks makes the next version, and freezing the
+//! tasks already in force changes nothing. A release records the version and digest it was
 //! held to.
 //!
 //! The file is JSON Lines, one task per line: `{"instruction": ...,
@@ -25,13 +22,12 @@
 //! task kind solved closed-book whose verifiers include the formal one, so
 //! every anchor task can be graded without a judge.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
-use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::digest::Digest;
 use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_record::{write_atomic, write_once};
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};
@@ -85,37 +81,25 @@ struct AnchorLine {
     kind: Option<String>,
 }
 
-fn dir(ctx: &Context) -> PathBuf {
-    ctx.root().suites().join("anchor")
-}
+const VERSION: &str = "anchor_version";
+const POINTER: &str = "anchor";
 
 /// The anchor suite version in force, verified; `None` before one is
 /// frozen.
 pub fn current(ctx: &Context) -> Result<Option<FrozenAnchor>, CampaignError> {
-    let pointer = dir(ctx).join("current");
-    let text = match std::fs::read_to_string(&pointer) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(io(&pointer)(e)),
+    ctx.workspace().refresh()?;
+    let Some((_, value)) = ctx.workspace().pointer(POINTER)? else {
+        return Ok(None);
     };
-    let digest = Digest::parse(text.trim())
-        .map_err(|e| CampaignError::Refused(format!("{} is corrupt: {e}", pointer.display())))?;
-    let path = dir(ctx).join(format!("{}.json", digest.hex()));
-    let bytes = std::fs::read(&path).map_err(io(&path))?;
-    let found = Digest::of(&bytes);
-    if found != digest {
-        return Err(CampaignError::Store(
-            splinter_record::experiences::StoreError::Corrupt {
-                path,
-                expected: digest,
-                found,
-            },
-        ));
-    }
-    let suite = serde_json::from_slice(&bytes).map_err(|source| CampaignError::Json {
-        what: path.display().to_string(),
-        source,
-    })?;
+    let digest = Digest::parse(&value)
+        .map_err(|e| CampaignError::Refused(format!("the anchor pointer is corrupt: {e}")))?;
+    let suite = ctx
+        .workspace()
+        .get_document(VERSION, &digest)?
+        .ok_or_else(|| CampaignError::NotFound {
+            what: "anchor suite version",
+            id: digest.to_string(),
+        })?;
     Ok(Some(FrozenAnchor { digest, suite }))
 }
 
@@ -180,26 +164,25 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, CampaignError> {
 
 /// Freezes the tasks in `file` as the anchor suite's next version and puts
 /// it in force; the version in force is kept when it holds the same tasks.
+/// Refused if another process froze one in the meantime.
 pub fn freeze(ctx: &Context, file: &Path) -> Result<FrozenAnchor, CampaignError> {
     let tasks = read_tasks(file)?;
     let previous = current(ctx)?;
-    if let Some(previous) = previous.filter(|p| p.suite.tasks == tasks) {
-        return Ok(previous);
+    if let Some(previous) = previous.as_ref().filter(|p| p.suite.tasks == tasks) {
+        return Ok(previous.clone());
     }
-    let version = current(ctx)?.map_or(1, |p| p.suite.version + 1);
+    let version = previous.as_ref().map_or(1, |p| p.suite.version + 1);
     let suite = AnchorSuite {
         format: ANCHOR_FORMAT.into(),
         version,
         tasks,
     };
-    let bytes = canonical_json(&suite).map_err(|source| CampaignError::Json {
-        what: "anchor suite".into(),
-        source,
-    })?;
-    let digest = Digest::of(&bytes);
-    let path = dir(ctx).join(format!("{}.json", digest.hex()));
-    write_once(&path, &bytes).map_err(io(&path))?;
-    let pointer = dir(ctx).join("current");
-    write_atomic(&pointer, &format!("{digest}\n")).map_err(io(&pointer))?;
+    let digest = ctx.workspace().put_document(VERSION, &suite)?;
+    ctx.workspace().move_pointer(
+        POINTER,
+        previous.as_ref().map(|p| p.digest.as_str()),
+        digest.as_str(),
+        &ctx.clock().utc_now(),
+    )?;
     Ok(FrozenAnchor { digest, suite })
 }

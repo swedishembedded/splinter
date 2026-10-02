@@ -65,6 +65,33 @@ impl Workspace {
         Ok(moves)
     }
 
+    /// Every pointer whose name starts with `prefix`, with what it points at
+    /// now, in name order.
+    pub fn pointers(&self, prefix: &str) -> Result<Vec<(String, String)>, StoreError> {
+        let mut latest: std::collections::BTreeMap<String, (u64, String)> = Default::default();
+        for (signal, note) in self.signals(&format!("pointer/{prefix}"))? {
+            let rest = &signal["pointer/".len()..];
+            let Some((name, version)) = rest.rsplit_once('/') else {
+                continue;
+            };
+            let version = version.parse::<u64>().unwrap_or(0);
+            let value = serde_json::from_str::<PointerMove>(&note)
+                .map(|m| m.value)
+                .map_err(|e| StoreError::UndecodableObject {
+                    what: format!("pointer {name}"),
+                    reason: e.to_string(),
+                })?;
+            let entry = latest.entry(name.to_owned()).or_insert((0, String::new()));
+            if version >= entry.0 {
+                *entry = (version, value);
+            }
+        }
+        Ok(latest
+            .into_iter()
+            .map(|(name, (_, value))| (name, value))
+            .collect())
+    }
+
     /// What the pointer `name` points at now, with its version.
     pub fn pointer(&self, name: &str) -> Result<Option<(u64, String)>, StoreError> {
         Ok(self

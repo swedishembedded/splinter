@@ -43,7 +43,7 @@ impl Report for Frontier {
             "pass@{} of {} ({sampling}) over {} task(s), taught by {}: {} kept - {} on the \
              frontier, {} taught; {} always solved (no signal), {} never solved with no \
              verified answer, {} unmeasured\n  frontier task set {} (attempts and verified \
-             answers: {})\n  measurement {} at {}\n",
+             answers: {})\n  measurement {}\n",
             self.k,
             measured,
             d.tasks(),
@@ -56,8 +56,7 @@ impl Report for Frontier {
             d.unmeasured,
             self.frontier_task_set,
             self.frontier_experience_set,
-            self.measurement,
-            self.path.display()
+            self.measurement
         )
     }
 }

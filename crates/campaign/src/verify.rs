@@ -31,13 +31,13 @@ use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifie
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
 use splinter_record::annotation::{decide, AnnotationBody, Outcome, Producer};
+use splinter_record::digest::Digest;
 use splinter_record::experience::{Experience, ExperienceId, Task};
 use splinter_record::experiences::SetId;
-use splinter_record::write_atomic;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
-use crate::error::{io, CampaignError};
+use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
 
 /// The producer of the formal verifier's verdicts on generated tasks.
@@ -56,6 +56,8 @@ pub const STATED_VERSION: &str = "1";
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
 
+const CALIBRATION: &str = "calibration";
+
 /// A judge and the calibration its verdicts are gated by.
 pub struct Judge {
     model: Model,
@@ -68,20 +70,12 @@ impl Judge {
     pub fn load(ctx: &Context, reference: &ModelRef) -> Result<Self, CampaignError> {
         let model = ctx.model(reference)?;
         let producer = judge_verifier(ctx, &model).producer();
-        let path = calibration_path(ctx, &producer);
-        let text = std::fs::read_to_string(&path).map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                CampaignError::Refused(format!(
-                    "judge {reference} has no calibration; its verdicts would stand unmeasured. \
-                     Run `splinter judge calibrate <LABELLED-FILE> --judge {reference}` first"
-                ))
-            } else {
-                io(&path)(e)
-            }
-        })?;
-        let calibration = serde_json::from_str(&text).map_err(|source| CampaignError::Json {
-            what: path.display().to_string(),
-            source,
+        ctx.workspace().refresh()?;
+        let calibration = latest_calibration(ctx, &producer)?.ok_or_else(|| {
+            CampaignError::Refused(format!(
+                "judge {reference} has no calibration; its verdicts would stand unmeasured. \
+                 Run `splinter judge calibrate <LABELLED-FILE> --judge {reference}` first"
+            ))
         })?;
         Ok(Self { model, calibration })
     }
@@ -100,33 +94,52 @@ pub(crate) fn judge_verifier(ctx: &Context, model: &Model) -> JudgeVerifier {
     JudgeVerifier::new(model.clone(), ctx.handle(), DEFAULT_JUDGE_DEADLINE)
 }
 
-/// Where the latest calibration of the judge `producer` is kept.
-pub(crate) fn calibration_path(ctx: &Context, producer: &Producer) -> std::path::PathBuf {
+/// The pointer that names the latest calibration of the judge `producer`.
+fn calibration_pointer(producer: &Producer) -> String {
     let name: String = format!("{}@{}", producer.name, producer.version)
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '@') {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
                 c
             } else {
                 '_'
             }
         })
         .collect();
-    ctx.root().calibrations().join(format!("{name}.json"))
+    format!("calibration-{name}")
 }
 
-/// Writes `calibration` as its judge's latest.
+/// The latest calibration of the judge `producer`, if it has one.
+fn latest_calibration(
+    ctx: &Context,
+    producer: &Producer,
+) -> Result<Option<Calibration>, CampaignError> {
+    let Some((_, value)) = ctx.workspace().pointer(&calibration_pointer(producer))? else {
+        return Ok(None);
+    };
+    let digest = Digest::parse(&value)
+        .map_err(|e| CampaignError::Refused(format!("a calibration pointer is corrupt: {e}")))?;
+    Ok(ctx.workspace().get_document(CALIBRATION, &digest)?)
+}
+
+/// Records `calibration` as its judge's latest, keeping the ones before it,
+/// and returns its address.
 pub(crate) fn store_calibration(
     ctx: &Context,
     calibration: &Calibration,
-) -> Result<std::path::PathBuf, CampaignError> {
-    let path = calibration_path(ctx, &calibration.producer);
-    let text = serde_json::to_string_pretty(calibration).map_err(|source| CampaignError::Json {
-        what: "calibration".into(),
-        source,
-    })?;
-    write_atomic(&path, &text).map_err(io(&path))?;
-    Ok(path)
+) -> Result<Digest, CampaignError> {
+    let digest = ctx.workspace().put_document(CALIBRATION, calibration)?;
+    let pointer = calibration_pointer(&calibration.producer);
+    let current = ctx.workspace().pointer(&pointer)?.map(|(_, value)| value);
+    if current.as_deref() != Some(digest.as_str()) {
+        ctx.workspace().move_pointer(
+            &pointer,
+            current.as_deref(),
+            digest.as_str(),
+            &ctx.clock().utc_now(),
+        )?;
+    }
+    Ok(digest)
 }
 
 /// The verifiers that grade answers to `task`: its kind's, in the

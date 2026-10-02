@@ -206,8 +206,11 @@ fn learn_teaches_a_fact_the_policy_never_answers_closed_book() {
         (0, 0, 2, 0, 0),
         "{frontier:#?}"
     );
-    let recorded: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&frontier.path).unwrap()).unwrap();
+    let recorded: serde_json::Value = ctx
+        .workspace()
+        .get_document("frontier_measurement", &frontier.measurement)
+        .unwrap()
+        .unwrap();
     for row in recorded["tasks"].as_array().unwrap() {
         assert_eq!(row["class"], "taught", "{row}");
         assert_eq!(

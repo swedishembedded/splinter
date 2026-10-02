@@ -30,7 +30,6 @@
 //! release the policy was, k and the sampling.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::time::Instant;
 
 use serde::Serialize;
@@ -39,16 +38,15 @@ use splinter_lab::frontier::{Distribution, FrontierClass, PassCount};
 pub use splinter_policy::Sampling;
 use splinter_policy::AGENT_SAMPLING;
 use splinter_record::annotation::decide;
-use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::digest::Digest;
 use splinter_record::experience::ExperienceId;
 use splinter_record::experiences::{ExperienceSet, SetId};
 use splinter_record::tasks::{TaskSet, TaskSetId};
-use splinter_record::write_once;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};
-use crate::error::{io, CampaignError};
+use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
 use crate::model_ref::ModelRef;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
@@ -188,13 +186,13 @@ pub struct Measurement {
     pub measured_at: String,
 }
 
+const MEASUREMENT: &str = "frontier_measurement";
+
 /// What frontier selection reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct Frontier {
     /// The recorded measurement's address.
     pub measurement: Digest,
-    /// Where it is recorded.
-    pub path: PathBuf,
     /// The solver's identity.
     pub solver: String,
     /// The release a policy solver was.
@@ -300,10 +298,9 @@ pub fn select_frontier(
         frontier_experience_set: frontier_experience_set.clone(),
         measured_at: ctx.clock().utc_now(),
     };
-    let (id, path) = record(ctx, &measurement)?;
+    let id = record(ctx, &measurement)?;
     Ok(Frontier {
         measurement: id,
-        path,
         solver: measurement.solver,
         policy: measurement.policy,
         k: measurement.k,
@@ -315,20 +312,9 @@ pub fn select_frontier(
     })
 }
 
-/// Writes `measurement` once under its address.
-fn record(ctx: &Context, measurement: &Measurement) -> Result<(Digest, PathBuf), CampaignError> {
-    let bytes = canonical_json(measurement).map_err(|source| CampaignError::Json {
-        what: "pass@k measurement".into(),
-        source,
-    })?;
-    let id = Digest::of(&bytes);
-    let path = ctx
-        .root()
-        .curriculum()
-        .join("measurements")
-        .join(format!("{}.json", id.hex()));
-    write_once(&path, &bytes).map_err(io(&path))?;
-    Ok((id, path))
+/// Records `measurement` once under its address.
+fn record(ctx: &Context, measurement: &Measurement) -> Result<Digest, CampaignError> {
+    Ok(ctx.workspace().put_document(MEASUREMENT, measurement)?)
 }
 
 /// One pass@k measurement's inputs and bounds.

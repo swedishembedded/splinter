@@ -359,14 +359,13 @@ impl Report for Calibrated {
     fn human(&self) -> String {
         let c = &self.calibration;
         format!(
-            "judge {} measured on {} labelled experience(s): pass precision {}, fail precision {}, abstains {}\n  calibration {} kept at {}\n",
+            "judge {} measured on {} labelled experience(s): pass precision {}, fail precision {}, abstains {}\n  calibration {} kept as {}\n",
             self.judge,
             c.n,
             share(c.precision_pass),
             share(c.precision_fail),
             share(c.abstain_rate),
-            c.id,
-            self.path.display()
+            c.id, self.stored
         )
     }
 }

@@ -13,11 +13,12 @@
 //! The labelled file is JSON Lines, one experience per line:
 //! `{"experience": "<id or unique prefix>", "label": "pass" | "fail"}`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use splinter_lab::verifiers::calibration::{calibrate, Calibration};
 use splinter_record::annotation::Outcome;
+use splinter_record::digest::Digest;
 use splinter_record::experience::ExperienceId;
 
 use crate::context::Context;
@@ -41,8 +42,8 @@ pub struct Calibrated {
     pub judge: String,
     /// The measurement: how often its passes and its fails were right.
     pub calibration: Calibration,
-    /// Where it is kept, as the judge's latest calibration.
-    pub path: PathBuf,
+    /// Its address: kept, and from now on the judge's latest calibration.
+    pub stored: Digest,
 }
 
 /// Measures the judge `judge` names on the experiences `labelled` lists.
@@ -81,10 +82,10 @@ pub fn calibrate_judge(
     let model = ctx.model(judge)?;
     let verifier = judge_verifier(ctx, &model);
     let calibration = calibrate(&verifier, &examples)?;
-    let path = store_calibration(ctx, &calibration)?;
+    let stored = store_calibration(ctx, &calibration)?;
     Ok(Calibrated {
         judge: model.identity,
         calibration,
-        path,
+        stored,
     })
 }

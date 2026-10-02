@@ -125,3 +125,21 @@ fn of_several_processes_moving_one_pointer_at_once_exactly_one_wins() {
     );
     let _ = std::fs::remove_dir_all(root.path());
 }
+
+#[test]
+fn pointers_are_listed_by_prefix_with_their_current_values() {
+    let root = root("list");
+    let ws = Workspace::at(&root);
+    ws.move_pointer("queue-a", None, "one", "t").unwrap();
+    ws.move_pointer("queue-a", Some("one"), "two", "t").unwrap();
+    ws.move_pointer("queue-b", None, "x", "t").unwrap();
+    ws.move_pointer("alias", None, "y", "t").unwrap();
+    assert_eq!(
+        ws.pointers("queue-").unwrap(),
+        vec![
+            ("queue-a".to_owned(), "two".to_owned()),
+            ("queue-b".to_owned(), "x".to_owned())
+        ]
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+}

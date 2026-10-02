@@ -18,21 +18,30 @@
 //! queue once its task set is stored ([`complete`]); a run that fails
 //! before that leaves them queued.
 //!
-//! Each queued concept is one file, `<root>/curriculum/queue/<hex>.json`,
-//! named by the digest of the concept: queuing a concept again merges the
-//! new sections and reasons into the entry already there.
+//! Each queued concept is a pointer, `queue-<digest of the concept>`, to the
+//! document that holds its entry, or to `done` once it was taken off the queue:
+//! queuing a concept again merges the new sections and reasons into its entry
+//! and moves the pointer, so two processes queuing at once cannot lose one
+//! another's merge, and the history of a concept's queuing stays on record.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use splinter_knowledge::concepts::{Concept, ConceptResolver, SectionRef};
 use splinter_record::digest::{canonical_json, Digest};
-use splinter_record::write_atomic;
+use splinter_record::experiences::StoreError;
 
 use crate::context::Context;
-use crate::error::{io, CampaignError};
+use crate::error::CampaignError;
 use crate::release::gate::GateReport;
+
+const ENTRY: &str = "queue_entry";
+const PREFIX: &str = "queue-";
+const DONE: &str = "done";
+
+/// How many times a merge retries when another process moved the same
+/// pointer first.
+const MERGE_ATTEMPTS: usize = 16;
 
 /// A concept waiting for new tasks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -49,16 +58,28 @@ pub struct QueuedConcept {
     pub queued_at: String,
 }
 
-fn queue_dir(ctx: &Context) -> PathBuf {
-    ctx.root().curriculum().join("queue")
-}
-
-fn entry_path(ctx: &Context, concept: &Concept) -> Result<PathBuf, CampaignError> {
+fn pointer_of(concept: &Concept) -> Result<String, CampaignError> {
     let bytes = canonical_json(concept).map_err(|source| CampaignError::Json {
         what: "concept".into(),
         source,
     })?;
-    Ok(queue_dir(ctx).join(format!("{}.json", Digest::of(&bytes).hex())))
+    Ok(format!("{PREFIX}{}", &Digest::of(&bytes).hex()[..32]))
+}
+
+/// The entry `concept`'s pointer holds, and the value to move it from.
+fn entry_of(
+    ctx: &Context,
+    pointer: &str,
+) -> Result<(Option<String>, Option<QueuedConcept>), CampaignError> {
+    let Some((_, value)) = ctx.workspace().pointer(pointer)? else {
+        return Ok((None, None));
+    };
+    if value == DONE {
+        return Ok((Some(value), None));
+    }
+    let digest = Digest::parse(&value)
+        .map_err(|e| CampaignError::Refused(format!("queue pointer {pointer} is corrupt: {e}")))?;
+    Ok((Some(value), ctx.workspace().get_document(ENTRY, &digest)?))
 }
 
 /// Queues the concepts of every task a failed retention suite of `gate`
@@ -95,43 +116,58 @@ pub fn enqueue_retention(ctx: &Context, gate: &GateReport) -> Result<Vec<Concept
         }
     }
     for (concept, (sections, reasons)) in &found {
-        let path = entry_path(ctx, concept)?;
-        let mut entry = read(&path)?.unwrap_or_else(|| QueuedConcept {
-            concept: concept.clone(),
-            sections: Vec::new(),
-            reasons: Vec::new(),
-            queued_at: ctx.clock().utc_now(),
-        });
-        for section in sections {
-            if !entry.sections.contains(section) {
-                entry.sections.push(section.clone());
+        let pointer = pointer_of(concept)?;
+        for attempt in 0..MERGE_ATTEMPTS {
+            ctx.workspace().refresh()?;
+            let (from, existing) = entry_of(ctx, &pointer)?;
+            let mut entry = existing.unwrap_or_else(|| QueuedConcept {
+                concept: concept.clone(),
+                sections: Vec::new(),
+                reasons: Vec::new(),
+                queued_at: ctx.clock().utc_now(),
+            });
+            for section in sections {
+                if !entry.sections.contains(section) {
+                    entry.sections.push(section.clone());
+                }
+            }
+            for reason in reasons {
+                if !entry.reasons.contains(reason) {
+                    entry.reasons.push(reason.clone());
+                }
+            }
+            let stored = ctx.workspace().put_document(ENTRY, &entry)?;
+            if from.as_deref() == Some(stored.as_str()) {
+                break;
+            }
+            match ctx.workspace().move_pointer(
+                &pointer,
+                from.as_deref(),
+                stored.as_str(),
+                &ctx.clock().utc_now(),
+            ) {
+                Ok(_) => break,
+                // Another process moved it first: merge into what it left.
+                Err(StoreError::PointerConflict { .. }) if attempt + 1 < MERGE_ATTEMPTS => {}
+                Err(other) => return Err(other.into()),
             }
         }
-        for reason in reasons {
-            if !entry.reasons.contains(reason) {
-                entry.reasons.push(reason.clone());
-            }
-        }
-        write(&path, &entry)?;
     }
     Ok(found.into_keys().collect())
 }
 
 /// Every queued concept, in concept order.
 pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, CampaignError> {
-    let dir = queue_dir(ctx);
-    let listing = match std::fs::read_dir(&dir) {
-        Ok(listing) => listing,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(io(&dir)(e)),
-    };
-    let mut queued = Vec::new();
-    for item in listing {
-        let path = item.map_err(io(&dir))?.path();
-        if path.extension().is_some_and(|e| e == "json") {
-            if let Some(entry) = read(&path)? {
-                queued.push(entry);
-            }
+    ctx.workspace().refresh()?;
+    let mut queued: Vec<QueuedConcept> = Vec::new();
+    for (_, value) in ctx.workspace().pointers(PREFIX)? {
+        if value == DONE {
+            continue;
+        }
+        let digest = Digest::parse(&value)
+            .map_err(|e| CampaignError::Refused(format!("a queue pointer is corrupt: {e}")))?;
+        if let Some(entry) = ctx.workspace().get_document(ENTRY, &digest)? {
+            queued.push(entry);
         }
     }
     queued.sort_by(|a, b| a.concept.cmp(&b.concept));
@@ -141,34 +177,20 @@ pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, CampaignError> {
 /// Takes `done` off the queue.
 pub fn complete(ctx: &Context, done: &[QueuedConcept]) -> Result<(), CampaignError> {
     for entry in done {
-        let path = entry_path(ctx, &entry.concept)?;
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(io(&path)(e)),
+        let pointer = pointer_of(&entry.concept)?;
+        let (from, _) = entry_of(ctx, &pointer)?;
+        if from.as_deref().is_some_and(|value| value != DONE) {
+            match ctx.workspace().move_pointer(
+                &pointer,
+                from.as_deref(),
+                DONE,
+                &ctx.clock().utc_now(),
+            ) {
+                // Queued again meanwhile: it stays queued.
+                Ok(_) | Err(StoreError::PointerConflict { .. }) => {}
+                Err(other) => return Err(other.into()),
+            }
         }
     }
     Ok(())
-}
-
-fn read(path: &std::path::Path) -> Result<Option<QueuedConcept>, CampaignError> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(io(path)(e)),
-    };
-    serde_json::from_str(&text)
-        .map(Some)
-        .map_err(|source| CampaignError::Json {
-            what: path.display().to_string(),
-            source,
-        })
-}
-
-fn write(path: &std::path::Path, entry: &QueuedConcept) -> Result<(), CampaignError> {
-    let text = serde_json::to_string_pretty(entry).map_err(|source| CampaignError::Json {
-        what: "queued concept".into(),
-        source,
-    })?;
-    write_atomic(path, &text).map_err(io(path))
 }
