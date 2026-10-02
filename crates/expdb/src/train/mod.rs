@@ -28,6 +28,7 @@ mod plan;
 mod ppo;
 mod prm;
 mod recipe;
+mod relation;
 mod render;
 mod rng;
 mod select;

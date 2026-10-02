@@ -91,11 +91,14 @@ impl Snapshot {
                 continue;
             };
             let outcome = outcomes.get(&id).copied();
-            let reward = evaluated.get(&id).copied().or(match outcome {
-                Some(Outcome::Pass) => Some(1.0),
-                Some(Outcome::Fail) => Some(0.0),
-                Some(Outcome::Aborted) | None => None,
-            });
+            let reward = match evaluated.get(&id) {
+                Some(measured) => *measured,
+                None => match outcome {
+                    Some(Outcome::Pass) => Some(1.0),
+                    Some(Outcome::Fail) => Some(0.0),
+                    Some(Outcome::Aborted) | None => None,
+                },
+            };
             attempts.entry(a.family).or_default().push(AttemptView {
                 attempt: id,
                 policy: a.policy,

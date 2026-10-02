@@ -32,6 +32,8 @@ pub enum Objective {
     Masked,
     /// Produce the actions that follow, from observations and an instruction.
     ActionChunk,
+    /// Follow a recorded relation between attempts.
+    Relation,
 }
 
 /// What a multimodal objective windows over. Times are nanoseconds on the
@@ -122,6 +124,19 @@ pub struct Recipe {
     pub criterion: String,
     /// Multimodal objectives: what to window over.
     pub mm: MmSpec,
+    /// Only attempts whose evidence decides at this rank or stronger.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_rank: Option<u8>,
+    /// DPO: pair the passing and failing attempts of one task instead of
+    /// the decisions taken at one state.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub by_task: bool,
+    /// DPO by task: at most this many pairs from one task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_pairs_per_task: Option<usize>,
+    /// Relation: the relation to follow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relation: Option<crate::model::Rel>,
 }
 
 impl Recipe {
@@ -144,6 +159,10 @@ impl Recipe {
             terminal_reward: true,
             criterion: "reasoning_quality".into(),
             mm: MmSpec::default(),
+            min_rank: None,
+            by_task: false,
+            max_pairs_per_task: None,
+            relation: None,
         }
     }
 
@@ -190,6 +209,33 @@ impl Recipe {
     /// Producing actions from observations and an instruction.
     pub fn action_chunk() -> Self {
         Self::new(Objective::ActionChunk)
+    }
+
+    /// The attempts joined by `rel`, as pairs of whole paths.
+    pub fn relations(rel: crate::model::Rel) -> Self {
+        Self {
+            relation: Some(rel),
+            ..Self::new(Objective::Relation)
+        }
+    }
+
+    /// Only attempts whose evidence decides, at this rank or stronger.
+    pub fn min_rank(mut self, rank: u8) -> Self {
+        self.min_rank = Some(rank);
+        self
+    }
+
+    /// DPO: pair each passing attempt of a task with each failing one decided
+    /// at the same rank, instead of decisions taken at one state.
+    pub fn by_task(mut self) -> Self {
+        self.by_task = true;
+        self
+    }
+
+    /// DPO by task: at most `n` pairs from any one task.
+    pub fn max_pairs_per_task(mut self, n: usize) -> Self {
+        self.max_pairs_per_task = Some(n);
+        self
     }
 
     /// Only attempts by this policy.

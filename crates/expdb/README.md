@@ -90,6 +90,13 @@ snapshot.pin("training-run-1")?;
 let plan = snapshot.compile(&Recipe::dpo().min_gap(0.5))?;   // the dataset is recipe + snapshot
 ```
 
+An attempt's reward is what its strongest evidence decides: ranked pass or fail
+verdicts on its evaluations, where the highest rank present rules, equal-rank
+disagreement decides nothing and an unjudged attempt has no reward rather than
+zero. A recipe can require evidence of a rank (`min_rank`), pair the passing and
+failing attempts of one task (`Recipe::dpo().by_task()`), and follow relations
+recorded between attempts (`Recipe::relations(Rel::RetryOf)`).
+
 `cargo run --release -p splinter-expdb --example quickstart` runs a complete
 version of this. The specs under `tests/` are the reference for everything
 else, one file per concern:

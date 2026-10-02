@@ -233,25 +233,44 @@ impl Snapshot {
         Ok(self.eval_set()?.retracted.contains(evaluator))
     }
 
-    /// The reward each attempt stands at according to its standing
-    /// task-completion evaluations, weighted by confidence.
-    pub(crate) fn attempt_rewards(&self) -> Result<HashMap<RecordId, f64>> {
-        let mut sums: HashMap<RecordId, (f64, f64, usize)> = HashMap::new();
+    /// The reward each attempt with standing task-completion evaluations
+    /// stands at. Where any of them carries a ranked verdict, the strongest
+    /// evidence decides, one for a pass and zero for a fail, and an attempt
+    /// the evidence leaves undecided has `None`: unmeasured, not zero.
+    /// Otherwise it is the mean of the scores, weighted by confidence.
+    pub(crate) fn attempt_rewards(&self) -> Result<HashMap<RecordId, Option<f64>>> {
+        struct Sums {
+            weighted: f64,
+            weight: f64,
+            n: usize,
+            verdicts: Vec<Verdict>,
+        }
+        let mut sums: HashMap<RecordId, Sums> = HashMap::new();
         for view in self.evaluations(&EvalFilter::new().criterion(TASK_COMPLETION))? {
             if let Target::Record(attempt) = view.evaluation.target {
-                let entry = sums.entry(attempt).or_default();
-                entry.0 += view.evaluation.score * view.evaluation.confidence;
-                entry.1 += view.evaluation.confidence;
-                entry.2 += 1;
+                let entry = sums.entry(attempt).or_insert(Sums {
+                    weighted: 0.0,
+                    weight: 0.0,
+                    n: 0,
+                    verdicts: Vec::new(),
+                });
+                entry.weighted += view.evaluation.score * view.evaluation.confidence;
+                entry.weight += view.evaluation.confidence;
+                entry.n += 1;
+                entry.verdicts.extend(view.evaluation.verdict);
             }
         }
         Ok(sums
             .into_iter()
-            .map(|(attempt, (weighted, weight, n))| {
-                let reward = if weight > 0.0 {
-                    weighted / weight
+            .map(|(attempt, s)| {
+                let reward = if s.verdicts.is_empty() {
+                    Some(if s.weight > 0.0 {
+                        s.weighted / s.weight
+                    } else {
+                        s.weighted / s.n as f64
+                    })
                 } else {
-                    weighted / n as f64
+                    resolve_verdicts(&s.verdicts).map(|r| if r.passed { 1.0 } else { 0.0 })
                 };
                 (attempt, reward)
             })

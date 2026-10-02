@@ -79,6 +79,15 @@ pub enum Materialized {
         /// Whether the episode ended here.
         done: bool,
     },
+    /// Two attempts joined by a recorded relation.
+    Related {
+        /// The relation.
+        rel: crate::model::Rel,
+        /// The attempt it starts from.
+        from: String,
+        /// The attempt it points at.
+        to: String,
+    },
     /// A score for one step.
     StepLabel {
         /// What came before.
@@ -185,6 +194,11 @@ impl Snapshot {
                 value_estimate: *value_estimate,
                 reward: *reward,
                 done: *done,
+            },
+            SampleBody::Related { rel, from, to } => Materialized::Related {
+                rel: *rel,
+                from: self.render(from)?,
+                to: self.render(to)?,
             },
             SampleBody::StepLabel {
                 context,

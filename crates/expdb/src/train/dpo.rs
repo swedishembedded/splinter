@@ -44,7 +44,62 @@ impl Snapshot {
             .collect())
     }
 
+    /// Every passing attempt of a task against every failing attempt of it
+    /// that was decided at the same rank. Only attempts the evidence decides
+    /// take part.
+    fn compile_task_pairs(&self, recipe: &Recipe) -> Result<Vec<Sample>> {
+        let mut tasks: BTreeMap<ContentId, Vec<super::select::AttemptInfo>> = BTreeMap::new();
+        for attempt in self.selected_attempts(recipe)? {
+            if attempt.resolution.is_some() {
+                tasks
+                    .entry(attempt.task_instance)
+                    .or_default()
+                    .push(attempt);
+            }
+        }
+        let mut samples = Vec::new();
+        for attempts in tasks.into_values() {
+            let mut pairs = Vec::new();
+            for chosen in attempts
+                .iter()
+                .filter(|a| a.resolution.is_some_and(|r| r.passed))
+            {
+                for rejected in attempts
+                    .iter()
+                    .filter(|a| a.resolution.is_some_and(|r| !r.passed))
+                {
+                    if chosen.resolution.map(|r| r.rank) == rejected.resolution.map(|r| r.rank) {
+                        pairs.push((chosen, rejected));
+                    }
+                }
+            }
+            pairs.truncate(recipe.max_pairs_per_task.unwrap_or(usize::MAX));
+            for (chosen, rejected) in pairs {
+                samples.push(Sample {
+                    provenance: chosen.attempt,
+                    family: Some(chosen.family),
+                    body: SampleBody::Preference {
+                        context: DataRef::Task {
+                            instance: chosen.task_instance,
+                        },
+                        chosen: DataRef::Episode {
+                            attempt: chosen.attempt,
+                        },
+                        rejected: DataRef::Episode {
+                            attempt: rejected.attempt,
+                        },
+                        reward_gap: 1.0,
+                    },
+                });
+            }
+        }
+        Ok(samples)
+    }
+
     pub(super) fn compile_dpo(&self, recipe: &Recipe) -> Result<Vec<Sample>> {
+        if recipe.by_task {
+            return self.compile_task_pairs(recipe);
+        }
         let index = self.index()?;
         let attempts: HashMap<RecordId, (ContentId, Option<f64>)> = self
             .selected_attempts(recipe)?

@@ -144,6 +144,16 @@ pub enum SampleBody {
         /// Whether the episode ended here.
         done: bool,
     },
+    /// Two attempts joined by a recorded relation, read as "`from` `rel`
+    /// `to`".
+    Related {
+        /// The relation.
+        rel: crate::model::Rel,
+        /// The attempt it starts from.
+        from: DataRef,
+        /// The attempt it points at.
+        to: DataRef,
+    },
     /// A score for one step.
     StepLabel {
         /// What came before.
@@ -279,6 +289,7 @@ impl Snapshot {
             Objective::Contrastive => self.compile_contrastive(recipe)?,
             Objective::Masked => self.compile_masked(recipe)?,
             Objective::ActionChunk => self.compile_action_chunk(recipe)?,
+            Objective::Relation => self.compile_relations(recipe)?,
         };
         Ok(TrainingPlan {
             snapshot: self.id(),

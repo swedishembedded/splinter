@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use super::recipe::Recipe;
-use crate::analyze::{EvalFilter, TASK_COMPLETION};
+use crate::analyze::{EvalFilter, Resolution, TASK_COMPLETION};
 use crate::error::Result;
 use crate::id::{ContentId, RecordId};
 use crate::manifest::Snapshot;
@@ -25,6 +25,8 @@ pub(crate) struct AttemptInfo {
     pub(crate) task_instance: ContentId,
     /// The reward it stands at, if one was measured.
     pub(crate) reward: Option<f64>,
+    /// What its verdicts decide, if they decide anything.
+    pub(crate) resolution: Option<Resolution>,
 }
 
 impl Snapshot {
@@ -39,6 +41,7 @@ impl Snapshot {
                 entry.1 |= view.evaluation.epistemic == Epistemic::Fact;
             }
         }
+        let resolutions = self.resolutions(TASK_COMPLETION)?;
         let mut selected = Vec::new();
         for family in self.families()? {
             for attempt in family.attempts {
@@ -49,7 +52,11 @@ impl Snapshot {
                 let policy_ok = recipe.policy.as_ref().is_none_or(|(name, version)| {
                     attempt.policy.name == *name && attempt.policy.version == *version
                 });
+                let resolution = resolutions.get(&Target::Record(attempt.attempt)).copied();
                 if policy_ok
+                    && recipe
+                        .min_rank
+                        .is_none_or(|r| resolution.is_some_and(|x| x.rank >= r))
                     && recipe.min_confidence.is_none_or(|c| confidence >= c)
                     && (!recipe.verified_only || verified)
                 {
@@ -58,6 +65,7 @@ impl Snapshot {
                         family: family.key,
                         task_instance: family.task_instance,
                         reward: attempt.reward,
+                        resolution,
                     });
                 }
             }
