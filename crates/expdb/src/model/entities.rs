@@ -21,6 +21,43 @@ fn content_id_of<T: Serialize>(what: &'static str, value: &T) -> Result<ContentI
     Ok(ContentId::of(&bytes))
 }
 
+/// An application-defined, content-addressed object: a source, a task, a
+/// named set, a release. The class tells the application what it is; the
+/// database only promises that the same class, value and blobs are one entity
+/// however many writers store it, and that it can be found by id or by class.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Entity {
+    /// What kind of object this is, in the application's vocabulary.
+    pub class: String,
+    /// The object itself.
+    pub value: serde_json::Value,
+    /// Large payloads the object refers to, stored in blob packs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blobs: Vec<BlobRef>,
+}
+
+impl Entity {
+    /// An entity of `class` with no blobs.
+    pub fn new(class: impl Into<String>, value: serde_json::Value) -> Self {
+        Self {
+            class: class.into(),
+            value,
+            blobs: Vec::new(),
+        }
+    }
+
+    /// The same entity referring to `blobs`.
+    pub fn with_blobs(mut self, blobs: Vec<BlobRef>) -> Self {
+        self.blobs = blobs;
+        self
+    }
+
+    /// The content id: a function of class, value and blobs alone.
+    pub fn id(&self) -> Result<ContentId> {
+        content_id_of("entity", self)
+    }
+}
+
 /// Bytes the record carries itself, or points at in the blob store when they
 /// are too large to live in a record block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

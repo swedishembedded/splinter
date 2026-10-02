@@ -8,7 +8,6 @@
 
 //! Turning references into text, only when a sample is actually used.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::plan::DataRef;
@@ -28,31 +27,6 @@ impl Snapshot {
         let store = Arc::new(BlobStore::with_packs(self.database(), &packs)?);
         *locked(&self.cache().blobs) = Some(Arc::clone(&store));
         Ok(store)
-    }
-
-    pub(crate) fn entity(&self, id: &ContentId) -> Result<Option<RecordId>> {
-        if let Some(found) = locked(&self.cache().entities).as_ref() {
-            return Ok(found.get(id).copied());
-        }
-        let index = self.index()?;
-        let mut map = HashMap::new();
-        for kind in [
-            RecordKind::TaskDefinition,
-            RecordKind::TaskInstance,
-            RecordKind::ModalitySchema,
-            RecordKind::ClockDomain,
-        ] {
-            for record_id in index.by_kind(kind) {
-                if let Some(record) = self.get(record_id)? {
-                    if let Some(entity) = record.body.entity_id()? {
-                        map.entry(entity).or_insert(record_id);
-                    }
-                }
-            }
-        }
-        let map = Arc::new(map);
-        *locked(&self.cache().entities) = Some(Arc::clone(&map));
-        Ok(map.get(id).copied())
     }
 
     fn content_text(&self, content: &Content) -> Result<String> {

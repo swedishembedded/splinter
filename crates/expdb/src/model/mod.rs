@@ -26,8 +26,8 @@ pub use body::{Body, RecordKind};
 pub use context::ContextLog;
 pub use edge::{Edge, Rel};
 pub use entities::{
-    family_key, Action, Attempt, Content, Decision, EpisodeFamily, Observation, Outcome, PolicyRef,
-    ReproLevel, State, TaskDefinition, TaskInstance, Transition,
+    family_key, Action, Attempt, Content, Decision, Entity, EpisodeFamily, Observation, Outcome,
+    PolicyRef, ReproLevel, State, TaskDefinition, TaskInstance, Transition,
 };
 pub use interpret::{
     Conclusion, CounterfactualSet, CreditAssignment, DatasetNode, Derivation, Epistemic,

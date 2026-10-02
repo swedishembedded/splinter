@@ -17,7 +17,7 @@ use crate::database::Database;
 use crate::error::{Error, Result};
 use crate::id::{ContentId, RecordId, WriterIdentity};
 use crate::model::{
-    family_key, Attempt, Body, Content, CounterfactualSet, Edge, EpisodeFamily, Evaluation,
+    family_key, Attempt, Body, Content, CounterfactualSet, Edge, Entity, EpisodeFamily, Evaluation,
     PolicyRef, Record, Rel, State, TaskDefinition, TaskInstance,
 };
 
@@ -98,6 +98,15 @@ impl Collector {
     pub(super) fn make(&mut self, body: Body) -> Record {
         let id = self.writer.next_id();
         Record::new(id, self.writer.database().clock().now_ns(), body)
+    }
+
+    /// Stores an application entity and returns its content id. Putting the
+    /// same entity again through this collector writes nothing; two
+    /// collectors that put it write two records that name one entity.
+    pub fn put_entity(&mut self, entity: &Entity) -> Result<ContentId> {
+        let id = entity.id()?;
+        self.entity(Body::Entity(entity.clone()))?;
+        Ok(id)
     }
 
     /// Writes an entity (task, instance, state, family) once per collector.

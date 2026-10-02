@@ -12,8 +12,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::entities::{
-    Attempt, Decision, EpisodeFamily, Observation, Outcome, State, TaskDefinition, TaskInstance,
-    Transition,
+    Attempt, Decision, Entity, EpisodeFamily, Observation, Outcome, State, TaskDefinition,
+    TaskInstance, Transition,
 };
 use super::interpret::{
     Conclusion, CounterfactualSet, CreditAssignment, DatasetNode, Derivation, Epistemic,
@@ -58,7 +58,7 @@ kinds! {
     CounterfactualSet = 11, Skill = 12, SkillEvidence = 13, Credit = 14, Derivation = 15,
     Experiment = 16, ExperimentResult = 17, Dataset = 18, TrainingRun = 19, Model = 20,
     ModalitySchema = 21, ClockDomain = 22, ClockMapping = 23, Episode = 24, Stream = 25, StreamChunk = 26,
-    Event = 27, ActionSegment = 28, Correspondence = 29,
+    Event = 27, ActionSegment = 28, Correspondence = 29, Entity = 30,
 }
 
 /// What a record says.
@@ -130,6 +130,8 @@ pub enum Body {
     ActionSegment(ActionSegment),
     /// A claimed relationship between spans.
     Correspondence(Correspondence),
+    /// An application-defined object.
+    Entity(Entity),
 }
 
 impl Body {
@@ -166,6 +168,7 @@ impl Body {
             Body::Event(_) => RecordKind::Event,
             Body::ActionSegment(_) => RecordKind::ActionSegment,
             Body::Correspondence(_) => RecordKind::Correspondence,
+            Body::Entity(_) => RecordKind::Entity,
         }
     }
 
@@ -187,13 +190,14 @@ impl Body {
     }
 
     /// The content id of a content-addressed entity this body defines: a
-    /// task definition, task instance, state or episode family. Other bodies
-    /// have none.
+    /// task definition, task instance, state, episode family or application
+    /// entity. Other bodies have none.
     pub fn entity_id(&self) -> crate::error::Result<Option<crate::id::ContentId>> {
         Ok(match self {
             Body::TaskDefinition(d) => Some(d.id()?),
             Body::TaskInstance(i) => Some(i.id()?),
             Body::State(s) => Some(s.id()?),
+            Body::Entity(e) => Some(e.id()?),
             Body::Family(f) => Some(super::entities::family_key(
                 &f.task_instance,
                 &f.initial_state,

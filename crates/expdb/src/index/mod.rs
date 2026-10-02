@@ -14,12 +14,14 @@
 //! a snapshot's segments and scans only the segments no run covers.
 
 mod csr;
+mod entities;
 mod model;
 mod persist;
 mod read;
 mod run;
 mod search;
 
+pub use entities::StoredEntity;
 pub use model::{Index, Loc};
 pub use read::ScanStats;
 pub(crate) use read::{locked, SnapshotCache};

@@ -41,7 +41,7 @@ pub(crate) struct SnapshotCache {
     segments_opened: AtomicU64,
     pub(crate) evaluations: Mutex<Option<Arc<crate::analyze::EvalSet>>>,
     pub(crate) blobs: Mutex<Option<Arc<crate::blob::BlobStore>>>,
-    pub(crate) entities: Mutex<Option<Arc<HashMap<ContentId, RecordId>>>>,
+    pub(crate) entities: Mutex<Option<Arc<super::entities::EntityMap>>>,
     pub(crate) timeline: Mutex<Option<Arc<crate::timeline::TimelineData>>>,
 }
 
