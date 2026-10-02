@@ -14,7 +14,9 @@ use std::sync::Arc;
 use crate::error::Result;
 use crate::id::RecordId;
 use crate::manifest::Snapshot;
-use crate::model::{Body, Epistemic, Evaluation, EvaluatorRef, RecordKind, Target};
+use crate::model::{
+    Body, Epistemic, Evaluation, EvaluatorRef, RecordKind, Ruling, Target, Verdict,
+};
 
 /// The criterion that decides an attempt's reward.
 pub const TASK_COMPLETION: &str = "task_completion";
@@ -90,7 +92,65 @@ impl EvalFilter {
     }
 }
 
+/// What a target's verdicts add up to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Resolution {
+    /// Whether the deciding evidence says the target passed.
+    pub passed: bool,
+    /// The rank of the deciding evidence.
+    pub rank: u8,
+}
+
+/// What a set of verdicts decides: abstentions are ignored, only the highest
+/// rank present is read, and it decides when every verdict at that rank
+/// agrees. No verdict, only abstentions, or disagreement at the top rank
+/// decide nothing: the answer is absent, never a zero.
+pub fn resolve_verdicts(verdicts: &[Verdict]) -> Option<Resolution> {
+    let top = verdicts
+        .iter()
+        .filter(|v| v.ruling != Ruling::Abstain)
+        .map(|v| v.rank)
+        .max()?;
+    let mut at_top = verdicts
+        .iter()
+        .filter(|v| v.rank == top && v.ruling != Ruling::Abstain)
+        .map(|v| v.ruling == Ruling::Pass);
+    let first = at_top.next()?;
+    at_top.all(|p| p == first).then_some(Resolution {
+        passed: first,
+        rank: top,
+    })
+}
+
 impl Snapshot {
+    /// What the standing verdicts of `criterion` on `target` decide.
+    pub fn resolution(&self, target: &Target, criterion: &str) -> Result<Option<Resolution>> {
+        let verdicts: Vec<Verdict> = self
+            .evaluations(&EvalFilter::new().target(*target).criterion(criterion))?
+            .iter()
+            .filter_map(|v| v.evaluation.verdict)
+            .collect();
+        Ok(resolve_verdicts(&verdicts))
+    }
+
+    /// What the standing verdicts of `criterion` decide for every target that
+    /// has a decision, in one pass.
+    pub fn resolutions(&self, criterion: &str) -> Result<HashMap<Target, Resolution>> {
+        let mut grouped: HashMap<Target, Vec<Verdict>> = HashMap::new();
+        for view in self.evaluations(&EvalFilter::new().criterion(criterion))? {
+            if let Some(verdict) = view.evaluation.verdict {
+                grouped
+                    .entry(view.evaluation.target)
+                    .or_default()
+                    .push(verdict);
+            }
+        }
+        Ok(grouped
+            .into_iter()
+            .filter_map(|(target, verdicts)| resolve_verdicts(&verdicts).map(|r| (target, r)))
+            .collect())
+    }
+
     fn eval_set(&self) -> Result<Arc<EvalSet>> {
         let cache = self.cache();
         if let Some(found) = cache

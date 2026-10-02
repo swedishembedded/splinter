@@ -33,6 +33,16 @@ pub enum Rel {
     Contains,
     /// The source experiment generated the target.
     Generated,
+    /// The source was judged better than the target.
+    PreferredOver,
+    /// The source is a new attempt after the failed target.
+    RetryOf,
+    /// The source is a critique of the target.
+    CritiqueOf,
+    /// The source is a revision of the target made from a critique.
+    RevisionOf,
+    /// The source is the target asked in other words.
+    VariantOf,
 }
 
 impl Rel {
@@ -47,6 +57,11 @@ impl Rel {
             Rel::ForkedFrom => 5,
             Rel::Contains => 6,
             Rel::Generated => 7,
+            Rel::PreferredOver => 8,
+            Rel::RetryOf => 9,
+            Rel::CritiqueOf => 10,
+            Rel::RevisionOf => 11,
+            Rel::VariantOf => 12,
         }
     }
 
@@ -61,6 +76,11 @@ impl Rel {
             5 => Rel::ForkedFrom,
             6 => Rel::Contains,
             7 => Rel::Generated,
+            8 => Rel::PreferredOver,
+            9 => Rel::RetryOf,
+            10 => Rel::CritiqueOf,
+            11 => Rel::RevisionOf,
+            12 => Rel::VariantOf,
             _ => return None,
         })
     }

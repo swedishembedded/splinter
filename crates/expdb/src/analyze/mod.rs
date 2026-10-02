@@ -20,7 +20,9 @@ mod lineage;
 mod priority;
 mod skills;
 
-pub use evaluations::{EvalFilter, EvalSet, EvaluationView, TASK_COMPLETION};
+pub use evaluations::{
+    resolve_verdicts, EvalFilter, EvalSet, EvaluationView, Resolution, TASK_COMPLETION,
+};
 pub use experiments::ExperimentView;
 pub use priority::{rank, Priority};
 pub use skills::{assess, SkillAssessment, SkillPolicy, SkillStatus, SkillView};

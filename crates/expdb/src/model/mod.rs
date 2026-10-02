@@ -31,8 +31,8 @@ pub use entities::{
 };
 pub use interpret::{
     Conclusion, CounterfactualSet, CreditAssignment, DatasetNode, Derivation, Epistemic,
-    Evaluation, EvaluatorRef, Experiment, ExperimentResult, ModelNode, Retraction, Skill,
-    SkillEvidence, Stance, Target, TrainingRun,
+    Evaluation, EvaluatorRef, Experiment, ExperimentResult, ModelNode, Retraction, Ruling, Skill,
+    SkillEvidence, Stance, Target, TrainingRun, Verdict,
 };
 pub use record::Record;
 pub(crate) use stream::convert_ns;

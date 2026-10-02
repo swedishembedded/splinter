@@ -69,6 +69,36 @@ impl EvaluatorRef {
     }
 }
 
+/// What a verdict rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ruling {
+    /// The target met the criterion.
+    Pass,
+    /// The target did not meet it.
+    Fail,
+    /// The evaluator could not tell; this says nothing either way.
+    Abstain,
+}
+
+/// A pass, fail or abstention, with the rank of the evidence behind it. Ranks
+/// are the application's ordering of how much a kind of evidence is worth;
+/// a higher rank outweighs every lower one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Verdict {
+    /// What was ruled.
+    pub ruling: Ruling,
+    /// How strong the evidence is.
+    pub rank: u8,
+}
+
+impl Verdict {
+    /// A verdict of `ruling` backed by evidence of `rank`.
+    pub fn new(ruling: Ruling, rank: u8) -> Self {
+        Self { ruling, rank }
+    }
+}
+
 /// Evidence about how good, bad or useful something was.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Evaluation {
@@ -88,6 +118,9 @@ pub struct Evaluation {
     pub epistemic: Epistemic,
     /// How the evaluation was computed, when it was derived.
     pub derivation: Option<RecordId>,
+    /// A ranked pass or fail, when the criterion is decided that way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<Verdict>,
 }
 
 impl Evaluation {
@@ -108,7 +141,14 @@ impl Evaluation {
             evidence: None,
             epistemic: Epistemic::Annotation,
             derivation: None,
+            verdict: None,
         }
+    }
+
+    /// The same evaluation carrying a ranked pass or fail.
+    pub fn with_verdict(mut self, verdict: Verdict) -> Self {
+        self.verdict = Some(verdict);
+        self
     }
 
     /// Marks how far the score may be believed.
