@@ -193,9 +193,29 @@ fn from_a_release_up_to_the_source_bytes_and_from_the_source_down_to_the_release
         &fixture.candidate.adapter_digest
     ));
 
+    // The database's own record of the release's provenance and the graph the
+    // command prints say the same: one record of lineage, two readings.
+    let manifest = ctx.datasets().get(&fixture.dataset).unwrap().manifest;
+    let trace = ctx
+        .workspace()
+        .trace_release(&fixture.release.0)
+        .unwrap()
+        .unwrap();
+    assert_eq!(trace.candidates, vec![fixture.candidate.candidate.clone()]);
+    assert_eq!(trace.datasets, vec![fixture.dataset.0.clone()]);
+    assert!(
+        trace.attempts >= manifest.experiences.len(),
+        "every experience of the dataset is an attempt it traces back to"
+    );
+    assert_eq!(
+        ids_of(&up, NodeKind::Dataset)
+            .into_iter()
+            .collect::<Vec<_>>(),
+        vec![fixture.dataset.to_string()]
+    );
+
     // The dataset's experiences, as its manifest names them, and their
     // tasks.
-    let manifest = ctx.datasets().get(&fixture.dataset).unwrap().manifest;
     assert_eq!(manifest.experiences.len(), 2);
     let experiences = ids_of(&up, NodeKind::Experience);
     let tasks = ids_of(&up, NodeKind::Task);

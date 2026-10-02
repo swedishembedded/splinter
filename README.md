@@ -67,9 +67,12 @@ system turn.
 
 Every stage stores what it makes under the state root by content address,
 so any stage can be rerun or inspected alone (`splinter runs show`,
-`splinter experiences show --graph`). Experience, sources, tasks and runs live
-in one experience database that also records where a release came from, back to
-the attempts it learned from; `splinter state maintain` keeps it small. Every model runs locally unless a
+`splinter experiences show --graph`). Experience, sources, tasks, runs, and the metadata of datasets,
+candidates and releases live in one experience database that also records where
+a release came from, back to the attempts it learned from; adapters and datasets
+stay plain files beside it, tracked by it. `splinter state maintain` keeps the
+database small, and `splinter state archive`, `verify` and `repair` pack the whole state,
+find what has gone missing and recover it. Every model runs locally unless a
 `remote:` model is named with `--allow-remote`.
 
 Local models share the device: the policy, a candidate and the champion

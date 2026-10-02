@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `splinter state status` and `splinter state maintain [--collect]`: what the
   experience database holds as files, and the merging, indexing and collection
   that keep it small and quick to open.
+- `splinter state archive`, `restore`, `verify` and `repair`: the database and
+  the files it tracks pack into one deterministic archive (incremental with
+  `--since`), restore verifies before it puts anything in place, and what has gone
+  missing is found and filled from any copy with the right digest. What no copy has
+  is written off in a ledger only when asked.
 - Every experience is also an attempt in the database's graph, a verdict is
   ranked evidence about that attempt, and a dataset, training run and release
   record where they came from, so a release traces back to the experience it
@@ -30,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edge. Splinter's own content addresses are blake3 (`blake3:<hex>`); digests a
   tool reports, such as an adapter's, stay `sha256:`. State written by earlier
   builds is not read: regenerate it.
+- Datasets, candidates, releases, aliases, answers, the anchor suite, judge
+  calibrations, the curriculum queue and frontier measurements are kept in the
+  experience database too. Adapters and dataset files stay plain files under
+  `<state>/artifacts`, content-addressed and tracked by the database. An alias is
+  a pointer whose history is kept, claimed by compare-and-set, so there is no lock
+  file. Releasing a candidate again completes an interrupted release instead of
+  storing a second one.
 - Run records are events in the experience database and a cancel request is a
   signal, instead of files in a run directory.
 - A bulk stage (solve, verify, critique) commits its writes in groups instead of

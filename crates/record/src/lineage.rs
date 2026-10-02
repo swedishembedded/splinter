@@ -51,7 +51,9 @@ pub struct ReleaseTrace {
     pub datasets: Vec<Digest>,
     /// The earlier releases this one continues.
     pub earlier_releases: Vec<Digest>,
-    /// How many attempts, one per experience, the datasets were built from.
+    /// How many attempts the release traces back to: the datasets' own, one
+    /// per experience, and those they were retried, critiqued or revised
+    /// from.
     pub attempts: usize,
 }
 
@@ -277,7 +279,7 @@ impl Workspace {
 
     /// What `release` was made from: the candidates that trained it, the
     /// datasets they read, the releases it continues and the number of
-    /// attempts the datasets were built from. `None` for a release that was
+    /// attempts it traces back to. `None` for a release that was
     /// never recorded.
     pub fn trace_release(&self, release: &Digest) -> Result<Option<ReleaseTrace>, StoreError> {
         let Some(start) = self.node("release", release.as_str())? else {

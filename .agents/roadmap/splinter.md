@@ -122,7 +122,10 @@ the released adapter answers the same questions from plain `brain serve`.
    releases record where they came from. Open: the training views still decide
    and render from whole experience values (a view reports why it left each
    candidate out, which a recipe does not); moving objectives onto recipes
-   needs a mode that carries exclusion reasons. Releases, datasets, suites and
-   answers are still files because brain needs a path to an adapter. The
+   needs a mode that carries exclusion reasons. Releases, datasets, suites,
+   answers, calibrations and the queue are documents and pointers in the
+   database too; only adapters and dataset files stay plain files, tracked as
+   artifacts, because brain needs a path to them. The database and its files pack
+   into one archive and recover from copies. The
    read model is in memory, so opening a very large database costs time
    proportional to its size; `splinter state maintain` keeps it down.

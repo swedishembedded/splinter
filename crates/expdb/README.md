@@ -97,6 +97,15 @@ zero. A recipe can require evidence of a rank (`min_rank`), pair the passing and
 failing attempts of one task (`Recipe::dpo().by_task()`), and follow relations
 recorded between attempts (`Recipe::relations(Rel::RetryOf)`).
 
+Beside the graph, an application can keep **entities**: keyed JSON records of a
+class (a dataset manifest, a task, an artifact), looked up by key, listed in
+the order they were written and read back without decoding the rest. Values
+past 256 KiB spill to blobs. **Signals** are write-once named files with a
+note: whoever creates one first wins, which is the compare-and-set a pointer's
+version claim or a cancel request needs. A **session** opens a database for one
+process, sees its own writes at once, commits in groups, and rolls a failed
+write back as a whole.
+
 `cargo run --release -p splinter-expdb --example quickstart` runs a complete
 version of this. The specs under `tests/` are the reference for everything
 else, one file per concern:
@@ -141,6 +150,20 @@ fixed in the code and pinned by `tests/hardening.rs` and `tests/compaction.rs`.
 A clean run means no violation within the model's small bounds, not for all
 sizes. The grace period is the one assumption about time: it must exceed a
 writer's pause between sealing and publishing, and one collection.
+
+## Damage and recovery
+
+Every segment, blob pack, index file and manifest is named by the hash of its
+bytes. `Database::verify(deep)` walks every ref, every manifest they reach and
+every file those name, and describes what is missing or damaged instead of
+refusing to open: a segment says how many records it held. Without `deep` a
+file is checked for existing at its recorded size; with it every byte is
+hashed. `Database::fill` writes a file from any copy whose bytes hash to its
+name and refuses all others, so a hole is filled exactly or not at all.
+`Database::quarantine` withdraws a file nothing can restore, and the rest of
+the database opens again. `Snapshot::files` lists everything a snapshot needs
+and `Database::adopt` makes a copy of those files a database, which is what an
+archive of the database is made of.
 
 ## Limits
 
