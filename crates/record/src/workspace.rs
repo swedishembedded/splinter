@@ -185,12 +185,18 @@ impl Workspace {
         Ok(found.filter(|e| e.class == class))
     }
 
+    /// Whether an entity of `class` has the address `id`, without reading it.
+    pub(crate) fn has(&self, class: &str, id: &Digest) -> Result<bool, StoreError> {
+        let cid = content_id(id)?;
+        self.read(|s| s.has(&cid, class))
+    }
+
     /// The addresses of every entity of `class`, in address order.
     pub(crate) fn ids_of(&self, class: &str) -> Result<Vec<Digest>, StoreError> {
         let mut ids: Vec<Digest> = self
-            .read(|s| s.entities(class))?
+            .read(|s| s.entity_ids(class))?
             .into_iter()
-            .map(|stored| Digest::from(stored.id))
+            .map(Digest::from)
             .collect();
         ids.sort();
         Ok(ids)

@@ -21,7 +21,7 @@ use crate::manifest::Manifest;
 
 /// The marker that says a directory is a database, and of which format.
 const FORMAT_NAME: &str = "format";
-const FORMAT_TEXT: &[u8] = b"splinter-expdb 1\n";
+const FORMAT_TEXT: &[u8] = b"splinter-expdb 2\n";
 
 /// An open database. Cheap to clone; clones share nothing but the files.
 #[derive(Clone)]
@@ -54,7 +54,7 @@ impl Database {
         if !backend.write_once(&marker, FORMAT_TEXT)? && backend.read(&marker)? != FORMAT_TEXT {
             return Err(Error::corrupt(
                 "database format marker",
-                "this is not a splinter-expdb 1 store",
+                "this is not a splinter-expdb 2 store",
             ));
         }
         Ok(Self {

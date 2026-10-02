@@ -20,6 +20,26 @@ const HAS_PARENT: u8 = 1;
 const HAS_ATTEMPT: u8 = 2;
 const HAS_FAMILY: u8 = 4;
 const HAS_INSTANCE: u8 = 8;
+const HAS_ENTITY: u8 = 16;
+
+/// A number that stands for an entity class in the envelope, so entities of
+/// one class can be listed without reading a body.
+pub(crate) fn class_hash(class: &str) -> u64 {
+    ContentId::of(class.as_bytes()).prefix_u64()
+}
+
+/// The content id and class hash of the entity a body defines, if it
+/// defines one.
+fn entity_of(body: &Body) -> Result<Option<(ContentId, u64)>> {
+    let Some(id) = body.entity_id()? else {
+        return Ok(None);
+    };
+    let class = match body {
+        Body::Entity(entity) => class_hash(&entity.class),
+        _ => 0,
+    };
+    Ok(Some((id, class)))
+}
 
 struct Reader<'a> {
     buf: &'a [u8],
@@ -73,6 +93,24 @@ impl<'a> Reader<'a> {
             .collect())
     }
 
+    fn contents_interleaved(&mut self, n: usize) -> Result<Vec<(ContentId, u64)>> {
+        let raw = self.take(
+            n.checked_mul(40)
+                .ok_or_else(|| Error::corrupt("segment block", "entity column is too long"))?,
+        )?;
+        Ok(raw
+            .as_chunks::<40>()
+            .0
+            .iter()
+            .map(|b| {
+                let mut id = [0u8; 32];
+                id.copy_from_slice(&b[..32]);
+                let class = u64::from_le_bytes(b[32..40].try_into().unwrap_or([0; 8]));
+                (ContentId::from_bytes(id), class)
+            })
+            .collect())
+    }
+
     fn contents(&mut self, n: usize) -> Result<Vec<ContentId>> {
         Ok(self
             .take(n * 32)?
@@ -109,12 +147,17 @@ pub(crate) fn encode_records(records: &[Record]) -> Result<Vec<u8>> {
     for record in records {
         out.extend_from_slice(&record.schema.to_le_bytes());
     }
-    out.extend(records.iter().map(|r| {
+    let entities: Vec<Option<(ContentId, u64)>> = records
+        .iter()
+        .map(|r| entity_of(&r.body))
+        .collect::<Result<_>>()?;
+    out.extend(records.iter().zip(&entities).map(|(r, entity)| {
         let flag = |present: bool, bit: u8| if present { bit } else { 0 };
         flag(r.parent.is_some(), HAS_PARENT)
             | flag(r.attempt.is_some(), HAS_ATTEMPT)
             | flag(r.family.is_some(), HAS_FAMILY)
             | flag(r.task_instance.is_some(), HAS_INSTANCE)
+            | flag(entity.is_some(), HAS_ENTITY)
     }));
     put_ids(
         &mut out,
@@ -132,6 +175,12 @@ pub(crate) fn encode_records(records: &[Record]) -> Result<Vec<u8>> {
                     .as_bytes(),
             );
         }
+    }
+    let defined: Vec<(ContentId, u64)> = entities.into_iter().flatten().collect();
+    out.extend_from_slice(&(defined.len() as u32).to_le_bytes());
+    for (id, class) in &defined {
+        out.extend_from_slice(id.as_bytes());
+        out.extend_from_slice(&class.to_le_bytes());
     }
     let mut bodies = Vec::new();
     let mut offsets = vec![0u32];
@@ -160,6 +209,7 @@ pub struct Block {
     attempts: Vec<Option<RecordId>>,
     families: Vec<Option<ContentId>>,
     instances: Vec<Option<ContentId>>,
+    entities: Vec<Option<(ContentId, u64)>>,
     offsets: Vec<u32>,
     bodies: Vec<u8>,
 }
@@ -177,6 +227,8 @@ impl Block {
         let attempt_ids = r.ids(n)?;
         let family_ids = r.contents(n)?;
         let instance_ids = r.contents(n)?;
+        let n_entities = r.u32()? as usize;
+        let defined = r.contents_interleaved(n_entities)?;
         let offsets: Vec<u32> = (0..=n).map(|_| r.u32()).collect::<Result<_>>()?;
         let bodies = raw[r.at..].to_vec();
         let end = offsets.last().copied().unwrap_or(0) as usize;
@@ -187,6 +239,22 @@ impl Block {
             ));
         }
         let pick = |flag: u8, i: usize| flags[i] & flag != 0;
+        let mut defined = defined.into_iter();
+        let entities: Vec<Option<(ContentId, u64)>> = (0..n)
+            .map(|i| {
+                if pick(HAS_ENTITY, i) {
+                    defined.next()
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if defined.next().is_some() {
+            return Err(Error::corrupt(
+                "segment block",
+                "more entity ids than records that define one",
+            ));
+        }
         Ok(Self {
             ids,
             timestamps,
@@ -204,6 +272,7 @@ impl Block {
             instances: (0..n)
                 .map(|i| pick(HAS_INSTANCE, i).then_some(instance_ids[i]))
                 .collect(),
+            entities,
             offsets,
             bodies,
         })
@@ -253,6 +322,18 @@ impl Block {
     /// The task instance of record `i`.
     pub fn task_instance(&self, i: usize) -> Option<ContentId> {
         self.instances[i]
+    }
+
+    /// The content id of the entity record `i` defines, without reading its
+    /// body.
+    pub fn entity(&self, i: usize) -> Option<ContentId> {
+        self.entities[i].map(|(id, _)| id)
+    }
+
+    /// The class hash of the application entity record `i` defines; zero for
+    /// the other kinds that define one.
+    pub fn entity_class(&self, i: usize) -> Option<u64> {
+        self.entities[i].map(|(_, class)| class)
     }
 
     /// The whole of record `i`, its body parsed now.

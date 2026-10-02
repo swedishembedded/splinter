@@ -20,6 +20,7 @@ pub(crate) mod frame;
 mod segment;
 mod zone;
 
+pub(crate) use columns::class_hash;
 pub use columns::Block;
 pub use segment::{encode_segment, seal_segment, seal_segment_in, BlockInfo, Segment, SegmentInfo};
 pub use zone::Zone;

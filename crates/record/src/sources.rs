@@ -80,7 +80,7 @@ impl SourceStore {
 
     /// Whether the store holds `id` (without verifying it).
     pub fn contains(&self, id: &SourceId) -> Result<bool, StoreError> {
-        Ok(self.workspace.find(SOURCE, &id.0)?.is_some())
+        self.workspace.has(SOURCE, &id.0)
     }
 
     /// The source stored under `id`, verified against its address.

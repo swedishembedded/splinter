@@ -17,13 +17,14 @@ use crate::id::{ContentId, RecordId, WriterId};
 use crate::model::{Edge, Rel};
 
 const MAGIC: &[u8; 8] = b"EXPIDX01";
-const ROW: usize = 16 + 4 + 4 + 4 + 1 + 1 + 16 + 16 + 32 + 32;
+const ROW: usize = 16 + 4 + 4 + 4 + 1 + 1 + 16 + 16 + 32 + 32 + 32 + 8;
 const EDGE: usize = 16 + 16 + 1 + 4;
 
 const HAS_PARENT: u8 = 1;
 const HAS_ATTEMPT: u8 = 2;
 const HAS_FAMILY: u8 = 4;
 const HAS_INSTANCE: u8 = 8;
+const HAS_ENTITY: u8 = 16;
 
 /// One record's place and neighbours.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +39,8 @@ pub(crate) struct Row {
     pub(crate) attempt: Option<RecordId>,
     pub(crate) family: Option<ContentId>,
     pub(crate) instance: Option<ContentId>,
+    /// The entity the record defines and its class hash.
+    pub(crate) entity: Option<(ContentId, u64)>,
 }
 
 /// An edge and the segment (index into `covers`) that holds it.
@@ -122,12 +125,15 @@ impl Run {
                 flag(r.parent.is_some(), HAS_PARENT)
                     | flag(r.attempt.is_some(), HAS_ATTEMPT)
                     | flag(r.family.is_some(), HAS_FAMILY)
-                    | flag(r.instance.is_some(), HAS_INSTANCE),
+                    | flag(r.instance.is_some(), HAS_INSTANCE)
+                    | flag(r.entity.is_some(), HAS_ENTITY),
             );
             put_id(&mut out, r.parent);
             put_id(&mut out, r.attempt);
             put_content(&mut out, r.family);
             put_content(&mut out, r.instance);
+            put_content(&mut out, r.entity.map(|(id, _)| id));
+            out.extend_from_slice(&r.entity.map_or(0, |(_, class)| class).to_le_bytes());
         }
         out.extend_from_slice(&(self.edges.len() as u32).to_le_bytes());
         for e in &self.edges {
@@ -161,6 +167,7 @@ impl Run {
             let (kind, flags) = (c.take(1)?[0], c.take(1)?[0]);
             let (parent, attempt) = (c.id()?, c.id()?);
             let (family, instance) = (c.content()?, c.content()?);
+            let (entity, class) = (c.content()?, c.u64()?);
             rows.push(Row {
                 id,
                 seg,
@@ -171,6 +178,7 @@ impl Run {
                 attempt: (flags & HAS_ATTEMPT != 0).then_some(attempt),
                 family: (flags & HAS_FAMILY != 0).then_some(family),
                 instance: (flags & HAS_INSTANCE != 0).then_some(instance),
+                entity: (flags & HAS_ENTITY != 0).then_some((entity, class)),
             });
         }
         let n_edges = c.u32()? as usize;
@@ -228,6 +236,9 @@ impl Run {
                         attempt: block.attempt(row),
                         family: block.family(row),
                         instance: block.task_instance(row),
+                        entity: block
+                            .entity(row)
+                            .map(|id| (id, block.entity_class(row).unwrap_or(0))),
                     });
                 }
             }

@@ -135,6 +135,28 @@ impl Session {
         self.base.entity_body(id)
     }
 
+    /// Whether the session or its snapshot holds an application entity of
+    /// `class` with content id `id`, without reading any body.
+    pub fn has(&self, id: &ContentId, class: &str) -> Result<bool> {
+        if let Some((_, entity)) = self.entities.get(id) {
+            return Ok(entity.class == class);
+        }
+        self.base.entity_in_class(id, class)
+    }
+
+    /// The ids of every application entity of `class`, in the order first
+    /// written, without reading any body.
+    pub fn entity_ids(&self, class: &str) -> Result<Vec<ContentId>> {
+        let mut ids: Vec<ContentId> = self
+            .base
+            .entity_ids(class)?
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        ids.extend(self.by_class.get(class).into_iter().flatten().copied());
+        Ok(ids)
+    }
+
     fn entity_record(&self, id: &ContentId) -> Result<RecordId> {
         if let Some((record, _)) = self.entities.get(id) {
             return Ok(*record);

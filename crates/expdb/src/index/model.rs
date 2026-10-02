@@ -45,6 +45,9 @@ pub struct Index {
     by_instance: HashMap<ContentId, Vec<u32>>,
     by_attempt: HashMap<RecordId, Vec<u32>>,
     by_kind: HashMap<u8, Vec<u32>>,
+    by_entity: HashMap<ContentId, u32>,
+    by_class: HashMap<u64, Vec<u32>>,
+    entity_of: HashMap<u32, ContentId>,
 }
 
 /// A node that has no stored record: an edge endpoint written elsewhere.
@@ -79,6 +82,9 @@ impl Index {
             HashMap::new(),
             HashMap::new(),
         );
+        let mut by_entity: HashMap<ContentId, u32> = HashMap::new();
+        let mut by_class: HashMap<u64, Vec<u32>> = HashMap::new();
+        let mut entity_of: HashMap<u32, ContentId> = HashMap::new();
         for (id, (run, row)) in &rows {
             let i = at(id) as usize;
             locs[i] = run.covers.get(row.seg as usize).map(|segment| Loc {
@@ -101,6 +107,21 @@ impl Index {
                 .entry(row.kind)
                 .or_insert_with(Vec::new)
                 .push(i as u32);
+            if let Some((entity, class)) = row.entity {
+                // The same entity can be stored by several writers: the one
+                // with the lowest record id is the entity's record.
+                by_entity
+                    .entry(entity)
+                    .and_modify(|first| *first = (*first).min(i as u32))
+                    .or_insert(i as u32);
+                entity_of.insert(i as u32, entity);
+                if class != 0 {
+                    by_class.entry(class).or_default().push(i as u32);
+                }
+            }
+        }
+        for list in by_class.values_mut() {
+            list.sort_unstable();
         }
         for list in by_family
             .values_mut()
@@ -133,6 +154,45 @@ impl Index {
             by_instance,
             by_attempt,
             by_kind,
+            by_entity,
+            by_class,
+            entity_of,
+        })
+    }
+
+    /// The record that defines the entity `id`: of the records that define
+    /// it, the one with the lowest id.
+    pub fn entity(&self, id: &ContentId) -> Option<RecordId> {
+        self.by_entity.get(id).map(|n| self.nodes[*n as usize])
+    }
+
+    /// The entities of the class with hash `class`, each once, with the
+    /// record that defines it, in record order.
+    pub fn entities_of_class(&self, class: u64) -> Vec<(ContentId, RecordId)> {
+        let mut seen = std::collections::HashSet::new();
+        self.by_class
+            .get(&class)
+            .into_iter()
+            .flatten()
+            .filter_map(|n| {
+                let id = self.entity_of.get(n)?;
+                let first = *self.by_entity.get(id)?;
+                (first == *n && seen.insert(*id)).then(|| (*id, self.nodes[first as usize]))
+            })
+            .collect()
+    }
+
+    /// How many distinct entities are indexed.
+    pub fn entity_count(&self) -> usize {
+        self.by_entity.len()
+    }
+
+    /// Whether the entity `id` is of the class with hash `class`.
+    pub fn entity_has_class(&self, id: &ContentId, class: u64) -> bool {
+        self.by_entity.get(id).is_some_and(|n| {
+            self.by_class
+                .get(&class)
+                .is_some_and(|nodes| nodes.binary_search(n).is_ok())
         })
     }
 

@@ -192,3 +192,50 @@ fn bytes_put_through_a_collector_are_read_back_from_a_snapshot_by_content_id() {
     assert_eq!(snapshot.read_blob(&b.id).unwrap(), large);
     assert!(snapshot.read_blob(&ContentId::of(b"absent")).is_err());
 }
+
+#[test]
+fn entities_are_found_and_listed_without_reading_a_single_body() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut collector = db.collector(&identity(0)).unwrap();
+    let mut tasks = Vec::new();
+    for n in 0..40 {
+        let class = if n % 2 == 0 { "task" } else { "source" };
+        let id = collector
+            .put_entity(&Entity::new(
+                class,
+                serde_json::json!({ "n": n, "pad": "x".repeat(2000) }),
+            ))
+            .unwrap();
+        if class == "task" {
+            tasks.push(id);
+        }
+    }
+    collector.flush().unwrap();
+
+    let snapshot = db.snapshot().unwrap();
+    let listed: Vec<ContentId> = snapshot
+        .entity_ids("task")
+        .unwrap()
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    assert_eq!(listed, tasks, "in the order first written");
+    assert!(snapshot.entity(&tasks[3]).unwrap().is_some());
+    assert!(snapshot.entity_in_class(&tasks[3], "task").unwrap());
+    assert!(!snapshot.entity_in_class(&tasks[3], "source").unwrap());
+    assert!(snapshot.entity_count().unwrap() >= 40);
+    assert_eq!(
+        snapshot.stats().bodies_parsed,
+        0,
+        "existence, class and listing come from the index"
+    );
+
+    let body = snapshot.entity_body(&tasks[3]).unwrap().unwrap();
+    assert_eq!(body.class, "task");
+    assert_eq!(
+        snapshot.stats().bodies_parsed,
+        1,
+        "reading one entity parses one body"
+    );
+}

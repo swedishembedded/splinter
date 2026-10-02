@@ -113,7 +113,7 @@ impl TaskStore {
 
     /// Whether the store holds the task `id` (without verifying it).
     pub fn contains(&self, id: &Digest) -> Result<bool, StoreError> {
-        Ok(self.workspace.find(TASK, id)?.is_some())
+        self.workspace.has(TASK, id)
     }
 
     /// The task stored under `id`, verified: it decodes, its content
@@ -183,7 +183,7 @@ impl TaskStore {
             source,
         })?;
         let id = TaskSetId(Digest::of(&bytes));
-        if self.workspace.find(TASK_SET, &id.0)?.is_none() {
+        if !self.workspace.has(TASK_SET, &id.0)? {
             let value = serde_json::to_value(set).map_err(|source| StoreError::Serialize {
                 what: "task set",
                 source,

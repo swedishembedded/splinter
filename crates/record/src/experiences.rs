@@ -90,7 +90,7 @@ impl ExperienceStore {
         experience.validate()?;
         let bytes = experience.canonical()?;
         let id = ExperienceId(Digest::of(&bytes));
-        if self.workspace.find(EXPERIENCE, &id.0)?.is_some() {
+        if self.workspace.has(EXPERIENCE, &id.0)? {
             self.get(&id)?;
             return Ok(id);
         }
@@ -117,7 +117,7 @@ impl ExperienceStore {
 
     /// Whether the store holds `id` (without verifying its content).
     pub fn contains(&self, id: &ExperienceId) -> Result<bool, StoreError> {
-        Ok(self.workspace.find(EXPERIENCE, &id.0)?.is_some())
+        self.workspace.has(EXPERIENCE, &id.0)
     }
 
     /// The experience stored under `id`, verified against its address.
@@ -267,7 +267,7 @@ impl ExperienceStore {
             source,
         })?;
         let id = SetId(Digest::of(&bytes));
-        if self.workspace.find(EXPERIENCE_SET, &id.0)?.is_none() {
+        if !self.workspace.has(EXPERIENCE_SET, &id.0)? {
             let value = serde_json::to_value(set).map_err(|source| StoreError::Serialize {
                 what: "experience set",
                 source,

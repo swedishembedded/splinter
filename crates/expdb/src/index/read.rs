@@ -29,6 +29,8 @@ pub struct ScanStats {
     pub blocks_read: u64,
     /// Segments opened.
     pub segments_opened: u64,
+    /// Record bodies parsed.
+    pub bodies_parsed: u64,
 }
 
 /// What a snapshot remembers between calls.
@@ -39,9 +41,9 @@ pub(crate) struct SnapshotCache {
     blocks: Mutex<HashMap<(ContentId, u32), Arc<Block>>>,
     pub(crate) blocks_read: Arc<AtomicU64>,
     segments_opened: AtomicU64,
+    bodies_parsed: AtomicU64,
     pub(crate) evaluations: Mutex<Option<Arc<crate::analyze::EvalSet>>>,
     pub(crate) blobs: Mutex<Option<Arc<crate::blob::BlobStore>>>,
-    pub(crate) entities: Mutex<Option<Arc<super::entities::EntityMap>>>,
     pub(crate) timeline: Mutex<Option<Arc<crate::timeline::TimelineData>>>,
 }
 
@@ -62,6 +64,7 @@ impl Snapshot {
         ScanStats {
             blocks_read: cache.blocks_read.load(Ordering::Relaxed),
             segments_opened: cache.segments_opened.load(Ordering::Relaxed),
+            bodies_parsed: cache.bodies_parsed.load(Ordering::Relaxed),
         }
     }
 
@@ -139,6 +142,7 @@ impl Snapshot {
                 "its row is past the end of its block",
             ));
         }
+        self.cache().bodies_parsed.fetch_add(1, Ordering::Relaxed);
         let record = block.record(loc.row as usize)?;
         if record.id != id {
             return Err(Error::corrupt(
