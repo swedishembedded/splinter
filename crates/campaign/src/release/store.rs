@@ -170,6 +170,18 @@ impl ReleaseStore {
             .collect())
     }
 
+    /// The release made from `candidate`, if one was made: a candidate is
+    /// released at most once.
+    pub fn of_candidate(&self, candidate: &str) -> Result<Option<StoredRelease>, CampaignError> {
+        for id in self.list()? {
+            let release = self.get(&id)?;
+            if release.manifest.candidate == candidate {
+                return Ok(Some(release));
+            }
+        }
+        Ok(None)
+    }
+
     /// The release `alias` points at; `None` when it points nowhere yet.
     pub fn alias(&self, alias: &str) -> Result<Option<ReleaseId>, CampaignError> {
         let name = self.pointer(alias)?;

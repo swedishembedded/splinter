@@ -130,6 +130,9 @@ pub fn release(
     let candidate = load_candidate(ctx, &request.candidate)?;
     let store = ctx.releases();
     let champion_id = store.alias(&request.alias)?;
+    if let Some(made) = store.of_candidate(&candidate.candidate)? {
+        return resume(ctx, request, &made, champion_id);
+    }
     if candidate.parent != champion_id {
         let named = |id: &Option<ReleaseId>| {
             id.as_ref()
@@ -192,6 +195,45 @@ pub fn release(
     released.release = Some(stored.id);
     released.adapter = Some(stored.adapter);
     Ok(released)
+}
+
+/// A candidate that already has a release: either the alias points at it and
+/// there is nothing to do, or the process that made it official died before
+/// the alias moved and the move is made now, against the champion it was
+/// decided against. The gate is not run again: its verdict is in the
+/// release.
+fn resume(
+    ctx: &Context,
+    request: &ReleaseRequest,
+    made: &StoredRelease,
+    champion: Option<ReleaseId>,
+) -> Result<Released, CampaignError> {
+    let store = ctx.releases();
+    if champion.as_ref() != Some(&made.id) {
+        if champion != made.manifest.parent {
+            return Err(CampaignError::Refused(format!(
+                "candidate {} was released as {}, and {} has moved on since; \
+                 train again from policy:{}",
+                made.manifest.candidate, made.id, request.alias, request.alias
+            )));
+        }
+        store.move_alias(
+            &request.alias,
+            champion.as_ref(),
+            &made.id,
+            &ctx.clock().utc_now(),
+        )?;
+        ctx.repin_policy(&request.alias);
+    }
+    Ok(Released {
+        candidate: made.manifest.candidate.clone(),
+        alias: request.alias.clone(),
+        champion: made.manifest.parent.clone(),
+        gate: made.manifest.gate.clone(),
+        requeued: Vec::new(),
+        release: Some(made.id.clone()),
+        adapter: Some(made.adapter.clone()),
+    })
 }
 
 /// The manifest of `candidate` released after `gate`. The base digest is

@@ -156,6 +156,38 @@ fn a_candidate_that_passes_every_check_is_released() {
         .readonly());
 }
 
+/// Releasing a candidate is idempotent: asking again for one that is already
+/// released changes nothing, and a release that was made official but whose
+/// alias never moved (the process died between the two) is completed by the
+/// next ask, without grading the candidate again or storing a second release.
+#[test]
+fn releasing_a_candidate_again_completes_or_repeats_but_never_duplicates() {
+    let (scratch, ctx) = gate_context("release-idempotent", Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let (candidate, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let first = decide(&ctx, &candidate);
+    let id = first.release.clone().unwrap();
+    let store = ctx.releases();
+
+    let again = decide(&ctx, &candidate);
+    assert_eq!(again.release, Some(id.clone()), "the same release");
+    assert_eq!(
+        again.gate, first.gate,
+        "the recorded gate, not a new grading"
+    );
+    assert_eq!(store.list().unwrap(), vec![id.clone()]);
+    assert_eq!(store.alias_history("default").unwrap().len(), 1);
+
+    // The process died after the release was committed and before the alias
+    // moved: no alias points anywhere.
+    std::fs::remove_dir_all(ctx.root().expdb().join("signals/pointer/alias-default")).unwrap();
+    assert_eq!(store.alias("default").unwrap(), None);
+    let completed = decide(&ctx, &candidate);
+    assert_eq!(completed.release, Some(id.clone()));
+    assert_eq!(store.alias("default").unwrap(), Some(id.clone()));
+    assert_eq!(store.list().unwrap(), vec![id]);
+}
+
 /// One blocked release: the reason the gate gives, and nothing released.
 fn blocked(ctx: &Context, candidate: &Candidate) -> Released {
     let decided = decide(ctx, candidate);
