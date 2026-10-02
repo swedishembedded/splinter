@@ -183,6 +183,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     let attempts = u32::try_from(request.attempts)
         .map_err(|_| CampaignError::Refused("too many attempts per task".into()))?;
     let store = ctx.experiences();
+    let batch = ctx.workspace().batch();
     let mut members = Vec::new();
     let mut report = Solved {
         experience_set: SetId(Digest::of(b"")),
@@ -277,6 +278,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         name: format!("{} {by}{times} by {}", request.task_set, model.identity),
         members,
     })?;
+    batch.commit()?;
     Ok(report)
 }
 

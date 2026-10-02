@@ -406,6 +406,26 @@ fn a_batch_commits_its_writes_together() {
     assert_eq!(after.annotations(&first).unwrap().annotations.len(), 1);
 }
 
+/// A batch does not hold its writes back for ever: it commits them in groups
+/// as it goes, so a crash costs the last group and not the whole batch.
+#[test]
+fn a_long_batch_commits_in_groups_as_it_goes() {
+    let scratch = Scratch::new("groups");
+    let workspace = scratch.workspace();
+    let store = ExperienceStore::new(&workspace);
+    let batch = workspace.batch();
+    for n in 0..300 {
+        store.put(&experience(&format!("answer {n}"))).unwrap();
+    }
+    let seen = scratch.store().list().unwrap().len();
+    assert!(
+        (1..300).contains(&seen),
+        "some of it is committed and the rest is held: {seen}"
+    );
+    batch.commit().unwrap();
+    assert_eq!(scratch.store().list().unwrap().len(), 300);
+}
+
 /// Reward is derived: the strongest non-abstaining verdicts decide, a
 /// conflict at that strength decides nothing, and no verdict is no reward.
 #[test]

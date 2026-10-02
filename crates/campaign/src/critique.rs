@@ -82,6 +82,7 @@ pub fn critique_set(
     request: &CritiqueRequest<'_>,
 ) -> Result<Critiqued, CampaignError> {
     let store = ctx.experiences();
+    let batch = ctx.workspace().batch();
     let members = store.get_set(request.set)?.members;
     let critic = Critic::new(ctx.model(request.critic)?);
     let solver = ctx.model(request.solver)?;
@@ -179,6 +180,7 @@ pub fn critique_set(
         name: format!("retries of {}", request.set),
         members: revisions,
     })?;
+    batch.commit()?;
     Ok(report)
 }
 

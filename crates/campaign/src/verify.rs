@@ -240,6 +240,7 @@ pub fn verify_set(
     cancel: &CancelToken,
 ) -> Result<Verified, CampaignError> {
     let store = ctx.experiences();
+    let batch = ctx.workspace().batch();
     let members = store.get_set(set)?.members;
     let experiences = members
         .iter()
@@ -284,5 +285,6 @@ pub fn verify_set(
             None => report.undecided += 1,
         }
     }
+    batch.commit()?;
     Ok(report)
 }

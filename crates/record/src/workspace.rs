@@ -17,21 +17,37 @@
 //!
 //! A write is made durable and visible to other processes before the call
 //! returns, unless the workspace is in a [`Batch`]: bulk ingest groups its
-//! writes and commits them once, at the end or on [`Batch::commit`]. A crash
-//! inside a batch loses the uncommitted part and nothing else; a record is
-//! never half written.
+//! writes into commits of at most [`GROUP_COMMIT_WRITES`] writes or
+//! [`GROUP_COMMIT_INTERVAL`] of waiting, and commits what is left at the end
+//! or on [`Batch::commit`]. Every commit costs several file syncs, so one per
+//! record is the price of a one-off write and too dear for a stage that writes
+//! thousands. A crash inside a batch loses at most the uncommitted group and
+//! nothing else; a record is never half written.
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 
 use splinter_expdb::{Config, Database, Session, WriterIdentity};
 
 use crate::error::StoreError;
 use crate::StateRoot;
 
+/// Writes a batch groups into one commit.
+pub const GROUP_COMMIT_WRITES: usize = 256;
+/// The longest a batch holds a write before committing it.
+pub const GROUP_COMMIT_INTERVAL: Duration = Duration::from_secs(2);
+
+/// What a batch has written and not yet committed.
+struct Group {
+    open_batches: usize,
+    writes: usize,
+    since: Instant,
+}
+
 struct Shared {
     root: StateRoot,
     session: Mutex<Option<Session>>,
-    batches: Mutex<usize>,
+    group: Mutex<Group>,
 }
 
 impl Drop for Shared {
@@ -98,7 +114,11 @@ impl Workspace {
             shared: Arc::new(Shared {
                 root: root.clone(),
                 session: Mutex::new(None),
-                batches: Mutex::new(0),
+                group: Mutex::new(Group {
+                    open_batches: 0,
+                    writes: 0,
+                    since: Instant::now(),
+                }),
             }),
         }
     }
@@ -124,7 +144,7 @@ impl Workspace {
     /// Groups the writes made until the returned guard is dropped (or
     /// committed) into one commit.
     pub fn batch(&self) -> Batch {
-        *locked(&self.shared.batches) += 1;
+        locked(&self.shared.group).open_batches += 1;
         Batch {
             workspace: self.clone(),
             done: false,
@@ -132,9 +152,10 @@ impl Workspace {
     }
 
     fn leave_batch(&self) -> Result<(), StoreError> {
-        let mut batches = locked(&self.shared.batches);
-        *batches = batches.saturating_sub(1);
-        if *batches == 0 {
+        let mut group = locked(&self.shared.group);
+        group.open_batches = group.open_batches.saturating_sub(1);
+        if group.open_batches == 0 {
+            group.writes = 0;
             if let Some(session) = locked(&self.shared.session).as_mut() {
                 session.flush()?;
             }
@@ -164,19 +185,28 @@ impl Workspace {
         self.with_session(f)
     }
 
-    /// Runs `f` against the session, for a write, committing it unless a
-    /// batch is open.
+    /// Runs `f` against the session, for a write: committed before it
+    /// returns, or, inside a batch, with the group it belongs to.
     pub(crate) fn write<R>(
         &self,
         f: impl FnOnce(&mut Session) -> splinter_expdb::Result<R>,
     ) -> Result<R, StoreError> {
-        let batching = *locked(&self.shared.batches) > 0;
-        self.with_session(|session| {
+        let mut group = locked(&self.shared.group);
+        let batching = group.open_batches > 0;
+        if !batching || group.writes == 0 {
+            group.since = Instant::now();
+        }
+        let out = self.with_session(|session| {
             let out = f(session)?;
-            if !batching {
+            let due = !batching
+                || group.writes + 1 >= GROUP_COMMIT_WRITES
+                || group.since.elapsed() >= GROUP_COMMIT_INTERVAL;
+            if due {
                 session.flush()?;
             }
-            Ok(out)
-        })
+            Ok((out, due))
+        })?;
+        group.writes = if out.1 { 0 } else { group.writes + 1 };
+        Ok(out.0)
     }
 }
