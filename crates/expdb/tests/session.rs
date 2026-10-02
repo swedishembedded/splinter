@@ -190,3 +190,34 @@ fn thousands_of_interleaved_writes_and_lookups_stay_correct_across_refreshes() {
     let fresh = db.snapshot().unwrap();
     assert_eq!(fresh.entities("experience").unwrap().len(), 1_500);
 }
+
+#[test]
+fn a_session_records_an_attempt_and_the_evaluations_and_links_about_it() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut session = open(&db, 0);
+    let (first, second) = session
+        .with_collector(|c| {
+            let (_, a) = common::attempt(c, 1, "p", 2, splinter_expdb::model::Outcome::Fail);
+            let (_, b) = common::attempt(c, 1, "p", 2, splinter_expdb::model::Outcome::Pass);
+            Ok((a, b))
+        })
+        .unwrap();
+    session
+        .evaluate(note(Target::Record(second), "tests", 1.0))
+        .unwrap();
+    session.link_records(second, Rel::RetryOf, first).unwrap();
+    assert_eq!(
+        session
+            .evaluations(&EvalFilter::new().target(Target::Record(second)))
+            .unwrap()
+            .len(),
+        1
+    );
+    session.flush().unwrap();
+
+    let snapshot = db.snapshot().unwrap();
+    let index = snapshot.index().unwrap();
+    assert_eq!(index.edges_from(second, Some(Rel::RetryOf)), vec![first]);
+    assert_eq!(snapshot.families().unwrap()[0].attempts.len(), 2);
+}

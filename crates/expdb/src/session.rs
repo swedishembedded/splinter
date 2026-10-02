@@ -193,6 +193,19 @@ impl Session {
         Ok(found)
     }
 
+    /// Runs `f` with the session's collector, for records that are not
+    /// entities or evaluations, such as the attempts of an agent run. What it
+    /// writes is flushed with everything else; the session does not read it
+    /// back itself, so a reader takes a snapshot after a refresh.
+    pub fn with_collector<R>(&mut self, f: impl FnOnce(&mut Collector) -> Result<R>) -> Result<R> {
+        f(&mut self.collector)
+    }
+
+    /// Links two records, such as two attempts.
+    pub fn link_records(&mut self, from: RecordId, rel: Rel, to: RecordId) -> Result<()> {
+        self.collector.link(from, rel, to)
+    }
+
     /// Links two entities.
     pub fn link(&mut self, from: &ContentId, rel: Rel, to: &ContentId) -> Result<()> {
         let (from, to) = (self.entity_record(from)?, self.entity_record(to)?);
