@@ -86,6 +86,11 @@ impl Snapshot {
         Ok(self.entity_map()?.by_id.get(id).copied())
     }
 
+    /// How many entities the snapshot holds.
+    pub fn entity_count(&self) -> Result<usize> {
+        Ok(self.entity_map()?.by_id.len())
+    }
+
     /// The bytes of the blob with content id `id`, verified against it.
     pub fn read_blob(&self, id: &ContentId) -> Result<Vec<u8>> {
         self.blob_store()?.get_by_id(id)

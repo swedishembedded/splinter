@@ -108,6 +108,12 @@ impl Collector {
         self.writer.blobs().put(bytes)
     }
 
+    /// The bytes with content id `id`, if this collector wrote them or they
+    /// are in a pack it has seen.
+    pub fn read_blob(&mut self, id: &ContentId) -> Result<Vec<u8>> {
+        self.writer.blobs().get_by_id(id)
+    }
+
     /// Stores an application entity and returns its content id. Putting the
     /// same entity again through this collector writes nothing; two
     /// collectors that put it write two records that name one entity.

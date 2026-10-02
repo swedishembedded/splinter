@@ -34,6 +34,7 @@ pub struct EvaluationView {
 #[derive(Debug, Default)]
 pub struct EvalSet {
     views: Vec<EvaluationView>,
+    by_target: HashMap<Target, Vec<usize>>,
     retracted: HashSet<EvaluatorRef>,
 }
 
@@ -89,6 +90,24 @@ impl EvalFilter {
     pub fn include_retracted(mut self) -> Self {
         self.include_retracted = true;
         self
+    }
+
+    /// Whether `e` passes every condition but the withdrawal of its
+    /// evaluator, which the caller knows and passes as `retracted`.
+    pub(crate) fn accepts(&self, e: &Evaluation, retracted: bool) -> bool {
+        (self.include_retracted || !retracted)
+            && self.target.is_none_or(|t| e.target == t)
+            && self.criterion.as_ref().is_none_or(|c| e.criterion == *c)
+            && self
+                .evaluator
+                .as_ref()
+                .is_none_or(|n| e.evaluator.name == *n)
+            && self.epistemic.is_none_or(|x| e.epistemic == x)
+            && self.min_confidence.is_none_or(|c| e.confidence >= c)
+    }
+
+    pub(crate) fn wanted_target(&self) -> Option<Target> {
+        self.target
     }
 }
 
@@ -165,6 +184,10 @@ impl Snapshot {
         let mut set = EvalSet::default();
         for id in index.by_kind(RecordKind::Evaluation) {
             if let Some(Body::Evaluation(evaluation)) = self.get(id)?.map(|r| r.body) {
+                set.by_target
+                    .entry(evaluation.target)
+                    .or_default()
+                    .push(set.views.len());
                 set.views.push(EvaluationView { id, evaluation });
             }
         }
@@ -185,23 +208,29 @@ impl Snapshot {
     /// covers an evaluator version's judgements whenever they were written.
     pub fn evaluations(&self, filter: &EvalFilter) -> Result<Vec<EvaluationView>> {
         let set = self.eval_set()?;
-        Ok(set
-            .views
-            .iter()
-            .filter(|v| {
-                let e = &v.evaluation;
-                (filter.include_retracted || !set.retracted.contains(&e.evaluator))
-                    && filter.target.is_none_or(|t| e.target == t)
-                    && filter.criterion.as_ref().is_none_or(|c| e.criterion == *c)
-                    && filter
-                        .evaluator
-                        .as_ref()
-                        .is_none_or(|n| e.evaluator.name == *n)
-                    && filter.epistemic.is_none_or(|x| e.epistemic == x)
-                    && filter.min_confidence.is_none_or(|c| e.confidence >= c)
-            })
-            .cloned()
-            .collect())
+        let pick = |v: &EvaluationView| {
+            filter
+                .accepts(
+                    &v.evaluation,
+                    set.retracted.contains(&v.evaluation.evaluator),
+                )
+                .then(|| v.clone())
+        };
+        Ok(match filter.wanted_target() {
+            Some(target) => set
+                .by_target
+                .get(&target)
+                .into_iter()
+                .flatten()
+                .filter_map(|&i| pick(&set.views[i]))
+                .collect(),
+            None => set.views.iter().filter_map(pick).collect(),
+        })
+    }
+
+    /// Whether every judgement by `evaluator` has been withdrawn.
+    pub fn is_retracted(&self, evaluator: &EvaluatorRef) -> Result<bool> {
+        Ok(self.eval_set()?.retracted.contains(evaluator))
     }
 
     /// The reward each attempt stands at according to its standing
