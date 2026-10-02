@@ -30,7 +30,7 @@ use splinter_lab::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifie
 use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
-use splinter_record::annotation::{decide, AnnotationBody, Outcome, Producer};
+use splinter_record::annotation::{AnnotationBody, Outcome, Producer};
 use splinter_record::digest::Digest;
 use splinter_record::experience::{Experience, ExperienceId, Task};
 use splinter_record::experiences::SetId;
@@ -260,6 +260,7 @@ pub fn verify_set(
         .map(|id| store.get(id))
         .collect::<Result<Vec<_>, _>>()?;
     let mut report = Verified::default();
+    let mut verified = Vec::new();
     for (id, experience) in members.iter().zip(&experiences) {
         if cancel.is_cancelled() {
             return Err(CampaignError::Cancelled);
@@ -292,7 +293,11 @@ pub fn verify_set(
                 .push(unverified(format!("{}: {error}", producer.name)));
         }
         report.experiences += 1;
-        match decide(&store.annotations(id)?.annotations) {
+        verified.push(id.clone());
+    }
+    let decisions = store.decisions(&verified)?;
+    for id in &verified {
+        match decisions.get(id) {
             Some(d) if d.passed => report.passed += 1,
             Some(_) => report.failed += 1,
             None => report.undecided += 1,

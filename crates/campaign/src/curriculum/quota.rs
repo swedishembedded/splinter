@@ -33,7 +33,7 @@ use serde::Serialize;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
 use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
-use splinter_record::annotation::{decide, Strength};
+use splinter_record::annotation::Strength;
 use splinter_record::experience::ExperienceId;
 use splinter_record::experiences::{ExperienceSet, SetId};
 
@@ -246,8 +246,9 @@ pub fn select_training_set(
         }
     }
     let mut candidates = Vec::new();
+    let decisions = store.decisions(&ids)?;
     for id in ids {
-        let Some(decision) = decide(&store.annotations(&id)?.annotations) else {
+        let Some(&decision) = decisions.get(&id) else {
             continue;
         };
         if !decision.passed || decision.strength < min_strength {

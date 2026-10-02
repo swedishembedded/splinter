@@ -27,7 +27,6 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
-use splinter_record::annotation::decide;
 use splinter_record::experience::PrivilegedKind;
 
 use crate::context::Context;
@@ -99,7 +98,9 @@ pub fn mastery(
     let store = ctx.experiences();
     let mut resolver = ConceptResolver::new(ctx.sources());
     let mut attempts: BTreeMap<(Concept, Option<ReleaseId>), Vec<Decided>> = BTreeMap::new();
-    for id in store.list()? {
+    let recorded = store.list()?;
+    let decisions = store.decisions(&recorded)?;
+    for id in recorded {
         let experience = store.get(&id)?;
         let Some(release) = experience
             .provenance
@@ -117,7 +118,7 @@ pub fn mastery(
         if helped {
             continue;
         }
-        let Some(decision) = decide(&store.annotations(&id)?.annotations) else {
+        let Some(decision) = decisions.get(&id) else {
             continue;
         };
         for concept in resolver.concepts(&experience.to_task())? {

@@ -21,7 +21,6 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use splinter_agent::critic::Critic;
 use splinter_agent::repair::{Repair, RepairBudget, Stop};
-use splinter_record::annotation::decide;
 use splinter_record::experiences::{ExperienceSet, SetId};
 use sven_sdk::CancelToken;
 
@@ -103,11 +102,12 @@ pub fn critique_set(
         unrepaired: Vec::new(),
         stopped: None,
     };
+    let decisions = store.decisions(&members)?;
     for (id, experience) in members.iter().zip(&pool) {
         if request.cancel.is_cancelled() {
             return Err(CampaignError::Cancelled);
         }
-        if decide(&store.annotations(id)?.annotations).is_none_or(|d| d.passed) {
+        if decisions.get(id).is_none_or(|d| d.passed) {
             report.not_failed += 1;
             continue;
         }

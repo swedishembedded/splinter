@@ -556,3 +556,50 @@ fn saying_the_same_thing_twice_records_it_once() {
     store.annotate(&again).unwrap();
     assert_eq!(store.annotations(&id).unwrap().annotations.len(), 2);
 }
+
+/// What many experiences decide is read in one pass over the verdicts and is
+/// exactly what `decide` gives over each one's annotations: the strongest
+/// verdicts rule, abstentions count for nothing, and conflict or silence is
+/// absent rather than a zero.
+#[test]
+fn decisions_in_bulk_are_what_each_experiences_annotations_decide() {
+    use splinter_record::annotation::decide;
+    let scratch = Scratch::new("decisions");
+    let store = scratch.store();
+    let ids: Vec<_> = ["a", "b", "c", "d", "e"]
+        .iter()
+        .map(|o| store.put(&experience(o)).unwrap())
+        .collect();
+    let notes = [
+        (0, Outcome::Pass, Strength::Executable),
+        (1, Outcome::Fail, Strength::Judged),
+        (1, Outcome::Pass, Strength::Formal),
+        (2, Outcome::Pass, Strength::Formal),
+        (2, Outcome::Fail, Strength::Formal),
+        (3, Outcome::Abstain, Strength::Executable),
+    ];
+    for (which, outcome, strength) in notes {
+        store
+            .annotate(&verdict(&ids[which], outcome, strength))
+            .unwrap();
+    }
+
+    let decided = store.decisions(&ids).unwrap();
+    for id in &ids {
+        let expected = decide(&store.annotations(id).unwrap().annotations);
+        assert_eq!(decided.get(id).copied(), expected, "{id}");
+    }
+    assert_eq!(
+        decided.len(),
+        2,
+        "conflict, abstention and silence decide nothing"
+    );
+    assert!(decided[&ids[0]].passed && !format!("{:?}", decided[&ids[0]]).is_empty());
+    assert_eq!(decided[&ids[1]].strength, Strength::Formal);
+
+    let unknown = experience("never stored").id().unwrap();
+    assert!(matches!(
+        store.decisions(&[unknown]),
+        Err(StoreError::UnknownExperience(_))
+    ));
+}

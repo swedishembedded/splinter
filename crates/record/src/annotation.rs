@@ -116,6 +116,19 @@ impl Strength {
     pub fn rank(self) -> u8 {
         self as u8
     }
+
+    /// The strength that has `rank`, if any.
+    #[must_use]
+    pub fn from_rank(rank: u8) -> Option<Self> {
+        [
+            Strength::Judged,
+            Strength::Consistency,
+            Strength::Formal,
+            Strength::Executable,
+        ]
+        .into_iter()
+        .find(|s| s.rank() == rank)
+    }
 }
 
 /// A step label.
@@ -195,17 +208,9 @@ pub fn decide(notes: &[Annotation]) -> Option<Decision> {
         })
         .collect();
     let resolved = resolve_verdicts(&verdicts)?;
-    let strength = [
-        Strength::Judged,
-        Strength::Consistency,
-        Strength::Formal,
-        Strength::Executable,
-    ]
-    .into_iter()
-    .find(|s| s.rank() == resolved.rank)?;
     Some(Decision {
         passed: resolved.passed,
-        strength,
+        strength: Strength::from_rank(resolved.rank)?,
     })
 }
 

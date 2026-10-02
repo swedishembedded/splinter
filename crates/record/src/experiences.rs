@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use splinter_expdb::analyze::{EvalFilter, TASK_COMPLETION};
 use splinter_expdb::model::{Entity, Evaluation, EvaluatorRef, Target};
 
-use crate::annotation::{Annotation, AnnotationBody, Label, Outcome};
+use crate::annotation::{Annotation, AnnotationBody, Decision, Label, Outcome, Strength};
 use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
 use crate::experience::{Experience, ExperienceId};
@@ -228,6 +228,43 @@ impl ExperienceStore {
 
     fn projected(&self, id: &ExperienceId) -> Result<Projected, StoreError> {
         projection_of(&self.workspace, id)
+    }
+
+    /// What each of `ids` decides, read in one pass over the verdicts instead
+    /// of every experience's annotations: the decision [`crate::annotation::decide`]
+    /// reaches over its annotations. An experience that decides nothing (no
+    /// verdict, only abstentions, or a conflict at the top rank) is absent.
+    /// Refused for an experience the store does not hold.
+    pub fn decisions(
+        &self,
+        ids: &[ExperienceId],
+    ) -> Result<std::collections::HashMap<ExperienceId, Decision>, StoreError> {
+        let mut attempts = Vec::with_capacity(ids.len());
+        for id in ids {
+            if !self.contains(id)? {
+                return Err(StoreError::UnknownExperience(id.clone()));
+            }
+            attempts.push(self.projected(id)?.attempt);
+        }
+        let resolutions = self
+            .workspace
+            .read(|s| s.snapshot()?.resolutions(TASK_COMPLETION))?;
+        let mut decided = std::collections::HashMap::new();
+        for (id, attempt) in ids.iter().zip(attempts) {
+            let Some(resolution) = resolutions.get(&Target::Record(attempt)) else {
+                continue;
+            };
+            if let Some(strength) = Strength::from_rank(resolution.rank) {
+                decided.insert(
+                    id.clone(),
+                    Decision {
+                        passed: resolution.passed,
+                        strength,
+                    },
+                );
+            }
+        }
+        Ok(decided)
     }
 
     /// `id`'s annotations in the order they were written.

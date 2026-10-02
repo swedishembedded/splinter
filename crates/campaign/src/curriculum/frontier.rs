@@ -37,7 +37,6 @@ use splinter_knowledge::concepts::{Concept, ConceptResolver};
 use splinter_lab::frontier::{Distribution, FrontierClass, PassCount};
 pub use splinter_policy::Sampling;
 use splinter_policy::AGENT_SAMPLING;
-use splinter_record::annotation::decide;
 use splinter_record::digest::Digest;
 use splinter_record::experience::ExperienceId;
 use splinter_record::experiences::{ExperienceSet, SetId};
@@ -222,9 +221,11 @@ pub(crate) fn tally(
 ) -> Result<BTreeMap<Digest, (PassCount, Vec<ExperienceId>)>, CampaignError> {
     let store = ctx.experiences();
     let mut tallied: BTreeMap<Digest, (PassCount, Vec<ExperienceId>)> = BTreeMap::new();
-    for id in store.get_set(set)?.members {
+    let members = store.get_set(set)?.members;
+    let decisions = store.decisions(&members)?;
+    for id in members {
         let experience = store.get(&id)?;
-        let outcome = decide(&store.annotations(&id)?.annotations).map(|d| d.passed);
+        let outcome = decisions.get(&id).map(|d| d.passed);
         let (count, ids) = tallied.entry(experience.task.id).or_default();
         count.record(outcome);
         ids.push(id);
