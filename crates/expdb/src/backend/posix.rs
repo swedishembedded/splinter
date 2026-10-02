@@ -42,16 +42,9 @@ impl PosixBackend {
     }
 
     fn path(&self, key: &Key) -> PathBuf {
-        let base = self.root.join(key.kind().dir());
-        if key.kind().fans_out() {
-            let name = key.name();
-            let fan: String = name.chars().take(2).collect();
-            base.join(fan).join(name)
-        } else {
-            key.name()
-                .split('/')
-                .fold(base, |path, part| path.join(part))
-        }
+        key.relative_path()
+            .split('/')
+            .fold(self.root.clone(), |path, part| path.join(part))
     }
 
     fn temp_beside(path: &Path) -> PathBuf {

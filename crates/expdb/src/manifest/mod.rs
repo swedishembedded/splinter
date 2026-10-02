@@ -20,7 +20,9 @@ mod model;
 mod refs;
 mod resolve;
 mod snapshot;
+mod verify;
 
 pub use collect::{AbsorbReport, GcReport};
 pub use model::{Manifest, ObjectKind, ObjectRef};
 pub use snapshot::Snapshot;
+pub use verify::{Fault, Problem, ProblemKind, Quarantined, VerifyReport};

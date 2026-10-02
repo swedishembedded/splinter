@@ -126,4 +126,33 @@ impl Key {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    /// Where the object lies under a database root, with `/` separators:
+    /// the kind's directory, a two-character fan-out directory where the
+    /// kind has one, then the name.
+    pub fn relative_path(&self) -> String {
+        if self.kind.fans_out() {
+            let fan: String = self.name.chars().take(2).collect();
+            format!("{}/{fan}/{}", self.kind.dir(), self.name)
+        } else {
+            format!("{}/{}", self.kind.dir(), self.name)
+        }
+    }
+
+    /// The key of the object at `path` under a database root, the inverse of
+    /// [`Key::relative_path`]; `None` for a path that is not an object's.
+    pub fn from_relative(path: &str) -> Option<Self> {
+        let (dir, rest) = path.split_once('/')?;
+        let kind = Kind::ALL.into_iter().find(|k| k.dir() == dir)?;
+        let name = if kind.fans_out() {
+            let (fan, name) = rest.split_once('/')?;
+            if name.chars().take(2).collect::<String>() != fan {
+                return None;
+            }
+            name
+        } else {
+            rest
+        };
+        Self::new(kind, name).ok()
+    }
 }
