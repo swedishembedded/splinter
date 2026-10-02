@@ -156,3 +156,49 @@ fn a_process_that_is_done_leaves_no_writer_ref_for_later_opens_to_read() {
     );
     let _ = std::fs::remove_dir_all(root.path());
 }
+
+#[test]
+fn a_long_running_reader_survives_the_files_it_opened_being_collected() {
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-maint-reader-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    let writer = ExperienceStore::new(&Workspace::at(&root));
+    let ids: Vec<_> = (0..6)
+        .map(|n| writer.put(&experience(n)).unwrap())
+        .collect();
+
+    // A reader opens its snapshot, names the six small segments.
+    let reader = ExperienceStore::new(&Workspace::at(&root));
+    assert_eq!(reader.list().unwrap().len(), 6);
+
+    // Meanwhile maintenance merges them and, long after the grace period,
+    // they are collected: here the files are simply removed.
+    let maintainer = Workspace::at(&root);
+    maintainer.maintain(false).unwrap();
+    for entry in std::fs::read_dir(root.expdb().join("segments"))
+        .unwrap()
+        .flatten()
+    {
+        for file in std::fs::read_dir(entry.path()).unwrap().flatten() {
+            let merged = {
+                let db =
+                    splinter_expdb::Database::open(root.expdb(), splinter_expdb::Config::default())
+                        .unwrap();
+                db.snapshot().unwrap().segments().iter().any(|s| {
+                    file.file_name()
+                        .to_string_lossy()
+                        .starts_with(&s.id.to_string())
+                })
+            };
+            if !merged {
+                std::fs::remove_file(file.path()).unwrap();
+            }
+        }
+    }
+
+    // The reader's snapshot names files that are gone; it refreshes and reads.
+    assert_eq!(reader.get(&ids[3]).unwrap(), experience(3));
+    assert_eq!(reader.list().unwrap().len(), 6);
+    let _ = std::fs::remove_dir_all(root.path());
+}

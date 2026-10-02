@@ -84,6 +84,14 @@ impl Database {
                 "a file cannot be added and removed together",
             ));
         }
+        // A file this manifest withdraws is as young as the withdrawal when a
+        // collection judges it: a reader that opened a snapshot before it
+        // still names the file, and has the whole grace period to finish.
+        // Touching first means a collection can never see it both
+        // unreferenced and old.
+        for object in &remove {
+            self.backend().touch(&object.key()?)?;
+        }
         let ref_name = format!("{JOBS_PREFIX}{job}");
         let parents = self.get_ref(&ref_name)?.into_iter().collect();
         let manifest = Manifest::new(

@@ -216,8 +216,8 @@ impl ExperienceStore {
         targets.extend(projected.decisions.values().copied());
         let raw = self.workspace.read(|s| {
             let mut views = Vec::new();
-            for target in targets {
-                views.extend(s.evaluations(&EvalFilter::new().target(Target::Record(target)))?);
+            for target in &targets {
+                views.extend(s.evaluations(&EvalFilter::new().target(Target::Record(*target)))?);
             }
             views.sort_by_key(|view| view.id);
             let mut raw = Vec::new();

@@ -279,6 +279,21 @@ impl StorageBackend for PosixBackend {
             .map_err(Error::io(path))
     }
 
+    fn touch(&self, key: &Key) -> Result<()> {
+        match self.open(key) {
+            Ok((file, path)) => {
+                drop(file);
+                fs::File::options()
+                    .write(true)
+                    .open(&path)
+                    .and_then(|f| f.set_modified(SystemTime::now()))
+                    .map_err(Error::io(path))
+            }
+            Err(Error::NotFound { .. }) => Ok(()),
+            Err(other) => Err(other),
+        }
+    }
+
     fn preferred_write_bytes(&self) -> usize {
         PREFERRED_WRITE_BYTES
     }

@@ -245,12 +245,23 @@ impl Workspace {
         self.with_session(Session::refresh)
     }
 
-    /// Runs `f` against the session, for a read.
+    /// Runs `f` against the session, for a read. A process that has run for a
+    /// long time can hold a snapshot whose files a maintenance pass has since
+    /// retired and collected; the read then finds a file gone, so it refreshes
+    /// the snapshot and runs once more before reporting anything.
     pub(crate) fn read<R>(
         &self,
-        f: impl FnOnce(&mut Session) -> splinter_expdb::Result<R>,
+        mut f: impl FnMut(&mut Session) -> splinter_expdb::Result<R>,
     ) -> Result<R, StoreError> {
-        self.with_session(f)
+        match self.with_session(&mut f) {
+            Err(StoreError::Database(splinter_expdb::Error::NotFound { .. })) => {
+                self.with_session(|session| {
+                    session.refresh()?;
+                    f(session)
+                })
+            }
+            other => other,
+        }
     }
 
     /// Runs `f` against the session, for a write: committed before it

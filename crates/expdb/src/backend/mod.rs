@@ -52,6 +52,12 @@ pub trait StorageBackend: Send + Sync {
     fn remove(&self, key: &Key) -> Result<()>;
     /// When the object was last written.
     fn modified(&self, key: &Key) -> Result<SystemTime>;
+    /// Marks the object as written now, so it is as young as that when a
+    /// collection judges it. The default does nothing, for storage that keeps
+    /// no modification time.
+    fn touch(&self, _key: &Key) -> Result<()> {
+        Ok(())
+    }
     /// The write size this storage prefers; writers batch up to it.
     fn preferred_write_bytes(&self) -> usize;
 }

@@ -580,3 +580,73 @@ fn a_blob_pack_whose_leading_magic_is_damaged_is_refused() {
     let read = db.snapshot().and_then(|s| s.read_blob(&blob.id));
     assert!(read.is_err(), "a pack with a damaged head was read");
 }
+
+fn age(path: &std::path::Path, days: u64) {
+    let old = SystemTime::now() - Duration::from_secs(days * 24 * 3600);
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+}
+
+fn files_under(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(files_under(&path));
+        } else {
+            found.push(path);
+        }
+    }
+    found
+}
+
+#[test]
+fn a_file_a_compaction_just_retired_gets_the_whole_grace_period_before_it_can_be_collected() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    // A reader that opened a snapshot before the compaction still names the
+    // inputs; they must outlive the compaction by the grace period, however
+    // old they already were.
+    let mut c = db
+        .collector(&WriterIdentity::new("exp", "job", "node", 0))
+        .unwrap();
+    for n in 0..3 {
+        c.record(Body::Skill(splinter_expdb::model::Skill {
+            name: format!("s{n}"),
+            description: String::new(),
+            trigger: String::new(),
+            action_pattern: String::new(),
+            expected_effect: String::new(),
+            parents: vec![],
+            prerequisites: vec![],
+        }))
+        .unwrap();
+        c.flush().unwrap();
+    }
+    let segments = files_under(&scratch.dir.path().join("segments"));
+    assert_eq!(segments.len(), 3);
+    for path in &segments {
+        age(path, 10);
+    }
+    let before = db.snapshot().unwrap();
+
+    let report = db.compact_segments().unwrap();
+    assert_eq!(report.inputs, 3);
+    let collected = db.gc().unwrap();
+    assert_eq!(
+        collected.removed, 0,
+        "the retired inputs are as young as the compaction that retired them"
+    );
+    for path in &segments {
+        assert!(path.exists(), "{path:?}");
+    }
+    assert_eq!(
+        before.records().unwrap().len(),
+        3,
+        "the old snapshot still reads"
+    );
+}
