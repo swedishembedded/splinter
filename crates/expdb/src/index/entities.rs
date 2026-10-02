@@ -86,6 +86,11 @@ impl Snapshot {
         Ok(self.entity_map()?.by_id.get(id).copied())
     }
 
+    /// The bytes of the blob with content id `id`, verified against it.
+    pub fn read_blob(&self, id: &ContentId) -> Result<Vec<u8>> {
+        self.blob_store()?.get_by_id(id)
+    }
+
     /// The application entity with content id `id`.
     pub fn entity_body(&self, id: &ContentId) -> Result<Option<Entity>> {
         let Some(record) = self.entity(id)? else {

@@ -13,6 +13,7 @@ use std::collections::HashSet;
 
 use super::run::{DecisionRef, Run};
 use super::writer::{Destination, Writer};
+use crate::blob::BlobRef;
 use crate::database::Database;
 use crate::error::{Error, Result};
 use crate::id::{ContentId, RecordId, WriterIdentity};
@@ -98,6 +99,13 @@ impl Collector {
     pub(super) fn make(&mut self, body: Body) -> Record {
         let id = self.writer.next_id();
         Record::new(id, self.writer.database().clock().now_ns(), body)
+    }
+
+    /// Stores `bytes` in the blob store and returns their reference. Whole
+    /// content already stored, or shared in part with what is, is not stored
+    /// again. The bytes are readable from a snapshot once flushed.
+    pub fn put_blob(&mut self, bytes: &[u8]) -> Result<BlobRef> {
+        self.writer.blobs().put(bytes)
     }
 
     /// Stores an application entity and returns its content id. Putting the

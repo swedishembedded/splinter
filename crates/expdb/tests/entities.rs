@@ -167,3 +167,28 @@ fn an_application_that_already_has_a_content_address_uses_it_as_the_entity_id() 
     assert_eq!(snapshot.entity_body(&address).unwrap(), Some(entity));
     assert_eq!(snapshot.entities("task").unwrap()[0].id, address);
 }
+
+#[test]
+fn bytes_put_through_a_collector_are_read_back_from_a_snapshot_by_content_id() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut collector = db.collector(&identity(0)).unwrap();
+    let small = b"a short note".to_vec();
+    let large = common::noise(300_000, 9);
+    let (a, b) = (
+        collector.put_blob(&small).unwrap(),
+        collector.put_blob(&large).unwrap(),
+    );
+    assert_eq!(a.id, ContentId::of(&small), "the id is the content hash");
+    assert_eq!(
+        collector.put_blob(&small).unwrap(),
+        a,
+        "putting again is a no-op"
+    );
+    collector.flush().unwrap();
+
+    let snapshot = db.snapshot().unwrap();
+    assert_eq!(snapshot.read_blob(&a.id).unwrap(), small);
+    assert_eq!(snapshot.read_blob(&b.id).unwrap(), large);
+    assert!(snapshot.read_blob(&ContentId::of(b"absent")).is_err());
+}
