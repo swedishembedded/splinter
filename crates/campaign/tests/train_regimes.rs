@@ -29,7 +29,7 @@ use common::gate::{
     anchor_file, dataset, decide, gate_context, policy, preference_dataset, released, Brain,
     FakeTrainer, ANCHOR, FACTS,
 };
-use splinter_campaign::release::{anchor, ReleaseStore};
+use splinter_campaign::release::anchor;
 use splinter_campaign::train::{
     train, Regime, TrainRequest, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
 };
@@ -59,10 +59,7 @@ fn a_preference_dataset_trains_by_dpo_from_the_champion_and_is_gated_like_any_ot
     let (scratch, ctx) = gate_context("train-dpo", Brain::Honest);
     anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
     let champion = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
-    let champion_adapter = ReleaseStore::open(ctx.root())
-        .get(&champion)
-        .unwrap()
-        .adapter;
+    let champion_adapter = ctx.releases().get(&champion).unwrap().adapter;
 
     let pairs = preference_dataset(&ctx, "beta", FACTS);
     let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha", "beta"]);
@@ -92,7 +89,8 @@ fn a_preference_dataset_trains_by_dpo_from_the_champion_and_is_gated_like_any_ot
 
     let decided = decide(&ctx, &candidate);
     assert!(decided.gate.passed, "{:#?}", decided.gate);
-    let release = ReleaseStore::open(ctx.root())
+    let release = ctx
+        .releases()
         .get(decided.release.as_ref().unwrap())
         .unwrap();
     assert_eq!(release.manifest.training.regime, Regime::Dpo);

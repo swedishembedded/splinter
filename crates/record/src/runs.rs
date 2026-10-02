@@ -265,7 +265,7 @@ fn events_by_run(
     workspace: &Workspace,
 ) -> Result<std::collections::BTreeMap<String, Vec<serde_json::Value>>, StoreError> {
     workspace.refresh()?;
-    let stored = workspace.read(|s| s.entities(RUN_EVENT))?;
+    let stored = workspace.read_or_default(|s| s.entities(RUN_EVENT))?;
     let mut runs: std::collections::BTreeMap<String, Vec<serde_json::Value>> = Default::default();
     for found in stored {
         if let Some(run) = found.entity.value.get("run").and_then(|r| r.as_str()) {

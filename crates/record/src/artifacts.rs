@@ -289,7 +289,7 @@ impl ArtifactStore {
 
     /// Every recorded artifact, in the order recorded.
     pub fn list(&self) -> Result<Vec<Artifact>, StoreError> {
-        let stored = self.workspace.read(|s| s.entities(ARTIFACT))?;
+        let stored = self.workspace.read_or_default(|s| s.entities(ARTIFACT))?;
         stored
             .into_iter()
             .map(|stored| {

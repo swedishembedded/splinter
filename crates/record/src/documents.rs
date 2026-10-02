@@ -76,7 +76,7 @@ impl Workspace {
     /// stored.
     pub fn documents_in_order(&self, class: &str) -> Result<Vec<Digest>, StoreError> {
         Ok(self
-            .read(|s| s.entity_ids(class))?
+            .read_or_default(|s| s.entity_ids(class))?
             .into_iter()
             .map(Digest::from)
             .collect())
@@ -91,7 +91,10 @@ fn digest_of<T: Serialize>(document: &T) -> Result<Digest, StoreError> {
     Ok(Digest::of(&bytes))
 }
 
-fn encode<T: Serialize>(class: &str, document: &T) -> Result<(Digest, Entity), StoreError> {
+pub(crate) fn encode<T: Serialize>(
+    class: &str,
+    document: &T,
+) -> Result<(Digest, Entity), StoreError> {
     let id = digest_of(document)?;
     let value = serde_json::to_value(document).map_err(|source| StoreError::Serialize {
         what: "document",

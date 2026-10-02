@@ -22,13 +22,16 @@ use splinter_expdb::model::{DatasetNode, ModelNode, TrainingRun};
 use splinter_expdb::{ContentId, RecordId};
 
 use crate::digest::Digest;
+use crate::documents::encode;
 use crate::error::StoreError;
 use crate::experience::ExperienceId;
 use crate::projection::projection_of;
-use crate::workspace::{content_id, Workspace};
+use crate::workspace::{content_id, put_spilling, Workspace};
 
 /// The class of the entity that names a lineage node.
 const NODE: &str = "lineage_node";
+const CANDIDATE: &str = "candidate";
+const RELEASE: &str = "release";
 
 /// How a dataset came to be, as its builder describes it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -57,6 +60,10 @@ struct NodeRef {
     kind: String,
     id: String,
     record: RecordId,
+    /// The other records of a node that is several, such as a candidate trained
+    /// on several datasets, which has a run for each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    also: Vec<RecordId>,
 }
 
 fn node_key(kind: &str, id: &str) -> Result<ContentId, StoreError> {
@@ -69,20 +76,32 @@ fn node_key(kind: &str, id: &str) -> Result<ContentId, StoreError> {
 }
 
 impl Workspace {
-    fn node(&self, kind: &str, id: &str) -> Result<Option<RecordId>, StoreError> {
+    fn node_ref(&self, kind: &str, id: &str) -> Result<Option<NodeRef>, StoreError> {
         let key = node_key(kind, id)?;
-        let found = self.read(|s| s.entity(&key))?;
-        Ok(match found {
-            Some(entity) => Some(
-                serde_json::from_value::<NodeRef>(entity.value)
-                    .map_err(|e| StoreError::UndecodableObject {
+        let found = self.read_or_default(|s| s.entity(&key))?;
+        found
+            .map(|entity| {
+                serde_json::from_value::<NodeRef>(entity.value).map_err(|e| {
+                    StoreError::UndecodableObject {
                         what: format!("the {kind} node {id}"),
                         reason: e.to_string(),
-                    })?
-                    .record,
-            ),
-            None => None,
-        })
+                    }
+                })
+            })
+            .transpose()
+    }
+
+    fn node(&self, kind: &str, id: &str) -> Result<Option<RecordId>, StoreError> {
+        Ok(self.node_ref(kind, id)?.map(|n| n.record))
+    }
+
+    /// Every record of the node, the first one first.
+    fn node_all(&self, kind: &str, id: &str) -> Result<Option<Vec<RecordId>>, StoreError> {
+        Ok(self.node_ref(kind, id)?.map(|n| {
+            let mut all = vec![n.record];
+            all.extend(n.also);
+            all
+        }))
     }
 
     fn name_node(
@@ -90,12 +109,17 @@ impl Workspace {
         key: ContentId,
         kind: &str,
         id: &str,
-        record: RecordId,
+        records: Vec<RecordId>,
     ) -> splinter_expdb::Result<()> {
+        let mut records = records.into_iter();
+        let record = records
+            .next()
+            .ok_or_else(|| splinter_expdb::Error::invalid("lineage node", "it has no record"))?;
         let value = serde_json::to_value(NodeRef {
             kind: kind.to_owned(),
             id: id.to_owned(),
             record,
+            also: records.collect(),
         })
         .map_err(|source| splinter_expdb::Error::Encode {
             what: "lineage node",
@@ -133,21 +157,25 @@ impl Workspace {
                 samples: lineage.records,
             };
             let record = s.with_collector(|c| c.record_dataset(node, &attempts))?;
-            Self::name_node(s, key, "dataset", dataset.as_str(), record)
+            Self::name_node(s, key, "dataset", dataset.as_str(), vec![record])
         })
     }
 
-    /// Records the training run that made `candidate` from `datasets`,
-    /// continuing `base` when it had one.
-    pub fn record_training_run(
+    /// Records the candidate `candidate`: its `document`, and the training that
+    /// made it from `datasets`, continuing `parent` when it had one, in one
+    /// commit. Every dataset must have been recorded. Returns the document's
+    /// address. Recording the same candidate again changes nothing.
+    pub fn record_candidate<T: Serialize>(
         &self,
+        document: &T,
         candidate: &str,
         datasets: &[Digest],
         objective: &str,
-        base: Option<&Digest>,
-    ) -> Result<(), StoreError> {
+        parent: Option<&Digest>,
+    ) -> Result<Digest, StoreError> {
+        let (id, entity) = encode(CANDIDATE, document)?;
         if self.node("candidate", candidate)?.is_some() {
-            return Ok(());
+            return Ok(id);
         }
         let mut sources = Vec::with_capacity(datasets.len());
         for dataset in datasets {
@@ -158,54 +186,93 @@ impl Workspace {
                 }
             })?);
         }
-        let base = match base {
-            Some(release) => self.node("release", release.as_str())?,
+        if sources.is_empty() {
+            return Err(StoreError::Rejected {
+                what: "training run",
+                reason: "it read no dataset".into(),
+            });
+        }
+        let base = match parent {
+            Some(release) => Some(self.node("release", release.as_str())?.ok_or_else(|| {
+                StoreError::Rejected {
+                    what: "training run",
+                    reason: format!("{release} was never recorded as a release"),
+                }
+            })?),
             None => None,
         };
         let key = node_key("candidate", candidate)?;
         let objective = objective.to_owned();
         self.write(|s| {
-            let record = s.with_collector(|c| {
-                let mut first = None;
-                for source in &sources {
-                    let run = c.record_training_run(TrainingRun {
-                        dataset: *source,
-                        objective: objective.clone(),
-                        base_model: base,
-                    })?;
-                    first.get_or_insert(run);
-                }
-                first.ok_or_else(|| {
-                    splinter_expdb::Error::invalid("training run", "it read no dataset")
-                })
+            put_spilling(s, entity.clone())?;
+            let runs = s.with_collector(|c| {
+                sources
+                    .iter()
+                    .map(|source| {
+                        c.record_training_run(TrainingRun {
+                            dataset: *source,
+                            objective: objective.clone(),
+                            base_model: base,
+                        })
+                    })
+                    .collect::<splinter_expdb::Result<Vec<_>>>()
             })?;
-            Self::name_node(s, key, "candidate", candidate, record)
-        })
+            Self::name_node(s, key, "candidate", candidate, runs)
+        })?;
+        Ok(id)
     }
 
-    /// Records the release `release`, named `name`, made by the training of
-    /// `candidate` and continuing `parent` when it had one.
-    pub fn record_model(
+    /// Records the release whose manifest is `document`, named `name`, made by
+    /// the training of `candidate` and continuing `parent` when it had one, in
+    /// one commit. The candidate and the parent must have been recorded.
+    /// Returns the document's address, which is the release's id. Recording the
+    /// same release again changes nothing.
+    pub fn record_release<T: Serialize>(
         &self,
-        release: &Digest,
+        document: &T,
         name: &str,
         candidate: &str,
         parent: Option<&Digest>,
-    ) -> Result<(), StoreError> {
-        if self.node("release", release.as_str())?.is_some() {
-            return Ok(());
+    ) -> Result<Digest, StoreError> {
+        let (id, entity) = encode(RELEASE, document)?;
+        if self.node("release", id.as_str())?.is_some() {
+            return Ok(id);
         }
-        let run = self.node("candidate", candidate)?;
+        let runs = self
+            .node_all("candidate", candidate)?
+            .ok_or_else(|| StoreError::Rejected {
+                what: "release",
+                reason: format!("candidate {candidate} was never recorded"),
+            })?;
         let parent = match parent {
-            Some(parent) => self.node("release", parent.as_str())?,
+            Some(parent) => Some(self.node("release", parent.as_str())?.ok_or_else(|| {
+                StoreError::Rejected {
+                    what: "release",
+                    reason: format!("the release {parent} it continues was never recorded"),
+                }
+            })?),
             None => None,
         };
-        let key = node_key("release", release.as_str())?;
+        let key = node_key("release", id.as_str())?;
         let name = name.to_owned();
+        let node_id = id.clone();
         self.write(|s| {
-            let record = s.with_collector(|c| c.record_model(ModelNode { name, run, parent }))?;
-            Self::name_node(s, key, "release", release.as_str(), record)
-        })
+            put_spilling(s, entity.clone())?;
+            let model = s.with_collector(|c| {
+                c.record_model(ModelNode {
+                    name: name.clone(),
+                    run: runs.first().copied(),
+                    parent,
+                })
+            })?;
+            // A candidate trained on several datasets has one run per
+            // dataset, and the model came from all of them.
+            for run in runs.iter().skip(1) {
+                s.link_records(model, splinter_expdb::model::Rel::ProducedBy, *run)?;
+            }
+            Self::name_node(s, key, "release", node_id.as_str(), vec![model])
+        })?;
+        Ok(id)
     }
 
     /// What `release` was made from: the candidates that trained it, the
@@ -232,15 +299,23 @@ impl Workspace {
                     index.kind_of(**id) == Some(splinter_expdb::model::RecordKind::Attempt)
                 })
                 .count();
-            Ok((reached, attempts))
+            // Newest first by the time on the records, which every reader
+            // agrees on, and not by the random ids of the writers.
+            let mut stamped: Vec<(u64, RecordId)> = reached
+                .into_iter()
+                .map(|id| (index.timestamp_ns(id).unwrap_or(0), id))
+                .collect();
+            stamped.sort_unstable_by(|a, b| b.cmp(a));
+            Ok((
+                stamped.into_iter().map(|(_, id)| id).collect::<Vec<_>>(),
+                attempts,
+            ))
         })?;
         let mut trace = ReleaseTrace {
             attempts: reached.1,
             ..ReleaseTrace::default()
         };
-        let mut reached = reached.0;
-        reached.sort();
-        reached.reverse();
+        let reached = reached.0;
         for id in reached {
             let Some(node) = names.get(&id) else { continue };
             match node.kind.as_str() {

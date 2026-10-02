@@ -15,6 +15,7 @@ use std::str::FromStr;
 
 use serde::Serialize;
 use splinter_record::annotation::Strength;
+use splinter_record::digest::canonical_json;
 use splinter_record::experience::{ExperienceId, PrivilegedKind};
 use splinter_record::experiences::SetId;
 use splinter_record::lineage::DatasetLineage;
@@ -316,6 +317,15 @@ pub fn store_dataset(
     options: WriteOptions,
 ) -> Result<StoredDataset, CampaignError> {
     let stored = ctx.datasets().put(projection, options)?;
+    record_dataset_lineage(ctx, &stored)?;
+    Ok(stored)
+}
+
+/// Records where the stored dataset `stored` came from, if that was not
+/// recorded yet. It is made official by one commit and its lineage by a second,
+/// so a crash between them leaves a dataset without; this repairs it, and
+/// `train` calls it before spending any time.
+pub fn record_dataset_lineage(ctx: &Context, stored: &StoredDataset) -> Result<(), CampaignError> {
     ctx.workspace().record_dataset(
         &stored.id.0,
         &DatasetLineage {
@@ -324,7 +334,7 @@ pub fn store_dataset(
         },
         &stored.manifest.experiences,
     )?;
-    Ok(stored)
+    Ok(())
 }
 
 /// The stored dataset `id` (or a unique prefix of it) names, verified.
@@ -358,8 +368,16 @@ pub fn export(ctx: &Context, id: &str, out: &Path) -> Result<Exported, CampaignE
     );
     let path = out.join(name);
     let manifest = manifest_path(&path);
-    copy_once(&stored.path, &path)?;
-    copy_once(&manifest_path(&stored.path), &manifest)?;
+    put_once(
+        &path,
+        &std::fs::read(&stored.path).map_err(io(&stored.path))?,
+    )?;
+    let manifest_bytes =
+        canonical_json(&stored.manifest).map_err(|source| CampaignError::Json {
+            what: "dataset manifest".into(),
+            source,
+        })?;
+    put_once(&manifest, &manifest_bytes)?;
     Ok(Exported {
         dataset: stored.id,
         path,
@@ -367,9 +385,8 @@ pub fn export(ctx: &Context, id: &str, out: &Path) -> Result<Exported, CampaignE
     })
 }
 
-/// Copies `from` to `to`, refusing to replace a different file.
-fn copy_once(from: &Path, to: &Path) -> Result<(), CampaignError> {
-    let bytes = std::fs::read(from).map_err(io(from))?;
+/// Writes `bytes` to `to`, refusing to replace a different file.
+fn put_once(to: &Path, bytes: &[u8]) -> Result<(), CampaignError> {
     match std::fs::read(to) {
         Ok(existing) if existing == bytes => return Ok(()),
         Ok(_) => {
@@ -381,8 +398,7 @@ fn copy_once(from: &Path, to: &Path) -> Result<(), CampaignError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(io(to)(e)),
     }
-    splinter_record::write_once(to, &bytes).map_err(io(to))?;
-    Ok(())
+    std::fs::write(to, bytes).map_err(io(to))
 }
 
 #[cfg(test)]

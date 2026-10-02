@@ -52,7 +52,7 @@ pub use store::{ReleaseId, ReleaseManifest, ReleaseStore, StoredRelease, RELEASE
 use crate::config::Config;
 use crate::context::Context;
 use crate::curriculum::queue::enqueue_retention;
-use crate::error::{io, CampaignError};
+use crate::error::CampaignError;
 use crate::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use crate::train::{load_candidate, Candidate, TrainingSummary};
 use gate::{Check, GateConfig, GateReport};
@@ -98,8 +98,8 @@ pub struct Released {
     pub requeued: Vec<Concept>,
     /// The release written; `None` when the gate blocked it.
     pub release: Option<ReleaseId>,
-    /// The release's directory.
-    pub dir: Option<PathBuf>,
+    /// The release's adapter file.
+    pub adapter: Option<PathBuf>,
 }
 
 /// The reference the gate grades the base with `adapter` through: an
@@ -128,7 +128,7 @@ pub fn release(
         )));
     }
     let candidate = load_candidate(ctx, &request.candidate)?;
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     let champion_id = store.alias(&request.alias)?;
     if candidate.parent != champion_id {
         let named = |id: &Option<ReleaseId>| {
@@ -173,23 +173,24 @@ pub fn release(
         gate,
         requeued,
         release: None,
-        dir: None,
+        adapter: None,
     };
     if !released.gate.passed {
         return Ok(released);
     }
     let manifest = manifest(ctx, &candidate, &released.gate)?;
-    let stored = store.put(&manifest, &candidate.adapter)?;
-    store.move_alias(&request.alias, champion_id.as_ref(), &stored.id)?;
-    ctx.workspace().record_model(
-        &stored.id.0,
+    // The release is made official first, with its place in the lineage, in
+    // one commit; only then does the alias move.
+    let stored = store.put(&manifest)?;
+    store.move_alias(
         &request.alias,
-        &candidate.candidate,
-        champion_id.as_ref().map(|release| &release.0),
+        champion_id.as_ref(),
+        &stored.id,
+        &ctx.clock().utc_now(),
     )?;
     ctx.repin_policy(&request.alias);
     released.release = Some(stored.id);
-    released.dir = Some(stored.dir);
+    released.adapter = Some(stored.adapter);
     Ok(released)
 }
 
@@ -206,17 +207,13 @@ fn manifest(
         .map_err(|e| CampaignError::Refused(format!("candidate {}: {e}", candidate.candidate)))?;
     let adapter_digest = Digest::parse(&candidate.adapter_digest)
         .map_err(|e| CampaignError::Refused(format!("candidate {}: {e}", candidate.candidate)))?;
-    let record_path = &candidate.training_record;
-    let record_text = std::fs::read_to_string(record_path).map_err(io(record_path))?;
-    let record = serde_json::from_str(&record_text).map_err(|source| CampaignError::Json {
-        what: record_path.display().to_string(),
-        source,
-    })?;
+    let record = candidate.training_record.clone();
     Ok(ReleaseManifest {
         format: RELEASE_FORMAT.into(),
         base_model: local_model_name(&ctx.config().policy_base),
         base_digest,
         adapter_digest,
+        adapter_artifact: candidate.adapter_artifact.clone(),
         parent: candidate.parent.clone(),
         candidate: candidate.candidate.clone(),
         datasets: candidate.datasets.clone(),
@@ -328,7 +325,7 @@ impl Suites {
             Err(why) => (Err(why), None),
         };
         let retention = soft(champion.map_or(Ok(Vec::new()), |champion| {
-            ReleaseStore::open(ctx.root())
+            ctx.releases()
                 .lineage(&champion.id)?
                 .into_iter()
                 .map(|release| {
@@ -496,7 +493,7 @@ pub struct ReleaseList {
 
 /// Every release under the state root, verified, oldest first.
 pub fn list(ctx: &Context) -> Result<ReleaseList, CampaignError> {
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     let aliases = store.aliases()?;
     let mut releases = Vec::new();
     for id in store.list()? {
@@ -531,7 +528,7 @@ pub struct RolledBack {
 
 /// Points `alias` at the release its current one was trained from.
 pub fn rollback(ctx: &Context, alias: &str) -> Result<RolledBack, CampaignError> {
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     let Some(from) = store.alias(alias)? else {
         return Err(CampaignError::Refused(format!(
             "alias {alias} points at no release; there is nothing to roll back"
@@ -543,7 +540,7 @@ pub fn rollback(ctx: &Context, alias: &str) -> Result<RolledBack, CampaignError>
              back to"
         )));
     };
-    store.move_alias(alias, Some(&from), &to)?;
+    store.move_alias(alias, Some(&from), &to, &ctx.clock().utc_now())?;
     ctx.repin_policy(alias);
     Ok(RolledBack {
         alias: alias.into(),

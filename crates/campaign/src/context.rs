@@ -32,6 +32,7 @@ use serde::Serialize;
 
 use splinter_agent::solve::Model;
 use splinter_policy::{LoadedModel, ModelSelection, Residency, Sampling};
+use splinter_record::artifacts::ArtifactStore;
 use splinter_record::clock::{Clock, SystemClock};
 use splinter_record::experience::Environment;
 use splinter_record::experiences::ExperienceStore;
@@ -226,6 +227,18 @@ impl Context {
         ExperienceStore::new(&self.workspace)
     }
 
+    /// The releases and the aliases that point at them.
+    #[must_use]
+    pub fn releases(&self) -> ReleaseStore {
+        ReleaseStore::new(&self.workspace, self.root())
+    }
+
+    /// The bulk files tools need: adapters, the records brain trains on.
+    #[must_use]
+    pub fn artifacts(&self) -> ArtifactStore {
+        ArtifactStore::new(&self.workspace, self.root())
+    }
+
     /// The answers `ask` gave.
     #[must_use]
     pub fn answers(&self) -> AnswerStore {
@@ -274,7 +287,7 @@ impl Context {
         if let Some(pin) = pins.get(alias) {
             return Ok(pin.clone());
         }
-        let store = ReleaseStore::open(self.root());
+        let store = ReleaseStore::new(&self.workspace, self.root());
         let pin = match store.alias(alias)? {
             Some(release) => {
                 let stored = store.get(&release)?;

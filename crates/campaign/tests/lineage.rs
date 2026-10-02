@@ -44,7 +44,7 @@ use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::lineage::{lineage, Direction, Lineage, LineageRequest, NodeKind, Relation};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::gate::{Check, GateConfig, GateReport};
-use splinter_campaign::release::{ReleaseId, ReleaseManifest, ReleaseStore, RELEASE_FORMAT};
+use splinter_campaign::release::{ReleaseId, ReleaseManifest, RELEASE_FORMAT};
 use splinter_campaign::train::{Candidate, TrainingSummary};
 use splinter_campaign::{CampaignError, Context};
 use splinter_record::clock::FixedClock;
@@ -111,6 +111,7 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
         base_model: "Qwen/Qwen3-0.6B".into(),
         base_digest: Digest::sha256_of(BASE_BYTES),
         adapter_digest: Digest::parse(&candidate.adapter_digest).unwrap(),
+        adapter_artifact: candidate.adapter_artifact.clone(),
         parent: candidate.parent.clone(),
         candidate: candidate.candidate.clone(),
         datasets: candidate.datasets.clone(),
@@ -135,9 +136,9 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
         ),
         created_at: NOW.into(),
     };
-    let store = ReleaseStore::open(ctx.root());
-    let stored = store.put(&manifest, &candidate.adapter).unwrap();
-    store.move_alias("default", None, &stored.id).unwrap();
+    let store = ctx.releases();
+    let stored = store.put(&manifest).unwrap();
+    store.move_alias("default", None, &stored.id, NOW).unwrap();
     stored.id
 }
 

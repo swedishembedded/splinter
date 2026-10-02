@@ -80,28 +80,43 @@ fn a_release_traces_back_through_its_run_and_dataset_to_the_experience() {
     workspace
         .record_dataset(&dataset, &lineage, std::slice::from_ref(&used))
         .unwrap();
+    let datasets = std::slice::from_ref(&dataset);
     workspace
-        .record_training_run("candidate-1", std::slice::from_ref(&dataset), "sft", None)
+        .record_candidate(
+            &json!({ "candidate": "candidate-1" }),
+            "candidate-1",
+            datasets,
+            "sft",
+            None,
+        )
         .unwrap();
-    let release = Digest::of(b"release one");
-    workspace
-        .record_model(&release, "default", "candidate-1", None)
+    let release = workspace
+        .record_release(&json!({ "release": "one" }), "default", "candidate-1", None)
         .unwrap();
-    workspace
-        .record_model(&release, "default", "candidate-1", None)
-        .unwrap();
+    assert_eq!(
+        workspace
+            .record_release(&json!({ "release": "one" }), "default", "candidate-1", None)
+            .unwrap(),
+        release,
+        "reported twice, recorded once"
+    );
     // A later release continues the first.
-    let next = Digest::of(b"release two");
     workspace
-        .record_training_run(
+        .record_candidate(
+            &json!({ "candidate": "candidate-2" }),
             "candidate-2",
-            std::slice::from_ref(&dataset),
+            datasets,
             "sft",
             Some(&release),
         )
         .unwrap();
-    workspace
-        .record_model(&next, "default", "candidate-2", Some(&release))
+    let next = workspace
+        .record_release(
+            &json!({ "release": "two" }),
+            "default",
+            "candidate-2",
+            Some(&release),
+        )
         .unwrap();
 
     let trace = workspace.trace_release(&next).unwrap().unwrap();
@@ -143,6 +158,68 @@ fn a_release_traces_back_through_its_run_and_dataset_to_the_experience() {
 }
 
 #[test]
+fn a_release_cannot_name_a_candidate_or_a_parent_that_was_never_recorded() {
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-lineage-strict-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    let workspace = Workspace::at(&root);
+    assert!(workspace
+        .record_release(
+            &json!({ "release": "x" }),
+            "default",
+            "candidate-never",
+            None
+        )
+        .is_err());
+    let _ = std::fs::remove_dir_all(root.path());
+}
+
+#[test]
+fn a_candidate_trained_on_several_datasets_traces_back_to_all_of_them() {
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-lineage-many-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    let workspace = Workspace::at(&root);
+    let store = ExperienceStore::new(&workspace);
+    let first = store.put(&experience("42")).unwrap();
+    let second = store.put(&experience("forty-two")).unwrap();
+    let (one, two) = (Digest::of(b"dataset one"), Digest::of(b"dataset two"));
+    let lineage = DatasetLineage {
+        recipe: json!({}),
+        records: 1,
+    };
+    workspace
+        .record_dataset(&one, &lineage, std::slice::from_ref(&first))
+        .unwrap();
+    workspace
+        .record_dataset(&two, &lineage, std::slice::from_ref(&second))
+        .unwrap();
+    workspace
+        .record_candidate(
+            &json!({ "c": 1 }),
+            "candidate-1",
+            &[one.clone(), two.clone()],
+            "sft",
+            None,
+        )
+        .unwrap();
+    let release = workspace
+        .record_release(&json!({ "r": 1 }), "default", "candidate-1", None)
+        .unwrap();
+    let trace = workspace.trace_release(&release).unwrap().unwrap();
+    let mut wanted = vec![one, two];
+    wanted.sort();
+    assert_eq!(
+        trace.datasets, wanted,
+        "the release reaches every dataset, not only the first"
+    );
+    assert_eq!(trace.attempts, 2);
+    let _ = std::fs::remove_dir_all(root.path());
+}
+
+#[test]
 fn a_run_cannot_read_a_dataset_that_was_never_recorded() {
     let root = StateRoot::new(
         std::env::temp_dir().join(format!("splinter-lineage-missing-{}", std::process::id())),
@@ -151,7 +228,7 @@ fn a_run_cannot_read_a_dataset_that_was_never_recorded() {
     let workspace = Workspace::at(&root);
     let missing = Digest::of(b"never recorded");
     assert!(workspace
-        .record_training_run("candidate-x", &[missing], "sft", None)
+        .record_candidate(&json!({}), "candidate-x", &[missing], "sft", None)
         .is_err());
     let _ = std::fs::remove_dir_all(root.path());
 }

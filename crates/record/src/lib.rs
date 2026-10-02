@@ -10,28 +10,23 @@
 //!
 //! ```text
 //! <root>/
-//!   expdb/                    the experience database: sources, tasks,
-//!                             experiences, annotations, sets and runs
-//!   datasets/<id>/            one dataset and its manifest
-//!   calibrations/             each judge's latest calibration
-//!   train/<candidate_id>/     one trained candidate: adapter, scores, record
-//!   releases/<hex>/           one immutable release: its adapter and manifest
-//!   releases/aliases/<name>   the release an alias (`default`) points at
-//!   answers/<hex>.json        one answer `ask` gave, and the release it used
-//!   suites/anchor/            the frozen anchor suite's versions
-//!   curriculum/               pass@k measurements and concepts queued for generation
-//!   sandbox/                  the process sandbox's per-call directories
+//!   expdb/        the experience database: sources, tasks, experiences,
+//!                 annotations, sets, runs, dataset and release manifests,
+//!                 candidates, answers, suites, calibrations, the curriculum,
+//!                 and the pointers (aliases, the anchor in force)
+//!   artifacts/    the bulk files tools need, by content address: adapters,
+//!                 the records brain trains on, replayed records
+//!   work/         work in progress, removed after: training scratch, the
+//!                 sandbox's call directories
 //! ```
 //!
-//! Every file a reader acts on is written with [`write_atomic`]: a status
-//! half-written by a crash must never read as a status. A content-addressed
-//! object is written with [`write_once`], which never replaces a file.
-//! [`runs`] holds a command's run record, readable and cancellable from any
-//! process, in the experience database.
-//!
-//! Sources, tasks and experiences live in the experience database under
-//! `expdb/`, through one shared [`workspace::Workspace`]; the other
-//! directories are files.
+//! Everything but the bulk files is in the experience database, through one
+//! shared [`workspace::Workspace`], so a snapshot of it is the state, and one
+//! commit makes a change official whole. A bulk file is a plain file at a
+//! stable path a tool opens directly, written before the commit that makes it
+//! official ([`artifacts`]). [`runs`] holds a command's run record, readable and
+//! cancellable from any process; [`pointers`] the few names that move, with
+//! their history; [`documents`] what is kept by its digest.
 //!
 //! [`source`] and [`sources`] are what Splinter learns from: every
 //! document, repository and command run, its content stored once per
@@ -63,8 +58,6 @@ pub mod sources;
 pub mod tasks;
 pub mod workspace;
 
-use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// The directory all of Splinter's durable state lives under.
@@ -110,53 +103,10 @@ impl StateRoot {
         self.0.join("expdb")
     }
 
-    /// Where datasets and their manifests live.
-    #[must_use]
-    pub fn datasets(&self) -> PathBuf {
-        self.0.join("datasets")
-    }
-
-    /// Where each judge's latest calibration lives.
-    #[must_use]
-    pub fn calibrations(&self) -> PathBuf {
-        self.0.join("calibrations")
-    }
-
-    /// Where trained candidates live.
-    #[must_use]
-    pub fn train(&self) -> PathBuf {
-        self.0.join("train")
-    }
-
-    /// Where releases and the aliases pointing at them live.
-    #[must_use]
-    pub fn releases(&self) -> PathBuf {
-        self.0.join("releases")
-    }
-
-    /// Where the answers `ask` gave are recorded.
-    #[must_use]
-    pub fn answers(&self) -> PathBuf {
-        self.0.join("answers")
-    }
-
-    /// Where frozen evaluation suites live.
-    #[must_use]
-    pub fn suites(&self) -> PathBuf {
-        self.0.join("suites")
-    }
-
-    /// Where the curriculum keeps its pass@k measurements and the concepts
-    /// queued for new tasks.
-    #[must_use]
-    pub fn curriculum(&self) -> PathBuf {
-        self.0.join("curriculum")
-    }
-
     /// The process sandbox's scratch root: a directory per code call.
     #[must_use]
     pub fn sandbox(&self) -> PathBuf {
-        self.0.join("sandbox")
+        self.work().join("sandbox")
     }
 }
 
@@ -184,75 +134,6 @@ pub fn new_id_with_prefix(prefix: &str) -> String {
     )
 }
 
-/// Writes `text` to `path` atomically: a temporary file in the same
-/// directory, fsync, rename. Creates the parent directory.
-pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("tmp");
-    {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(text.as_bytes())?;
-        f.sync_all()?;
-    }
-    fs::rename(&tmp, path)?;
-    Ok(())
-}
-
-/// Creates `path` holding `bytes`, unless it already exists; returns
-/// whether it was created. Never replaces an existing file, and never
-/// exposes a partial one: the bytes go to a uniquely named temporary file in
-/// the same directory, are fsynced, and are hard-linked into place (which
-/// fails rather than replaces when `path` exists), then the directory entry
-/// is fsynced. Two writers racing on one path both succeed, and exactly one
-/// of them reports the creation.
-pub fn write_once(path: &Path, bytes: &[u8]) -> std::io::Result<bool> {
-    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let parent = path.parent().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("{} has no parent directory", path.display()),
-        )
-    })?;
-    fs::create_dir_all(parent)?;
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("object");
-    let tmp = parent.join(format!(
-        ".{name}.{}.{}.tmp",
-        std::process::id(),
-        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    let linked = (|| {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
-        match fs::hard_link(&tmp, path) {
-            Ok(()) => Ok(true),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-            Err(e) => Err(e),
-        }
-    })();
-    let removed = fs::remove_file(&tmp);
-    let created = linked?;
-    removed?;
-    if created {
-        sync_dir(parent)?;
-    }
-    Ok(created)
-}
-
-/// Fsyncs a directory, so an entry just created in it survives a crash.
-pub fn sync_dir(dir: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    fs::File::open(dir)?.sync_all()?;
-    #[cfg(not(unix))]
-    let _ = dir;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,24 +153,5 @@ mod tests {
         let home = Path::new("home-dir");
         let root = StateRoot::under_home(home);
         assert_eq!(root.path(), home.join(".sven").join("splinter"));
-    }
-
-    #[test]
-    fn write_atomic_leaves_no_tmp_file_behind() {
-        let dir = std::env::temp_dir().join(format!("splinter-record-test-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("run.json");
-        write_atomic(&path, "{\"status\":\"pending\"}").unwrap();
-        assert_eq!(
-            fs::read_to_string(&path).unwrap(),
-            "{\"status\":\"pending\"}"
-        );
-        let leftovers: Vec<String> = fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(|e| e.unwrap().file_name().into_string().ok())
-            .filter(|n| n.ends_with(".tmp"))
-            .collect();
-        assert!(leftovers.is_empty(), "{leftovers:?}");
-        fs::remove_dir_all(&dir).unwrap();
     }
 }

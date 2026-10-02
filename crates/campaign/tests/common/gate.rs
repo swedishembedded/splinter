@@ -27,7 +27,7 @@ use splinter_agent::solve::Model;
 use splinter_campaign::datasets::store_dataset;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::gate::GateConfig;
-use splinter_campaign::release::{arm, release, ReleaseId, ReleaseRequest, ReleaseStore, Released};
+use splinter_campaign::release::{arm, release, ReleaseId, ReleaseRequest, Released};
 use splinter_campaign::train::{
     train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, DEFAULT_REPLAY_FRACTION,
 };
@@ -396,7 +396,7 @@ pub fn released(ctx: &Context, topic: &str, knows: &[&str]) -> ReleaseId {
 /// what it knows. The gate grades a champion through its release's copy of
 /// the adapter.
 pub fn serve_release(ctx: &Context, id: &ReleaseId) {
-    let stored = ReleaseStore::open(ctx.root()).get(id).unwrap();
+    let stored = ctx.releases().get(id).unwrap();
     let adapter: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&stored.adapter).unwrap()).unwrap();
     let knows: Vec<&str> = adapter["knows"]
@@ -469,15 +469,27 @@ impl FakeTrainer {
         std::fs::write(&adapter, &bytes).unwrap();
         let record = plan.dir.join("training.json");
         std::fs::write(&record, r#"{"trainer":"fake"}"#).unwrap();
+        // Training keeps the adapter as an artifact; the model is served from
+        // the path every later reader will find it at.
+        let kept = ctx
+            .artifacts()
+            .put_file(
+                &adapter,
+                &splinter_record::artifacts::ArtifactSpec::new("adapter", "test-trainer")
+                    .with_extension(".safetensors")
+                    .with_sha256(),
+            )
+            .unwrap();
+        let kept_path = ctx.artifacts().path(&kept.digest).unwrap();
         let knows: Vec<&str> = self.knows.iter().map(String::as_str).collect();
-        ctx.add_model(arm(ctx.config(), Some(&adapter)), knower(&knows));
+        ctx.add_model(arm(ctx.config(), Some(&kept_path)), knower(&knows));
         let records = plan
             .datasets
             .iter()
             .map(|d| d.manifest.counts.records)
             .sum();
         FakeAdapter {
-            adapter,
+            adapter: kept_path,
             digest: Digest::sha256_of(bytes.as_bytes()).to_string(),
             record,
             records,

@@ -225,8 +225,11 @@ pub fn write_dataset(
         let path = path.to_path_buf();
         move |source| ViewError::Io { path, source }
     };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(io(parent))?;
+    }
     let pending = path.with_extension("pending");
-    splinter_record::write_atomic(&pending, &text).map_err(io(&pending))?;
+    std::fs::write(&pending, &text).map_err(io(&pending))?;
     let validated = match format {
         Format::GenericMessagesV2 => validate_chat(path, &pending).map(Some),
         Format::GenericPreferenceV1 => {
@@ -249,7 +252,7 @@ pub fn write_dataset(
     let manifest_file = manifest_path(path);
     // Canonical JSON is UTF-8 by construction, so nothing is substituted.
     let manifest_text = String::from_utf8_lossy(&manifest);
-    splinter_record::write_atomic(&manifest_file, &manifest_text).map_err(io(&manifest_file))?;
+    std::fs::write(&manifest_file, manifest_text.as_bytes()).map_err(io(&manifest_file))?;
     Ok(Dataset {
         path: path.to_path_buf(),
         format,

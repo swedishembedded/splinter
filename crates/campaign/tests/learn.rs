@@ -36,7 +36,7 @@ use common::scratch_context;
 use splinter_agent::solve::Model;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::model_ref::ModelRef;
-use splinter_campaign::release::{anchor, rollback, ReleaseId, ReleaseStore};
+use splinter_campaign::release::{anchor, rollback, ReleaseId};
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_policy::train::{Trained, TrainedPreference};
@@ -147,8 +147,11 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         *trainer.handed.lock().unwrap(),
         vec![dataset.dataset.clone()]
     );
-    let candidate = report.candidate.as_ref().unwrap();
-    assert!(!candidate.released, "training never releases");
+    assert!(report.candidate.is_some());
+    assert!(
+        ctx.releases().list().unwrap().is_empty(),
+        "training never releases"
+    );
     assert_eq!(report.policy.release, None, "no release yet: the base");
 
     // The gate ran, and released nothing it could not measure: no anchor
@@ -235,8 +238,13 @@ impl Trainer for AliasMover {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<Trained, CampaignError> {
-        ReleaseStore::open(ctx.root())
-            .move_alias("default", Some(&self.from), &self.to)
+        ctx.releases()
+            .move_alias(
+                "default",
+                Some(&self.from),
+                &self.to,
+                "2026-09-30T08:00:00.000Z",
+            )
             .unwrap();
         let ModelSelection::Local(weights) = ctx.selection(&ModelRef::policy_default()).unwrap()
         else {
@@ -290,7 +298,7 @@ fn the_policy_is_resolved_once_when_a_run_starts_and_recorded() {
         panic!("a learn that is not a dry run runs");
     };
 
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     assert_eq!(
         store.alias("default").unwrap(),
         Some(second),

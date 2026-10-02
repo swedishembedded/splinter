@@ -385,6 +385,8 @@ fn annotations_append_in_order_and_are_refused_for_unknown_experiences() {
 fn a_batch_commits_its_writes_together() {
     let scratch = Scratch::new("batch");
     let workspace = scratch.workspace();
+    // Nothing but the end of the batch commits it, however slow the disk.
+    workspace.set_group_commit(1_000, std::time::Duration::from_secs(3600));
     let store = ExperienceStore::new(&workspace);
     let reader = scratch.store();
 

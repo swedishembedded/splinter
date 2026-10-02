@@ -43,17 +43,17 @@ use splinter_policy::train::{
     TrainedPreference,
 };
 use splinter_policy::{ModelSelection, PolicyError};
+use splinter_record::artifacts::ArtifactSpec;
 use splinter_record::digest::Digest;
-use splinter_record::write_atomic;
 use splinter_views::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
 use sven_sdk::CancelToken;
 
 use crate::context::{Context, PolicyPin};
-use crate::datasets::resolve_dataset;
+use crate::datasets::{record_dataset_lineage, resolve_dataset};
 use crate::error::{io, CampaignError};
 use crate::model_ref::ModelRef;
 use crate::release::probe::split_records;
-use crate::release::{ReleaseId, ReleaseStore};
+use crate::release::ReleaseId;
 
 /// Training steps when a command names none.
 pub const DEFAULT_STEPS: u32 = 40;
@@ -69,8 +69,8 @@ pub use splinter_policy::train::DEFAULT_DPO_BETA;
 /// The seed of the replay draw: the same records are replayed every time.
 pub const REPLAY_SEED: u64 = 0;
 
-/// The file a candidate's record is kept in, inside its directory.
-pub const CANDIDATE_RECORD: &str = "candidate.json";
+/// The class a candidate's record is stored under.
+const CANDIDATE: &str = "candidate";
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
 
@@ -218,54 +218,122 @@ pub struct TrainingSummary {
     pub record: serde_json::Value,
 }
 
-/// A trained candidate.
+/// A trained candidate, as stored: everything but where its adapter file is.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct StoredCandidate {
+    candidate: String,
+    from: String,
+    #[serde(default)]
+    regime: Regime,
+    base: PathBuf,
+    parent: Option<ReleaseId>,
+    datasets: Vec<DatasetId>,
+    replay: Option<ReplaySample>,
+    adapter_artifact: Digest,
+    adapter_digest: String,
+    base_digest: String,
+    training_record: serde_json::Value,
+    steps: u32,
+    rank: u32,
+    #[serde(default)]
+    base_score: Option<HeldOutScore>,
+    #[serde(default)]
+    tuned_score: Option<HeldOutScore>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preference: Option<PreferenceSummary>,
+    records: usize,
+}
+
+/// A trained candidate.
+#[derive(Clone, Debug, Serialize)]
 pub struct Candidate {
-    /// Its id, which names its directory under the state root's `train/`.
+    /// Its id.
     pub candidate: String,
     /// The reference it was trained from.
     pub from: String,
     /// How it was trained.
-    #[serde(default)]
     pub regime: Regime,
     /// The base checkpoint.
     pub base: PathBuf,
     /// The release it was trained from; `None` from a base or a `local:`
     /// adapter.
     pub parent: Option<ReleaseId>,
-    /// The adapter it continued, if any.
-    pub continued_from: Option<PathBuf>,
     /// The new datasets trained on.
     pub datasets: Vec<DatasetId>,
     /// The earlier records replayed; `None` with no release to replay.
     pub replay: Option<ReplaySample>,
-    /// The adapter file.
+    /// The adapter file: an artifact, a real file at a stable path.
     pub adapter: PathBuf,
-    /// Its digest.
+    /// The artifact the adapter is kept as.
+    pub adapter_artifact: Digest,
+    /// Its digest, as brain reports it.
     pub adapter_digest: String,
     /// The digest of the base it was trained on, as its card records it.
     pub base_digest: String,
     /// brain's training record for it.
-    pub training_record: PathBuf,
+    pub training_record: serde_json::Value,
     /// Optimizer steps.
     pub steps: u32,
     /// LoRA rank asked for.
     pub rank: u32,
     /// The base on the held-out records; `None` when not measured (the
     /// preference regime measures preferences instead).
-    #[serde(default)]
     pub base_score: Option<HeldOutScore>,
     /// The base with the adapter on the same records; `None` when not
     /// measured.
-    #[serde(default)]
     pub tuned_score: Option<HeldOutScore>,
     /// The preference measurements; `None` for the supervised regime.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub preference: Option<PreferenceSummary>,
     /// Records in the new datasets, trained and held out together.
     pub records: usize,
-    /// Always `false`: training never releases; `release` decides.
-    pub released: bool,
+}
+
+impl Candidate {
+    fn stored(&self) -> StoredCandidate {
+        StoredCandidate {
+            candidate: self.candidate.clone(),
+            from: self.from.clone(),
+            regime: self.regime,
+            base: self.base.clone(),
+            parent: self.parent.clone(),
+            datasets: self.datasets.clone(),
+            replay: self.replay.clone(),
+            adapter_artifact: self.adapter_artifact.clone(),
+            adapter_digest: self.adapter_digest.clone(),
+            base_digest: self.base_digest.clone(),
+            training_record: self.training_record.clone(),
+            steps: self.steps,
+            rank: self.rank,
+            base_score: self.base_score,
+            tuned_score: self.tuned_score,
+            preference: self.preference.clone(),
+            records: self.records,
+        }
+    }
+
+    fn from_stored(ctx: &Context, stored: StoredCandidate) -> Result<Self, CampaignError> {
+        Ok(Self {
+            adapter: ctx.artifacts().path(&stored.adapter_artifact)?,
+            candidate: stored.candidate,
+            from: stored.from,
+            regime: stored.regime,
+            base: stored.base,
+            parent: stored.parent,
+            datasets: stored.datasets,
+            replay: stored.replay,
+            adapter_artifact: stored.adapter_artifact,
+            adapter_digest: stored.adapter_digest,
+            base_digest: stored.base_digest,
+            training_record: stored.training_record,
+            steps: stored.steps,
+            rank: stored.rank,
+            base_score: stored.base_score,
+            tuned_score: stored.tuned_score,
+            preference: stored.preference,
+            records: stored.records,
+        })
+    }
 }
 
 /// Trains a candidate; the seam `train` and `learn` train through. `train`
@@ -347,7 +415,7 @@ fn combine(plan: &TrainPlan) -> Result<PathBuf, CampaignError> {
     for dataset in &plan.datasets {
         text.push_str(&std::fs::read_to_string(&dataset.path).map_err(io(&dataset.path))?);
     }
-    write_atomic(&combined, &text).map_err(io(&combined))?;
+    std::fs::write(&combined, &text).map_err(io(&combined))?;
     Ok(combined)
 }
 
@@ -417,8 +485,13 @@ pub fn train(
         ModelRef::Policy(alias) => ctx.policy_pin(alias)?,
         _ => None,
     };
+    // Every dataset trained on must be traceable before hours are spent
+    // training on it.
+    for dataset in &datasets {
+        record_dataset_lineage(ctx, dataset)?;
+    }
     let candidate = splinter_record::new_id_with_prefix("candidate");
-    let dir = ctx.root().train().join(&candidate);
+    let dir = ctx.root().work().join("train").join(&candidate);
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
     let replay = match (&pin, regime) {
         (Some(pin), Regime::Sft) => Some(draw_replay(ctx, &pin.release, fraction, &dir)?),
@@ -447,35 +520,84 @@ pub fn train(
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),
     };
+    let record = keep_candidate(ctx, &plan, &replay, trained, request, &candidate, regime);
+    // The directory was only ever a working place; the adapter and the
+    // replay are kept as artifacts and everything else is reproducible.
+    let _ = std::fs::remove_dir_all(&dir);
+    record
+}
+
+/// Keeps what training produced: the adapter and the replayed records as
+/// artifacts, then the candidate's record and the training that made it in one
+/// commit.
+fn keep_candidate(
+    ctx: &Context,
+    plan: &TrainPlan,
+    replay: &Option<ReplaySample>,
+    trained: Outcome,
+    request: &TrainRequest,
+    candidate: &str,
+    regime: Regime,
+) -> Result<Candidate, CampaignError> {
+    let artifacts = ctx.artifacts();
+    let adapter = artifacts.put_file(
+        &trained.adapter,
+        &ArtifactSpec::new("adapter", "brain-trainer")
+            .with_extension(".safetensors")
+            .with_sha256(),
+    )?;
+    let reported = Digest::parse(&trained.adapter_digest)
+        .map_err(|e| CampaignError::Train(format!("brain's adapter digest: {e}")))?;
+    if adapter.sha256.as_ref() != Some(&reported) {
+        return Err(CampaignError::Train(format!(
+            "brain reported the adapter as {reported} but its file hashes to {}",
+            adapter
+                .sha256
+                .as_ref()
+                .map_or_else(|| "nothing".to_string(), ToString::to_string)
+        )));
+    }
+    if let Some(file) = &plan.replay_file {
+        let kept = artifacts.put_file(
+            file,
+            &ArtifactSpec::new("replay", "splinter-train").with_extension(".jsonl"),
+        )?;
+        if replay.as_ref().and_then(|r| r.digest.as_ref()) != Some(&kept.digest) {
+            return Err(CampaignError::Train(
+                "the replayed records changed while they were being kept".into(),
+            ));
+        }
+    }
+    let record_text =
+        std::fs::read_to_string(&trained.training_record).map_err(io(&trained.training_record))?;
+    let training_record =
+        serde_json::from_str(&record_text).map_err(|source| CampaignError::Json {
+            what: trained.training_record.display().to_string(),
+            source,
+        })?;
     let record = Candidate {
-        candidate,
+        candidate: candidate.to_string(),
         from: request.from.to_string(),
         regime,
-        base: plan.base,
-        parent: plan.parent,
-        continued_from: plan.continue_from,
+        base: plan.base.clone(),
+        parent: plan.parent.clone(),
         datasets: plan.datasets.iter().map(|d| d.id.clone()).collect(),
-        replay,
-        adapter: trained.adapter,
+        replay: replay.clone(),
+        adapter: artifacts.path(&adapter.digest)?,
+        adapter_artifact: adapter.digest,
         adapter_digest: trained.adapter_digest,
         base_digest: trained.base_digest,
-        training_record: trained.training_record,
+        training_record,
         steps: request.steps,
         rank: request.rank,
         base_score: trained.base_score,
         tuned_score: trained.tuned_score,
         preference: trained.preference,
         records: trained.records,
-        released: false,
     };
-    let path = dir.join(CANDIDATE_RECORD);
-    let json = serde_json::to_string_pretty(&record).map_err(|source| CampaignError::Json {
-        what: "candidate".into(),
-        source,
-    })?;
-    write_atomic(&path, &json).map_err(io(&path))?;
     let datasets: Vec<Digest> = record.datasets.iter().map(|d| d.0.clone()).collect();
-    ctx.workspace().record_training_run(
+    ctx.workspace().record_candidate(
+        &record.stored(),
         &record.candidate,
         &datasets,
         match regime {
@@ -543,7 +665,7 @@ fn draw_replay(
     fraction: Fraction,
     dir: &Path,
 ) -> Result<ReplaySample, CampaignError> {
-    let lineage = ReleaseStore::open(ctx.root()).lineage(release)?;
+    let lineage = ctx.releases().lineage(release)?;
     let mut sample = ReplaySample {
         fraction: fraction.get(),
         seed: REPLAY_SEED,
@@ -573,7 +695,7 @@ fn draw_replay(
     }
     if !text.is_empty() {
         let path = dir.join(REPLAY_FILE);
-        write_atomic(&path, &text).map_err(io(&path))?;
+        std::fs::write(&path, &text).map_err(io(&path))?;
         sample.digest = Some(Digest::of(text.as_bytes()));
     }
     Ok(sample)
@@ -581,10 +703,9 @@ fn draw_replay(
 
 /// The candidate `id` (or a unique prefix of it) names, as trained.
 pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, CampaignError> {
-    let matching: Vec<String> = candidate_ids(ctx)?
-        .into_iter()
-        .filter(|c| c.starts_with(id))
-        .collect();
+    let all = stored_candidates(ctx)?;
+    let matching: Vec<&StoredCandidate> =
+        all.iter().filter(|c| c.candidate.starts_with(id)).collect();
     let found = match matching.as_slice() {
         [] => {
             return Err(CampaignError::NotFound {
@@ -592,41 +713,42 @@ pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, CampaignErro
                 id: id.into(),
             })
         }
-        [one] => one.clone(),
-        many if many.iter().any(|c| c == id) => id.to_string(),
-        many => {
-            return Err(CampaignError::AmbiguousId {
-                what: "candidate",
-                id: id.into(),
-                matches: many.len(),
-            })
-        }
+        [one] => *one,
+        many => match many.iter().find(|c| c.candidate == id) {
+            Some(exact) => *exact,
+            None => {
+                return Err(CampaignError::AmbiguousId {
+                    what: "candidate",
+                    id: id.into(),
+                    matches: many.len(),
+                })
+            }
+        },
     };
-    let path = ctx.root().train().join(&found).join(CANDIDATE_RECORD);
-    let text = std::fs::read_to_string(&path).map_err(io(&path))?;
-    serde_json::from_str(&text).map_err(|source| CampaignError::Json {
-        what: path.display().to_string(),
-        source,
-    })
+    Candidate::from_stored(ctx, found.clone())
+}
+
+fn stored_candidates(ctx: &Context) -> Result<Vec<StoredCandidate>, CampaignError> {
+    ctx.workspace().refresh()?;
+    let mut all = Vec::new();
+    for id in ctx.workspace().documents_in_order(CANDIDATE)? {
+        if let Some(stored) = ctx
+            .workspace()
+            .get_document::<StoredCandidate>(CANDIDATE, &id)?
+        {
+            all.push(stored);
+        }
+    }
+    all.sort_by(|a, b| a.candidate.cmp(&b.candidate));
+    Ok(all)
 }
 
 /// Every trained candidate's id, oldest first.
 pub fn candidate_ids(ctx: &Context) -> Result<Vec<String>, CampaignError> {
-    let dir = ctx.root().train();
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(io(&dir)(e)),
-    };
-    let mut ids = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(io(&dir))?;
-        if entry.path().join(CANDIDATE_RECORD).is_file() {
-            ids.push(entry.file_name().to_string_lossy().into_owned());
-        }
-    }
-    ids.sort();
-    Ok(ids)
+    Ok(stored_candidates(ctx)?
+        .into_iter()
+        .map(|c| c.candidate)
+        .collect())
 }
 
 /// How many candidates were trained under the state root.

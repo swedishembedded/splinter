@@ -43,6 +43,8 @@ struct Group {
     open_batches: usize,
     writes: usize,
     since: Instant,
+    limit_writes: usize,
+    limit_interval: Duration,
 }
 
 struct Shared {
@@ -184,6 +186,8 @@ impl Workspace {
                     open_batches: 0,
                     writes: 0,
                     since: Instant::now(),
+                    limit_writes: GROUP_COMMIT_WRITES,
+                    limit_interval: GROUP_COMMIT_INTERVAL,
                 }),
             }),
         }
@@ -201,6 +205,20 @@ impl Workspace {
         Ok(db)
     }
 
+    /// Whether a database exists under the root, or has been opened by this
+    /// process. A command that only plans, or reads, must not create one: what
+    /// is absent reads as empty.
+    pub(crate) fn initialised(&self) -> bool {
+        locked(&self.shared.database).is_some()
+            || self
+                .shared
+                .root
+                .expdb()
+                .join("refs")
+                .join("format")
+                .exists()
+    }
+
     /// Raises the signal `name` with `note`; whether this call raised it.
     pub fn signal(&self, name: &str, note: &str) -> Result<bool, StoreError> {
         Ok(self.database()?.signal(name, note)?)
@@ -209,16 +227,25 @@ impl Workspace {
     /// Every signal whose name starts with `prefix`, with its note, in name
     /// order.
     pub fn signals(&self, prefix: &str) -> Result<Vec<(String, String)>, StoreError> {
+        if !self.initialised() {
+            return Ok(Vec::new());
+        }
         Ok(self.database()?.signals(prefix)?)
     }
 
     /// The note the signal `name` was raised with, if it has been raised.
     pub fn signal_note(&self, name: &str) -> Result<Option<String>, StoreError> {
+        if !self.initialised() {
+            return Ok(None);
+        }
         Ok(self.database()?.signal_note(name)?)
     }
 
     /// Whether the signal `name` has been raised, by any process.
     pub fn signalled(&self, name: &str) -> Result<bool, StoreError> {
+        if !self.initialised() {
+            return Ok(false);
+        }
         Ok(self.database()?.signalled(name)?)
     }
 
@@ -247,28 +274,37 @@ impl Workspace {
         id: &Digest,
     ) -> Result<Option<splinter_expdb::model::Entity>, StoreError> {
         let cid = content_id(id)?;
-        let found = self.read(|s| match s.entity(&cid)? {
+        self.read_or_default(|s| match s.entity(&cid)? {
             Some(entity) if entity.class == class => unspill(s, entity).map(Some),
             _ => Ok(None),
-        })?;
-        Ok(found)
+        })
     }
 
     /// Whether an entity of `class` has the address `id`, without reading it.
     pub(crate) fn has(&self, class: &str, id: &Digest) -> Result<bool, StoreError> {
         let cid = content_id(id)?;
-        self.read(|s| s.has(&cid, class))
+        self.read_or_default(|s| s.has(&cid, class))
     }
 
     /// The addresses of every entity of `class`, in address order.
     pub(crate) fn ids_of(&self, class: &str) -> Result<Vec<Digest>, StoreError> {
         let mut ids: Vec<Digest> = self
-            .read(|s| s.entity_ids(class))?
+            .read_or_default(|s| s.entity_ids(class))?
             .into_iter()
             .map(Digest::from)
             .collect();
         ids.sort();
         Ok(ids)
+    }
+
+    /// Sets how many writes a batch groups and how long it waits before it
+    /// commits what it holds, in place of [`GROUP_COMMIT_WRITES`] and
+    /// [`GROUP_COMMIT_INTERVAL`]. For a caller whose disk is slow or whose
+    /// work is bursty, and for tests of what is visible when.
+    pub fn set_group_commit(&self, writes: usize, interval: Duration) {
+        let mut group = locked(&self.shared.group);
+        group.limit_writes = writes.max(1);
+        group.limit_interval = interval;
     }
 
     /// Groups the writes made until the returned guard is dropped (or
@@ -304,7 +340,22 @@ impl Workspace {
 
     /// Reads other processes' commits from now on.
     pub fn refresh(&self) -> Result<(), StoreError> {
+        if !self.initialised() {
+            return Ok(());
+        }
         self.with_session(Session::refresh)
+    }
+
+    /// Like [`Workspace::read`], and what an absent database holds, which is
+    /// nothing, when there is none.
+    pub(crate) fn read_or_default<R: Default>(
+        &self,
+        f: impl FnMut(&mut Session) -> splinter_expdb::Result<R>,
+    ) -> Result<R, StoreError> {
+        if !self.initialised() {
+            return Ok(R::default());
+        }
+        self.read(f)
     }
 
     /// Runs `f` against the session, for a read. A process that has run for a
@@ -353,8 +404,8 @@ impl Workspace {
                 }
             };
             let due = !batching
-                || group.writes + 1 >= GROUP_COMMIT_WRITES
-                || group.since.elapsed() >= GROUP_COMMIT_INTERVAL;
+                || group.writes + 1 >= group.limit_writes
+                || group.since.elapsed() >= group.limit_interval;
             if due {
                 if let Err(error) = session.flush() {
                     session.rollback(mark);

@@ -19,7 +19,7 @@ use splinter_record::sources::SourceStore;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::release::{ReleaseStore, StoredRelease};
+use crate::release::StoredRelease;
 use crate::train::{candidate_ids, load_candidate, ReplaySample};
 
 use super::graph::Graph;
@@ -358,7 +358,7 @@ fn candidates(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
 }
 
 fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     let aliases = store.aliases()?;
     for id in store.list()? {
         let StoredRelease { manifest, .. } = store.get(&id)?;

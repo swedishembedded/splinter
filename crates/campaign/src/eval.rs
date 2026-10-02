@@ -37,7 +37,7 @@ use crate::context::Context;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
 use crate::release::probe::{self, Suite, SuiteSummary};
-use crate::release::{anchor, arm, ReleaseId, ReleaseStore, StoredRelease};
+use crate::release::{anchor, arm, ReleaseId, StoredRelease};
 use crate::runs::{record, Recorded};
 use crate::train::load_candidate;
 
@@ -131,7 +131,7 @@ struct Subject {
 }
 
 fn subject(ctx: &Context, named: &str) -> Result<Subject, CampaignError> {
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     let lineage = |parent: Option<&ReleaseId>| match parent {
         Some(id) => store.lineage(id),
         None => Ok(Vec::new()),

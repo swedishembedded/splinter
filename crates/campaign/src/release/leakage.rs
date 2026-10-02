@@ -28,7 +28,7 @@ use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 use crate::context::Context;
 use crate::error::{io, CampaignError};
 use crate::release::probe::{split_records, Suite};
-use crate::train::{Candidate, REPLAY_FILE};
+use crate::train::Candidate;
 
 /// Why a task was left out of a suite: the candidate was trained on it.
 pub const LEAKED: &str = "leaked";
@@ -41,11 +41,10 @@ pub(crate) fn trained_prompts(ctx: &Context, candidate: &Candidate) -> Result<Se
         .as_ref()
         .is_some_and(|r| r.digest.is_some())
     {
-        let path = ctx
-            .root()
-            .train()
-            .join(&candidate.candidate)
-            .join(REPLAY_FILE);
+        let digest = candidate.replay.as_ref().and_then(|r| r.digest.as_ref());
+        let path = ctx.artifacts().path(digest.ok_or_else(|| {
+            CampaignError::Refused("a candidate that replayed records names no replay file".into())
+        })?)?;
         let text = std::fs::read_to_string(&path).map_err(io(&path))?;
         trained_on.extend(
             text.lines()

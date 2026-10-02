@@ -50,7 +50,7 @@ use common::Scratch;
 use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{
-    anchor, list, release, rollback, ReleaseId, ReleaseRequest, ReleaseStore, Released,
+    anchor, list, release, rollback, ReleaseId, ReleaseRequest, Released,
 };
 use splinter_campaign::train::{train, Candidate, TrainRequest, DEFAULT_REPLAY_FRACTION};
 use splinter_campaign::Context;
@@ -101,10 +101,13 @@ fn a_candidate_that_passes_every_check_is_released() {
     // The release: its id is its manifest's digest, and the manifest says
     // what it is and why it was released.
     let id = decided.release.clone().unwrap();
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     let stored = store.get(&id).unwrap();
-    let bytes = std::fs::read(stored.dir.join("manifest.json")).unwrap();
-    assert_eq!(id.0, Digest::of(&bytes));
+    assert_eq!(
+        id.0,
+        Digest::of(&splinter_record::digest::canonical_json(&stored.manifest).unwrap()),
+        "the id is the digest of the manifest"
+    );
     let manifest = &stored.manifest;
     assert_eq!(manifest.base_digest, Digest::sha256_of(BASE_BYTES));
     assert_eq!(manifest.base_model, "Qwen/Qwen3-0.6B");
@@ -129,9 +132,8 @@ fn a_candidate_that_passes_every_check_is_released() {
     assert_eq!(&manifest.gate, gate);
     assert_eq!(manifest.created_at, NOW);
     assert_eq!(
-        std::fs::read(&stored.adapter).unwrap(),
-        std::fs::read(&candidate.adapter).unwrap(),
-        "the adapter is copied into the release"
+        stored.adapter, candidate.adapter,
+        "the release names the file its candidate was kept as: one file, not a copy"
     );
 
     // `default` points at it, and the policy is now base plus its adapter.
@@ -141,14 +143,14 @@ fn a_candidate_that_passes_every_check_is_released() {
     };
     assert_eq!(weights.adapter.as_deref(), Some(stored.adapter.as_path()));
 
-    // Immutable: it is never written again, and its files are read-only.
-    let again = store.put(manifest, &candidate.adapter).unwrap_err();
-    assert!(again.to_string().contains("already exists"), "{again}");
+    // Immutable: the same release is never written twice, and its adapter file
+    // is read-only.
+    let again = store.put(manifest).unwrap();
+    assert_eq!(
+        again.id, id,
+        "putting the same manifest again is the same release"
+    );
     assert!(std::fs::metadata(&stored.adapter)
-        .unwrap()
-        .permissions()
-        .readonly());
-    assert!(std::fs::metadata(stored.dir.join("manifest.json"))
         .unwrap()
         .permissions()
         .readonly());
@@ -160,7 +162,7 @@ fn blocked(ctx: &Context, candidate: &Candidate) -> Released {
     assert!(!decided.gate.passed, "{:#?}", decided.gate);
     assert_eq!(decided.release, None);
     assert_eq!(
-        ReleaseStore::open(ctx.root()).alias("default").unwrap(),
+        ctx.releases().alias("default").unwrap(),
         decided.champion,
         "a blocked release moves no alias"
     );
@@ -338,7 +340,7 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
     let (scratch, ctx) = gate_context("release-continue", Brain::Honest);
     freeze_anchor(&scratch, &ctx);
     let first = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
-    let champion = ReleaseStore::open(ctx.root()).get(&first).unwrap();
+    let champion = ctx.releases().get(&first).unwrap();
 
     let (next, trainer) = candidate(&ctx, "beta", &[ANCHOR, "alpha", "beta"]);
     let plans = trainer.plans.lock().unwrap();
@@ -359,7 +361,12 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
         (replay.sources[0].available, replay.sources[0].sampled),
         (54, 14)
     );
-    let file = std::fs::read_to_string(plan.replay_file.as_ref().unwrap()).unwrap();
+    let file = std::fs::read_to_string(
+        ctx.artifacts()
+            .path(replay.digest.as_ref().unwrap())
+            .expect("the replayed records are kept"),
+    )
+    .unwrap();
     assert_eq!(replay.digest, Some(Digest::of(file.as_bytes())));
     assert_eq!(file.lines().count(), 14);
     assert!(file.lines().all(|l| l.contains("alpha-")), "{file}");
@@ -377,7 +384,8 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
     let retention = decided.gate.retention.measured.as_ref().unwrap();
     assert_eq!(retention.suites.len(), 1);
     assert_eq!(retention.suites[0].drop, Some(0.0));
-    let second = ReleaseStore::open(ctx.root())
+    let second = ctx
+        .releases()
         .get(decided.release.as_ref().unwrap())
         .unwrap();
     assert_eq!(second.manifest.parent, Some(first));
@@ -446,7 +454,7 @@ fn rollback_moves_the_alias_back_and_refuses_without_a_previous_release() {
 
     let rolled = rollback(&ctx, "default").unwrap();
     assert_eq!((rolled.from, rolled.to.clone()), (second, first.clone()));
-    let store = ReleaseStore::open(ctx.root());
+    let store = ctx.releases();
     assert_eq!(store.alias("default").unwrap(), Some(first.clone()));
     let ModelSelection::Local(weights) = ctx.selection(&policy()).unwrap() else {
         panic!("local");
