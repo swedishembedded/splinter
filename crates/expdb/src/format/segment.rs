@@ -170,6 +170,9 @@ impl Segment {
         if len < (MAGIC.len() + TAIL) as u64 {
             return Err(Error::corrupt(what, "shorter than its tail"));
         }
+        if backend.read_range(&key, 0, MAGIC.len())? != MAGIC {
+            return Err(Error::corrupt(what, "leading magic is wrong"));
+        }
         let tail = backend.read_range(&key, len - TAIL as u64, TAIL)?;
         if &tail[TAIL - 8..] != MAGIC {
             return Err(Error::corrupt(what, "tail magic is wrong"));

@@ -137,6 +137,9 @@ pub(crate) fn read_index(backend: &dyn StorageBackend, name: &ContentId) -> Resu
     if len < (MAGIC.len() + FOOTER) as u64 {
         return Err(Error::corrupt(what, "shorter than its footer"));
     }
+    if backend.read_range(&key, 0, MAGIC.len())? != MAGIC {
+        return Err(Error::corrupt(what, "leading magic is wrong"));
+    }
     let footer = backend.read_range(&key, len - FOOTER as u64, FOOTER)?;
     if &footer[FOOTER - 8..] != MAGIC {
         return Err(Error::corrupt(what, "footer magic is wrong"));

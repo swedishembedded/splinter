@@ -537,3 +537,46 @@ fn a_collection_that_died_midway_is_finished_by_the_next_one() {
         "what was not is gone"
     );
 }
+
+#[test]
+fn a_segment_whose_leading_magic_is_damaged_is_refused() {
+    use splinter_expdb::format::{encode_segment, Segment};
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let (records, edges) = common::mixed(1, 3);
+    let (_, mut bytes) = encode_segment(&records, &edges, db.config()).unwrap();
+    bytes[0] ^= 1;
+    let damaged = ContentId::of(&bytes);
+    db.backend()
+        .write_once(
+            &Key::new(Kind::Segment, &format!("{damaged}.seg")).unwrap(),
+            &bytes,
+        )
+        .unwrap();
+    assert!(
+        Segment::open(db.backend_arc(), damaged)
+            .and_then(|s| s.verify())
+            .is_err(),
+        "only the tail's magic was checked, so a damaged head passed"
+    );
+}
+
+#[test]
+fn a_blob_pack_whose_leading_magic_is_damaged_is_refused() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut collector = db
+        .collector(&WriterIdentity::new("exp", "job", "node", 0))
+        .unwrap();
+    let blob = collector.put_blob(b"some bytes worth keeping").unwrap();
+    collector.flush().unwrap();
+    let packs = db.backend().list(Kind::BlobPack).unwrap();
+    assert_eq!(packs.len(), 1);
+    let key = packs[0].clone();
+    let mut bytes = db.backend().read(&key).unwrap();
+    bytes[0] ^= 1;
+    db.backend().replace(&key, &bytes).unwrap();
+
+    let read = db.snapshot().and_then(|s| s.read_blob(&blob.id));
+    assert!(read.is_err(), "a pack with a damaged head was read");
+}
