@@ -62,6 +62,7 @@ pub mod release;
 pub mod runs;
 pub mod solving;
 pub mod sources;
+pub mod state;
 pub mod status;
 pub mod tasks;
 pub mod train;

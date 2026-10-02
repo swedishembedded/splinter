@@ -241,6 +241,16 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         command(&["runs", "cancel", "run-1"]),
         Command::Runs(RunsCommand::Cancel { .. })
     ));
+    let Command::State(StateCommand::Maintain { collect }) =
+        command(&["state", "maintain", "--collect"])
+    else {
+        panic!("state maintain");
+    };
+    assert!(collect);
+    assert!(matches!(
+        command(&["state", "maintain"]),
+        Command::State(StateCommand::Maintain { collect: false })
+    ));
     let Command::Lineage(lineage) = command(&["lineage", "ab12"]) else {
         panic!("lineage");
     };
@@ -339,6 +349,9 @@ fn every_command_takes_the_global_flags() {
         &["release", "c1"],
         &["rollback", "default"],
         &["eval", "c1", "--suite", "anchor"],
+        &["state", "status"],
+        &["state", "maintain"],
+        &["state", "maintain", "--collect"],
         &["runs", "list"],
         &["lineage", "ab12"],
     ] {

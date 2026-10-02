@@ -120,6 +120,10 @@ pub enum Command {
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
+    /// Show and maintain the experience database: merge its small files,
+    /// and optionally delete what nothing reaches.
+    #[command(subcommand)]
+    State(StateCommand),
     /// Trace any artifact up to where it came from (down to source bytes)
     /// and down to everything that came from it.
     Lineage(LineageArgs),
@@ -522,6 +526,21 @@ impl LineageArgs {
             _ => Direction::Both,
         }
     }
+}
+
+/// `state ...`.
+#[derive(Debug, Subcommand)]
+pub enum StateCommand {
+    /// What the experience database holds, as files.
+    Status,
+    /// Merge small files, index what is not indexed and retire finished
+    /// writers; nothing stored changes.
+    Maintain {
+        /// Also delete files nothing reaches that are past their grace
+        /// period; a snapshot a dataset pinned is never touched.
+        #[arg(long)]
+        collect: bool,
+    },
 }
 
 /// `runs ...`.

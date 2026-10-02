@@ -25,6 +25,7 @@ use splinter_campaign::release::{self, ReleaseRequest};
 use splinter_campaign::runs::{self, record};
 use splinter_campaign::solving::solve_set;
 use splinter_campaign::sources::{self, SourceTarget};
+use splinter_campaign::state;
 use splinter_campaign::status::status;
 use splinter_campaign::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_campaign::train::{train, BrainTrainer, TrainRequest};
@@ -34,7 +35,7 @@ use splinter_campaign::{CampaignError, Config, Context};
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, ReleaseCommand,
-    RunsCommand, SourceCommand, TasksCommand,
+    RunsCommand, SourceCommand, StateCommand, TasksCommand,
 };
 use crate::learn_output;
 use crate::output::{self, emit, shell_words};
@@ -453,6 +454,10 @@ impl Session {
                     freeze: args.freeze,
                 };
                 emit(json, &evaluate(ctx, &request)?);
+            }
+            Command::State(StateCommand::Status) => emit(json, &state::storage(ctx)?),
+            Command::State(StateCommand::Maintain { collect }) => {
+                emit(json, &state::maintain(ctx, collect)?);
             }
             Command::Runs(RunsCommand::List) => emit(json, &runs::list(ctx)?),
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),

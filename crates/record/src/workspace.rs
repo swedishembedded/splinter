@@ -136,7 +136,7 @@ impl Workspace {
 
     /// The database, opened on first use. It is not behind the session's
     /// lock, so a process polling a signal never waits for a write.
-    fn database(&self) -> Result<Database, StoreError> {
+    pub(crate) fn database(&self) -> Result<Database, StoreError> {
         let mut slot = locked(&self.shared.database);
         if let Some(db) = slot.as_ref() {
             return Ok(db.clone());

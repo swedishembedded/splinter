@@ -19,11 +19,13 @@ use splinter_campaign::judge::Calibrated;
 use splinter_campaign::runs::{CancelRequested, Recorded, RunList};
 use splinter_campaign::solving::Solved;
 use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
+use splinter_campaign::state::StateStorage;
 use splinter_campaign::status::Status;
 use splinter_campaign::tasks::{TaskSetList, TaskShow, TasksGenerated};
 use splinter_campaign::train::{Candidate, Regime};
 use splinter_campaign::verify::Verified;
 use splinter_campaign::CampaignError;
+use splinter_record::maintenance::{Maintained, Storage};
 use splinter_record::runs::Run;
 use splinter_record::source::{Origin, Source};
 
@@ -602,6 +604,40 @@ impl Report for CancelRequested {
             "cancel requested for {}; it stops at its next check (runs show {})\n",
             self.run, self.run
         )
+    }
+}
+
+fn files(storage: &Storage) -> String {
+    format!(
+        "{} segment(s), {} blob pack(s), {} index run(s), {} pinned snapshot(s)",
+        storage.segments, storage.blob_packs, storage.index_runs, storage.pins
+    )
+}
+
+impl Report for StateStorage {
+    fn human(&self) -> String {
+        format!(
+            "state:   {}\ndatabase: {}\n",
+            self.state.display(),
+            files(&self.storage)
+        )
+    }
+}
+
+impl Report for Maintained {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "before: {}\nafter:  {}\nmerged {} group(s) of segments and {} of blob packs; retired {} finished writer(s)\n",
+            files(&self.before),
+            files(&self.after),
+            self.segment_groups,
+            self.blob_groups,
+            self.writers_retired
+        );
+        if let Some(removed) = self.removed {
+            out.push_str(&format!("collected {removed} file(s) nothing reaches\n"));
+        }
+        out
     }
 }
 

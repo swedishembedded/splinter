@@ -214,3 +214,48 @@ fn lineage_prints_nodes_and_edges_and_refuses_an_unknown_id() {
     assert_eq!(code, 2, "{refused}");
     assert!(refused["error"].as_str().unwrap().contains("no artifact"));
 }
+
+#[test]
+fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
+    let scratch = Scratch::new("state");
+    let state = scratch.0.join("state");
+    let doc = scratch.0.join("manual.md");
+    std::fs::write(&doc, "# Manual\n\nThe console runs at 115200 baud.\n").unwrap();
+    for _ in 0..3 {
+        let (code, _) = splinter(&state, &["source", "add", doc.to_str().unwrap()]);
+        assert_eq!(code, 0);
+    }
+
+    let (code, status) = splinter(&state, &["state", "status"]);
+    assert_eq!(code, 0, "{status}");
+    assert_eq!(keys(&status), ["state", "storage"]);
+    assert_eq!(
+        keys(&status["storage"]),
+        ["blob_packs", "index_runs", "pins", "segments"]
+    );
+    let before = status["storage"]["segments"].as_u64().unwrap();
+    assert!(before >= 1);
+
+    let (code, maintained) = splinter(&state, &["state", "maintain"]);
+    assert_eq!(code, 0, "{maintained}");
+    assert_eq!(
+        keys(&maintained),
+        [
+            "after",
+            "before",
+            "blob_groups",
+            "removed",
+            "run",
+            "segment_groups",
+            "writers_retired"
+        ]
+    );
+
+    let (code, list) = splinter(&state, &["source", "list"]);
+    assert_eq!(code, 0);
+    assert_eq!(
+        list["sources"].as_array().unwrap().len(),
+        1,
+        "one source, however often added"
+    );
+}
