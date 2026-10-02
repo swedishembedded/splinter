@@ -19,13 +19,14 @@
 //! Nothing is ever rewritten: re-grading is a new evaluation.
 
 use serde::{Deserialize, Serialize};
-use splinter_expdb::analyze::EvalFilter;
+use splinter_expdb::analyze::{EvalFilter, TASK_COMPLETION};
 use splinter_expdb::model::{Entity, Evaluation, EvaluatorRef, Target};
 
 use crate::annotation::{Annotation, AnnotationBody, Label, Outcome};
 use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
 use crate::experience::{Experience, ExperienceId};
+use crate::projection::{project, projection_address, Projected, PROJECTION};
 use crate::workspace::{content_id, Workspace};
 
 const EXPERIENCE: &str = "experience";
@@ -98,7 +99,19 @@ impl ExperienceStore {
             source,
         })?;
         let entity = Entity::keyed(EXPERIENCE, content_id(&id.0)?, value);
-        self.workspace.write(|s| s.put_entity(&entity))?;
+        let projection_key = content_id(&projection_address(&id))?;
+        self.workspace.write(|s| {
+            s.put_entity(&entity)?;
+            let projected = s.with_collector(|c| project(c, &id, experience))?;
+            let value = serde_json::to_value(&projected).map_err(|source| {
+                splinter_expdb::Error::Encode {
+                    what: "projection",
+                    source,
+                }
+            })?;
+            s.put_entity(&Entity::keyed(PROJECTION, projection_key, value))
+                .map(|_| ())
+        })?;
         Ok(id)
     }
 
@@ -151,20 +164,29 @@ impl ExperienceStore {
                 return Err(StoreError::UnknownExperience(other.clone()));
             }
         }
-        let subject = content_id(&note.experience.0)?;
         let json = serde_json::to_vec(note).map_err(|source| StoreError::Serialize {
             what: "annotation",
             source,
         })?;
+        let projected = self.projected(&note.experience)?;
         let (criterion, score, confidence, verdict) = describe(&note.body);
-        let other = match &note.body {
-            AnnotationBody::Relation { kind, other } => Some((kind.edge(), content_id(&other.0)?)),
+        let (target, criterion) = match &note.body {
+            AnnotationBody::StepLabel { step, .. } => match projected.decisions.get(step) {
+                Some(decision) => (*decision, criterion),
+                None => (projected.attempt, format!("{criterion}:{step}")),
+            },
+            _ => (projected.attempt, criterion),
+        };
+        let related = match &note.body {
+            AnnotationBody::Relation { kind, other } => {
+                Some((kind.edge(), self.projected(other)?.attempt))
+            }
             _ => None,
         };
         let producer = EvaluatorRef::new(&note.producer.name, &note.producer.version);
         self.workspace.write(|s| {
             let mut evaluation = Evaluation::new(
-                Target::Entity(subject),
+                Target::Record(target),
                 producer,
                 &criterion,
                 score,
@@ -173,11 +195,20 @@ impl ExperienceStore {
             evaluation.evidence = Some(s.put_blob(&json)?);
             evaluation.verdict = verdict;
             s.evaluate(evaluation)?;
-            if let Some((rel, other)) = other {
-                s.link(&subject, rel, &other)?;
+            if let Some((rel, other)) = related {
+                s.link_records(projected.attempt, rel, other)?;
             }
             Ok(())
         })
+    }
+
+    fn projected(&self, id: &ExperienceId) -> Result<Projected, StoreError> {
+        let entity = self
+            .workspace
+            .find(PROJECTION, &projection_address(id))?
+            .ok_or_else(|| StoreError::UnknownExperience(id.clone()))?;
+        serde_json::from_value(entity.value)
+            .map_err(|e| undecodable(format!("the graph of {id}"), e))
     }
 
     /// `id`'s annotations in the order they were written.
@@ -185,10 +216,17 @@ impl ExperienceStore {
         if !self.contains(id)? {
             return Err(StoreError::UnknownExperience(id.clone()));
         }
-        let subject = content_id(&id.0)?;
+        let projected = self.projected(id)?;
+        let mut targets = vec![projected.attempt];
+        targets.extend(projected.decisions.values().copied());
         let raw = self.workspace.read(|s| {
+            let mut views = Vec::new();
+            for target in targets {
+                views.extend(s.evaluations(&EvalFilter::new().target(Target::Record(target)))?);
+            }
+            views.sort_by_key(|view| view.id);
             let mut raw = Vec::new();
-            for view in s.evaluations(&EvalFilter::new().target(Target::Entity(subject)))? {
+            for view in views {
                 if let Some(blob) = view.evaluation.evidence {
                     raw.push(s.read_blob(&blob.id)?);
                 }
@@ -303,19 +341,19 @@ fn describe(body: &AnnotationBody) -> (String, f64, f64, Option<splinter_expdb::
                 Outcome::Abstain => (Ruling::Abstain, 0.0, 0.0),
             };
             (
-                "verdict".to_owned(),
+                TASK_COMPLETION.to_owned(),
                 score,
                 confidence,
                 Some(Verdict::new(ruling, strength.rank())),
             )
         }
-        AnnotationBody::StepLabel { step, label, .. } => {
+        AnnotationBody::StepLabel { label, .. } => {
             let score = match label {
                 Label::Good => 1.0,
                 Label::Bad => 0.0,
                 Label::Neutral => 0.5,
             };
-            (format!("step_label:{step}"), score, 1.0, None)
+            ("step_label".to_owned(), score, 1.0, None)
         }
         AnnotationBody::Relation { kind, .. } => {
             let name = serde_json::to_value(kind)

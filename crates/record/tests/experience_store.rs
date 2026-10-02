@@ -228,15 +228,23 @@ fn put_is_write_once_and_get_round_trips() {
         "another writer storing the same content agrees on the id"
     );
     let db = Database::open(StateRoot::new(&scratch.0).expdb(), Config::default()).unwrap();
-    let stored = db
-        .snapshot()
-        .unwrap()
+    let snapshot = db.snapshot().unwrap();
+    let stored = snapshot
         .query(&Query::all().kind(RecordKind::Entity))
-        .unwrap();
+        .unwrap()
+        .records
+        .iter()
+        .filter(|r| matches!(&r.body, splinter_expdb::model::Body::Entity(e) if e.class == "experience"))
+        .count();
+    assert_eq!(stored, 1, "one record however often it is put");
     assert_eq!(
-        stored.records.len(),
+        snapshot
+            .query(&Query::all().kind(RecordKind::Attempt))
+            .unwrap()
+            .records
+            .len(),
         1,
-        "one record however often it is put"
+        "and one attempt"
     );
     assert_eq!(store.get(&first).unwrap(), exp);
 }
