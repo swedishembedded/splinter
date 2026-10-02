@@ -46,6 +46,7 @@
 #![warn(missing_docs)]
 
 pub mod annotation;
+pub mod artifacts;
 pub mod clock;
 pub mod digest;
 pub mod error;
@@ -86,6 +87,12 @@ impl StateRoot {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.0
+    }
+
+    /// Where the bulk files tools need are kept, by content address.
+    #[must_use]
+    pub fn artifacts(&self) -> PathBuf {
+        self.0.join("artifacts")
     }
 
     /// The experience database's directory.

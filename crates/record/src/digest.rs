@@ -88,6 +88,12 @@ impl Digest {
         Self(format!("{SHA256}{}", hex_of(&Sha256::digest(bytes))))
     }
 
+    /// The SHA-256 digest whose raw bytes are `hash`.
+    #[must_use]
+    pub fn sha256_from_hash(hash: &[u8]) -> Self {
+        Self(format!("{SHA256}{}", hex_of(hash)))
+    }
+
     /// The SHA-256 of everything `reader` yields, read in chunks.
     pub fn sha256_of_reader(reader: impl std::io::Read) -> std::io::Result<Self> {
         let mut hasher = Sha256::new();

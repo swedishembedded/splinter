@@ -64,6 +64,22 @@ pub enum StoreError {
         /// The part name asked for.
         part: String,
     },
+    /// The database holds no artifact with this digest.
+    #[error("no artifact {0} is recorded")]
+    UnknownArtifact(Digest),
+    /// An artifact is recorded but its file is gone.
+    #[error(
+        "artifact {digest} ({role}) is recorded but its file {path} is missing; \
+         restore it with `splinter state repair --from <archive or state>`"
+    )]
+    MissingArtifact {
+        /// The artifact.
+        digest: Digest,
+        /// What it is for.
+        role: String,
+        /// Where its file should be.
+        path: PathBuf,
+    },
     /// The store holds no content under this digest.
     #[error("no content {0} in the store")]
     UnknownBlob(Digest),
