@@ -609,8 +609,8 @@ impl Report for CancelRequested {
 
 fn files(storage: &Storage) -> String {
     format!(
-        "{} segment(s), {} blob pack(s), {} index run(s), {} pinned snapshot(s)",
-        storage.segments, storage.blob_packs, storage.index_runs, storage.pins
+        "{} segment(s), {} blob pack(s), {} index run(s), {} pinned snapshot(s), {} manifest(s) walked on open",
+        storage.segments, storage.blob_packs, storage.index_runs, storage.pins, storage.history
     )
 }
 

@@ -56,13 +56,15 @@ impl Drop for Shared {
     fn drop(&mut self) {
         // Best effort: a writer that is going away must not lose what it
         // was asked to keep, and a destructor has nowhere to report a failure.
+        // Its history goes to the catalog, so a process that is done leaves
+        // no ref of its own for every later open to read.
         if let Some(session) = self
             .session
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
             .as_mut()
         {
-            let _ = session.flush();
+            let _ = session.close();
         }
     }
 }
@@ -149,6 +151,11 @@ impl Workspace {
     /// Raises the signal `name` with `note`; whether this call raised it.
     pub fn signal(&self, name: &str, note: &str) -> Result<bool, StoreError> {
         Ok(self.database()?.signal(name, note)?)
+    }
+
+    /// The note the signal `name` was raised with, if it has been raised.
+    pub fn signal_note(&self, name: &str) -> Result<Option<String>, StoreError> {
+        Ok(self.database()?.signal_note(name)?)
     }
 
     /// Whether the signal `name` has been raised, by any process.

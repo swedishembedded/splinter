@@ -14,7 +14,8 @@
 //! sees is those events folded in order. A cancel request is a signal, which
 //! any process can raise and the running one polls without reading anything
 //! else. A run's id is claimed with a signal too, so two processes starting in
-//! the same instant never share one.
+//! the same instant never share one, and its end raises a third, so asking
+//! whether a run is still in progress never reads a record.
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -119,7 +120,7 @@ impl RunLog {
         let mut claimed = None;
         for _ in 0..ID_ATTEMPTS {
             let id = new_id_with_prefix("run");
-            if workspace.signal(&format!("run/{id}"), command)? {
+            if workspace.signal(&claim_signal(&id), command)? {
                 claimed = Some(id);
                 break;
             }
@@ -207,12 +208,24 @@ impl RunLog {
             &now,
             json!({ "status": status, "outputs": outputs, "error": error }),
         ))?;
+        self.workspace
+            .signal(&done_signal(&self.run.id), status.as_str())?;
         self.run.status = status;
         self.run.outputs = outputs;
         self.run.error = error;
         self.run.updated_at = now;
         Ok(self.run)
     }
+}
+
+/// The signal that says run `run_id` has ended.
+fn done_signal(run_id: &str) -> String {
+    format!("done/{run_id}")
+}
+
+/// The signal that claims the id `run_id`.
+fn claim_signal(run_id: &str) -> String {
+    format!("run/{run_id}")
 }
 
 /// The signal that asks run `run_id` to stop.
@@ -231,11 +244,15 @@ pub fn cancel_requested(workspace: &Workspace, run_id: &str) -> bool {
 /// can see; the run polls for it. Returns the signal's name. Refused for a run
 /// that is not recorded or not in progress.
 pub fn request_cancel(workspace: &Workspace, run_id: &str) -> Result<String, StoreError> {
-    let run = read_run(workspace, run_id)?;
-    if run.status != RunStatus::Running {
+    // Three signals say all that is needed, so a cancel reads no record:
+    // the run exists if its id was claimed, and it has ended if it said so.
+    if !workspace.signalled(&claim_signal(run_id))? {
+        return Err(StoreError::UnknownRun(run_id.to_string()));
+    }
+    if let Some(status) = workspace.signal_note(&done_signal(run_id))? {
         return Err(StoreError::RunNotInProgress {
             run: run_id.to_string(),
-            status: run.status.as_str().to_string(),
+            status,
         });
     }
     let signal = cancel_signal(run_id);

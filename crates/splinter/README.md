@@ -336,7 +336,7 @@ records the experience it came from and pins the database as it was, so
 `lineage` and the database can trace a release back to what it learned from.
 
 `state status` reports what the database holds as files: `{"state",
-"storage": {"segments", "blob_packs", "index_runs", "pins"}}`. Every commit
+"storage": {"segments", "blob_packs", "index_runs", "pins", "history"}}`. Every commit
 leaves small files behind, and a command that opens the database reads them
 all, so `state maintain` merges them, indexes what is not indexed and retires
 finished writers; nothing stored changes, and it is safe beside a running

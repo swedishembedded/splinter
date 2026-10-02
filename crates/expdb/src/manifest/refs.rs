@@ -194,6 +194,38 @@ impl Database {
         Ok(id)
     }
 
+    /// Replaces the head of `job` with a checkpoint that carries everything
+    /// the job's chain made visible, so reading the job never walks further
+    /// back than this. Only the job's own writer may call it.
+    pub fn checkpoint_job(&self, job: &str) -> Result<ContentId> {
+        let ref_name = format!("{JOBS_PREFIX}{job}");
+        let head = self
+            .get_ref(&ref_name)?
+            .ok_or_else(|| crate::error::Error::NotFound {
+                what: format!("ref {ref_name}"),
+            })?;
+        let resolved = self.resolve(&[head])?;
+        let mut manifest = Manifest::new(
+            vec![head],
+            resolved.live,
+            resolved.removed,
+            self.clock().now_ns(),
+            "checkpoint",
+        );
+        manifest.squash = true;
+        let id = self.put_manifest(&manifest)?;
+        self.set_ref(&ref_name, id)?;
+        Ok(id)
+    }
+
+    /// How many manifests resolving the database walks: what every open
+    /// reads. It grows with every commit until a checkpoint cuts it.
+    pub fn history_depth(&self) -> Result<usize> {
+        let mut heads = self.job_heads()?;
+        heads.extend(self.catalog_heads()?);
+        Ok(self.resolve(&heads)?.manifests.len())
+    }
+
     /// Adds a checkpoint that carries the whole state, so resolving the
     /// catalog never walks history, and trims the heads it contains.
     pub fn checkpoint(&self) -> Result<ContentId> {

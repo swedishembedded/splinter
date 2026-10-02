@@ -103,3 +103,56 @@ fn maintenance_merges_the_files_commits_leave_and_changes_nothing_stored() {
     assert_eq!(after.list().unwrap().len(), 24);
     let _ = std::fs::remove_dir_all(root.path());
 }
+
+#[test]
+fn what_every_open_walks_stays_short_however_much_was_committed() {
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-maint-history-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    let workspace = Workspace::at(&root);
+    let store = ExperienceStore::new(&workspace);
+    for n in 0..150 {
+        store.put(&experience(n)).unwrap();
+    }
+    // The writer checkpoints its own chain as it goes.
+    assert!(workspace.storage().unwrap().history < 40);
+    let report = workspace.maintain(false).unwrap();
+    assert!(report.after.history < 40, "{report:?}");
+    let after = ExperienceStore::new(&Workspace::at(&root));
+    assert_eq!(after.list().unwrap().len(), 150);
+    let _ = std::fs::remove_dir_all(root.path());
+}
+
+#[test]
+fn a_process_that_is_done_leaves_no_writer_ref_for_later_opens_to_read() {
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-maint-refs-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    for n in 0..5 {
+        let workspace = Workspace::at(&root);
+        ExperienceStore::new(&workspace)
+            .put(&experience(n))
+            .unwrap();
+        // The workspace is dropped here, as a command ends.
+    }
+    let db =
+        splinter_expdb::Database::open(root.expdb(), splinter_expdb::Config::default()).unwrap();
+    let writers = db
+        .backend()
+        .list(splinter_expdb::backend::Kind::Ref)
+        .unwrap()
+        .into_iter()
+        .filter(|k| k.name().starts_with("jobs/"))
+        .count();
+    assert_eq!(writers, 0);
+    assert_eq!(
+        ExperienceStore::new(&Workspace::at(&root))
+            .list()
+            .unwrap()
+            .len(),
+        5
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+}

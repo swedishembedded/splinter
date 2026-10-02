@@ -202,3 +202,68 @@ fn a_file_younger_than_the_grace_period_is_never_collected() {
     db.publish("job", vec![in_flight], vec![]).unwrap();
     assert_eq!(db.snapshot().unwrap().records().unwrap().len(), 3);
 }
+
+#[test]
+fn a_writer_that_keeps_committing_checkpoints_its_own_chain() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut collector = db
+        .collector(&splinter_expdb::WriterIdentity::new(
+            "exp", "job", "node", 0,
+        ))
+        .unwrap();
+    for n in 0..150 {
+        collector
+            .put_entity(&splinter_expdb::model::Entity::new(
+                "n",
+                serde_json::json!({ "n": n }),
+            ))
+            .unwrap();
+        collector.flush().unwrap();
+    }
+    assert!(
+        db.history_depth().unwrap() < 40,
+        "a checkpoint every 64 commits bounds what an open walks: {}",
+        db.history_depth().unwrap()
+    );
+    assert_eq!(db.snapshot().unwrap().entities("n").unwrap().len(), 150);
+}
+
+#[test]
+fn a_writer_that_is_done_hands_its_history_to_the_catalog_and_leaves_no_ref() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut session = splinter_expdb::Session::open(
+        &db,
+        &splinter_expdb::WriterIdentity::new("exp", "job", "node", 0),
+    )
+    .unwrap();
+    for n in 0..5 {
+        session
+            .put_entity(&splinter_expdb::model::Entity::new(
+                "n",
+                serde_json::json!({ "n": n }),
+            ))
+            .unwrap();
+        session.flush().unwrap();
+    }
+    let refs = || {
+        db.backend()
+            .list(splinter_expdb::backend::Kind::Ref)
+            .unwrap()
+            .into_iter()
+            .filter(|k| k.name().starts_with("jobs/"))
+            .count()
+    };
+    assert_eq!(refs(), 1);
+    session.close().unwrap();
+    assert_eq!(refs(), 0, "the writer's ref is retired");
+    assert_eq!(
+        db.snapshot().unwrap().entities("n").unwrap().len(),
+        5,
+        "nothing is lost"
+    );
+    db.checkpoint().unwrap();
+    assert!(db.history_depth().unwrap() <= 3);
+    assert_eq!(db.snapshot().unwrap().entities("n").unwrap().len(), 5);
+}

@@ -231,7 +231,7 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
     assert_eq!(keys(&status), ["state", "storage"]);
     assert_eq!(
         keys(&status["storage"]),
-        ["blob_packs", "index_runs", "pins", "segments"]
+        ["blob_packs", "history", "index_runs", "pins", "segments"]
     );
     let before = status["storage"]["segments"].as_u64().unwrap();
     assert!(before >= 1);

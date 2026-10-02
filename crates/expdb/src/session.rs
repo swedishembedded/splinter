@@ -90,6 +90,16 @@ impl Session {
         self.collector.flush()
     }
 
+    /// Flushes and hands this session's history to the catalog, so a process
+    /// that is done leaves no ref of its own behind. The session may be used
+    /// again; its next commit starts a new chain.
+    pub fn close(&mut self) -> Result<()> {
+        self.flush()?;
+        let job = self.collector.job().to_owned();
+        self.db.retire_job(&job)?;
+        Ok(())
+    }
+
     /// Flushes, then reads from the database as it is now, so other
     /// writers' records appear.
     pub fn refresh(&mut self) -> Result<()> {

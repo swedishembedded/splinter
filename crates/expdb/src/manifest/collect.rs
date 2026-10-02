@@ -179,24 +179,41 @@ impl Database {
             if !self.past_grace(&key)? {
                 continue;
             }
-            static RETIREMENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            let mut unique = self.clock().now_ns().to_le_bytes().to_vec();
-            unique.extend_from_slice(
-                &RETIREMENT
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    .to_le_bytes(),
-            );
-            let tag = &ContentId::of(&unique).to_string()[..12];
-            let retired = Key::new(Kind::Ref, &format!("retired/{job}-{tag}"))?;
-            if !self.backend().rename(&key, &retired)? {
-                continue;
+            if self.retire(&key, job)? {
+                report.pruned += 1;
             }
-            if let Some(head) = self.get_ref(retired.name())? {
-                self.fold_into_catalog(head)?;
-            }
-            self.backend().remove(&retired)?;
-            report.pruned += 1;
         }
         Ok(report)
+    }
+
+    /// Hands the history of the job `job` to the catalog and removes its ref,
+    /// without waiting for it to be idle. Only the writer that owns the job
+    /// should call this, when it is done: a writer that publishes again
+    /// starts a new chain.
+    pub fn retire_job(&self, job: &str) -> Result<bool> {
+        let key = Key::new(Kind::Ref, &format!("jobs/{job}"))?;
+        self.retire(&key, job)
+    }
+
+    /// Moves `key` aside atomically, folds what it held into the catalog and
+    /// discards it. Whether this call retired it: another may have first.
+    fn retire(&self, key: &Key, job: &str) -> Result<bool> {
+        static RETIREMENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let mut unique = self.clock().now_ns().to_le_bytes().to_vec();
+        unique.extend_from_slice(
+            &RETIREMENT
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                .to_le_bytes(),
+        );
+        let tag = &ContentId::of(&unique).to_string()[..12];
+        let retired = Key::new(Kind::Ref, &format!("retired/{job}-{tag}"))?;
+        if !self.backend().rename(key, &retired)? {
+            return Ok(false);
+        }
+        if let Some(head) = self.get_ref(retired.name())? {
+            self.fold_into_catalog(head)?;
+        }
+        self.backend().remove(&retired)?;
+        Ok(true)
     }
 }

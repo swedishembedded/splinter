@@ -48,7 +48,12 @@ pub struct Writer {
     edges: Vec<Edge>,
     blobs: BlobStore,
     published_packs: HashSet<ContentId>,
+    commits: u64,
 }
+
+/// A writer replaces its head with a checkpoint after this many commits, so
+/// reading what it wrote never walks further back than that.
+const CHECKPOINT_EVERY: u64 = 64;
 
 impl Writer {
     /// Starts a writer for `identity`. Each start is a new incarnation, so a
@@ -92,6 +97,7 @@ impl Writer {
             edges: Vec::new(),
             blobs: BlobStore::with_packs(db, &[])?,
             published_packs: HashSet::new(),
+            commits: 0,
         })
     }
 
@@ -115,6 +121,11 @@ impl Writer {
     /// Records waiting to be sealed.
     pub fn buffered(&self) -> usize {
         self.records.len().max(self.edges.len())
+    }
+
+    /// The name of the job this writer publishes under.
+    pub fn job(&self) -> &str {
+        &self.job_ref
     }
 
     /// The blob store large content is put in.
@@ -190,6 +201,10 @@ impl Writer {
         if !add.is_empty() {
             self.db.publish(&self.job_ref, add, Vec::new())?;
             self.published_packs.extend(packs);
+            self.commits += 1;
+            if self.commits.is_multiple_of(CHECKPOINT_EVERY) {
+                self.db.checkpoint_job(&self.job_ref)?;
+            }
         }
         // Only once the manifest is out is the buffer let go. If publishing
         // failed above, the records are still here, and a retry seals the same

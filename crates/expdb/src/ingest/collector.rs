@@ -101,6 +101,12 @@ impl Collector {
         Record::new(id, self.writer.database().clock().now_ns(), body)
     }
 
+    /// The name of the job this collector publishes under, for
+    /// [`Database::retire_job`].
+    pub fn job(&self) -> &str {
+        self.writer.job()
+    }
+
     /// Stores `bytes` in the blob store and returns their reference. Whole
     /// content already stored, or shared in part with what is, is not stored
     /// again. The bytes are readable from a snapshot once flushed.

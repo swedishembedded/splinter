@@ -30,7 +30,12 @@ pub struct Storage {
     pub index_runs: usize,
     /// Snapshots held alive by a name, such as a dataset's.
     pub pins: usize,
+    /// Manifests every open walks, one per commit since the last checkpoint.
+    pub history: usize,
 }
+
+/// Once opening walks more manifests than this, maintenance checkpoints.
+const CHECKPOINT_AFTER: usize = 64;
 
 /// What a maintenance pass did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -53,7 +58,9 @@ impl Workspace {
     /// What the database holds, as files.
     pub fn storage(&self) -> Result<Storage, StoreError> {
         self.commit()?;
-        let pins = self.database()?.pins()?.len();
+        let db = self.database()?;
+        let pins = db.pins()?.len();
+        let history = db.history_depth()?;
         self.read(|s| {
             let snapshot = s.snapshot()?;
             Ok(Storage {
@@ -61,6 +68,7 @@ impl Workspace {
                 blob_packs: snapshot.blob_packs().len(),
                 index_runs: snapshot.index_runs().len(),
                 pins,
+                history,
             })
         })
     }
@@ -77,6 +85,9 @@ impl Workspace {
         db.build_indexes()?;
         db.compact_indexes()?;
         let absorbed = db.absorb_jobs()?;
+        if db.history_depth()? > CHECKPOINT_AFTER {
+            db.checkpoint()?;
+        }
         let removed = if collect {
             Some(db.gc()?.removed)
         } else {
