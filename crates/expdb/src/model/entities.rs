@@ -23,12 +23,20 @@ fn content_id_of<T: Serialize>(what: &'static str, value: &T) -> Result<ContentI
 
 /// An application-defined, content-addressed object: a source, a task, a
 /// named set, a release. The class tells the application what it is; the
-/// database only promises that the same class, value and blobs are one entity
-/// however many writers store it, and that it can be found by id or by class.
+/// database only promises that the same identity is one entity however many
+/// writers store it, and that it can be found by id or by class.
+///
+/// The identity is a hash of class, value and blobs unless the application
+/// supplies its own `key`, for an object that already has a content address
+/// the rest of the system uses. The database does not check a supplied key
+/// against the content: whoever supplies it owns that promise.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entity {
     /// What kind of object this is, in the application's vocabulary.
     pub class: String,
+    /// The application's own content address for the object, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<ContentId>,
     /// The object itself.
     pub value: serde_json::Value,
     /// Large payloads the object refers to, stored in blob packs.
@@ -41,8 +49,18 @@ impl Entity {
     pub fn new(class: impl Into<String>, value: serde_json::Value) -> Self {
         Self {
             class: class.into(),
+            key: None,
             value,
             blobs: Vec::new(),
+        }
+    }
+
+    /// An entity of `class` that is known by `key`, an address the
+    /// application computed.
+    pub fn keyed(class: impl Into<String>, key: ContentId, value: serde_json::Value) -> Self {
+        Self {
+            key: Some(key),
+            ..Self::new(class, value)
         }
     }
 
@@ -52,9 +70,13 @@ impl Entity {
         self
     }
 
-    /// The content id: a function of class, value and blobs alone.
+    /// The content id: the application's key, else a function of class,
+    /// value and blobs alone.
     pub fn id(&self) -> Result<ContentId> {
-        content_id_of("entity", self)
+        match self.key {
+            Some(key) => Ok(key),
+            None => content_id_of("entity", self),
+        }
     }
 }
 

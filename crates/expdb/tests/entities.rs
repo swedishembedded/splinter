@@ -151,3 +151,19 @@ fn an_entity_names_the_blobs_it_carries() {
         common::noise(100_000, 3)
     );
 }
+
+#[test]
+fn an_application_that_already_has_a_content_address_uses_it_as_the_entity_id() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut collector = db.collector(&identity(0)).unwrap();
+    let object = serde_json::json!({"instruction": "list the files"});
+    let address = ContentId::of(object.to_string().as_bytes());
+    let entity = Entity::keyed("task", address, object);
+
+    assert_eq!(collector.put_entity(&entity).unwrap(), address);
+    collector.flush().unwrap();
+    let snapshot = db.snapshot().unwrap();
+    assert_eq!(snapshot.entity_body(&address).unwrap(), Some(entity));
+    assert_eq!(snapshot.entities("task").unwrap()[0].id, address);
+}
