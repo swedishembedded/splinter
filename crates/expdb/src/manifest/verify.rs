@@ -215,7 +215,8 @@ impl Database {
     /// [`Problem::path`] names it) from `bytes`, refused unless the bytes are
     /// what its name says: every object is named by the hash of its bytes, so a
     /// hole can be filled from any copy and from nowhere else. Returns whether
-    /// a file was written; `false` when one is already there.
+    /// a file was written; `false` when a sound one is already there. A file
+    /// whose bytes are not what its name says is replaced.
     pub fn fill(&self, path: &str, bytes: &[u8]) -> Result<bool> {
         let key = Key::from_relative(path).ok_or_else(|| {
             Error::invalid(
@@ -223,10 +224,7 @@ impl Database {
                 format!("`{path}` is not a file of a database"),
             )
         })?;
-        if matches!(
-            key.kind(),
-            Kind::Segment | Kind::BlobPack | Kind::Manifest | Kind::Index
-        ) {
+        if key.kind().is_addressed() {
             let name = key.name().split('.').next().unwrap_or_default();
             if ContentId::of(bytes).to_string() != name {
                 return Err(Error::invalid(
@@ -235,7 +233,14 @@ impl Database {
                 ));
             }
         }
-        self.backend().write_once(&key, bytes)
+        if self.backend().write_once(&key, bytes)? {
+            return Ok(true);
+        }
+        if !key.kind().is_addressed() || self.backend().read(&key)? == bytes {
+            return Ok(false);
+        }
+        self.backend().replace(&key, bytes)?;
+        Ok(true)
     }
 
     /// Withdraws the file a problem is about from the database, for good, so

@@ -154,6 +154,14 @@ impl Database {
             .map(|_| ())
     }
 
+    /// Makes the snapshot `head` part of the database: the catalog holds it
+    /// from now on. For a database whose files were copied in from another.
+    /// Refused when the manifest is not there.
+    pub fn adopt(&self, head: ContentId) -> Result<()> {
+        self.manifest(head)?;
+        self.fold_into_catalog(head)
+    }
+
     /// Drops catalog heads that `newest` contains. A head is dropped only
     /// because another holds all of it, so nothing the catalog knew is lost.
     fn trim_catalog(&self, newest: ContentId) -> Result<()> {

@@ -186,3 +186,26 @@ fn a_file_nothing_can_restore_is_quarantined_so_the_rest_opens_again() {
         "what survives opens, and the lost record is not guessed"
     );
 }
+
+#[test]
+fn a_snapshot_names_every_file_it_needs_and_copying_them_reproduces_it() {
+    let scratch = Scratch::new();
+    let db = populated(&scratch);
+    let snapshot = db.snapshot().unwrap();
+    let files = snapshot.files().unwrap();
+    assert!(files.windows(2).all(|w| w[0] < w[1]), "sorted, each once");
+
+    let copy = Scratch::new();
+    let other = copy.open();
+    for path in &files {
+        let bytes = std::fs::read(scratch.dir.path().join(path)).unwrap();
+        assert!(other.fill(path, &bytes).unwrap(), "{path}");
+    }
+    other.adopt(snapshot.id()).unwrap();
+    let reopened = other.snapshot().unwrap();
+    assert_eq!(
+        reopened.records().unwrap().len(),
+        snapshot.records().unwrap().len()
+    );
+    assert_eq!(other.verify(true).unwrap().problems, Vec::new());
+}

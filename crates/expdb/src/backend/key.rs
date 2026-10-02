@@ -64,6 +64,15 @@ impl Kind {
         )
     }
 
+    /// Whether the name is the hash of the bytes, so the bytes can be checked
+    /// against it.
+    pub fn is_addressed(self) -> bool {
+        matches!(
+            self,
+            Kind::Segment | Kind::BlobPack | Kind::Manifest | Kind::Index
+        )
+    }
+
     /// Every kind.
     pub const ALL: [Kind; 11] = [
         Kind::Segment,

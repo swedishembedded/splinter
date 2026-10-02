@@ -123,6 +123,24 @@ impl Snapshot {
         Ok(segment)
     }
 
+    /// Every file the snapshot needs, as paths under the database root in
+    /// sorted order: the manifests that make it up, then the segments, blob
+    /// packs and index files it holds. Copying these and
+    /// [`Database::adopt`]ing the snapshot's id elsewhere reproduces it.
+    pub fn files(&self) -> Result<Vec<String>> {
+        let resolved = self.db.resolve(&[self.id])?;
+        let mut paths = Vec::new();
+        for manifest in &resolved.manifests {
+            paths.push(Key::new(Kind::Manifest, &manifest.to_string())?.relative_path());
+        }
+        for object in &resolved.live {
+            paths.push(object.key()?.relative_path());
+        }
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
+    }
+
     /// Makes sure the manifest the snapshot is named by exists, so its id can
     /// be recorded and reopened later. A snapshot of one head is named by
     /// that head; any other (several heads, or none) by their merge, which is
