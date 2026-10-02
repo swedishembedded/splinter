@@ -51,6 +51,7 @@ pub mod digest;
 pub mod error;
 pub mod experience;
 pub mod experiences;
+pub mod lineage;
 mod projection;
 pub mod runs;
 pub mod source;

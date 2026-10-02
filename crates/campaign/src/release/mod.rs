@@ -181,6 +181,12 @@ pub fn release(
     let manifest = manifest(ctx, &candidate, &released.gate)?;
     let stored = store.put(&manifest, &candidate.adapter)?;
     store.move_alias(&request.alias, champion_id.as_ref(), &stored.id)?;
+    ctx.workspace().record_model(
+        &stored.id.0,
+        &request.alias,
+        &candidate.candidate,
+        champion_id.as_ref().map(|release| &release.0),
+    )?;
     ctx.repin_policy(&request.alias);
     released.release = Some(stored.id);
     released.dir = Some(stored.dir);

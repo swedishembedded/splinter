@@ -17,16 +17,18 @@ use serde::Serialize;
 use splinter_record::annotation::Strength;
 use splinter_record::experience::{ExperienceId, PrivilegedKind};
 use splinter_record::experiences::SetId;
+use splinter_record::lineage::DatasetLineage;
 pub use splinter_views::Strip;
 use splinter_views::{
     manifest_path, Corpus, Cpt, Critic, DatasetId, DecisionView, DenoiseView, Exclusion, Format,
-    Fraction, Objective, OutcomeView, Preference, Retrieval, SftFinal, SftStep, StoredDataset,
-    VerifierView, View, WriteOptions,
+    Fraction, Objective, OutcomeView, Preference, Projection, Retrieval, SftFinal, SftStep,
+    StoredDataset, VerifierView, View, WriteOptions,
 };
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};
 use crate::ids;
+use crate::runs::to_json;
 use crate::variants::refuse_variants;
 
 /// The weakest decision a view counts when a command names none:
@@ -294,13 +296,35 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, CampaignErr
         ViewName::Denoise => DenoiseView::new().with_strip(strip).project(&corpus),
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
     }?;
-    let stored = ctx.datasets().put(
+    let stored = store_dataset(
+        ctx,
         &projection,
         WriteOptions {
             export_only: request.export_only,
         },
     )?;
     Ok(Built::from(stored))
+}
+
+/// Stores `projection` as a dataset and records where it came from: the
+/// experience it was projected from, with the database pinned as it is, so
+/// whatever is trained on it can be traced back and what it read stays
+/// readable. Storing the same projection again changes nothing.
+pub fn store_dataset(
+    ctx: &Context,
+    projection: &Projection,
+    options: WriteOptions,
+) -> Result<StoredDataset, CampaignError> {
+    let stored = ctx.datasets().put(projection, options)?;
+    ctx.workspace().record_dataset(
+        &stored.id.0,
+        &DatasetLineage {
+            recipe: to_json("dataset manifest", &stored.manifest)?,
+            records: stored.manifest.counts.records as u64,
+        },
+        &stored.manifest.experiences,
+    )?;
+    Ok(stored)
 }
 
 /// The stored dataset `id` (or a unique prefix of it) names, verified.

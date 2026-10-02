@@ -113,6 +113,19 @@ fn a_candidate_that_passes_every_check_is_released() {
     assert_eq!(manifest.candidate, candidate.candidate);
     assert_eq!(manifest.datasets, candidate.datasets);
     assert_eq!(manifest.training.record["trainer"], "fake");
+
+    // The experience database traces the release back through the run that
+    // made it to the dataset it read, which pinned the database as it was.
+    let trace = ctx.workspace().trace_release(&id.0).unwrap().unwrap();
+    assert_eq!(trace.candidates, vec![candidate.candidate.clone()]);
+    assert_eq!(
+        trace.datasets,
+        candidate
+            .datasets
+            .iter()
+            .map(|d| d.0.clone())
+            .collect::<Vec<_>>()
+    );
     assert_eq!(&manifest.gate, gate);
     assert_eq!(manifest.created_at, NOW);
     assert_eq!(

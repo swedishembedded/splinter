@@ -26,7 +26,7 @@ use crate::annotation::{Annotation, AnnotationBody, Label, Outcome};
 use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
 use crate::experience::{Experience, ExperienceId};
-use crate::projection::{project, projection_address, Projected, PROJECTION};
+use crate::projection::{project, projection_address, projection_of, Projected, PROJECTION};
 use crate::workspace::{content_id, Workspace};
 
 const EXPERIENCE: &str = "experience";
@@ -203,12 +203,7 @@ impl ExperienceStore {
     }
 
     fn projected(&self, id: &ExperienceId) -> Result<Projected, StoreError> {
-        let entity = self
-            .workspace
-            .find(PROJECTION, &projection_address(id))?
-            .ok_or_else(|| StoreError::UnknownExperience(id.clone()))?;
-        serde_json::from_value(entity.value)
-            .map_err(|e| undecodable(format!("the graph of {id}"), e))
+        projection_of(&self.workspace, id)
     }
 
     /// `id`'s annotations in the order they were written.

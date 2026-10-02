@@ -474,6 +474,16 @@ pub fn train(
         source,
     })?;
     write_atomic(&path, &json).map_err(io(&path))?;
+    let datasets: Vec<Digest> = record.datasets.iter().map(|d| d.0.clone()).collect();
+    ctx.workspace().record_training_run(
+        &record.candidate,
+        &datasets,
+        match regime {
+            Regime::Sft => "sft",
+            Regime::Dpo => "dpo",
+        },
+        record.parent.as_ref().map(|release| &release.0),
+    )?;
     Ok(record)
 }
 

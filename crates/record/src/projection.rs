@@ -29,7 +29,9 @@ use splinter_expdb::{ContentId, RecordId};
 use sven_sdk::atif::StepOrigin;
 
 use crate::digest::Digest;
+use crate::error::StoreError;
 use crate::experience::{Experience, ExperienceId};
+use crate::workspace::Workspace;
 
 /// The class of the entity that names an experience's attempt.
 pub(crate) const PROJECTION: &str = "projection";
@@ -150,5 +152,19 @@ pub(crate) fn project(
         experience: id.clone(),
         attempt,
         decisions,
+    })
+}
+
+/// Where the graph holds `id`.
+pub(crate) fn projection_of(
+    workspace: &Workspace,
+    id: &ExperienceId,
+) -> Result<Projected, StoreError> {
+    let entity = workspace
+        .find(PROJECTION, &projection_address(id))?
+        .ok_or_else(|| StoreError::UnknownExperience(id.clone()))?;
+    serde_json::from_value(entity.value).map_err(|e| StoreError::UndecodableObject {
+        what: format!("the graph of {id}"),
+        reason: e.to_string(),
     })
 }

@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use splinter_agent::solve::Model;
+use splinter_campaign::datasets::store_dataset;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::gate::GateConfig;
 use splinter_campaign::release::{arm, release, ReleaseId, ReleaseRequest, ReleaseStore, Released};
@@ -159,8 +160,7 @@ pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
         records,
         excluded: BTreeMap::new(),
     };
-    ctx.datasets()
-        .put(&projection, WriteOptions::default())
+    store_dataset(ctx, &projection, WriteOptions::default())
         .unwrap()
         .id
 }
@@ -206,8 +206,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         records,
         excluded: BTreeMap::new(),
     };
-    ctx.datasets()
-        .put(&projection, WriteOptions::default())
+    store_dataset(ctx, &projection, WriteOptions::default())
         .unwrap()
         .id
 }
