@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
+use serde::Serialize;
 use splinter_expdb::manifest::{Problem, ProblemKind, VerifyReport};
 use splinter_expdb::Database;
 
@@ -25,7 +26,8 @@ use crate::error::StoreError;
 use crate::workspace::Workspace;
 
 /// What is wrong with an artifact's file.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ArtifactFault {
     /// There is no file.
     Missing,
@@ -36,7 +38,7 @@ pub enum ArtifactFault {
 }
 
 /// An artifact that cannot be used.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ArtifactProblem {
     /// Its digest.
     pub digest: Digest,
@@ -47,7 +49,7 @@ pub struct ArtifactProblem {
 }
 
 /// What a verification found.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct StateVerify {
     /// The database's files.
     pub database: VerifyReport,
@@ -77,7 +79,7 @@ pub struct RepairOptions {
 }
 
 /// What a repair did.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Repaired {
     /// Files restored from a copy.
     pub filled: usize,

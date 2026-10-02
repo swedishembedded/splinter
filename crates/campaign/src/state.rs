@@ -9,11 +9,15 @@
 //! The state root's storage: what the experience database holds as files, and
 //! the maintenance that keeps it small and quick to open.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
 use splinter_record::maintenance::{Maintained, Storage};
+use splinter_record::recovery::{
+    ArchiveOptions, Archived, Loss, RepairOptions, Repaired, Restored, StateVerify,
+};
+use splinter_record::workspace::Workspace;
 
 use crate::context::Context;
 use crate::error::CampaignError;
@@ -26,6 +30,8 @@ pub struct StateStorage {
     pub state: PathBuf,
     /// What its experience database holds, as files.
     pub storage: Storage,
+    /// What was written off as lost, in the order recorded.
+    pub losses: Vec<Loss>,
 }
 
 /// The storage of the state root `ctx` works in.
@@ -33,6 +39,7 @@ pub fn storage(ctx: &Context) -> Result<StateStorage, CampaignError> {
     Ok(StateStorage {
         state: ctx.root().path().to_path_buf(),
         storage: ctx.workspace().storage()?,
+        losses: ctx.workspace().losses()?,
     })
 }
 
@@ -46,4 +53,43 @@ pub fn maintain(ctx: &Context, collect: bool) -> Result<Recorded<Maintained>, Ca
         &json!({ "collect": collect }),
         |_| Ok(ctx.workspace().maintain(collect)?),
     )
+}
+
+/// Checks the database and the artifacts it tracks; see
+/// [`Workspace::verify`].
+pub fn verify(ctx: &Context, deep: bool) -> Result<StateVerify, CampaignError> {
+    Ok(ctx.workspace().verify(deep)?)
+}
+
+/// Recovers what verification finds; see [`Workspace::repair`].
+pub fn repair(
+    ctx: &Context,
+    from: Vec<PathBuf>,
+    accept_loss: bool,
+) -> Result<Repaired, CampaignError> {
+    Ok(ctx
+        .workspace()
+        .repair(&RepairOptions { from, accept_loss })?)
+}
+
+/// Packs the state into `file`; see [`Workspace::archive`].
+pub fn archive(
+    ctx: &Context,
+    file: &Path,
+    no_artifacts: bool,
+    since: Option<PathBuf>,
+) -> Result<Archived, CampaignError> {
+    Ok(ctx.workspace().archive(
+        file,
+        &ArchiveOptions {
+            no_artifacts,
+            since,
+        },
+    )?)
+}
+
+/// Unpacks `archives` into the context's empty state root; see
+/// [`Workspace::restore`].
+pub fn restore(ctx: &Context, archives: &[PathBuf]) -> Result<Restored, CampaignError> {
+    Ok(Workspace::restore(ctx.root(), archives)?)
 }

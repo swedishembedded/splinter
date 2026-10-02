@@ -120,8 +120,8 @@ pub enum Command {
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
-    /// Show and maintain the experience database: merge its small files,
-    /// and optionally delete what nothing reaches.
+    /// Show, maintain, verify, repair, archive and restore the state: the
+    /// experience database and the files it tracks.
     #[command(subcommand)]
     State(StateCommand),
     /// Trace any artifact up to where it came from (down to source bytes)
@@ -540,6 +540,46 @@ pub enum StateCommand {
         /// period; a snapshot a dataset pinned is never touched.
         #[arg(long)]
         collect: bool,
+    },
+    /// Check the database and every file it tracks, and report each one that
+    /// is missing or damaged; exits 1 when anything is.
+    Verify {
+        /// Read every byte instead of only checking sizes.
+        #[arg(long)]
+        deep: bool,
+    },
+    /// Recover what verify finds: fill holes from copies (archives or other
+    /// state roots), rebuild indexes, and with --accept-loss write off what
+    /// no copy has.
+    Repair {
+        /// A copy to take missing files from: an archive file, or another
+        /// state root. May be given more than once.
+        #[arg(long = "from", value_name = "PATH")]
+        from: Vec<PathBuf>,
+        /// Give up on what no copy has: withdraw damaged database files and
+        /// record lost artifacts in the ledger, which `state status` lists.
+        #[arg(long)]
+        accept_loss: bool,
+    },
+    /// Pack the database and the files it tracks into one archive; the same
+    /// state always gives the same bytes.
+    Archive {
+        /// Where to write the archive (a .tar.zst).
+        file: PathBuf,
+        /// Leave the artifacts (adapters, datasets) out.
+        #[arg(long)]
+        no_artifacts: bool,
+        /// An earlier archive: carry only what it lacks. Restore the result
+        /// together with that archive.
+        #[arg(long, value_name = "ARCHIVE")]
+        since: Option<PathBuf>,
+    },
+    /// Unpack an archive (and the archives an incremental one was made
+    /// after) into an empty state root, verifying everything first.
+    Restore {
+        /// The archive to restore, then any it builds on.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
     },
 }
 

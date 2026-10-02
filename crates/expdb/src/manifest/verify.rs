@@ -12,6 +12,8 @@
 
 use std::collections::BTreeSet;
 
+use serde::Serialize;
+
 use super::model::{ObjectKind, ObjectRef};
 use super::resolve::load_manifest;
 use crate::backend::{Key, Kind};
@@ -20,7 +22,8 @@ use crate::error::{Error, Result};
 use crate::id::ContentId;
 
 /// What kind of file a problem is about.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ProblemKind {
     /// A ref that cannot be read as a manifest id.
     Ref,
@@ -39,7 +42,8 @@ pub enum ProblemKind {
 }
 
 /// What is wrong with a file.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Fault {
     /// There is no such file.
     Missing,
@@ -55,7 +59,7 @@ pub enum Fault {
 }
 
 /// One file the database names and cannot use.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Problem {
     /// What kind of file.
     pub kind: ProblemKind,
@@ -69,11 +73,12 @@ pub struct Problem {
     pub records: u64,
     /// The manifest entry for it, when it is an object rather than a ref or a
     /// manifest.
+    #[serde(skip)]
     pub object: Option<ObjectRef>,
 }
 
 /// What a verification found.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct VerifyReport {
     /// Manifests walked.
     pub manifests: usize,
@@ -274,7 +279,7 @@ impl Database {
 }
 
 /// What quarantining a file cost.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Quarantined {
     /// What kind of file it was.
     pub kind: ProblemKind,

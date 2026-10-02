@@ -202,3 +202,44 @@ fn a_long_running_reader_survives_the_files_it_opened_being_collected() {
     assert_eq!(reader.list().unwrap().len(), 6);
     let _ = std::fs::remove_dir_all(root.path());
 }
+
+/// A file a crash left in the artifact directory, that no commit made
+/// official, goes when collection is asked for; one just written, or one a
+/// commit recorded, stays.
+#[test]
+fn collection_sweeps_artifact_files_no_commit_made_official() {
+    use splinter_record::artifacts::{ArtifactSpec, ArtifactStore};
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-maint-orphan-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    let ws = Workspace::at(&root);
+    let kept = ArtifactStore::new(&ws, &root)
+        .put_bytes(b"recorded", &ArtifactSpec::new("dataset", "test"))
+        .unwrap();
+
+    let fan = root.artifacts().join("ab");
+    std::fs::create_dir_all(&fan).unwrap();
+    let stale = fan.join(format!("ab{}", "0".repeat(62)));
+    let fresh = fan.join(format!("ab{}", "1".repeat(62)));
+    std::fs::write(&stale, b"orphan").unwrap();
+    std::fs::write(&fresh, b"orphan").unwrap();
+    let long_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 24 * 3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&stale)
+        .unwrap()
+        .set_modified(long_ago)
+        .unwrap();
+
+    let without = ws.maintain(false).unwrap();
+    assert_eq!(without.orphan_artifacts, None);
+    assert!(stale.exists());
+
+    let with = ws.maintain(true).unwrap();
+    assert_eq!(with.orphan_artifacts, Some(1));
+    assert!(!stale.exists() && fresh.exists());
+    assert!(ArtifactStore::new(&ws, &root).path(&kept.digest).is_ok());
+    assert_eq!(with.after.artifacts, 1);
+    let _ = std::fs::remove_dir_all(root.path());
+}

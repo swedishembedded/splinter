@@ -9,13 +9,16 @@
 //! Keeping the experience database small and quick to open: merging the small
 //! files every commit leaves behind, indexing what is not indexed, folding the
 //! history of finished writers into the catalog, and, when asked, deleting
-//! what nothing reaches any more.
+//! what nothing reaches any more, files and artifacts included.
 //!
 //! None of it changes what is stored. It is safe to run beside a running
 //! command and from several processes at once.
 
+use std::time::Duration;
+
 use serde::Serialize;
 
+use crate::artifacts::ArtifactStore;
 use crate::error::StoreError;
 use crate::workspace::Workspace;
 
@@ -32,10 +35,18 @@ pub struct Storage {
     pub pins: usize,
     /// Manifests every open walks, one per commit since the last checkpoint.
     pub history: usize,
+    /// Files the database tracks as artifacts.
+    pub artifacts: usize,
+    /// Items written off as lost.
+    pub losses: usize,
 }
 
 /// Once opening walks more manifests than this, maintenance checkpoints.
 const CHECKPOINT_AFTER: usize = 64;
+
+/// How old an unrecorded artifact file must be before collection takes it: a
+/// file being written is not yet recorded, and must not be taken.
+const ORPHAN_GRACE: Duration = Duration::from_secs(3600);
 
 /// What a maintenance pass did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -52,6 +63,9 @@ pub struct Maintained {
     pub writers_retired: usize,
     /// Files deleted, when collection was asked for.
     pub removed: Option<usize>,
+    /// Artifact files no commit made official that were deleted, when
+    /// collection was asked for.
+    pub orphan_artifacts: Option<usize>,
 }
 
 impl Workspace {
@@ -61,6 +75,8 @@ impl Workspace {
         let db = self.database()?;
         let pins = db.pins()?.len();
         let history = db.history_depth()?;
+        let artifacts = ArtifactStore::new(self, self.root()).list()?.len();
+        let losses = self.losses()?.len();
         self.read(|s| {
             let snapshot = s.snapshot()?;
             Ok(Storage {
@@ -69,6 +85,8 @@ impl Workspace {
                 index_runs: snapshot.index_runs().len(),
                 pins,
                 history,
+                artifacts,
+                losses,
             })
         })
     }
@@ -88,10 +106,11 @@ impl Workspace {
         if db.history_depth()? > CHECKPOINT_AFTER {
             db.checkpoint()?;
         }
-        let removed = if collect {
-            Some(db.gc()?.removed)
+        let (removed, orphan_artifacts) = if collect {
+            let swept = ArtifactStore::new(self, self.root()).sweep_orphans(ORPHAN_GRACE)?;
+            (Some(db.gc()?.removed), Some(swept))
         } else {
-            None
+            (None, None)
         };
         self.refresh()?;
         Ok(Maintained {
@@ -101,6 +120,7 @@ impl Workspace {
             blob_groups: blobs.groups,
             writers_retired: absorbed.pruned,
             removed,
+            orphan_artifacts,
         })
     }
 }

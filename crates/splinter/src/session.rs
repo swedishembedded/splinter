@@ -459,6 +459,32 @@ impl Session {
             Command::State(StateCommand::Maintain { collect }) => {
                 emit(json, &state::maintain(ctx, collect)?);
             }
+            Command::State(StateCommand::Verify { deep }) => {
+                let verified = state::verify(ctx, deep)?;
+                emit(json, &verified);
+                return Ok(if verified.is_sound() {
+                    Exit::Ok
+                } else {
+                    Exit::Failed
+                });
+            }
+            Command::State(StateCommand::Repair { from, accept_loss }) => {
+                let repaired = state::repair(ctx, from, accept_loss)?;
+                emit(json, &repaired);
+                return Ok(if repaired.unresolved == 0 {
+                    Exit::Ok
+                } else {
+                    Exit::Failed
+                });
+            }
+            Command::State(StateCommand::Archive {
+                file,
+                no_artifacts,
+                since,
+            }) => emit(json, &state::archive(ctx, &file, no_artifacts, since)?),
+            Command::State(StateCommand::Restore { files }) => {
+                emit(json, &state::restore(ctx, &files)?);
+            }
             Command::Runs(RunsCommand::List) => emit(json, &runs::list(ctx)?),
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),
             Command::Runs(RunsCommand::Cancel { id }) => emit(json, &runs::cancel(ctx, &id)?),

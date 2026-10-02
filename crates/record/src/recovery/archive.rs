@@ -47,7 +47,7 @@ pub struct ArchiveOptions {
 }
 
 /// What an archive holds.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Archived {
     /// The snapshot the archive reproduces.
     pub snapshot: String,
@@ -62,7 +62,7 @@ pub struct Archived {
 }
 
 /// What a restore put in place.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Restored {
     /// Files restored.
     pub files: usize,

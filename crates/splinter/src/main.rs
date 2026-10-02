@@ -25,6 +25,7 @@ mod lineage_output;
 mod output;
 mod release_output;
 mod session;
+mod state_output;
 
 use std::process::ExitCode;
 

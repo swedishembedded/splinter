@@ -228,10 +228,18 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
 
     let (code, status) = splinter(&state, &["state", "status"]);
     assert_eq!(code, 0, "{status}");
-    assert_eq!(keys(&status), ["state", "storage"]);
+    assert_eq!(keys(&status), ["losses", "state", "storage"]);
     assert_eq!(
         keys(&status["storage"]),
-        ["blob_packs", "history", "index_runs", "pins", "segments"]
+        [
+            "artifacts",
+            "blob_packs",
+            "history",
+            "index_runs",
+            "losses",
+            "pins",
+            "segments"
+        ]
     );
     let before = status["storage"]["segments"].as_u64().unwrap();
     assert!(before >= 1);
@@ -244,12 +252,39 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
             "after",
             "before",
             "blob_groups",
+            "orphan_artifacts",
             "removed",
             "run",
             "segment_groups",
             "writers_retired"
         ]
     );
+
+    let (code, verified) = splinter(&state, &["state", "verify", "--deep"]);
+    assert_eq!(code, 0, "{verified}");
+    assert_eq!(
+        keys(&verified),
+        ["artifacts", "artifacts_unchecked", "database"]
+    );
+    assert_eq!(verified["database"]["problems"], serde_json::json!([]));
+
+    // Packed and unpacked elsewhere, the state is the same.
+    let archive = scratch.0.join("state.tar.zst");
+    let (code, archived) = splinter(&state, &["state", "archive", archive.to_str().unwrap()]);
+    assert_eq!(code, 0, "{archived}");
+    assert_eq!(
+        keys(&archived),
+        ["artifacts", "bytes", "carried", "files", "snapshot"]
+    );
+    let elsewhere = scratch.0.join("elsewhere");
+    let (code, restored) = splinter(&elsewhere, &["state", "restore", archive.to_str().unwrap()]);
+    assert_eq!(code, 0, "{restored}");
+    assert_eq!(restored["verified"], true);
+    let (code, refused) = splinter(&elsewhere, &["state", "restore", archive.to_str().unwrap()]);
+    assert_eq!(code, 1, "restoring over a state is refused: {refused}");
+    let (code, copy) = splinter(&elsewhere, &["source", "list"]);
+    assert_eq!(code, 0);
+    assert_eq!(copy["sources"].as_array().unwrap().len(), 1);
 
     let (code, list) = splinter(&state, &["source", "list"]);
     assert_eq!(code, 0);

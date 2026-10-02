@@ -251,6 +251,49 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         command(&["state", "maintain"]),
         Command::State(StateCommand::Maintain { collect: false })
     ));
+    assert!(matches!(
+        command(&["state", "verify"]),
+        Command::State(StateCommand::Verify { deep: false })
+    ));
+    let Command::State(StateCommand::Repair { from, accept_loss }) = command(&[
+        "state",
+        "repair",
+        "--from",
+        "a.tar.zst",
+        "--from",
+        "other",
+        "--accept-loss",
+    ]) else {
+        panic!("state repair");
+    };
+    assert_eq!(from, [PathBuf::from("a.tar.zst"), PathBuf::from("other")]);
+    assert!(accept_loss);
+    let Command::State(StateCommand::Archive {
+        file,
+        no_artifacts,
+        since,
+    }) = command(&["state", "archive", "new.tar.zst", "--since", "old.tar.zst"])
+    else {
+        panic!("state archive");
+    };
+    assert_eq!(
+        (file, no_artifacts, since),
+        (
+            PathBuf::from("new.tar.zst"),
+            false,
+            Some(PathBuf::from("old.tar.zst"))
+        )
+    );
+    let Command::State(StateCommand::Restore { files }) =
+        command(&["state", "restore", "new.tar.zst", "old.tar.zst"])
+    else {
+        panic!("state restore");
+    };
+    assert_eq!(files.len(), 2);
+    assert!(
+        parse(&["state", "restore"]).is_err(),
+        "restore needs an archive"
+    );
     let Command::Lineage(lineage) = command(&["lineage", "ab12"]) else {
         panic!("lineage");
     };
@@ -352,6 +395,10 @@ fn every_command_takes_the_global_flags() {
         &["state", "status"],
         &["state", "maintain"],
         &["state", "maintain", "--collect"],
+        &["state", "verify", "--deep"],
+        &["state", "repair", "--from", "a.tar.zst"],
+        &["state", "archive", "a.tar.zst"],
+        &["state", "restore", "a.tar.zst"],
         &["runs", "list"],
         &["lineage", "ab12"],
     ] {
