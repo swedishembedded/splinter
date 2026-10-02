@@ -479,7 +479,7 @@ impl FakeTrainer {
             .sum();
         FakeAdapter {
             adapter,
-            digest: Digest::of(bytes.as_bytes()).to_string(),
+            digest: Digest::sha256_of(bytes.as_bytes()).to_string(),
             record,
             records,
         }
@@ -498,7 +498,7 @@ impl Trainer for FakeTrainer {
         Ok(Trained {
             adapter: fake.adapter,
             adapter_digest: fake.digest,
-            base_digest: Digest::of(BASE_BYTES).to_string(),
+            base_digest: Digest::sha256_of(BASE_BYTES).to_string(),
             training_record: fake.record,
             records: fake.records,
             block: 0,
@@ -518,7 +518,7 @@ impl Trainer for FakeTrainer {
         Ok(TrainedPreference {
             adapter: fake.adapter,
             adapter_digest: fake.digest,
-            base_digest: Digest::of(BASE_BYTES).to_string(),
+            base_digest: Digest::sha256_of(BASE_BYTES).to_string(),
             training_record: fake.record,
             records: fake.records,
             block: 0,

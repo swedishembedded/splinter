@@ -68,8 +68,8 @@ fn a_correct_solution_passes_and_the_evidence_records_digests_not_outputs() {
     let runs = evidence["checks"].as_array().unwrap();
     assert_eq!(runs.len(), 2);
     for run in runs {
-        assert!(run["program"].as_str().unwrap().starts_with("sha256:"));
-        assert!(run["stdout"].as_str().unwrap().starts_with("sha256:"));
+        assert!(run["program"].as_str().unwrap().starts_with("blake3:"));
+        assert!(run["stdout"].as_str().unwrap().starts_with("blake3:"));
         assert_eq!(
             run["environment"],
             task.environment.snapshot.as_ref().unwrap().as_str()

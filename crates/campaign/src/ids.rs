@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Content-addressed ids as a person types them: the full `sha256:<hex>`,
+//! Content-addressed ids as a person types them: the full `blake3:<hex>`,
 //! the hex alone, or a prefix of it that names exactly one stored object.
 
 use splinter_record::digest::Digest;
@@ -12,6 +12,14 @@ use crate::error::CampaignError;
 /// to be worth resolving.
 pub const MIN_PREFIX: usize = 4;
 
+/// `given` without a leading `blake3:` or `sha256:`.
+pub(crate) fn strip_algorithm(given: &str) -> &str {
+    given
+        .strip_prefix("blake3:")
+        .or_else(|| given.strip_prefix("sha256:"))
+        .unwrap_or(given)
+}
+
 /// The one digest of `stored` that `given` names; `what` names the kind of
 /// object in a refusal.
 pub(crate) fn resolve(
@@ -19,14 +27,14 @@ pub(crate) fn resolve(
     given: &str,
     stored: impl IntoIterator<Item = Digest>,
 ) -> Result<Digest, CampaignError> {
-    let hex = given.strip_prefix("sha256:").unwrap_or(given);
+    let hex = strip_algorithm(given);
     let not_found = || CampaignError::NotFound {
         what,
         id: given.to_string(),
     };
     if hex.len() < MIN_PREFIX || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(CampaignError::Refused(format!(
-            "{given:?} is not a {what} id: give sha256:<hex>, or at least {MIN_PREFIX} hex digits \
+            "{given:?} is not a {what} id: give blake3:<hex>, or at least {MIN_PREFIX} hex digits \
              of one"
         )));
     }

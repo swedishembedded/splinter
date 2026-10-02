@@ -32,7 +32,7 @@ use crate::digest::{canonical_json, Digest};
 pub struct SourceId(pub Digest);
 
 impl SourceId {
-    /// `sha256:<hex>`.
+    /// `blake3:<hex>`.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()

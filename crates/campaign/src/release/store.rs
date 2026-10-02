@@ -13,7 +13,7 @@
 //!   adapter.safetensors      the released adapter, copied once, read-only
 //!   manifest.json            its manifest in canonical JSON; <hex> is its digest
 //! <root>/releases/aliases/<name>
-//!                            `sha256:<hex>` of the release the alias points at
+//!                            `blake3:<hex>` of the release the alias points at
 //! ```
 //!
 //! A [`ReleaseId`] is the digest of the manifest's bytes, and the manifest
@@ -153,7 +153,7 @@ impl ReleaseStore {
             return Err(exists());
         }
         let adapter_bytes = fs::read(adapter).map_err(io(adapter))?;
-        let found = Digest::of(&adapter_bytes);
+        let found = Digest::sha256_of(&adapter_bytes);
         if found != manifest.adapter_digest {
             return Err(CampaignError::Refused(format!(
                 "{} hashes to {found}, not the {} the manifest names",
@@ -217,7 +217,7 @@ impl ReleaseStore {
             })?;
         let adapter = dir.join(ADAPTER_FILE);
         let file = fs::File::open(&adapter).map_err(io(&adapter))?;
-        let found = Digest::of_reader(file).map_err(io(&adapter))?;
+        let found = Digest::sha256_of_reader(file).map_err(io(&adapter))?;
         verify(&adapter, &manifest.adapter_digest, &found)?;
         Ok(StoredRelease {
             id: id.clone(),
@@ -239,7 +239,7 @@ impl ReleaseStore {
             let name = entry.map_err(io(&self.dir))?.file_name();
             // Only a `<64 hex>` directory is a release; `aliases` and a
             // pending write are not.
-            if let Some(Ok(digest)) = name.to_str().map(|n| Digest::parse(&format!("sha256:{n}"))) {
+            if let Some(Ok(digest)) = name.to_str().map(Digest::from_content_hex) {
                 ids.push(ReleaseId(digest));
             }
         }

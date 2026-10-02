@@ -167,7 +167,7 @@ pub(crate) fn object_digests(dir: &Path) -> Result<Vec<Digest>, StoreError> {
         let Some(hex) = name.to_str().and_then(|n| n.strip_suffix(".json")) else {
             continue;
         };
-        if let Ok(digest) = Digest::parse(&format!("sha256:{hex}")) {
+        if let Ok(digest) = Digest::from_content_hex(hex) {
             digests.push(digest);
         }
     }

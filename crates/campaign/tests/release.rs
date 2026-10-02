@@ -106,7 +106,7 @@ fn a_candidate_that_passes_every_check_is_released() {
     let bytes = std::fs::read(stored.dir.join("manifest.json")).unwrap();
     assert_eq!(id.0, Digest::of(&bytes));
     let manifest = &stored.manifest;
-    assert_eq!(manifest.base_digest, Digest::of(BASE_BYTES));
+    assert_eq!(manifest.base_digest, Digest::sha256_of(BASE_BYTES));
     assert_eq!(manifest.base_model, "Qwen/Qwen3-0.6B");
     assert_eq!(manifest.adapter_digest.as_str(), candidate.adapter_digest);
     assert_eq!(manifest.parent, None);

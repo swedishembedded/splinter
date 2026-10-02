@@ -149,7 +149,7 @@ impl DatasetStore {
             let name = entry.map_err(io(&self.dir))?.file_name();
             // Anything but a `<64 hex>` directory (a pending write) is not
             // a stored dataset.
-            if let Some(Ok(digest)) = name.to_str().map(|n| Digest::parse(&format!("sha256:{n}"))) {
+            if let Some(Ok(digest)) = name.to_str().map(Digest::from_content_hex) {
                 ids.push(DatasetId(digest));
             }
         }

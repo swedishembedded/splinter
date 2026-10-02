@@ -35,7 +35,7 @@ splinter lineage <ID> [--up|--down|--both] [--depth N]
 global: --state DIR  --json  -v  --allow-remote
 ```
 
-An id is the full `sha256:<hex>`, the hex alone, or a prefix of at least
+An id is the full `blake3:<hex>`, the hex alone, or a prefix of at least
 four hex digits that names exactly one stored object.
 
 `ask` records every answer under `<state>/answers/` with the model that

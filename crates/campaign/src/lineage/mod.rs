@@ -216,7 +216,7 @@ impl Relation {
 /// One artifact.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Node {
-    /// Its id: the content address for a stored artifact (`sha256:<hex>`),
+    /// Its id: the content address for a stored artifact (`blake3:<hex>`),
     /// a candidate's id, or `<kind>:<...>` for what has no address of its
     /// own (a span, a model, a verdict, a verifier).
     pub id: String,

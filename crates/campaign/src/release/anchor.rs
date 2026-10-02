@@ -12,7 +12,7 @@
 //!
 //! ```text
 //! <root>/suites/anchor/<hex>.json   one version, canonical JSON; <hex> is its digest
-//! <root>/suites/anchor/current      `sha256:<hex>` of the version in force
+//! <root>/suites/anchor/current      `blake3:<hex>` of the version in force
 //! ```
 //!
 //! A version is frozen from a file ([`freeze`]) and never changes; freezing

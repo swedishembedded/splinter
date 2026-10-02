@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::CampaignError;
-use crate::ids::MIN_PREFIX;
+use crate::ids::{strip_algorithm, MIN_PREFIX};
 
 use super::{Node, NodeKind, Relation};
 
@@ -77,7 +77,7 @@ impl Graph {
     }
 
     /// The one node `given` names: its exact id; or, for a content
-    /// address, `sha256:<hex>` or the hex alone, or at least
+    /// address, `blake3:<hex>` or the hex alone, or at least
     /// [`MIN_PREFIX`] hex digits of it; or a prefix of any other id (a
     /// candidate's). A prefix naming more than one node is refused with
     /// every node it names.
@@ -85,22 +85,32 @@ impl Graph {
         if let Some(node) = self.nodes.get(given) {
             return Ok(node);
         }
-        let hex = given.strip_prefix("sha256:").unwrap_or(given);
+        let hex = strip_algorithm(given);
         let is_hex = !hex.is_empty() && hex.bytes().all(|b| b.is_ascii_hexdigit());
         let matches: Vec<&Node> = if is_hex {
             if hex.len() < MIN_PREFIX {
                 return Err(CampaignError::Refused(format!(
-                    "{given:?} is too short: give sha256:<hex>, or at least {MIN_PREFIX} hex \
+                    "{given:?} is too short: give blake3:<hex>, or at least {MIN_PREFIX} hex \
                      digits of an id"
                 )));
             }
-            let prefix = format!("sha256:{}", hex.to_ascii_lowercase());
-            self.nodes
-                .range(prefix.clone()..)
-                .take_while(|(id, _)| id.starts_with(&prefix))
-                .map(|(_, node)| node)
+            let hex = hex.to_ascii_lowercase();
+            let algorithms: &[&str] = match given.split_once(':') {
+                Some(("sha256", _)) => &["sha256"],
+                Some(_) => &["blake3"],
+                None => &["blake3", "sha256"],
+            };
+            algorithms
+                .iter()
+                .flat_map(|algorithm| {
+                    let prefix = format!("{algorithm}:{hex}");
+                    self.nodes
+                        .range(prefix.clone()..)
+                        .take_while(move |(id, _)| id.starts_with(&prefix))
+                        .map(|(_, node)| node)
+                })
                 .collect()
-        } else if given.starts_with("sha256:") || given.is_empty() {
+        } else if given.starts_with("blake3:") || given.starts_with("sha256:") || given.is_empty() {
             Vec::new()
         } else {
             self.nodes
@@ -133,12 +143,12 @@ mod tests {
     fn graph() -> Graph {
         let mut graph = Graph::default();
         graph.record(
-            &format!("sha256:abcd{}", "1".repeat(60)),
+            &format!("blake3:abcd{}", "1".repeat(60)),
             NodeKind::Source,
             "s".into(),
         );
         graph.record(
-            &format!("sha256:abcd{}", "2".repeat(60)),
+            &format!("blake3:abcd{}", "2".repeat(60)),
             NodeKind::Task,
             "t".into(),
         );
@@ -153,11 +163,11 @@ mod tests {
     #[test]
     fn an_id_is_resolved_whole_by_hex_prefix_or_by_prefix_and_never_guessed() {
         let graph = graph();
-        let task = format!("sha256:abcd{}", "2".repeat(60));
+        let task = format!("blake3:abcd{}", "2".repeat(60));
         assert_eq!(graph.resolve(&task).unwrap().kind, NodeKind::Task);
         assert_eq!(graph.resolve("ABCD2").unwrap().kind, NodeKind::Task);
         assert_eq!(
-            graph.resolve("sha256:abcd1").unwrap().kind,
+            graph.resolve("blake3:abcd1").unwrap().kind,
             NodeKind::Source
         );
         assert_eq!(
@@ -168,8 +178,8 @@ mod tests {
             panic!("abcd names two artifacts");
         };
         assert_eq!(candidates.len(), 2);
-        assert!(candidates[0].starts_with("source sha256:abcd1"));
-        assert!(candidates[1].starts_with("task sha256:abcd2"));
+        assert!(candidates[0].starts_with("source blake3:abcd1"));
+        assert!(candidates[1].starts_with("task blake3:abcd2"));
         assert!(matches!(
             graph.resolve("abc"),
             Err(CampaignError::Refused(_))

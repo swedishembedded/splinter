@@ -41,7 +41,7 @@ pub const ANSWER_FORMAT: &str = "splinter-answer-v1";
 pub struct AnswerId(pub Digest);
 
 impl AnswerId {
-    /// `sha256:<hex>`.
+    /// `blake3:<hex>`.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -150,7 +150,7 @@ impl AnswerStore {
             let digest = name
                 .to_str()
                 .and_then(|n| n.strip_suffix(".json"))
-                .and_then(|hex| Digest::parse(&format!("sha256:{hex}")).ok());
+                .and_then(|hex| Digest::from_content_hex(hex).ok());
             if let Some(digest) = digest {
                 ids.push(AnswerId(digest));
             }

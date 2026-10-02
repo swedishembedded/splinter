@@ -39,7 +39,7 @@ use crate::{clock::Clock, digest::canonical_json};
 pub struct ExperienceId(pub Digest);
 
 impl ExperienceId {
-    /// `sha256:<hex>`.
+    /// `blake3:<hex>`.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()

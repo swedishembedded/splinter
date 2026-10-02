@@ -8,8 +8,11 @@
 
 //! Content addresses and the canonical form they are computed over.
 //!
-//! A [`Digest`] is `sha256:<64 lowercase hex>`, the form brain reports for
-//! an adapter file. [`canonical_json`] is the one serialization every
+//! A [`Digest`] is `<algorithm>:<64 lowercase hex>`. Splinter's own content
+//! addresses are `blake3:`, the hash the experience database addresses its
+//! objects by. `sha256:` is the form an external tool reports for a file it
+//! produced (brain, for an adapter), so such a digest can be recorded and
+//! compared as given. [`canonical_json`] is the one serialization every
 //! content address in this crate hashes:
 //!
 //! * the value is first converted to a JSON value tree with `serde_json`;
@@ -21,67 +24,86 @@
 //!   (its string escaping; integers in decimal; floats in their shortest
 //!   round-trip form, so `1.0` stays `1.0`).
 //!
-//! The address of a value is the SHA-256 of those bytes.
+//! The address of a value is the BLAKE3 hash of those bytes.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-const PREFIX: &str = "sha256:";
+const BLAKE3: &str = "blake3:";
+const SHA256: &str = "sha256:";
 const HEX_LEN: usize = 64;
 
-/// A content address: `sha256:<64 lowercase hex digits>`. Validated on
-/// construction and on deserialization, so a malformed digest never enters
-/// the store.
+/// A content address: `blake3:<64 lowercase hex digits>`, or `sha256:` for a
+/// digest an external tool reported. Validated on construction and on
+/// deserialization, so a malformed digest never enters the store.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Digest(String);
 
 /// Why a string is not a [`Digest`].
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("{value:?} is not a sha256:<64 lowercase hex> digest")]
+#[error("{value:?} is not a blake3:<64 lowercase hex> or sha256:<64 lowercase hex> digest")]
 pub struct DigestError {
     /// The rejected text.
     pub value: String,
 }
 
+fn hex_of(hash: &[u8]) -> String {
+    hash.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn read_chunks(mut reader: impl std::io::Read, mut each: impl FnMut(&[u8])) -> std::io::Result<()> {
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => return Ok(()),
+            Ok(n) => each(&buf[..n]),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 impl Digest {
-    /// The SHA-256 of `bytes`.
+    /// The content address of `bytes`: their BLAKE3 hash.
     #[must_use]
     pub fn of(bytes: &[u8]) -> Self {
-        Self::from_hash(&Sha256::digest(bytes))
+        Self(format!("{BLAKE3}{}", blake3::hash(bytes).to_hex()))
     }
 
-    /// The SHA-256 of everything `reader` yields, read in chunks, so a
-    /// large file is hashed without being held in memory.
-    pub fn of_reader(mut reader: impl std::io::Read) -> std::io::Result<Self> {
+    /// The content address of everything `reader` yields, read in chunks, so
+    /// a large file is hashed without being held in memory.
+    pub fn of_reader(reader: impl std::io::Read) -> std::io::Result<Self> {
+        let mut hasher = blake3::Hasher::new();
+        read_chunks(reader, |chunk| {
+            hasher.update(chunk);
+        })?;
+        Ok(Self(format!("{BLAKE3}{}", hasher.finalize().to_hex())))
+    }
+
+    /// The SHA-256 of `bytes`, for comparing with a digest an external tool
+    /// reported for the same bytes.
+    #[must_use]
+    pub fn sha256_of(bytes: &[u8]) -> Self {
+        Self(format!("{SHA256}{}", hex_of(&Sha256::digest(bytes))))
+    }
+
+    /// The SHA-256 of everything `reader` yields, read in chunks.
+    pub fn sha256_of_reader(reader: impl std::io::Read) -> std::io::Result<Self> {
         let mut hasher = Sha256::new();
-        let mut buf = [0u8; 64 * 1024];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => hasher.update(&buf[..n]),
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(Self::from_hash(&hasher.finalize()))
+        read_chunks(reader, |chunk| hasher.update(chunk))?;
+        Ok(Self(format!("{SHA256}{}", hex_of(&hasher.finalize()))))
     }
 
-    fn from_hash(hash: &[u8]) -> Self {
-        let mut hex = String::with_capacity(PREFIX.len() + HEX_LEN);
-        hex.push_str(PREFIX);
-        for byte in hash {
-            hex.push_str(&format!("{byte:02x}"));
-        }
-        Self(hex)
-    }
-
-    /// Parses `text`, refusing anything but `sha256:` and 64 lowercase hex
-    /// digits.
+    /// Parses `text`, refusing anything but `blake3:` or `sha256:` and 64
+    /// lowercase hex digits.
     pub fn parse(text: &str) -> Result<Self, DigestError> {
-        let well_formed = text.strip_prefix(PREFIX).is_some_and(|hex| {
-            hex.len() == HEX_LEN && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-        });
+        let well_formed = [BLAKE3, SHA256]
+            .iter()
+            .filter_map(|prefix| text.strip_prefix(prefix))
+            .any(|hex| {
+                hex.len() == HEX_LEN && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+            });
         if well_formed {
             Ok(Self(text.to_string()))
         } else {
@@ -91,7 +113,12 @@ impl Digest {
         }
     }
 
-    /// The whole digest, `sha256:<hex>`.
+    /// The content address whose hex part is `hex`, as found in a file name.
+    pub fn from_content_hex(hex: &str) -> Result<Self, DigestError> {
+        Self::parse(&format!("{BLAKE3}{hex}"))
+    }
+
+    /// The whole digest, `<algorithm>:<hex>`.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -101,7 +128,7 @@ impl Digest {
     /// 64 hex digits.
     #[must_use]
     pub fn hex(&self) -> &str {
-        &self.0[PREFIX.len()..]
+        &self.0[self.0.find(':').map_or(0, |colon| colon + 1)..]
     }
 }
 
@@ -182,7 +209,33 @@ mod tests {
         );
         assert_eq!(
             Digest::of(b"").as_str(),
+            "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        );
+        assert_eq!(
+            Digest::sha256_of(b"").as_str(),
             "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
+        assert_eq!(
+            Digest::sha256_of_reader(&b"abc"[..]).unwrap(),
+            Digest::sha256_of(b"abc")
+        );
+    }
+
+    #[test]
+    fn both_algorithms_parse_and_nothing_else_does() {
+        let blake = Digest::of(b"x");
+        let sha = Digest::sha256_of(b"x");
+        assert_eq!(Digest::parse(blake.as_str()).unwrap(), blake);
+        assert_eq!(Digest::parse(sha.as_str()).unwrap(), sha);
+        assert_ne!(blake.hex(), "");
+        assert_eq!(Digest::from_content_hex(blake.hex()).unwrap(), blake);
+        for bad in [
+            "md5:00",
+            &format!("blake3:{}", "A".repeat(64)),
+            &format!("sha256:{}", "a".repeat(63)),
+            "",
+        ] {
+            assert!(Digest::parse(bad).is_err(), "{bad:?}");
+        }
     }
 }

@@ -109,7 +109,7 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
     let manifest = ReleaseManifest {
         format: RELEASE_FORMAT.into(),
         base_model: "Qwen/Qwen3-0.6B".into(),
-        base_digest: Digest::of(BASE_BYTES),
+        base_digest: Digest::sha256_of(BASE_BYTES),
         adapter_digest: Digest::parse(&candidate.adapter_digest).unwrap(),
         parent: candidate.parent.clone(),
         candidate: candidate.candidate.clone(),

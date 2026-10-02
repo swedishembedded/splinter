@@ -133,7 +133,7 @@ fn the_id_is_a_canonical_content_address() {
     assert_eq!(a.id().unwrap(), b.id().unwrap(), "key order is not content");
     let id = a.id().unwrap();
     assert!(
-        id.as_str().starts_with("sha256:") && id.as_str().len() == 71,
+        id.as_str().starts_with("blake3:") && id.as_str().len() == 71,
         "{id}"
     );
     assert_ne!(id, experience("quick fox").id().unwrap());

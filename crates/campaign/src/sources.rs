@@ -94,7 +94,7 @@ impl SourceTarget {
         if path.exists() {
             return Ok(Self::Path { path });
         }
-        let hex = arg.strip_prefix("sha256:").unwrap_or(arg);
+        let hex = ids::strip_algorithm(arg);
         if hex.len() >= ids::MIN_PREFIX && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Ok(Self::Stored { id: arg.into() });
         }
@@ -261,7 +261,7 @@ mod tests {
     #[test]
     fn a_learn_argument_that_is_no_path_is_a_stored_id_or_refused() {
         assert!(matches!(
-            SourceTarget::from_learn_arg("sha256:abcd1234"),
+            SourceTarget::from_learn_arg("blake3:abcd1234"),
             Ok(SourceTarget::Stored { .. })
         ));
         assert!(matches!(

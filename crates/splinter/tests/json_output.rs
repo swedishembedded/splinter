@@ -81,7 +81,7 @@ fn status_and_source_list_print_their_documented_fields() {
     assert_eq!(source["kind"], "document");
     assert_eq!(source["origin"]["kind"], "document");
     assert_eq!(source["parts"], 1);
-    assert!(source["id"].as_str().unwrap().starts_with("sha256:"));
+    assert!(source["id"].as_str().unwrap().starts_with("blake3:"));
 
     let (code, status) = splinter(&state, &["status"]);
     assert_eq!(code, 0, "{status}");
@@ -196,7 +196,7 @@ fn lineage_prints_nodes_and_edges_and_refuses_an_unknown_id() {
     assert_eq!(code, 0, "{added}");
     let source = added["source"]["id"].as_str().unwrap().to_string();
 
-    let (code, lineage) = splinter(&state, &["lineage", &source["sha256:".len()..][..8]]);
+    let (code, lineage) = splinter(&state, &["lineage", &source["blake3:".len()..][..8]]);
     assert_eq!(code, 0, "{lineage}");
     assert_eq!(keys(&lineage), ["edges", "nodes"]);
     let root = &lineage["nodes"][0];
