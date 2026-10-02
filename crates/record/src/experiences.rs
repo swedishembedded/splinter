@@ -90,18 +90,26 @@ impl ExperienceStore {
         experience.validate()?;
         let bytes = experience.canonical()?;
         let id = ExperienceId(Digest::of(&bytes));
-        if self.workspace.has(EXPERIENCE, &id.0)? {
+        let stored = self.workspace.has(EXPERIENCE, &id.0)?;
+        if stored {
             self.get(&id)?;
+        }
+        let projection_key = content_id(&projection_address(&id))?;
+        let projected = self.workspace.has(PROJECTION, &projection_address(&id))?;
+        if stored && projected {
             return Ok(id);
         }
+        // Whatever is missing is written, in one commit: a new experience
+        // with its graph, or the graph of one a failed write left without.
         let value = serde_json::to_value(experience).map_err(|source| StoreError::Serialize {
             what: "experience",
             source,
         })?;
         let entity = Entity::keyed(EXPERIENCE, content_id(&id.0)?, value);
-        let projection_key = content_id(&projection_address(&id))?;
         self.workspace.write(|s| {
-            s.put_entity(&entity)?;
+            if !stored {
+                s.put_entity(&entity)?;
+            }
             let projected = s.with_collector(|c| project(c, &id, experience))?;
             let value = serde_json::to_value(&projected).map_err(|source| {
                 splinter_expdb::Error::Encode {

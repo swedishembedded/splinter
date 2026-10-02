@@ -221,3 +221,47 @@ fn a_session_records_an_attempt_and_the_evaluations_and_links_about_it() {
     assert_eq!(index.edges_from(second, Some(Rel::RetryOf)), vec![first]);
     assert_eq!(snapshot.families().unwrap()[0].attempts.len(), 2);
 }
+
+#[test]
+fn a_write_that_fails_halfway_leaves_nothing_behind() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut session = open(&db, 0);
+    let kept = session
+        .put_entity(&Entity::new("task", serde_json::json!("kept")))
+        .unwrap();
+
+    let mark = session.begin();
+    let first = session
+        .put_entity(&Entity::new("task", serde_json::json!("first")))
+        .unwrap();
+    session
+        .evaluate(note(Target::Entity(first), "judge", 1.0))
+        .unwrap();
+    session
+        .retract(EvaluatorRef::new("judge", "1"), "mistake")
+        .unwrap();
+    session.rollback(mark);
+
+    assert_eq!(
+        session.entity(&first).unwrap(),
+        None,
+        "the session no longer reads it"
+    );
+    assert_eq!(session.entities("task").unwrap().len(), 1);
+    assert!(session
+        .evaluations(&EvalFilter::new().target(Target::Entity(first)))
+        .unwrap()
+        .is_empty());
+    session.flush().unwrap();
+    let snapshot = db.snapshot().unwrap();
+    assert!(
+        snapshot.entity(&first).unwrap().is_none(),
+        "and it was never committed"
+    );
+    assert!(
+        snapshot.entity(&kept).unwrap().is_some(),
+        "what came before is untouched"
+    );
+    assert_eq!(snapshot.evaluations(&EvalFilter::new()).unwrap().len(), 0);
+}

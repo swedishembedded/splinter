@@ -276,12 +276,28 @@ impl Workspace {
             group.since = Instant::now();
         }
         let out = self.with_session(|session| {
-            let out = f(session)?;
+            // A refresh commits, so it is made between writes and never in
+            // the middle of one.
+            session.refresh_if_due()?;
+            let mark = session.begin();
+            let out = match f(session) {
+                Ok(out) => out,
+                Err(error) => {
+                    // A write either happens whole or not at all: what it
+                    // had buffered before it failed is not left to be
+                    // committed later, after the caller was told it failed.
+                    session.rollback(mark);
+                    return Err(error);
+                }
+            };
             let due = !batching
                 || group.writes + 1 >= GROUP_COMMIT_WRITES
                 || group.since.elapsed() >= GROUP_COMMIT_INTERVAL;
             if due {
-                session.flush()?;
+                if let Err(error) = session.flush() {
+                    session.rollback(mark);
+                    return Err(error);
+                }
             }
             Ok((out, due))
         })?;

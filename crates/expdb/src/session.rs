@@ -38,11 +38,28 @@ pub struct Session {
     base: Snapshot,
     db: Database,
     entities: HashMap<ContentId, (RecordId, Entity)>,
+    entity_log: Vec<ContentId>,
     by_class: HashMap<String, Vec<ContentId>>,
     evaluations: Vec<EvaluationView>,
     retracted: HashSet<EvaluatorRef>,
+    retracted_log: Vec<EvaluatorRef>,
     refresh_every: usize,
     base_size: usize,
+    delta_bytes: usize,
+}
+
+/// How much of a session's own writes it keeps in memory before it refreshes,
+/// however few records that is.
+const REFRESH_BYTES: usize = 64 << 20;
+
+/// Where a session stood, to return to with [`Session::rollback`].
+#[derive(Debug, Clone, Copy)]
+pub struct Mark {
+    writer: (usize, usize),
+    entities: usize,
+    evaluations: usize,
+    retracted: usize,
+    delta_bytes: usize,
 }
 
 impl Session {
@@ -57,10 +74,13 @@ impl Session {
             base_size: base.entity_count()?,
             base,
             entities: HashMap::new(),
+            entity_log: Vec::new(),
             by_class: HashMap::new(),
             evaluations: Vec::new(),
             retracted: HashSet::new(),
+            retracted_log: Vec::new(),
             refresh_every: DEFAULT_REFRESH_EVERY,
+            delta_bytes: 0,
         })
     }
 
@@ -77,11 +97,52 @@ impl Session {
         self.entities.len() + self.evaluations.len() + self.retracted.len()
     }
 
-    fn maybe_refresh(&mut self) -> Result<()> {
-        if self.written() >= self.refresh_every.max(self.base_size / 2) {
+    /// Whether the session has written enough since its snapshot that it
+    /// should take a new one, by number of records or by bytes held.
+    pub fn refresh_due(&self) -> bool {
+        self.written() >= self.refresh_every.max(self.base_size / 2)
+            || self.delta_bytes >= REFRESH_BYTES
+    }
+
+    /// Refreshes if [`Session::refresh_due`]. It is a call of its own, made
+    /// between writes and never inside one, because a refresh commits: a write
+    /// that spans several records would otherwise be committed in pieces.
+    pub fn refresh_if_due(&mut self) -> Result<()> {
+        if self.refresh_due() {
             self.refresh()?;
         }
         Ok(())
+    }
+
+    /// Where the session stands now, so a write that fails halfway can be
+    /// undone with [`Session::rollback`].
+    pub fn begin(&self) -> Mark {
+        Mark {
+            writer: self.collector.mark(),
+            entities: self.entity_log.len(),
+            evaluations: self.evaluations.len(),
+            retracted: self.retracted_log.len(),
+            delta_bytes: self.delta_bytes,
+        }
+    }
+
+    /// Forgets everything written since `mark`: it will not be committed and
+    /// the session no longer reads it. Only valid while nothing was flushed
+    /// since the mark was taken.
+    pub fn rollback(&mut self, mark: Mark) {
+        self.collector.rollback(mark.writer);
+        for id in self.entity_log.split_off(mark.entities) {
+            if let Some((_, entity)) = self.entities.remove(&id) {
+                if let Some(ids) = self.by_class.get_mut(&entity.class) {
+                    ids.retain(|kept| *kept != id);
+                }
+            }
+        }
+        self.evaluations.truncate(mark.evaluations);
+        for evaluator in self.retracted_log.split_off(mark.retracted) {
+            self.retracted.remove(&evaluator);
+        }
+        self.delta_bytes = mark.delta_bytes;
     }
 
     /// Makes everything written so far durable and visible to other
@@ -107,9 +168,12 @@ impl Session {
         self.base = self.db.snapshot()?;
         self.base_size = self.base.entity_count()?;
         self.entities.clear();
+        self.entity_log.clear();
         self.by_class.clear();
         self.evaluations.clear();
         self.retracted.clear();
+        self.retracted_log.clear();
+        self.delta_bytes = 0;
         Ok(())
     }
 
@@ -128,12 +192,13 @@ impl Session {
             return Ok(id);
         }
         let record = self.collector.record(Body::Entity(entity.clone()))?;
+        self.delta_bytes += entity.value.to_string().len();
         self.entities.insert(id, (record, entity.clone()));
+        self.entity_log.push(id);
         self.by_class
             .entry(entity.class.clone())
             .or_default()
             .push(id);
-        self.maybe_refresh()?;
         Ok(id)
     }
 
@@ -195,15 +260,14 @@ impl Session {
     pub fn evaluate(&mut self, evaluation: Evaluation) -> Result<RecordId> {
         let id = self.collector.evaluate(evaluation.clone())?;
         self.evaluations.push(EvaluationView { id, evaluation });
-        self.maybe_refresh()?;
         Ok(id)
     }
 
     /// Withdraws every judgement by `evaluator`.
     pub fn retract(&mut self, evaluator: EvaluatorRef, reason: &str) -> Result<RecordId> {
         let id = self.collector.retract(evaluator.clone(), reason)?;
-        self.retracted.insert(evaluator);
-        self.maybe_refresh()?;
+        self.retracted.insert(evaluator.clone());
+        self.retracted_log.push(evaluator);
         Ok(id)
     }
 

@@ -123,6 +123,18 @@ impl Writer {
         self.records.len().max(self.edges.len())
     }
 
+    /// How much is buffered, to return to with [`Writer::rollback`].
+    pub(crate) fn mark(&self) -> (usize, usize) {
+        (self.records.len(), self.edges.len())
+    }
+
+    /// Forgets what was buffered after `mark`. Only for a buffer that has not
+    /// been sealed since the mark was taken.
+    pub(crate) fn rollback(&mut self, mark: (usize, usize)) {
+        self.records.truncate(mark.0);
+        self.edges.truncate(mark.1);
+    }
+
     /// The name of the job this writer publishes under.
     pub fn job(&self) -> &str {
         &self.job_ref

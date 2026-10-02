@@ -101,6 +101,14 @@ impl Collector {
         Record::new(id, self.writer.database().clock().now_ns(), body)
     }
 
+    pub(crate) fn mark(&self) -> (usize, usize) {
+        self.writer.mark()
+    }
+
+    pub(crate) fn rollback(&mut self, mark: (usize, usize)) {
+        self.writer.rollback(mark);
+    }
+
     /// The name of the job this collector publishes under, for
     /// [`Database::retire_job`].
     pub fn job(&self) -> &str {

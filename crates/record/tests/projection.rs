@@ -300,3 +300,40 @@ fn a_step_label_is_evidence_about_that_steps_decision() {
     assert_eq!(plan.samples.len(), 1);
     assert_eq!(store.annotations(&id).unwrap().annotations.len(), 1);
 }
+
+#[test]
+fn an_experience_stored_without_its_graph_is_healed_by_storing_it_again() {
+    let scratch = Scratch::new("heal");
+    let exp = experience("six times seven?", &["42"]);
+    let id = exp.id().unwrap();
+    // A write that died between the experience and its graph.
+    let db = Database::open(StateRoot::new(&scratch.0).expdb(), Config::default()).unwrap();
+    let mut session = splinter_expdb::Session::open(
+        &db,
+        &splinter_expdb::WriterIdentity::new("test", "partial", "node", 0),
+    )
+    .unwrap();
+    session
+        .put_entity(&splinter_expdb::model::Entity::keyed(
+            "experience",
+            id.0.content_id().unwrap(),
+            serde_json::to_value(&exp).unwrap(),
+        ))
+        .unwrap();
+    session.flush().unwrap();
+
+    let store = scratch.store();
+    assert!(store.contains(&id).unwrap());
+    assert!(
+        store
+            .annotate(&grade(&id, Outcome::Pass, Strength::Formal))
+            .is_err(),
+        "without its graph there is nothing to record evidence about"
+    );
+    assert_eq!(store.put(&exp).unwrap(), id);
+    store
+        .annotate(&grade(&id, Outcome::Pass, Strength::Formal))
+        .unwrap();
+    assert_eq!(store.annotations(&id).unwrap().annotations.len(), 1);
+    assert_eq!(count(&scratch.snapshot(), RecordKind::Attempt), 1);
+}
