@@ -33,6 +33,8 @@ pub enum Kind {
     Cache,
     /// Files a collection has set aside and may still restore.
     Trash,
+    /// A write-once marker one process raises for others to notice.
+    Signal,
 }
 
 impl Kind {
@@ -49,6 +51,7 @@ impl Kind {
             Kind::Overlay => "overlay",
             Kind::Cache => "cache",
             Kind::Trash => "trash",
+            Kind::Signal => "signals",
         }
     }
 
@@ -62,7 +65,7 @@ impl Kind {
     }
 
     /// Every kind.
-    pub const ALL: [Kind; 10] = [
+    pub const ALL: [Kind; 11] = [
         Kind::Segment,
         Kind::BlobPack,
         Kind::Manifest,
@@ -73,6 +76,7 @@ impl Kind {
         Kind::Overlay,
         Kind::Cache,
         Kind::Trash,
+        Kind::Signal,
     ];
 }
 
