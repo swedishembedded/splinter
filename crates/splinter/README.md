@@ -346,7 +346,9 @@ scratch that exists only while a command runs.
 
 `state status` reports what the database holds as files and what was written
 off: `{"state", "storage": {"segments", "blob_packs", "index_runs", "pins",
-"history", "artifacts", "losses"}, "losses"}`. Every commit leaves small files
+"history", "artifacts", "losses"}, "losses", "pins"}`. A dataset keeps the
+database as it was alive under a name (`pins` lists them); `state unpin <holder>`
+lets one go so `state maintain --collect` can free its files. Every commit leaves small files
 behind, and a command that opens the database reads them all, so `state
 maintain` merges them, indexes what is not indexed and retires finished
 writers; nothing stored changes, and it is safe beside a running command.

@@ -459,6 +459,9 @@ impl Session {
             Command::State(StateCommand::Maintain { collect }) => {
                 emit(json, &state::maintain(ctx, collect)?);
             }
+            Command::State(StateCommand::Unpin { holder }) => {
+                emit(json, &state::unpin(ctx, &holder)?);
+            }
             Command::State(StateCommand::Verify { deep }) => {
                 let verified = state::verify(ctx, deep)?;
                 emit(json, &verified);

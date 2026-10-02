@@ -68,7 +68,50 @@ pub struct Maintained {
     pub orphan_artifacts: Option<usize>,
 }
 
+/// A name that holds a snapshot of the database alive.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Pin {
+    /// Who holds it, such as `dataset-<hex>`.
+    pub holder: String,
+    /// The snapshot it keeps readable.
+    pub snapshot: String,
+}
+
 impl Workspace {
+    /// Holds the database as it is now alive under `holder`'s name until
+    /// [`Workspace::release_pin`].
+    pub fn hold(&self, holder: &str) -> Result<(), StoreError> {
+        self.commit()?;
+        self.read(|s| s.snapshot()?.pin(holder))
+    }
+
+    /// The snapshots held alive, by name.
+    pub fn pins(&self) -> Result<Vec<Pin>, StoreError> {
+        if !self.initialised() {
+            return Ok(Vec::new());
+        }
+        Ok(self
+            .database()?
+            .pins()?
+            .into_iter()
+            .map(|(holder, id)| Pin {
+                holder,
+                snapshot: id.to_string(),
+            })
+            .collect())
+    }
+
+    /// Lets go of a held snapshot; its files become collectable once nothing
+    /// else reaches them. Refused for a name that holds nothing.
+    pub fn release_pin(&self, holder: &str) -> Result<(), StoreError> {
+        if !self.pins()?.iter().any(|p| p.holder == holder) {
+            return Err(StoreError::Recovery(format!(
+                "no snapshot is held by {holder}"
+            )));
+        }
+        Ok(self.database()?.unpin(holder)?)
+    }
+
     /// What the database holds, as files.
     pub fn storage(&self) -> Result<Storage, StoreError> {
         self.commit()?;

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
-use splinter_record::maintenance::{Maintained, Storage};
+use splinter_record::maintenance::{Maintained, Pin, Storage};
 use splinter_record::recovery::{
     ArchiveOptions, Archived, Loss, RepairOptions, Repaired, Restored, StateVerify,
 };
@@ -32,6 +32,8 @@ pub struct StateStorage {
     pub storage: Storage,
     /// What was written off as lost, in the order recorded.
     pub losses: Vec<Loss>,
+    /// The snapshots held alive, by name.
+    pub pins: Vec<Pin>,
 }
 
 /// The storage of the state root `ctx` works in.
@@ -40,6 +42,7 @@ pub fn storage(ctx: &Context) -> Result<StateStorage, CampaignError> {
         state: ctx.root().path().to_path_buf(),
         storage: ctx.workspace().storage()?,
         losses: ctx.workspace().losses()?,
+        pins: ctx.workspace().pins()?,
     })
 }
 
@@ -92,4 +95,19 @@ pub fn archive(
 /// [`Workspace::restore`].
 pub fn restore(ctx: &Context, archives: &[PathBuf]) -> Result<Restored, CampaignError> {
     Ok(Workspace::restore(ctx.root(), archives)?)
+}
+
+/// What `state unpin` reports.
+#[derive(Clone, Debug, Serialize)]
+pub struct Unpinned {
+    /// The holder that let go.
+    pub unpinned: String,
+}
+
+/// Releases the snapshot `holder` keeps alive.
+pub fn unpin(ctx: &Context, holder: &str) -> Result<Unpinned, CampaignError> {
+    ctx.workspace().release_pin(holder)?;
+    Ok(Unpinned {
+        unpinned: holder.to_owned(),
+    })
 }

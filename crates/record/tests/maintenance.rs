@@ -243,3 +243,25 @@ fn collection_sweeps_artifact_files_no_commit_made_official() {
     assert_eq!(with.after.artifacts, 1);
     let _ = std::fs::remove_dir_all(root.path());
 }
+
+/// A name that holds a snapshot alive is listed with what it holds and can be
+/// released by name; releasing one that does not exist is refused.
+#[test]
+fn pins_are_listed_and_released_by_name() {
+    let root = StateRoot::new(
+        std::env::temp_dir().join(format!("splinter-maint-pins-{}", std::process::id())),
+    );
+    let _ = std::fs::remove_dir_all(root.path());
+    let ws = Workspace::at(&root);
+    ExperienceStore::new(&ws).put(&experience(0)).unwrap();
+    ws.hold("dataset-x").unwrap();
+    let held = ws.pins().unwrap();
+    assert_eq!(held.len(), 1);
+    assert_eq!(held[0].holder, "dataset-x");
+    assert_eq!(ws.storage().unwrap().pins, 1);
+
+    ws.release_pin("dataset-x").unwrap();
+    assert!(ws.pins().unwrap().is_empty());
+    assert!(ws.release_pin("dataset-x").is_err(), "nothing to release");
+    let _ = std::fs::remove_dir_all(root.path());
+}

@@ -252,6 +252,10 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         Command::State(StateCommand::Maintain { collect: false })
     ));
     assert!(matches!(
+        command(&["state", "unpin", "dataset-ab"]),
+        Command::State(StateCommand::Unpin { .. })
+    ));
+    assert!(matches!(
         command(&["state", "verify"]),
         Command::State(StateCommand::Verify { deep: false })
     ));

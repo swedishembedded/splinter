@@ -11,7 +11,7 @@
 
 use std::fmt::Write as _;
 
-use splinter_campaign::state::StateStorage;
+use splinter_campaign::state::{StateStorage, Unpinned};
 use splinter_record::maintenance::{Maintained, Storage};
 use splinter_record::recovery::{Archived, ArtifactFault, Repaired, Restored, StateVerify};
 
@@ -36,6 +36,9 @@ impl Report for StateStorage {
             self.state.display(),
             files(&self.storage)
         );
+        for pin in &self.pins {
+            let _ = writeln!(out, "pin:     {} holds {}", pin.holder, pin.snapshot);
+        }
         for loss in &self.losses {
             let _ = writeln!(
                 out,
@@ -160,6 +163,15 @@ impl Report for Restored {
         format!(
             "restored {} file(s) ({} artifact(s)); the state verified before it was put in place\n",
             self.files, self.artifacts
+        )
+    }
+}
+
+impl Report for Unpinned {
+    fn human(&self) -> String {
+        format!(
+            "{} no longer holds a snapshot; `state maintain --collect` can now free its files\n",
+            self.unpinned
         )
     }
 }

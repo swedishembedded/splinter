@@ -541,6 +541,12 @@ pub enum StateCommand {
         #[arg(long)]
         collect: bool,
     },
+    /// Let go of a snapshot a dataset (or another holder) keeps alive, named
+    /// as `state status` lists it, so its files can be collected.
+    Unpin {
+        /// The holder's name.
+        holder: String,
+    },
     /// Check the database and every file it tracks, and report each one that
     /// is missing or damaged; exits 1 when anything is.
     Verify {

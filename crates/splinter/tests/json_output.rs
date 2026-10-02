@@ -228,7 +228,7 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
 
     let (code, status) = splinter(&state, &["state", "status"]);
     assert_eq!(code, 0, "{status}");
-    assert_eq!(keys(&status), ["losses", "state", "storage"]);
+    assert_eq!(keys(&status), ["losses", "pins", "state", "storage"]);
     assert_eq!(
         keys(&status["storage"]),
         [
