@@ -227,7 +227,7 @@ impl ExperienceStore {
             for target in &targets {
                 views.extend(s.evaluations(&EvalFilter::new().target(Target::Record(*target)))?);
             }
-            views.sort_by_key(|view| view.id);
+            views.sort_by_key(|view| (view.timestamp_ns, view.id));
             let mut raw = Vec::new();
             for view in views {
                 if let Some(blob) = view.evaluation.evidence {

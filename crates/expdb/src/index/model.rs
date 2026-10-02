@@ -48,6 +48,7 @@ pub struct Index {
     by_entity: HashMap<ContentId, u32>,
     by_class: HashMap<u64, Vec<u32>>,
     entity_of: HashMap<u32, ContentId>,
+    stamped: Vec<u64>,
 }
 
 /// A node that has no stored record: an edge endpoint written elsewhere.
@@ -76,6 +77,7 @@ impl Index {
 
         let n = ids.len();
         let (mut locs, mut kinds, mut parent) = (vec![None; n], vec![UNSTORED; n], vec![NONE; n]);
+        let mut stamped = vec![0u64; n];
         let (mut by_family, mut by_instance, mut by_attempt, mut by_kind) = (
             HashMap::new(),
             HashMap::new(),
@@ -93,6 +95,7 @@ impl Index {
                 row: row.row,
             });
             kinds[i] = row.kind;
+            stamped[i] = row.timestamp_ns;
             parent[i] = row.parent.as_ref().map_or(NONE, at);
             if let Some(f) = row.family {
                 by_family.entry(f).or_insert_with(Vec::new).push(i as u32);
@@ -157,6 +160,7 @@ impl Index {
             by_entity,
             by_class,
             entity_of,
+            stamped,
         })
     }
 
@@ -166,19 +170,38 @@ impl Index {
         self.by_entity.get(id).map(|n| self.nodes[*n as usize])
     }
 
+    /// When record `id` was stamped; `None` if the index does not hold it.
+    pub fn timestamp_ns(&self, id: RecordId) -> Option<u64> {
+        let node = self.node(id)?;
+        self.locs[node as usize].map(|_| self.stamped[node as usize])
+    }
+
     /// The entities of the class with hash `class`, each once, with the
-    /// record that defines it, in record order.
+    /// record that defines it, in the order the records were stamped (ties
+    /// by record id), the same for every reader.
     pub fn entities_of_class(&self, class: u64) -> Vec<(ContentId, RecordId)> {
         let mut seen = std::collections::HashSet::new();
-        self.by_class
+        let mut found: Vec<(u64, RecordId, ContentId)> = self
+            .by_class
             .get(&class)
             .into_iter()
             .flatten()
             .filter_map(|n| {
                 let id = self.entity_of.get(n)?;
                 let first = *self.by_entity.get(id)?;
-                (first == *n && seen.insert(*id)).then(|| (*id, self.nodes[first as usize]))
+                (first == *n && seen.insert(*id)).then(|| {
+                    (
+                        self.stamped[first as usize],
+                        self.nodes[first as usize],
+                        *id,
+                    )
+                })
             })
+            .collect();
+        found.sort_unstable();
+        found
+            .into_iter()
+            .map(|(_, record, id)| (id, record))
             .collect()
     }
 

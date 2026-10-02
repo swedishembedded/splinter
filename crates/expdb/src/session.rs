@@ -259,7 +259,11 @@ impl Session {
     /// Records an evaluation of something that exists.
     pub fn evaluate(&mut self, evaluation: Evaluation) -> Result<RecordId> {
         let id = self.collector.evaluate(evaluation.clone())?;
-        self.evaluations.push(EvaluationView { id, evaluation });
+        self.evaluations.push(EvaluationView {
+            id,
+            evaluation,
+            timestamp_ns: self.db.clock().now_ns(),
+        });
         Ok(id)
     }
 

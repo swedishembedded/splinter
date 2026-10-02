@@ -17,7 +17,7 @@ use crate::id::{ContentId, RecordId, WriterId};
 use crate::model::{Edge, Rel};
 
 const MAGIC: &[u8; 8] = b"EXPIDX01";
-const ROW: usize = 16 + 4 + 4 + 4 + 1 + 1 + 16 + 16 + 32 + 32 + 32 + 8;
+const ROW: usize = 16 + 4 + 4 + 4 + 1 + 1 + 16 + 16 + 32 + 32 + 32 + 8 + 8;
 const EDGE: usize = 16 + 16 + 1 + 4;
 
 const HAS_PARENT: u8 = 1;
@@ -35,6 +35,8 @@ pub(crate) struct Row {
     pub(crate) block: u32,
     pub(crate) row: u32,
     pub(crate) kind: u8,
+    /// When the record was stamped.
+    pub(crate) timestamp_ns: u64,
     pub(crate) parent: Option<RecordId>,
     pub(crate) attempt: Option<RecordId>,
     pub(crate) family: Option<ContentId>,
@@ -120,6 +122,7 @@ impl Run {
             out.extend_from_slice(&r.block.to_le_bytes());
             out.extend_from_slice(&r.row.to_le_bytes());
             out.push(r.kind);
+            out.extend_from_slice(&r.timestamp_ns.to_le_bytes());
             let flag = |present: bool, bit: u8| if present { bit } else { 0 };
             out.push(
                 flag(r.parent.is_some(), HAS_PARENT)
@@ -164,7 +167,9 @@ impl Run {
         for _ in 0..n_rows {
             let id = c.id()?;
             let (seg, block, row) = (c.u32()?, c.u32()?, c.u32()?);
-            let (kind, flags) = (c.take(1)?[0], c.take(1)?[0]);
+            let kind = c.take(1)?[0];
+            let timestamp_ns = c.u64()?;
+            let flags = c.take(1)?[0];
             let (parent, attempt) = (c.id()?, c.id()?);
             let (family, instance) = (c.content()?, c.content()?);
             let (entity, class) = (c.content()?, c.u64()?);
@@ -174,6 +179,7 @@ impl Run {
                 block,
                 row,
                 kind,
+                timestamp_ns,
                 parent: (flags & HAS_PARENT != 0).then_some(parent),
                 attempt: (flags & HAS_ATTEMPT != 0).then_some(attempt),
                 family: (flags & HAS_FAMILY != 0).then_some(family),
@@ -232,6 +238,7 @@ impl Run {
                         block: index as u32,
                         row: row as u32,
                         kind: block.kind(row)?.code(),
+                        timestamp_ns: block.timestamp_ns(row),
                         parent: block.parent(row),
                         attempt: block.attempt(row),
                         family: block.family(row),

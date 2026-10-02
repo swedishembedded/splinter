@@ -28,6 +28,8 @@ pub struct EvaluationView {
     pub id: RecordId,
     /// What it says.
     pub evaluation: Evaluation,
+    /// When it was stamped.
+    pub timestamp_ns: u64,
 }
 
 /// Every evaluation of a snapshot and the evaluators withdrawn from it.
@@ -184,12 +186,22 @@ impl Snapshot {
         let mut set = EvalSet::default();
         for id in index.by_kind(RecordKind::Evaluation) {
             if let Some(Body::Evaluation(evaluation)) = self.get(id)?.map(|r| r.body) {
-                set.by_target
-                    .entry(evaluation.target)
-                    .or_default()
-                    .push(set.views.len());
-                set.views.push(EvaluationView { id, evaluation });
+                let timestamp_ns = index.timestamp_ns(id).unwrap_or(0);
+                set.views.push(EvaluationView {
+                    id,
+                    evaluation,
+                    timestamp_ns,
+                });
             }
+        }
+        // In the order they were stamped, which every reader and every run
+        // agrees on, and not in the order of the random ids of the writers.
+        set.views.sort_by_key(|v| (v.timestamp_ns, v.id));
+        for (position, view) in set.views.iter().enumerate() {
+            set.by_target
+                .entry(view.evaluation.target)
+                .or_default()
+                .push(position);
         }
         for id in index.by_kind(RecordKind::Retraction) {
             if let Some(Body::Retraction(retraction)) = self.get(id)?.map(|r| r.body) {
