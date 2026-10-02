@@ -30,7 +30,7 @@ sven-sdk = { git = "https://github.com/swedishembedded/sven" }
 brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study"] }
 
 splinter-lab = { path = "crates/lab" }
-splinter-store = { path = "crates/store" }
+splinter-record = { path = "crates/record" }
 splinter-policy = { path = "crates/policy" }
 splinter-agent = { path = "crates/agent" }
 splinter-knowledge = { path = "crates/knowledge" }

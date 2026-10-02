@@ -28,7 +28,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 
-use splinter_store::digest::Digest;
+use splinter_record::digest::Digest;
 
 use crate::gates::normalize;
 

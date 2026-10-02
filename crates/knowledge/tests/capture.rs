@@ -25,11 +25,11 @@ use splinter_knowledge::capture::{
     capture_command, capture_document, capture_repository, default_environment, CaptureError,
     CommandSpec, ProcessError, DEFAULT_MAX_FILE_BYTES,
 };
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::Span;
-use splinter_store::source::{Origin, PartRef, SkipReason, Source};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::Span;
+use splinter_record::source::{Origin, PartRef, SkipReason, Source};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 
 const AT: &str = "2026-09-30T08:00:00.000Z";
 const LATER: &str = "2026-09-30T09:30:00.000Z";

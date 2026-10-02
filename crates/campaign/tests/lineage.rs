@@ -47,10 +47,10 @@ use splinter_campaign::release::gate::{Check, GateConfig, GateReport};
 use splinter_campaign::release::{ReleaseId, ReleaseManifest, ReleaseStore, RELEASE_FORMAT};
 use splinter_campaign::train::{Candidate, TrainingSummary};
 use splinter_campaign::{CampaignError, Context};
-use splinter_store::clock::FixedClock;
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, ExperienceId, Task};
-use splinter_store::source::{CapturedSource, Origin, PartContent, SourceId};
+use splinter_record::clock::FixedClock;
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, ExperienceId, Task};
+use splinter_record::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_views::DatasetId;
 
 /// What the learned fixture holds.

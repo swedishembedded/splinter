@@ -3,7 +3,7 @@
 
 //! Every command that does pipeline work runs as a recorded run: its
 //! arguments, each stage as it finishes, how it ended and what it produced
-//! (see `splinter_store::runs`). A cancel requested from another process
+//! (see `splinter_record::runs`). A cancel requested from another process
 //! reaches the run through a token its stages poll and hand to every model
 //! run they start.
 
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
-use splinter_store::runs::{self, list_runs, read_run, Run, RunLog, RunStatus};
+use splinter_record::runs::{self, list_runs, read_run, Run, RunLog, RunStatus};
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

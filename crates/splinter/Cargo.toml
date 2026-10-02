@@ -16,7 +16,7 @@ publish.workspace = true
 
 [dependencies]
 splinter-campaign = { workspace = true }
-splinter-store = { workspace = true }
+splinter-record = { workspace = true }
 
 clap = { workspace = true }
 serde = { workspace = true }

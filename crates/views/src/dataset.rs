@@ -52,9 +52,9 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_store::annotation::Strength;
-use splinter_store::digest::{canonical_json, Digest};
-use splinter_store::experience::ExperienceId;
+use splinter_record::annotation::Strength;
+use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::experience::ExperienceId;
 
 use crate::{
     Exclusion, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, ViewError,
@@ -226,7 +226,7 @@ pub fn write_dataset(
         move |source| ViewError::Io { path, source }
     };
     let pending = path.with_extension("pending");
-    splinter_store::write_atomic(&pending, &text).map_err(io(&pending))?;
+    splinter_record::write_atomic(&pending, &text).map_err(io(&pending))?;
     let validated = match format {
         Format::GenericMessagesV2 => validate_chat(path, &pending).map(Some),
         Format::GenericPreferenceV1 => {
@@ -249,7 +249,7 @@ pub fn write_dataset(
     let manifest_file = manifest_path(path);
     // Canonical JSON is UTF-8 by construction, so nothing is substituted.
     let manifest_text = String::from_utf8_lossy(&manifest);
-    splinter_store::write_atomic(&manifest_file, &manifest_text).map_err(io(&manifest_file))?;
+    splinter_record::write_atomic(&manifest_file, &manifest_text).map_err(io(&manifest_file))?;
     Ok(Dataset {
         path: path.to_path_buf(),
         format,

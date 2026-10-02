@@ -4,14 +4,14 @@
 //! The sft-final view: a passed experience's final answer, supervised.
 //!
 //! An experience qualifies when its annotations decide pass (under the
-//! decision rule of `splinter_store::annotation`: the strongest pass/fail
+//! decision rule of `splinter_record::annotation`: the strongest pass/fail
 //! verdicts decide, a conflict among them decides nothing) at or above the
 //! view's minimum strength, and it has a final output. It yields one record:
 //! the student's turn (see [`Strip`]), not supervised, and the final output
 //! as the assistant turn, the only supervised one. The trajectory's
 //! intermediate steps stay out of the record. One candidate per experience.
 
-use splinter_store::annotation::Strength;
+use splinter_record::annotation::Strength;
 
 use crate::render::{message, student_turn};
 use crate::{

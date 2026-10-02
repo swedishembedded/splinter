@@ -26,7 +26,7 @@ pub use sft_final::SftFinal;
 pub use sft_step::SftStep;
 pub use verifier::VerifierView;
 
-use splinter_store::experiences::StoreError;
+use splinter_record::experiences::StoreError;
 
 use crate::{Exclusion, ViewError};
 

@@ -26,8 +26,8 @@ mod repository;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use splinter_store::clock::Clock;
-use splinter_store::source::{CapturedSource, Origin, PartContent, SourceError};
+use splinter_record::clock::Clock;
+use splinter_record::source::{CapturedSource, Origin, PartContent, SourceError};
 
 pub use command::{
     capture_command, default_environment, CommandSpec, DEFAULT_ENV_ALLOWLIST, DEFAULT_OUTPUT_CAP,

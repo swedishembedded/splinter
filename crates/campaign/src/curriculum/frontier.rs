@@ -38,12 +38,12 @@ use splinter_knowledge::concepts::{Concept, ConceptResolver};
 use splinter_lab::frontier::{Distribution, FrontierClass, PassCount};
 pub use splinter_policy::Sampling;
 use splinter_policy::AGENT_SAMPLING;
-use splinter_store::annotation::decide;
-use splinter_store::digest::{canonical_json, Digest};
-use splinter_store::experience::ExperienceId;
-use splinter_store::experiences::{ExperienceSet, SetId};
-use splinter_store::tasks::{TaskSet, TaskSetId};
-use splinter_store::write_once;
+use splinter_record::annotation::decide;
+use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::experience::ExperienceId;
+use splinter_record::experiences::{ExperienceSet, SetId};
+use splinter_record::tasks::{TaskSet, TaskSetId};
+use splinter_record::write_once;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

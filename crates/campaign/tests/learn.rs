@@ -41,7 +41,7 @@ use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_policy::train::{Trained, TrainedPreference};
 use splinter_policy::ModelSelection;
-use splinter_store::runs::{read_run, RunStatus};
+use splinter_record::runs::{read_run, RunStatus};
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
 

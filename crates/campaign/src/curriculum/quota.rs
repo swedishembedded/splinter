@@ -33,9 +33,9 @@ use serde::Serialize;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
 use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
-use splinter_store::annotation::{decide, Strength};
-use splinter_store::experience::ExperienceId;
-use splinter_store::experiences::{ExperienceSet, SetId};
+use splinter_record::annotation::{decide, Strength};
+use splinter_record::experience::ExperienceId;
+use splinter_record::experiences::{ExperienceSet, SetId};
 
 use crate::context::Context;
 use crate::error::CampaignError;

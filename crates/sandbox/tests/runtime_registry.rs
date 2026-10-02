@@ -18,11 +18,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use splinter_record::experience::{Digest, Environment};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeError, RuntimeRegistry,
     RuntimeSpec, SandboxError,
 };
-use splinter_store::experience::{Digest, Environment};
 
 fn sandbox(limits: Limits) -> Arc<ProcessSandbox> {
     Arc::new(ProcessSandbox::new(

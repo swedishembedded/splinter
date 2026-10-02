@@ -29,9 +29,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
-use splinter_store::digest::{canonical_json, Digest};
-use splinter_store::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_store::{write_atomic, write_once};
+use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_record::{write_atomic, write_once};
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};
@@ -105,7 +105,7 @@ pub fn current(ctx: &Context) -> Result<Option<FrozenAnchor>, CampaignError> {
     let found = Digest::of(&bytes);
     if found != digest {
         return Err(CampaignError::Store(
-            splinter_store::experiences::StoreError::Corrupt {
+            splinter_record::experiences::StoreError::Corrupt {
                 path,
                 expected: digest,
                 found,

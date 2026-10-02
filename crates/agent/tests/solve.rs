@@ -32,11 +32,11 @@ use splinter_agent::replay::{replay, CallReplay, ReplayError};
 use splinter_agent::solve::{
     solve, solve_prompted, SolveError, SolveOptions, RUN_CODE, SYSTEM_PROMPT,
 };
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{Environment, Provenance, Task};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{Environment, Provenance, Task};
 use sven_sdk::model::{
     CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
 };

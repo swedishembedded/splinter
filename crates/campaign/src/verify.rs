@@ -30,10 +30,10 @@ use splinter_lab::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifie
 use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
-use splinter_store::annotation::{decide, AnnotationBody, Outcome, Producer};
-use splinter_store::experience::{Experience, ExperienceId, Task};
-use splinter_store::experiences::SetId;
-use splinter_store::write_atomic;
+use splinter_record::annotation::{decide, AnnotationBody, Outcome, Producer};
+use splinter_record::experience::{Experience, ExperienceId, Task};
+use splinter_record::experiences::SetId;
+use splinter_record::write_atomic;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

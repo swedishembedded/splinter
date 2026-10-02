@@ -29,7 +29,7 @@ use std::str::FromStr;
 
 use serde::Serialize;
 use splinter_lab::paired::accuracy;
-use splinter_store::digest::Digest;
+use splinter_record::digest::Digest;
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
 

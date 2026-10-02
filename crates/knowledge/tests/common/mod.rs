@@ -15,11 +15,11 @@ use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
 use splinter_agent::solve::Model;
 use splinter_knowledge::tasks::{ModelTaskGenerator, SourceText};
+use splinter_record::clock::FixedClock;
+use splinter_record::source::{CapturedSource, Origin, PartContent, SourceId};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 use splinter_sandbox::{Limits, ProcessSandbox, RuntimeEnvironment, RuntimeRegistry};
-use splinter_store::clock::FixedClock;
-use splinter_store::source::{CapturedSource, Origin, PartContent, SourceId};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 
 /// A generator model that answers each request with the next reply of its

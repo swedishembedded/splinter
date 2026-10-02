@@ -12,7 +12,7 @@
 //! student's turn (see [`Strip`]); its actions are the messages marked
 //! `train`.
 
-use splinter_store::annotation::{reward, Strength};
+use splinter_record::annotation::{reward, Strength};
 
 use crate::render::student_turn;
 use crate::trajectory::conversation;

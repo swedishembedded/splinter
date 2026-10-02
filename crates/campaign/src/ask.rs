@@ -18,9 +18,9 @@ use std::time::Duration;
 use serde::Serialize;
 use splinter_agent::solve::{open_book_prompt, solve, SolveOptions};
 use splinter_knowledge::tasks::SourceIdentity;
+use splinter_record::experience::{Environment, Task};
+use splinter_record::source::SourceId;
 use splinter_sandbox::ResolvedEnvironment;
-use splinter_store::experience::{Environment, Task};
-use splinter_store::source::SourceId;
 
 use crate::answers::{AnswerId, AnswerRecord, AnswerStore, ANSWER_FORMAT};
 use crate::context::Context;

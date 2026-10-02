@@ -15,7 +15,7 @@ splinter-knowledge = { workspace = true }
 splinter-lab = { workspace = true }
 splinter-policy = { workspace = true }
 splinter-sandbox = { workspace = true }
-splinter-store = { workspace = true }
+splinter-record = { workspace = true }
 splinter-views = { workspace = true }
 sven-sdk = { workspace = true }
 

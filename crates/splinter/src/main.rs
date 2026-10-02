@@ -30,7 +30,7 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser};
 use splinter_campaign::Config;
-use splinter_store::StateRoot;
+use splinter_record::StateRoot;
 
 use cli::Cli;
 use session::Session;

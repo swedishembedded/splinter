@@ -27,7 +27,7 @@
 //! received it passes where the critiqued attempt failed.
 //!
 //! [`Strongest`] runs several and returns every verdict; the store's
-//! [`decide`](splinter_store::annotation::decide) lets the strongest
+//! [`decide`](splinter_record::annotation::decide) lets the strongest
 //! agreeing ones decide, so no verdict is dropped here to reach that.
 //!
 //! Verification blocks: an executable check runs a process, a judge waits
@@ -43,11 +43,11 @@ pub mod mutation;
 pub mod normalise;
 
 use serde_json::json;
+use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Experience, ExperienceError, PrivilegedKind, Task};
+use splinter_record::experiences::{ExperienceStore, StoreError};
 use splinter_sandbox::SandboxError;
-use splinter_store::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Experience, ExperienceError, PrivilegedKind, Task};
-use splinter_store::experiences::{ExperienceStore, StoreError};
 
 /// Grades experiences of tasks at one [`Strength`].
 pub trait Verifier: Send + Sync {

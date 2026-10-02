@@ -18,10 +18,10 @@ mod common;
 use common::*;
 use serde_json::json;
 use splinter_lab::verifiers::executable;
-use splinter_store::annotation::{
+use splinter_record::annotation::{
     Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
 };
-use splinter_store::experience::PrivilegedKind;
+use splinter_record::experience::PrivilegedKind;
 use splinter_views::{
     Corpus, Critic, Exclusion, Objective, Preference, RecordBody, VerifierView, View,
 };

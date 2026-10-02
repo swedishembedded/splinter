@@ -14,9 +14,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde::Serialize;
-use splinter_store::annotation::Strength;
-use splinter_store::experience::{ExperienceId, PrivilegedKind};
-use splinter_store::experiences::SetId;
+use splinter_record::annotation::Strength;
+use splinter_record::experience::{ExperienceId, PrivilegedKind};
+use splinter_record::experiences::SetId;
 pub use splinter_views::Strip;
 use splinter_views::{
     manifest_path, Corpus, Cpt, Critic, DatasetId, DecisionView, DenoiseView, Exclusion, Format,
@@ -357,7 +357,7 @@ fn copy_once(from: &Path, to: &Path) -> Result<(), CampaignError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(io(to)(e)),
     }
-    splinter_store::write_once(to, &bytes).map_err(io(to))?;
+    splinter_record::write_once(to, &bytes).map_err(io(to))?;
     Ok(())
 }
 

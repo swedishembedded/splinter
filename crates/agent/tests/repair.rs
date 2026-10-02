@@ -34,14 +34,14 @@ use splinter_agent::repair::{Repair, RepairBudget, RepairError, RepairReport, St
 use splinter_agent::solve::{solve, Model, SolveOptions, SYSTEM_PROMPT};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest};
+use splinter_record::annotation::{decide, AnnotationBody, RelationKind, Strength};
+use splinter_record::clock::Clock;
+use splinter_record::experience::{ExperienceId, Privileged, PrivilegedKind, Provenance, Task};
+use splinter_record::experiences::ExperienceStore;
+use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
-use splinter_store::annotation::{decide, AnnotationBody, RelationKind, Strength};
-use splinter_store::clock::Clock;
-use splinter_store::experience::{ExperienceId, Privileged, PrivilegedKind, Provenance, Task};
-use splinter_store::experiences::ExperienceStore;
-use splinter_store::StateRoot;
 use splinter_views::{
     Corpus, Critic as CriticView, DecisionView, Exclusion, Preference, RecordBody, SftFinal, Strip,
     View,

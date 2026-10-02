@@ -14,7 +14,7 @@
 //! ```
 //!
 //! An [`AnswerId`] is the digest of the record's canonical form (see
-//! `splinter_store::digest`), the time it was asked included, so asking the
+//! `splinter_record::digest`), the time it was asked included, so asking the
 //! same question twice records two answers. A record is written once and
 //! checked against its address on every read. Every record carries
 //! [`ANSWER_FORMAT`]; a later format adds fields beside it rather than
@@ -24,10 +24,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use splinter_store::digest::{canonical_json, Digest};
-use splinter_store::experiences::StoreError;
-use splinter_store::source::SourceId;
-use splinter_store::{write_once, StateRoot};
+use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::experiences::StoreError;
+use splinter_record::source::SourceId;
+use splinter_record::{write_once, StateRoot};
 
 use crate::error::{io, CampaignError};
 use crate::release::ReleaseId;

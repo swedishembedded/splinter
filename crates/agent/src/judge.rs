@@ -22,10 +22,10 @@ use std::time::Duration;
 
 use serde_json::json;
 use splinter_lab::verifiers::{Finding, Verifier, VerifyError};
+use splinter_record::annotation::{Outcome, Producer, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, Experience, PrivilegedKind, Task};
 use splinter_sandbox::ResolvedEnvironment;
-use splinter_store::annotation::{Outcome, Producer, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, Experience, PrivilegedKind, Task};
 use tokio::runtime::Handle;
 
 use crate::solve::{solve, Model, SolveOptions};

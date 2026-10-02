@@ -12,9 +12,9 @@ use splinter_agent::solve::SolveError;
 use splinter_knowledge::capture::CaptureError;
 use splinter_knowledge::tasks::GenerateError;
 use splinter_lab::verifiers::VerifyError;
+use splinter_record::experience::ExperienceError;
+use splinter_record::experiences::StoreError;
 use splinter_sandbox::SandboxError;
-use splinter_store::experience::ExperienceError;
-use splinter_store::experiences::StoreError;
 use splinter_views::ViewError;
 
 use crate::model_ref::RefError;

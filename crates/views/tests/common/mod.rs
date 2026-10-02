@@ -11,11 +11,11 @@ use std::path::PathBuf;
 
 use serde_json::json;
 use splinter_lab::{WireMessage, SYSTEM_PROMPT};
-use splinter_store::annotation::{
+use splinter_record::annotation::{
     Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
 };
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
     Environment, Experience, ExperienceId, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use sven_sdk::atif::{

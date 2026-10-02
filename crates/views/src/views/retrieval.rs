@@ -17,9 +17,9 @@
 //! [`Exclusion::SourceMissing`], one that is not UTF-8 text as
 //! [`Exclusion::NotText`]; a store that cannot be read is an error.
 
-use splinter_store::annotation::Strength;
-use splinter_store::experience::Span;
-use splinter_store::sources::SourceStore;
+use splinter_record::annotation::Strength;
+use splinter_record::experience::Span;
+use splinter_record::sources::SourceStore;
 
 use super::source_text;
 use crate::render::student_turn;

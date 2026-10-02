@@ -18,15 +18,15 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::json;
-use splinter_store::annotation::{
+use splinter_record::annotation::{
     reward, Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
 };
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
-use splinter_store::experiences::{ExperienceSet, ExperienceStore, StoreError};
-use splinter_store::StateRoot;
+use splinter_record::experiences::{ExperienceSet, ExperienceStore, StoreError};
+use splinter_record::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 /// A fresh state root per test, removed when dropped.
@@ -104,7 +104,7 @@ fn experience(output: &str) -> Experience {
 }
 
 fn verdict(
-    id: &splinter_store::experience::ExperienceId,
+    id: &splinter_record::experience::ExperienceId,
     outcome: Outcome,
     strength: Strength,
 ) -> Annotation {
@@ -167,7 +167,7 @@ fn an_environment_snapshot_addresses_its_kind_and_spec() {
     assert!(
         matches!(
             refused,
-            Err(splinter_store::experience::ExperienceError::EnvironmentSnapshot { .. })
+            Err(splinter_record::experience::ExperienceError::EnvironmentSnapshot { .. })
         ),
         "{refused:?}"
     );

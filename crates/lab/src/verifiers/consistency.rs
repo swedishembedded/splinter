@@ -12,9 +12,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::json;
-use splinter_store::annotation::{Producer, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Experience, ExperienceId, Task};
+use splinter_record::annotation::{Producer, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Experience, ExperienceId, Task};
 
 use super::normalise::Normalisation;
 use super::{Finding, Verifier, VerifyError};

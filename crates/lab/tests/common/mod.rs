@@ -12,13 +12,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use splinter_lab::verifiers::{annotation, Verifier};
+use splinter_record::annotation::{AnnotationBody, Outcome, Strength};
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
+    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
+};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
-};
-use splinter_store::annotation::{AnnotationBody, Outcome, Strength};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
-    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
 use sven_sdk::atif::{AgentProfile, Trajectory};
 

@@ -25,9 +25,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_store::digest::Digest;
-use splinter_store::experiences::StoreError;
-use splinter_store::StateRoot;
+use splinter_record::digest::Digest;
+use splinter_record::experiences::StoreError;
+use splinter_record::StateRoot;
 
 use crate::dataset::{manifest_path, write_dataset, Manifest, WriteOptions};
 use crate::{Projection, ViewError};

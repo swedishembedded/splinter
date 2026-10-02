@@ -27,9 +27,9 @@
 //! that grade an answer. (Whether a reference is supported by its evidence
 //! is a different question, [`crate::tasks::grounding`]'s.)
 
-use splinter_store::error::StoreError;
-use splinter_store::experience::{PrivilegedKind, Span, Task};
-use splinter_store::sources::SourceStore;
+use splinter_record::error::StoreError;
+use splinter_record::experience::{PrivilegedKind, Span, Task};
+use splinter_record::sources::SourceStore;
 
 use crate::sections::sections;
 

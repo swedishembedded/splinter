@@ -10,12 +10,12 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
-use splinter_store::clock::FixedClock;
-use splinter_store::experiences::StoreError;
-use splinter_store::runs::{
+use splinter_record::clock::FixedClock;
+use splinter_record::experiences::StoreError;
+use splinter_record::runs::{
     cancel_requested, list_runs, read_run, request_cancel, RunLog, RunStatus,
 };
-use splinter_store::StateRoot;
+use splinter_record::StateRoot;
 
 fn scratch(name: &str) -> StateRoot {
     let path = std::env::temp_dir().join(format!("splinter-runs-{name}-{}", std::process::id()));

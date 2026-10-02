@@ -12,23 +12,23 @@
 # only on brain's public SDK, the `brain` crate - never an internal
 # `brain-*` crate.
 
-[crates.splinter-store]
+[crates.splinter-record]
 internal = []
 
 [crates.splinter-expdb]
 # The experience graph database. Standalone: it owns its digest, atomic-write
-# and clock primitives so it can replace splinter-store without depending on it.
+# and clock primitives, and knows nothing of Splinter's vocabulary.
 internal = []
 
 [crates.splinter-sandbox]
 # Where a solver's code runs; below knowledge (command capture) and agent
 # (the solver's run_code tool), which share its process-running core.
-internal = ["splinter-store"]
+internal = ["splinter-record"]
 
 [crates.splinter-lab]
 # Executable verifiers run checks in the environment a task names, through
 # the sandbox's one bounded runner rather than a second one of their own.
-internal = ["splinter-store", "splinter-sandbox"]
+internal = ["splinter-record", "splinter-sandbox"]
 
 [crates.splinter-policy]
 internal = ["splinter-lab"]
@@ -40,26 +40,26 @@ brain = true
 # and preference views read. The views never depend on the agent. The agent
 # runs whatever model it is handed through sven's provider seam, so it does
 # not depend on the policy.
-internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-views"]
+internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-views"]
 
 [crates.splinter-knowledge]
 # Model-driven task generators ask their generator model through the
 # agent's closed-book solve, the one way a model is run on a task, and hold
 # every generated instruction to the views' self-containment rule, the one
 # rule for what a student may be shown without the material it lacks.
-internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-views"]
+internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-views"]
 
 [crates.splinter-views]
-internal = ["splinter-store", "splinter-lab", "splinter-policy"]
+internal = ["splinter-record", "splinter-lab", "splinter-policy"]
 
 [crates.splinter-campaign]
-internal = ["splinter-store", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
+internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
 
 [crates.splinter]
 # The binary is grammar and output: it calls the controller and prints the
 # controller's reports, and reaches the store only for the types those
 # reports carry.
-internal = ["splinter-store", "splinter-campaign"]
+internal = ["splinter-record", "splinter-campaign"]
 
 [crates.splinter-tool-syntax]
 internal = ["splinter-lab", "splinter-policy"]

@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use splinter_agent::critic::Critic;
 use splinter_agent::repair::{Repair, RepairBudget, Stop};
-use splinter_store::annotation::decide;
-use splinter_store::experiences::{ExperienceSet, SetId};
+use splinter_record::annotation::decide;
+use splinter_record::experiences::{ExperienceSet, SetId};
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
@@ -91,7 +91,7 @@ pub fn critique_set(
         .collect::<Result<Vec<_>, _>>()?;
     let mut produced = Vec::new();
     let mut revisions = Vec::new();
-    let unset = SetId(splinter_store::digest::Digest::of(b""));
+    let unset = SetId(splinter_record::digest::Digest::of(b""));
     let mut report = Critiqued {
         experience_set: unset.clone(),
         revisions: unset,

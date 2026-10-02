@@ -17,11 +17,11 @@
 use std::fs;
 use std::path::PathBuf;
 
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_store::experiences::StoreError;
-use splinter_store::tasks::{TaskEntry, TaskSet, TaskStore};
-use splinter_store::StateRoot;
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_record::experiences::StoreError;
+use splinter_record::tasks::{TaskEntry, TaskSet, TaskStore};
+use splinter_record::StateRoot;
 
 struct Scratch(PathBuf);
 

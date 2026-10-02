@@ -43,8 +43,8 @@ use splinter_policy::train::{
     TrainedPreference,
 };
 use splinter_policy::{ModelSelection, PolicyError};
-use splinter_store::digest::Digest;
-use splinter_store::write_atomic;
+use splinter_record::digest::Digest;
+use splinter_record::write_atomic;
 use splinter_views::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
 use sven_sdk::CancelToken;
 
@@ -417,7 +417,7 @@ pub fn train(
         ModelRef::Policy(alias) => ctx.policy_pin(alias)?,
         _ => None,
     };
-    let candidate = splinter_store::new_id_with_prefix("candidate");
+    let candidate = splinter_record::new_id_with_prefix("candidate");
     let dir = ctx.root().train().join(&candidate);
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
     let replay = match (&pin, regime) {

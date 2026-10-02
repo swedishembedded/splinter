@@ -12,12 +12,12 @@
 
 use std::collections::HashMap;
 
-use splinter_store::annotation::{
+use splinter_record::annotation::{
     decide, Annotation, AnnotationBody, Decision, Label, RelationKind,
 };
-use splinter_store::experience::{Experience, ExperienceId, Task};
-use splinter_store::experiences::ExperienceStore;
-use splinter_store::source::SourceId;
+use splinter_record::experience::{Experience, ExperienceId, Task};
+use splinter_record::experiences::ExperienceStore;
+use splinter_record::source::SourceId;
 
 use crate::ViewError;
 

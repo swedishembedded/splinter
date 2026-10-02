@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use splinter_store::digest::Digest;
+use splinter_record::digest::Digest;
 
 use crate::backend::{
     io, Backend, CallDir, CodeCall, CodeResult, Isolation, Sandbox, SandboxError, SandboxSpec,

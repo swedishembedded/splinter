@@ -33,10 +33,10 @@ use splinter_knowledge::tasks::{
     TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_lab::denoise::KIND as DENOISE_KIND;
-use splinter_store::digest::Digest;
-use splinter_store::experience::{PrivilegedKind, Task};
-use splinter_store::source::SourceId;
-use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{PrivilegedKind, Task};
+use splinter_record::source::SourceId;
+use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

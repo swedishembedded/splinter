@@ -33,10 +33,10 @@ use serde::Serialize;
 use splinter_agent::solve::{open_book_prompt, solve_prompted, Model, SolveError, SolveOptions};
 use splinter_knowledge::material::teacher_material;
 use splinter_policy::Sampling;
-use splinter_store::digest::Digest;
-use splinter_store::experience::Provenance;
-use splinter_store::experiences::{ExperienceSet, SetId};
-use splinter_store::tasks::TaskSetId;
+use splinter_record::digest::Digest;
+use splinter_record::experience::Provenance;
+use splinter_record::experiences::{ExperienceSet, SetId};
+use splinter_record::tasks::TaskSetId;
 use sven_sdk::{CancelToken, RunConclusion};
 
 use crate::context::Context;

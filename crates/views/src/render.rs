@@ -5,7 +5,7 @@
 //! renders the same parts the same way.
 
 use splinter_lab::WireMessage;
-use splinter_store::experience::Experience;
+use splinter_record::experience::Experience;
 
 use crate::{Entry, Exclusion, Strip};
 

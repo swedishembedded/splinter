@@ -27,8 +27,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use splinter_knowledge::concepts::{Concept, ConceptResolver, SectionRef};
-use splinter_store::digest::{canonical_json, Digest};
-use splinter_store::write_atomic;
+use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::write_atomic;
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};

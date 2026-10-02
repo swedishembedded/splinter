@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn write_atomic_leaves_no_tmp_file_behind() {
-        let dir = std::env::temp_dir().join(format!("splinter-store-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("splinter-record-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("run.json");
         write_atomic(&path, "{\"status\":\"pending\"}").unwrap();

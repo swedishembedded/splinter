@@ -44,10 +44,10 @@ use splinter_lab::holdout::holdout_split;
 use splinter_lab::paired::PairedOutcome;
 use splinter_lab::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
+use splinter_record::annotation::decide;
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, ExperienceId, Provenance, Task};
 use splinter_sandbox::ResolvedEnvironment;
-use splinter_store::annotation::decide;
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, ExperienceId, Provenance, Task};
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
 

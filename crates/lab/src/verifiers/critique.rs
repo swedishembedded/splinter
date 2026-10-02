@@ -36,10 +36,10 @@
 //! strength - the condition under which two decisions are comparable.
 
 use serde_json::json;
-use splinter_store::annotation::{
+use splinter_record::annotation::{
     Annotation, AnnotationBody, Decision, Outcome, Producer, Strength,
 };
-use splinter_store::experience::ExperienceId;
+use splinter_record::experience::ExperienceId;
 
 /// The producer name of a critique's outcome verdict.
 pub const PRODUCER: &str = "splinter-lab/critique-outcome";
@@ -163,7 +163,7 @@ fn decision_json(decision: Option<Decision>) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use splinter_store::digest::Digest;
+    use splinter_record::digest::Digest;
 
     fn id(tag: &str) -> ExperienceId {
         ExperienceId(Digest::of(tag.as_bytes()))

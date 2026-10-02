@@ -29,11 +29,11 @@ use serde_json::json;
 use splinter_knowledge::tasks::{Catalogue, Rejection, SourceText, TaskKind};
 use splinter_lab::verifiers::executable::CHECK_KIND;
 use splinter_lab::verifiers::mutation::TEST_KIND;
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{Environment, PrivilegedKind};
-use splinter_store::source::{CapturedSource, Origin, PartContent, Revision};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{Environment, PrivilegedKind};
+use splinter_record::source::{CapturedSource, Origin, PartContent, Revision};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 use sven_sdk::model::ResponseFormat;
 
 const MANUAL: &str = "# Frobnicator manual

@@ -20,16 +20,16 @@ use splinter_agent::solve::Model;
 use splinter_lab::verifiers::calibration::{calibrate, CalibratedJudge};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
+use splinter_record::annotation::{decide, AnnotationBody, Outcome, Strength};
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
+    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
+};
+use splinter_record::experiences::ExperienceStore;
+use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
-use splinter_store::annotation::{decide, AnnotationBody, Outcome, Strength};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
-    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
-};
-use splinter_store::experiences::ExperienceStore;
-use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};
 use sven_sdk::model::{
     CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream,

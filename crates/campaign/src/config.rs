@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use splinter_knowledge::capture::DEFAULT_ENV_ALLOWLIST;
-use splinter_store::StateRoot;
+use splinter_record::StateRoot;
 
 /// The model Splinter trains by default, as brain's model store names it:
 /// the size whose base serves and whose adapters train, at agent-trajectory

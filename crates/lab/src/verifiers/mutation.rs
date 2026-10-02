@@ -32,10 +32,10 @@ use std::collections::HashSet;
 
 use serde::Serialize;
 use serde_json::json;
+use splinter_record::annotation::{Producer, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Experience, Task};
 use splinter_sandbox::{CodeCall, RuntimeEnvironment};
-use splinter_store::annotation::{Producer, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Experience, Task};
 
 use super::executable::{
     assemble, parse_checks, program_text, run_check, run_evidence, ExecutableCheck, Offered,

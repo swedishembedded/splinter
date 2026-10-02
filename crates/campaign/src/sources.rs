@@ -18,7 +18,7 @@ use splinter_knowledge::capture::{
     capture_command, capture_document, capture_repository, default_environment, CommandSpec,
     DEFAULT_MAX_FILE_BYTES,
 };
-use splinter_store::source::{CapturedSource, Origin, Source, SourceId};
+use splinter_record::source::{CapturedSource, Origin, Source, SourceId};
 
 use crate::context::Context;
 use crate::error::CampaignError;

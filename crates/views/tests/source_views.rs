@@ -17,12 +17,12 @@ mod common;
 
 use common::*;
 use splinter_lab::denoise::KIND;
-use splinter_store::annotation::{Outcome, Strength};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{Digest, PrivilegedKind, Span};
-use splinter_store::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
+use splinter_record::annotation::{Outcome, Strength};
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{Digest, PrivilegedKind, Span};
+use splinter_record::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 use splinter_views::{Corpus, Cpt, DenoiseView, Exclusion, Objective, RecordBody, Retrieval, View};
 
 /// A conversation as (role, content, supervised) triples.

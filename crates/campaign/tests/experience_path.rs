@@ -24,15 +24,15 @@ use splinter_knowledge::denoise::{Denoise, GENERATOR};
 use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::annotation;
 use splinter_lab::SYSTEM_PROMPT;
-use splinter_store::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
+use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
     Digest, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
-use splinter_store::experiences::ExperienceStore;
-use splinter_store::source::{CapturedSource, Origin, PartContent};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
+use splinter_record::experiences::ExperienceStore;
+use splinter_record::source::{CapturedSource, Origin, PartContent};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 use splinter_views::{write_dataset, Corpus, SftFinal, View, WriteOptions};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 use sven_sdk::Engine;

@@ -14,9 +14,9 @@ use std::path::PathBuf;
 
 use serde_json::json;
 use splinter_lab::SYSTEM_PROMPT;
-use splinter_store::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
+use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_views::{

@@ -15,8 +15,8 @@
 mod common;
 
 use common::*;
-use splinter_store::annotation::{Outcome, Strength};
-use splinter_store::experience::{Experience, Privileged, PrivilegedKind};
+use splinter_record::annotation::{Outcome, Strength};
+use splinter_record::experience::{Experience, Privileged, PrivilegedKind};
 use splinter_views::{
     check_self_contained, Corpus, Exclusion, Fraction, NotSelfContained, RecordBody, SftFinal,
     Strip, View, ViewError, MIN_QUOTED_CHARS,

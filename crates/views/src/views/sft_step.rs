@@ -25,7 +25,7 @@
 //! Candidates: an experience, until its actions are reached; then each
 //! action (a bad one counts as [`Exclusion::BadStep`]).
 
-use splinter_store::annotation::{AnnotationBody, Label, Strength};
+use splinter_record::annotation::{AnnotationBody, Label, Strength};
 
 use crate::render::student_turn;
 use crate::trajectory::conversation;

@@ -19,9 +19,9 @@ use splinter_lab::verifiers::executable::{
     ExpectedStdout,
 };
 use splinter_lab::verifiers::normalise::Normalisation;
+use splinter_record::annotation::{Outcome, Strength};
+use splinter_record::experience::Environment;
 use splinter_sandbox::Limits;
-use splinter_store::annotation::{Outcome, Strength};
-use splinter_store::experience::Environment;
 
 const CORRECT: &str = "Here it is:\n```python\ndef add(a, b):\n    return a + b\n```\n";
 const WRONG: &str = "def add(a, b):\n    return a - b\n";
@@ -50,7 +50,7 @@ fn checks() -> Vec<ExecutableCheck> {
     ]
 }
 
-fn code_task(env: &splinter_sandbox::RuntimeEnvironment) -> splinter_store::experience::Task {
+fn code_task(env: &splinter_sandbox::RuntimeEnvironment) -> splinter_record::experience::Task {
     let privileged = checks().iter().map(|c| c.as_check().unwrap()).collect();
     task("code", record(env), privileged)
 }

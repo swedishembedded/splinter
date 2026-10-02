@@ -37,7 +37,7 @@
 use serde::{Deserialize, Serialize};
 use splinter_lab::paired::{compare, Comparison, PairedOutcome};
 use splinter_policy::stats::{sign_test, SignTest};
-use splinter_store::digest::Digest;
+use splinter_record::digest::Digest;
 
 use crate::release::probe::SuiteSummary;
 use crate::release::store::ReleaseId;

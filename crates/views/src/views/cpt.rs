@@ -12,8 +12,8 @@
 
 use std::collections::HashSet;
 
-use splinter_store::digest::Digest;
-use splinter_store::sources::SourceStore;
+use splinter_record::digest::Digest;
+use splinter_record::sources::SourceStore;
 
 use super::source_text;
 use crate::{Corpus, Exclusion, Objective, Projection, Provenance, RecordBody, View, ViewError};

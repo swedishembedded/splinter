@@ -25,8 +25,8 @@
 //!
 //! The record's experiences are the passing, then the failing one.
 
-use splinter_store::annotation::{Label, RelationKind, Strength};
-use splinter_store::experience::ExperienceId;
+use splinter_record::annotation::{Label, RelationKind, Strength};
+use splinter_record::experience::ExperienceId;
 
 use crate::render::student_turn;
 use crate::trajectory::{conversation, same_message};

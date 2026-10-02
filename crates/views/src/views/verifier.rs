@@ -20,7 +20,7 @@
 //! writes it as `generic-messages-v2`.
 
 use splinter_lab::verifiers::executable;
-use splinter_store::annotation::{AnnotationBody, Strength};
+use splinter_record::annotation::{AnnotationBody, Strength};
 
 use crate::render::{message, student_turn, with_candidate, EXECUTION_HEADING};
 use crate::{

@@ -27,12 +27,12 @@
 use serde::Serialize;
 use splinter_agent::solve::{Model, SolveOptions};
 use splinter_lab::verifiers::mutation::MutationPolicy;
+use splinter_record::digest::Digest;
+use splinter_record::error::StoreError;
+use splinter_record::experience::ExperienceError;
+use splinter_record::source::{Origin, PartRef, SourceId};
+use splinter_record::sources::SourceStore;
 use splinter_sandbox::RuntimeEnvironment;
-use splinter_store::digest::Digest;
-use splinter_store::error::StoreError;
-use splinter_store::experience::ExperienceError;
-use splinter_store::source::{Origin, PartRef, SourceId};
-use splinter_store::sources::SourceStore;
 use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
 use super::admit::{Admission, Proposal, Refusal};

@@ -23,14 +23,14 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 use splinter_lab::SYSTEM_PROMPT;
-use splinter_store::annotation::{Outcome, Strength};
-use splinter_store::experience::{Digest, PrivilegedKind};
+use splinter_record::annotation::{Outcome, Strength};
+use splinter_record::experience::{Digest, PrivilegedKind};
 use splinter_views::{
     manifest_path, write_dataset, Corpus, Format, Objective, Preference, Projection, Record,
     RecordBody, RecordMetadata, SftFinal, View, ViewError, WriteOptions, EXPORT_FORMAT,
 };
 
-fn graded_corpus() -> (Corpus, Vec<splinter_store::experience::ExperienceId>) {
+fn graded_corpus() -> (Corpus, Vec<splinter_record::experience::ExperienceId>) {
     let sum = task("arithmetic", "What is two plus two?", Vec::new());
     let pass = answered(&sum, "4", "2026-09-30T01:00:00.000Z");
     let fail = answered(&sum, "5", "2026-09-30T02:00:00.000Z");

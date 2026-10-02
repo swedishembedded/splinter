@@ -19,7 +19,7 @@
 //! 2. its evidence cites sections it was shown, each quote is found
 //!    verbatim in its section, and the evidence spans the kind's
 //!    `min_sections` distinct sections; every span names the source part
-//!    ([`Span::in_part`](splinter_store::experience::Span::in_part)) and
+//!    ([`Span::in_part`](splinter_record::experience::Span::in_part)) and
 //!    resolves through the source store;
 //! 3. it carries the material its kind requires, and an open-book kind's
 //!    material is in the instruction verbatim;
@@ -65,8 +65,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use serde::Serialize;
-use splinter_store::digest::Digest;
-use splinter_store::experience::Task;
+use splinter_record::digest::Digest;
+use splinter_record::experience::Task;
 
 pub use generator::{GenerateError, ModelTaskGenerator, SourceIdentity, SourceText};
 pub use kind::{

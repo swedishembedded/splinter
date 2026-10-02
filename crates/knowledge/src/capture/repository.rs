@@ -12,8 +12,8 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
-use splinter_store::clock::Clock;
-use splinter_store::source::{CapturedSource, Origin, PartContent, Revision, SkipReason, Skipped};
+use splinter_record::clock::Clock;
+use splinter_record::source::{CapturedSource, Origin, PartContent, Revision, SkipReason, Skipped};
 
 use super::{io, is_text, read_capped, text_media_type, utf8, CaptureError};
 

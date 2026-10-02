@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use splinter_lab::verifiers::calibration::{calibrate, Calibration};
-use splinter_store::annotation::Outcome;
-use splinter_store::experience::ExperienceId;
+use splinter_record::annotation::Outcome;
+use splinter_record::experience::ExperienceId;
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};

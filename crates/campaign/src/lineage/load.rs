@@ -11,11 +11,11 @@
 //! of hiding it. A record that is stored but fails its verification is an
 //! error: lineage over a corrupt store is not reported as if it were whole.
 
-use splinter_store::annotation::{AnnotationBody, Outcome, RelationKind};
-use splinter_store::experience::{Environment, Experience, Span, Task};
-use splinter_store::experiences::StoreError;
-use splinter_store::source::Origin;
-use splinter_store::sources::SourceStore;
+use splinter_record::annotation::{AnnotationBody, Outcome, RelationKind};
+use splinter_record::experience::{Environment, Experience, Span, Task};
+use splinter_record::experiences::StoreError;
+use splinter_record::source::Origin;
+use splinter_record::sources::SourceStore;
 
 use crate::answers::AnswerStore;
 use crate::context::Context;

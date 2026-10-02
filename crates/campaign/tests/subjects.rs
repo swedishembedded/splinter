@@ -30,9 +30,9 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::tasks::{generate, Generation};
 use splinter_campaign::variants::{generate_variants, VariantsRequest};
-use splinter_store::clock::FixedClock;
-use splinter_store::source::{CapturedSource, Origin, PartContent};
-use splinter_store::tasks::{TaskEntry, TaskSet};
+use splinter_record::clock::FixedClock;
+use splinter_record::source::{CapturedSource, Origin, PartContent};
+use splinter_record::tasks::{TaskEntry, TaskSet};
 use sven_sdk::CancelToken;
 
 /// Three manuals: two disagree about one board, the third is another board.

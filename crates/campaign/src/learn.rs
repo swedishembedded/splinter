@@ -47,8 +47,8 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splinter_lab::holdout::MIN_SAMPLES;
-use splinter_store::experiences::SetId;
-use splinter_store::source::SourceId;
+use splinter_record::experiences::SetId;
+use splinter_record::source::SourceId;
 
 use crate::context::Context;
 use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};

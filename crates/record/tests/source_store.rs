@@ -18,13 +18,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use splinter_store::clock::FixedClock;
-use splinter_store::digest::Digest;
-use splinter_store::experience::Span;
-use splinter_store::experiences::StoreError;
-use splinter_store::source::{CapturedSource, Origin, PartContent, PartRef, SourceError};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
+use splinter_record::clock::FixedClock;
+use splinter_record::digest::Digest;
+use splinter_record::experience::Span;
+use splinter_record::experiences::StoreError;
+use splinter_record::source::{CapturedSource, Origin, PartContent, PartRef, SourceError};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 
 struct Scratch(PathBuf);
 

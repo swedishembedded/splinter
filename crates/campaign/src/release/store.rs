@@ -34,8 +34,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_store::digest::{canonical_json, Digest};
-use splinter_store::{sync_dir, write_atomic, write_once, StateRoot};
+use splinter_record::digest::{canonical_json, Digest};
+use splinter_record::{sync_dir, write_atomic, write_once, StateRoot};
 use splinter_views::DatasetId;
 
 use crate::error::{io, CampaignError};
@@ -348,7 +348,7 @@ fn verify(path: &Path, expected: &Digest, found: &Digest) -> Result<(), Campaign
         return Ok(());
     }
     Err(CampaignError::Store(
-        splinter_store::experiences::StoreError::Corrupt {
+        splinter_record::experiences::StoreError::Corrupt {
             path: path.to_path_buf(),
             expected: expected.clone(),
             found: found.clone(),

@@ -62,10 +62,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_lab::{WireMessage, SYSTEM_PROMPT};
-use splinter_store::annotation::{decide, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{ExperienceError, ExperienceId};
-use splinter_store::experiences::StoreError;
+use splinter_record::annotation::{decide, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{ExperienceError, ExperienceId};
+use splinter_record::experiences::StoreError;
 
 pub use corpus::{Corpus, Entry};
 pub use dataset::{

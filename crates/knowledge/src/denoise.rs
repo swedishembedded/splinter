@@ -21,10 +21,10 @@
 //! student never sees.
 
 use splinter_lab::denoise::KIND;
-use splinter_store::experience::{
+use splinter_record::experience::{
     Digest, Environment, ExperienceError, Privileged, PrivilegedKind, Span, Task,
 };
-use splinter_store::source::{PartRef, Source, SourceId};
+use splinter_record::source::{PartRef, Source, SourceId};
 
 /// Words in a denoise passage, when the part has that many.
 pub const SPAN_WORDS: usize = 12;

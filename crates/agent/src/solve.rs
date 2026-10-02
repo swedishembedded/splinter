@@ -37,9 +37,9 @@ pub use splinter_lab::SYSTEM_PROMPT;
 use std::sync::Arc;
 use std::time::Duration;
 
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Experience, ExperienceError, Provenance, Task};
 use splinter_sandbox::{ResolvedEnvironment, SandboxError};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Experience, ExperienceError, Provenance, Task};
 use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
 use sven_sdk::{atif, CallError, CancelToken, Engine, RunConclusion, RunOptions, Toolset, Usage};

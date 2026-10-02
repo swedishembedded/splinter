@@ -34,11 +34,11 @@ use splinter_campaign::{CampaignError, Context};
 use splinter_lab::WireMessage;
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
-use splinter_store::annotation::Strength;
-use splinter_store::clock::FixedClock;
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_record::annotation::Strength;
+use splinter_record::clock::FixedClock;
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use splinter_views::{
     DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, WriteOptions,
 };

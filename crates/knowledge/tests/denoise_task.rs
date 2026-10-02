@@ -12,11 +12,11 @@
 use std::path::PathBuf;
 
 use splinter_knowledge::denoise::{Denoise, DenoiseError};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::PrivilegedKind;
-use splinter_store::source::{CapturedSource, Origin, PartContent};
-use splinter_store::sources::SourceStore;
-use splinter_store::StateRoot;
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::PrivilegedKind;
+use splinter_record::source::{CapturedSource, Origin, PartContent};
+use splinter_record::sources::SourceStore;
+use splinter_record::StateRoot;
 
 const PASSAGE: &str = "Splinter keeps every experience immutable and content addressed. \
     Graders append annotations beside an experience and never rewrite it. \

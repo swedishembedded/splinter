@@ -14,8 +14,8 @@ mod common;
 use common::{experience, task, verdict};
 use splinter_lab::verifiers::consistency::AgreementVerifier;
 use splinter_lab::verifiers::normalise::Normalisation;
-use splinter_store::annotation::{Outcome, Strength};
-use splinter_store::experience::{Environment, Experience, Task};
+use splinter_record::annotation::{Outcome, Strength};
+use splinter_record::experience::{Environment, Experience, Task};
 
 fn capital() -> Task {
     task("recall", Environment::closed_book(), vec![])

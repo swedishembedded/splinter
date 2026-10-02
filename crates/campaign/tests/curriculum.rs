@@ -60,10 +60,10 @@ use splinter_campaign::verify::verify_set;
 use splinter_campaign::Context;
 use splinter_knowledge::concepts::Concept;
 use splinter_lab::paired::PairedOutcome;
-use splinter_store::annotation::{decide as decision, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
-use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_record::annotation::{decide as decision, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
+use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 /// A closed-book recall task asking `instruction`, referenced by `answer`.
@@ -423,7 +423,7 @@ fn learn_keeps_the_frontier_by_default_and_generates_for_queued_concepts() {
         "the passing attempts of one task are one example: {select:#?}"
     );
     assert!(select.selection.duplicates >= 1, "{select:#?}");
-    let stages: Vec<String> = splinter_store::runs::read_run(ctx.root(), &run.run)
+    let stages: Vec<String> = splinter_record::runs::read_run(ctx.root(), &run.run)
         .unwrap()
         .stages
         .into_iter()

@@ -15,9 +15,9 @@ use splinter_lab::denoise::{FormalVerifier, KIND};
 use splinter_lab::verifiers::formal::ExactMatchVerifier;
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{annotation, Verifier};
-use splinter_store::annotation::{AnnotationBody, Outcome, Producer, Strength};
-use splinter_store::clock::FixedClock;
-use splinter_store::experience::{
+use splinter_record::annotation::{AnnotationBody, Outcome, Producer, Strength};
+use splinter_record::clock::FixedClock;
+use splinter_record::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use sven_sdk::atif::{AgentProfile, Trajectory};

@@ -44,7 +44,7 @@ use serde::Serialize;
 use splinter_knowledge::concepts::Concept;
 use splinter_policy::local::resolve_base;
 use splinter_policy::selection::local_model_name;
-use splinter_store::digest::Digest;
+use splinter_record::digest::Digest;
 use sven_sdk::CancelToken;
 
 pub use store::{ReleaseId, ReleaseManifest, ReleaseStore, StoredRelease, RELEASE_FORMAT};

@@ -33,9 +33,9 @@ use serde::Serialize;
 use splinter_knowledge::tasks::{
     can_vary, GenerateError, GenerationPolicy, ModelTaskGenerator, DEFAULT_REQUEST_DEADLINE,
 };
-use splinter_store::digest::Digest;
-use splinter_store::experience::Experience;
-use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_record::digest::Digest;
+use splinter_record::experience::Experience;
+use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 pub use splinter_knowledge::tasks::DEFAULT_VARIANTS_PER_TASK;

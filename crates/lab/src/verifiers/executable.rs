@@ -37,12 +37,12 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use splinter_record::annotation::{Producer, Strength};
+use splinter_record::digest::Digest;
+use splinter_record::experience::{Environment, Experience, Privileged, PrivilegedKind, Task};
 use splinter_sandbox::{
     CodeCall, CodeResult, ResolvedEnvironment, RuntimeEnvironment, SandboxError,
 };
-use splinter_store::annotation::{Producer, Strength};
-use splinter_store::digest::Digest;
-use splinter_store::experience::{Environment, Experience, Privileged, PrivilegedKind, Task};
 
 use super::normalise::Normalisation;
 use super::{privileged_of, Finding, Verifier, VerifyError};

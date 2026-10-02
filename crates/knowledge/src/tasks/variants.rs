@@ -32,7 +32,7 @@
 //! discarded - so the verifiers that grade the original grade it.
 
 use serde::Serialize;
-use splinter_store::experience::{Privileged, PrivilegedKind, Task};
+use splinter_record::experience::{Privileged, PrivilegedKind, Task};
 use splinter_views::check_self_contained;
 
 use super::dedup::{Repeat, Seen};
@@ -61,7 +61,7 @@ pub fn can_vary(task: &Task) -> Result<(), &'static str> {
         return Err("material_or_computed_answer");
     }
     if kind.environment != SolverEnvironment::ClosedBook
-        || task.environment.kind != splinter_store::experience::Environment::CLOSED_BOOK
+        || task.environment.kind != splinter_record::experience::Environment::CLOSED_BOOK
     {
         return Err("not_closed_book");
     }
