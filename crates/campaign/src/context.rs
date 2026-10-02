@@ -235,7 +235,7 @@ impl Context {
     /// The dataset store.
     #[must_use]
     pub fn datasets(&self) -> DatasetStore {
-        DatasetStore::open(self.root())
+        DatasetStore::new(&self.workspace, self.root())
     }
 
     /// The environments tasks are solved and checked in.

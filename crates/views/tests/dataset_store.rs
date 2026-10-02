@@ -34,7 +34,8 @@ fn passed_corpus() -> Corpus {
 #[test]
 fn a_stored_dataset_is_named_by_its_manifest_and_verified_on_read() {
     let scratch = Scratch::new("dataset-store");
-    let store = DatasetStore::open(&StateRoot::new(&scratch.0));
+    let root = StateRoot::new(&scratch.0);
+    let store = DatasetStore::new(&splinter_record::workspace::Workspace::at(&root), &root);
     let projection = SftFinal::new(Strength::Formal)
         .project(&passed_corpus())
         .unwrap();
@@ -48,6 +49,11 @@ fn a_stored_dataset_is_named_by_its_manifest_and_verified_on_read() {
     assert_eq!(store.list().unwrap(), vec![stored.id.clone()]);
     assert_eq!(store.get(&stored.id).unwrap(), stored);
 
+    {
+        // The file is read-only; someone with the means changes it anyway.
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&stored.path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
     std::fs::write(&stored.path, "{}\n").unwrap();
     assert!(
         store.get(&stored.id).is_err(),

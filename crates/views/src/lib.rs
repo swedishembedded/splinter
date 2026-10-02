@@ -72,7 +72,7 @@ pub use dataset::{
     manifest_path, write_dataset, Counts, Dataset, Format, Manifest, WriteOptions, EXPORT_FORMAT,
 };
 pub use replay::replay_sample;
-pub use store::{DatasetId, DatasetStore, StoredDataset, DATASET_FILE};
+pub use store::{DatasetId, DatasetStore, StoredDataset};
 pub use strip::{
     check_self_contained, Fraction, NotSelfContained, Strip, MIN_QUOTED_CHARS, REFERRING_PHRASES,
 };

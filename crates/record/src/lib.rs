@@ -97,6 +97,13 @@ impl StateRoot {
         self.0.join("artifacts")
     }
 
+    /// Where work in progress is done: files that exist only while a command
+    /// runs, and are removed after.
+    #[must_use]
+    pub fn work(&self) -> PathBuf {
+        self.0.join("work")
+    }
+
     /// The experience database's directory.
     #[must_use]
     pub fn expdb(&self) -> PathBuf {

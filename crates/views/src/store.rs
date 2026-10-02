@@ -6,36 +6,35 @@
 // team needs expertise in dataset curation for fine-tuning, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! Datasets under the state root, named by their manifest.
+//! Datasets, named by their manifest.
 //!
-//! ```text
-//! <root>/datasets/<hex>/
-//!   dataset.jsonl                  the records, as [`write_dataset`] wrote them
-//!   dataset.jsonl.manifest.json    its manifest; <hex> is this file's digest
-//! ```
-//!
-//! A [`DatasetId`] is the digest of the manifest's bytes, and the manifest
-//! names the dataset file by its digest in turn, so one id pins both. A
-//! dataset is written into a pending directory beside the others and moved
-//! into place whole once its manifest exists; storing the same projection
-//! again finds it already there. [`DatasetStore::get`] checks both digests
-//! on every read.
+//! A dataset is two things: the records file brain trains on, a real file kept
+//! as an artifact at a stable path, and its manifest, a document in the
+//! experience database. A [`DatasetId`] is the digest of the manifest's
+//! canonical form, and the manifest names the records file by its digest in
+//! turn, so one id pins both. The file is stored first and the manifest makes
+//! the dataset official in one commit; storing the same projection again finds
+//! it already there. [`DatasetStore::get`] checks both digests on every read.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_record::artifacts::{ArtifactSpec, ArtifactState, ArtifactStore};
 use splinter_record::digest::Digest;
 use splinter_record::experiences::StoreError;
+use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 
 use crate::dataset::{manifest_path, write_dataset, Manifest, WriteOptions};
 use crate::{Projection, ViewError};
 
-/// The dataset file's name inside its directory.
-pub const DATASET_FILE: &str = "dataset.jsonl";
+const MANIFEST: &str = "dataset_manifest";
 
-/// A stored dataset's id: the digest of its manifest's bytes.
+/// The file name a dataset's records are written under.
+const DATASET_FILE: &str = "dataset.jsonl";
+
+/// A stored dataset's id: the digest of its manifest's canonical form.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct DatasetId(pub Digest);
@@ -51,85 +50,118 @@ impl std::fmt::Display for DatasetId {
 pub struct StoredDataset {
     /// Its id.
     pub id: DatasetId,
-    /// The dataset file.
+    /// The records file, a real file a tool can open.
     pub path: PathBuf,
     /// Its manifest.
     pub manifest: Manifest,
 }
 
-/// The datasets under one state root.
+/// The datasets of one state root.
 #[derive(Clone, Debug)]
 pub struct DatasetStore {
-    dir: PathBuf,
+    workspace: Workspace,
+    artifacts: ArtifactStore,
+    work: PathBuf,
 }
 
 impl DatasetStore {
-    /// The store under `root`. Nothing is created until something is
-    /// written.
+    /// The store over `workspace`, keeping files under `root`.
     #[must_use]
-    pub fn open(root: &StateRoot) -> Self {
+    pub fn new(workspace: &Workspace, root: &StateRoot) -> Self {
         Self {
-            dir: root.datasets(),
+            workspace: workspace.clone(),
+            artifacts: ArtifactStore::new(workspace, root),
+            work: root.work().join("datasets"),
         }
     }
 
-    fn dataset_dir(&self, id: &DatasetId) -> PathBuf {
-        self.dir.join(id.0.hex())
+    fn spec() -> ArtifactSpec {
+        ArtifactSpec::new("dataset", "splinter-views").with_extension(".jsonl")
     }
 
-    /// Writes `projection` as [`write_dataset`] does and stores it under
-    /// its id; the refusals are [`write_dataset`]'s. A dataset already
-    /// stored under the same id is kept and returned.
+    /// Writes `projection` as [`write_dataset`] does and stores it under its
+    /// id; the refusals are [`write_dataset`]'s. A dataset already stored
+    /// under the same id is kept and returned.
     pub fn put(
         &self,
         projection: &Projection,
         options: WriteOptions,
     ) -> Result<StoredDataset, ViewError> {
         static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let pending = self.dir.join(format!(
-            ".pending-{}-{}",
+        let scratch = self.work.join(format!(
+            "{}-{}",
             std::process::id(),
             SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        let _ = fs::remove_dir_all(&pending);
-        fs::create_dir_all(&pending).map_err(io(&pending))?;
-        let written = write_dataset(&pending.join(DATASET_FILE), projection, options);
-        let written = match written {
-            Ok(written) => written,
-            Err(e) => {
-                // The refusal is the error worth reporting; a leftover
-                // pending directory is harmless and named for this process.
-                let _ = fs::remove_dir_all(&pending);
-                return Err(e);
-            }
-        };
-        let id = DatasetId(written.manifest);
-        let target = self.dataset_dir(&id);
-        if target.is_dir() {
-            fs::remove_dir_all(&pending).map_err(io(&pending))?;
-        } else if let Err(e) = fs::rename(&pending, &target) {
-            // A writer racing on the same dataset got there first.
-            if !target.is_dir() {
-                return Err(io(&target)(e));
-            }
-            fs::remove_dir_all(&pending).map_err(io(&pending))?;
-        }
-        self.get(&id)
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).map_err(io(&scratch))?;
+        let stored = self.put_from(&scratch, projection, options);
+        // A scratch directory is only ever a working place.
+        let _ = fs::remove_dir_all(&scratch);
+        stored
     }
 
-    /// The dataset stored under `id`, verified: the manifest's bytes hash
-    /// to `id`, and the dataset's bytes to the digest the manifest names.
-    pub fn get(&self, id: &DatasetId) -> Result<StoredDataset, ViewError> {
-        let path = self.dataset_dir(id).join(DATASET_FILE);
-        let manifest_file = manifest_path(&path);
-        if !manifest_file.is_file() {
-            return Err(ViewError::UnknownDataset(id.clone()));
-        }
+    fn put_from(
+        &self,
+        scratch: &Path,
+        projection: &Projection,
+        options: WriteOptions,
+    ) -> Result<StoredDataset, ViewError> {
+        let file = scratch.join(DATASET_FILE);
+        let written = write_dataset(&file, projection, options)?;
+        // The records file first, then the manifest that makes the dataset
+        // official: a crash between them leaves an orphan file and nothing
+        // that names it.
+        let artifact = self.artifacts.put_file(&file, &Self::spec())?;
+        let manifest_file = manifest_path(&file);
         let manifest_bytes = fs::read(&manifest_file).map_err(io(&manifest_file))?;
-        verify(&manifest_file, &id.0, &manifest_bytes)?;
         let manifest: Manifest = serde_json::from_slice(&manifest_bytes)?;
-        let dataset_bytes = fs::read(&path).map_err(io(&path))?;
-        verify(&path, &manifest.dataset, &dataset_bytes)?;
+        let stored = self.workspace.put_document(MANIFEST, &manifest)?;
+        if stored != written.manifest || artifact.digest != written.digest {
+            return Err(ViewError::Store(StoreError::Altered {
+                what: "a dataset as it was stored".into(),
+                expected: written.manifest,
+                found: stored,
+            }));
+        }
+        self.get(&DatasetId(stored))
+    }
+
+    /// The dataset stored under `id`, verified: the manifest hashes to `id`,
+    /// and the records file to the digest the manifest names.
+    pub fn get(&self, id: &DatasetId) -> Result<StoredDataset, ViewError> {
+        let manifest: Manifest = self
+            .workspace
+            .get_document(MANIFEST, &id.0)?
+            .ok_or_else(|| ViewError::UnknownDataset(id.clone()))?;
+        let path = self.artifacts.path(&manifest.dataset)?;
+        match self.artifacts.check(&manifest.dataset, true)? {
+            ArtifactState::Sound => {}
+            ArtifactState::Missing => {
+                return Err(StoreError::MissingArtifact {
+                    digest: manifest.dataset.clone(),
+                    role: "dataset".into(),
+                    path,
+                }
+                .into())
+            }
+            ArtifactState::SizeChanged { .. } => {
+                return Err(StoreError::Altered {
+                    what: format!("dataset {id}"),
+                    expected: manifest.dataset.clone(),
+                    found: manifest.dataset.clone(),
+                }
+                .into())
+            }
+            ArtifactState::Corrupt { found } => {
+                return Err(StoreError::Altered {
+                    what: format!("dataset {id}"),
+                    expected: manifest.dataset.clone(),
+                    found,
+                }
+                .into())
+            }
+        }
         Ok(StoredDataset {
             id: id.clone(),
             path,
@@ -139,36 +171,13 @@ impl DatasetStore {
 
     /// Every stored dataset's id, in id order (without verifying them).
     pub fn list(&self) -> Result<Vec<DatasetId>, ViewError> {
-        let entries = match fs::read_dir(&self.dir) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(io(&self.dir)(e)),
-        };
-        let mut ids = Vec::new();
-        for entry in entries {
-            let name = entry.map_err(io(&self.dir))?.file_name();
-            // Anything but a `<64 hex>` directory (a pending write) is not
-            // a stored dataset.
-            if let Some(Ok(digest)) = name.to_str().map(Digest::from_content_hex) {
-                ids.push(DatasetId(digest));
-            }
-        }
-        ids.sort();
-        Ok(ids)
+        Ok(self
+            .workspace
+            .document_ids(MANIFEST)?
+            .into_iter()
+            .map(DatasetId)
+            .collect())
     }
-}
-
-/// Refuses `bytes`, read from `path`, unless they hash to `expected`.
-fn verify(path: &Path, expected: &Digest, bytes: &[u8]) -> Result<(), ViewError> {
-    let found = Digest::of(bytes);
-    if found != *expected {
-        return Err(ViewError::Store(StoreError::Corrupt {
-            path: path.to_path_buf(),
-            expected: expected.clone(),
-            found,
-        }));
-    }
-    Ok(())
 }
 
 /// Wraps an I/O error on `path`.
