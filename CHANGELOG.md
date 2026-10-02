@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`splinter-expdb`.** A new standalone crate for a versioned experience graph
   database: immutable files, manifests as the transaction layer, snapshots,
-  modality-neutral episodes of streams, queries and training views. It is not
-  yet used by any other crate.
+  modality-neutral episodes of streams, queries and training views, with its
+  storage protocol model-checked in TLA+. It is not yet used by any other crate.
 
 ## [0.1.0] - 2026-10-01
 
