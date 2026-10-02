@@ -120,6 +120,21 @@ is materialised, from the clean action and a seed. Nothing pre-noised is
 stored. An export to JSON lines is a projection; the plan and its snapshot
 remain the dataset.
 
+## Verification
+
+The storage protocol is modelled in TLA+ and checked with TLC (see `spec/`).
+The model covers writers that can crash, overlapping compactors, catalog
+merging and checkpoints, absorbing idle writer refs, pins, and collection
+with a grace period. Each safeguard in the code is a switch in the model, and
+with it off TLC returns a counterexample: a file rewritten while an old copy
+awaits collection, a merge that reproduces one of its inputs and removes it,
+a pin validated during a collection, a ref deleted after it was checked, an
+overwritten catalog. Every one of these was a real design error here and is
+fixed in the code and pinned by `tests/hardening.rs` and `tests/compaction.rs`.
+A clean run means no violation within the model's small bounds, not for all
+sizes. The grace period is the one assumption about time: it must exceed a
+writer's pause between sealing and publishing, and one collection.
+
 ## Limits
 
 - One storage backend, plain POSIX files. The backend trait keeps record
@@ -128,8 +143,10 @@ remain the dataset.
   Persisted index runs avoid scanning but do not avoid loading.
 - Record bodies are canonical JSON inside compressed column blocks. Envelope
   fields are columns; bodies are parsed only for rows that survive a filter.
-- Several writers sharing one job name can overwrite each other's head, so
-  each writer gets its own ref and maintenance tasks publish on unique refs.
+- A job ref has one publisher. Several writers sharing a name could overwrite
+  each other's head, so each writer gets its own ref and maintenance tasks
+  publish on refs of their own. The catalog is a set of head files that is
+  never overwritten.
 - Concurrency is tested with independent database handles in threads, not with
   separate processes.
 - Embeddings are supplied by the caller and searched exactly. Computing them,
