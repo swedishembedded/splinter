@@ -357,10 +357,9 @@ pub fn evidence_summary(evidence: &serde_json::Value) -> Option<String> {
             "timed out".to_string()
         } else if let Some(code) = check.get("exit_code").and_then(serde_json::Value::as_i64) {
             format!("exit code {code}")
-        } else if let Some(signal) = check.get("signal").and_then(serde_json::Value::as_i64) {
-            format!("ended by signal {signal}")
         } else {
-            return None;
+            let signal = check.get("signal").and_then(serde_json::Value::as_i64)?;
+            format!("ended by signal {signal}")
         };
         lines.push(format!("check {}: {name} {version}, {ending}", index + 1));
     }
