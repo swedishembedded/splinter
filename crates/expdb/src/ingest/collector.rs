@@ -49,6 +49,11 @@ pub struct Collector {
 }
 
 impl Collector {
+    /// This collector's writer id, unique to this start of it.
+    pub fn writer_id(&self) -> crate::id::WriterId {
+        self.writer.id()
+    }
+
     /// Records waiting to be sealed.
     pub fn buffered(&self) -> usize {
         self.writer.buffered()

@@ -27,8 +27,6 @@ pub const DEFAULT_BLOCK_RECORDS: usize = 1024;
 pub const DEFAULT_MAX_BUFFERED_RECORDS: usize = 65_536;
 /// Payloads up to this size are stored inline in the record's block.
 pub const DEFAULT_INLINE_PAYLOAD_LIMIT: usize = 4096;
-/// A context log writes a full checkpoint after this many deltas.
-pub const DEFAULT_CHECKPOINT_EVERY: usize = 32;
 /// Compaction stops merging a tier once a segment reaches this size.
 pub const DEFAULT_COMPACT_TARGET_BYTES: usize = 1024 * 1024 * 1024;
 /// Decoded record blocks a snapshot keeps for single-record reads.
@@ -62,8 +60,6 @@ pub struct Config {
     pub max_buffered_records: usize,
     /// Payloads at most this large live inside the record block.
     pub inline_payload_limit: usize,
-    /// Deltas between full checkpoints of a context log.
-    pub checkpoint_every: usize,
     /// Block compression.
     pub compression: Compression,
     /// An unpublished file younger than this is never collected, because its
@@ -113,7 +109,6 @@ impl Default for Config {
             block_records: DEFAULT_BLOCK_RECORDS,
             max_buffered_records: DEFAULT_MAX_BUFFERED_RECORDS,
             inline_payload_limit: DEFAULT_INLINE_PAYLOAD_LIMIT,
-            checkpoint_every: DEFAULT_CHECKPOINT_EVERY,
             compression: Compression::Zstd(3),
             orphan_grace: DEFAULT_ORPHAN_GRACE,
             compact_target_bytes: DEFAULT_COMPACT_TARGET_BYTES,

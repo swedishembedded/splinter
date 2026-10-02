@@ -41,7 +41,7 @@ impl ClockTransform {
 
     /// A source time on the destination clock.
     pub fn apply(&self, source_ns: i64) -> i64 {
-        self.dst_ref_ns + (self.slope * (source_ns - self.src_ref_ns) as f64).round() as i64
+        crate::model::convert_ns(self.src_ref_ns, self.dst_ref_ns, self.slope, source_ns)
     }
 
     /// The conversion the other way.

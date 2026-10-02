@@ -66,6 +66,12 @@ impl Tree {
             }
         }
         for (name, sub) in subtrees {
+            if root.contains_key(&name) {
+                return Err(Error::invalid(
+                    "tree path",
+                    format!("`{name}` is both a file and a directory"),
+                ));
+            }
             root.insert(
                 name,
                 Entry::Dir {

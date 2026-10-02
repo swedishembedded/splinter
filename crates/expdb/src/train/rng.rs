@@ -19,6 +19,16 @@ impl Rng {
         Self(seed)
     }
 
+    /// A generator for one step of a seeded sequence. The seed and the step
+    /// are mixed through the generator itself, so neighbouring steps (and a
+    /// seed of zero) get streams that do not overlap.
+    pub fn for_step(seed: u64, step: u64) -> Self {
+        let mut first = Rng::new(seed);
+        let a = first.next_u64();
+        let mut second = Rng::new(step ^ a);
+        Rng::new(second.next_u64() ^ a.rotate_left(32))
+    }
+
     /// The next 64 random bits.
     pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);

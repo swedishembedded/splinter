@@ -133,6 +133,12 @@ impl Snapshot {
             return Ok(None);
         };
         let block = self.block(loc.segment, loc.block)?;
+        if loc.row as usize >= block.len() {
+            return Err(Error::corrupt(
+                format!("index entry for {id}"),
+                "its row is past the end of its block",
+            ));
+        }
         let record = block.record(loc.row as usize)?;
         if record.id != id {
             return Err(Error::corrupt(

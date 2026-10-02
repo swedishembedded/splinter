@@ -183,10 +183,21 @@ impl Snapshot {
             DataRef::Episode { attempt } => {
                 let index = self.index()?;
                 let members = index.by_attempt(*attempt);
+                // The end of the attempt, or failing that the last step of its
+                // path. An evaluation can be the newest record of an attempt
+                // that never finished, but it is not part of the path.
+                let on_path = |id: &&RecordId| {
+                    matches!(
+                        index.kind_of(**id),
+                        Some(
+                            RecordKind::Observation | RecordKind::Decision | RecordKind::Transition
+                        )
+                    )
+                };
                 let end = members
                     .iter()
                     .find(|id| index.kind_of(**id) == Some(RecordKind::AttemptEnd))
-                    .or_else(|| members.last())
+                    .or_else(|| members.iter().rfind(on_path))
                     .copied();
                 let mut lines = Vec::new();
                 for record in self.path_to(end)? {

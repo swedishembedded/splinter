@@ -31,7 +31,7 @@ pub struct FlowSample {
 /// Derives a flow-matching pair from a clean action, a sample seed and a step
 /// number. The same inputs always give the same pair.
 pub fn flow_matching(clean: &[f32], seed: u64, step: u64) -> FlowSample {
-    let mut rng = Rng::new(seed ^ step.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+    let mut rng = Rng::for_step(seed, step);
     let t = rng.unit() as f32;
     let mut noise = Vec::with_capacity(clean.len());
     while noise.len() < clean.len() {

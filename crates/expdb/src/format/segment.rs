@@ -250,7 +250,7 @@ impl Segment {
 
     /// Every record, in stored order.
     pub fn records(&self) -> Result<Vec<Record>> {
-        let mut records = Vec::with_capacity(self.info.records as usize);
+        let mut records = Vec::with_capacity((self.info.records as usize).min(1 << 20));
         for index in 0..self.info.blocks.len() {
             let block = self.read_block(index)?;
             for i in 0..block.len() {
@@ -262,7 +262,7 @@ impl Segment {
 
     /// Every edge, in stored order.
     pub fn edges(&self) -> Result<Vec<Edge>> {
-        let mut edges = Vec::with_capacity(self.info.edges as usize);
+        let mut edges = Vec::with_capacity((self.info.edges as usize).min(1 << 20));
         for (index, info) in self.info.edge_blocks.iter().enumerate() {
             edges.extend(decode_edges(
                 &self.raw(&format!("edge block {index}"), info)?,

@@ -76,3 +76,20 @@ impl Database {
         })
     }
 }
+
+impl Database {
+    /// Every manifest reachable from `heads`, walking through checkpoints as
+    /// well. [`resolve`](Database::resolve) stops at a checkpoint because it
+    /// carries the whole state; this is for asking whether a manifest has
+    /// been absorbed at all.
+    pub(crate) fn ancestry_all(&self, heads: &[ContentId]) -> Result<HashSet<ContentId>> {
+        let mut pending: Vec<ContentId> = heads.to_vec();
+        let mut seen = HashSet::new();
+        while let Some(id) = pending.pop() {
+            if seen.insert(id) {
+                pending.extend(load_manifest(self, id)?.parents.iter().copied());
+            }
+        }
+        Ok(seen)
+    }
+}

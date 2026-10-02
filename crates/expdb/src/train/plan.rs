@@ -267,6 +267,8 @@ impl TrainingPlan {
 impl Snapshot {
     /// Compiles a recipe against this snapshot.
     pub fn compile(&self, recipe: &Recipe) -> Result<TrainingPlan> {
+        // The plan names this snapshot, so the snapshot must be reopenable.
+        self.persist()?;
         let samples = match recipe.objective {
             Objective::Sft => self.compile_sft(recipe)?,
             Objective::Dpo => self.compile_dpo(recipe)?,

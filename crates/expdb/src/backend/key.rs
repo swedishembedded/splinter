@@ -31,6 +31,8 @@ pub enum Kind {
     Overlay,
     /// A cache of data derived from experience, keyed by what it came from.
     Cache,
+    /// Files a collection has set aside and may still restore.
+    Trash,
 }
 
 impl Kind {
@@ -46,6 +48,7 @@ impl Kind {
             Kind::Spool => "spool",
             Kind::Overlay => "overlay",
             Kind::Cache => "cache",
+            Kind::Trash => "trash",
         }
     }
 
@@ -59,7 +62,7 @@ impl Kind {
     }
 
     /// Every kind.
-    pub const ALL: [Kind; 9] = [
+    pub const ALL: [Kind; 10] = [
         Kind::Segment,
         Kind::BlobPack,
         Kind::Manifest,
@@ -69,6 +72,7 @@ impl Kind {
         Kind::Spool,
         Kind::Overlay,
         Kind::Cache,
+        Kind::Trash,
     ];
 }
 

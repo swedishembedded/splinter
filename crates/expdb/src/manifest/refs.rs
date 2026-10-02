@@ -17,7 +17,7 @@ use crate::database::Database;
 use crate::error::Result;
 use crate::id::ContentId;
 
-const CATALOG_REF: &str = "catalog";
+const CATALOG_PREFIX: &str = "catalog/";
 const JOBS_PREFIX: &str = "jobs/";
 
 impl Database {
@@ -34,10 +34,13 @@ impl Database {
     /// The value of a ref, if it has been set.
     pub fn get_ref(&self, name: &str) -> Result<Option<ContentId>> {
         let key = Key::new(Kind::Ref, name)?;
-        if !self.backend().exists(&key)? {
-            return Ok(None);
-        }
-        let bytes = self.backend().read(&key)?;
+        // Read directly: a ref can be retired between an existence check and
+        // the read, and that is not an error, only a ref that is gone.
+        let bytes = match self.backend().read(&key) {
+            Ok(bytes) => bytes,
+            Err(crate::error::Error::NotFound { .. }) => return Ok(None),
+            Err(other) => return Err(other),
+        };
         let text = String::from_utf8_lossy(&bytes);
         ContentId::parse(text.trim()).map(Some)
     }
@@ -53,8 +56,10 @@ impl Database {
     pub fn job_heads(&self) -> Result<Vec<ContentId>> {
         let mut heads = Vec::new();
         for key in self.backend().list(Kind::Ref)? {
-            if let Some(job) = key.name().strip_prefix(JOBS_PREFIX) {
-                if let Some(head) = self.get_ref(&format!("{JOBS_PREFIX}{job}"))? {
+            // Refs being retired still count: until the catalog holds their
+            // history they are the only record of it.
+            if key.name().starts_with(JOBS_PREFIX) || key.name().starts_with("retired/") {
+                if let Some(head) = self.get_ref(key.name())? {
                     heads.push(head);
                 }
             }
@@ -118,39 +123,82 @@ impl Database {
         self.publish(&format!("{prefix}-{tag}"), add, remove)
     }
 
-    /// Merges the catalog and every job head into the catalog ref. If two
-    /// processes merge at once their manifests are identical, and a merge
-    /// that loses the race to move the ref is picked up by the next one.
-    ///
-    /// Merging when the catalog already holds every head changes nothing, so
-    /// merging twice in a row gives the same catalog.
+    /// The heads of the catalog. The catalog is a set of immutable head files
+    /// that only ever grows or is trimmed of heads another head contains. It is
+    /// never overwritten, so two processes merging at once cannot lose what
+    /// either absorbed: both heads exist until a later merge joins them.
+    pub fn catalog_heads(&self) -> Result<Vec<ContentId>> {
+        let mut heads = Vec::new();
+        for key in self.backend().list(Kind::Ref)? {
+            if key.name().starts_with(CATALOG_PREFIX) {
+                heads.extend(self.get_ref(key.name())?);
+            }
+        }
+        heads.sort();
+        heads.dedup();
+        Ok(heads)
+    }
+
+    fn add_catalog_head(&self, head: ContentId) -> Result<()> {
+        let key = Key::new(Kind::Ref, &format!("{CATALOG_PREFIX}{head}"))?;
+        self.backend()
+            .write_once(&key, head.to_string().as_bytes())
+            .map(|_| ())
+    }
+
+    /// Drops catalog heads that `newest` contains. A head is dropped only
+    /// because another holds all of it, so nothing the catalog knew is lost.
+    fn trim_catalog(&self, newest: ContentId) -> Result<()> {
+        let inside = self.ancestry_all(&[newest])?;
+        for head in self.catalog_heads()? {
+            if head != newest && inside.contains(&head) {
+                self.backend()
+                    .remove(&Key::new(Kind::Ref, &format!("{CATALOG_PREFIX}{head}"))?)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Puts `head` into the catalog and returns once the catalog holds it.
+    pub(crate) fn fold_into_catalog(&self, head: ContentId) -> Result<()> {
+        let heads = self.catalog_heads()?;
+        if self.ancestry_all(&heads)?.contains(&head) {
+            return Ok(());
+        }
+        let merged = self.merged_head(heads.into_iter().chain([head]).collect())?;
+        self.add_catalog_head(merged)?;
+        self.trim_catalog(merged)
+    }
+
+    /// Merges every job head the catalog does not yet hold into it, leaving
+    /// one catalog head. Merging when the catalog already holds every head
+    /// changes nothing, so merging twice in a row gives the same catalog.
     pub fn merge_catalog(&self) -> Result<ContentId> {
-        let catalog = self.get_ref(CATALOG_REF)?;
-        let known = match catalog {
-            Some(head) => self.resolve(&[head])?.manifests,
-            None => Default::default(),
-        };
-        let mut heads: Vec<ContentId> = self
+        let catalog = self.catalog_heads()?;
+        // Everything the catalog has ever absorbed, below any checkpoint too,
+        // so a checkpoint does not make settled history look new.
+        let known = self.ancestry_all(&catalog)?;
+        let fresh: Vec<ContentId> = self
             .job_heads()?
             .into_iter()
             .filter(|h| !known.contains(h))
             .collect();
-        if heads.is_empty() {
-            if let Some(head) = catalog {
-                return Ok(head);
+        if fresh.is_empty() {
+            if let [only] = catalog.as_slice() {
+                return Ok(*only);
             }
         }
-        heads.extend(catalog);
-        let id = self.merged_head(heads)?;
-        self.set_ref(CATALOG_REF, id)?;
+        let id = self.merged_head(fresh.into_iter().chain(catalog).collect())?;
+        self.add_catalog_head(id)?;
+        self.trim_catalog(id)?;
         Ok(id)
     }
 
-    /// Replaces the catalog with a checkpoint that carries the whole state,
-    /// so resolving it never walks history.
+    /// Adds a checkpoint that carries the whole state, so resolving the
+    /// catalog never walks history, and trims the heads it contains.
     pub fn checkpoint(&self) -> Result<ContentId> {
         let mut heads = self.job_heads()?;
-        heads.extend(self.get_ref(CATALOG_REF)?);
+        heads.extend(self.catalog_heads()?);
         let head = self.merged_head(heads)?;
         let resolved = self.resolve(&[head])?;
         let mut manifest = Manifest::new(
@@ -162,7 +210,8 @@ impl Database {
         );
         manifest.squash = true;
         let id = self.put_manifest(&manifest)?;
-        self.set_ref(CATALOG_REF, id)?;
+        self.add_catalog_head(id)?;
+        self.trim_catalog(id)?;
         Ok(id)
     }
 

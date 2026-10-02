@@ -179,8 +179,31 @@ impl ModalitySchema {
             "u64" | "i64" | "f64" => 8,
             _ => return None,
         };
-        (self.codec == "raw").then(|| element * self.shape.iter().product::<u64>() as usize)
+        if self.codec != "raw" {
+            return None;
+        }
+        self.shape
+            .iter()
+            .try_fold(element as u64, |acc, dim| acc.checked_mul(*dim))
+            .and_then(|n| usize::try_from(n).ok())
     }
+}
+
+/// `to_ref + slope * (at - from_ref)`, in nanoseconds.
+///
+/// The part of the conversion that is exact (the offset, and the delta
+/// itself) is done in 128-bit integers; only the small correction for a slope
+/// that is not one goes through a float, so epoch-scale timestamps keep every
+/// nanosecond. Results beyond the range of `i64` saturate instead of wrapping.
+pub(crate) fn convert_ns(from_ref: i64, to_ref: i64, slope: f64, at: i64) -> i64 {
+    let delta = i128::from(at) - i128::from(from_ref);
+    let correction = if slope == 1.0 {
+        0
+    } else {
+        ((slope - 1.0) * delta as f64).round() as i128
+    };
+    let value = i128::from(to_ref) + delta + correction;
+    value.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64
 }
 
 /// A source of timestamps. Cameras, microphones, MCUs and hosts each keep
@@ -223,12 +246,17 @@ pub struct ClockMapping {
 impl ClockMapping {
     /// A source time on the destination clock.
     pub fn to_destination(&self, source_ns: i64) -> i64 {
-        self.dst_ref_ns + (self.slope * (source_ns - self.src_ref_ns) as f64).round() as i64
+        convert_ns(self.src_ref_ns, self.dst_ref_ns, self.slope, source_ns)
     }
 
     /// A destination time on the source clock.
     pub fn to_source(&self, destination_ns: i64) -> i64 {
-        self.src_ref_ns + ((destination_ns - self.dst_ref_ns) as f64 / self.slope).round() as i64
+        convert_ns(
+            self.dst_ref_ns,
+            self.src_ref_ns,
+            1.0 / self.slope,
+            destination_ns,
+        )
     }
 }
 

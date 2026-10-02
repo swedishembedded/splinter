@@ -37,8 +37,16 @@ struct VectorShard {
 }
 
 fn normalised(vector: &[f32]) -> Result<Vec<f32>> {
-    let norm = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if vector.is_empty() || !norm.is_finite() || norm == 0.0 {
+    // Scale by the largest component first, so large but finite components do
+    // not overflow when squared.
+    let peak = vector.iter().fold(0.0f32, |peak, x| peak.max(x.abs()));
+    let norm = peak
+        * vector
+            .iter()
+            .map(|x| (x / peak) * (x / peak))
+            .sum::<f32>()
+            .sqrt();
+    if vector.is_empty() || !peak.is_finite() || peak == 0.0 || !norm.is_finite() {
         return Err(Error::invalid(
             "vector",
             "it must be finite, non-empty and not all zero",
@@ -148,14 +156,14 @@ impl Database {
     /// `None` if there were fewer than two.
     pub fn compact_vectors(&self, model: &str) -> Result<Option<ContentId>> {
         let snapshot = self.snapshot()?;
-        let old: Vec<ObjectRef> = snapshot
-            .objects(ObjectKind::Vector)
-            .into_iter()
-            .filter(|o| {
-                self.read_shard::<VectorShard>(o, VECTOR_MAGIC)
-                    .is_ok_and(|s| s.model == model)
-            })
-            .collect();
+        // An unreadable shard is an error to report, not one to skip over.
+        let mut old: Vec<ObjectRef> = Vec::new();
+        for object in snapshot.objects(ObjectKind::Vector) {
+            let shard: VectorShard = self.read_shard(&object, VECTOR_MAGIC)?;
+            if shard.model == model {
+                old.push(object);
+            }
+        }
         if old.len() < 2 {
             return Ok(None);
         }
@@ -165,6 +173,15 @@ impl Database {
             match &mut merged {
                 None => merged = Some(shard),
                 Some(m) => {
+                    if m.dims != shard.dims {
+                        return Err(Error::invalid(
+                            "vector shard",
+                            format!(
+                                "model `{model}` has shards of {} and {} dimensions",
+                                m.dims, shard.dims
+                            ),
+                        ));
+                    }
                     m.ids.extend(shard.ids);
                     m.data.extend(shard.data);
                 }

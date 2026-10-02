@@ -35,6 +35,7 @@ pub use interpret::{
     SkillEvidence, Stance, Target, TrainingRun,
 };
 pub use record::Record;
+pub(crate) use stream::convert_ns;
 pub use stream::{
     ActionKind, ActionSegment, ClockDomain, ClockMapping, Correspondence, CorrespondenceRelation,
     Episode, EpisodeKind, Event, ModalitySchema, SpanRef, Stream, StreamChunk, StreamOrigin,

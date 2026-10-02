@@ -23,7 +23,8 @@ use crate::error::Result;
 /// What the database needs from storage.
 ///
 /// Published objects are immutable: [`write_once`](StorageBackend::write_once)
-/// never replaces. Only refs and pins, which are tiny pointers, are replaced,
+/// never replaces, and writing content that is already there restarts its
+/// grace period so a collection in progress cannot take it. Only refs and pins, which are tiny pointers, are replaced,
 /// and replacement is atomic.
 pub trait StorageBackend: Send + Sync {
     /// Publishes `bytes` under `key` unless it exists. Returns whether this
@@ -31,6 +32,12 @@ pub trait StorageBackend: Send + Sync {
     fn write_once(&self, key: &Key, bytes: &[u8]) -> Result<bool>;
     /// Atomically replaces the value under `key`, creating it if needed.
     fn replace(&self, key: &Key, bytes: &[u8]) -> Result<()>;
+    /// Atomically moves an object (or a ref) to another key, replacing
+    /// anything there. Returns whether it was there to move. It is how a
+    /// collection sets a file aside, and how an idle ref is retired: the
+    /// mover knows exactly which value it took, and whatever is written under
+    /// the old key afterwards is new.
+    fn rename(&self, from: &Key, to: &Key) -> Result<bool>;
     /// All of the object.
     fn read(&self, key: &Key) -> Result<Vec<u8>>;
     /// Exactly `len` bytes from `offset`; reading past the end is an error.

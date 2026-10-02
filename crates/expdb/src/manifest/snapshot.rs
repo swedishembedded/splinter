@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use super::model::{ObjectKind, ObjectRef};
 use crate::backend::{Key, Kind};
 use crate::database::Database;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::format::Segment;
 use crate::id::{ContentId, RecordId};
 use crate::model::{Edge, Record};
@@ -33,7 +33,7 @@ impl Database {
     /// A snapshot of everything published so far: the catalog and every job.
     pub fn snapshot(&self) -> Result<Snapshot> {
         let mut heads = self.job_heads()?;
-        heads.extend(self.get_ref("catalog")?);
+        heads.extend(self.catalog_heads()?);
         heads.sort();
         heads.dedup();
         Snapshot::of(self, heads)
@@ -123,18 +123,57 @@ impl Snapshot {
         Ok(segment)
     }
 
+    /// Makes sure the manifest the snapshot is named by exists, so its id can
+    /// be recorded and reopened later. A snapshot of one head is named by
+    /// that head; any other (several heads, or none) by their merge, which is
+    /// written here, deterministically, so doing it twice changes nothing.
+    pub fn persist(&self) -> Result<ContentId> {
+        if self.heads.len() != 1 {
+            self.db
+                .put_manifest(&crate::manifest::Manifest::merge(self.heads.clone()))?;
+        }
+        Ok(self.id)
+    }
+
     /// Keeps the snapshot's files alive under `holder`'s name until
     /// [`Database::unpin`]. A snapshot of several heads is first stored as a
     /// merge manifest, so the pin names something that exists.
     pub fn pin(&self, holder: &str) -> Result<()> {
-        if self.heads.len() > 1 {
-            self.db
-                .put_manifest(&crate::manifest::Manifest::merge(self.heads.clone()))?;
+        self.persist()?;
+        let key = Key::new(Kind::Pin, holder)?;
+        self.db
+            .backend()
+            .replace(&key, self.id.to_string().as_bytes())?;
+        // The pin protects the snapshot's files from now on, but a collection
+        // that began earlier may already have taken some. Look: if anything is
+        // gone the pin is withdrawn and the caller told, rather than left
+        // naming a snapshot that can no longer be read.
+        if let Err(missing) = self.verify_files() {
+            self.db.backend().remove(&key)?;
+            return Err(missing);
         }
-        self.db.backend().replace(
-            &Key::new(Kind::Pin, holder)?,
-            self.id.to_string().as_bytes(),
-        )
+        Ok(())
+    }
+
+    /// Checks that every manifest and file of the snapshot still exists.
+    fn verify_files(&self) -> Result<()> {
+        let resolved = self.db.resolve(&[self.id])?;
+        for manifest in &resolved.manifests {
+            let key = Key::new(Kind::Manifest, &manifest.to_string())?;
+            if !self.db.backend().exists(&key)? {
+                return Err(Error::NotFound {
+                    what: format!("manifest {manifest} of the snapshot, already collected"),
+                });
+            }
+        }
+        for object in &resolved.live {
+            if !self.db.backend().exists(&object.key()?)? {
+                return Err(Error::NotFound {
+                    what: format!("file {} of the snapshot, already collected", object.id),
+                });
+            }
+        }
+        Ok(())
     }
 
     /// Every record, once: the first copy wins if two segments hold the

@@ -92,14 +92,23 @@ impl Snapshot {
         let mut covered: Option<(i64, i64)> = None;
         for chunk in data.chunks.get(&stream).into_iter().flatten() {
             let start = chunk.chunk.interval.start_ns;
-            let n = chunk.chunk.samples as i64;
-            let first = ceil_stable((a - start) as f64 / period_ns).clamp(0, n);
-            let last = ceil_stable((b - start) as f64 / period_ns).clamp(0, n);
+            let n = i64::try_from(chunk.chunk.samples).map_err(|_| {
+                Error::corrupt(
+                    format!("chunk {}", chunk.id),
+                    "its sample count is beyond any real stream",
+                )
+            })?;
+            let first = ceil_stable(a.saturating_sub(start) as f64 / period_ns).clamp(0, n);
+            let last = ceil_stable(b.saturating_sub(start) as f64 / period_ns).clamp(0, n);
             if last <= first {
                 continue;
             }
             let content = blobs.get(&chunk.chunk.content)?;
-            if content.len() != chunk.chunk.samples as usize * sample_bytes {
+            if Some(content.len())
+                != usize::try_from(chunk.chunk.samples)
+                    .ok()
+                    .and_then(|n| n.checked_mul(sample_bytes))
+            {
                 return Err(Error::corrupt(
                     format!("chunk {}", chunk.id),
                     format!(

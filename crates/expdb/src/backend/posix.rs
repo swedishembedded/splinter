@@ -64,8 +64,11 @@ impl PosixBackend {
     }
 
     /// Writes `bytes` to a fresh temporary file beside `path` and syncs it.
-    fn stage(path: &Path, bytes: &[u8]) -> Result<PathBuf> {
+    /// Returns the temporary file and whether a directory had to be created
+    /// for it, in which case the directories above need syncing too.
+    fn stage(path: &Path, bytes: &[u8]) -> Result<(PathBuf, bool)> {
         let dir = path.parent().unwrap_or(Path::new("."));
+        let created = !dir.exists();
         fs::create_dir_all(dir).map_err(Error::io(dir))?;
         let temp = Self::temp_beside(path);
         let mut file = OpenOptions::new()
@@ -75,13 +78,31 @@ impl PosixBackend {
             .map_err(Error::io(&temp))?;
         file.write_all(bytes).map_err(Error::io(&temp))?;
         file.sync_all().map_err(Error::io(&temp))?;
-        Ok(temp)
+        Ok((temp, created))
     }
 
     fn sync_dir(dir: &Path) -> Result<()> {
         File::open(dir)
             .and_then(|d| d.sync_all())
             .map_err(Error::io(dir))
+    }
+
+    /// Syncs `dir` and, when it is new, every directory above it up to the
+    /// root, so a power loss cannot keep a file's entry but lose the
+    /// directory that holds it.
+    fn sync_up(&self, dir: &Path, created: bool) -> Result<()> {
+        Self::sync_dir(dir)?;
+        if created {
+            let mut at = dir.parent();
+            while let Some(parent) = at {
+                Self::sync_dir(parent)?;
+                if parent == self.root {
+                    break;
+                }
+                at = parent.parent();
+            }
+        }
+        Ok(())
     }
 
     fn open(&self, key: &Key) -> Result<(File, PathBuf)> {
@@ -99,31 +120,74 @@ impl PosixBackend {
 impl StorageBackend for PosixBackend {
     fn write_once(&self, key: &Key, bytes: &[u8]) -> Result<bool> {
         let path = self.path(key);
-        let temp = Self::stage(&path, bytes)?;
-        let linked = fs::hard_link(&temp, &path);
-        let _ = fs::remove_file(&temp);
-        match linked {
-            Ok(()) => {
-                if let Some(dir) = path.parent() {
-                    Self::sync_dir(dir)?;
+        // A copy that is already there may be an orphan about to be collected.
+        // Touching it restarts its grace period, so the writer that is about
+        // to publish it cannot lose it to a collection already in progress.
+        // If it is collected between the two steps, write it again.
+        for _ in 0..4 {
+            let (temp, created) = Self::stage(&path, bytes)?;
+            let linked = fs::hard_link(&temp, &path);
+            let _ = fs::remove_file(&temp);
+            match linked {
+                Ok(()) => {
+                    if let Some(dir) = path.parent() {
+                        self.sync_up(dir, created)?;
+                    }
+                    return Ok(true);
                 }
-                Ok(true)
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    match OpenOptions::new()
+                        .write(true)
+                        .open(&path)
+                        .and_then(|f| f.set_modified(SystemTime::now()))
+                    {
+                        Ok(()) => return Ok(false),
+                        Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                        Err(source) => return Err(Error::Io { path, source }),
+                    }
+                }
+                Err(e) => return Err(Error::Io { path, source: e }),
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(false),
-            Err(e) => Err(Error::Io { path, source: e }),
         }
+        Err(Error::corrupt(
+            format!("{} `{}`", key.kind().dir(), key.name()),
+            "it was removed again and again while being written",
+        ))
     }
 
     fn replace(&self, key: &Key, bytes: &[u8]) -> Result<()> {
         let path = self.path(key);
-        let temp = Self::stage(&path, bytes)?;
+        let (temp, created) = Self::stage(&path, bytes)?;
         if let Err(e) = fs::rename(&temp, &path) {
             let _ = fs::remove_file(&temp);
             return Err(Error::Io { path, source: e });
         }
         match path.parent() {
-            Some(dir) => Self::sync_dir(dir),
+            Some(dir) => self.sync_up(dir, created),
             None => Ok(()),
+        }
+    }
+
+    fn rename(&self, from: &Key, to: &Key) -> Result<bool> {
+        let (source, target) = (self.path(from), self.path(to));
+        if let Some(dir) = target.parent() {
+            fs::create_dir_all(dir).map_err(Error::io(dir))?;
+        }
+        match fs::rename(&source, &target) {
+            Ok(()) => {
+                if let Some(dir) = target.parent() {
+                    self.sync_up(dir, true)?;
+                }
+                if let Some(dir) = source.parent() {
+                    Self::sync_dir(dir)?;
+                }
+                Ok(true)
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(source_error) => Err(Error::Io {
+                path: source,
+                source: source_error,
+            }),
         }
     }
 

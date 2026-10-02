@@ -69,9 +69,18 @@ impl ReplayOverlay {
             .replace(&Key::new(Kind::Overlay, &self.trainer)?, &bytes)
     }
 
-    /// Sets how much a record should be sampled.
-    pub fn set_priority(&mut self, id: RecordId, priority: f64) {
+    /// Sets how much a record should be sampled. Zero means never; a
+    /// negative or non-finite priority is refused, because it would be stored
+    /// as nothing and the record would quietly get the default.
+    pub fn set_priority(&mut self, id: RecordId, priority: f64) -> Result<()> {
+        if !priority.is_finite() || priority < 0.0 {
+            return Err(Error::invalid(
+                "priority",
+                format!("{priority} is not a finite number of at least zero"),
+            ));
+        }
         self.entries.entry(id).or_default().priority = Some(priority);
+        Ok(())
     }
 
     /// Notes that a record was used and what its error estimate was.
@@ -97,17 +106,18 @@ impl ReplayOverlay {
     }
 
     /// `k` of the candidates drawn without replacement with probability in
-    /// proportion to priority, fixed by `seed`.
+    /// proportion to priority, fixed by `seed`. A record of priority zero is
+    /// never drawn; one nobody has prioritised has the default weight.
     pub fn sample(&self, candidates: &[RecordId], k: usize, seed: u64) -> Vec<RecordId> {
         let mut rng = Rng::new(seed);
         let mut keyed: Vec<(f64, RecordId)> = candidates
             .iter()
-            .map(|id| {
-                let weight = self
-                    .priority(*id)
-                    .filter(|p| *p > 0.0)
-                    .unwrap_or(DEFAULT_PRIORITY);
-                (rng.unit().powf(1.0 / weight), *id)
+            .filter_map(|id| {
+                let weight = self.priority(*id).unwrap_or(DEFAULT_PRIORITY);
+                // Always draw, so one record's weight does not shift another's
+                // luck; a zero weight is then left out.
+                let luck = rng.unit();
+                (weight > 0.0).then(|| (luck.powf(1.0 / weight), *id))
             })
             .collect();
         keyed.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));

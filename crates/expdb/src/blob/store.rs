@@ -201,7 +201,8 @@ impl BlobStore {
         let data = match kind {
             EntryKind::Raw => bytes,
             EntryKind::ChunkList => {
-                let mut whole = Vec::with_capacity(blob.len as usize);
+                // The length comes from a record, so it is not trusted to size a buffer.
+                let mut whole = Vec::with_capacity(blob.len.min(1 << 26) as usize);
                 for item in bytes.as_chunks::<36>().0.iter() {
                     let mut id = [0u8; 32];
                     id.copy_from_slice(&item[..32]);

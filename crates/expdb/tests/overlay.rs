@@ -44,7 +44,7 @@ fn priorities_change_without_touching_a_single_byte_of_the_experience() {
 
     let mut overlay = ReplayOverlay::load(&db, "trainer-a").unwrap();
     for (n, d) in decisions.iter().enumerate() {
-        overlay.set_priority(d.id, 1.0 + n as f64);
+        overlay.set_priority(d.id, 1.0 + n as f64).unwrap();
         overlay.record_sample(d.id, 0.25);
     }
     overlay.save(&db).unwrap();
@@ -57,7 +57,7 @@ fn an_overlay_survives_a_reload_and_each_trainer_has_its_own() {
     let scratch = Scratch::new();
     let db = scratch.open();
     let mut a = ReplayOverlay::load(&db, "trainer-a").unwrap();
-    a.set_priority(rid(1, 1), 4.0);
+    a.set_priority(rid(1, 1), 4.0).unwrap();
     a.record_sample(rid(1, 1), 0.5);
     a.save(&db).unwrap();
 
@@ -79,9 +79,9 @@ fn prioritised_sampling_favours_high_priority_and_is_fixed_by_the_seed() {
     let db = scratch.open();
     let mut overlay = ReplayOverlay::load(&db, "t").unwrap();
     let ids: Vec<_> = (0..10).map(|n| rid(1, n)).collect();
-    overlay.set_priority(ids[0], 1000.0);
+    overlay.set_priority(ids[0], 1000.0).unwrap();
     for id in &ids[1..] {
-        overlay.set_priority(*id, 1.0);
+        overlay.set_priority(*id, 1.0).unwrap();
     }
     let picks: Vec<_> = (0..50)
         .map(|seed| overlay.sample(&ids, 1, seed)[0])

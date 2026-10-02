@@ -58,8 +58,18 @@ impl Writer {
         identity: &WriterIdentity,
         destination: Destination,
     ) -> Result<Self> {
-        let incarnation =
-            db.clock().now_ns() ^ INCARNATION.fetch_add(1, Ordering::Relaxed).rotate_left(48);
+        // A fresh incarnation must differ from every other, in this process
+        // and in any other process of the same identity, even on a frozen
+        // clock: the process id, a counter and the standard library's
+        // per-process random keys are all mixed in.
+        let incarnation = {
+            use std::hash::{BuildHasher, Hasher};
+            let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+            hasher.write_u64(db.clock().now_ns());
+            hasher.write_u32(std::process::id());
+            hasher.write_u64(INCARNATION.fetch_add(1, Ordering::Relaxed));
+            hasher.finish()
+        };
         let id = identity.writer_id(incarnation);
         let job: String = identity
             .job()
@@ -119,6 +129,7 @@ impl Writer {
 
     /// Buffers a record, sealing first if the buffer is full.
     pub fn push(&mut self, record: Record) -> Result<RecordId> {
+        record.body.check_finite()?;
         let id = record.id;
         self.records.push(record);
         self.seal_if_full()?;
@@ -170,14 +181,23 @@ impl Writer {
                         &self.edges,
                         config,
                     )?);
+                    // The spooled file now holds them; only packs remain to publish.
+                    self.records.clear();
+                    self.edges.clear();
                 }
             }
-            self.records.clear();
-            self.edges.clear();
         }
         if !add.is_empty() {
             self.db.publish(&self.job_ref, add, Vec::new())?;
             self.published_packs.extend(packs);
+        }
+        // Only once the manifest is out is the buffer let go. If publishing
+        // failed above, the records are still here, and a retry seals the same
+        // segment again (the same bytes, so nothing new is written) and
+        // publishes it.
+        if self.destination == Destination::Publish {
+            self.records.clear();
+            self.edges.clear();
         }
         Ok(segment)
     }

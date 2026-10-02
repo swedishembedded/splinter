@@ -202,6 +202,61 @@ impl Body {
         })
     }
 
+    /// Refuses a value JSON cannot hold. The body is stored as JSON, which
+    /// writes a NaN or an infinity as `null`: an optional number would read
+    /// back as absent and a required one would make the whole segment
+    /// unreadable. Better refused at the door with a message than changed.
+    pub fn check_finite(&self) -> crate::error::Result<()> {
+        let finite = |what: &'static str, value: f64| {
+            if value.is_finite() {
+                Ok(())
+            } else {
+                Err(crate::error::Error::invalid(
+                    "record body",
+                    format!("{what} is {value}, which cannot be stored"),
+                ))
+            }
+        };
+        let opt =
+            |what: &'static str, value: Option<f64>| value.map_or(Ok(()), |v| finite(what, v));
+        match self {
+            Body::Decision(d) => {
+                opt("old_logprob", d.old_logprob)?;
+                opt("value_estimate", d.value_estimate)
+            }
+            Body::Transition(t) => opt("reward", t.reward),
+            Body::Evaluation(e) => {
+                finite("score", e.score)?;
+                finite("confidence", e.confidence)
+            }
+            Body::Credit(c) => {
+                finite("credit value", c.value)?;
+                finite("credit confidence", c.confidence)
+            }
+            Body::SkillEvidence(e) => {
+                opt("effect_size", e.effect_size)?;
+                finite("strength", e.strength)
+            }
+            Body::ExperimentResult(r) => {
+                r.metrics.values().try_for_each(|v| finite("a metric", *v))
+            }
+            Body::ClockMapping(m) => {
+                finite("slope", m.slope)?;
+                if m.slope <= 0.0 {
+                    return Err(crate::error::Error::invalid(
+                        "record body",
+                        "a clock mapping needs a positive slope",
+                    ));
+                }
+                Ok(())
+            }
+            Body::Stream(s) => opt("rate_hz", s.rate_hz),
+            Body::Event(e) => opt("value", e.value),
+            Body::Correspondence(c) => finite("confidence", c.confidence),
+            _ => Ok(()),
+        }
+    }
+
     /// The conclusion of an experiment result, when this is one.
     pub fn conclusion(&self) -> Option<Conclusion> {
         match self {
