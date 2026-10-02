@@ -79,6 +79,19 @@ processes folding at once could drop history that a pruned ref had been the
 only other copy of; the catalog is now a set of head files that is never
 overwritten.
 
+## The pointer protocol
+
+`Pointer.tla` models the protocol `splinter-record` uses for the few mutable
+names it keeps (an alias, the anchor suite in force) on top of write-once
+signal files. A name is its whole history; a writer reads the latest version
+and claims the next one by creating one file that cannot be created twice. It
+is checked with `-deadlock`, since the model ends when every version is claimed.
+
+| Config | Switch off | Outcome |
+|---|---|---|
+| `Pointer` | none: three writers racing for four versions, with crashes | no error, 6,986 distinct states; no version has two winners, the history has no gaps, a winner owns its version, and a claim is never changed |
+| `Pointer_noAtomic` | the claim is a check followed by a write | violated: two writers both see version one unclaimed, both write it, and the first one's move is lost |
+
 ## Running it
 
 TLC needs a Java runtime and `tla2tools.jar` from the TLA+ releases (checked
