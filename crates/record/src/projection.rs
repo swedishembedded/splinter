@@ -135,11 +135,18 @@ pub(crate) fn project(
                     .as_ref()
                     .and_then(|calls| calls.first())
                     .map_or_else(|| "message".to_owned(), |call| call.function_name.clone());
-                let arguments =
-                    serde_json::to_value(step).map_err(|source| splinter_expdb::Error::Encode {
-                        what: "step",
-                        source,
-                    })?;
+                // What the step said and called, not the whole step: the
+                // experience holds that, once, and what a decision needs is
+                // enough to tell it from another and to find it again.
+                let arguments = serde_json::to_value(json!({
+                    "step_id": step.step_id,
+                    "message": message,
+                    "tool_calls": step.tool_calls,
+                }))
+                .map_err(|source| splinter_expdb::Error::Encode {
+                    what: "step",
+                    source,
+                })?;
                 let made = decision.commit(Action::new(&name, arguments))?;
                 decisions.insert(step.step_id, made.id);
                 if let Some(content) = observation {

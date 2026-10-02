@@ -21,7 +21,7 @@ use crate::digest::Digest;
 use crate::error::StoreError;
 use crate::experience::Span;
 use crate::source::{CapturedSource, Source, SourceId};
-use crate::workspace::{content_id, Workspace};
+use crate::workspace::{content_id, put_spilling, Workspace};
 
 const SOURCE: &str = "source";
 
@@ -72,8 +72,11 @@ impl SourceStore {
             for (_, bytes) in &parts {
                 blobs.push(s.put_blob(bytes)?);
             }
-            s.put_entity(&Entity::keyed(SOURCE, key, value.clone()).with_blobs(blobs))
-                .map(|_| ())
+            put_spilling(
+                s,
+                Entity::keyed(SOURCE, key, value.clone()).with_blobs(blobs),
+            )
+            .map(|_| ())
         })?;
         Ok(source.id.clone())
     }

@@ -504,3 +504,53 @@ fn experience_sets_are_content_addressed() {
         Err(StoreError::UnknownExperience(_))
     ));
 }
+
+/// A very large experience does not make every small neighbour in its block
+/// expensive to read: it is kept as a blob and reads back whole.
+#[test]
+fn a_very_large_experience_is_spilled_to_a_blob_and_reads_back_whole() {
+    let scratch = Scratch::new("spill");
+    let store = scratch.store();
+    let big = experience(&"x".repeat(700_000));
+    let id = store.put(&big).unwrap();
+    assert_eq!(store.get(&id).unwrap(), big);
+    assert_eq!(
+        scratch.store().get(&id).unwrap(),
+        big,
+        "through a fresh handle too"
+    );
+
+    let db = Database::open(StateRoot::new(&scratch.0).expdb(), Config::default()).unwrap();
+    let entity = db
+        .snapshot()
+        .unwrap()
+        .entity_body(&id.0.content_id().unwrap())
+        .unwrap()
+        .unwrap();
+    assert!(
+        entity.value.get("$spilled").is_some(),
+        "the record holds a pointer, not the text"
+    );
+    assert_eq!(entity.blobs.len(), 1);
+}
+
+/// Re-running a stage over the same experience says the same thing again; it
+/// is recorded once.
+#[test]
+fn saying_the_same_thing_twice_records_it_once() {
+    let scratch = Scratch::new("repeat");
+    let store = scratch.store();
+    let id = store.put(&experience("quick brown fox")).unwrap();
+    let note = verdict(&id, Outcome::Pass, Strength::Formal);
+    for _ in 0..3 {
+        store.annotate(&note).unwrap();
+    }
+    assert_eq!(
+        store.annotations(&id).unwrap().annotations,
+        vec![note.clone()]
+    );
+    // A different verdict from the same grader is a new statement.
+    let again = verdict(&id, Outcome::Fail, Strength::Formal);
+    store.annotate(&again).unwrap();
+    assert_eq!(store.annotations(&id).unwrap().annotations.len(), 2);
+}

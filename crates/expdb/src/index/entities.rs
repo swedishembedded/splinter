@@ -50,6 +50,14 @@ impl Snapshot {
         self.blob_store()?.get_by_id(id)
     }
 
+    /// Whether the blob with content id `id` is stored in a pack of the
+    /// snapshot.
+    pub fn has_blob(&self, id: &ContentId) -> Result<bool> {
+        Ok(self
+            .blob_store()?
+            .contains(&crate::blob::BlobRef { id: *id, len: 0 }))
+    }
+
     /// The application entity with content id `id`.
     pub fn entity_body(&self, id: &ContentId) -> Result<Option<Entity>> {
         let Some(record) = self.entity(id)? else {

@@ -27,7 +27,7 @@ use crate::digest::{canonical_json, Digest};
 pub use crate::error::StoreError;
 use crate::experience::{Experience, ExperienceId};
 use crate::projection::{project, projection_address, projection_of, Projected, PROJECTION};
-use crate::workspace::{content_id, Workspace};
+use crate::workspace::{content_id, put_spilling, Workspace};
 
 const EXPERIENCE: &str = "experience";
 const EXPERIENCE_SET: &str = "experience_set";
@@ -108,7 +108,7 @@ impl ExperienceStore {
         let entity = Entity::keyed(EXPERIENCE, content_id(&id.0)?, value);
         self.workspace.write(|s| {
             if !stored {
-                s.put_entity(&entity)?;
+                put_spilling(s, entity.clone())?;
             }
             let projected = s.with_collector(|c| project(c, &id, experience))?;
             let value = serde_json::to_value(&projected).map_err(|source| {
@@ -192,6 +192,22 @@ impl ExperienceStore {
             _ => None,
         };
         let producer = EvaluatorRef::new(&note.producer.name, &note.producer.version);
+        // Saying the same thing again is saying it once: re-running a stage
+        // over an experience must not pile up copies of its verdicts.
+        let said = splinter_expdb::ContentId::of(&json);
+        let already = self.workspace.read(|s| {
+            Ok(
+                s.evaluations(&EvalFilter::new().target(Target::Record(target)))?
+                    .iter()
+                    .any(|view| {
+                        view.evaluation.evaluator == producer
+                            && view.evaluation.evidence.is_some_and(|blob| blob.id == said)
+                    }),
+            )
+        })?;
+        if already {
+            return Ok(());
+        }
         self.workspace.write(|s| {
             let mut evaluation = Evaluation::new(
                 Target::Record(target),
@@ -281,7 +297,7 @@ impl ExperienceStore {
                 source,
             })?;
             let entity = Entity::keyed(EXPERIENCE_SET, content_id(&id.0)?, value);
-            self.workspace.write(|s| s.put_entity(&entity))?;
+            self.workspace.write(|s| put_spilling(s, entity.clone()))?;
         }
         Ok(id)
     }

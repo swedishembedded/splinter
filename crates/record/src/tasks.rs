@@ -23,7 +23,7 @@ use splinter_expdb::model::Entity;
 use crate::digest::{canonical_json, Digest};
 use crate::error::StoreError;
 use crate::experience::Task;
-use crate::workspace::{content_id, Workspace};
+use crate::workspace::{content_id, put_spilling, Workspace};
 
 const TASK: &str = "task";
 const TASK_SET: &str = "task_set";
@@ -107,7 +107,7 @@ impl TaskStore {
             source,
         })?;
         let entity = Entity::keyed(TASK, content_id(&id)?, value);
-        self.workspace.write(|s| s.put_entity(&entity))?;
+        self.workspace.write(|s| put_spilling(s, entity.clone()))?;
         Ok(id)
     }
 
@@ -189,7 +189,7 @@ impl TaskStore {
                 source,
             })?;
             let entity = Entity::keyed(TASK_SET, content_id(&id.0)?, value);
-            self.workspace.write(|s| s.put_entity(&entity))?;
+            self.workspace.write(|s| put_spilling(s, entity.clone()))?;
         }
         Ok(id)
     }

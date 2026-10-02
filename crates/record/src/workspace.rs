@@ -108,6 +108,59 @@ fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// A value larger than this is kept as a blob and the entity names it, so
+/// reading one record of a block never means decompressing megabytes of its
+/// neighbours' bodies.
+const SPILL_OVER: usize = 256 * 1024;
+
+/// The key of the marker an entity's value holds when it was spilled: the
+/// position of its blob among the entity's blobs.
+const SPILLED: &str = "$spilled";
+
+/// Stores `entity`, spilling its value to a blob when it is large.
+pub(crate) fn put_spilling(
+    s: &mut Session,
+    mut entity: splinter_expdb::model::Entity,
+) -> splinter_expdb::Result<splinter_expdb::ContentId> {
+    let bytes =
+        serde_json::to_vec(&entity.value).map_err(|source| splinter_expdb::Error::Encode {
+            what: "entity value",
+            source,
+        })?;
+    if bytes.len() > SPILL_OVER && entity.value.get(SPILLED).is_none() {
+        let blob = s.put_blob(&bytes)?;
+        entity.blobs.push(blob);
+        entity.value = serde_json::json!({ SPILLED: entity.blobs.len() - 1 });
+    }
+    s.put_entity(&entity)
+}
+
+/// `entity` with its value read back from its blob if it was spilled.
+fn unspill(
+    s: &mut Session,
+    mut entity: splinter_expdb::model::Entity,
+) -> splinter_expdb::Result<splinter_expdb::model::Entity> {
+    let Some(at) = entity
+        .value
+        .get(SPILLED)
+        .and_then(serde_json::Value::as_u64)
+    else {
+        return Ok(entity);
+    };
+    let blob = usize::try_from(at)
+        .ok()
+        .and_then(|at| entity.blobs.get(at))
+        .copied()
+        .ok_or_else(|| splinter_expdb::Error::corrupt("entity", "its spilled value has no blob"))?;
+    let bytes = s.read_blob(&blob.id)?;
+    entity.value =
+        serde_json::from_slice(&bytes).map_err(|source| splinter_expdb::Error::Decode {
+            what: "a spilled entity value".into(),
+            source,
+        })?;
+    Ok(entity)
+}
+
 /// The database id of the object `address` names.
 pub(crate) fn content_id(address: &Digest) -> Result<splinter_expdb::ContentId, StoreError> {
     address.content_id().ok_or_else(|| StoreError::Rejected {
@@ -188,8 +241,11 @@ impl Workspace {
         id: &Digest,
     ) -> Result<Option<splinter_expdb::model::Entity>, StoreError> {
         let cid = content_id(id)?;
-        let found = self.read(|s| s.entity(&cid))?;
-        Ok(found.filter(|e| e.class == class))
+        let found = self.read(|s| match s.entity(&cid)? {
+            Some(entity) if entity.class == class => unspill(s, entity).map(Some),
+            _ => Ok(None),
+        })?;
+        Ok(found)
     }
 
     /// Whether an entity of `class` has the address `id`, without reading it.

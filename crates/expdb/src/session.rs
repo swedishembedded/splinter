@@ -312,8 +312,16 @@ impl Session {
         self.collector.link(from, rel, to)
     }
 
-    /// Stores `bytes` and returns their reference.
+    /// Stores `bytes` and returns their reference. Bytes the snapshot already
+    /// holds are not written again, whoever wrote them.
     pub fn put_blob(&mut self, bytes: &[u8]) -> Result<BlobRef> {
+        let id = ContentId::of(bytes);
+        if self.base.has_blob(&id)? {
+            return Ok(BlobRef {
+                id,
+                len: bytes.len() as u64,
+            });
+        }
         self.collector.put_blob(bytes)
     }
 
