@@ -14,6 +14,7 @@ splinter-expdb = { workspace = true }
 sven-sdk = { workspace = true }
 
 blake3 = { workspace = true }
+zstd = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

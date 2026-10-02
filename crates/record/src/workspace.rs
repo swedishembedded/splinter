@@ -172,6 +172,11 @@ pub(crate) fn content_id(address: &Digest) -> Result<splinter_expdb::ContentId, 
 }
 
 impl Workspace {
+    /// The state root this workspace keeps its database and files under.
+    pub(crate) fn root(&self) -> &StateRoot {
+        &self.shared.root
+    }
+
     /// The database under `root`. Nothing is opened or created until the
     /// first read or write, so a command that only plans leaves the root
     /// untouched.

@@ -4126,6 +4126,7 @@ dependencies = [
  "splinter-expdb",
  "sven-sdk",
  "thiserror 2.0.21",
+ "zstd",
 ]
 
 [[package]]

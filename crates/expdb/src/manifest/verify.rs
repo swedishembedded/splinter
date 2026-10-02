@@ -248,9 +248,20 @@ impl Database {
     /// how much. Only for a file no copy can restore.
     pub fn quarantine(&self, problem: &Problem) -> Result<Quarantined> {
         let Some(object) = problem.object.clone() else {
+            if problem.kind == ProblemKind::Ref {
+                let key = Key::from_relative(&problem.path).ok_or_else(|| {
+                    Error::invalid("quarantine", format!("`{}` is not a ref", problem.path))
+                })?;
+                self.backend().remove(&key)?;
+                return Ok(Quarantined {
+                    kind: problem.kind,
+                    id: problem.id.clone(),
+                    records: 0,
+                });
+            }
             return Err(Error::invalid(
                 "quarantine",
-                "only a segment, pack or index can be withdrawn",
+                "only a ref, segment, pack or index can be withdrawn",
             ));
         };
         self.publish_once("quarantine", Vec::new(), vec![object.clone()])?;

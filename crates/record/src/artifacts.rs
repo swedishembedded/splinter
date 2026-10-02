@@ -89,6 +89,16 @@ pub struct Artifact {
     pub sha256: Option<Digest>,
 }
 
+impl Artifact {
+    /// Where its file lies under a state root, with `/` separators: the same
+    /// path a state archive names it by.
+    #[must_use]
+    pub fn relative_path(&self) -> String {
+        let hex = self.digest.hex();
+        format!("artifacts/{}/{hex}{}", &hex[..2], self.extension)
+    }
+}
+
 /// What is true of an artifact's file now.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ArtifactState {
@@ -137,6 +147,12 @@ impl ArtifactStore {
         self.dir
             .join(&hex[..2])
             .join(format!("{hex}{}", artifact.extension))
+    }
+
+    /// Whether the artifact was written off as lost.
+    fn written_off(&self, digest: &Digest) -> Result<bool, StoreError> {
+        self.workspace
+            .signalled(&crate::recovery::loss_name("artifact", digest.hex()))
     }
 
     fn temporary(&self) -> PathBuf {
@@ -251,6 +267,13 @@ impl ArtifactStore {
     pub fn path(&self, digest: &Digest) -> Result<PathBuf, StoreError> {
         let artifact = self.get(digest)?;
         let path = self.file_of(&artifact);
+        if self.written_off(digest)? {
+            return Err(StoreError::MissingArtifact {
+                digest: artifact.digest,
+                role: artifact.role,
+                path,
+            });
+        }
         match fs::metadata(&path) {
             Ok(meta) if meta.len() == artifact.size => Ok(path),
             Ok(_) | Err(_) => Err(StoreError::MissingArtifact {

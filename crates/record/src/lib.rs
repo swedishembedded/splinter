@@ -52,6 +52,7 @@ pub mod lineage;
 pub mod maintenance;
 pub mod pointers;
 mod projection;
+pub mod recovery;
 pub mod runs;
 pub mod source;
 pub mod sources;

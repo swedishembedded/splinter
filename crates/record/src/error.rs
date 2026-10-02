@@ -74,6 +74,10 @@ pub enum StoreError {
         /// What it points at.
         found: Option<String>,
     },
+    /// An archive, restore or repair could not be completed; nothing was
+    /// changed that the message does not say.
+    #[error("{0}")]
+    Recovery(String),
     /// The database holds no artifact with this digest.
     #[error("no artifact {0} is recorded")]
     UnknownArtifact(Digest),
