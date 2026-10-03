@@ -103,6 +103,9 @@ pub enum VerifierKind {
     /// Every passage the answer quotes is in the task's source text word for
     /// word, and the answer gives the reference advice.
     Quotation,
+    /// Every number, name and quotation the answer states is in the task's
+    /// source text, its instruction or what the other speaker said.
+    Grounding,
 }
 
 /// Which sections of a source a kind is asked about: a kind that is only
@@ -161,6 +164,11 @@ pub struct TaskKind {
     /// source (what would you advise) names none.
     #[serde(default = "yes")]
     pub subject_required: bool,
+    /// Whether the answer is a dialogue: the instruction is the opening
+    /// message of someone speaking to the writer, and the teacher's answer
+    /// is a conversation that continues it.
+    #[serde(default)]
+    pub dialogue: bool,
 }
 
 fn yes() -> bool {
@@ -271,7 +279,7 @@ impl Catalogue {
         Self::default()
     }
 
-    /// The kinds Splinter ships: recall, advise, explain, predict, construct,
+    /// The kinds Splinter ships: recall, advise, converse, explain, predict, construct,
     /// debug, counterexample, transform, classify, retrieve, multi-turn and
     /// combine.
     #[must_use]
@@ -321,12 +329,13 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
         focus: None,
         reference_verbatim: false,
         subject_required: true,
+        dialogue: false,
     }
 }
 
 fn builtin_kinds() -> Vec<TaskKind> {
     use VerifierKind::{
-        Consistency, Executable, Formal, Judged, MutationValidated, Quotation, Stated,
+        Consistency, Executable, Formal, Grounding, Judged, MutationValidated, Quotation, Stated,
     };
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
@@ -357,6 +366,30 @@ fn builtin_kinds() -> Vec<TaskKind> {
             focus: Some(Focus::Advice),
             reference_verbatim: true,
             subject_required: false,
+            dialogue: false,
+        },
+        TaskKind {
+            name: "converse".into(),
+            brief: "Write up to {count} opening messages, each from someone who wants to talk \
+                    with the writer of the sections about a matter the sections bear on: their \
+                    own situation, a decision, a question about how to think or live. The \
+                    reference is the passage of the sections, copied word for word, of at most \
+                    85 words, that the writer would draw on in answering. Cite that same \
+                    passage as the evidence quote. The message must stand on its own: do not \
+                    mention the sections, a letter, a date or the person written to, and do \
+                    not give the answer."
+                .into(),
+            answer: AnswerForm::Text,
+            shows_material: false,
+            environment: SolverEnvironment::ClosedBook,
+            runtime: None,
+            requires: Vec::new(),
+            verifiers: vec![Grounding, Judged],
+            min_sections: 1,
+            focus: None,
+            reference_verbatim: true,
+            subject_required: false,
+            dialogue: true,
         },
         text(
             "explain",
@@ -382,6 +415,7 @@ fn builtin_kinds() -> Vec<TaskKind> {
             focus: None,
             reference_verbatim: false,
             subject_required: true,
+            dialogue: false,
         },
         TaskKind {
             name: "construct".into(),
@@ -400,6 +434,7 @@ fn builtin_kinds() -> Vec<TaskKind> {
             focus: None,
             reference_verbatim: false,
             subject_required: true,
+            dialogue: false,
         },
         TaskKind {
             name: "debug".into(),
@@ -419,6 +454,7 @@ fn builtin_kinds() -> Vec<TaskKind> {
             focus: None,
             reference_verbatim: false,
             subject_required: true,
+            dialogue: false,
         },
         text(
             "counterexample",

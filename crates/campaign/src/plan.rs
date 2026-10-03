@@ -50,7 +50,7 @@ const MAX_PERSONA_CHARS: usize = 80;
 
 /// The task kinds a plan may choose, and what each teaches: the planner's
 /// menu.
-pub const MENU: [(&str, &str); 4] = [
+pub const MENU: [(&str, &str); 5] = [
     (
         "recall",
         "facts the writing states, asked as questions with short exact answers",
@@ -59,6 +59,12 @@ pub const MENU: [(&str, &str); 4] = [
         "advise",
         "the writer's own advice to a correspondent, asked as a predicament put to the writer \
          and answered by quoting the writer's own words; only where the writing holds advice",
+    ),
+    (
+        "converse",
+        "a conversation with the writer: someone opens with a matter the writing bears on and \
+         the writer answers, from the writing and without inventing a number, name or quotation \
+         it does not give; teaches how the writer talks and reasons",
     ),
     (
         "explain",

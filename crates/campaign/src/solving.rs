@@ -30,8 +30,10 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_agent::converse::converse_prompted;
 use splinter_agent::solve::{open_book_prompt, solve_prompted, Model, SolveError, SolveOptions};
 use splinter_knowledge::material::teacher_material;
+use splinter_knowledge::tasks::Catalogue;
 use splinter_policy::Sampling;
 use splinter_record::digest::Digest;
 use splinter_record::experience::Provenance;
@@ -41,6 +43,7 @@ use sven_sdk::{CancelToken, RunConclusion};
 
 use crate::context::Context;
 use crate::curriculum::policy_label;
+use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
 use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
 use crate::model_ref::ModelRef;
@@ -207,13 +210,22 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 continue;
             }
         };
+        let dialogue = request.teacher
+            && Catalogue::builtin()
+                .get(&task.task.kind)
+                .is_some_and(|kind| kind.dialogue);
         let prompt = if request.teacher {
             let material = teacher_material(&ctx.sources(), &task)?;
             if material.is_empty() {
                 report.skipped.push(skip(&entry.task, &NOTHING_TO_SHOW));
                 continue;
             }
-            open_book_prompt(&task.instruction, &material)
+            let instruction = if dialogue {
+                teacher_instruction(&task.instruction)
+            } else {
+                task.instruction.clone()
+            };
+            open_book_prompt(&instruction, &material)
         } else {
             task.instruction.clone()
         };
@@ -229,13 +241,36 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
             options.cancel = Some(request.cancel.clone());
             options.stream_idle = model.stream_idle;
-            let solution = match ctx.block_on(solve_prompted(
-                &task,
-                &prompt,
-                &environment,
-                model.provider.clone(),
-                options,
-            )) {
+            let solved = if dialogue {
+                ctx.block_on(async {
+                    let student = Student::new(
+                        &model,
+                        &entry.task,
+                        DIALOGUE_TURNS,
+                        &options,
+                        &request.cancel,
+                    )?;
+                    converse_prompted(
+                        &task,
+                        &prompt,
+                        &environment,
+                        model.provider.clone(),
+                        &student,
+                        DIALOGUE_TURNS,
+                        options,
+                    )
+                    .await
+                })
+            } else {
+                ctx.block_on(solve_prompted(
+                    &task,
+                    &prompt,
+                    &environment,
+                    model.provider.clone(),
+                    options,
+                ))
+            };
+            let solution = match solved {
                 Ok(solution) => solution,
                 Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
                     report.skipped.push(skip(&entry.task, &e));

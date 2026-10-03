@@ -27,6 +27,7 @@ use splinter_lab::verifiers::calibration::{CalibratedJudge, Calibration, DEFAULT
 use splinter_lab::verifiers::consistency::AgreementVerifier;
 use splinter_lab::verifiers::executable::ExecutableVerifier;
 use splinter_lab::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifier};
+use splinter_lab::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
 use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
@@ -66,6 +67,17 @@ pub const QUOTATION_MIN_WORDS: usize = 8;
 
 /// The share of the reference advice an answer must reproduce.
 pub const QUOTATION_MIN_RECALL: f64 = 0.5;
+
+/// Who the grounding verdicts name as their producer.
+pub const GROUNDING_PRODUCER: &str = "splinter-lab/grounding";
+
+/// The version of the grounding check; a changed check carries a new one.
+pub const GROUNDING_VERSION: &str = "1";
+
+/// The proper names a dialogue may state that nothing in its source grounds:
+/// the check cannot tell a form of address or a common name from a person,
+/// and one stray name is not the invented specifics it exists to refuse.
+pub const GROUNDING_MAX_NAMES: usize = 1;
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -219,6 +231,17 @@ pub(crate) fn verifiers_for(
                 QuotationPolicy {
                     min_words: QUOTATION_MIN_WORDS,
                     min_reference_recall: QUOTATION_MIN_RECALL,
+                },
+            ))),
+            VerifierKind::Grounding => verifiers.push(Box::new(GroundingVerifier::new(
+                Producer {
+                    name: GROUNDING_PRODUCER.into(),
+                    version: GROUNDING_VERSION.into(),
+                },
+                Box::new(StoredEvidence::new(ctx.sources())),
+                GroundingPolicy {
+                    max_ungrounded_names: GROUNDING_MAX_NAMES,
+                    min_quote_words: QUOTATION_MIN_WORDS,
                 },
             ))),
             VerifierKind::Judged => {

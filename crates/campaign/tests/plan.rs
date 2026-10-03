@@ -123,3 +123,10 @@ fn a_plan_with_no_kinds_or_the_same_kind_twice_is_not_a_plan() {
         r#"{"persona": null, "kinds": ["recall", "recall"], "distill": false, "rationale": "x"}"#;
     assert!(run("plan-twice", vec![twice], 100).0.is_err());
 }
+
+#[test]
+fn a_conversation_is_on_the_menu_and_needs_no_advice_in_the_sources() {
+    let converse = r#"{"persona": "Thomas Jefferson", "kinds": ["converse", "recall"], "distill": true, "rationale": "the letters show how the writer talks and reasons"}"#;
+    let chosen = run("plan-converse", vec![converse], 0).0.unwrap();
+    assert_eq!(chosen.kinds, ["converse", "recall"]);
+}

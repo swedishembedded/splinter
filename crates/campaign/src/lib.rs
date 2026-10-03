@@ -49,6 +49,7 @@ pub mod context;
 pub mod critique;
 pub mod curriculum;
 pub mod datasets;
+pub mod dialogue;
 pub mod error;
 pub mod eval;
 pub mod experiences;
