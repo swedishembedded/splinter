@@ -54,7 +54,7 @@ use crate::datasets::{record_dataset_lineage, resolve_dataset};
 use crate::error::{io, CampaignError};
 use crate::model_ref::ModelRef;
 use crate::release::probe::split_records;
-use crate::release::ReleaseId;
+use splinter_core::release::ReleaseId;
 
 /// The peak learning rate a `learn` run trains a LoRA adapter at when none is
 /// given: the rate that moves a low-rank update in the few hundred steps of a

@@ -49,7 +49,7 @@ pub mod teacher;
 
 use splinter_core::digest::Digest;
 
-use crate::release::ReleaseId;
+use splinter_core::release::ReleaseId;
 
 /// What an experience's provenance records as its policy when the base
 /// solved it through a policy alias that pointed at no release.

@@ -31,7 +31,6 @@
 //! from, and refuses when there is none.
 
 pub mod anchor;
-pub mod gate;
 pub mod leakage;
 pub mod probe;
 pub mod serve;
@@ -42,12 +41,13 @@ use std::time::Duration;
 
 use serde::Serialize;
 use splinter_core::digest::Digest;
+use splinter_core::release::ReleaseId;
 use splinter_knowledge::concepts::Concept;
 use splinter_policy::local::{load_source, resolve_base};
 use splinter_policy::selection::local_model_name;
 use sven_sdk::CancelToken;
 
-pub use store::{ReleaseId, ReleaseManifest, ReleaseStore, StoredRelease, RELEASE_FORMAT};
+pub use store::{ReleaseManifest, ReleaseStore, StoredRelease, RELEASE_FORMAT};
 
 use crate::config::Config;
 use crate::context::Context;
@@ -55,8 +55,9 @@ use crate::curriculum::queue::enqueue_retention;
 use crate::error::CampaignError;
 use crate::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use crate::train::{load_candidate, Candidate, TrainingSummary};
-use gate::{Check, GateConfig, GateReport};
-use probe::{pair, Probe, Suite, SuiteSummary};
+use probe::{pair, Probe, Suite};
+use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
+use splinter_policy::stats::BrainSignificance;
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]
@@ -440,6 +441,7 @@ fn run_gate(
                     suites.variants.clone(),
                     &pair(suite, &c, &b),
                     config.alpha,
+                    &BrainSignificance,
                 );
                 in_process = Some(c);
                 check

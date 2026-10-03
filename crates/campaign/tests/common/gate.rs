@@ -26,8 +26,7 @@ use std::sync::{Arc, Mutex};
 use splinter_agent::solve::Model;
 use splinter_campaign::datasets::store_dataset;
 use splinter_campaign::model_ref::ModelRef;
-use splinter_campaign::release::gate::GateConfig;
-use splinter_campaign::release::{arm, release, ReleaseId, ReleaseRequest, Released};
+use splinter_campaign::release::{arm, release, ReleaseRequest, Released};
 use splinter_campaign::train::{
     train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
@@ -37,7 +36,9 @@ use splinter_core::chat::WireMessage;
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_core::release::ReleaseId;
 use splinter_data::{DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
+use splinter_eval::gate::GateConfig;
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};

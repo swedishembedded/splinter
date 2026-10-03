@@ -64,7 +64,7 @@ use crate::error::CampaignError;
 use crate::exam::{examine_candidate, Exam};
 use crate::model_ref::{ModelRef, POLICY_DEFAULT};
 use crate::plan::{plan as make_plan, Plan};
-use crate::release::{release, ReleaseId, ReleaseRequest, Released};
+use crate::release::{release, ReleaseRequest, Released};
 use crate::runs::{record, Recorded, Recorder};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::sources::{self, SourceSummary, SourceTarget};
@@ -77,6 +77,7 @@ use crate::variants::{
     generate_variants, VariantsGenerated, VariantsRequest, DEFAULT_VARIANTS_PER_TASK,
 };
 use crate::verify::{verify_set, Verified};
+use splinter_core::release::ReleaseId;
 
 /// The stages, in order, as runs and reports name them.
 pub const STAGES: [&str; 15] = [

@@ -36,10 +36,12 @@ use sven_sdk::CancelToken;
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
-use crate::release::probe::{self, Suite, SuiteSummary};
-use crate::release::{anchor, arm, ReleaseId, StoredRelease};
+use crate::release::probe::{self, Suite};
+use crate::release::{anchor, arm, StoredRelease};
 use crate::runs::{record, Recorded};
 use crate::train::load_candidate;
+use splinter_core::release::ReleaseId;
+use splinter_eval::gate::SuiteSummary;
 
 /// Which suite `eval` grades on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

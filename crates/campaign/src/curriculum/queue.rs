@@ -33,7 +33,7 @@ use splinter_store::experiences::StoreError;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::release::gate::GateReport;
+use splinter_eval::gate::GateReport;
 
 const ENTRY: &str = "queue_entry";
 const PREFIX: &str = "queue-";

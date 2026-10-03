@@ -38,12 +38,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use splinter_agent::solve::{solve, Model, SolveOptions};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
 use splinter_data::holdout::holdout_split_records;
 use splinter_data::DatasetId;
+use splinter_eval::gate::SuiteSummary;
 use splinter_eval::paired::PairedOutcome;
 use splinter_eval::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
@@ -72,17 +73,6 @@ pub struct Suite {
     /// The tasks, each once, in the order they were found.
     pub tasks: Vec<Task>,
     /// Records or tasks left out, by reason.
-    pub excluded: BTreeMap<String, usize>,
-}
-
-/// What a suite was, as a report states it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SuiteSummary {
-    /// Its name.
-    pub name: String,
-    /// Tasks in it.
-    pub tasks: usize,
-    /// Left out, by reason.
     pub excluded: BTreeMap<String, usize>,
 }
 

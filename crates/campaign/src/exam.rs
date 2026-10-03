@@ -29,11 +29,12 @@
 use serde::Serialize;
 use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Experience, Task};
+use splinter_eval::significance::SignTest;
 use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
 };
 use splinter_eval::verifiers::Verifier;
-use splinter_policy::stats::{sign_test, SignTest};
+use splinter_policy::stats::sign_test;
 use splinter_store::experiences::SetId;
 use sven_sdk::CancelToken;
 

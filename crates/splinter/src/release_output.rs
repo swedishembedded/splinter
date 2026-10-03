@@ -7,8 +7,8 @@
 use std::fmt::Write as _;
 
 use splinter_campaign::eval::{EvalReport, Evaluated};
-use splinter_campaign::release::gate::{Check, GateReport};
 use splinter_campaign::release::{ReleaseList, Released, RolledBack};
+use splinter_eval::gate::{Check, GateReport};
 
 use crate::output::{tally, Report};
 

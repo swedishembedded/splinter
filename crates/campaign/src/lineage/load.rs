@@ -315,7 +315,7 @@ fn training(
     graph: &mut Graph,
     id: &str,
     datasets: &[splinter_data::DatasetId],
-    parent: Option<&crate::release::ReleaseId>,
+    parent: Option<&splinter_core::release::ReleaseId>,
     sample: Option<&ReplaySample>,
     adapter: &str,
 ) {

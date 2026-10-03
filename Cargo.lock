@@ -4009,6 +4009,7 @@ dependencies = [
  "serde_json",
  "splinter-campaign",
  "splinter-core",
+ "splinter-eval",
  "splinter-store",
 ]
 
@@ -4155,6 +4156,7 @@ dependencies = [
  "serde_json",
  "splinter-core",
  "splinter-data",
+ "splinter-eval",
  "sven-sdk",
  "thiserror 2.0.21",
  "tokio",

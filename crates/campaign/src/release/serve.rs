@@ -45,8 +45,8 @@ use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::release::gate::{self, Check, Disagreement, Serve};
 use crate::release::probe::{grade, Probe, Suite};
+use splinter_eval::gate::{self, Check, Disagreement, Serve};
 
 /// What starts every line naming the adapter brain serves.
 const STARTUP_PREFIX: &str = "brain serve: ";

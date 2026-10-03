@@ -16,17 +16,16 @@
 //! pairs of which the candidate won `k`: the chance of at least that many
 //! candidate wins if the candidate were no better.
 
-use serde::{Deserialize, Serialize};
+use splinter_eval::significance::{SignTest, Significance};
 
-/// One sign test's result.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SignTest {
-    /// Discordant pairs: one model right, the other wrong.
-    pub discordant: usize,
-    /// Of those, the pairs the candidate got right.
-    pub candidate_wins: usize,
-    /// The one-sided p-value; `1.0` when no pair is discordant.
-    pub p_value: f64,
+/// brain's sign test as the gate's [`Significance`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BrainSignificance;
+
+impl Significance for BrainSignificance {
+    fn sign_test(&self, pairs: &[(bool, bool)]) -> SignTest {
+        sign_test(pairs)
+    }
 }
 
 /// The sign test over `pairs` of `(candidate right, baseline right)`, one

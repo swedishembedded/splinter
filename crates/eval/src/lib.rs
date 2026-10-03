@@ -13,6 +13,10 @@
 //!
 //! # What the parts are for
 //!
+//! * [`gate`] - the release gate's four checks, the numbers each records and
+//!   how each is decided.
+//! * [`significance`] - the paired sign test the gate rests on, handed in by
+//!   the model backend.
 //! * [`paired`] - two models graded on the same items, compared only where
 //!   both have a verdict.
 //! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
@@ -26,7 +30,6 @@
 //!   experience against the reference passage it never showed the solver.
 //! * [`overlap`] - texts that print one passage form a group, so a held-out
 //!   split can keep a group whole.
-
 //!
 //! Every verdict names its producer, and those names keep the `splinter-lab/`
 //! prefix this crate was first published under: they are recorded in each
@@ -36,6 +39,8 @@
 
 pub mod denoise;
 pub mod frontier;
+pub mod gate;
 pub mod overlap;
 pub mod paired;
+pub mod significance;
 pub mod verifiers;

@@ -50,7 +50,8 @@ use crate::answers::AnswerStore;
 use crate::config::Config;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
-use crate::release::{ReleaseId, ReleaseStore};
+use crate::release::ReleaseStore;
+use splinter_core::release::ReleaseId;
 
 /// How long a local model may stay silent between two stream chunks: as
 /// long as its run lasts. sven's idle limit guards a remote wire going

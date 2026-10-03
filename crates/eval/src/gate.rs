@@ -12,8 +12,8 @@
 //! 1. **Improvement** on the new data's held-out tasks - the records
 //!    training held out, and the variants of the tasks it trained on (the
 //!    same fact in other words, which is what shows a fact was learned) -
-//!    brain's one-sided paired sign test over the tasks both models were
-//!    graded on,
+//!    a one-sided paired sign test ([`Significance`]) over the tasks both
+//!    models were graded on,
 //!    candidate right and champion wrong against the reverse, significant
 //!    at `alpha` ([`DEFAULT_ALPHA`]). Ties and unpaired tasks carry no
 //!    evidence; they are excluded and counted.
@@ -34,13 +34,25 @@
 //! anchor suite, no brain binary - fails, and says why: an unmeasured
 //! check is never a pass.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
-use splinter_eval::paired::{compare, Comparison, PairedOutcome};
-use splinter_policy::stats::{sign_test, SignTest};
+use splinter_core::release::ReleaseId;
 
-use crate::release::probe::SuiteSummary;
-use crate::release::store::ReleaseId;
+use crate::paired::{compare, Comparison, PairedOutcome};
+use crate::significance::{SignTest, Significance};
+
+/// What a suite was, as a report states it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SuiteSummary {
+    /// Its name.
+    pub name: String,
+    /// Tasks in it.
+    pub tasks: usize,
+    /// Left out, by reason.
+    pub excluded: BTreeMap<String, usize>,
+}
 
 /// The sign test's significance level: the chance of releasing a candidate
 /// no better than the champion that the gate accepts. Brain's own promote
@@ -262,6 +274,7 @@ pub fn improvement(
     variants: Option<SuiteSummary>,
     outcomes: &[PairedOutcome],
     alpha: f64,
+    significance: &dyn Significance,
 ) -> Check<Improvement> {
     let comparison = compare(outcomes);
     if comparison.paired == 0 {
@@ -274,7 +287,7 @@ pub fn improvement(
         ));
     }
     let pairs: Vec<(bool, bool)> = outcomes.iter().filter_map(PairedOutcome::paired).collect();
-    let test = sign_test(&pairs);
+    let test = significance.sign_test(&pairs);
     let failure = (test.p_value > alpha).then(|| {
         format!(
             "no significant improvement: the candidate won {} of {} discordant task(s), p = \

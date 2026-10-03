@@ -22,7 +22,7 @@ use splinter_core::source::SourceId;
 use splinter_store::workspace::Workspace;
 
 use crate::error::CampaignError;
-use crate::release::ReleaseId;
+use splinter_core::release::ReleaseId;
 
 const ANSWER: &str = "answer";
 
