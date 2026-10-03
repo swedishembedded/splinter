@@ -143,6 +143,26 @@ the quotation verifier, with no model involved: every passage the answer puts
 in quotation marks must be in the task's source text, the advice must be
 reproduced, and an answer that quotes nothing or invents a quotation fails.
 
+The `converse` kind teaches how the writer talks and reasons. Its task is the
+opening message of someone speaking to the writer, with a passage of the
+writer's text as its reference. A teacher shown the passage answers as the
+writer, and a model that is never shown it plays the other speaker, following
+up for up to three exchanges; the training record is the whole conversation
+with every reply of the writer supervised and no passage in it. A dialogue
+is graded by what it states, with no model involved: every number, name and
+quotation in the replies must be in the writer's text or in what the other
+speaker said, and a dialogue with one that is not teaches nothing. One
+dialogue in four ends by asking for a specific the exchange has not given, so
+that the student also sees the writer decline to invent one.
+
+Task generation is bounded by the budget and spread over the sources: each
+text part is shown through at most four evenly spaced windows of sections,
+parts are visited in a stable order that does not follow their names, and the
+budget stops generation inside a part. A held-out split never divides texts
+that print the same passage (two editions of a letter): records name the
+group of overlapping source text they came from, and a group is held out or
+trained on whole.
+
 `--distill` skips the policy's own attempts: the teacher answers every task
 open-book and the policy is trained on its verified answers, with no
 frontier and no critique. It is for a policy that cannot answer a task
