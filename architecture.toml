@@ -65,6 +65,10 @@ internal = ["splinter-record", "splinter-campaign"]
 [crates.splinter-tool-syntax]
 internal = ["splinter-lab", "splinter-policy"]
 
+[crates.splinter-jefferson]
+# A controlled experiment: teach a model a public-domain corpus and measure what it kept.
+internal = ["splinter-policy"]
+
 [limits]
 # A source file larger than this is split; the listed exceptions may only
 # shrink, and an entry is removed once its file is back under the limit.

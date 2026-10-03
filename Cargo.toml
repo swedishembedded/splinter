@@ -60,3 +60,4 @@ zstd = "0.13"
 proptest = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "process", "signal"] }
 toml = "0.8"
+regex = "1"

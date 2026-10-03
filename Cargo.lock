@@ -4066,6 +4066,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-jefferson"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "futures",
+ "regex",
+ "serde",
+ "serde_json",
+ "splinter-policy",
+ "sven-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "splinter-knowledge"
 version = "0.1.0"
 dependencies = [
