@@ -37,7 +37,7 @@ use sven_sdk::{CallError, Engine, Method, Toolset};
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::model_ref::ModelRef;
-use crate::sources::COMMAND_PREFIX;
+use crate::sources::{SourceTarget, COMMAND_PREFIX};
 
 /// The confidence below which the top reading is a question.
 pub const MIN_CONFIDENCE: f64 = 0.7;
@@ -125,7 +125,7 @@ nothing fits, and lower confidences when the sentence could mean several things.
 /// Sentences shown to the model with their classifications: a small
 /// model copies an example far more reliably than it reads a schema's
 /// references.
-const EXAMPLES: [(&str, &str); 3] = [
+const EXAMPLES: [(&str, &str); 4] = [
     (
         "Learn everything in the manual at ./manuals/pump.md",
         r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./manuals/pump.md"], "goal": "everything in the manual"}, "confidence": 0.9}]}"#,
@@ -133,6 +133,10 @@ const EXAMPLES: [(&str, &str); 3] = [
     (
         "Learn what the tar command line can do",
         r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["cmd:tar --help"], "goal": "what the tar command line can do"}, "confidence": 0.9}]}"#,
+    ),
+    (
+        "Learn to think like Ada Lovelace based on the letters she wrote in directory ./ada",
+        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./ada"], "goal": "think like Ada Lovelace"}, "confidence": 0.9}]}"#,
     ),
     (
         "Explain the tar flags from what you know",
@@ -256,7 +260,10 @@ impl Intent {
 /// sentence that matches no command is, with what was wrong with it.
 pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, CampaignError> {
     match classify(ctx, sentence) {
-        Ok(classification) => Ok(route(&classification, ctx.allow_remote())),
+        Ok(mut classification) => {
+            repair_paths(&mut classification, sentence);
+            Ok(route(&classification, ctx.allow_remote()))
+        }
         Err(CampaignError::Call {
             source: CallError::Invalid { detail, .. } | CallError::Postcondition { detail, .. },
             ..
@@ -271,9 +278,52 @@ pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, CampaignError>
     }
 }
 
-/// The policy model's readings of `sentence`.
+/// Corrects, by code, a path the model copied wrongly: a source that is
+/// no file or directory, no `cmd:` and no stored id is replaced by the one
+/// path the sentence names that exists. Nothing is invented: with no such
+/// path, or more than one, the reading keeps what the model wrote and is
+/// refused later where the path is read.
+fn repair_paths(classification: &mut Classification, sentence: &str) {
+    let named: Vec<String> = sentence
+        .split_whitespace()
+        .map(|word| {
+            word.trim_matches(|c: char| {
+                matches!(c, '"' | '\'' | ',' | ';' | ':' | '!' | '?' | '(' | ')')
+            })
+            .trim_end_matches('.')
+            .to_string()
+        })
+        .filter(|word| word.contains('/') && std::path::Path::new(word).exists())
+        .collect();
+    let [only] = named.as_slice() else { return };
+    // Wrong is what the source reader would refuse, except a URL: that is
+    // refused as a URL, not mended into some other path.
+    let wrong = |path: &str| !path.contains("://") && SourceTarget::from_learn_arg(path).is_err();
+    for candidate in &mut classification.candidates {
+        match &mut candidate.intent {
+            Intent::Learn { sources, .. } => {
+                for source in sources.iter_mut().filter(|s| wrong(s)) {
+                    source.clone_from(only);
+                }
+            }
+            Intent::AddSource { target } if wrong(target) => target.clone_from(only),
+            _ => {}
+        }
+    }
+}
+
+/// The readings of `sentence` by the model that reads sentences: the policy,
+/// or the model the configuration names for the front door.
 pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, CampaignError> {
-    let model = ctx.model(&ModelRef::policy_default())?;
+    let reader = match &ctx.config().front_door_model {
+        Some(text) => text.parse::<ModelRef>().map_err(|e| {
+            CampaignError::Refused(format!(
+                "the front door model {text:?} is not a model reference: {e}"
+            ))
+        })?,
+        None => ModelRef::policy_default(),
+    };
+    let model = ctx.model(&reader)?;
     let mut task = format!("{TASK}\n\nFor example:");
     for (example, classified) in EXAMPLES {
         task.push_str(&format!("\n{example:?} is classified as {classified}"));

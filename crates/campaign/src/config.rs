@@ -44,6 +44,11 @@ pub struct Config {
     /// when there is none, and the release gate's serve check is then
     /// unmeasured, which blocks the release.
     pub brain_binary: Option<PathBuf>,
+    /// The model reference that reads a sentence at the front door, when it
+    /// is not the policy: a small policy reads a sentence worse than a
+    /// larger model would. Parsed where it is used, so a bad value is
+    /// refused by name when a sentence is read.
+    pub front_door_model: Option<String>,
 }
 
 impl Config {
@@ -60,7 +65,9 @@ impl Config {
     /// * the capture allowlist's variables, and the current directory, for
     ///   command sources;
     /// * `SPLINTER_BRAIN_BIN`, else the first `brain` executable on `PATH`,
-    ///   as the binary a release must serve on.
+    ///   as the binary a release must serve on;
+    /// * `SPLINTER_FRONT_DOOR_MODEL`, a model reference that reads
+    ///   sentences instead of the policy.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -88,6 +95,7 @@ impl Config {
             brain_binary: var("SPLINTER_BRAIN_BIN")
                 .map(PathBuf::from)
                 .or_else(|| var("PATH").and_then(|path| find_executable(&path, "brain"))),
+            front_door_model: var("SPLINTER_FRONT_DOOR_MODEL"),
         }
     }
 }

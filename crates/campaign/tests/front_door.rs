@@ -14,7 +14,7 @@
 
 mod common;
 
-use common::{scratch_context, Scripted};
+use common::{config, scratch_context, Scratch, Scripted, POLICY};
 use serde_json::json;
 use splinter_campaign::front_door::{interpret, Intent, Routed};
 
@@ -56,6 +56,18 @@ fn classifier() -> Scripted {
             json!({ "candidates": [{
                 "intent": { "verb": "explain", "question": "the flags" },
                 "confidence": 0.9
+            }]})
+        } else if prompt.contains("materials she wrote")
+            || prompt.contains("from her letters in ./nowhere")
+        {
+            // The model garbles the path it was given.
+            json!({ "candidates": [{
+                "intent": {
+                    "verb": "learn",
+                    "sources": ["./typo/ada/letters"],
+                    "goal": "think like Ada Lovelace"
+                },
+                "confidence": 0.93
             }]})
         } else if prompt.contains("stop that run") {
             json!({ "candidates": [{
@@ -170,4 +182,96 @@ fn an_unreadable_classification_is_a_question_not_a_failure() {
     };
     assert!(question.candidates.is_empty());
     assert!(question.reason.contains("explain"), "{}", question.reason);
+}
+
+/// A path the model got wrong is corrected from the sentence, by code: when
+/// the reading's source is no file or directory but the sentence names exactly
+/// one that exists, that is what the person meant.
+#[test]
+fn a_path_the_model_garbled_is_corrected_from_the_sentence() {
+    let (scratch, ctx) = scratch_context("front-door-path", classifier(), false);
+    let letters = scratch.0.join("ada-letters");
+    std::fs::create_dir_all(&letters).unwrap();
+    let sentence = format!(
+        "Learn to think like Ada based on the materials she wrote in directory {}.",
+        letters.display()
+    );
+    let Routed::Execute(Intent::Learn { sources, goal }) = interpret(&ctx, &sentence).unwrap()
+    else {
+        panic!("a confident learn runs");
+    };
+    assert_eq!(sources, [letters.display().to_string()]);
+    assert_eq!(goal.as_deref(), Some("think like Ada Lovelace"));
+}
+
+#[test]
+fn a_source_that_exists_or_is_not_a_path_is_left_as_the_model_wrote_it() {
+    let (scratch, ctx) = scratch_context("front-door-path-kept", classifier(), false);
+    // The model's path is wrong and the sentence names no path that exists:
+    // nothing is invented, so the run is refused later where the path is read.
+    let Routed::Execute(Intent::Learn { sources, .. }) = interpret(
+        &ctx,
+        "Learn to think like Ada from her letters in ./nowhere/at/all",
+    )
+    .unwrap() else {
+        panic!("a confident learn runs");
+    };
+    assert_eq!(sources, ["./typo/ada/letters"]);
+    drop(scratch);
+}
+
+#[test]
+fn the_policy_is_shown_how_a_persona_sentence_is_read() {
+    let policy = classifier();
+    let (_scratch, ctx) = scratch_context("front-door-persona", policy.clone(), false);
+    interpret(&ctx, "learn ./docs").unwrap();
+    let prompts = policy.prompts.lock().unwrap();
+    assert!(
+        prompts[0].contains("think like"),
+        "a sentence naming a person to think like is shown as a learn: {}",
+        prompts[0]
+    );
+}
+
+/// The front door can be given a stronger model than the policy to read a
+/// sentence with: the configuration names it, and the policy is not asked.
+#[test]
+fn a_model_named_in_the_configuration_reads_the_sentence_instead_of_the_policy() {
+    let scratch = Scratch::new("front-door-model");
+    let mut settings = config(&scratch);
+    settings.front_door_model = Some("local:./reader".into());
+    let reader = classifier();
+    let policy = Scripted::new(|_| json!({ "candidates": [] }).to_string());
+    let ctx = splinter_campaign::Context::new(settings, false)
+        .unwrap()
+        .with_model(
+            splinter_campaign::model_ref::ModelRef::policy_default(),
+            splinter_agent::solve::Model::new(std::sync::Arc::new(policy.clone()), POLICY),
+        )
+        .with_model(
+            "local:./reader".parse().unwrap(),
+            splinter_agent::solve::Model::new(
+                std::sync::Arc::new(reader.clone()),
+                "scripted/reader",
+            ),
+        );
+    let Routed::Execute(_) = interpret(&ctx, "learn ./docs").unwrap() else {
+        panic!("the reader's confident reading runs");
+    };
+    assert!(
+        policy.prompts.lock().unwrap().is_empty(),
+        "the policy was not asked"
+    );
+    assert_eq!(reader.prompts.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_front_door_model_that_is_no_model_reference_is_refused_by_name() {
+    let scratch = Scratch::new("front-door-model-bad");
+    let mut settings = config(&scratch);
+    settings.front_door_model = Some("not a reference".into());
+    let ctx = splinter_campaign::Context::new(settings, false).unwrap();
+    let error = interpret(&ctx, "learn ./docs").err().unwrap();
+    assert!(error.is_refusal(), "{error}");
+    assert!(error.to_string().contains("not a reference"), "{error}");
 }

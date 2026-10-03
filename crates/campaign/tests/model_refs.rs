@@ -36,6 +36,7 @@ fn config() -> Config {
         command_env: BTreeMap::new(),
         working_dir: PathBuf::from("."),
         brain_binary: None,
+        front_door_model: None,
     }
 }
 
