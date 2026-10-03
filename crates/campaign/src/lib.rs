@@ -75,5 +75,5 @@ pub mod variants;
 pub mod verify;
 
 pub use config::Config;
-pub use context::Context;
+pub use context::{Context, Runtime};
 pub use error::CampaignError;

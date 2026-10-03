@@ -1,27 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! What every command works with: the configuration and state root, the
-//! clock that stamps records, the async runtime model runs block on, the
-//! models it has loaded, and the environments tasks are solved in.
+//! What a command works with, in two parts.
 //!
-//! A model is loaded once per [`Context`] and shared by every stage that
-//! names it; dropping the context stops a local generation still running
-//! before the process exits. A caller that already holds a model - a test's
-//! scripted one - hands it in with [`Context::with_model`] instead.
+//! A [`Runtime`] is what a process shares across its commands: the
+//! configuration and state root, the clock that stamps records, the async
+//! runtime model runs block on, the models loaded so far, and the
+//! environments tasks are solved in. A [`Context`] is one command's view of
+//! it: the release each policy alias pointed at when the command first asked,
+//! and where the command reports its stages. A REPL builds one runtime and a
+//! context per sentence, so a model loaded for one sentence is there for the
+//! next, and an alias that moved in between is resolved afresh.
 //!
-//! Local models go on the context's [`Residency`]: one resident copy of
-//! each base, shared by every model on it - the policy and the release
-//! gate's two arms differ only by adapter, and never hold two bases. Work
-//! that needs the device for itself - a fine-tune, which loads its own
-//! copy, and the gate's serve check, a separate process - first releases
-//! every resident base ([`Context::release_bases`]); the next generation of
-//! a model reloads its base.
+//! A model is loaded once per runtime and adapter and shared by every stage
+//! that names it; dropping the runtime stops a local generation still
+//! running before the process exits. A caller that already holds a model - a
+//! test's scripted one - hands it in with [`Context::with_model`] instead.
 //!
-//! `policy:<alias>` is resolved once per context, on first use: the
-//! release the alias points at then is the one every stage of the command
-//! uses, however the alias moves meanwhile ([`Context::policy_pin`]). Only
-//! the context's own release or rollback moves the pin along.
+//! Local models go on the runtime's [`Residency`]: one resident copy of each
+//! base, shared by every model on it - the policy and the release gate's two
+//! arms differ only by adapter, and never hold two bases. Work that needs the
+//! device for itself - a fine-tune, which loads its own copy, and the gate's
+//! serve check, a separate process - first releases every resident base
+//! ([`Runtime::release_bases`]); the next generation of a model reloads its
+//! base.
+//!
+//! `policy:<alias>` is resolved once per context, on first use: the release
+//! the alias points at then is the one every stage of the command uses,
+//! however the alias moves meanwhile ([`Context::policy_pin`]). Only the
+//! context's own release or rollback moves the pin along.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -63,13 +70,17 @@ const LOCAL_STREAM_IDLE: Duration = Duration::MAX;
 /// Receives each stage's summary as it finishes: `(stage, summary)`.
 pub type Progress = Box<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
 
-/// A model a context holds, and what keeps a loaded one alive.
+/// A loaded model: what a command runs on, and what keeps it alive.
 struct Held {
     model: Model,
-    /// The loaded model, when the context loaded it; dropping it quiesces
-    /// a local device.
-    loaded: Option<LoadedModel>,
+    /// The loaded model; dropping it quiesces a local device.
+    loaded: LoadedModel,
 }
+
+/// Where a loaded model is cached: the reference that named it and the
+/// adapter it was resolved to, so two commands that pinned different
+/// releases of one alias never share a model.
+type ModelKey = (ModelRef, Option<PathBuf>);
 
 /// The release a policy alias was resolved to for a context.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -82,22 +93,24 @@ pub struct PolicyPin {
     pub adapter: PathBuf,
 }
 
-/// See the module documentation.
-pub struct Context {
+/// The services every command of a process shares: the configuration and
+/// state root, the clock, the async runtime model runs block on, the models
+/// loaded so far and the bases they sit on, and the environments tasks are
+/// solved in. Built once; each command works through its own [`Context`].
+pub struct Runtime {
     config: Config,
     workspace: Workspace,
     allow_remote: bool,
     clock: Box<dyn Clock + Send + Sync>,
     runtime: tokio::runtime::Runtime,
-    models: Mutex<HashMap<ModelRef, Held>>,
+    handed_in: Mutex<HashMap<ModelRef, Model>>,
+    models: Mutex<HashMap<ModelKey, Held>>,
     residency: Residency,
-    pins: Mutex<BTreeMap<String, Option<PolicyPin>>>,
     environments: Environments,
-    progress: Option<Progress>,
 }
 
-impl Context {
-    /// A context over `config`, with `allow_remote` as the command line's
+impl Runtime {
+    /// A runtime over `config`, with `allow_remote` as the command line's
     /// network opt-in, stamping records with the wall clock.
     pub fn new(config: Config, allow_remote: bool) -> Result<Self, CampaignError> {
         let runtime = tokio::runtime::Runtime::new().map_err(CampaignError::Runtime)?;
@@ -109,34 +122,14 @@ impl Context {
             allow_remote,
             clock: Box::new(SystemClock),
             runtime,
+            handed_in: Mutex::new(HashMap::new()),
             models: Mutex::new(HashMap::new()),
             residency: Residency::default(),
-            pins: Mutex::new(BTreeMap::new()),
             environments,
-            progress: None,
         })
     }
 
-    /// The same context answering `reference` with `model` instead of
-    /// loading it.
-    #[must_use]
-    pub fn with_model(self, reference: ModelRef, model: Model) -> Self {
-        self.add_model(reference, model);
-        self
-    }
-
-    /// Answers `reference` with `model` from now on, instead of loading it.
-    pub fn add_model(&self, reference: ModelRef, model: Model) {
-        self.lock_models().insert(
-            reference,
-            Held {
-                model,
-                loaded: None,
-            },
-        );
-    }
-
-    /// The same context keeping its local models' bases on `residency`
+    /// The same runtime keeping its local models' bases on `residency`
     /// instead of loading them with brain: a spec's scripted bases.
     #[must_use]
     pub fn with_residency(mut self, residency: Residency) -> Self {
@@ -144,7 +137,25 @@ impl Context {
         self
     }
 
-    /// How many bases are resident on the device for this context's
+    /// The same runtime stamping records with `clock`.
+    #[must_use]
+    pub fn with_clock(mut self, clock: Box<dyn Clock + Send + Sync>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// A context for one command on this runtime.
+    #[must_use]
+    pub fn context(self: &Arc<Self>) -> Context {
+        Context::on(Arc::clone(self))
+    }
+
+    /// Answers `reference` with `model` from now on, instead of loading it.
+    pub fn add_model(&self, reference: ModelRef, model: Model) {
+        self.lock_handed_in().insert(reference, model);
+    }
+
+    /// How many bases are resident on the device for this runtime's
     /// models right now.
     #[must_use]
     pub fn resident_bases(&self) -> usize {
@@ -157,27 +168,11 @@ impl Context {
     /// their next generation loading the base again.
     pub fn release_bases(&self) {
         for held in self.lock_models().values() {
-            if let Some(loaded) = &held.loaded {
-                // Best effort, as on drop: a generation outliving the grace
-                // is cancelling, and the release waits for it to end.
-                let _ = loaded.quiesce();
-            }
+            // Best effort, as on drop: a generation outliving the grace
+            // is cancelling, and the release waits for it to end.
+            let _ = held.loaded.quiesce();
         }
         self.residency.release_all();
-    }
-
-    /// The same context stamping records with `clock`.
-    #[must_use]
-    pub fn with_clock(mut self, clock: Box<dyn Clock + Send + Sync>) -> Self {
-        self.clock = clock;
-        self
-    }
-
-    /// The same context reporting each finished stage to `progress`.
-    #[must_use]
-    pub fn with_progress(mut self, progress: Progress) -> Self {
-        self.progress = Some(progress);
-        self
     }
 
     /// The configuration.
@@ -258,10 +253,205 @@ impl Context {
         &self.environments
     }
 
+    /// Runs `future` to completion on the runtime. Must not be called from
+    /// inside an async task.
+    pub(crate) fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.runtime.block_on(future)
+    }
+
+    /// A handle to the runtime, for the lower crates that block on it
+    /// themselves.
+    pub(crate) fn handle(&self) -> tokio::runtime::Handle {
+        self.runtime.handle().clone()
+    }
+
+    /// The model `reference` names, resolved to `selection` and `adapter`:
+    /// the one handed in for it, else the loaded one, loading it on first
+    /// use.
+    fn model(
+        &self,
+        reference: &ModelRef,
+        adapter: Option<PathBuf>,
+        selection: &ModelSelection,
+    ) -> Result<Model, CampaignError> {
+        if let Some(model) = self.lock_handed_in().get(reference) {
+            return Ok(model.clone());
+        }
+        let key = (reference.clone(), adapter);
+        if let Some(held) = self.lock_models().get(&key) {
+            return Ok(held.model.clone());
+        }
+        let local = selection.local().is_some();
+        let loaded = selection
+            .load(&self.residency)
+            .map_err(|e| CampaignError::Model {
+                model: reference.to_string(),
+                detail: format!("{e:#}"),
+            })?;
+        let mut model = Model::new(loaded.provider(), loaded.identity());
+        if local {
+            model = model.with_stream_idle(LOCAL_STREAM_IDLE);
+        }
+        self.lock_models().insert(
+            key,
+            Held {
+                model: model.clone(),
+                loaded,
+            },
+        );
+        Ok(model)
+    }
+
+    /// The model `reference` names, sampling as `sampling` says; `None`
+    /// when its sampling cannot be set here: a model reached over an API
+    /// (its server samples) or one handed in rather than loaded.
+    fn resampled(
+        &self,
+        reference: &ModelRef,
+        adapter: Option<PathBuf>,
+        selection: &ModelSelection,
+        sampling: Sampling,
+    ) -> Result<Option<Model>, CampaignError> {
+        let model = self.model(reference, adapter.clone(), selection)?;
+        let provider = self
+            .lock_models()
+            .get(&(reference.clone(), adapter))
+            .and_then(|held| held.loaded.resampled(sampling));
+        Ok(provider.map(|provider| Model { provider, ..model }))
+    }
+
+    /// Drops every model loaded for `reference`, whatever adapter it was on:
+    /// the models stay gone until next used, and a base goes with its last
+    /// model. A model handed in stays.
+    fn drop_loaded(&self, reference: &ModelRef) {
+        // Dropped outside the lock: dropping quiesces a running generation.
+        let dropped: Vec<Held> = {
+            let mut models = self.lock_models();
+            let keys: Vec<ModelKey> = models
+                .keys()
+                .filter(|(held, _)| held == reference)
+                .cloned()
+                .collect();
+            keys.iter().filter_map(|key| models.remove(key)).collect()
+        };
+        drop(dropped);
+    }
+
+    fn lock_models(&self) -> std::sync::MutexGuard<'_, HashMap<ModelKey, Held>> {
+        // A poisoned lock only means a load panicked; the map is still
+        // consistent, since an entry is inserted whole.
+        self.models
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn lock_handed_in(&self) -> std::sync::MutexGuard<'_, HashMap<ModelRef, Model>> {
+        self.handed_in
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// What one command works with: the shared [`Runtime`], the release each
+/// policy alias pointed at when the command first asked, and where the
+/// command reports its stages.
+///
+/// `policy:<alias>` is resolved once per context, on first use: the release
+/// the alias points at then is the one every stage of the command uses,
+/// however the alias moves meanwhile ([`Context::policy_pin`]). Only the
+/// context's own release or rollback moves the pin along. A later command
+/// has a context of its own and resolves the alias afresh.
+pub struct Context {
+    runtime: Arc<Runtime>,
+    pins: Mutex<BTreeMap<String, Option<PolicyPin>>>,
+    progress: Option<Progress>,
+}
+
+impl std::ops::Deref for Context {
+    type Target = Runtime;
+
+    fn deref(&self) -> &Runtime {
+        &self.runtime
+    }
+}
+
+impl Context {
+    /// A context for one command on `runtime`.
+    #[must_use]
+    pub fn on(runtime: Arc<Runtime>) -> Self {
+        Self {
+            runtime,
+            pins: Mutex::new(BTreeMap::new()),
+            progress: None,
+        }
+    }
+
+    /// A context over its own runtime on `config`, with `allow_remote` as
+    /// the command line's network opt-in, stamping records with the wall
+    /// clock: for a process that runs one command.
+    pub fn new(config: Config, allow_remote: bool) -> Result<Self, CampaignError> {
+        Ok(Self::on(Arc::new(Runtime::new(config, allow_remote)?)))
+    }
+
+    /// The runtime this context works on, to build the next command's
+    /// context on.
+    #[must_use]
+    pub fn runtime(&self) -> &Arc<Runtime> {
+        &self.runtime
+    }
+
+    /// The runtime this context was built on, owned by this context alone:
+    /// the builders below run before it is shared.
+    fn sole_runtime(&mut self) -> &mut Runtime {
+        Arc::get_mut(&mut self.runtime)
+            .unwrap_or_else(|| unreachable!("a context is configured before its runtime is shared"))
+    }
+
+    /// The same context answering `reference` with `model` instead of
+    /// loading it.
+    #[must_use]
+    pub fn with_model(self, reference: ModelRef, model: Model) -> Self {
+        self.add_model(reference, model);
+        self
+    }
+
+    /// The same context keeping its local models' bases on `residency`
+    /// instead of loading them with brain: a spec's scripted bases. Only a
+    /// context that owns its runtime alone can change it.
+    #[must_use]
+    pub fn with_residency(mut self, residency: Residency) -> Self {
+        self.sole_runtime().residency = residency;
+        self
+    }
+
+    /// The same context stamping records with `clock`. Only a context that
+    /// owns its runtime alone can change it.
+    #[must_use]
+    pub fn with_clock(mut self, clock: Box<dyn Clock + Send + Sync>) -> Self {
+        self.sole_runtime().clock = clock;
+        self
+    }
+
+    /// The same context reporting each finished stage to `progress`.
+    #[must_use]
+    pub fn with_progress(mut self, progress: Progress) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
     /// The selection `reference` resolves to, without loading it: refused
     /// for a remote model without the network opt-in, and for a policy
     /// alias other than `default` that points at no release.
     pub fn selection(&self, reference: &ModelRef) -> Result<ModelSelection, CampaignError> {
+        Ok(self.resolve(reference)?.1)
+    }
+
+    /// The adapter and selection `reference` resolves to under this
+    /// context's pins.
+    fn resolve(
+        &self,
+        reference: &ModelRef,
+    ) -> Result<(Option<PathBuf>, ModelSelection), CampaignError> {
         let adapter = match reference {
             ModelRef::Policy(alias) => {
                 let pin = self.policy_pin(alias)?;
@@ -275,7 +465,9 @@ impl Context {
             }
             _ => None,
         };
-        Ok(reference.resolve(&self.config, self.allow_remote(), adapter.as_deref())?)
+        let selection =
+            reference.resolve(self.config(), self.allow_remote(), adapter.as_deref())?;
+        Ok((adapter, selection))
     }
 
     /// The release `alias` points at, resolved on this context's first ask
@@ -288,7 +480,7 @@ impl Context {
         if let Some(pin) = pins.get(alias) {
             return Ok(pin.clone());
         }
-        let store = ReleaseStore::new(&self.workspace, self.root());
+        let store = self.releases();
         let pin = match store.alias(alias)? {
             Some(release) => {
                 let stored = store.get(&release)?;
@@ -304,53 +496,22 @@ impl Context {
         Ok(pin)
     }
 
-    /// Drops `alias`'s pin and the policy model this context loaded for
-    /// it, so the next use resolves the alias afresh: for the context's own
-    /// release or rollback, which moved it.
+    /// Drops `alias`'s pin and the policy model this context's runtime
+    /// loaded for it, so the next use resolves the alias afresh: for the
+    /// context's own release or rollback, which moved it.
     pub(crate) fn repin_policy(&self, alias: &str) {
         self.pins
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(alias);
-        // A model handed in stays; one this context loaded is dropped,
-        // and its base with it once no other model uses it.
-        // Dropped outside the lock: dropping quiesces a running generation.
-        let reference = ModelRef::Policy(alias.to_string());
-        let dropped = {
-            let mut models = self.lock_models();
-            let loaded = models
-                .get(&reference)
-                .is_some_and(|held| held.loaded.is_some());
-            loaded.then(|| models.remove(&reference))
-        };
-        drop(dropped);
+        self.runtime
+            .drop_loaded(&ModelRef::Policy(alias.to_string()));
     }
 
     /// The model `reference` names, loaded on first use.
     pub fn model(&self, reference: &ModelRef) -> Result<Model, CampaignError> {
-        if let Some(held) = self.lock_models().get(reference) {
-            return Ok(held.model.clone());
-        }
-        let selection = self.selection(reference)?;
-        let local = selection.local().is_some();
-        let loaded = selection
-            .load(&self.residency)
-            .map_err(|e| CampaignError::Model {
-                model: reference.to_string(),
-                detail: format!("{e:#}"),
-            })?;
-        let mut model = Model::new(loaded.provider(), loaded.identity());
-        if local {
-            model = model.with_stream_idle(LOCAL_STREAM_IDLE);
-        }
-        self.lock_models().insert(
-            reference.clone(),
-            Held {
-                model: model.clone(),
-                loaded: Some(loaded),
-            },
-        );
-        Ok(model)
+        let (adapter, selection) = self.resolve(reference)?;
+        self.runtime.model(reference, adapter, &selection)
     }
 
     /// The model `reference` names, sampling as `sampling` says; `None`
@@ -361,25 +522,9 @@ impl Context {
         reference: &ModelRef,
         sampling: Sampling,
     ) -> Result<Option<Model>, CampaignError> {
-        let model = self.model(reference)?;
-        let provider = self
-            .lock_models()
-            .get(reference)
-            .and_then(|held| held.loaded.as_ref())
-            .and_then(|loaded| loaded.resampled(sampling));
-        Ok(provider.map(|provider| Model { provider, ..model }))
-    }
-
-    /// Runs `future` to completion on the context's runtime. Must not be
-    /// called from inside an async task.
-    pub(crate) fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.runtime.block_on(future)
-    }
-
-    /// A handle to the context's runtime, for the lower crates that block
-    /// on it themselves.
-    pub(crate) fn handle(&self) -> tokio::runtime::Handle {
-        self.runtime.handle().clone()
+        let (adapter, selection) = self.resolve(reference)?;
+        self.runtime
+            .resampled(reference, adapter, &selection, sampling)
     }
 
     /// Reports a finished stage to the progress receiver, if any.
@@ -387,14 +532,6 @@ impl Context {
         if let Some(progress) = &self.progress {
             progress(stage, summary);
         }
-    }
-
-    fn lock_models(&self) -> std::sync::MutexGuard<'_, HashMap<ModelRef, Held>> {
-        // A poisoned lock only means a load panicked; the map is still
-        // consistent, since an entry is inserted whole.
-        self.models
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 

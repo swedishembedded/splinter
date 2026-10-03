@@ -7,6 +7,7 @@
 //! once.
 
 use std::io::{BufRead, IsTerminal, Write};
+use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
@@ -31,7 +32,7 @@ use splinter_campaign::tasks::{self, check_kinds, resolve_set as resolve_task_se
 use splinter_campaign::train::{train, BrainTrainer, TrainRequest, Tuning};
 use splinter_campaign::variants;
 use splinter_campaign::verify::{verify_set, Judge};
-use splinter_campaign::{CampaignError, Config, Context};
+use splinter_campaign::{CampaignError, Config, Context, Runtime};
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
@@ -66,24 +67,30 @@ impl From<Exit> for std::process::ExitCode {
 
 /// See the module documentation.
 pub struct Session {
-    ctx: Context,
+    runtime: Arc<Runtime>,
     global: Global,
 }
 
 impl Session {
     /// A session over `config` with the command line's global flags.
     pub fn new(config: Config, global: Global) -> Result<Self, CampaignError> {
-        let verbose = global.verbose > 0;
-        let ctx = Context::new(config, global.allow_remote)?.with_progress(Box::new(
-            move |stage, summary| {
+        let runtime = Arc::new(Runtime::new(config, global.allow_remote)?);
+        Ok(Self { runtime, global })
+    }
+
+    /// The context of one command: its own pins on the shared runtime, so
+    /// each sentence of a REPL resolves `policy:<alias>` afresh.
+    fn context(&self) -> Context {
+        let verbose = self.global.verbose > 0;
+        self.runtime
+            .context()
+            .with_progress(Box::new(move |stage, summary| {
                 if verbose {
                     eprintln!("[{stage}] {summary}");
                 } else {
                     eprintln!("[{stage}] {}", learn_output::stage_line(stage, summary));
                 }
-            },
-        ));
-        Ok(Self { ctx, global })
+            }))
     }
 
     /// Runs `command`, prints its report, and says how it ended.
@@ -139,7 +146,7 @@ impl Session {
         sentence: &str,
         answers: Option<&mut std::io::Lines<std::io::StdinLock<'_>>>,
     ) -> Exit {
-        let routed = match interpret(&self.ctx, sentence) {
+        let routed = match interpret(&self.context(), sentence) {
             Ok(routed) => routed,
             Err(e) => {
                 output::error(self.global.json, &e);
@@ -204,7 +211,8 @@ impl Session {
     }
 
     fn dispatch(&self, command: Command) -> Result<Exit, CampaignError> {
-        let ctx = &self.ctx;
+        let context = self.context();
+        let ctx = &context;
         let json = self.global.json;
         match command {
             Command::Learn(args) => {

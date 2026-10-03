@@ -22,7 +22,8 @@ improve, (2) retention holds on everything learned before, (3) the anchor
 suite for general behaviour does not regress, and (4) the adapter loads in
 plain `brain serve`. A release is an immutable adapter plus a manifest (base
 model identity, lineage, dataset digests, evaluation); a moving default
-alias is resolved once when a run starts.
+alias is resolved once when a command starts (a REPL resolves it afresh for
+each sentence).
 
 Lineage runs both ways: an answer traces to an adapter, a training run,
 examples and the source passage or command output; an example traces
@@ -64,9 +65,7 @@ the released adapter answers the same questions from plain `brain serve`.
    sampling (temperature 0.2), so the serve check's verdict agreement can
    differ by sampling rather than by serving - the local provider should
    honour a request's temperature so probes decode greedily on both paths;
-   `policy:<alias>` is pinned per context, so a REPL session keeps the
-   release it first resolved until its own release or rollback; and a
-   default-policy size chosen by measurement (the largest Qwen3 brain's
+   and a default-policy size chosen by measurement (the largest Qwen3 brain's
    training path fits).
 5. **SDK surfaces**, so Splinter uses only `sven-sdk` and `brain`:
    - brain: done for chat inference (messages, tool schemas, streaming,
