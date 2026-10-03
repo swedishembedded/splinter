@@ -21,11 +21,11 @@ use std::sync::Arc;
 use common::{config, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::learn::{learn, parse_budget, LearnRequest, Learned};
-use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::learn::{learn, parse_budget, LearnRequest, Learned};
+use splinter_pipelines::train::{TrainPlan, Trainer};
 
 struct NoTraining;
 

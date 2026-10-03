@@ -4007,10 +4007,10 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
- "splinter-campaign",
  "splinter-core",
  "splinter-eval",
  "splinter-orchestrator",
+ "splinter-pipelines",
  "splinter-store",
 ]
 
@@ -4027,29 +4027,6 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "splinter-knowledge",
- "splinter-sandbox",
- "splinter-store",
- "sven-sdk",
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "splinter-campaign"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "futures",
- "serde",
- "serde_json",
- "splinter-agent",
- "splinter-core",
- "splinter-data",
- "splinter-eval",
- "splinter-knowledge",
- "splinter-model",
- "splinter-orchestrator",
  "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
@@ -4178,6 +4155,29 @@ dependencies = [
  "splinter-model",
  "splinter-sandbox",
  "splinter-store",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "splinter-pipelines"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "serde",
+ "serde_json",
+ "splinter-agent",
+ "splinter-core",
+ "splinter-data",
+ "splinter-eval",
+ "splinter-knowledge",
+ "splinter-model",
+ "splinter-orchestrator",
+ "splinter-sandbox",
+ "splinter-store",
+ "sven-sdk",
  "thiserror 2.0.21",
  "tokio",
 ]

@@ -30,13 +30,13 @@ use common::gate::{
     FakeTrainer, ANCHOR, FACTS,
 };
 use splinter_agent::CancelToken;
-use splinter_campaign::release::anchor;
-use splinter_campaign::train::{
-    train, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
-};
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
 use splinter_orchestrator::Context;
+use splinter_pipelines::release::anchor;
+use splinter_pipelines::train::{
+    train, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
+};
 
 fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
     TrainRequest {

@@ -26,13 +26,13 @@ mod common;
 use common::{scratch_context, Scripted};
 use serde_json::json;
 use splinter_agent::CancelToken;
-use splinter_campaign::ask::ask;
-use splinter_campaign::sources::{self, SourceTarget};
-use splinter_campaign::tasks::{generate, Generation};
-use splinter_campaign::variants::{generate_variants, VariantsRequest};
 use splinter_core::clock::FixedClock;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
+use splinter_pipelines::ask::ask;
+use splinter_pipelines::sources::{self, SourceTarget};
+use splinter_pipelines::tasks::{generate, Generation};
+use splinter_pipelines::variants::{generate_variants, VariantsRequest};
 use splinter_store::tasks::{TaskEntry, TaskSet};
 
 /// Three manuals: two disagree about one board, the third is another board.

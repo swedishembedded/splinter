@@ -35,14 +35,14 @@ use common::Scripted;
 use serde_json::json;
 use splinter_agent::solve::{Model, MATERIAL_HEADING, SYSTEM_PROMPT};
 use splinter_agent::CancelToken;
-use splinter_campaign::curriculum::mastery::weakest;
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::release::arm;
-use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::curriculum::mastery::weakest;
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::release::arm;
+use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_store::decision::decide;
 
 /// The idle-current question.

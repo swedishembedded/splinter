@@ -11,29 +11,29 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_campaign::ask::ask;
-use splinter_campaign::critique::{critique_set, CritiqueRequest};
-use splinter_campaign::curriculum::frontier::{measure, MeasureRequest};
-use splinter_campaign::datasets::{build, export, BuildRequest};
-use splinter_campaign::eval::{evaluate, EvalRequest};
-use splinter_campaign::experiences::{self, resolve_set};
-use splinter_campaign::front_door::{interpret, Routed};
-use splinter_campaign::judge::calibrate_judge;
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::lineage::{lineage, LineageRequest};
-use splinter_campaign::release::{self, ReleaseRequest};
-use splinter_campaign::solving::solve_set;
-use splinter_campaign::sources::{self, SourceTarget};
-use splinter_campaign::state;
-use splinter_campaign::status::status;
-use splinter_campaign::tasks::{self, check_kinds, resolve_set as resolve_task_set};
-use splinter_campaign::train::{train, BrainTrainer, TrainRequest, Tuning};
-use splinter_campaign::variants;
-use splinter_campaign::verify::{verify_set, Judge};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::Role;
 use splinter_orchestrator::runs::{self, record};
 use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
+use splinter_pipelines::ask::ask;
+use splinter_pipelines::critique::{critique_set, CritiqueRequest};
+use splinter_pipelines::curriculum::frontier::{measure, MeasureRequest};
+use splinter_pipelines::datasets::{build, export, BuildRequest};
+use splinter_pipelines::eval::{evaluate, EvalRequest};
+use splinter_pipelines::experiences::{self, resolve_set};
+use splinter_pipelines::front_door::{interpret, Routed};
+use splinter_pipelines::judge::calibrate_judge;
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::lineage::{lineage, LineageRequest};
+use splinter_pipelines::release::{self, ReleaseRequest};
+use splinter_pipelines::solving::solve_set;
+use splinter_pipelines::sources::{self, SourceTarget};
+use splinter_pipelines::state;
+use splinter_pipelines::status::status;
+use splinter_pipelines::tasks::{self, check_kinds, resolve_set as resolve_task_set};
+use splinter_pipelines::train::{train, BrainTrainer, TrainRequest, Tuning};
+use splinter_pipelines::variants;
+use splinter_pipelines::verify::{verify_set, Judge};
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,

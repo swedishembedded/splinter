@@ -2,8 +2,8 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 [package]
-name = "splinter-campaign"
-description = "Splinter's controller: configuration, model references, the front door, and each pipeline stage - sources, tasks, solve, verify, critique, dataset, train, release - with learn composing them."
+name = "splinter-pipelines"
+description = "Splinter's stages and pipelines: the front door, and each stage - sources, tasks, solve, verify, critique, dataset, train, release - with learn composing them as a pipeline."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

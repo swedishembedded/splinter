@@ -6,8 +6,8 @@
 
 use std::fmt::Write as _;
 
-use splinter_campaign::learn::{LearnPlan, LearnReport, Learned};
-use splinter_campaign::variants::VariantsGenerated;
+use splinter_pipelines::learn::{LearnPlan, LearnReport, Learned};
+use splinter_pipelines::variants::VariantsGenerated;
 
 use crate::output::{source_line, tally, word, Report};
 

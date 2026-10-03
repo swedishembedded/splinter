@@ -35,23 +35,23 @@ use common::manual::{
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::datasets::{build, BuildRequest, ViewName};
-use splinter_campaign::learn::{learn, LearnRequest, Learned, STAGES};
-use splinter_campaign::release::arm;
-use splinter_campaign::solving::solve_set;
-use splinter_campaign::sources::{self, SourceTarget};
-use splinter_campaign::tasks::{generate, Generation};
-use splinter_campaign::train::{TrainPlan, Trainer};
-use splinter_campaign::variants::{generate_variants, VariantsRequest};
-use splinter_campaign::verify::verify_set;
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::datasets::{build, BuildRequest, ViewName};
+use splinter_pipelines::learn::{learn, LearnRequest, Learned, STAGES};
+use splinter_pipelines::release::arm;
+use splinter_pipelines::solving::solve_set;
+use splinter_pipelines::sources::{self, SourceTarget};
+use splinter_pipelines::tasks::{generate, Generation};
+use splinter_pipelines::train::{TrainPlan, Trainer};
+use splinter_pipelines::variants::{generate_variants, VariantsRequest};
+use splinter_pipelines::verify::verify_set;
 use splinter_store::runs::read_run;
 
 /// A context whose policy is the manual's, and the tasks `tasks` writes
 /// from the manual (recall, and denoise, which cannot be varied).
-fn manual_tasks(test: &str) -> (Scratch, Context, splinter_campaign::tasks::TasksGenerated) {
+fn manual_tasks(test: &str) -> (Scratch, Context, splinter_pipelines::tasks::TasksGenerated) {
     let (scratch, ctx) = scratch_context(test, manual_policy(), false);
     let manual = scratch.0.join("manual.md");
     std::fs::write(&manual, MANUAL).unwrap();
@@ -81,8 +81,8 @@ fn manual_tasks(test: &str) -> (Scratch, Context, splinter_campaign::tasks::Task
 
 fn variants_of(
     ctx: &Context,
-    generated: &splinter_campaign::tasks::TasksGenerated,
-) -> splinter_campaign::variants::VariantsGenerated {
+    generated: &splinter_pipelines::tasks::TasksGenerated,
+) -> splinter_pipelines::variants::VariantsGenerated {
     generate_variants(
         ctx,
         &VariantsRequest {

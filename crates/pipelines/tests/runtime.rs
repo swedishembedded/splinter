@@ -20,7 +20,7 @@
 mod common;
 
 use common::gate::{anchor_file, gate_context, released, Brain, ANCHOR};
-use splinter_campaign::release::{anchor, arm};
+use splinter_pipelines::release::{anchor, arm};
 
 #[test]
 fn a_new_command_sees_the_alias_where_the_last_one_left_it() {

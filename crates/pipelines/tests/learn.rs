@@ -35,15 +35,15 @@ use common::manual::{manual_policy as policy, MANUAL};
 use common::scratch_context;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::release::{anchor, rollback};
-use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_core::dataset::DatasetId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::release::{anchor, rollback};
+use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_store::runs::{read_run, RunStatus};
 
 /// Training as a test double: keeps what it was handed, and trains the
@@ -164,7 +164,7 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     assert!(!report.finished(true) && report.finished(false));
     // With no assistant configured the policy would be its own judge, which
     // a judge refuses; the exam says why it did not run and the gate decides.
-    let Some(splinter_campaign::exam::Exam::NotRun(why)) = &report.exam else {
+    let Some(splinter_pipelines::exam::Exam::NotRun(why)) = &report.exam else {
         panic!("the exam could not run: {:?}", report.exam);
     };
     assert!(why.contains("refuses to grade"), "{why}");

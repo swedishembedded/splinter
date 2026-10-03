@@ -6,14 +6,13 @@
 // your team needs expertise in continual learning or agent evaluation, you
 // can procure our services by sending an email to info@swedishembedded.com.
 
-//! Splinter's controller: what each command does, composed from the lower
-//! crates. One module per pipeline stage, each reading and writing the
+//! The stages and the pipelines: what each command does, composed from the
+//! lower crates. One module per pipeline stage, each reading and writing the
 //! content-addressed stores under the state root, and `learn` composing
-//! them.
+//! them as a pipeline the orchestrator's engine runs. What a run is carried
+//! out with - the configuration, the runtime and context, the roles, the
+//! recorded run - is `splinter-orchestrator`'s.
 //!
-//! * [`config`] - the configuration, and the only place the environment
-//!   is read; [`context`] - what every command works with.
-//! * [`model_ref`] - the one way a command names a model.
 //! * [`sources`] - capture and inspect sources.
 //! * [`tasks`] - sources become a task set.
 //! * [`variants`] - the tasks kept for training asked again in other

@@ -16,7 +16,7 @@ mod common;
 
 use common::{config, scratch_context, Scratch, Scripted, POLICY};
 use serde_json::json;
-use splinter_campaign::front_door::{interpret, Intent, Routed};
+use splinter_pipelines::front_door::{interpret, Intent, Routed};
 
 /// The classification the scripted policy gives each sentence.
 fn classifier() -> Scripted {

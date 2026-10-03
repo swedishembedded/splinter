@@ -27,13 +27,13 @@ use std::sync::Arc;
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::exam::{exam, ExamRequest};
-use splinter_campaign::sources::{self, SourceTarget};
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_core::model_ref::ModelRef;
+use splinter_pipelines::exam::{exam, ExamRequest};
+use splinter_pipelines::sources::{self, SourceTarget};
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const LETTER: &str = "# To a young man\n\n## Habits\n\nKeep habit1 and habit2 and habit3 and habit4 and habit5 and habit6 each morning, for a settled mind needs them.\n";
@@ -162,7 +162,7 @@ fn run(
     ctx: &splinter_orchestrator::Context,
     tasks: &[Task],
     controls: &[Experience],
-) -> splinter_campaign::exam::Examined {
+) -> splinter_pipelines::exam::Examined {
     let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
     exam(
         ctx,

@@ -24,9 +24,9 @@ use std::time::{Duration, Instant};
 use common::{scratch_context, Scratch, Scripted};
 use serde_json::json;
 use splinter_agent::CancelToken;
-use splinter_campaign::sources::{self, SourceTarget};
-use splinter_campaign::tasks::{generate, Generation, MAX_WINDOWS_PER_PART};
 use splinter_core::model_ref::ModelRef;
+use splinter_pipelines::sources::{self, SourceTarget};
+use splinter_pipelines::tasks::{generate, Generation, MAX_WINDOWS_PER_PART};
 
 /// A part of `sections` sections, each carrying its own marker.
 fn part(tag: &str, sections: usize) -> String {
@@ -42,7 +42,7 @@ fn run(
     ctx: &splinter_orchestrator::Context,
     files: &[(&str, String)],
     deadline: Option<Instant>,
-) -> splinter_campaign::tasks::TasksGenerated {
+) -> splinter_pipelines::tasks::TasksGenerated {
     let dir = scratch.0.join("parts");
     std::fs::create_dir_all(&dir).unwrap();
     for (name, text) in files {

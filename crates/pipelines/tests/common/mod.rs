@@ -80,7 +80,7 @@ impl Scratch {
     /// A fresh scratch directory named for `test`.
     pub fn new(test: &str) -> Self {
         let path =
-            std::env::temp_dir().join(format!("splinter-campaign-{test}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("splinter-pipelines-{test}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         Self(path)

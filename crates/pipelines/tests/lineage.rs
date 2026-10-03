@@ -39,10 +39,6 @@ use common::gate::{gate_context, Brain, FakeTrainer, BASE_BYTES, NOW};
 use common::manual::{manual_policy, BAUD_QUESTION, BAUD_QUOTE, MANUAL};
 use common::Scratch;
 use splinter_agent::solve::Model;
-use splinter_campaign::ask::ask;
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::lineage::{lineage, Direction, Lineage, LineageRequest, NodeKind, Relation};
-use splinter_campaign::train::Candidate;
 use splinter_core::clock::FixedClock;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
@@ -54,6 +50,12 @@ use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{Check, GateConfig, GateReport};
 use splinter_orchestrator::releases::{ReleaseManifest, RELEASE_FORMAT};
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::ask::ask;
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::lineage::{
+    lineage, Direction, Lineage, LineageRequest, NodeKind, Relation,
+};
+use splinter_pipelines::train::Candidate;
 
 /// What the learned fixture holds.
 struct Fixture {

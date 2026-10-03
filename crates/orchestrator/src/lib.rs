@@ -25,7 +25,7 @@
 //! * [`error`] - the error every command reports.
 //!
 //! The stages and pipelines that compose these belong to
-//! `splinter-campaign`.
+//! `splinter-pipelines`.
 
 #![warn(missing_docs)]
 

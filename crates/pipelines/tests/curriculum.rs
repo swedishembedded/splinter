@@ -44,16 +44,6 @@ use common::{scratch_context, Scripted, POLICY};
 use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::curriculum::frontier::{measure, MeasureRequest, PassAtK};
-use splinter_campaign::curriculum::mastery::weakest;
-use splinter_campaign::curriculum::queue::{enqueue_retention, pending};
-use splinter_campaign::curriculum::quota::{select, Candidate, Quotas};
-use splinter_campaign::curriculum::BASE_POLICY;
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::release::anchor;
-use splinter_campaign::solving::solve_set;
-use splinter_campaign::status::status;
-use splinter_campaign::verify::verify_set;
 use splinter_core::annotation::Strength;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
@@ -64,6 +54,16 @@ use splinter_eval::gate::{self, Check, GateConfig, GateReport};
 use splinter_eval::paired::PairedOutcome;
 use splinter_knowledge::concepts::Concept;
 use splinter_orchestrator::Context;
+use splinter_pipelines::curriculum::frontier::{measure, MeasureRequest, PassAtK};
+use splinter_pipelines::curriculum::mastery::weakest;
+use splinter_pipelines::curriculum::queue::{enqueue_retention, pending};
+use splinter_pipelines::curriculum::quota::{select, Candidate, Quotas};
+use splinter_pipelines::curriculum::BASE_POLICY;
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::release::anchor;
+use splinter_pipelines::solving::solve_set;
+use splinter_pipelines::status::status;
+use splinter_pipelines::verify::verify_set;
 use splinter_store::decision::decide as decision;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
@@ -676,7 +676,7 @@ fn quotas_cap_each_share_after_removing_near_duplicates_deterministically() {
     // kinds: ceil(0.6 * 8) = 5 recall; 2 strengths: ceil(0.9 * 8) = 8.
     assert_eq!(chosen.caps["concept"]["declared:console"], 2);
     assert_eq!(chosen.caps["kind"]["recall"], 5);
-    let kept = |c: &splinter_campaign::curriculum::quota::Selection, name: &str| {
+    let kept = |c: &splinter_pipelines::curriculum::quota::Selection, name: &str| {
         c.selected
             .iter()
             .filter(|id| {

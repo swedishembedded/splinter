@@ -25,11 +25,6 @@ use std::sync::{Arc, Mutex};
 
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::datasets::store_dataset;
-use splinter_campaign::release::{arm, release, ReleaseRequest, Released};
-use splinter_campaign::train::{
-    train, Candidate, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
-};
 use splinter_core::annotation::Strength;
 use splinter_core::chat::WireMessage;
 use splinter_core::clock::FixedClock;
@@ -45,6 +40,11 @@ use splinter_eval::gate::GateConfig;
 use splinter_model::train::Trained;
 use splinter_model::train::TrainedPreference;
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::datasets::store_dataset;
+use splinter_pipelines::release::{arm, release, ReleaseRequest, Released};
+use splinter_pipelines::train::{
+    train, Candidate, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
+};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use super::{config, Scratch, Scripted};

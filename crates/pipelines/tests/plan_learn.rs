@@ -24,15 +24,15 @@ use common::manual::{manual_reply, MANUAL};
 use common::Scripted;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_campaign::learn::auto_steps;
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::release::arm;
-use splinter_campaign::train::DEFAULT_STEPS;
-use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::learn::auto_steps;
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::release::arm;
+use splinter_pipelines::train::DEFAULT_STEPS;
+use splinter_pipelines::train::{TrainPlan, Trainer};
 
 const RECALL_ONLY: &str = r#"{"persona": null, "kinds": ["recall"], "distill": false, "rationale": "the manual states facts"}"#;
 const DISTILLED: &str = r#"{"persona": null, "kinds": ["recall"], "distill": true, "rationale": "the manual is not known to the learner"}"#;
@@ -86,7 +86,7 @@ fn run(
     test: &str,
     plan: &'static str,
     request: impl FnOnce(String) -> LearnRequest,
-) -> Result<(splinter_campaign::learn::LearnReport, common::Scratch), OrchestratorError> {
+) -> Result<(splinter_pipelines::learn::LearnReport, common::Scratch), OrchestratorError> {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
         ModelRef::policy_default(),

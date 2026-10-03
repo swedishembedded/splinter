@@ -7,7 +7,7 @@
 // services by sending an email to info@swedishembedded.com.
 
 //! The `splinter` command line: argument parsing and output only. Every
-//! command is a call into `splinter-campaign`, configured once from the
+//! command is a call into `splinter-pipelines`, configured once from the
 //! environment.
 //!
 //! Exit status: 0 on success; 1 when the work failed or did not get as far

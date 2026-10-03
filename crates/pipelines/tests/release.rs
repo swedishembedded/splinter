@@ -48,14 +48,14 @@ use common::gate::{
 };
 use common::Scratch;
 use splinter_agent::CancelToken;
-use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
-use splinter_campaign::release::{anchor, list, release, rollback, ReleaseRequest, Released};
-use splinter_campaign::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_model::ModelSelection;
 use splinter_orchestrator::Context;
+use splinter_pipelines::eval::{eval, EvalRequest, SuiteChoice};
+use splinter_pipelines::release::{anchor, list, release, rollback, ReleaseRequest, Released};
+use splinter_pipelines::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
     anchor::freeze(ctx, &anchor_file(&scratch.0, 4)).unwrap();

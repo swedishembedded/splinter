@@ -11,7 +11,7 @@
 
 use std::fmt::Write as _;
 
-use splinter_campaign::state::{StateStorage, Unpinned};
+use splinter_pipelines::state::{StateStorage, Unpinned};
 use splinter_store::maintenance::{Maintained, Storage};
 use splinter_store::recovery::{Archived, ArtifactFault, Repaired, Restored, StateVerify};
 

@@ -14,7 +14,7 @@
 
 use std::time::{Duration, Instant};
 
-use splinter_campaign::budget::StageDeadlines;
+use splinter_pipelines::budget::StageDeadlines;
 
 #[test]
 fn each_open_ended_stage_stops_at_a_growing_share_that_leaves_time_for_training() {

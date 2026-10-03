@@ -30,13 +30,13 @@ use common::Scripted;
 use serde_json::json;
 use splinter_agent::solve::{Model, MATERIAL_HEADING};
 use splinter_agent::CancelToken;
-use splinter_campaign::dialogue::{probes_beyond_the_source, STUDENT_ROLE};
-use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::release::arm;
-use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::dialogue::{probes_beyond_the_source, STUDENT_ROLE};
+use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::release::arm;
+use splinter_pipelines::train::{TrainPlan, Trainer};
 
 const LETTER: &str = "# To a young man
 
@@ -119,7 +119,7 @@ impl Trainer for Student {
 fn run(
     test: &str,
     third: &'static str,
-) -> (splinter_campaign::learn::LearnReport, common::Scratch) {
+) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
         ModelRef::policy_default(),

@@ -9,18 +9,18 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
-use splinter_campaign::critique::DEFAULT_RETRIES;
-use splinter_campaign::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
-use splinter_campaign::datasets::{parse_strength, parse_strip, Strip, ViewName};
-use splinter_campaign::eval::SuiteChoice;
-use splinter_campaign::learn::parse_budget;
-use splinter_campaign::lineage::Direction;
-use splinter_campaign::train::{
-    DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
-};
-use splinter_campaign::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_core::annotation::Strength;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
+use splinter_pipelines::critique::DEFAULT_RETRIES;
+use splinter_pipelines::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
+use splinter_pipelines::datasets::{parse_strength, parse_strip, Strip, ViewName};
+use splinter_pipelines::eval::SuiteChoice;
+use splinter_pipelines::learn::parse_budget;
+use splinter_pipelines::lineage::Direction;
+use splinter_pipelines::train::{
+    DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
+};
+use splinter_pipelines::variants::DEFAULT_VARIANTS_PER_TASK;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
 /// a repository, a command's output - and it generates tasks from it,

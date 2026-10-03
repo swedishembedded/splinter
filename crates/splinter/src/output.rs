@@ -8,24 +8,24 @@
 use std::fmt::Write as _;
 
 use serde::Serialize;
-use splinter_campaign::ask::Answer;
-use splinter_campaign::critique::Critiqued;
-use splinter_campaign::datasets::{Built, Exported};
-use splinter_campaign::experiences::{
-    CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList,
-};
-use splinter_campaign::front_door::Routed;
-use splinter_campaign::judge::Calibrated;
-use splinter_campaign::solving::Solved;
-use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
-use splinter_campaign::status::Status;
-use splinter_campaign::tasks::{TaskSetList, TaskShow, TasksGenerated};
-use splinter_campaign::train::Candidate;
-use splinter_campaign::verify::Verified;
 use splinter_core::source::{Origin, Source};
 use splinter_core::training::Regime;
 use splinter_orchestrator::runs::{CancelRequested, Recorded, RunList};
 use splinter_orchestrator::OrchestratorError;
+use splinter_pipelines::ask::Answer;
+use splinter_pipelines::critique::Critiqued;
+use splinter_pipelines::datasets::{Built, Exported};
+use splinter_pipelines::experiences::{
+    CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList,
+};
+use splinter_pipelines::front_door::Routed;
+use splinter_pipelines::judge::Calibrated;
+use splinter_pipelines::solving::Solved;
+use splinter_pipelines::sources::{SourceAdded, SourceList, SourceSummary};
+use splinter_pipelines::status::Status;
+use splinter_pipelines::tasks::{TaskSetList, TaskShow, TasksGenerated};
+use splinter_pipelines::train::Candidate;
+use splinter_pipelines::verify::Verified;
 use splinter_store::runs::Run;
 
 /// A report a command prints.
