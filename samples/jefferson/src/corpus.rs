@@ -16,8 +16,6 @@
 //! train on one printing of a letter and examine on another. The unit of the
 //! split is therefore the family, found from the words themselves.
 
-use std::collections::{HashMap, HashSet};
-
 use regex::Regex;
 
 /// One letter as an edition prints it.
@@ -184,62 +182,17 @@ pub fn without_salutation(body: &str) -> String {
 /// agree on once spacing, punctuation and capitals are set aside.
 pub use splinter_lab::verifiers::quotation::words;
 
-/// For each letter, the index of the first letter of its family: letters that
-/// share enough sampled eight-word runs are one letter printed twice.
+/// For each letter, the index of the first letter of its family: letters
+/// that print the same text, found by Splinter's own overlap rule over what
+/// each says after its salutation.
 #[must_use]
 pub fn families(letters: &[Letter]) -> Vec<usize> {
-    const RUN: usize = 8;
-    const SAMPLE_EVERY: u64 = 8;
-    const WINDOW: usize = 700;
-    const SHARED_TO_MERGE: usize = 3;
-    const MAX_HOLDERS: usize = 6;
-
-    let mut holders: HashMap<u64, Vec<usize>> = HashMap::new();
-    for (n, letter) in letters.iter().enumerate() {
-        let w = words(&without_salutation(&letter.body));
-        let limit = w.len().saturating_sub(RUN).min(WINDOW);
-        let mut seen = HashSet::new();
-        for at in 0..limit {
-            let h = hash_run(&w[at..at + RUN]);
-            if h.is_multiple_of(SAMPLE_EVERY) && seen.insert(h) {
-                holders.entry(h).or_default().push(n);
-            }
-        }
-    }
-
-    let mut shared: HashMap<(usize, usize), usize> = HashMap::new();
-    for group in holders.values().filter(|g| g.len() <= MAX_HOLDERS) {
-        for (i, &a) in group.iter().enumerate() {
-            for &b in &group[i + 1..] {
-                *shared.entry((a.min(b), a.max(b))).or_default() += 1;
-            }
-        }
-    }
-
-    let mut parent: Vec<usize> = (0..letters.len()).collect();
-    fn find(parent: &mut [usize], mut x: usize) -> usize {
-        while parent[x] != x {
-            parent[x] = parent[parent[x]];
-            x = parent[x];
-        }
-        x
-    }
-    for (&(a, b), &count) in &shared {
-        if count >= SHARED_TO_MERGE {
-            let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
-            if ra != rb {
-                parent[ra.max(rb)] = ra.min(rb);
-            }
-        }
-    }
-    (0..letters.len()).map(|n| find(&mut parent, n)).collect()
-}
-
-fn hash_run(run: &[String]) -> u64 {
-    let digest = blake3::hash(run.join(" ").as_bytes());
-    let mut first = [0u8; 8];
-    first.copy_from_slice(&digest.as_bytes()[..8]);
-    u64::from_le_bytes(first)
+    let bodies: Vec<String> = letters
+        .iter()
+        .map(|letter| without_salutation(&letter.body))
+        .collect();
+    let texts: Vec<&str> = bodies.iter().map(String::as_str).collect();
+    splinter_lab::overlap::overlap_groups(&texts)
 }
 
 /// Whether the family named `key` belongs to the exam: a seeded hash of the
