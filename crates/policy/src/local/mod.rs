@@ -27,6 +27,7 @@
 //! back onto sven's event stream.
 
 mod events;
+mod reasoning;
 mod request;
 
 use std::path::{Path, PathBuf};
@@ -39,6 +40,7 @@ use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 use crate::error::PolicyError;
 use crate::residency::{Residency, Resident};
 use events::events_from;
+pub use reasoning::{opens_think_block, REASONING_REPLY_TOKENS};
 use request::chat_request;
 pub use request::Sampling;
 
@@ -86,6 +88,10 @@ pub struct LocalQwen {
     live: Arc<AtomicUsize>,
     /// How each reply is sampled.
     sampling: Sampling,
+    /// The least a reply may run before its cap, whatever the sampling says:
+    /// a reasoning model spends its first tokens inside the think block its
+    /// template opened.
+    reply_floor: u32,
 }
 
 /// Where the weights come from and which adapter rides on top.
@@ -121,6 +127,7 @@ impl LocalQwen {
             in_flight: Arc::new(Mutex::new(None)),
             live: Arc::new(AtomicUsize::new(0)),
             sampling: AGENT_SAMPLING,
+            reply_floor: reasoning::reply_floor(&base),
         })
     }
 
@@ -137,6 +144,7 @@ impl LocalQwen {
             in_flight: Arc::clone(&self.in_flight),
             live: Arc::clone(&self.live),
             sampling,
+            reply_floor: self.reply_floor,
         }
     }
 
@@ -216,7 +224,11 @@ impl ModelProvider for LocalQwen {
         &self,
         req: CompletionRequest,
     ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-        let request = chat_request(&req, &self.sampling);
+        let sampling = Sampling {
+            max_new_tokens: self.sampling.max_new_tokens.max(self.reply_floor),
+            ..self.sampling
+        };
+        let request = chat_request(&req, &sampling);
         let resident = Arc::clone(&self.resident);
         let adapter = self.adapter.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(16);
