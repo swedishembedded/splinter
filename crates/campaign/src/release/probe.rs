@@ -46,7 +46,7 @@ use splinter_lab::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
 use splinter_record::annotation::decide;
 use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, ExperienceId, Provenance, Task};
+use splinter_record::experience::{Environment, Experience, ExperienceId, Provenance, Task};
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
@@ -279,12 +279,14 @@ pub fn grade(
         .collect()
 }
 
-fn grade_one(
+/// `model`'s closed-book answer to `task`, as an experience that is never
+/// stored.
+pub(crate) fn answer(
     ctx: &Context,
     model: &Model,
     task: &Task,
     cancel: &CancelToken,
-) -> Result<Probe, CampaignError> {
+) -> Result<Experience, CampaignError> {
     if cancel.is_cancelled() {
         return Err(CampaignError::Cancelled);
     }
@@ -300,10 +302,19 @@ fn grade_one(
     if cancel.is_cancelled() {
         return Err(CampaignError::Cancelled);
     }
-    let experience = solution.into_experience(
+    Ok(solution.into_experience(
         task.clone(),
         Provenance::new(model.identity.clone(), ctx.clock()),
-    )?;
+    )?)
+}
+
+fn grade_one(
+    ctx: &Context,
+    model: &Model,
+    task: &Task,
+    cancel: &CancelToken,
+) -> Result<Probe, CampaignError> {
+    let experience = answer(ctx, model, task, cancel)?;
     let verifiers: Strongest = verifiers_for(ctx, task, &[], None)?;
     let verification = verifiers.run(task, &experience)?;
     Ok(Probe {

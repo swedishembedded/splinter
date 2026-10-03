@@ -161,6 +161,12 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     assert!(gated.gate.anchor.measured.is_none());
     assert!(gated.gate.serve.measured.is_none());
     assert!(!report.finished(true) && report.finished(false));
+    // With no assistant configured the policy would be its own judge, which
+    // a judge refuses; the exam says why it did not run and the gate decides.
+    let Some(splinter_campaign::exam::Exam::NotRun(why)) = &report.exam else {
+        panic!("the exam could not run: {:?}", report.exam);
+    };
+    assert!(why.contains("refuses to grade"), "{why}");
 
     let recorded = read_run(ctx.workspace(), &run.run).unwrap();
     assert_eq!(recorded.status, RunStatus::Completed);
@@ -169,7 +175,7 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         stages,
         [
             "policy", "sources", "tasks", "solve", "verify", "teach", "variants", "critique",
-            "select", "dataset", "train", "release"
+            "select", "dataset", "train", "exam", "release"
         ]
     );
 }
@@ -197,7 +203,7 @@ fn a_dry_run_reports_the_plan_and_writes_nothing() {
     };
     assert!(plan.dry_run);
     assert_eq!(plan.kinds, ["recall", "denoise"]);
-    assert_eq!(plan.stages.len(), 13);
+    assert_eq!(plan.stages.len(), 14);
     assert!(plan.stages.contains(&"variants"));
     assert!(
         plan.stages.contains(&"frontier"),

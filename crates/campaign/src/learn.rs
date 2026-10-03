@@ -60,6 +60,7 @@ use crate::curriculum::quota::{select_training_set, Quotas, Selected};
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::datasets::{build, BuildRequest, Built, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::error::CampaignError;
+use crate::exam::{examine_candidate, Exam};
 use crate::model_ref::{ModelRef, POLICY_DEFAULT};
 use crate::plan::{plan as make_plan, Plan};
 use crate::release::{release, ReleaseId, ReleaseRequest, Released};
@@ -77,9 +78,9 @@ use crate::variants::{
 use crate::verify::{verify_set, Verified};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 14] = [
+pub const STAGES: [&str; 15] = [
     "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "frontier", "variants",
-    "critique", "select", "dataset", "train", "release",
+    "critique", "select", "dataset", "train", "exam", "release",
 ];
 
 /// How many passes a `learn` run makes over what it has learned when its
@@ -225,6 +226,9 @@ pub struct LearnReport {
     pub candidate: Option<Candidate>,
     /// The release gate on it, and the release when it passed.
     pub release: Option<Released>,
+    /// The exam stage: base against candidate on held-out tasks, graded by a
+    /// calibrated judge and by the grounding check.
+    pub exam: Option<Exam>,
     /// Why the pipeline stopped before training or releasing, if it did.
     pub stopped: Option<String>,
 }
@@ -301,6 +305,7 @@ pub fn learn(
     };
     let teacher = role(&request.teacher);
     let generator = role(&request.generator);
+    let judge = role(&None);
     let planner = request.plan.then(|| match (&request.planner, &assistant) {
         (Some(named), _) => named.clone(),
         (None, Some(assistant)) => assistant.clone(),
@@ -342,6 +347,7 @@ pub fn learn(
         trainer,
         teacher: &teacher,
         generator: &generator,
+        judge: &judge,
         no_release: request.no_release,
         distill: request.distill,
         steps: request.steps,
@@ -373,6 +379,9 @@ struct Pipeline<'a> {
     trainer: &'a dyn Trainer,
     teacher: &'a ModelRef,
     generator: &'a ModelRef,
+    /// The model that judges the exam: another one than the policy when an
+    /// assistant is configured.
+    judge: &'a ModelRef,
     no_release: bool,
     /// The teacher answers every task and the student makes no attempt.
     distill: bool,
@@ -400,6 +409,7 @@ impl Pipeline<'_> {
             trainer,
             teacher,
             generator,
+            judge,
             no_release,
             distill,
             steps,
@@ -646,7 +656,7 @@ impl Pipeline<'_> {
             ctx,
             &TrainRequest {
                 datasets: vec![dataset],
-                from: policy,
+                from: policy.clone(),
                 replay_fraction: DEFAULT_REPLAY_FRACTION,
                 steps: steps.unwrap_or_else(|| auto_steps(records)),
                 rank,
@@ -659,6 +669,25 @@ impl Pipeline<'_> {
         run.stage("train", &candidate)?;
         let id = candidate.candidate.clone();
         report.candidate = Some(candidate);
+        run.check_cancelled()?;
+        if let Some(why) = spent("exam") {
+            report.stopped = Some(why);
+            return Ok(());
+        }
+        let verified = report.select.as_ref().map(|s| s.experience_set.clone());
+        if let Some(verified) = verified {
+            // The candidate is trained and stored whatever the exam finds; an
+            // exam that cannot run says why in the report and the release
+            // gate still decides.
+            let examined =
+                match examine_candidate(ctx, &id, &policy, &verified, judge, &run.cancel_token()) {
+                    Ok(examined) => examined,
+                    Err(CampaignError::Cancelled) => return Err(CampaignError::Cancelled),
+                    Err(e) => Exam::NotRun(format!("the exam failed: {e}")),
+                };
+            run.stage("exam", &examined)?;
+            report.exam = Some(examined);
+        }
         if no_release {
             return Ok(());
         }

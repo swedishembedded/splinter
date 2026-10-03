@@ -52,6 +52,7 @@ pub mod datasets;
 pub mod dialogue;
 pub mod error;
 pub mod eval;
+pub mod exam;
 pub mod experiences;
 pub mod front_door;
 mod grouping;

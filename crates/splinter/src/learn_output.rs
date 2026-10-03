@@ -35,6 +35,42 @@ fn plan_line(summary: &serde_json::Value) -> String {
     )
 }
 
+/// What the exam found, on one line: the judge's standing, each arm's judged
+/// and grounded results, and the paired test.
+fn exam_line(summary: &serde_json::Value) -> String {
+    if let Some(why) = summary["not_run"].as_str() {
+        return format!("not run: {why}");
+    }
+    let ran = &summary["ran"];
+    let arm = |a: &serde_json::Value| {
+        format!(
+            "{}/{} judged right, {}/{} invented a specific",
+            a["judged_right"], a["judged"], a["invented"], a["checked"]
+        )
+    };
+    let judge = &ran["judge"];
+    let trust = if judge["trusted"] == true {
+        "trusted"
+    } else {
+        "NOT trusted, so no claim"
+    };
+    let test = ran["paired"].as_object().map_or(String::new(), |t| {
+        format!(
+            "; the candidate won {} of {} discordant task(s), p = {:.4}",
+            t["candidate_wins"],
+            t["discordant"],
+            t["p_value"].as_f64().unwrap_or(1.0)
+        )
+    });
+    format!(
+        "{} task(s), judge {} {trust}: base {}; candidate {}{test}",
+        ran["tasks"],
+        judge["judge"].as_str().unwrap_or("?"),
+        arm(&ran["base"]),
+        arm(&ran["candidate"]),
+    )
+}
+
 /// One line saying what a finished `learn` stage did, from its summary.
 pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
     let field = |name: &str| match &summary[name] {
@@ -45,6 +81,7 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
     match stage {
         "sources" => format!("{} source(s)", summary.as_array().map_or(0, Vec::len)),
         "plan" => plan_line(summary),
+        "exam" => exam_line(summary),
         "tasks" => format!("{} task(s) in {}", field("tasks"), field("task_set")),
         "solve" => format!(
             "{} solved, {} answered, in {}",
@@ -207,6 +244,10 @@ impl Report for LearnReport {
         }
         if let Some(r) = &self.candidate {
             stage(&mut out, "train", r.human());
+        }
+        if let Some(exam) = &self.exam {
+            let summary = serde_json::to_value(exam).unwrap_or(serde_json::Value::Null);
+            stage(&mut out, "exam", exam_line(&summary));
         }
         if let Some(r) = &self.release {
             stage(&mut out, "release", r.human());

@@ -168,6 +168,21 @@ pub(crate) fn store_calibration(
     Ok(digest)
 }
 
+/// The grounding check as every grade of a dialogue or an exam applies it.
+pub(crate) fn grounding_verifier(ctx: &Context) -> GroundingVerifier {
+    GroundingVerifier::new(
+        Producer {
+            name: GROUNDING_PRODUCER.into(),
+            version: GROUNDING_VERSION.into(),
+        },
+        Box::new(StoredEvidence::new(ctx.sources())),
+        GroundingPolicy {
+            max_ungrounded_names: GROUNDING_MAX_NAMES,
+            min_quote_words: QUOTATION_MIN_WORDS,
+        },
+    )
+}
+
 /// The verifiers that grade answers to `task`: its kind's, in the
 /// environments it runs code in, with `pool` as the other answers
 /// agreement is counted over. Refused for a kind with no known verifiers.
@@ -233,17 +248,7 @@ pub(crate) fn verifiers_for(
                     min_reference_recall: QUOTATION_MIN_RECALL,
                 },
             ))),
-            VerifierKind::Grounding => verifiers.push(Box::new(GroundingVerifier::new(
-                Producer {
-                    name: GROUNDING_PRODUCER.into(),
-                    version: GROUNDING_VERSION.into(),
-                },
-                Box::new(StoredEvidence::new(ctx.sources())),
-                GroundingPolicy {
-                    max_ungrounded_names: GROUNDING_MAX_NAMES,
-                    min_quote_words: QUOTATION_MIN_WORDS,
-                },
-            ))),
+            VerifierKind::Grounding => verifiers.push(Box::new(grounding_verifier(ctx))),
             VerifierKind::Judged => {
                 if let Some(judge) = judge {
                     verifiers.push(judge.verifier(ctx)?);
