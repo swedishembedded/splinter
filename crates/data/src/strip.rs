@@ -41,6 +41,8 @@ use crate::{Exclusion, ViewError};
 
 /// The domain of `mix:F`'s draw, which picks the subjects that keep their
 /// privileged context.
+// The name is part of the draw: renaming it would change which subjects a
+// seed keeps context for.
 const MIX_DOMAIN: &str = "splinter-views/strip-mix";
 
 /// A share of subjects, in `[0, 1]`.

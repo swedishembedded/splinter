@@ -76,6 +76,7 @@ impl DatasetStore {
     }
 
     fn spec() -> ArtifactSpec {
+        // The producer is recorded with every stored dataset; it keeps its name.
         ArtifactSpec::new("dataset", "splinter-views").with_extension(".jsonl")
     }
 

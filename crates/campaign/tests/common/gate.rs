@@ -37,10 +37,10 @@ use splinter_core::chat::WireMessage;
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_data::{DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-use splinter_views::{DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use sven_sdk::CancelToken;
 
 use super::{config, Scratch, Scripted};

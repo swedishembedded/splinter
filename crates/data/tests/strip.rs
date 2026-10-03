@@ -18,7 +18,7 @@ use common::*;
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::experience::{Experience, Privileged, PrivilegedKind};
 use splinter_core::selfcontained::{check_self_contained, NotSelfContained, MIN_QUOTED_CHARS};
-use splinter_views::{Corpus, Exclusion, Fraction, RecordBody, SftFinal, Strip, View, ViewError};
+use splinter_data::{Corpus, Exclusion, Fraction, RecordBody, SftFinal, Strip, View, ViewError};
 
 const PASSAGE: &str = "TEACHER-ONLY passage: the store keeps every experience under its digest.";
 const HINT: &str = "TEACHER-ONLY hint: think about content addressing.";

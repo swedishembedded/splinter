@@ -15,7 +15,7 @@
 
 use std::path::Path;
 
-use splinter_views::{DatasetCheck, Format, Objective};
+use splinter_data::{DatasetCheck, Format, Objective};
 
 use crate::error::PolicyError;
 use crate::train::{validate_dataset, validate_preference_dataset};

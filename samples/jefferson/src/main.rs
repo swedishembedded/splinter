@@ -195,7 +195,7 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
             started.elapsed().as_secs_f64()
         );
     };
-    let split = splinter_views::holdout::split_dataset_file(&dataset, &attempt)?;
+    let split = splinter_data::holdout::split_dataset_file(&dataset, &attempt)?;
     let request = splinter_policy::train::FineTune {
         model_dir: &base,
         train: &split.train,

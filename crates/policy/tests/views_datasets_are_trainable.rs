@@ -21,11 +21,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use splinter_core::chat::WireMessage;
-use splinter_policy::{BrainDatasetCheck, PolicyError, TrainingCapabilities};
-use splinter_views::{
+use splinter_data::{
     manifest_path, write_dataset, Format, Objective, Projection, Record, RecordBody,
     RecordMetadata, ViewError,
 };
+use splinter_policy::{BrainDatasetCheck, PolicyError, TrainingCapabilities};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("policy-views-{name}-{}", std::process::id()));

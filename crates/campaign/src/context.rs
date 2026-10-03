@@ -33,6 +33,7 @@ use serde::Serialize;
 use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_core::experience::Environment;
+use splinter_data::DatasetStore;
 use splinter_policy::{LoadedModel, ModelSelection, Residency, Sampling};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
@@ -44,7 +45,6 @@ use splinter_store::sources::SourceStore;
 use splinter_store::tasks::TaskStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use splinter_views::DatasetStore;
 
 use crate::answers::AnswerStore;
 use crate::config::Config;

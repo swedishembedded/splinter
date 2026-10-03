@@ -27,11 +27,11 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
+use splinter_data::DatasetId;
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use splinter_views::DatasetId;
 
 use crate::error::CampaignError;
 use crate::model_ref::is_alias_name;

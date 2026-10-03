@@ -47,8 +47,8 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splinter_core::source::SourceId;
+use splinter_data::holdout::MIN_SAMPLES;
 use splinter_store::experiences::SetId;
-use splinter_views::holdout::MIN_SAMPLES;
 
 use splinter_knowledge::survey::{survey, Survey};
 
@@ -640,7 +640,7 @@ impl Pipeline<'_> {
             },
         ) {
             Ok(built) => built,
-            Err(CampaignError::View(splinter_views::ViewError::Empty)) => {
+            Err(CampaignError::View(splinter_data::ViewError::Empty)) => {
                 report.stopped = Some(
                     "no experience passed verification, so there is nothing to train on".into(),
                 );

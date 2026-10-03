@@ -13,10 +13,10 @@ mod common;
 
 use common::*;
 use splinter_core::annotation::{Outcome, Strength};
-use splinter_store::StateRoot;
-use splinter_views::{
+use splinter_data::{
     Corpus, DatasetId, DatasetStore, Format, SftFinal, Unchecked, View, ViewError,
 };
+use splinter_store::StateRoot;
 
 fn passed_corpus() -> Corpus {
     let sum = task("arithmetic", "What is two plus two?", Vec::new());

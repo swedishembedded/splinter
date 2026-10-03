@@ -21,10 +21,10 @@ use splinter_core::annotation::{
     Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
 };
 use splinter_core::experience::PrivilegedKind;
-use splinter_lab::verifiers::executable;
-use splinter_views::{
+use splinter_data::{
     Corpus, Critic, Exclusion, Objective, Preference, RecordBody, VerifierView, View,
 };
+use splinter_lab::verifiers::executable;
 
 const INSTRUCTION: &str = "What is two plus two? Reply with the number only.";
 

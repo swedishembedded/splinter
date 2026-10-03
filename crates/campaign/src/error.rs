@@ -10,12 +10,12 @@ use splinter_agent::repair::RepairError;
 use splinter_agent::replay::ReplayError;
 use splinter_agent::solve::SolveError;
 use splinter_core::experience::ExperienceError;
+use splinter_data::ViewError;
 use splinter_knowledge::capture::CaptureError;
 use splinter_knowledge::tasks::GenerateError;
 use splinter_lab::verifiers::VerifyError;
 use splinter_sandbox::SandboxError;
 use splinter_store::experiences::StoreError;
-use splinter_views::ViewError;
 
 use crate::model_ref::RefError;
 

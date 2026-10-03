@@ -39,7 +39,7 @@ splinter-policy = { path = "crates/policy" }
 splinter-agent = { path = "crates/agent" }
 splinter-knowledge = { path = "crates/knowledge" }
 splinter-campaign = { path = "crates/campaign" }
-splinter-views = { path = "crates/views" }
+splinter-data = { path = "crates/data" }
 splinter-sandbox = { path = "crates/sandbox" }
 splinter-expdb = { path = "crates/expdb" }
 

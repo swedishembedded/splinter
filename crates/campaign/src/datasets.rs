@@ -17,15 +17,15 @@ use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::digest::canonical_json;
 use splinter_core::experience::{ExperienceId, PrivilegedKind};
-use splinter_policy::{BrainDatasetCheck, TrainingCapabilities};
-use splinter_store::experiences::SetId;
-use splinter_store::lineage::DatasetLineage;
-pub use splinter_views::Strip;
-use splinter_views::{
+pub use splinter_data::Strip;
+use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DatasetId, DecisionView, DenoiseView, Exclusion, Format,
     Fraction, Objective, OutcomeView, Preference, Projection, Retrieval, SftFinal, SftStep,
     StoredDataset, VerifierView, View,
 };
+use splinter_policy::{BrainDatasetCheck, TrainingCapabilities};
+use splinter_store::experiences::SetId;
+use splinter_store::lineage::DatasetLineage;
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};

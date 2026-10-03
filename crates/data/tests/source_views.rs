@@ -21,9 +21,9 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Digest, PrivilegedKind, Span};
 use splinter_core::kinds::DENOISE;
 use splinter_core::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
+use splinter_data::{Corpus, Cpt, DenoiseView, Exclusion, Objective, RecordBody, Retrieval, View};
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
-use splinter_views::{Corpus, Cpt, DenoiseView, Exclusion, Objective, RecordBody, Retrieval, View};
 
 /// A conversation as (role, content, supervised) triples.
 type Turns = Vec<(String, String, bool)>;

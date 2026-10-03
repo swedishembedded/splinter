@@ -39,10 +39,10 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{anchor, rollback, ReleaseId};
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
+use splinter_data::DatasetId;
 use splinter_policy::train::{Trained, TrainedPreference};
 use splinter_policy::ModelSelection;
 use splinter_store::runs::{read_run, RunStatus};
-use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
 
 /// Training as a test double: keeps what it was handed, and trains the

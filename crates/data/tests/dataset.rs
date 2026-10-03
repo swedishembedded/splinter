@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::experience::{Digest, PrivilegedKind};
 use splinter_core::prompt::SYSTEM_PROMPT;
-use splinter_views::{
+use splinter_data::{
     manifest_path, write_dataset, Corpus, Format, Objective, Preference, Projection, Record,
     RecordBody, RecordMetadata, SftFinal, Unchecked, View, ViewError, EXPORT_FORMAT,
 };
@@ -252,7 +252,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
 #[test]
 fn a_check_that_refuses_a_file_leaves_nothing_at_the_path() {
     struct Refuses;
-    impl splinter_views::DatasetCheck for Refuses {
+    impl splinter_data::DatasetCheck for Refuses {
         fn check(&self, _: Format, pending: &std::path::Path, _: usize) -> Result<(), String> {
             assert!(pending.exists(), "the check reads the file before it lands");
             Err("not a file this backend reads".into())

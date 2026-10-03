@@ -25,13 +25,13 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Digest, Experience, Privileged, PrivilegedKind, Provenance, Task};
 use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
+use splinter_data::{write_dataset, Corpus, SftFinal, Unchecked, View};
 use splinter_knowledge::denoise::{Denoise, GENERATOR};
 use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::annotation;
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
-use splinter_views::{write_dataset, Corpus, SftFinal, Unchecked, View};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 use sven_sdk::Engine;
 

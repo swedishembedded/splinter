@@ -2,8 +2,8 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 [package]
-name = "splinter-views"
-description = "Views over the experience store: each projects experiences, tasks and sources into training records for one objective, written in the format that objective maps to, with a manifest."
+name = "splinter-data"
+description = "Training data from experience: the holdout rule, and views over the experience store, each of which projects experiences, tasks and sources into training records for one objective, written in the format that objective maps to, with a manifest."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

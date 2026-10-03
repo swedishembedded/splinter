@@ -51,7 +51,7 @@ use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, ExperienceId, Task};
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
-use splinter_views::DatasetId;
+use splinter_data::DatasetId;
 
 /// What the learned fixture holds.
 struct Fixture {

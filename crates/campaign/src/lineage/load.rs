@@ -314,7 +314,7 @@ fn replay(graph: &mut Graph, replay: &ReplaySample) -> Option<String> {
 fn training(
     graph: &mut Graph,
     id: &str,
-    datasets: &[splinter_views::DatasetId],
+    datasets: &[splinter_data::DatasetId],
     parent: Option<&crate::release::ReleaseId>,
     sample: Option<&ReplaySample>,
     adapter: &str,

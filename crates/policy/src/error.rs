@@ -23,7 +23,7 @@ pub enum PolicyError {
     )]
     ObjectiveNotTrainable {
         /// The objective.
-        objective: splinter_views::Objective,
+        objective: splinter_data::Objective,
     },
     /// The embedding model could not embed.
     #[error("embedding: {reason}")]

@@ -24,7 +24,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-splinter-views = { workspace = true }
+splinter-data = { workspace = true }
 
 futures = { workspace = true }
 

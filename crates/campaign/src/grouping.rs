@@ -12,14 +12,14 @@
 //! that divides such records between training and scoring measures memory of
 //! the print, not learning, so each record carries the group of its evidence
 //! (`splinter_lab::overlap`), and the split keeps a group whole
-//! (`splinter_views::holdout`).
+//! (`splinter_data::holdout`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_core::digest::Digest;
 use splinter_core::experience::Experience;
+use splinter_data::{Corpus, Projection};
 use splinter_lab::overlap::overlap_groups;
-use splinter_views::{Corpus, Projection};
 
 use crate::context::Context;
 use crate::error::CampaignError;

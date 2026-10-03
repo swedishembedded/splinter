@@ -11,7 +11,7 @@
 //!
 //! A held-out suite is the tasks of the records training held out: the
 //! datasets are concatenated in order and split by the holdout rule
-//! (`splinter_views::holdout`), exactly as training split them, and each
+//! (`splinter_data::holdout`), exactly as training split them, and each
 //! held-out record's task is found in the task store (or, for a record of a
 //! revision, in the experience it was projected from). A probe is
 //! closed-book: the model sees the instruction alone. A task that is not
@@ -42,13 +42,13 @@ use serde::{Deserialize, Serialize};
 use splinter_agent::solve::{solve, Model, SolveOptions};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
+use splinter_data::holdout::holdout_split_records;
+use splinter_data::DatasetId;
 use splinter_lab::paired::PairedOutcome;
 use splinter_lab::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
-use splinter_views::holdout::holdout_split_records;
-use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

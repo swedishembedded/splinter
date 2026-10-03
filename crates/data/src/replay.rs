@@ -22,6 +22,8 @@ use crate::strip::draw;
 use crate::Fraction;
 
 /// The domain of the replay draw, apart from every other seeded draw.
+// The name is part of the draw: renaming it would change which earlier
+// records a seed replays.
 const REPLAY_DOMAIN: &str = "splinter-views/replay";
 
 /// The indices of the records of `records` replayed at `fraction` under

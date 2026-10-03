@@ -19,7 +19,7 @@ use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_core::prompt::SYSTEM_PROMPT;
-use splinter_views::{
+use splinter_data::{
     write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, Unchecked, View, ViewError,
 };
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
@@ -87,14 +87,14 @@ fn verdict(exp: &Experience, outcome: Outcome, strength: Strength) -> Annotation
 }
 
 /// The records `view` projects from `exp` graded by `notes`.
-fn project(view: &SftFinal, exp: &Experience, notes: &[Annotation]) -> Vec<splinter_views::Record> {
+fn project(view: &SftFinal, exp: &Experience, notes: &[Annotation]) -> Vec<splinter_data::Record> {
     let mut corpus = Corpus::new();
     corpus.insert(exp.clone(), notes.to_vec()).unwrap();
     view.project(&corpus).unwrap().records
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("splinter-views-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("splinter-data-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }
