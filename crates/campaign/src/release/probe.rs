@@ -54,10 +54,10 @@ use splinter_store::decision::decide;
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};
-use crate::model_ref::ModelRef;
 use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::variants::stored_variants;
 use crate::verify::verifiers_for;
+use splinter_core::model_ref::ModelRef;
 
 /// Why a task was left out of a suite: it is not solved closed-book.
 pub const NOT_CLOSED_BOOK: &str = "not_closed_book";

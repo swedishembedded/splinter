@@ -52,8 +52,8 @@ use splinter_store::artifacts::ArtifactSpec;
 use crate::context::{Context, PolicyPin};
 use crate::datasets::{record_dataset_lineage, resolve_dataset};
 use crate::error::{io, CampaignError};
-use crate::model_ref::ModelRef;
 use crate::release::probe::split_records;
+use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 
 /// The peak learning rate a `learn` run trains a LoRA adapter at when none is

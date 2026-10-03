@@ -17,8 +17,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use splinter_agent::solve::Model;
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::{Config, Context};
+use splinter_core::model_ref::ModelRef;
 use splinter_store::StateRoot;
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream, Role};
 

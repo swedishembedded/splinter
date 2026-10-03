@@ -36,8 +36,8 @@ use splinter_agent::CallError;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::sources::{SourceTarget, COMMAND_PREFIX};
+use splinter_core::model_ref::ModelRef;
 
 /// The confidence below which the top reading is a question.
 pub const MIN_CONFIDENCE: f64 = 0.7;
@@ -392,7 +392,7 @@ pub fn route(classification: &Classification, allow_remote: bool) -> Routed {
             Err(e) => return Routed::Refuse(e.to_string()),
             Ok(reference) if reference.is_remote() && !allow_remote => {
                 return Routed::Refuse(
-                    crate::model_ref::RefError::RemoteNotAllowed {
+                    splinter_core::model_ref::RefError::RemoteNotAllowed {
                         reference: reference.to_string(),
                     }
                     .to_string(),

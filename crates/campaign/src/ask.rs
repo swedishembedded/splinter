@@ -25,9 +25,9 @@ use splinter_sandbox::ResolvedEnvironment;
 use crate::answers::{AnswerId, AnswerRecord, ANSWER_FORMAT};
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::solving::conclusion_name;
 use crate::sources;
+use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 
 /// How long one answer may take.

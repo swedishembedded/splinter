@@ -33,7 +33,7 @@ use crate::context::Context;
 use crate::curriculum::{queue, release_of_label};
 use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
-use crate::model_ref::POLICY_DEFAULT;
+use splinter_core::model_ref::POLICY_DEFAULT;
 use splinter_core::release::ReleaseId;
 
 /// Decided attempts per concept and release the rolling rate is over: the

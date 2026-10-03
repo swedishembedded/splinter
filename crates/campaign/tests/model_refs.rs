@@ -20,8 +20,9 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use splinter_campaign::model_ref::{ModelRef, RefError};
+use splinter_campaign::model_ref::resolve;
 use splinter_campaign::Config;
+use splinter_core::model_ref::{ModelRef, RefError};
 use splinter_model::ModelSelection;
 use splinter_store::StateRoot;
 
@@ -123,12 +124,12 @@ fn malformed_references_are_refused_precisely() {
 #[test]
 fn a_remote_model_is_refused_without_the_network_opt_in() {
     let remote = parse("remote:openrouter/z-ai/glm").unwrap();
-    let refused = remote.resolve(&config(), false, None).unwrap_err();
+    let refused = resolve(&remote, &config(), false, None).unwrap_err();
     assert!(matches!(refused, RefError::RemoteNotAllowed { .. }));
     let message = refused.to_string();
     assert!(message.contains("--allow-remote"), "{message}");
 
-    let ModelSelection::Remote(model) = remote.resolve(&config(), true, None).unwrap() else {
+    let ModelSelection::Remote(model) = resolve(&remote, &config(), true, None).unwrap() else {
         panic!("a remote reference resolves to a remote model");
     };
     assert_eq!(model.spec, "openrouter/z-ai/glm");
@@ -138,7 +139,7 @@ fn a_remote_model_is_refused_without_the_network_opt_in() {
         "the key follows the provider"
     );
     let brain = parse("remote:brain/qwen3").unwrap();
-    let ModelSelection::Remote(model) = brain.resolve(&config(), true, None).unwrap() else {
+    let ModelSelection::Remote(model) = resolve(&brain, &config(), true, None).unwrap() else {
         panic!("remote");
     };
     assert_eq!(model.api_key.as_deref(), Some("brain-key"));
@@ -147,16 +148,12 @@ fn a_remote_model_is_refused_without_the_network_opt_in() {
         allow_remote: true,
         ..config()
     };
-    assert!(remote.resolve(&opted_in, false, None).is_ok());
+    assert!(resolve(&remote, &opted_in, false, None).is_ok());
 }
 
 #[test]
 fn local_references_resolve_to_weights() {
-    let local = |text: &str| match parse(text)
-        .unwrap()
-        .resolve(&config(), false, None)
-        .unwrap()
-    {
+    let local = |text: &str| match resolve(&parse(text).unwrap(), &config(), false, None).unwrap() {
         ModelSelection::Local(weights) => weights,
         ModelSelection::Remote(_) => panic!("{text} is local"),
     };
@@ -182,10 +179,13 @@ fn local_references_resolve_to_weights() {
     // A policy reference carries the adapter of the release its alias was
     // resolved to; a local one ignores it.
     let champion = std::path::Path::new("/state/releases/ab/adapter.safetensors");
-    let resolved = |text: &str| match parse(text)
-        .unwrap()
-        .resolve(&config(), false, Some(champion))
-        .unwrap()
+    let resolved = |text: &str| match resolve(
+        &parse(text).unwrap(),
+        &config(),
+        false,
+        Some(champion),
+    )
+    .unwrap()
     {
         ModelSelection::Local(weights) => weights,
         ModelSelection::Remote(_) => panic!("{text} is local"),

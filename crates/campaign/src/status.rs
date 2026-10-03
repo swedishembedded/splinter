@@ -13,9 +13,9 @@ use splinter_store::runs::list_runs;
 use crate::context::Context;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
 use crate::error::CampaignError;
-use crate::model_ref::{ModelRef, POLICY_DEFAULT};
 use crate::runs::{RunSummary, RECENT_RUNS};
 use crate::train::candidate_count;
+use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::release::ReleaseId;
 
 /// The policy in use.

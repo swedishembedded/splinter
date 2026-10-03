@@ -25,10 +25,10 @@ use splinter_agent::solve::{Model, MATERIAL_HEADING};
 use splinter_agent::CancelToken;
 use splinter_campaign::dialogue::STUDENT_ROLE;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::arm;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
+use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
 
 /// `i` spelled in letters, so a word carries no digit and the text is prose.

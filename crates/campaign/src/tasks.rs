@@ -46,7 +46,7 @@ use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::ids;
-use crate::model_ref::ModelRef;
+use splinter_core::model_ref::ModelRef;
 
 /// Sections one generation request shows the model: enough context for
 /// tasks that combine sections, few enough that a small model keeps its

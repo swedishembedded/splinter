@@ -30,7 +30,7 @@ use splinter_knowledge::survey::Survey;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
+use splinter_core::model_ref::ModelRef;
 
 /// How long the planner may take.
 pub const PLAN_DEADLINE: Duration = Duration::from_secs(300);

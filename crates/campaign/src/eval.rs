@@ -35,11 +35,11 @@ use splinter_eval::paired::accuracy;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::release::probe::{self, Suite};
 use crate::release::{anchor, arm, StoredRelease};
 use crate::runs::{record, Recorded};
 use crate::train::load_candidate;
+use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_eval::gate::SuiteSummary;
 

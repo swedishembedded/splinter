@@ -24,9 +24,9 @@ use std::time::{Duration, Instant};
 use common::{scratch_context, Scratch, Scripted};
 use serde_json::json;
 use splinter_agent::CancelToken;
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::tasks::{generate, Generation, MAX_WINDOWS_PER_PART};
+use splinter_core::model_ref::ModelRef;
 
 /// A part of `sections` sections, each carrying its own marker.
 fn part(tag: &str, sections: usize) -> String {

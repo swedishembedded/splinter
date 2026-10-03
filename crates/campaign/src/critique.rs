@@ -26,9 +26,9 @@ use splinter_store::experiences::{ExperienceSet, SetId};
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::tasks::remaining;
 use crate::verify::{verifiers_for, Unverified};
+use splinter_core::model_ref::ModelRef;
 
 /// Retries per failed experience when a command names none.
 pub const DEFAULT_RETRIES: usize = 1;

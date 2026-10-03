@@ -23,9 +23,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use common::gate::{candidate, decide, device_lock, gate_context, policy, Brain};
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::arm;
 use splinter_campaign::Context;
+use splinter_core::model_ref::ModelRef;
 use splinter_model::residency::scripted::{ScriptedEvent, ScriptedLoader};
 use splinter_model::Residency;
 

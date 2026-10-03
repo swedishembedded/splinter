@@ -15,12 +15,12 @@ use splinter_campaign::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_campaign::eval::SuiteChoice;
 use splinter_campaign::learn::parse_budget;
 use splinter_campaign::lineage::Direction;
-use splinter_campaign::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_campaign::train::{
     DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
 };
 use splinter_campaign::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_core::annotation::Strength;
+use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 
 /// A learning agent with its own model. Tell it what to learn - a document,
 /// a repository, a command's output - and it generates tasks from it,
@@ -132,7 +132,7 @@ pub enum Command {
 /// A model reference, for clap.
 fn model_ref(text: &str) -> Result<ModelRef, String> {
     text.parse()
-        .map_err(|e: splinter_campaign::model_ref::RefError| e.to_string())
+        .map_err(|e: splinter_core::model_ref::RefError| e.to_string())
 }
 
 fn budget(text: &str) -> Result<Duration, String> {

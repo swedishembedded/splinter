@@ -46,8 +46,8 @@ use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
 use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
-use crate::model_ref::ModelRef;
 use crate::tasks::remaining;
+use splinter_core::model_ref::ModelRef;
 
 /// How long one task's solve may take.
 pub const DEFAULT_SOLVE_DEADLINE: Duration = Duration::from_secs(300);

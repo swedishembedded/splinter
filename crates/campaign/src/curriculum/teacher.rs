@@ -35,9 +35,9 @@ use splinter_store::tasks::{TaskSet, TaskSetId};
 use crate::context::Context;
 use crate::curriculum::frontier::tally;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::verify::{verify_set, Verified};
+use splinter_core::model_ref::ModelRef;
 
 /// One teach stage's inputs and bounds.
 pub struct TeachRequest<'a> {

@@ -40,11 +40,11 @@ use splinter_store::experiences::SetId;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::release::arm;
 use crate::release::probe::{answer, greedy, held_out};
 use crate::train::load_candidate;
 use crate::verify::{grounding_verifier, judge_verifier};
+use splinter_core::model_ref::ModelRef;
 
 /// One arm's verdicts, a task each: `None` where nothing decided.
 type Decided = Vec<Option<bool>>;

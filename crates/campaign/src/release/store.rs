@@ -35,8 +35,8 @@ use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
 use crate::error::CampaignError;
-use crate::model_ref::is_alias_name;
 use crate::train::{ReplaySample, TrainingSummary};
+use splinter_core::model_ref::is_alias_name;
 use splinter_eval::gate::GateReport;
 
 const RELEASE: &str = "release";

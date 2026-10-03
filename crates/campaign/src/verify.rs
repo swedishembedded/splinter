@@ -41,7 +41,7 @@ use splinter_store::experiences::SetId;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
+use splinter_core::model_ref::ModelRef;
 
 /// The producer of the formal verifier's verdicts on generated tasks.
 pub const FORMAL_PRODUCER: &str = "splinter-lab/exact-match:lenient";

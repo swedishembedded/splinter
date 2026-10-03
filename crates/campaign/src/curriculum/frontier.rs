@@ -47,9 +47,9 @@ use crate::context::Context;
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
-use crate::model_ref::ModelRef;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::verify::{verify_set, Verified};
+use splinter_core::model_ref::ModelRef;
 
 /// Attempts per task when a command names none: enough for a task solved
 /// about half the time to show both a pass and a fail most of the time,

@@ -45,8 +45,8 @@ pub use splinter_knowledge::tasks::DEFAULT_VARIANTS_PER_TASK;
 
 use crate::context::Context;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::tasks::{reason_name, remaining, RejectionNote};
+use splinter_core::model_ref::ModelRef;
 
 /// One variants request.
 pub struct VariantsRequest<'a> {

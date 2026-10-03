@@ -37,10 +37,10 @@ use splinter_agent::solve::{Model, MATERIAL_HEADING, SYSTEM_PROMPT};
 use splinter_agent::CancelToken;
 use splinter_campaign::curriculum::mastery::weakest;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::arm;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
+use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_store::decision::decide;
 

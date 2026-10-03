@@ -17,7 +17,7 @@ use splinter_knowledge::tasks::GenerateError;
 use splinter_sandbox::SandboxError;
 use splinter_store::experiences::StoreError;
 
-use crate::model_ref::RefError;
+use splinter_core::model_ref::RefError;
 
 /// Why a command failed.
 #[derive(Debug, thiserror::Error)]

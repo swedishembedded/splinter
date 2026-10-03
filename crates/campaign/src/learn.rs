@@ -62,7 +62,6 @@ use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::datasets::{build, BuildRequest, Built, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::error::CampaignError;
 use crate::exam::{examine_candidate, Exam};
-use crate::model_ref::{ModelRef, POLICY_DEFAULT};
 use crate::plan::{plan as make_plan, Plan};
 use crate::release::{release, ReleaseRequest, Released};
 use crate::runs::{record, Recorded, Recorder};
@@ -77,6 +76,7 @@ use crate::variants::{
     generate_variants, VariantsGenerated, VariantsRequest, DEFAULT_VARIANTS_PER_TASK,
 };
 use crate::verify::{verify_set, Verified};
+use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::release::ReleaseId;
 
 /// The stages, in order, as runs and reports name them.

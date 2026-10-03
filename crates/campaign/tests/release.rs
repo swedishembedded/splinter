@@ -49,11 +49,11 @@ use common::gate::{
 use common::Scratch;
 use splinter_agent::CancelToken;
 use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{anchor, list, release, rollback, ReleaseRequest, Released};
 use splinter_campaign::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
 use splinter_campaign::Context;
 use splinter_core::digest::Digest;
+use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_model::ModelSelection;
 

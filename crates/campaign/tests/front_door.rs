@@ -245,7 +245,7 @@ fn a_model_named_in_the_configuration_reads_the_sentence_instead_of_the_policy()
     let ctx = splinter_campaign::Context::new(settings, false)
         .unwrap()
         .with_model(
-            splinter_campaign::model_ref::ModelRef::policy_default(),
+            splinter_core::model_ref::ModelRef::policy_default(),
             splinter_agent::solve::Model::new(std::sync::Arc::new(policy.clone()), POLICY),
         )
         .with_model(

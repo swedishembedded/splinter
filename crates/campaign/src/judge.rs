@@ -24,8 +24,8 @@ use splinter_eval::verifiers::calibration::{calibrate, Calibration};
 use crate::context::Context;
 use crate::error::{io, CampaignError};
 use crate::experiences::resolve_experience;
-use crate::model_ref::ModelRef;
 use crate::verify::{judge_verifier, store_calibration};
+use splinter_core::model_ref::ModelRef;
 
 /// One line of a labelled file.
 #[derive(Debug, Deserialize)]

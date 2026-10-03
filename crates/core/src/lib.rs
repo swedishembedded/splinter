@@ -23,6 +23,7 @@
 //! * [`chat`] and [`prompt`] - the shapes a conversation is written in, and the
 //!   one system turn every model run on a task is sent.
 //! * [`evidence`] - how an executable verdict's evidence reads back.
+//! * [`model_ref`] - how a command names a model.
 //! * [`release`] - what names a release.
 //! * [`kinds`] and [`selfcontained`] - the names tasks travel under, and the
 //!   rule that an instruction must stand on its own.
@@ -40,6 +41,7 @@ pub mod digest;
 pub mod evidence;
 pub mod experience;
 pub mod kinds;
+pub mod model_ref;
 pub mod prompt;
 pub mod release;
 pub mod selfcontained;

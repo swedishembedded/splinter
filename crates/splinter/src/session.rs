@@ -21,7 +21,6 @@ use splinter_campaign::front_door::{interpret, Routed};
 use splinter_campaign::judge::calibrate_judge;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::lineage::{lineage, LineageRequest};
-use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{self, ReleaseRequest};
 use splinter_campaign::runs::{self, record};
 use splinter_campaign::solving::solve_set;
@@ -33,6 +32,7 @@ use splinter_campaign::train::{train, BrainTrainer, TrainRequest, Tuning};
 use splinter_campaign::variants;
 use splinter_campaign::verify::{verify_set, Judge};
 use splinter_campaign::{CampaignError, Config, Context, Runtime};
+use splinter_core::model_ref::ModelRef;
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,

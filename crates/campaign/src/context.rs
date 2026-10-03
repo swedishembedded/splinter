@@ -56,8 +56,8 @@ use splinter_store::StateRoot;
 use crate::answers::AnswerStore;
 use crate::config::Config;
 use crate::error::CampaignError;
-use crate::model_ref::ModelRef;
 use crate::release::ReleaseStore;
+use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 
 /// How long a local model may stay silent between two stream chunks: as
@@ -455,7 +455,7 @@ impl Context {
         let adapter = match reference {
             ModelRef::Policy(alias) => {
                 let pin = self.policy_pin(alias)?;
-                if pin.is_none() && alias != crate::model_ref::POLICY_DEFAULT {
+                if pin.is_none() && alias != splinter_core::model_ref::POLICY_DEFAULT {
                     return Err(CampaignError::NotFound {
                         what: "release alias",
                         id: alias.clone(),
@@ -465,8 +465,12 @@ impl Context {
             }
             _ => None,
         };
-        let selection =
-            reference.resolve(self.config(), self.allow_remote(), adapter.as_deref())?;
+        let selection = crate::model_ref::resolve(
+            reference,
+            self.config(),
+            self.allow_remote(),
+            adapter.as_deref(),
+        )?;
         Ok((adapter, selection))
     }
 
