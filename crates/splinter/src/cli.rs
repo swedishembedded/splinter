@@ -184,6 +184,11 @@ pub struct LearnArgs {
     /// sometimes, with a verified answer).
     #[arg(long, conflicts_with_all = ["k", "temperature", "top_k"])]
     pub no_frontier: bool,
+    /// Skip the policy's own attempts: the teacher answers every task
+    /// open-book and the policy is trained on its verified answers. For a
+    /// policy that cannot answer the tasks closed-book at all.
+    #[arg(long, conflicts_with_all = ["no_frontier", "k", "temperature", "top_k"])]
+    pub distill: bool,
     /// The model that solves open-book, shown each task's grounding
     /// material, the tasks the policy never solves (default: the policy).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
@@ -191,6 +196,21 @@ pub struct LearnArgs {
     /// The model that writes the tasks (default: the policy).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub generator: Option<ModelRef>,
+    /// Optimizer steps of the training.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
+        help = format!("Optimizer steps of the training [default: {DEFAULT_STEPS}]"))]
+    pub steps: Option<u32>,
+    /// LoRA rank of the adapter.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
+        help = format!("LoRA rank of the adapter [default: {DEFAULT_LORA_RANK}]"))]
+    pub rank: Option<u32>,
+    /// The peak learning rate of the training (brain's default if not given).
+    #[arg(long, value_name = "LR")]
+    pub lr: Option<f32>,
+    /// Hold the frozen base at bf16, half the bytes of fp32: what a 7B
+    /// base needs to train on one 24 GiB card.
+    #[arg(long)]
+    pub bf16_base: bool,
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,

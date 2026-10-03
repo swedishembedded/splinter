@@ -29,7 +29,7 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::gate::GateConfig;
 use splinter_campaign::release::{arm, release, ReleaseId, ReleaseRequest, Released};
 use splinter_campaign::train::{
-    train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, DEFAULT_REPLAY_FRACTION,
+    train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::{CampaignError, Context};
 use splinter_lab::WireMessage;
@@ -305,6 +305,7 @@ pub fn candidate_on(ctx: &Context, data: DatasetId, knows: &[&str]) -> (Candidat
             steps: 1,
             rank: 4,
             beta: None,
+            tuning: Tuning::default(),
         },
         &trainer,
         &CancelToken::new(),

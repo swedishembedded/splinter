@@ -43,8 +43,9 @@ use crate::verify::{verify_set, Verified};
 pub struct TeachRequest<'a> {
     /// The tasks the student attempted.
     pub task_set: &'a TaskSetId,
-    /// The student's graded attempts at them.
-    pub attempts: &'a SetId,
+    /// The student's graded attempts at them; `None` when it made none, and
+    /// every task is taught.
+    pub attempts: Option<&'a SetId>,
     /// The model that teaches.
     pub teacher: &'a ModelRef,
     /// No solve starts after this, and none runs past it.
@@ -69,20 +70,26 @@ pub struct Taught {
 /// grades each solve; see the module documentation.
 pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, CampaignError> {
     let set = ctx.tasks().get_set(request.task_set)?;
-    let student = tally(ctx, request.attempts)?;
-    let members = set
-        .members
-        .into_iter()
-        .filter(|entry| {
-            student
-                .get(&entry.task)
-                .is_some_and(|(count, _)| count.graded > 0 && count.passes == 0)
-        })
-        .collect();
-    let task_set = ctx.tasks().put_set(&TaskSet {
-        name: format!("never solved closed-book of {}", request.task_set),
-        members,
-    })?;
+    let (members, name) = match request.attempts {
+        Some(attempts) => {
+            let student = tally(ctx, attempts)?;
+            let never_solved = set
+                .members
+                .into_iter()
+                .filter(|entry| {
+                    student
+                        .get(&entry.task)
+                        .is_some_and(|(count, _)| count.graded > 0 && count.passes == 0)
+                })
+                .collect();
+            (
+                never_solved,
+                format!("never solved closed-book of {}", request.task_set),
+            )
+        }
+        None => (set.members, format!("every task of {}", request.task_set)),
+    };
+    let task_set = ctx.tasks().put_set(&TaskSet { name, members })?;
     let solve = solve_tasks(
         ctx,
         &SolveRequest {

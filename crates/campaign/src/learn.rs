@@ -65,7 +65,7 @@ use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::sources::{self, SourceSummary, SourceTarget};
 use crate::tasks::{check_kinds, generate, Generation, TasksGenerated, DEFAULT_LEARN_KINDS};
 use crate::train::{
-    train, Candidate, TrainRequest, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION,
+    train, Candidate, TrainRequest, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION,
     DEFAULT_STEPS,
 };
 use crate::variants::{
@@ -97,6 +97,17 @@ pub struct LearnRequest {
     /// Solve each task once and keep every task, instead of measuring
     /// pass@k and keeping the frontier.
     pub no_frontier: bool,
+    /// Skip the student's attempts: the teacher answers every task open-book,
+    /// and the training set is its verified answers. For a student that
+    /// cannot answer a task closed-book at all, where its attempts cost the
+    /// most and teach nothing. Implies no frontier.
+    pub distill: bool,
+    /// Optimizer steps of the training; [`DEFAULT_STEPS`] when `None`.
+    pub steps: Option<u32>,
+    /// LoRA rank of the adapter; [`DEFAULT_LORA_RANK`] when `None`.
+    pub rank: Option<u32>,
+    /// The base's precision and the learning rate of the training.
+    pub tuning: Tuning,
     /// The model that teaches what the policy never solves; `None`: the
     /// policy itself.
     pub teacher: Option<ModelRef>,
@@ -213,7 +224,8 @@ pub fn learn(
             "name at least one source to learn from".into(),
         ));
     }
-    if !request.no_frontier {
+    let measures_frontier = !request.no_frontier && !request.distill;
+    if measures_frontier {
         request.pass_at_k.validate()?;
     }
     request.quotas.validate()?;
@@ -238,7 +250,10 @@ pub fn learn(
             stages: STAGES
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
-                .filter(|stage| !(request.no_frontier && *stage == "frontier"))
+                .filter(|stage| !(!measures_frontier && *stage == "frontier"))
+                .filter(|stage| {
+                    !(request.distill && ["solve", "verify", "critique"].contains(stage))
+                })
                 .collect(),
             dry_run: true,
         })));
@@ -253,7 +268,11 @@ pub fn learn(
         teacher: &teacher,
         generator: &generator,
         no_release: request.no_release,
-        frontier: (!request.no_frontier).then_some(request.pass_at_k),
+        distill: request.distill,
+        steps: request.steps.unwrap_or(DEFAULT_STEPS),
+        rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
+        tuning: request.tuning,
+        frontier: measures_frontier.then_some(request.pass_at_k),
         quotas: request.quotas,
     };
     let recorded = record(ctx, "learn", request, |run| {
@@ -275,6 +294,12 @@ struct Pipeline<'a> {
     teacher: &'a ModelRef,
     generator: &'a ModelRef,
     no_release: bool,
+    /// The teacher answers every task and the student makes no attempt.
+    distill: bool,
+    /// Optimizer steps, LoRA rank and tuning of the training.
+    steps: u32,
+    rank: u32,
+    tuning: Tuning,
     /// pass@k's parameters; `None` keeps every task.
     frontier: Option<PassAtK>,
     quotas: Quotas,
@@ -294,6 +319,10 @@ impl Pipeline<'_> {
             teacher,
             generator,
             no_release,
+            distill,
+            steps,
+            rank,
+            tuning,
             frontier,
             quotas,
         } = *self;
@@ -351,27 +380,35 @@ impl Pipeline<'_> {
             report.stopped = Some(why);
             return Ok(());
         }
-        let solved = solve_tasks(
-            ctx,
-            &SolveRequest {
-                task_set: &task_set,
-                solver: &policy,
-                attempts: frontier.map_or(1, |p| p.k),
-                sampling: frontier.map_or(SamplingChoice::Own, |p| p.sampling_choice()),
-                teacher: false,
-                deadline,
-                cancel: run.cancel_token(),
-            },
-        )?;
-        run.stage("solve", &solved)?;
-        let mut attempts = solved.experience_set.clone();
-        report.solve = Some(solved.clone());
+        // The student's own attempts: skipped when distilling.
+        let mut attempts: Option<SetId> = None;
+        let mut solved: Option<Solved> = None;
+        let mut failed = 0;
+        if !distill {
+            let attempted = solve_tasks(
+                ctx,
+                &SolveRequest {
+                    task_set: &task_set,
+                    solver: &policy,
+                    attempts: frontier.map_or(1, |p| p.k),
+                    sampling: frontier.map_or(SamplingChoice::Own, |p| p.sampling_choice()),
+                    teacher: false,
+                    deadline,
+                    cancel: run.cancel_token(),
+                },
+            )?;
+            run.stage("solve", &attempted)?;
+            let graded = attempted.experience_set.clone();
+            report.solve = Some(attempted.clone());
+            solved = Some(attempted);
 
-        run.check_cancelled()?;
-        let verified = verify_set(ctx, &attempts, None, &run.cancel_token())?;
-        run.stage("verify", &verified)?;
-        let mut failed = verified.failed;
-        report.verify = Some(verified);
+            run.check_cancelled()?;
+            let verified = verify_set(ctx, &graded, None, &run.cancel_token())?;
+            attempts = Some(graded);
+            run.stage("verify", &verified)?;
+            failed = verified.failed;
+            report.verify = Some(verified);
+        }
 
         if let Some(why) = spent("teach") {
             report.stopped = Some(why);
@@ -381,7 +418,7 @@ impl Pipeline<'_> {
             ctx,
             &TeachRequest {
                 task_set: &task_set,
-                attempts: &attempts,
+                attempts: attempts.as_ref(),
                 teacher,
                 deadline,
                 cancel: run.cancel_token(),
@@ -390,10 +427,10 @@ impl Pipeline<'_> {
         run.stage("teach", &taught)?;
         let mut sets: Vec<SetId> = Vec::new();
         let kept_tasks;
-        if frontier.is_some() {
-            let kept = select_frontier(ctx, &task_set, &solved, &taught)?;
+        if let (Some(_), Some(solved)) = (frontier, solved.as_ref()) {
+            let kept = select_frontier(ctx, &task_set, solved, &taught)?;
             run.stage("frontier", &kept)?;
-            attempts = kept.frontier_experience_set.clone();
+            attempts = Some(kept.frontier_experience_set.clone());
             kept_tasks = kept.frontier_task_set.clone();
             let d = kept.distribution;
             report.teach = Some(taught);
@@ -435,8 +472,10 @@ impl Pipeline<'_> {
         run.stage("variants", &varied)?;
         report.variants = Some(varied);
 
-        sets.insert(0, attempts.clone());
-        if failed > 0 {
+        if let Some(attempts) = &attempts {
+            sets.insert(0, attempts.clone());
+        }
+        if let (true, Some(attempts)) = (failed > 0, attempts.as_ref()) {
             if let Some(why) = spent("critique") {
                 report.stopped = Some(why);
                 return Ok(());
@@ -444,7 +483,7 @@ impl Pipeline<'_> {
             let critiqued = critique_set(
                 ctx,
                 &CritiqueRequest {
-                    set: &attempts,
+                    set: attempts,
                     critic: &policy,
                     solver: &policy,
                     retries: DEFAULT_RETRIES,
@@ -505,9 +544,10 @@ impl Pipeline<'_> {
                 datasets: vec![dataset],
                 from: policy,
                 replay_fraction: DEFAULT_REPLAY_FRACTION,
-                steps: DEFAULT_STEPS,
-                rank: DEFAULT_LORA_RANK,
+                steps,
+                rank,
                 beta: None,
+                tuning,
             },
             trainer,
             &run.cancel_token(),

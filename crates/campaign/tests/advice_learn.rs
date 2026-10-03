@@ -107,14 +107,17 @@ impl Trainer for Student {
     }
 }
 
-fn run(
-    test: &str,
-    teacher_answer: &'static str,
-) -> (
+type Ran = (
     splinter_campaign::learn::LearnReport,
     Student,
     common::Scratch,
-) {
+);
+
+fn run(test: &str, teacher_answer: &'static str) -> Ran {
+    run_with(test, teacher_answer, false)
+}
+
+fn run_with(test: &str, teacher_answer: &'static str, distill: bool) -> Ran {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
         ModelRef::policy_default(),
@@ -131,6 +134,7 @@ fn run(
             sources: vec![letter.display().to_string()],
             kinds: vec!["advise".into()],
             no_release: true,
+            distill,
             ..LearnRequest::default()
         },
         &student,
@@ -198,4 +202,44 @@ fn a_teacher_that_invents_a_quotation_teaches_nothing() {
         student.plans.lock().unwrap().is_empty(),
         "nothing was trained"
     );
+}
+
+#[test]
+fn distilling_has_the_teacher_answer_every_task_without_the_student_trying() {
+    let answer: &'static str =
+        Box::leak(format!("In my letter, I advised: \"{ADVICE}\"").into_boxed_str());
+    let (report, student, _scratch) = run_with("advice-learn-distill", answer, true);
+
+    assert!(report.solve.is_none(), "the student made no attempt");
+    assert!(
+        report.verify.is_none(),
+        "there was nothing of the student's to grade"
+    );
+    assert!(
+        report.frontier.is_none(),
+        "no frontier is measured without attempts"
+    );
+    assert!(report.critique.is_none(), "no student attempt failed");
+    let taught = report.teach.as_ref().unwrap();
+    assert_eq!(
+        (
+            taught.solve.solved,
+            taught.verify.passed,
+            taught.verify.failed
+        ),
+        (1, 1, 0),
+        "{taught:#?}"
+    );
+
+    let dataset = report.dataset.as_ref().unwrap();
+    assert_eq!(dataset.records, 1, "{dataset:#?}");
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    assert!(text.contains(ADVICE) && text.contains(SITUATION));
+    // One record is too few to hold any out for scoring, so nothing is trained.
+    assert!(report
+        .stopped
+        .as_deref()
+        .unwrap_or_default()
+        .contains("record(s) passed"));
+    assert!(student.plans.lock().unwrap().is_empty());
 }

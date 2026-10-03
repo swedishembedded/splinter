@@ -31,7 +31,7 @@ use common::gate::{
 };
 use splinter_campaign::release::anchor;
 use splinter_campaign::train::{
-    train, Regime, TrainRequest, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
+    train, Regime, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::Context;
 use splinter_views::DatasetId;
@@ -45,6 +45,7 @@ fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
         steps: 1,
         rank: 4,
         beta,
+        tuning: Tuning::default(),
     }
 }
 
@@ -146,4 +147,33 @@ fn a_run_trains_one_regime_and_beta_only_for_preferences() {
     assert_eq!(dpo.regime, Regime::Dpo);
     assert_eq!(dpo.preference.unwrap().beta, DEFAULT_DPO_BETA);
     assert_eq!(*trainer.called.lock().unwrap(), [Regime::Sft, Regime::Dpo]);
+}
+
+#[test]
+fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
+    let (_scratch, ctx) = gate_context("train-tuning", Brain::Missing);
+    let chat = dataset(&ctx, "alpha", FACTS);
+    let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
+    train(
+        &ctx,
+        &request(&[&chat], None),
+        &trainer,
+        &CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(trainer.plans.lock().unwrap()[0].tuning, Tuning::default());
+    assert!(!Tuning::default().bf16_base && Tuning::default().learning_rate.is_none());
+
+    let tuned = TrainRequest {
+        tuning: Tuning {
+            bf16_base: true,
+            learning_rate: Some(2e-4),
+        },
+        ..request(&[&chat], None)
+    };
+    let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
+    train(&ctx, &tuned, &trainer, &CancelToken::new()).unwrap();
+    let plan = trainer.plans.lock().unwrap()[0].clone();
+    assert!(plan.tuning.bf16_base);
+    assert_eq!(plan.tuning.learning_rate, Some(2e-4));
 }

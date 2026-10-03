@@ -449,3 +449,38 @@ fn the_old_commands_are_gone() {
         assert!(parse(removed).is_err(), "{removed:?} still parses");
     }
 }
+
+#[test]
+fn learn_can_distill_and_tune_the_training_it_runs() {
+    let Command::Learn(plain) = command(&["learn", "docs"]) else {
+        panic!("learn");
+    };
+    assert!(!plain.distill && !plain.bf16_base);
+    assert_eq!((plain.steps, plain.rank, plain.lr), (None, None, None));
+
+    let Command::Learn(tuned) = command(&[
+        "learn",
+        "docs",
+        "--distill",
+        "--steps",
+        "300",
+        "--rank",
+        "16",
+        "--lr",
+        "0.0002",
+        "--bf16-base",
+    ]) else {
+        panic!("learn --distill");
+    };
+    assert!(tuned.distill && tuned.bf16_base);
+    assert_eq!((tuned.steps, tuned.rank), (Some(300), Some(16)));
+    assert_eq!(tuned.lr, Some(0.0002));
+    assert!(
+        parse(&["learn", "docs", "--distill", "--k", "6"]).is_err(),
+        "distilling makes no attempts to measure pass@k over"
+    );
+    assert!(
+        parse(&["learn", "docs", "--steps", "0"]).is_err(),
+        "no steps is no training"
+    );
+}

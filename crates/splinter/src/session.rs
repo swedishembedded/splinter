@@ -28,7 +28,7 @@ use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::state;
 use splinter_campaign::status::status;
 use splinter_campaign::tasks::{self, check_kinds, resolve_set as resolve_task_set};
-use splinter_campaign::train::{train, BrainTrainer, TrainRequest};
+use splinter_campaign::train::{train, BrainTrainer, TrainRequest, Tuning};
 use splinter_campaign::variants;
 use splinter_campaign::verify::{verify_set, Judge};
 use splinter_campaign::{CampaignError, Config, Context};
@@ -217,6 +217,13 @@ impl Session {
                     dry_run: args.dry_run,
                     no_release: args.no_release,
                     no_frontier: args.no_frontier,
+                    distill: args.distill,
+                    steps: args.steps,
+                    rank: args.rank,
+                    tuning: Tuning {
+                        bf16_base: args.bf16_base,
+                        learning_rate: args.lr,
+                    },
                     teacher: args.teacher,
                     generator: args.generator,
                     ..LearnRequest::default()
@@ -409,6 +416,7 @@ impl Session {
                     steps: args.steps,
                     rank: args.rank,
                     beta: args.beta,
+                    tuning: Tuning::default(),
                 };
                 let candidate = record(ctx, "train", &request, |run| {
                     train(ctx, &request, &BrainTrainer, &run.cancel_token())

@@ -100,6 +100,18 @@ impl Regime {
     }
 }
 
+/// How a run trains beyond its step count and rank: what depends on the
+/// base and the card, not on the data.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+pub struct Tuning {
+    /// Hold the frozen base at bf16, half the bytes of fp32: what lets a 7B
+    /// base train on one 24 GiB card. Supervised runs only; brain's
+    /// preference trainer holds its base at its own tier.
+    pub bf16_base: bool,
+    /// The peak learning rate; brain's default when `None`.
+    pub learning_rate: Option<f32>,
+}
+
 /// One training request.
 #[derive(Clone, Debug, Serialize)]
 pub struct TrainRequest {
@@ -117,6 +129,8 @@ pub struct TrainRequest {
     /// The DPO temperature, for preference datasets only;
     /// [`DEFAULT_DPO_BETA`] when `None`.
     pub beta: Option<f32>,
+    /// The base's precision and the learning rate.
+    pub tuning: Tuning,
 }
 
 /// Where the replayed records came from.
@@ -172,6 +186,8 @@ pub struct TrainPlan {
     pub rank: u32,
     /// The DPO temperature; used by the preference regime only.
     pub beta: f32,
+    /// The base's precision and the learning rate.
+    pub tuning: Tuning,
 }
 
 /// A preference candidate's measurements: brain's preference score of the
@@ -382,8 +398,8 @@ impl Trainer for BrainTrainer {
             replay: &replayed,
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
-            bf16_base: false,
-            learning_rate: None,
+            bf16_base: plan.tuning.bf16_base,
+            learning_rate: plan.tuning.learning_rate,
             on_step: None,
         })
         .map_err(trainer_error)
@@ -515,6 +531,7 @@ pub fn train(
         steps: request.steps,
         rank: request.rank,
         beta,
+        tuning: request.tuning,
     };
     // A fine-tune loads its own copy of the base: the device holds no
     // other while it trains.

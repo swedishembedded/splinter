@@ -52,7 +52,7 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{
     anchor, list, release, rollback, ReleaseId, ReleaseRequest, Released,
 };
-use splinter_campaign::train::{train, Candidate, TrainRequest, DEFAULT_REPLAY_FRACTION};
+use splinter_campaign::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
 use splinter_campaign::Context;
 use splinter_policy::ModelSelection;
 use splinter_record::digest::Digest;
@@ -320,6 +320,7 @@ fn a_held_out_task_trained_on_is_left_out_of_the_gate() {
             steps: 1,
             rank: 4,
             beta: None,
+            tuning: Tuning::default(),
         },
         &FakeTrainer::knowing(&[ANCHOR, "alpha"]),
         &CancelToken::new(),
@@ -438,6 +439,7 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
             steps: 1,
             rank: 4,
             beta: None,
+            tuning: Tuning::default(),
         },
         &FakeTrainer::knowing(&[ANCHOR, "alpha", "beta", "gamma"]),
         &CancelToken::new(),

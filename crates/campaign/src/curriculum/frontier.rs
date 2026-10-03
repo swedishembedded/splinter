@@ -371,7 +371,7 @@ pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, 
         ctx,
         &TeachRequest {
             task_set: request.task_set,
-            attempts: &solve.experience_set,
+            attempts: Some(&solve.experience_set),
             teacher: request.teacher.unwrap_or(request.solver),
             deadline: request.deadline,
             cancel: request.cancel.clone(),
