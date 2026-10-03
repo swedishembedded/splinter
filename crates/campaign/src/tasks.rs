@@ -50,6 +50,13 @@ use crate::model_ref::ModelRef;
 /// answers tied to what it was shown instead of to the reply example.
 pub const SECTIONS_PER_REQUEST: usize = 3;
 
+/// The most windows of [`SECTIONS_PER_REQUEST`] sections a text part is shown
+/// through for the kinds that read every section. A longer part is sampled at
+/// evenly spaced windows so that its end is represented as well as its start,
+/// and a run over more text than its budget covers still touches every part
+/// it reaches.
+pub const MAX_WINDOWS_PER_PART: usize = 4;
+
 /// The seed denoise tasks are generated with, so the same part always
 /// yields the same task.
 pub const DENOISE_SEED: u64 = 0;
@@ -168,15 +175,22 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
     } else {
         Some(model_generator(ctx, request, &model_kinds)?)
     };
-    let mut batch = Batch::default();
+    let mut batch = Batch {
+        deadline: request.deadline,
+        ..Batch::default()
+    };
     let mut stopped = None;
     'sources: for source_id in request.sources {
         let source = ctx.sources().get_source(source_id)?;
-        for part in source
+        let mut parts: Vec<_> = source
             .parts
             .iter()
             .filter(|p| p.media_type.starts_with("text/"))
-        {
+            .collect();
+        // Not in name order: a run that stops early has covered a spread of
+        // the parts, not the first files.
+        parts.sort_by_cached_key(|p| Digest::of(p.name.as_bytes()));
+        for part in parts {
             if request.cancel.is_cancelled() {
                 return Err(CampaignError::Cancelled);
             }
@@ -204,6 +218,10 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
             if let Some(generator) = &generator {
                 let text = SourceText::load(&ctx.sources(), source_id, &part.name)?;
                 generate_part(ctx, generator, &text, &model_kinds, &mut batch)?;
+                if batch.expired {
+                    stopped = Some("the budget was spent inside a part".into());
+                    break 'sources;
+                }
             }
         }
     }
@@ -306,16 +324,35 @@ fn generate_part(
         kinds.iter().partition(|kind| kind.focus.is_some());
     if !general.is_empty() {
         let positions: Vec<usize> = (0..text.sections().len()).collect();
-        run_windows(ctx, generator, text, &positions, &general, batch)?;
+        run_windows(
+            ctx,
+            generator,
+            text,
+            &positions,
+            &general,
+            Some(MAX_WINDOWS_PER_PART),
+            batch,
+        )?;
     }
     for kind in focused {
         let positions = match kind.focus {
             Some(Focus::Advice) => advice_sections(text),
             None => continue,
         };
-        run_windows(ctx, generator, text, &positions, &[kind], batch)?;
+        run_windows(ctx, generator, text, &positions, &[kind], None, batch)?;
     }
     Ok(())
+}
+
+/// At most `cap` of `windows`, evenly spaced from the first to the last; all
+/// of them when there are no more than `cap` (or no cap).
+fn spread<T: Copy>(windows: Vec<T>, cap: Option<usize>) -> Vec<T> {
+    match cap {
+        Some(cap) if cap >= 2 && windows.len() > cap => (0..cap)
+            .map(|i| windows[i * (windows.len() - 1) / (cap - 1)])
+            .collect(),
+        _ => windows,
+    }
 }
 
 /// The sections of `text` at `positions`, a window of
@@ -326,9 +363,15 @@ fn run_windows(
     text: &SourceText,
     positions: &[usize],
     kinds: &[&TaskKind],
+    cap: Option<usize>,
     batch: &mut Batch,
 ) -> Result<(), CampaignError> {
-    for window in positions.chunks(SECTIONS_PER_REQUEST) {
+    let windows = spread(positions.chunks(SECTIONS_PER_REQUEST).collect(), cap);
+    for window in windows {
+        if batch.deadline.is_some_and(|d| Instant::now() >= d) {
+            batch.expired = true;
+            return Ok(());
+        }
         let shown = text.clone().select(window)?;
         let report = match ctx.block_on(generator.generate(&shown, kinds)) {
             Ok(report) => report,
@@ -392,6 +435,10 @@ struct Batch {
     per_kind: BTreeMap<String, KindTally>,
     rejected: BTreeMap<String, usize>,
     rejections: Vec<RejectionNote>,
+    /// No window is put to the generator after this.
+    deadline: Option<Instant>,
+    /// Whether the deadline passed with windows still to cover.
+    expired: bool,
 }
 
 impl Batch {
