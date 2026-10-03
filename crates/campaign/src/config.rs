@@ -49,6 +49,13 @@ pub struct Config {
     /// larger model would. Parsed where it is used, so a bad value is
     /// refused by name when a sentence is read.
     pub front_door_model: Option<String>,
+    /// The model reference of a stronger model than the policy that plans a
+    /// learning run, writes its tasks and teaches what the policy cannot
+    /// answer, when the command names none of them. Parsed where it is used.
+    pub assistant_model: Option<String>,
+    /// Hold a base the policy trains at bf16: for a base too large for the
+    /// card at fp32, which is a fact about the machine, not the run.
+    pub bf16_base: bool,
 }
 
 impl Config {
@@ -67,7 +74,11 @@ impl Config {
     /// * `SPLINTER_BRAIN_BIN`, else the first `brain` executable on `PATH`,
     ///   as the binary a release must serve on;
     /// * `SPLINTER_FRONT_DOOR_MODEL`, a model reference that reads
-    ///   sentences instead of the policy.
+    ///   sentences instead of the policy;
+    /// * `SPLINTER_ASSISTANT_MODEL`, a model reference that plans, writes
+    ///   tasks and teaches in place of the policy;
+    /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
+    ///   held at bf16.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -96,6 +107,9 @@ impl Config {
                 .map(PathBuf::from)
                 .or_else(|| var("PATH").and_then(|path| find_executable(&path, "brain"))),
             front_door_model: var("SPLINTER_FRONT_DOOR_MODEL"),
+            assistant_model: var("SPLINTER_ASSISTANT_MODEL"),
+            bf16_base: var("SPLINTER_BF16_BASE")
+                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
         }
     }
 }

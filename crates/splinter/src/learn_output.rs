@@ -144,7 +144,10 @@ impl Report for LearnPlan {
             "dry run - nothing written under {}\n  sources: {}\n  kinds:   {}\n  goal:    {}\n  budget:  {}\n  policy:  {}\n  writer:  {}\n  teacher: {}\n  stages:  {}\n",
             self.state.display(),
             sources.join(", "),
-            self.kinds.join(", "),
+            self.planner.as_ref().map_or_else(
+                || self.kinds.join(", "),
+                |planner| format!("chosen by the planner ({planner}) from what the sources hold")
+            ),
             self.goal.as_deref().unwrap_or("-"),
             self.budget_secs.map_or("none".into(), |s| format!("{s}s")),
             self.policy,

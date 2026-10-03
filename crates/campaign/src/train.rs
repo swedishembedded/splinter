@@ -55,6 +55,11 @@ use crate::model_ref::ModelRef;
 use crate::release::probe::split_records;
 use crate::release::ReleaseId;
 
+/// The peak learning rate a `learn` run trains a LoRA adapter at when none is
+/// given: the rate that moves a low-rank update in the few hundred steps of a
+/// short run, which brain's own default (set for long runs) does not.
+pub const DEFAULT_LEARNING_RATE: f32 = 2e-4;
+
 /// Training steps when a command names none.
 pub const DEFAULT_STEPS: u32 = 40;
 /// LoRA rank of a new adapter when a command names none.

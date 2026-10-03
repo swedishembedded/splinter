@@ -248,6 +248,7 @@ fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
         train: number(args, "--train", 120)?,
         exam: number(args, "--exam", 40)?,
         seed: flag(args, "--seed").map_or(Ok(1), |s| s.parse())?,
+        per_letter: number(args, "--per-letter", 2)?,
     };
     let made = writer::generate(&options, &out)?;
     let mut sft = String::new();

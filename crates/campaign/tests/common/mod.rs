@@ -112,6 +112,8 @@ pub fn config(scratch: &Scratch) -> Config {
         working_dir: scratch.0.clone(),
         brain_binary: None,
         front_door_model: None,
+        assistant_model: None,
+        bf16_base: false,
     }
 }
 

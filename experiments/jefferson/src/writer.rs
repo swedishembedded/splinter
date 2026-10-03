@@ -30,6 +30,8 @@ pub struct Options {
     pub exam: usize,
     /// The split seed.
     pub seed: u64,
+    /// The most advice passages tried from one letter.
+    pub per_letter: usize,
 }
 
 /// The candidates of one split: a letter with a person to write to, an era
@@ -38,6 +40,7 @@ fn candidates(
     resources: &Path,
     seed: u64,
     exam: bool,
+    per_letter: usize,
 ) -> anyhow::Result<Vec<(Scenario, String, u16)>> {
     let letters = load_letters(resources)?;
     let family = families(&letters);
@@ -52,7 +55,7 @@ fn candidates(
         if !(1760..=1826).contains(&letter.year) {
             continue;
         }
-        for passage in advice_passages(letter).into_iter().take(2) {
+        for passage in advice_passages(letter).into_iter().take(per_letter) {
             let source = format!("my letter to {} in {}", letter.recipient, letter.year);
             let id = blake3::hash(format!("{}:{passage}", letter.id).as_bytes()).to_hex()[..12]
                 .to_string();
@@ -114,7 +117,9 @@ pub fn generate(options: &Options, out: &Path) -> anyhow::Result<Generated> {
     let (mut rejected, mut not_advice) = (0, 0);
     for (exam, wanted) in [(false, options.train), (true, options.exam)] {
         let mut taken = 0;
-        for (mut scenario, surname, year) in candidates(&options.resources, options.seed, exam)? {
+        for (mut scenario, surname, year) in
+            candidates(&options.resources, options.seed, exam, options.per_letter)?
+        {
             if taken >= wanted {
                 break;
             }

@@ -37,6 +37,8 @@ fn config() -> Config {
         working_dir: PathBuf::from("."),
         brain_binary: None,
         front_door_model: None,
+        assistant_model: None,
+        bf16_base: false,
     }
 }
 

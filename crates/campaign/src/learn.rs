@@ -68,8 +68,8 @@ use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::sources::{self, SourceSummary, SourceTarget};
 use crate::tasks::{check_kinds, generate, Generation, TasksGenerated, DEFAULT_LEARN_KINDS};
 use crate::train::{
-    train, Candidate, TrainRequest, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION,
-    DEFAULT_STEPS,
+    train, Candidate, TrainRequest, Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK,
+    DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
 };
 use crate::variants::{
     generate_variants, VariantsGenerated, VariantsRequest, DEFAULT_VARIANTS_PER_TASK,
@@ -81,6 +81,24 @@ pub const STAGES: [&str; 14] = [
     "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "frontier", "variants",
     "critique", "select", "dataset", "train", "release",
 ];
+
+/// How many passes a `learn` run makes over what it has learned when its
+/// steps are not given.
+pub const EPOCHS: u32 = 2;
+
+/// The most steps a `learn` run takes when they are not given.
+pub const MAX_AUTO_STEPS: u32 = 2000;
+
+/// The steps of a run over `records` records when none are given: about
+/// [`EPOCHS`] passes, never fewer than [`DEFAULT_STEPS`] and never more than
+/// [`MAX_AUTO_STEPS`].
+#[must_use]
+pub fn auto_steps(records: usize) -> u32 {
+    u32::try_from(records)
+        .unwrap_or(u32::MAX)
+        .saturating_mul(EPOCHS)
+        .clamp(DEFAULT_STEPS, MAX_AUTO_STEPS)
+}
 
 /// One `learn`.
 #[derive(Clone, Debug, Default, Serialize)]
@@ -146,6 +164,9 @@ pub struct LearnPlan {
     pub generator: String,
     /// The model that teaches what the policy never solves.
     pub teacher: String,
+    /// The model that surveys the sources and plans, when a plan is asked
+    /// for.
+    pub planner: Option<String>,
     /// The stages, in order.
     pub stages: Vec<&'static str>,
     /// Always `true`: nothing was written.
@@ -262,11 +283,29 @@ pub fn learn(
         .map(|s| SourceTarget::from_learn_arg(s))
         .collect::<Result<Vec<_>, _>>()?;
     let policy = ModelRef::policy_default();
-    let teacher = request.teacher.clone().unwrap_or_else(|| policy.clone());
-    let generator = request.generator.clone().unwrap_or_else(|| policy.clone());
-    let planner = request
-        .plan
-        .then(|| request.planner.clone().unwrap_or_else(|| generator.clone()));
+    // The roles a command names win; then the configured assistant; then
+    // the policy itself.
+    let assistant = match &ctx.config().assistant_model {
+        Some(text) => Some(text.parse::<ModelRef>().map_err(|e| {
+            CampaignError::Refused(format!(
+                "the assistant model {text:?} is not a model reference: {e}"
+            ))
+        })?),
+        None => None,
+    };
+    let role = |named: &Option<ModelRef>| {
+        named
+            .clone()
+            .or_else(|| assistant.clone())
+            .unwrap_or_else(|| policy.clone())
+    };
+    let teacher = role(&request.teacher);
+    let generator = role(&request.generator);
+    let planner = request.plan.then(|| match (&request.planner, &assistant) {
+        (Some(named), _) => named.clone(),
+        (None, Some(assistant)) => assistant.clone(),
+        (None, None) => generator.clone(),
+    });
     if request.dry_run {
         return Ok(Learned::Planned(Box::new(LearnPlan {
             state: ctx.root().path().to_path_buf(),
@@ -277,6 +316,10 @@ pub fn learn(
             policy: ctx.selection(&policy)?.identity(),
             teacher: ctx.selection(&teacher)?.identity(),
             generator: ctx.selection(&generator)?.identity(),
+            planner: planner
+                .as_ref()
+                .map(|p| ctx.selection(p).map(|s| s.identity()))
+                .transpose()?,
             stages: STAGES
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
@@ -301,9 +344,12 @@ pub fn learn(
         generator: &generator,
         no_release: request.no_release,
         distill: request.distill,
-        steps: request.steps.unwrap_or(DEFAULT_STEPS),
+        steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
-        tuning: request.tuning,
+        tuning: Tuning {
+            bf16_base: request.tuning.bf16_base || ctx.config().bf16_base,
+            learning_rate: request.tuning.learning_rate.or(Some(DEFAULT_LEARNING_RATE)),
+        },
         frontier: measures_frontier.then_some(request.pass_at_k),
         quotas: request.quotas,
     };
@@ -330,8 +376,9 @@ struct Pipeline<'a> {
     no_release: bool,
     /// The teacher answers every task and the student makes no attempt.
     distill: bool,
-    /// Optimizer steps, LoRA rank and tuning of the training.
-    steps: u32,
+    /// Optimizer steps (`None`: [`auto_steps`] of the dataset), LoRA rank
+    /// and tuning of the training.
+    steps: Option<u32>,
     rank: u32,
     tuning: Tuning,
     /// pass@k's parameters; `None` keeps every task.
@@ -601,7 +648,7 @@ impl Pipeline<'_> {
                 datasets: vec![dataset],
                 from: policy,
                 replay_fraction: DEFAULT_REPLAY_FRACTION,
-                steps,
+                steps: steps.unwrap_or_else(|| auto_steps(records)),
                 rank,
                 beta: None,
                 tuning,

@@ -23,9 +23,11 @@ use common::gate::{gate_context, Brain, FakeTrainer, ANCHOR};
 use common::manual::{manual_reply, MANUAL};
 use common::Scripted;
 use splinter_agent::solve::Model;
+use splinter_campaign::learn::auto_steps;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::arm;
+use splinter_campaign::train::DEFAULT_STEPS;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_policy::train::{Trained, TrainedPreference};
@@ -144,4 +146,84 @@ fn naming_kinds_and_asking_for_a_plan_is_refused() {
     .err()
     .unwrap();
     assert!(error.is_refusal(), "{error}");
+}
+
+/// The configuration names the stronger model that plans, writes the tasks
+/// and teaches, so a sentence needs no flag for it; a model named on the
+/// command wins over it.
+#[test]
+fn the_configured_assistant_is_the_default_planner_generator_and_teacher() {
+    let scratch = common::Scratch::new("plan-learn-assistant");
+    let mut settings = common::config(&scratch);
+    settings.assistant_model = Some("local:Qwen/Qwen3-8B".into());
+    let ctx = splinter_campaign::Context::new(settings, false).unwrap();
+    let student = Student {
+        plans: Mutex::new(Vec::new()),
+    };
+    let dry = |generator: Option<ModelRef>| {
+        let Learned::Planned(plan) = learn(
+            &ctx,
+            &LearnRequest {
+                sources: vec![scratch.0.display().to_string()],
+                plan: true,
+                dry_run: true,
+                generator,
+                ..LearnRequest::default()
+            },
+            &student,
+        )
+        .unwrap() else {
+            panic!("a dry run plans");
+        };
+        plan
+    };
+    let plan = dry(None);
+    assert!(plan.generator.contains("Qwen3-8B"), "{}", plan.generator);
+    assert_eq!(plan.teacher, plan.generator);
+    assert_eq!(plan.planner.as_deref(), Some(plan.generator.as_str()));
+    let named = dry(Some("local:./other".parse().unwrap()));
+    assert!(named.generator.contains("other"), "{}", named.generator);
+    assert!(
+        named.teacher.contains("Qwen3-8B"),
+        "the teacher is still the assistant"
+    );
+}
+
+#[test]
+fn an_assistant_that_is_no_model_reference_is_refused_by_name() {
+    let scratch = common::Scratch::new("plan-learn-assistant-bad");
+    let mut settings = common::config(&scratch);
+    settings.assistant_model = Some("not a reference".into());
+    let ctx = splinter_campaign::Context::new(settings, false).unwrap();
+    let student = Student {
+        plans: Mutex::new(Vec::new()),
+    };
+    let error = learn(
+        &ctx,
+        &LearnRequest {
+            sources: vec![scratch.0.display().to_string()],
+            dry_run: true,
+            ..LearnRequest::default()
+        },
+        &student,
+    )
+    .err()
+    .unwrap();
+    assert!(
+        error.is_refusal() && error.to_string().contains("not a reference"),
+        "{error}"
+    );
+}
+
+/// A run trains for about two passes over what it has learned, never fewer
+/// steps than the default and never more than a day's work.
+#[test]
+fn the_steps_follow_the_size_of_the_dataset() {
+    assert_eq!(
+        auto_steps(2),
+        DEFAULT_STEPS,
+        "a tiny set trains for the default"
+    );
+    assert_eq!(auto_steps(100), 200, "two passes over a hundred records");
+    assert_eq!(auto_steps(1_000_000), auto_steps(5_000), "bounded above");
 }
