@@ -20,7 +20,8 @@
 mod common;
 
 use common::{entry, generator, reply, stored, Scratch, Scripted};
-use splinter_knowledge::tasks::{Catalogue, Rejection, VerifierKind};
+use splinter_knowledge::advice::{judgment_cues, judgment_sections, reads_as_judgment};
+use splinter_knowledge::tasks::{Catalogue, Focus, Rejection, VerifierKind};
 
 const LETTER: &str = "# To a young man
 
@@ -86,4 +87,34 @@ async fn a_passage_the_writer_did_not_write_is_refused() {
         .unwrap();
     assert!(report.admitted.is_empty(), "{report:#?}");
     assert_eq!(report.count(Rejection::NotQuoted), 1);
+}
+
+const OPINION: &str = "I am of opinion that the public debt is a curse upon a nation, and I believe that no generation has a right to bind another by loans it cannot repay within the term of its own life, for the earth belongs to the living and not to the dead.";
+
+const BUSINESS: &str = "I have received your favour of the tenth and enclose the bill of lading for the hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month if the wind holds fair.";
+
+#[test]
+fn a_conversation_is_shown_the_sections_where_the_writer_judges_not_every_section() {
+    assert_eq!(converse().focus, Some(Focus::Judgment));
+    assert!(judgment_cues(OPINION) >= 2);
+    assert_eq!(judgment_cues(BUSINESS), 0);
+    // Opinion and advice both read as judgment; business does not.
+    assert!(reads_as_judgment(OPINION));
+    assert!(reads_as_judgment(PASSAGE));
+    assert!(!reads_as_judgment(BUSINESS));
+    assert!(
+        !reads_as_judgment("I think so."),
+        "too short to hold a passage"
+    );
+
+    let scratch = Scratch::new("converse-judgment");
+    let letter = format!("# To a friend\n\n## Business\n\n{BUSINESS}\n\n## Debt\n\n{OPINION}\n\n## Study\n\n{PASSAGE}\n");
+    let (_, _, source) = stored(&scratch, &letter);
+    let chosen = judgment_sections(&source);
+    assert_eq!(chosen.len(), 2, "{chosen:?}");
+    let texts: Vec<&str> = chosen
+        .iter()
+        .map(|&n| source.section_text(n).unwrap())
+        .collect();
+    assert!(texts[0].contains("public debt") && texts[1].contains("habit of study"));
 }

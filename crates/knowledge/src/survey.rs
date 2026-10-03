@@ -19,7 +19,7 @@ use splinter_record::error::StoreError;
 use splinter_record::source::SourceId;
 use splinter_record::sources::SourceStore;
 
-use crate::advice::reads_as_advice;
+use crate::advice::{reads_as_advice, reads_as_judgment};
 use crate::sections::sections;
 
 /// The most excerpts a survey carries.
@@ -42,6 +42,9 @@ pub struct Survey {
     pub sections: usize,
     /// Of those, the sections that read as advice.
     pub advice_sections: usize,
+    /// Of those, the sections in which the writer judges: advises or states a
+    /// position (advice included).
+    pub judgment_sections: usize,
     /// The first few part names, in order.
     pub names: Vec<String>,
     /// A few short excerpts, advice first.
@@ -85,6 +88,7 @@ pub fn survey(store: &SourceStore, sources: &[SourceId]) -> Result<Survey, Store
                     continue;
                 };
                 found.sections += 1;
+                found.judgment_sections += usize::from(reads_as_judgment(body));
                 if reads_as_advice(body) {
                     found.advice_sections += 1;
                     if advice.len() < MAX_EXCERPTS {

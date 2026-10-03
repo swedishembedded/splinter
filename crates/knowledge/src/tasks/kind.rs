@@ -116,6 +116,9 @@ pub enum Focus {
     /// Sections that read as advice: a writer telling a correspondent what
     /// to do, what to avoid or what to value.
     Advice,
+    /// Sections in which a writer judges: advises or states a position,
+    /// where the rest of a correspondence is business and news.
+    Judgment,
 }
 
 fn one() -> usize {
@@ -386,7 +389,7 @@ fn builtin_kinds() -> Vec<TaskKind> {
             requires: Vec::new(),
             verifiers: vec![Grounding, Judged],
             min_sections: 1,
-            focus: None,
+            focus: Some(Focus::Judgment),
             reference_verbatim: true,
             subject_required: false,
             dialogue: true,

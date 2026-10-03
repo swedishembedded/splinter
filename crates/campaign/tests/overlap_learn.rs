@@ -31,10 +31,22 @@ use splinter_campaign::{CampaignError, Context};
 use splinter_policy::train::{Trained, TrainedPreference};
 use sven_sdk::CancelToken;
 
+/// `i` spelled in letters, so a word carries no digit and the text is prose.
+fn letters(mut i: usize) -> String {
+    let mut out = String::new();
+    loop {
+        out.push(char::from(b'a' + u8::try_from(i % 26).unwrap()));
+        i /= 26;
+        if i == 0 {
+            return out;
+        }
+    }
+}
+
 /// `n` lower-case words that no other seed shares.
 fn words(seed: &str, n: usize) -> String {
     (0..n)
-        .map(|i| format!("{seed}x{i}"))
+        .map(|i| format!("{seed}x{}", letters(i)))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -71,8 +83,8 @@ impl Trainer for Student {
 
 #[test]
 fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_own() {
-    let body = words("a", 130);
-    let other = words("c", 130);
+    let body = format!("I believe that {}", words("a", 130));
+    let other = format!("I believe that {}", words("c", 130));
     let letters = [
         ("one.md", format!("# One\n\n## Body\n\n{body}\n")),
         (
@@ -97,24 +109,24 @@ fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_
             };
             let passage: String = text.split(' ').take(40).collect::<Vec<_>>().join(" ");
             json!({ "tasks": [{
-                "instruction": format!("question {n} about {seed}x0 matters"),
+                "instruction": format!("question {n} about {seed}xa matters"),
                 "reference": passage,
-                "evidence": [{ "section": 1, "quote": passage }]
+                "evidence": [{ "section": 0, "quote": passage }]
             }]})
             .to_string()
         } else if prompt.contains(STUDENT_ROLE) {
             json!({ "message": "and then?" }).to_string()
         } else if prompt.contains(MATERIAL_HEADING) {
-            "ax0 ax1 ax2 ax3".to_string()
+            "axa axb axc axd".to_string()
         } else {
             "I do not know.".to_string()
         }
     });
     fn body_text() -> String {
-        words("a", 130)
+        format!("I believe that {}", words("a", 130))
     }
     fn other_text() -> String {
-        words("c", 130)
+        format!("I believe that {}", words("c", 130))
     }
 
     let (scratch, ctx) = gate_context("overlap-learn", Brain::Missing);
@@ -165,8 +177,8 @@ fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_
             .map(|(_, g)| g)
             .collect()
     };
-    let a = group_of("ax0");
-    let c = group_of("cx0");
+    let a = group_of("axa");
+    let c = group_of("cxa");
     assert_eq!(a.len(), 2);
     assert!(a[0].is_some() && a[0] == a[1], "{groups:?}");
     assert!(c[0].is_some() && c[0] != a[0], "{groups:?}");

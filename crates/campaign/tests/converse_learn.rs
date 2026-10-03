@@ -58,7 +58,7 @@ fn policy(third: &'static str) -> Scripted {
             json!({ "tasks": [{
                 "instruction": OPENING,
                 "reference": PASSAGE,
-                "evidence": [{ "section": 1, "quote": PASSAGE }]
+                "evidence": [{ "section": 0, "quote": PASSAGE }]
             }]})
             .to_string()
         } else if prompt.contains(STUDENT_ROLE) {

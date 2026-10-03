@@ -27,9 +27,10 @@ fn plan_line(summary: &serde_json::Value) -> String {
         ""
     };
     format!(
-        "{} part(s), {} section(s) read as advice -> {}{persona}{mode}: {}",
+        "{} part(s), {} section(s) read as advice, {} as the writer judging -> {}{persona}{mode}: {}",
         survey["parts"],
         survey["advice_sections"],
+        survey["judgment_sections"],
         kinds.join(", "),
         plan["rationale"].as_str().unwrap_or("")
     )

@@ -47,6 +47,34 @@ const CUES: &[&str] = &[
     "i hope you will",
 ];
 
+/// Phrases a writer uses when stating a position and not only counselling:
+/// what they hold, think, fear or are persuaded of.
+const OPINION_CUES: &[&str] = &[
+    "i am of opinion",
+    "i am of the opinion",
+    "in my opinion",
+    "my opinion",
+    "i believe",
+    "i think",
+    "i hold",
+    "i conceive",
+    "i consider",
+    "i am persuaded",
+    "i am convinced",
+    "i am satisfied",
+    "my judgment",
+    "my judgement",
+    "in my judgment",
+    "it appears to me",
+    "i apprehend",
+    "i fear",
+    "i have always",
+    "i have ever",
+    "i am clear",
+    "it is my wish",
+    "i deem",
+];
+
 /// The fewest words a section needs to hold a passage of advice.
 const MIN_WORDS: usize = 30;
 
@@ -55,6 +83,16 @@ const MIN_WORDS: usize = 30;
 pub fn advice_cues(text: &str) -> usize {
     let lower = text.to_lowercase();
     CUES.iter().filter(|cue| lower.contains(*cue)).count()
+}
+
+/// How many of the phrases of a position `text` contains.
+#[must_use]
+pub fn judgment_cues(text: &str) -> usize {
+    let lower = text.to_lowercase();
+    OPINION_CUES
+        .iter()
+        .filter(|cue| lower.contains(*cue))
+        .count()
 }
 
 /// Whether `text` is running prose and not an index entry, a table or a
@@ -82,6 +120,24 @@ pub fn is_prose(text: &str) -> bool {
 #[must_use]
 pub fn reads_as_advice(text: &str) -> bool {
     text.split_whitespace().count() >= MIN_WORDS && is_prose(text) && advice_cues(text) >= 1
+}
+
+/// Whether the section `text` reads as the writer judging: advising, or
+/// stating a position. Business, news and courtesies do not.
+#[must_use]
+pub fn reads_as_judgment(text: &str) -> bool {
+    text.split_whitespace().count() >= MIN_WORDS
+        && is_prose(text)
+        && (advice_cues(text) >= 1 || judgment_cues(text) >= 1)
+}
+
+/// The positions of the sections of `source` that read as the writer
+/// judging, in order.
+#[must_use]
+pub fn judgment_sections(source: &SourceText) -> Vec<usize> {
+    (0..source.sections().len())
+        .filter(|&at| source.section_text(at).is_some_and(reads_as_judgment))
+        .collect()
 }
 
 /// The positions of the sections of `source` that read as advice, in order.

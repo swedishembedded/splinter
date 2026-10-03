@@ -23,6 +23,8 @@ use splinter_record::StateRoot;
 
 const ADVICE: &str = "I advise you to fix a habit of study every morning before you do anything else, and never let a day pass without reading something of history or ethics, for what is not fixed by the pen is lost.";
 
+const OPINION: &str = "I am of opinion that the public debt is a curse upon a nation, and I believe that no generation has a right to bind another by loans it cannot repay within the term of its own life, for the earth belongs to the living and not to the dead.";
+
 const BUSINESS: &str = "I have received your favour of the tenth and enclose the bill of lading for the hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month if the wind holds fair.";
 
 fn store(test: &str) -> SourceStore {
@@ -61,13 +63,17 @@ fn a_survey_counts_parts_and_sections_and_the_ones_that_read_as_advice() {
         &store,
         &[
             ("to-carr.txt", &format!("{ADVICE}\n\n{BUSINESS}")),
-            ("to-jay.txt", BUSINESS),
+            ("to-jay.txt", &format!("{BUSINESS}\n\n{OPINION}")),
         ],
     );
     let found = survey(&store, &[id]).unwrap();
     assert_eq!(found.parts, 2);
-    assert_eq!(found.sections, 3);
+    assert_eq!(found.sections, 4);
     assert_eq!(found.advice_sections, 1);
+    assert_eq!(
+        found.judgment_sections, 2,
+        "the advice, and the position stated beside the business"
+    );
     assert!(found.text_bytes > 300);
     assert_eq!(found.names, ["to-carr.txt", "to-jay.txt"]);
 }

@@ -23,16 +23,17 @@ use std::sync::{Arc, Mutex};
 
 use common::{scratch_context, Scripted};
 use splinter_campaign::model_ref::ModelRef;
-use splinter_campaign::plan::{plan, MIN_ADVICE_SECTIONS};
+use splinter_campaign::plan::{plan, MIN_ADVICE_SECTIONS, MIN_JUDGMENT_SECTIONS};
 use splinter_knowledge::survey::Survey;
 use sven_sdk::CancelToken;
 
-fn survey(advice_sections: usize) -> Survey {
+fn survey(advice_sections: usize, judgment_sections: usize) -> Survey {
     Survey {
         parts: 300,
         text_bytes: 4_000_000,
         sections: 9000,
         advice_sections,
+        judgment_sections,
         names: vec!["to-carr.txt".into(), "to-jay.txt".into()],
         excerpts: vec!["I advise you to fix a habit of study every morning.".into()],
     }
@@ -65,11 +66,24 @@ fn run(
     Scripted,
     usize,
 ) {
+    run_surveyed(test, replies, advice, advice)
+}
+
+fn run_surveyed(
+    test: &str,
+    replies: Vec<&'static str>,
+    advice: usize,
+    judgment: usize,
+) -> (
+    Result<splinter_campaign::plan::Plan, splinter_campaign::CampaignError>,
+    Scripted,
+    usize,
+) {
     let (model, asked) = planner(replies);
     let (_scratch, ctx) = scratch_context(test, model.clone(), false);
     let result = plan(
         &ctx,
-        &survey(advice),
+        &survey(advice, judgment),
         Some("think like Thomas Jefferson"),
         &ModelRef::policy_default(),
         &CancelToken::new(),
@@ -125,8 +139,16 @@ fn a_plan_with_no_kinds_or_the_same_kind_twice_is_not_a_plan() {
 }
 
 #[test]
-fn a_conversation_is_on_the_menu_and_needs_no_advice_in_the_sources() {
+fn a_conversation_needs_sections_where_the_writer_judges_and_not_advice_alone() {
     let converse = r#"{"persona": "Thomas Jefferson", "kinds": ["converse", "recall"], "distill": true, "rationale": "the letters show how the writer talks and reasons"}"#;
-    let chosen = run("plan-converse", vec![converse], 0).0.unwrap();
+    // Positions stated without counsel are enough: no advice in the sources.
+    let chosen = run_surveyed("plan-converse", vec![converse], 0, MIN_JUDGMENT_SECTIONS)
+        .0
+        .unwrap();
     assert_eq!(chosen.kinds, ["converse", "recall"]);
+    // Sources that are all business and news give a conversation nothing to
+    // teach, and the plan is refused.
+    let (result, _, asked) = run_surveyed("plan-converse-none", vec![converse], 0, 0);
+    assert!(result.is_err());
+    assert!(asked >= 2, "it was sent back before being refused");
 }

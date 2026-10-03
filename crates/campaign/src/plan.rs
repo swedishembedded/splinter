@@ -42,6 +42,10 @@ pub const PLAN_MAX_OUTPUT_TOKENS: u64 = 1024;
 /// to teach advice.
 pub const MIN_ADVICE_SECTIONS: usize = 8;
 
+/// The fewest sections in which the writer judges - advises or states a
+/// position - a survey must find for the plan to teach a conversation.
+pub const MIN_JUDGMENT_SECTIONS: usize = 8;
+
 /// The most kinds one plan may choose.
 pub const MAX_KINDS: usize = 4;
 
@@ -123,6 +127,15 @@ fn check(plan: &Plan, survey: &Survey) -> Result<(), String> {
             "the survey found {} section(s) that read as advice and at least {MIN_ADVICE_SECTIONS} \
              are needed to teach advice; choose other kinds",
             survey.advice_sections
+        ));
+    }
+    if plan.kinds.iter().any(|k| k == "converse")
+        && survey.judgment_sections < MIN_JUDGMENT_SECTIONS
+    {
+        return Err(format!(
+            "the survey found {} section(s) in which the writer judges and at least \
+             {MIN_JUDGMENT_SECTIONS} are needed to teach a conversation; choose other kinds",
+            survey.judgment_sections
         ));
     }
     if plan.rationale.trim().is_empty() {

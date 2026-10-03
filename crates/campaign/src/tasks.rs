@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use splinter_knowledge::advice::advice_sections;
+use splinter_knowledge::advice::{advice_sections, judgment_sections};
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
 use splinter_knowledge::tasks::dedup::{contradictions, Asked};
@@ -337,6 +337,7 @@ fn generate_part(
     for kind in focused {
         let positions = match kind.focus {
             Some(Focus::Advice) => advice_sections(text),
+            Some(Focus::Judgment) => judgment_sections(text),
             None => continue,
         };
         run_windows(ctx, generator, text, &positions, &[kind], None, batch)?;
