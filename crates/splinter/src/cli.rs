@@ -20,7 +20,7 @@ use splinter_campaign::train::{
     DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
 };
 use splinter_campaign::variants::DEFAULT_VARIANTS_PER_TASK;
-use splinter_record::annotation::Strength;
+use splinter_core::annotation::Strength;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
 /// a repository, a command's output - and it generates tasks from it,

@@ -17,8 +17,8 @@
 use std::fs;
 use std::path::PathBuf;
 
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_record::experiences::StoreError;
 use splinter_record::tasks::{TaskEntry, TaskSet, TaskStore};
 use splinter_record::StateRoot;
@@ -96,7 +96,7 @@ fn a_task_is_stored_once_and_read_back_verified() {
     .unwrap();
     let forged = splinter_expdb::model::Entity::keyed(
         "task",
-        other.task.id.content_id().unwrap(),
+        splinter_record::address::content_id(&other.task.id).unwrap(),
         serde_json::to_value(&baud).unwrap(),
     );
     forger.put_entity(&forged).unwrap();

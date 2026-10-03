@@ -46,16 +46,15 @@
 
 use std::time::{Duration, Instant};
 
-use splinter_lab::verifiers::critique::{critique_verdict, preferred, RetryOutcome};
-use splinter_lab::verifiers::{verify_and_annotate, Strongest, VerifyError};
-use splinter_record::annotation::{
-    decide, Annotation, AnnotationBody, Decision, Outcome, Producer, RelationKind,
-};
-use splinter_record::clock::Clock;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, RelationKind};
+use splinter_core::clock::Clock;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{
     ExperienceError, ExperienceId, Privileged, PrivilegedKind, Provenance, Task,
 };
+use splinter_lab::verifiers::critique::{critique_verdict, preferred, RetryOutcome};
+use splinter_lab::verifiers::{verify_and_annotate, Strongest, VerifyError};
+use splinter_record::decision::{decide, Decision};
 use splinter_record::experiences::{ExperienceStore, StoreError};
 use splinter_sandbox::ResolvedEnvironment;
 use sven_sdk::{CancelToken, RunConclusion, Usage};

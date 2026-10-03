@@ -13,12 +13,12 @@
 use std::path::PathBuf;
 
 use serde_json::json;
-use splinter_lab::SYSTEM_PROMPT;
-use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
+use splinter_lab::SYSTEM_PROMPT;
 use splinter_views::{
     write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, View, ViewError, WriteOptions,
 };

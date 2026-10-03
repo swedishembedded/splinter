@@ -9,7 +9,7 @@
 //! The task store: generated tasks under their own address, and named sets
 //! of them - how a pipeline stage names the tasks it hands the next one.
 //!
-//! A task is an entity keyed by its [`TaskRef::id`](crate::experience::TaskRef),
+//! A task is an entity keyed by its [`TaskRef::id`](splinter_core::experience::TaskRef),
 //! the address of its content, and a read decodes it and checks that the
 //! content still addresses it. A set is addressed by the digest of its own
 //! canonical form, like an [`ExperienceSet`](crate::experiences::ExperienceSet),
@@ -20,10 +20,10 @@ use serde::{Deserialize, Serialize};
 
 use splinter_expdb::model::Entity;
 
-use crate::digest::{canonical_json, Digest};
 use crate::error::StoreError;
-use crate::experience::Task;
 use crate::workspace::{content_id, put_spilling, Workspace};
+use splinter_core::digest::{canonical_json, Digest};
+use splinter_core::experience::Task;
 
 const TASK: &str = "task";
 const TASK_SET: &str = "task_set";
@@ -52,7 +52,7 @@ pub struct TaskEntry {
     /// The task this one is a variant of - the same fact asked in other
     /// words, to be graded by the same verifiers and never trained on;
     /// the task-level form of
-    /// [`RelationKind::VariantOf`](crate::annotation::RelationKind::VariantOf).
+    /// [`RelationKind::VariantOf`](splinter_core::annotation::RelationKind::VariantOf).
     /// Left out of the canonical form when `None`, so a set of tasks that
     /// are no variants keeps its address.
     #[serde(default, skip_serializing_if = "Option::is_none")]

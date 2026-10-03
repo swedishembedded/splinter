@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use splinter_agent::converse::{converse_prompted, Exchange, Interlocutor};
 use splinter_agent::solve::{open_book_prompt, SolveOptions};
-use splinter_record::experience::{Environment, Task};
+use splinter_core::experience::{Environment, Task};
 use splinter_sandbox::ResolvedEnvironment;
 use sven_sdk::atif::StepOrigin;
 use sven_sdk::model::{

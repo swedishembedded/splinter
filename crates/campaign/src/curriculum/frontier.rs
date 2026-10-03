@@ -33,12 +33,12 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use serde::Serialize;
+use splinter_core::digest::Digest;
+use splinter_core::experience::ExperienceId;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
 use splinter_lab::frontier::{Distribution, FrontierClass, PassCount};
 pub use splinter_policy::Sampling;
 use splinter_policy::AGENT_SAMPLING;
-use splinter_record::digest::Digest;
-use splinter_record::experience::ExperienceId;
 use splinter_record::experiences::{ExperienceSet, SetId};
 use splinter_record::tasks::{TaskSet, TaskSetId};
 use sven_sdk::CancelToken;

@@ -20,11 +20,11 @@
 //! privileged reference: what the verifier compares against and the
 //! student never sees.
 
-use splinter_lab::denoise::KIND;
-use splinter_record::experience::{
+use splinter_core::experience::{
     Digest, Environment, ExperienceError, Privileged, PrivilegedKind, Span, Task,
 };
-use splinter_record::source::{PartRef, Source, SourceId};
+use splinter_core::source::{PartRef, Source, SourceId};
+use splinter_lab::denoise::KIND;
 
 /// Words in a denoise passage, when the part has that many.
 pub const SPAN_WORDS: usize = 12;

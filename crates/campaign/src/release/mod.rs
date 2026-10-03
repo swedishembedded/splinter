@@ -41,10 +41,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
+use splinter_core::digest::Digest;
 use splinter_knowledge::concepts::Concept;
 use splinter_policy::local::{load_source, resolve_base};
 use splinter_policy::selection::local_model_name;
-use splinter_record::digest::Digest;
 use sven_sdk::CancelToken;
 
 pub use store::{ReleaseId, ReleaseManifest, ReleaseStore, StoredRelease, RELEASE_FORMAT};

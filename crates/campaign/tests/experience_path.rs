@@ -20,17 +20,15 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{Digest, Experience, Privileged, PrivilegedKind, Provenance, Task};
+use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::denoise::{Denoise, GENERATOR};
 use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::annotation;
 use splinter_lab::SYSTEM_PROMPT;
-use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
-    Digest, Experience, Privileged, PrivilegedKind, Provenance, Task,
-};
 use splinter_record::experiences::ExperienceStore;
-use splinter_record::source::{CapturedSource, Origin, PartContent};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 use splinter_views::{write_dataset, Corpus, SftFinal, View, WriteOptions};

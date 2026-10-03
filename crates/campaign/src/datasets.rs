@@ -14,9 +14,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde::Serialize;
-use splinter_record::annotation::Strength;
-use splinter_record::digest::canonical_json;
-use splinter_record::experience::{ExperienceId, PrivilegedKind};
+use splinter_core::annotation::Strength;
+use splinter_core::digest::canonical_json;
+use splinter_core::experience::{ExperienceId, PrivilegedKind};
 use splinter_record::experiences::SetId;
 use splinter_record::lineage::DatasetLineage;
 pub use splinter_views::Strip;

@@ -17,14 +17,15 @@ use std::time::Duration;
 
 use splinter_agent::judge::JudgeVerifier;
 use splinter_agent::solve::Model;
+use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
+    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
+};
 use splinter_lab::verifiers::calibration::{calibrate, CalibratedJudge};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
-use splinter_record::annotation::{decide, AnnotationBody, Outcome, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
-    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
-};
+use splinter_record::decision::decide;
 use splinter_record::experiences::ExperienceStore;
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;

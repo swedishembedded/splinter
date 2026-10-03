@@ -21,13 +21,13 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::Span;
+use splinter_core::source::{Origin, PartRef, SkipReason, Source};
 use splinter_knowledge::capture::{
     capture_command, capture_document, capture_repository, default_environment, CaptureError,
     CommandSpec, ProcessError, DEFAULT_MAX_FILE_BYTES,
 };
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::Span;
-use splinter_record::source::{Origin, PartRef, SkipReason, Source};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 

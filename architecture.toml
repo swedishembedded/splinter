@@ -38,6 +38,7 @@ order = [
 ]
 
 [crates]
+splinter-core = "foundation"
 splinter-expdb = "foundation"
 splinter-record = "storage"
 splinter-sandbox = "storage"
@@ -60,14 +61,34 @@ allowed = ["splinter-policy"]
 max_file_lines = 800
 
 [[same_layer]]
-from = "splinter-sandbox"
-to = "splinter-record"
-why = "TEMPORARY. The sandbox names its environments by the record vocabulary's digest and environment types; both move to a vocabulary crate below the storage tier."
-
-[[same_layer]]
 from = "splinter-knowledge"
 to = "splinter-views"
 why = "TEMPORARY. Task admission applies the views' self-containment rule; the rule moves to the vocabulary crate."
+
+[[forbidden]]
+from = "splinter-core"
+to = "splinter-expdb"
+why = "The vocabulary names no storage: a Task or an Experience is the same value whichever database holds it."
+
+[[forbidden]]
+from = "splinter-core"
+to = "sven-sdk"
+why = "The vocabulary names no agent runtime; it holds sven's trajectory format (atif) alone."
+
+[[forbidden]]
+from = "splinter-core"
+to = "brain"
+why = "The vocabulary names no model computation."
+
+[[forbidden]]
+from = "splinter-core"
+to = "tokio"
+why = "The vocabulary performs no I/O and starts no task."
+
+[[forbidden]]
+from = "splinter-core"
+to = "libc"
+why = "The vocabulary starts no process and touches no operating-system interface."
 
 [[forbidden]]
 from = "splinter-expdb"

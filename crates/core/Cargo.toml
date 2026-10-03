@@ -2,20 +2,20 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 [package]
-name = "splinter-lab"
-description = "What a learning run measures with: verifiers by strength, the holdout rule, paired comparison, pass@k and the wire shapes training data is written in."
+name = "splinter-core"
+description = "Splinter's vocabulary: content addresses, the clock, sources, tasks, experiences and the annotations made about them, with the invariants each must keep."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
-splinter-core = { workspace = true }
-sven-sdk = { workspace = true }
-splinter-sandbox = { workspace = true }
-splinter-record = { workspace = true }
+atif = { workspace = true }
+
+blake3 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

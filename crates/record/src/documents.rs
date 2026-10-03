@@ -17,9 +17,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use splinter_expdb::model::Entity;
 
-use crate::digest::{canonical_json, Digest};
 use crate::error::StoreError;
 use crate::workspace::{content_id, put_spilling, Workspace};
+use splinter_core::digest::{canonical_json, Digest};
 
 impl Workspace {
     /// Stores `document` of `class` and returns its address. Storing the same
@@ -78,7 +78,7 @@ impl Workspace {
         Ok(self
             .read_or_default(|s| s.entity_ids(class))?
             .into_iter()
-            .map(Digest::from)
+            .map(crate::address::digest_of)
             .collect())
     }
 }

@@ -17,8 +17,8 @@
 //! [`Exclusion::SourceMissing`], one that is not UTF-8 text as
 //! [`Exclusion::NotText`]; a store that cannot be read is an error.
 
-use splinter_record::annotation::Strength;
-use splinter_record::experience::Span;
+use splinter_core::annotation::Strength;
+use splinter_core::experience::Span;
 use splinter_record::sources::SourceStore;
 
 use super::source_text;

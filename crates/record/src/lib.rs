@@ -32,21 +32,20 @@
 //! document, repository and command run, its content stored once per
 //! digest, so a span resolves to the exact bytes it names. [`tasks`] holds
 //! the tasks generated from them and the named sets a stage hands the
-//! next. [`experience`], [`annotation`] and [`experiences`] are the
-//! experience store every training set is projected from: immutable
-//! experiences under their content address, append-only annotations beside
-//! them, and named sets of experience ids. [`error`] is the error every
-//! store reports.
+//! next. [`experiences`] is the experience store every training set is
+//! projected from: immutable experiences under their content address,
+//! append-only annotations beside them, and named sets of experience ids;
+//! [`decision`] is the rule that turns an experience's verdicts into one
+//! decision. The sources, tasks, experiences and annotations themselves are
+//! `splinter-core`'s vocabulary. [`error`] is the error every store reports.
 
 #![warn(missing_docs)]
 
-pub mod annotation;
+pub mod address;
 pub mod artifacts;
-pub mod clock;
-pub mod digest;
+pub mod decision;
 pub mod documents;
 pub mod error;
-pub mod experience;
 pub mod experiences;
 pub mod lineage;
 pub mod maintenance;
@@ -54,7 +53,6 @@ pub mod pointers;
 mod projection;
 pub mod recovery;
 pub mod runs;
-pub mod source;
 pub mod sources;
 pub mod tasks;
 pub mod workspace;
@@ -116,7 +114,7 @@ impl StateRoot {
 /// millisecond are unlikely to collide.
 #[must_use]
 pub fn new_id_with_prefix(prefix: &str) -> String {
-    let t = clock::now();
+    let t = splinter_core::clock::now();
     let rand = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

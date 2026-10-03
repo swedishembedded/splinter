@@ -58,11 +58,12 @@ use splinter_campaign::solving::solve_set;
 use splinter_campaign::status::status;
 use splinter_campaign::verify::verify_set;
 use splinter_campaign::Context;
+use splinter_core::annotation::Strength;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
 use splinter_knowledge::concepts::Concept;
 use splinter_lab::paired::PairedOutcome;
-use splinter_record::annotation::{decide as decision, Strength};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
+use splinter_record::decision::decide as decision;
 use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 

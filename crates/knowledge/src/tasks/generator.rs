@@ -26,11 +26,11 @@
 
 use serde::Serialize;
 use splinter_agent::solve::{Model, SolveOptions};
+use splinter_core::digest::Digest;
+use splinter_core::experience::ExperienceError;
+use splinter_core::source::{Origin, PartRef, SourceId};
 use splinter_lab::verifiers::mutation::MutationPolicy;
-use splinter_record::digest::Digest;
 use splinter_record::error::StoreError;
-use splinter_record::experience::ExperienceError;
-use splinter_record::source::{Origin, PartRef, SourceId};
 use splinter_record::sources::SourceStore;
 use splinter_sandbox::RuntimeEnvironment;
 use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};

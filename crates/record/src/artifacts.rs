@@ -27,10 +27,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use splinter_expdb::model::Entity;
 
-use crate::digest::Digest;
 use crate::error::StoreError;
 use crate::workspace::{content_id, put_spilling, Workspace};
 use crate::StateRoot;
+use splinter_core::digest::Digest;
 
 const ARTIFACT: &str = "artifact";
 
@@ -210,7 +210,7 @@ impl ArtifactStore {
             out.sync_all().map_err(io_error(&temporary))?;
         }
         let artifact = Artifact {
-            digest: Digest::from(splinter_expdb::ContentId::from_bytes(
+            digest: crate::address::digest_of(splinter_expdb::ContentId::from_bytes(
                 *blake.finalize().as_bytes(),
             )),
             size,

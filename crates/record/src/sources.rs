@@ -17,11 +17,11 @@
 
 use splinter_expdb::model::Entity;
 
-use crate::digest::Digest;
 use crate::error::StoreError;
-use crate::experience::Span;
-use crate::source::{CapturedSource, Source, SourceId};
 use crate::workspace::{content_id, put_spilling, Workspace};
+use splinter_core::digest::Digest;
+use splinter_core::experience::Span;
+use splinter_core::source::{CapturedSource, Source, SourceId};
 
 const SOURCE: &str = "source";
 
@@ -108,7 +108,7 @@ impl SourceStore {
         source.validate()?;
         // The value handed back must be the record stored, not what
         // survived decoding it.
-        let stored = crate::digest::canonical_json(&entity.value).map_err(|source| {
+        let stored = splinter_core::digest::canonical_json(&entity.value).map_err(|source| {
             StoreError::Serialize {
                 what: "source",
                 source,
@@ -125,7 +125,7 @@ impl SourceStore {
 
     /// The content stored under `digest`, verified.
     pub fn read_blob(&self, digest: &Digest) -> Result<Vec<u8>, StoreError> {
-        let Some(id) = digest.content_id() else {
+        let Some(id) = crate::address::content_id(digest) else {
             return Err(StoreError::UnknownBlob(digest.clone()));
         };
         match self.workspace.read(|s| s.read_blob(&id)) {

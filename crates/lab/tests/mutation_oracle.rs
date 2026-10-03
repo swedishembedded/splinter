@@ -13,11 +13,11 @@
 mod common;
 
 use common::{experience, python, record, reference, task, verdict, Scratch};
+use splinter_core::annotation::{Outcome, Strength};
 use splinter_lab::verifiers::executable::{ExecutableCheck, Expectation};
 use splinter_lab::verifiers::mutation::{
     mutants, validate_oracle, MutationOperator, MutationPolicy, MutationValidatedVerifier,
 };
-use splinter_record::annotation::{Outcome, Strength};
 use splinter_sandbox::Limits;
 
 const REFERENCE: &str = "def clamp(x, lo, hi):

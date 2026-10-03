@@ -11,7 +11,7 @@
 //! The rule, first match wins:
 //!
 //! 1. **Declared.** A task that declares concepts
-//!    ([`Task::concepts`](splinter_record::experience::Task)) exercises
+//!    ([`Task::concepts`](splinter_core::experience::Task)) exercises
 //!    exactly those.
 //! 2. **Sections.** Otherwise each evidence span that names its source part
 //!    exercises one (source, section) pair: the part is split by the one
@@ -29,9 +29,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
+use splinter_core::experience::{Span, Task};
+use splinter_core::source::SourceId;
 use splinter_record::error::StoreError;
-use splinter_record::experience::{Span, Task};
-use splinter_record::source::SourceId;
 use splinter_record::sources::SourceStore;
 
 use crate::sections::sections;

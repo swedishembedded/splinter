@@ -7,11 +7,11 @@
 
 use std::path::PathBuf;
 
-use crate::digest::Digest;
-use crate::experience::{ExperienceError, ExperienceId};
 use crate::experiences::SetId;
-use crate::source::{SourceError, SourceId};
 use crate::tasks::TaskSetId;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{ExperienceError, ExperienceId};
+use splinter_core::source::{SourceError, SourceId};
 
 /// Why a store operation failed.
 #[derive(Debug, thiserror::Error)]

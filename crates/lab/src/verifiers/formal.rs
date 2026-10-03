@@ -10,15 +10,15 @@
 //! a configured [`Normalisation`].
 
 use serde_json::json;
-use splinter_record::annotation::{Producer, Strength};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Experience, Task};
+use splinter_core::annotation::{Producer, Strength};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Experience, Task};
 
 use super::normalise::Normalisation;
 use super::{single_reference, Finding, Verifier, VerifyError};
 
 /// Passes an answer iff it equals the task's one
-/// [`Reference`](splinter_record::experience::PrivilegedKind::Reference)
+/// [`Reference`](splinter_core::experience::PrivilegedKind::Reference)
 /// once both are normalised; fails a different answer or none. Abstains on
 /// a task without exactly one reference, or of a kind it is not for.
 #[derive(Clone, Debug)]
@@ -98,7 +98,7 @@ const STATED_FACTOR: usize = 4;
 const STATED_SLACK: usize = 60;
 
 /// Passes an answer iff it states the task's one
-/// [`Reference`](splinter_record::experience::PrivilegedKind::Reference):
+/// [`Reference`](splinter_core::experience::PrivilegedKind::Reference):
 /// the normalised reference occurs in the normalised answer with no letter
 /// or digit directly before or after it, and the answer is at most
 /// `STATED_FACTOR` times the reference's length plus `STATED_SLACK`

@@ -15,8 +15,8 @@
 //!
 //! The record's experiences are the critique, then the critiqued one.
 
-use splinter_record::annotation::{RelationKind, Strength};
-use splinter_record::experience::ExperienceId;
+use splinter_core::annotation::{RelationKind, Strength};
+use splinter_core::experience::ExperienceId;
 
 use crate::render::{message, student_turn, with_candidate};
 use crate::{

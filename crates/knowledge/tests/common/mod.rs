@@ -14,9 +14,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use splinter_agent::solve::Model;
+use splinter_core::clock::FixedClock;
+use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_knowledge::tasks::{ModelTaskGenerator, SourceText};
-use splinter_record::clock::FixedClock;
-use splinter_record::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 use splinter_sandbox::{Limits, ProcessSandbox, RuntimeEnvironment, RuntimeRegistry};

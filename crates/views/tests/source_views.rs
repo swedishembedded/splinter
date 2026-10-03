@@ -16,11 +16,11 @@
 mod common;
 
 use common::*;
+use splinter_core::annotation::{Outcome, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{Digest, PrivilegedKind, Span};
+use splinter_core::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
 use splinter_lab::denoise::KIND;
-use splinter_record::annotation::{Outcome, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{Digest, PrivilegedKind, Span};
-use splinter_record::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 use splinter_views::{Corpus, Cpt, DenoiseView, Exclusion, Objective, RecordBody, Retrieval, View};

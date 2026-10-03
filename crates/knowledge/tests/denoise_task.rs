@@ -11,10 +11,10 @@
 
 use std::path::PathBuf;
 
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::PrivilegedKind;
+use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::denoise::{Denoise, DenoiseError};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::PrivilegedKind;
-use splinter_record::source::{CapturedSource, Origin, PartContent};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 

@@ -27,8 +27,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
+use splinter_core::digest::{canonical_json, Digest};
 use splinter_knowledge::concepts::{Concept, ConceptResolver, SectionRef};
-use splinter_record::digest::{canonical_json, Digest};
 use splinter_record::experiences::StoreError;
 
 use crate::context::Context;

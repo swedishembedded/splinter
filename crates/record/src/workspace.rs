@@ -29,9 +29,9 @@ use std::time::{Duration, Instant};
 
 use splinter_expdb::{Config, Database, Session, WriterIdentity};
 
-use crate::digest::Digest;
 use crate::error::StoreError;
 use crate::StateRoot;
+use splinter_core::digest::Digest;
 
 /// Writes a batch groups into one commit.
 pub const GROUP_COMMIT_WRITES: usize = 256;
@@ -165,7 +165,7 @@ fn unspill(
 
 /// The database id of the object `address` names.
 pub(crate) fn content_id(address: &Digest) -> Result<splinter_expdb::ContentId, StoreError> {
-    address.content_id().ok_or_else(|| StoreError::Rejected {
+    crate::address::content_id(address).ok_or_else(|| StoreError::Rejected {
         what: "address",
         reason: format!("{address} is not a content address"),
     })
@@ -296,7 +296,7 @@ impl Workspace {
         let mut ids: Vec<Digest> = self
             .read_or_default(|s| s.entity_ids(class))?
             .into_iter()
-            .map(Digest::from)
+            .map(crate::address::digest_of)
             .collect();
         ids.sort();
         Ok(ids)

@@ -16,9 +16,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use splinter_core::digest::Digest;
+use splinter_core::experience::Experience;
 use splinter_lab::overlap::overlap_groups;
-use splinter_record::digest::Digest;
-use splinter_record::experience::Experience;
 use splinter_views::{Corpus, Projection};
 
 use crate::context::Context;

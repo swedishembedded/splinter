@@ -20,8 +20,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_core::digest::Digest;
 use splinter_record::artifacts::{ArtifactSpec, ArtifactState, ArtifactStore};
-use splinter_record::digest::Digest;
 use splinter_record::experiences::StoreError;
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;

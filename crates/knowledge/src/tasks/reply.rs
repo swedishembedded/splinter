@@ -26,9 +26,9 @@
 //! sends a malformed one back for correction.
 
 use serde::Deserialize;
+use splinter_core::experience::Environment;
 use splinter_lab::verifiers::executable::{ExecutableCheck, Expectation, ExpectedStdout};
 use splinter_lab::verifiers::normalise::Normalisation;
-use splinter_record::experience::Environment;
 use sven_sdk::schemars::JsonSchema;
 
 /// One reply of the shape [`Reply`] parses, shown to the model beside the

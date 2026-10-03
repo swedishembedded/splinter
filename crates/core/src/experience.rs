@@ -499,7 +499,7 @@ pub struct Experience {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub concepts: Vec<String>,
     /// What the solver did, as sven exports it.
-    pub trajectory: sven_sdk::atif::Trajectory,
+    pub trajectory: atif::Trajectory,
     /// The solver's final answer, when it gave one.
     pub final_output: Option<String>,
     /// Who produced it, and when.
@@ -510,7 +510,7 @@ impl Experience {
     /// A validated experience of `task`.
     pub fn new(
         task: Task,
-        trajectory: sven_sdk::atif::Trajectory,
+        trajectory: atif::Trajectory,
         final_output: Option<String>,
         provenance: Provenance,
     ) -> Result<Self, ExperienceError> {

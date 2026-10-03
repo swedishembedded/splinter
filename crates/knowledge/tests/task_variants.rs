@@ -21,8 +21,8 @@
 mod common;
 
 use common::{about, entry, generator, reply, stored, Scratch, Scripted};
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_knowledge::tasks::{can_vary, Catalogue, GenerateError, Rejection};
-use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
 
 const MANUAL: &str = "# Frobnicator manual
 

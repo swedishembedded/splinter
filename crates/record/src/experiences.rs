@@ -22,12 +22,13 @@ use serde::{Deserialize, Serialize};
 use splinter_expdb::analyze::{EvalFilter, TASK_COMPLETION};
 use splinter_expdb::model::{Entity, Evaluation, EvaluatorRef, Target};
 
-use crate::annotation::{Annotation, AnnotationBody, Decision, Label, Outcome, Strength};
-use crate::digest::{canonical_json, Digest};
+use crate::decision::{relation_edge, Decision};
 pub use crate::error::StoreError;
-use crate::experience::{Experience, ExperienceId};
 use crate::projection::{project, projection_address, projection_of, Projected, PROJECTION};
 use crate::workspace::{content_id, put_spilling, Workspace};
+use splinter_core::annotation::{Annotation, AnnotationBody, Label, Outcome, Strength};
+use splinter_core::digest::{canonical_json, Digest};
+use splinter_core::experience::{Experience, ExperienceId};
 
 const EXPERIENCE: &str = "experience";
 const EXPERIENCE_SET: &str = "experience_set";
@@ -187,7 +188,7 @@ impl ExperienceStore {
         };
         let related = match &note.body {
             AnnotationBody::Relation { kind, other } => {
-                Some((kind.edge(), self.projected(other)?.attempt))
+                Some((relation_edge(*kind), self.projected(other)?.attempt))
             }
             _ => None,
         };
@@ -231,7 +232,7 @@ impl ExperienceStore {
     }
 
     /// What each of `ids` decides, read in one pass over the verdicts instead
-    /// of every experience's annotations: the decision [`crate::annotation::decide`]
+    /// of every experience's annotations: the decision [`crate::decision::decide`]
     /// reaches over its annotations. An experience that decides nothing (no
     /// verdict, only abstentions, or a conflict at the top rank) is absent.
     /// Refused for an experience the store does not hold.

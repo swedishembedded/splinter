@@ -26,7 +26,7 @@ use sven_sdk::model::ModelProvider;
 use sven_sdk::{RunConclusion, Usage};
 
 use crate::solve::{engine, Solution, SolveError, SolveOptions, SOLVER_MODE};
-use splinter_record::experience::Task;
+use splinter_core::experience::Task;
 use splinter_sandbox::ResolvedEnvironment;
 
 /// One exchange: what the other speaker said and the reply to it.

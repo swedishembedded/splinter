@@ -10,7 +10,7 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
-use splinter_record::clock::FixedClock;
+use splinter_core::clock::FixedClock;
 use splinter_record::experiences::StoreError;
 use splinter_record::runs::{
     cancel_requested, list_runs, read_run, request_cancel, RunLog, RunStatus,

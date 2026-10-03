@@ -10,14 +10,14 @@
 use std::path::PathBuf;
 
 use serde_json::json;
-use splinter_lab::{WireMessage, SYSTEM_PROMPT};
-use splinter_record::annotation::{
+use splinter_core::annotation::{
     Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
 };
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
     Environment, Experience, ExperienceId, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
+use splinter_lab::{WireMessage, SYSTEM_PROMPT};
 use sven_sdk::atif::{
     AgentProfile, ObservationEntry, StepObservation, StepOrigin, ToolInvocation, TraceStep,
     Trajectory,

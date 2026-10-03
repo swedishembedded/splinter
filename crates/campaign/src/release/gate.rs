@@ -35,9 +35,9 @@
 //! check is never a pass.
 
 use serde::{Deserialize, Serialize};
+use splinter_core::digest::Digest;
 use splinter_lab::paired::{compare, Comparison, PairedOutcome};
 use splinter_policy::stats::{sign_test, SignTest};
-use splinter_record::digest::Digest;
 
 use crate::release::probe::SuiteSummary;
 use crate::release::store::ReleaseId;

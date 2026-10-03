@@ -91,7 +91,7 @@ pub fn critique_set(
         .collect::<Result<Vec<_>, _>>()?;
     let mut produced = Vec::new();
     let mut revisions = Vec::new();
-    let unset = SetId(splinter_record::digest::Digest::of(b""));
+    let unset = SetId(splinter_core::digest::Digest::of(b""));
     let mut report = Critiqued {
         experience_set: unset.clone(),
         revisions: unset,

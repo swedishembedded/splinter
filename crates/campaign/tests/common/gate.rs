@@ -32,13 +32,13 @@ use splinter_campaign::train::{
     train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::{CampaignError, Context};
+use splinter_core::annotation::Strength;
+use splinter_core::clock::FixedClock;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_lab::WireMessage;
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
-use splinter_record::annotation::Strength;
-use splinter_record::clock::FixedClock;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use splinter_views::{
     DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, WriteOptions,

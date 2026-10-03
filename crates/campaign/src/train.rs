@@ -38,13 +38,13 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_core::digest::Digest;
 use splinter_policy::train::{
     fine_tune, train_preference, FineTune, HeldOutScore, PreferenceScore, PreferenceTune, Trained,
     TrainedPreference,
 };
 use splinter_policy::{ModelSelection, PolicyError};
 use splinter_record::artifacts::ArtifactSpec;
-use splinter_record::digest::Digest;
 use splinter_views::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
 use sven_sdk::CancelToken;
 

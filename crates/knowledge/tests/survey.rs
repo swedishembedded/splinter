@@ -15,9 +15,9 @@
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
+use splinter_core::clock::FixedClock;
+use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::survey::{survey, MAX_EXCERPTS, MAX_NAMES};
-use splinter_record::clock::FixedClock;
-use splinter_record::source::{CapturedSource, Origin, PartContent};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 
@@ -35,7 +35,7 @@ fn store(test: &str) -> SourceStore {
     )))
 }
 
-fn put(store: &SourceStore, parts: &[(&str, &str)]) -> splinter_record::source::SourceId {
+fn put(store: &SourceStore, parts: &[(&str, &str)]) -> splinter_core::source::SourceId {
     let captured = CapturedSource::new(
         Origin::Repository {
             path: "/letters".into(),

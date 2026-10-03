@@ -10,8 +10,9 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::Serialize;
-use splinter_record::annotation::{decide, Annotation, AnnotationBody, RelationKind, Strength};
-use splinter_record::experience::{Experience, ExperienceId};
+use splinter_core::annotation::{Annotation, AnnotationBody, RelationKind, Strength};
+use splinter_core::experience::{Experience, ExperienceId};
+use splinter_record::decision::decide;
 use splinter_record::experiences::SetId;
 
 use crate::context::Context;

@@ -4,7 +4,7 @@
 //! The sft-final view: a passed experience's final answer, supervised.
 //!
 //! An experience qualifies when its annotations decide pass (under the
-//! decision rule of `splinter_record::annotation`: the strongest pass/fail
+//! decision rule of `splinter_core::annotation`: the strongest pass/fail
 //! verdicts decide, a conflict among them decides nothing) at or above the
 //! view's minimum strength, and it has a final output. It yields one record:
 //! the student's turn (see [`Strip`]), not supervised, and the final output
@@ -13,7 +13,7 @@
 //! A dialogue (a trajectory of several user steps) is the exception: its
 //! record is the whole conversation with every reply supervised.
 
-use splinter_record::annotation::Strength;
+use splinter_core::annotation::Strength;
 
 use crate::render::{message, student_turn};
 use crate::trajectory::dialogue;

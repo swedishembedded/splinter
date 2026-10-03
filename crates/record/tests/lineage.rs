@@ -13,11 +13,11 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
+use splinter_core::clock::FixedClock;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_expdb::model::RecordKind;
 use splinter_expdb::{Config, Database};
-use splinter_record::clock::FixedClock;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Experience, Provenance, Task};
 use splinter_record::experiences::ExperienceStore;
 use splinter_record::lineage::DatasetLineage;
 use splinter_record::workspace::Workspace;

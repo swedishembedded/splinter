@@ -31,10 +31,10 @@ use std::time::Duration;
 use serde::Serialize;
 
 use splinter_agent::solve::Model;
+use splinter_core::clock::{Clock, SystemClock};
+use splinter_core::experience::Environment;
 use splinter_policy::{LoadedModel, ModelSelection, Residency, Sampling};
 use splinter_record::artifacts::ArtifactStore;
-use splinter_record::clock::{Clock, SystemClock};
-use splinter_record::experience::Environment;
 use splinter_record::experiences::ExperienceStore;
 use splinter_record::sources::SourceStore;
 use splinter_record::tasks::TaskStore;

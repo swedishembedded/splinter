@@ -11,15 +11,15 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
+use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
+    Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
+};
 use splinter_lab::denoise::{FormalVerifier, KIND};
 use splinter_lab::verifiers::formal::ExactMatchVerifier;
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{annotation, Verifier};
-use splinter_record::annotation::{AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
-    Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
-};
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const REFERENCE: &str = "the quick brown fox";

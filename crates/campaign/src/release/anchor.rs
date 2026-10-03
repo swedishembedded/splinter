@@ -25,9 +25,9 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Task};
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};

@@ -21,10 +21,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_expdb::model::Entity;
 
-use crate::clock::Clock;
 use crate::error::StoreError;
 use crate::new_id_with_prefix;
 use crate::workspace::Workspace;
+use splinter_core::clock::Clock;
 
 const RUN_EVENT: &str = "run_event";
 
@@ -256,7 +256,7 @@ pub fn request_cancel(workspace: &Workspace, run_id: &str) -> Result<String, Sto
         });
     }
     let signal = cancel_signal(run_id);
-    workspace.signal(&signal, &crate::clock::utc_now())?;
+    workspace.signal(&signal, &splinter_core::clock::utc_now())?;
     Ok(signal)
 }
 

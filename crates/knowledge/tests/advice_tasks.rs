@@ -80,7 +80,7 @@ async fn a_situation_answered_by_a_verbatim_passage_is_admitted_without_naming_a
     let reference = task
         .privileged
         .iter()
-        .find(|p| p.kind == splinter_record::experience::PrivilegedKind::Reference)
+        .find(|p| p.kind == splinter_core::experience::PrivilegedKind::Reference)
         .unwrap();
     assert_eq!(reference.content, ADVICE);
 }

@@ -26,8 +26,8 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
+use splinter_core::experience::PrivilegedKind;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
-use splinter_record::experience::PrivilegedKind;
 
 use crate::context::Context;
 use crate::curriculum::{queue, release_of_label};

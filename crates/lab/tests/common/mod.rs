@@ -11,12 +11,12 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use splinter_lab::verifiers::{annotation, Verifier};
-use splinter_record::annotation::{AnnotationBody, Outcome, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
+use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
+use splinter_lab::verifiers::{annotation, Verifier};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };

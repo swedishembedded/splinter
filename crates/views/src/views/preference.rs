@@ -31,9 +31,9 @@
 
 use std::collections::HashSet;
 
-use splinter_record::annotation::{RelationKind, Strength};
-use splinter_record::digest::Digest;
-use splinter_record::experience::ExperienceId;
+use splinter_core::annotation::{RelationKind, Strength};
+use splinter_core::digest::Digest;
+use splinter_core::experience::ExperienceId;
 
 use crate::render::{message, student_turn};
 use crate::trajectory::{final_calls, same_message};

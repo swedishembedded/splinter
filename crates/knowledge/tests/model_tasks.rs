@@ -26,12 +26,12 @@ mod common;
 
 use common::{about, entry, generator, python, reply, stored, Scratch, Scripted, PART};
 use serde_json::json;
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{Environment, PrivilegedKind};
+use splinter_core::source::{CapturedSource, Origin, PartContent, Revision};
 use splinter_knowledge::tasks::{Catalogue, Rejection, SourceText, TaskKind};
 use splinter_lab::verifiers::executable::CHECK_KIND;
 use splinter_lab::verifiers::mutation::TEST_KIND;
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{Environment, PrivilegedKind};
-use splinter_record::source::{CapturedSource, Origin, PartContent, Revision};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 use sven_sdk::model::ResponseFormat;

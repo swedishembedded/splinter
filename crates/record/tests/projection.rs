@@ -17,17 +17,17 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::json;
+use splinter_core::annotation::{
+    Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
+};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
+    Environment, Experience, ExperienceId, Privileged, PrivilegedKind, Provenance, Task,
+};
 use splinter_expdb::model::{RecordKind, Rel};
 use splinter_expdb::query::Query;
 use splinter_expdb::train::{Recipe, SampleBody};
 use splinter_expdb::{Config, Database};
-use splinter_record::annotation::{
-    Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
-};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
-    Environment, Experience, ExperienceId, Privileged, PrivilegedKind, Provenance, Task,
-};
 use splinter_record::experiences::ExperienceStore;
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
@@ -316,7 +316,7 @@ fn an_experience_stored_without_its_graph_is_healed_by_storing_it_again() {
     session
         .put_entity(&splinter_expdb::model::Entity::keyed(
             "experience",
-            id.0.content_id().unwrap(),
+            splinter_record::address::content_id(&id.0).unwrap(),
             serde_json::to_value(&exp).unwrap(),
         ))
         .unwrap();

@@ -4,7 +4,7 @@
 //! Content-addressed ids as a person types them: the full `blake3:<hex>`,
 //! the hex alone, or a prefix of it that names exactly one stored object.
 
-use splinter_record::digest::Digest;
+use splinter_core::digest::Digest;
 
 use crate::error::CampaignError;
 

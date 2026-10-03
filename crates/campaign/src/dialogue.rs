@@ -25,7 +25,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use splinter_agent::converse::{Exchange, Interlocutor};
 use splinter_agent::solve::{Model, SolveOptions};
-use splinter_record::digest::Digest;
+use splinter_core::digest::Digest;
 use sven_sdk::schemars::JsonSchema;
 use sven_sdk::{CancelToken, Engine, Method, Toolset};
 

@@ -32,8 +32,8 @@ pub use dense::{Dense, EmbedError, Embedder};
 pub use fuse::fuse;
 pub use lexical::Bm25;
 
-use splinter_record::digest::Digest;
-use splinter_record::source::SourceId;
+use splinter_core::digest::Digest;
+use splinter_core::source::SourceId;
 use splinter_record::sources::SourceStore;
 
 use crate::sections::MARKDOWN;

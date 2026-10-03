@@ -16,7 +16,7 @@
 //! order they were given. Mixing the sample into training is the trainer's
 //! business: brain replays exactly the files it is handed.
 
-use splinter_record::digest::Digest;
+use splinter_core::digest::Digest;
 
 use crate::strip::draw;
 use crate::Fraction;

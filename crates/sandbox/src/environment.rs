@@ -10,7 +10,7 @@
 //! an experience keeps of them.
 //!
 //! [`ResolvedEnvironment::record`] is the store's
-//! [`Environment`](splinter_record::experience::Environment): its kind, a
+//! [`Environment`](splinter_core::experience::Environment): its kind, a
 //! spec holding everything that determines its behaviour, and the snapshot
 //! digest of the two. For a runtime environment the spec is the runtime
 //! (its registry entry, probed version and executable digest) and the
@@ -22,8 +22,8 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use splinter_record::digest::Digest;
-use splinter_record::experience::Environment;
+use splinter_core::digest::Digest;
+use splinter_core::experience::Environment;
 
 use crate::backend::{CodeCall, CodeResult, Sandbox, SandboxError, SandboxSpec};
 use crate::runtime::{ResolvedRuntime, RuntimeRegistry, RuntimeSpec};

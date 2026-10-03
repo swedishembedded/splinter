@@ -211,7 +211,7 @@ fn a_dialogue_that_states_a_year_the_letter_does_not_hold_teaches_nothing() {
 #[test]
 fn one_dialogue_in_four_ends_by_asking_beyond_the_letter_and_the_choice_is_stable() {
     let digests: Vec<_> = (0..400u32)
-        .map(|n| splinter_record::digest::Digest::of(&n.to_le_bytes()))
+        .map(|n| splinter_core::digest::Digest::of(&n.to_le_bytes()))
         .collect();
     let probing = digests
         .iter()

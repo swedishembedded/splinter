@@ -15,8 +15,8 @@
 //! sources are, so it fits in a prompt.
 
 use serde::Serialize;
+use splinter_core::source::SourceId;
 use splinter_record::error::StoreError;
-use splinter_record::source::SourceId;
 use splinter_record::sources::SourceStore;
 
 use crate::advice::{reads_as_advice, reads_as_judgment};

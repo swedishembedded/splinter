@@ -30,8 +30,8 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::tasks::{generate, Generation};
 use splinter_campaign::variants::{generate_variants, VariantsRequest};
-use splinter_record::clock::FixedClock;
-use splinter_record::source::{CapturedSource, Origin, PartContent};
+use splinter_core::clock::FixedClock;
+use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_record::tasks::{TaskEntry, TaskSet};
 use sven_sdk::CancelToken;
 

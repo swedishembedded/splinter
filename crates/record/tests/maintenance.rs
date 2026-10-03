@@ -12,9 +12,9 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
-use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{Environment, Experience, Provenance, Task};
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_record::experiences::ExperienceStore;
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;

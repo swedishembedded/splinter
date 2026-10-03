@@ -25,6 +25,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{PrivilegedKind, Task};
+use splinter_core::source::SourceId;
 use splinter_knowledge::advice::{advice_sections, judgment_sections};
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
@@ -34,9 +37,6 @@ use splinter_knowledge::tasks::{
     TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_lab::denoise::KIND as DENOISE_KIND;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{PrivilegedKind, Task};
-use splinter_record::source::SourceId;
 use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 

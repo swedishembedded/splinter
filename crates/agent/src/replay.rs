@@ -23,7 +23,7 @@
 //! a code result) is [`CallReplay::NotReplayable`], with why.
 
 use serde::Serialize;
-use splinter_record::experience::{Environment, Experience};
+use splinter_core::experience::{Environment, Experience};
 use splinter_sandbox::{CodeCall, CodeResult, ResolvedEnvironment, SandboxError};
 use sven_sdk::atif::{MessageBody, ObservationEntry};
 

@@ -15,9 +15,9 @@
 
 use std::collections::HashSet;
 
+use splinter_core::digest::Digest;
+use splinter_core::experience::{PrivilegedKind, Task};
 use splinter_lab::denoise::KIND;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{PrivilegedKind, Task};
 
 use crate::render::message;
 use crate::{

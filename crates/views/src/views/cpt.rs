@@ -12,7 +12,7 @@
 
 use std::collections::HashSet;
 
-use splinter_record::digest::Digest;
+use splinter_core::digest::Digest;
 use splinter_record::sources::SourceStore;
 
 use super::source_text;

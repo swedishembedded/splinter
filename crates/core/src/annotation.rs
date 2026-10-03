@@ -13,20 +13,8 @@
 //! describe, so re-grading is a new annotation, and every view derived from
 //! them can be recomputed from the log.
 //!
-//! # The decision rule
-//!
-//! Reward is derived, never stored. [`decide`] reads the verdicts:
-//!
-//! 1. abstentions decide nothing and are ignored;
-//! 2. among the remaining pass/fail verdicts, only those at the strongest
-//!    [`Strength`] present count (`Executable > Formal > Consistency >
-//!    Judged`): a formal check outranks any number of judged opinions;
-//! 3. if those all agree, that is the decision; if they conflict, there is
-//!    no decision - two equally strong graders disagreeing is not evidence
-//!    either way.
-//!
-//! [`reward`] is the decision as a number: pass `1.0`, fail `0.0`, no
-//! decision `None` (unmeasured is not zero).
+//! The rule that turns verdicts into a decision is the store's: it is the
+//! experience database's own, and lives beside it.
 
 use serde::{Deserialize, Serialize};
 
@@ -159,64 +147,4 @@ pub enum RelationKind {
     /// same relation between tasks, which are not experiences, on its
     /// entries.)
     VariantOf,
-}
-
-impl RelationKind {
-    /// The edge kind the experience database records this relation as.
-    #[must_use]
-    pub fn edge(self) -> splinter_expdb::model::Rel {
-        use splinter_expdb::model::Rel;
-        match self {
-            RelationKind::PreferredOver => Rel::PreferredOver,
-            RelationKind::RetryOf => Rel::RetryOf,
-            RelationKind::CritiqueOf => Rel::CritiqueOf,
-            RelationKind::RevisionOf => Rel::RevisionOf,
-            RelationKind::VariantOf => Rel::VariantOf,
-        }
-    }
-}
-
-/// The verdict the annotations add up to under the module's decision rule.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Decision {
-    /// `true` for pass, `false` for fail.
-    pub passed: bool,
-    /// The strength of the verdicts that decided it.
-    pub strength: Strength,
-}
-
-/// The decision `notes` add up to; `None` when there is no pass/fail
-/// verdict, or the strongest ones conflict.
-#[must_use]
-pub fn decide(notes: &[Annotation]) -> Option<Decision> {
-    use splinter_expdb::analyze::resolve_verdicts;
-    use splinter_expdb::model::{Ruling, Verdict};
-    let verdicts: Vec<Verdict> = notes
-        .iter()
-        .filter_map(|note| match &note.body {
-            AnnotationBody::Verdict {
-                outcome, strength, ..
-            } => Some(Verdict::new(
-                match outcome {
-                    Outcome::Pass => Ruling::Pass,
-                    Outcome::Fail => Ruling::Fail,
-                    Outcome::Abstain => Ruling::Abstain,
-                },
-                strength.rank(),
-            )),
-            _ => None,
-        })
-        .collect();
-    let resolved = resolve_verdicts(&verdicts)?;
-    Some(Decision {
-        passed: resolved.passed,
-        strength: Strength::from_rank(resolved.rank)?,
-    })
-}
-
-/// The reward `notes` derive: `1.0` for a pass decision, `0.0` for a fail,
-/// `None` when [`decide`] reaches no decision.
-#[must_use]
-pub fn reward(notes: &[Annotation]) -> Option<f64> {
-    decide(notes).map(|d| if d.passed { 1.0 } else { 0.0 })
 }

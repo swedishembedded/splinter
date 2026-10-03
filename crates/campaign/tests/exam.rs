@@ -29,8 +29,8 @@ use splinter_agent::solve::Model;
 use splinter_campaign::exam::{exam, ExamRequest};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::sources::{self, SourceTarget};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use sven_sdk::atif::{AgentProfile, Trajectory};

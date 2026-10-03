@@ -21,12 +21,12 @@ use serde_json::json;
 use splinter_expdb::model::{DatasetNode, ModelNode, TrainingRun};
 use splinter_expdb::{ContentId, RecordId};
 
-use crate::digest::Digest;
 use crate::documents::encode;
 use crate::error::StoreError;
-use crate::experience::ExperienceId;
 use crate::projection::projection_of;
 use crate::workspace::{content_id, put_spilling, Workspace};
+use splinter_core::digest::Digest;
+use splinter_core::experience::ExperienceId;
 
 /// The class of the entity that names a lineage node.
 const NODE: &str = "lineage_node";

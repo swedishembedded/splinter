@@ -20,9 +20,9 @@ mod common;
 
 use common::*;
 use serde_json::json;
+use splinter_core::annotation::{Label, Outcome, RelationKind, Strength};
+use splinter_core::experience::{Experience, PrivilegedKind, Task};
 use splinter_lab::WireMessage;
-use splinter_record::annotation::{Label, Outcome, RelationKind, Strength};
-use splinter_record::experience::{Experience, PrivilegedKind, Task};
 use splinter_views::{
     write_dataset, Corpus, DecisionView, Exclusion, Objective, OutcomeView, Record, RecordBody,
     SftStep, View, ViewError, WriteOptions,

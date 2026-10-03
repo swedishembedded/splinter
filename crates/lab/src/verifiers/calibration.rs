@@ -18,9 +18,9 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use splinter_record::annotation::{AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::digest::{canonical_json, Digest};
-use splinter_record::experience::{Experience, ExperienceError, ExperienceId, Task};
+use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::digest::{canonical_json, Digest};
+use splinter_core::experience::{Experience, ExperienceError, ExperienceId, Task};
 
 use super::{annotation, Finding, Verifier, VerifyError};
 

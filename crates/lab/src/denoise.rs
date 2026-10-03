@@ -10,15 +10,15 @@
 //!
 //! A denoise task shows the student a corrupted passage and asks for the
 //! original; the original travels with the experience as its one
-//! [`Reference`](splinter_record::experience::PrivilegedKind::Reference).
+//! [`Reference`](splinter_core::experience::PrivilegedKind::Reference).
 //! [`FormalVerifier`] passes an answer iff it equals that reference once
 //! whitespace is normalised (every run of whitespace one space, none at
 //! either end). The comparison is exact otherwise - case and punctuation
 //! count - so the verdict is formal, not judged. It is the
 //! [`ExactMatchVerifier`] with that normalisation, for denoise tasks only.
 
-use splinter_record::annotation::{Producer, Strength};
-use splinter_record::experience::{Experience, Task};
+use splinter_core::annotation::{Producer, Strength};
+use splinter_core::experience::{Experience, Task};
 
 use crate::verifiers::formal::ExactMatchVerifier;
 use crate::verifiers::normalise::Normalisation;

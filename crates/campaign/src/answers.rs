@@ -10,15 +10,15 @@
 //! and the release that gave it.
 //!
 //! An answer is a document in the experience database. An [`AnswerId`] is the
-//! digest of the record's canonical form (see `splinter_record::digest`), the
+//! digest of the record's canonical form (see `splinter_core::digest`), the
 //! time it was asked included, so asking the same question twice records two
 //! answers. A record is stored once and checked against its address on every
 //! read. Every record carries [`ANSWER_FORMAT`]; a later format adds fields
 //! beside it rather than changing what these mean.
 
 use serde::{Deserialize, Serialize};
-use splinter_record::digest::Digest;
-use splinter_record::source::SourceId;
+use splinter_core::digest::Digest;
+use splinter_core::source::SourceId;
 use splinter_record::workspace::Workspace;
 
 use crate::error::CampaignError;

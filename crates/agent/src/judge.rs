@@ -21,10 +21,10 @@
 use std::time::Duration;
 
 use serde_json::json;
+use splinter_core::annotation::{Outcome, Producer, Strength};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Experience, PrivilegedKind, Task};
 use splinter_lab::verifiers::{Finding, Verifier, VerifyError};
-use splinter_record::annotation::{Outcome, Producer, Strength};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Experience, PrivilegedKind, Task};
 use splinter_sandbox::ResolvedEnvironment;
 use tokio::runtime::Handle;
 

@@ -11,7 +11,7 @@
 #![allow(clippy::unwrap_used)]
 
 use serde::{Deserialize, Serialize};
-use splinter_record::digest::Digest;
+use splinter_core::digest::Digest;
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 

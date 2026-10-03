@@ -27,8 +27,12 @@ expect_used = "warn"
 # chat inference, `study` for fine-tuning, held-out scoring and
 # `brain::promote`, whose paired sign test decides a release.
 sven-sdk = { git = "https://github.com/swedishembedded/sven" }
+# sven's trajectory format, the one type of sven's that Splinter's vocabulary
+# holds; `sven-sdk` re-exports it, and it depends on no other sven crate.
+atif = { git = "https://github.com/swedishembedded/sven" }
 brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study"] }
 
+splinter-core = { path = "crates/core" }
 splinter-lab = { path = "crates/lab" }
 splinter-record = { path = "crates/record" }
 splinter-policy = { path = "crates/policy" }

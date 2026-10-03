@@ -52,9 +52,9 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_record::annotation::Strength;
-use splinter_record::digest::{canonical_json, Digest};
-use splinter_record::experience::ExperienceId;
+use splinter_core::annotation::Strength;
+use splinter_core::digest::{canonical_json, Digest};
+use splinter_core::experience::ExperienceId;
 
 use crate::{
     Exclusion, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, ViewError,

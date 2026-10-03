@@ -26,12 +26,13 @@
 //! names the critic's model, and a `CritiqueOf` relation names the failed
 //! experience. Only an experience decided fail is critiqued.
 
-use splinter_lab::verifiers::executable::{evidence_summary, failed_checks};
-use splinter_record::annotation::{
-    decide, Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
+use splinter_core::annotation::{
+    Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
 };
-use splinter_record::clock::Clock;
-use splinter_record::experience::{Environment, ExperienceId, Provenance, Task};
+use splinter_core::clock::Clock;
+use splinter_core::experience::{Environment, ExperienceId, Provenance, Task};
+use splinter_lab::verifiers::executable::{evidence_summary, failed_checks};
+use splinter_record::decision::decide;
 use splinter_record::experiences::ExperienceStore;
 use splinter_sandbox::ResolvedEnvironment;
 use sven_sdk::{RunConclusion, Usage};

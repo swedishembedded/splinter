@@ -47,7 +47,7 @@ pub mod queue;
 pub mod quota;
 pub mod teacher;
 
-use splinter_record::digest::Digest;
+use splinter_core::digest::Digest;
 
 use crate::release::ReleaseId;
 

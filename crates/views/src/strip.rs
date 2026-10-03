@@ -33,10 +33,10 @@
 //! [`Exclusion::NotSelfContained`].
 
 use serde::{Deserialize, Serialize};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Privileged, PrivilegedKind};
 use splinter_lab::verifiers::executable::{CHECK_KIND, OUTPUT_CHECK_KIND};
 use splinter_lab::verifiers::mutation::TEST_KIND;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Privileged, PrivilegedKind};
 
 use crate::{Exclusion, ViewError};
 

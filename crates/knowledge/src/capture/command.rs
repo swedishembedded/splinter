@@ -22,8 +22,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use splinter_record::clock::Clock;
-use splinter_record::source::{CapturedSource, Origin, PartContent};
+use splinter_core::clock::Clock;
+use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_sandbox::process::{environment_from, run, ProcessSpec, Stream};
 
 use super::{io, is_text, utf8, CaptureError};

@@ -10,7 +10,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-splinter-record = { workspace = true }
+splinter-core = { workspace = true }
 
 libc = { workspace = true }
 serde = { workspace = true }

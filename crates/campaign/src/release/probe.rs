@@ -40,13 +40,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::solve::{solve, Model, SolveOptions};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
 use splinter_lab::holdout::holdout_split_records;
 use splinter_lab::paired::PairedOutcome;
 use splinter_lab::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
-use splinter_record::annotation::decide;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Experience, ExperienceId, Provenance, Task};
+use splinter_record::decision::decide;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;

@@ -22,13 +22,13 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::json;
-use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
+use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_record::experiences::ExperienceStore;
-use splinter_record::source::{CapturedSource, Origin, PartContent};
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};

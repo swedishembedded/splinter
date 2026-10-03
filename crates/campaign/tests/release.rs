@@ -54,8 +54,8 @@ use splinter_campaign::release::{
 };
 use splinter_campaign::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
 use splinter_campaign::Context;
+use splinter_core::digest::Digest;
 use splinter_policy::ModelSelection;
-use splinter_record::digest::Digest;
 use sven_sdk::CancelToken;
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
@@ -105,7 +105,7 @@ fn a_candidate_that_passes_every_check_is_released() {
     let stored = store.get(&id).unwrap();
     assert_eq!(
         id.0,
-        Digest::of(&splinter_record::digest::canonical_json(&stored.manifest).unwrap()),
+        Digest::of(&splinter_core::digest::canonical_json(&stored.manifest).unwrap()),
         "the id is the digest of the manifest"
     );
     let manifest = &stored.manifest;

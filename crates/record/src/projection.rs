@@ -28,10 +28,10 @@ use splinter_expdb::model::{Action, PolicyRef, ReproLevel, State, TaskDefinition
 use splinter_expdb::{ContentId, RecordId};
 use sven_sdk::atif::StepOrigin;
 
-use crate::digest::Digest;
 use crate::error::StoreError;
-use crate::experience::{Experience, ExperienceId};
 use crate::workspace::Workspace;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Experience, ExperienceId};
 
 /// The class of the entity that names an experience's attempt.
 pub(crate) const PROJECTION: &str = "projection";
@@ -96,9 +96,7 @@ pub(crate) fn project(
         params: json!({ "task": task.id }),
         environment: None,
     };
-    let address = task
-        .id
-        .content_id()
+    let address = crate::address::content_id(&task.id)
         .unwrap_or_else(|| ContentId::of(task.id.as_str().as_bytes()));
     let initial = State::new(
         BTreeMap::from([("task".to_owned(), address)]),

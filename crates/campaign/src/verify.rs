@@ -21,6 +21,9 @@ use std::time::Duration;
 use serde::Serialize;
 use splinter_agent::judge::JudgeVerifier;
 use splinter_agent::solve::Model;
+use splinter_core::annotation::{AnnotationBody, Outcome, Producer};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Experience, ExperienceId, Task};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_lab::denoise::{FormalVerifier, KIND as DENOISE_KIND};
 use splinter_lab::verifiers::calibration::{CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION};
@@ -32,9 +35,6 @@ use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifie
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
-use splinter_record::annotation::{AnnotationBody, Outcome, Producer};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Experience, ExperienceId, Task};
 use splinter_record::experiences::SetId;
 use sven_sdk::CancelToken;
 

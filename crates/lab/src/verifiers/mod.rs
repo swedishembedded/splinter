@@ -27,7 +27,7 @@
 //! received it passes where the critiqued attempt failed.
 //!
 //! [`Strongest`] runs several and returns every verdict; the store's
-//! [`decide`](splinter_record::annotation::decide) lets the strongest
+//! [`decide`](splinter_record::decision::decide) lets the strongest
 //! agreeing ones decide, so no verdict is dropped here to reach that.
 //!
 //! Verification blocks: an executable check runs a process, a judge waits
@@ -45,9 +45,9 @@ pub mod normalise;
 pub mod quotation;
 
 use serde_json::json;
-use splinter_record::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Experience, ExperienceError, PrivilegedKind, Task};
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Experience, ExperienceError, PrivilegedKind, Task};
 use splinter_record::experiences::{ExperienceStore, StoreError};
 use splinter_sandbox::SandboxError;
 

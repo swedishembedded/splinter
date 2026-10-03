@@ -27,13 +27,13 @@
 //! produces can reach a training set.
 
 use serde::Serialize;
+use splinter_core::annotation::Outcome;
+use splinter_core::experience::{Experience, Task};
 use splinter_lab::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
 };
 use splinter_lab::verifiers::Verifier;
 use splinter_policy::stats::{sign_test, SignTest};
-use splinter_record::annotation::Outcome;
-use splinter_record::experience::{Experience, Task};
 use splinter_record::experiences::SetId;
 use sven_sdk::CancelToken;
 

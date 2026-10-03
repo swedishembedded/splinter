@@ -4008,6 +4008,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-campaign",
+ "splinter-core",
  "splinter-record",
 ]
 
@@ -4020,6 +4021,7 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
+ "splinter-core",
  "splinter-lab",
  "splinter-record",
  "splinter-sandbox",
@@ -4039,6 +4041,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-agent",
+ "splinter-core",
  "splinter-knowledge",
  "splinter-lab",
  "splinter-policy",
@@ -4048,6 +4051,18 @@ dependencies = [
  "sven-sdk",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "splinter-core"
+version = "0.1.0"
+dependencies = [
+ "atif",
+ "blake3",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4092,6 +4107,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-agent",
+ "splinter-core",
  "splinter-lab",
  "splinter-record",
  "splinter-sandbox",
@@ -4107,6 +4123,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "splinter-core",
  "splinter-record",
  "splinter-sandbox",
  "sven-sdk",
@@ -4137,6 +4154,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "splinter-core",
  "splinter-expdb",
  "sven-sdk",
  "thiserror 2.0.21",
@@ -4150,7 +4168,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
- "splinter-record",
+ "splinter-core",
  "tempfile",
  "thiserror 2.0.21",
 ]
@@ -4175,6 +4193,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "splinter-core",
  "splinter-lab",
  "splinter-policy",
  "splinter-record",

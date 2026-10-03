@@ -18,11 +18,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use splinter_record::clock::FixedClock;
-use splinter_record::digest::Digest;
-use splinter_record::experience::Span;
+use splinter_core::clock::FixedClock;
+use splinter_core::digest::Digest;
+use splinter_core::experience::Span;
+use splinter_core::source::{CapturedSource, Origin, PartContent, PartRef, SourceError};
 use splinter_record::experiences::StoreError;
-use splinter_record::source::{CapturedSource, Origin, PartContent, PartRef, SourceError};
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 

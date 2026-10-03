@@ -12,15 +12,15 @@
 
 use std::collections::BTreeSet;
 
+use splinter_core::annotation::Outcome;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
 use splinter_lab::verifiers::executable::{
     program_text, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout, CHECK_KIND,
     OUTPUT_CHECK_KIND,
 };
 use splinter_lab::verifiers::mutation::{validate_oracle, MutationPolicy};
 use splinter_lab::verifiers::normalise::Normalisation;
-use splinter_record::annotation::Outcome;
-use splinter_record::digest::Digest;
-use splinter_record::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
 use splinter_record::sources::SourceStore;
 use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
 use splinter_views::check_self_contained;

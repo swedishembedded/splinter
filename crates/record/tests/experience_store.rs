@@ -18,16 +18,17 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::json;
+use splinter_core::annotation::{
+    Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
+};
+use splinter_core::clock::FixedClock;
+use splinter_core::experience::{
+    Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
+};
 use splinter_expdb::model::{Entity, RecordKind};
 use splinter_expdb::query::Query;
 use splinter_expdb::{Config, Database, Session, WriterIdentity};
-use splinter_record::annotation::{
-    reward, Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
-};
-use splinter_record::clock::FixedClock;
-use splinter_record::experience::{
-    Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
-};
+use splinter_record::decision::reward;
 use splinter_record::experiences::{ExperienceSet, ExperienceStore, StoreError};
 use splinter_record::workspace::Workspace;
 use splinter_record::StateRoot;
@@ -114,7 +115,7 @@ fn experience(output: &str) -> Experience {
 }
 
 fn verdict(
-    id: &splinter_record::experience::ExperienceId,
+    id: &splinter_core::experience::ExperienceId,
     outcome: Outcome,
     strength: Strength,
 ) -> Annotation {
@@ -177,7 +178,7 @@ fn an_environment_snapshot_addresses_its_kind_and_spec() {
     assert!(
         matches!(
             refused,
-            Err(splinter_record::experience::ExperienceError::EnvironmentSnapshot { .. })
+            Err(splinter_core::experience::ExperienceError::EnvironmentSnapshot { .. })
         ),
         "{refused:?}"
     );
@@ -262,7 +263,7 @@ fn an_object_that_no_longer_matches_its_address_is_an_error_not_silently_accepte
     session
         .put_entity(&Entity::keyed(
             "experience",
-            id.0.content_id().unwrap(),
+            splinter_record::address::content_id(&id.0).unwrap(),
             forged,
         ))
         .unwrap();
@@ -526,7 +527,7 @@ fn a_very_large_experience_is_spilled_to_a_blob_and_reads_back_whole() {
     let entity = db
         .snapshot()
         .unwrap()
-        .entity_body(&id.0.content_id().unwrap())
+        .entity_body(&splinter_record::address::content_id(&id.0).unwrap())
         .unwrap()
         .unwrap();
     assert!(
@@ -563,7 +564,7 @@ fn saying_the_same_thing_twice_records_it_once() {
 /// absent rather than a zero.
 #[test]
 fn decisions_in_bulk_are_what_each_experiences_annotations_decide() {
-    use splinter_record::annotation::decide;
+    use splinter_record::decision::decide;
     let scratch = Scratch::new("decisions");
     let store = scratch.store();
     let ids: Vec<_> = ["a", "b", "c", "d", "e"]

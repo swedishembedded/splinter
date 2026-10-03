@@ -21,9 +21,9 @@ use splinter_expdb::Database;
 use super::archive::{place_artifact, read_member, scan};
 use super::{loss_name, Loss};
 use crate::artifacts::{Artifact, ArtifactState, ArtifactStore};
-use crate::digest::Digest;
 use crate::error::StoreError;
 use crate::workspace::Workspace;
+use splinter_core::digest::Digest;
 
 /// What is wrong with an artifact's file.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

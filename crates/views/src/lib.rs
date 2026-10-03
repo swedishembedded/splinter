@@ -61,10 +61,11 @@ mod views;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use splinter_core::annotation::Strength;
+use splinter_core::digest::Digest;
+use splinter_core::experience::{ExperienceError, ExperienceId};
 use splinter_lab::{WireMessage, SYSTEM_PROMPT};
-use splinter_record::annotation::{decide, Strength};
-use splinter_record::digest::Digest;
-use splinter_record::experience::{ExperienceError, ExperienceId};
+use splinter_record::decision::decide;
 use splinter_record::experiences::StoreError;
 
 pub use corpus::{Corpus, Entry};

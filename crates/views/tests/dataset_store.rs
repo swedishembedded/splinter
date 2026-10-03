@@ -12,7 +12,7 @@
 mod common;
 
 use common::*;
-use splinter_record::annotation::{Outcome, Strength};
+use splinter_core::annotation::{Outcome, Strength};
 use splinter_record::StateRoot;
 use splinter_views::{
     Corpus, DatasetId, DatasetStore, Format, SftFinal, View, ViewError, WriteOptions,
@@ -59,7 +59,7 @@ fn a_stored_dataset_is_named_by_its_manifest_and_verified_on_read() {
         store.get(&stored.id).is_err(),
         "a dataset whose bytes changed is refused"
     );
-    let unknown = splinter_record::digest::Digest::of(b"no such dataset");
+    let unknown = splinter_core::digest::Digest::of(b"no such dataset");
     assert!(matches!(
         store.get(&DatasetId(unknown)),
         Err(ViewError::UnknownDataset(_))
