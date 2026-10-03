@@ -211,3 +211,37 @@ fn a_judge_that_cannot_tell_right_from_wrong_grades_nothing() {
     // What code measures does not depend on the judge.
     assert_eq!(report.candidate.invented, 1);
 }
+
+#[test]
+fn a_task_an_arm_answered_with_nothing_is_counted_unanswered_and_the_exam_goes_on() {
+    let (_scratch, ctx, tasks, controls) = setup("exam-silent", judge(false));
+    // The candidate says nothing to the second question, as a reasoning model
+    // does when it spends its whole reply budget thinking.
+    let silent = Scripted::new(|prompt| {
+        if prompt.contains("question 2)") {
+            return String::new();
+        }
+        let n = (1..=6)
+            .find(|n| prompt.contains(&format!("question {n})")))
+            .unwrap_or(1);
+        format!("Keep habit{n} each morning.")
+    });
+    ctx.add_model(
+        "local:exam/tuned".parse().unwrap(),
+        Model::new(Arc::new(silent), "scripted/tuned"),
+    );
+    let report = run(&ctx, &tasks, &controls);
+    let candidate = &report.candidate;
+    assert_eq!(candidate.unanswered, 1, "{candidate:#?}");
+    assert_eq!(
+        (candidate.judged_right, candidate.judged),
+        (5, 6),
+        "an unanswered task is a task not done"
+    );
+    assert_eq!(
+        (candidate.invented, candidate.checked),
+        (0, 5),
+        "nothing was said, so nothing was checked"
+    );
+    assert_eq!(report.base.unanswered, 0);
+}

@@ -45,8 +45,8 @@ fn exam_line(summary: &serde_json::Value) -> String {
     let ran = &summary["ran"];
     let arm = |a: &serde_json::Value| {
         format!(
-            "{}/{} judged right, {}/{} invented a specific",
-            a["judged_right"], a["judged"], a["invented"], a["checked"]
+            "{}/{} judged right ({} unanswered), {}/{} invented a specific",
+            a["judged_right"], a["judged"], a["unanswered"], a["invented"], a["checked"]
         )
     };
     let judge = &ran["judge"];

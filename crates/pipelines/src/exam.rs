@@ -87,7 +87,11 @@ pub struct JudgeTrust {
 pub struct ArmResult {
     /// The model's identity.
     pub model: String,
-    /// Answers the judge decided (a trusted judge's pass or fail).
+    /// Tasks the model gave no answer to (a reasoning model that spent its
+    /// whole reply budget thinking). Each counts as not done in `judged`.
+    pub unanswered: usize,
+    /// Answers decided: the judge's pass or fail when it is trusted, and a
+    /// task without an answer, which code decides is not done.
     pub judged: usize,
     /// Of those, the ones it said give what the reference says.
     pub judged_right: usize,
@@ -180,6 +184,12 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 Outcome::Fail => Some(false),
                 Outcome::Abstain => None,
             };
+            if exp.final_output.is_none() {
+                // Nothing was said: not done, and nothing to hold to the source.
+                judged.push(Some(false));
+                grounded.push(None);
+                continue;
+            }
             judged.push(decided(judge.verify(task, exp)?));
             grounded.push(decided(grounding.verify(task, exp)?));
         }
@@ -188,8 +198,12 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     let (base_judged, base_grounded) = grade(&base_answers)?;
     let (candidate_judged, candidate_grounded) = grade(&candidate_answers)?;
 
-    let arm = |model: String, judged: &[Option<bool>], grounded: &[Option<bool>]| ArmResult {
+    let arm = |model: String,
+               given: &[Experience],
+               judged: &[Option<bool>],
+               grounded: &[Option<bool>]| ArmResult {
         model,
+        unanswered: given.iter().filter(|e| e.final_output.is_none()).count(),
         judged: judged.iter().flatten().count(),
         judged_right: judged.iter().flatten().filter(|right| **right).count(),
         checked: grounded.iter().flatten().count(),
@@ -209,8 +223,13 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             min_precision: DEFAULT_MIN_PRECISION,
             calibration,
         },
-        base: arm(base_model, &base_judged, &base_grounded),
-        candidate: arm(candidate_model, &candidate_judged, &candidate_grounded),
+        base: arm(base_model, &base_answers, &base_judged, &base_grounded),
+        candidate: arm(
+            candidate_model,
+            &candidate_answers,
+            &candidate_judged,
+            &candidate_grounded,
+        ),
         paired: (trusted && !pairs.is_empty()).then(|| sign_test(&pairs)),
     })
 }
