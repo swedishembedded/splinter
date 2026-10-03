@@ -65,6 +65,18 @@ solve, `ask`, judge, critique and gate probe runs under one short system
 prompt of Splinter's own, and every training record starts with that same
 system turn.
 
+Learning a person's way of thinking is the same pipeline, planned: point
+Splinter at a directory of what they wrote and it surveys it, a planner model
+chooses what to teach from a menu (recall, the person's own advice to a
+correspondent, explanation, restoration of corrupted passages), and each
+choice is held to the sources by code. A task teaches what the writer
+advised only if its answer is a passage of the writer's own text, word for
+word, and an answer is graded by checking that every passage it quotes is in
+the source and that it gives the advice; no model decides that. A strong
+teacher answers open-book and the policy is trained on those verified answers
+(`--distill`). `experiments/jefferson` measures what that teaches a model
+about Thomas Jefferson's letters, on letters it never saw.
+
 Every stage stores what it makes under the state root by content address,
 so any stage can be rerun or inspected alone (`splinter runs show`,
 `splinter experiences show --graph`). Experience, sources, tasks, runs, and the metadata of datasets,

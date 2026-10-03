@@ -11,8 +11,9 @@ every command. `splinter <command> --help` is the authoritative reference.
 ```
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
-splinter learn <SOURCE>... [--goal TEXT] [--kinds K,..] [--budget DUR] [--dry-run] [--no-release]
-                         [--no-frontier | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF]
+splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
+                         [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF]
+                         [--steps N] [--rank R] [--lr LR] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -114,6 +115,47 @@ wall-clock time; `--goal` steers what tasks are asked for; `--dry-run`
 prints the plan and writes nothing. A `learn` that stops before training
 (nothing admitted, no task worth training on, nothing passed, the budget
 spent) or whose candidate the gate blocks says why and exits 1.
+
+## Learning to think like a person
+
+```bash
+splinter "Learn to think like Thomas Jefferson based on the materials he has written in directory ./jefferson"
+```
+
+With no `--kinds`, `learn` plans. After the sources are captured it surveys
+them by code (how many parts and sections, how many sections read as advice,
+a few excerpts) and shows the survey and the goal to a planner model (the
+model `--planner` names, else the configured assistant, else the generator).
+The planner chooses from a menu of task kinds, whether to distil, and who the
+learner is becoming; code holds the choice to the survey, so a plan cannot
+teach advice the sources do not hold. A plan that breaks a rule is sent back
+once with the rule it broke and then refused: a run that cannot be planned
+says so, and no default replaces its plan. The survey and the plan are in the
+report, and naming `--kinds` as well is refused: one of the two decides.
+
+The `advise` kind is what teaches a person's own advice. Its task is a
+predicament put to the writer, addressed to the writer (so it names no
+document), and its reference is a passage of the writer's own text that
+answers it. The generator is shown only the sections that read as advice, and
+a task is admitted only when its reference is a passage of its evidence word
+for word, so a paraphrase the model wrote is refused. An answer is graded by
+the quotation verifier, with no model involved: every passage the answer puts
+in quotation marks must be in the task's source text, the advice must be
+reproduced, and an answer that quotes nothing or invents a quotation fails.
+
+`--distill` skips the policy's own attempts: the teacher answers every task
+open-book and the policy is trained on its verified answers, with no
+frontier and no critique. It is for a policy that cannot answer a task
+closed-book at all, where its attempts are the most expensive part of a run
+and teach nothing. A plan can choose it too.
+
+A run needs no flags. The configuration names what a machine knows:
+`SPLINTER_ASSISTANT_MODEL` is the stronger model that plans, writes tasks and
+teaches when the command names none, `SPLINTER_FRONT_DOOR_MODEL` reads the
+sentence, and `SPLINTER_BF16_BASE` holds a large policy's base at bf16 so it
+trains on one card. Unless `--steps` is given a run trains about two passes
+over what it learned, within bounds, at a learning rate suited to a short
+LoRA run.
 
 ## The curriculum
 
@@ -291,6 +333,11 @@ Anything less is asked back - in the REPL at a terminal you pick one; with
 `--json` or a sentence argument the candidates are printed and the exit is
 3. A remote model without the opt-in is refused; cancelling a run, running
 a command (`cmd:`) and using a remote model are never done on a guess.
+A sentence naming a person to think like and a directory of their writing is
+read as a `learn` of the directory; a path the model copied wrongly is
+replaced, by code, by the one path the sentence names that exists, and never
+by a guess. `SPLINTER_FRONT_DOOR_MODEL` names a model for reading sentences
+other than the policy, since a larger model reads them better.
 
 ## JSON output
 
