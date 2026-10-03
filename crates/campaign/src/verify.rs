@@ -36,7 +36,7 @@ use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifie
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
-use splinter_record::experiences::SetId;
+use splinter_store::experiences::SetId;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

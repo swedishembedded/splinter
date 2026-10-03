@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 [package]
-name = "splinter-record"
+name = "splinter-store"
 description = "Splinter's durable state: the state-root layout, run records, the decision rule, and the source, task and experience stores kept in the experience database."
 version.workspace = true
 edition.workspace = true

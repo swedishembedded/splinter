@@ -30,9 +30,9 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceError;
 use splinter_core::source::{Origin, PartRef, SourceId};
 use splinter_lab::verifiers::mutation::MutationPolicy;
-use splinter_record::error::StoreError;
-use splinter_record::sources::SourceStore;
 use splinter_sandbox::RuntimeEnvironment;
+use splinter_store::error::StoreError;
+use splinter_store::sources::SourceStore;
 use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
 use super::admit::{Admission, Proposal, Refusal};

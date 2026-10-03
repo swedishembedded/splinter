@@ -35,7 +35,7 @@ use splinter_core::experience::Experience;
 use splinter_knowledge::tasks::{
     can_vary, GenerateError, GenerationPolicy, ModelTaskGenerator, DEFAULT_REQUEST_DEADLINE,
 };
-use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 pub use splinter_knowledge::tasks::DEFAULT_VARIANTS_PER_TASK;

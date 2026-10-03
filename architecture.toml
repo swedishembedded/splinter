@@ -40,7 +40,7 @@ order = [
 [crates]
 splinter-core = "foundation"
 splinter-expdb = "foundation"
-splinter-record = "storage"
+splinter-store = "storage"
 splinter-sandbox = "storage"
 splinter-lab = "domain"
 splinter-policy = "adapters"
@@ -96,7 +96,7 @@ to = "sven-sdk"
 why = "The experience database is a generic store; it knows neither an agent runtime nor a trajectory."
 
 [[forbidden]]
-from = "splinter-record"
+from = "splinter-store"
 to = "brain"
 why = "Persistence has no model computation in it."
 

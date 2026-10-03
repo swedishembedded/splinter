@@ -54,9 +54,9 @@ use splinter_core::experience::{
 };
 use splinter_lab::verifiers::critique::{critique_verdict, preferred, RetryOutcome};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, VerifyError};
-use splinter_record::decision::{decide, Decision};
-use splinter_record::experiences::{ExperienceStore, StoreError};
 use splinter_sandbox::ResolvedEnvironment;
+use splinter_store::decision::{decide, Decision};
+use splinter_store::experiences::{ExperienceStore, StoreError};
 use sven_sdk::{CancelToken, RunConclusion, Usage};
 use tokio::runtime::Handle;
 

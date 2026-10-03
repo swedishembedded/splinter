@@ -38,7 +38,7 @@
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::experience::ExperienceId;
-use splinter_record::decision::Decision;
+use splinter_store::decision::Decision;
 
 /// The producer name of a critique's outcome verdict.
 pub const PRODUCER: &str = "splinter-lab/critique-outcome";

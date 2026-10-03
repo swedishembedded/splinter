@@ -13,7 +13,7 @@ mod common;
 
 use common::*;
 use splinter_core::annotation::{Outcome, Strength};
-use splinter_record::StateRoot;
+use splinter_store::StateRoot;
 use splinter_views::{
     Corpus, DatasetId, DatasetStore, Format, SftFinal, View, ViewError, WriteOptions,
 };
@@ -35,7 +35,7 @@ fn passed_corpus() -> Corpus {
 fn a_stored_dataset_is_named_by_its_manifest_and_verified_on_read() {
     let scratch = Scratch::new("dataset-store");
     let root = StateRoot::new(&scratch.0);
-    let store = DatasetStore::new(&splinter_record::workspace::Workspace::at(&root), &root);
+    let store = DatasetStore::new(&splinter_store::workspace::Workspace::at(&root), &root);
     let projection = SftFinal::new(Strength::Formal)
         .project(&passed_corpus())
         .unwrap();

@@ -34,16 +34,16 @@ use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_core::experience::Environment;
 use splinter_policy::{LoadedModel, ModelSelection, Residency, Sampling};
-use splinter_record::artifacts::ArtifactStore;
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::sources::SourceStore;
-use splinter_record::tasks::TaskStore;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
     SandboxError,
 };
+use splinter_store::artifacts::ArtifactStore;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::sources::SourceStore;
+use splinter_store::tasks::TaskStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use splinter_views::DatasetStore;
 
 use crate::answers::AnswerStore;

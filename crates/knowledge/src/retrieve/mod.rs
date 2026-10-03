@@ -34,7 +34,7 @@ pub use lexical::Bm25;
 
 use splinter_core::digest::Digest;
 use splinter_core::source::SourceId;
-use splinter_record::sources::SourceStore;
+use splinter_store::sources::SourceStore;
 
 use crate::sections::MARKDOWN;
 use crate::tasks::{GenerateError, SourceText};

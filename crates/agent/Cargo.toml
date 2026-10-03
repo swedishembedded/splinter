@@ -14,7 +14,7 @@ splinter-core = { workspace = true }
 sven-sdk = { workspace = true }
 splinter-lab = { workspace = true }
 splinter-sandbox = { workspace = true }
-splinter-record = { workspace = true }
+splinter-store = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

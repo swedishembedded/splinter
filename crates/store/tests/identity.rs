@@ -28,9 +28,9 @@ use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_core::source::{CapturedSource, Origin, PartContent};
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const STAMP: &str = "2026-09-30T12:00:00.000Z";

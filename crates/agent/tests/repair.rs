@@ -37,13 +37,13 @@ use splinter_core::clock::Clock;
 use splinter_core::experience::{ExperienceId, Privileged, PrivilegedKind, Provenance, Task};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest};
-use splinter_record::decision::decide;
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
+use splinter_store::decision::decide;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use splinter_views::{
     Corpus, Critic as CriticView, DecisionView, Exclusion, Preference, RecordBody, SftFinal, Strip,
     View,

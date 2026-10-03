@@ -14,8 +14,8 @@
 use splinter_core::annotation::{AnnotationBody, Outcome, RelationKind};
 use splinter_core::experience::{Environment, Experience, Span, Task};
 use splinter_core::source::Origin;
-use splinter_record::experiences::StoreError;
-use splinter_record::sources::SourceStore;
+use splinter_store::experiences::StoreError;
+use splinter_store::sources::SourceStore;
 
 use crate::context::Context;
 use crate::error::CampaignError;

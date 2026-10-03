@@ -37,7 +37,7 @@ use splinter_knowledge::tasks::{
     Catalogue, Focus, GenerateError, GenerationPolicy, ModelTaskGenerator, Rejection, SourceText,
     TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
-use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

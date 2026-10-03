@@ -28,8 +28,8 @@ use splinter_knowledge::capture::{
     capture_command, capture_document, capture_repository, default_environment, CaptureError,
     CommandSpec, ProcessError, DEFAULT_MAX_FILE_BYTES,
 };
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 
 const AT: &str = "2026-09-30T08:00:00.000Z";
 const LATER: &str = "2026-09-30T09:30:00.000Z";
@@ -49,7 +49,7 @@ impl Scratch {
         Self(path)
     }
     fn store(&self) -> SourceStore {
-        SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
             self.0.join("state"),
         )))
     }

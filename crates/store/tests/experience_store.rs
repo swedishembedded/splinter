@@ -28,10 +28,10 @@ use splinter_core::experience::{
 use splinter_expdb::model::{Entity, RecordKind};
 use splinter_expdb::query::Query;
 use splinter_expdb::{Config, Database, Session, WriterIdentity};
-use splinter_record::decision::reward;
-use splinter_record::experiences::{ExperienceSet, ExperienceStore, StoreError};
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::decision::reward;
+use splinter_store::experiences::{ExperienceSet, ExperienceStore, StoreError};
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 /// A fresh state root per test, removed when dropped.
@@ -263,7 +263,7 @@ fn an_object_that_no_longer_matches_its_address_is_an_error_not_silently_accepte
     session
         .put_entity(&Entity::keyed(
             "experience",
-            splinter_record::address::content_id(&id.0).unwrap(),
+            splinter_store::address::content_id(&id.0).unwrap(),
             forged,
         ))
         .unwrap();
@@ -527,7 +527,7 @@ fn a_very_large_experience_is_spilled_to_a_blob_and_reads_back_whole() {
     let entity = db
         .snapshot()
         .unwrap()
-        .entity_body(&splinter_record::address::content_id(&id.0).unwrap())
+        .entity_body(&splinter_store::address::content_id(&id.0).unwrap())
         .unwrap()
         .unwrap();
     assert!(
@@ -564,7 +564,7 @@ fn saying_the_same_thing_twice_records_it_once() {
 /// absent rather than a zero.
 #[test]
 fn decisions_in_bulk_are_what_each_experiences_annotations_decide() {
-    use splinter_record::decision::decide;
+    use splinter_store::decision::decide;
     let scratch = Scratch::new("decisions");
     let store = scratch.store();
     let ids: Vec<_> = ["a", "b", "c", "d", "e"]

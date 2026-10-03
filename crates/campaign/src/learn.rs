@@ -48,7 +48,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use splinter_core::source::SourceId;
 use splinter_lab::holdout::MIN_SAMPLES;
-use splinter_record::experiences::SetId;
+use splinter_store::experiences::SetId;
 
 use splinter_knowledge::survey::{survey, Survey};
 

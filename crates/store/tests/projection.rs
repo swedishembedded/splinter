@@ -28,9 +28,9 @@ use splinter_expdb::model::{RecordKind, Rel};
 use splinter_expdb::query::Query;
 use splinter_expdb::train::{Recipe, SampleBody};
 use splinter_expdb::{Config, Database};
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 struct Scratch(PathBuf);
@@ -316,7 +316,7 @@ fn an_experience_stored_without_its_graph_is_healed_by_storing_it_again() {
     session
         .put_entity(&splinter_expdb::model::Entity::keyed(
             "experience",
-            splinter_record::address::content_id(&id.0).unwrap(),
+            splinter_store::address::content_id(&id.0).unwrap(),
             serde_json::to_value(&exp).unwrap(),
         ))
         .unwrap();

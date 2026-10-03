@@ -34,7 +34,7 @@ brain = { git = "https://github.com/swedishembedded/brain", default-features = f
 
 splinter-core = { path = "crates/core" }
 splinter-lab = { path = "crates/lab" }
-splinter-record = { path = "crates/record" }
+splinter-store = { path = "crates/store" }
 splinter-policy = { path = "crates/policy" }
 splinter-agent = { path = "crates/agent" }
 splinter-knowledge = { path = "crates/knowledge" }

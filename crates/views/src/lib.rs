@@ -66,8 +66,8 @@ use splinter_core::chat::WireMessage;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{ExperienceError, ExperienceId};
 use splinter_core::prompt::SYSTEM_PROMPT;
-use splinter_record::decision::decide;
-use splinter_record::experiences::StoreError;
+use splinter_store::decision::decide;
+use splinter_store::experiences::StoreError;
 
 pub use corpus::{Corpus, Entry};
 pub use dataset::{

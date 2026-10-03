@@ -31,8 +31,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use splinter_core::experience::{Span, Task};
 use splinter_core::source::SourceId;
-use splinter_record::error::StoreError;
-use splinter_record::sources::SourceStore;
+use splinter_store::error::StoreError;
+use splinter_store::sources::SourceStore;
 
 use crate::sections::sections;
 

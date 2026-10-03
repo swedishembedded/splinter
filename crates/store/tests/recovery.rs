@@ -16,10 +16,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use splinter_core::digest::Digest;
-use splinter_record::artifacts::{ArtifactSpec, ArtifactStore};
-use splinter_record::recovery::{ArchiveOptions, ArtifactFault, RepairOptions};
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::artifacts::{ArtifactSpec, ArtifactStore};
+use splinter_store::recovery::{ArchiveOptions, ArtifactFault, RepairOptions};
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 struct Scratch(PathBuf);
 

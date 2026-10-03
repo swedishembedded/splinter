@@ -22,9 +22,9 @@ use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::Span;
 use splinter_core::source::{CapturedSource, Origin, PartContent, PartRef, SourceError};
-use splinter_record::experiences::StoreError;
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
+use splinter_store::experiences::StoreError;
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 
 struct Scratch(PathBuf);
 
@@ -40,7 +40,7 @@ impl Scratch {
         Self(path)
     }
     fn store(&self) -> SourceStore {
-        SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
             &self.0,
         )))
     }

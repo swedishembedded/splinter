@@ -18,10 +18,10 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_expdb::model::RecordKind;
 use splinter_expdb::{Config, Database};
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::lineage::DatasetLineage;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::lineage::DatasetLineage;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 fn experience(answer: &str) -> Experience {

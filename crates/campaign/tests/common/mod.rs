@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use splinter_agent::solve::Model;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::{Config, Context};
-use splinter_record::StateRoot;
+use splinter_store::StateRoot;
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream, Role};
 
 /// The identity the scripted policy is recorded under.

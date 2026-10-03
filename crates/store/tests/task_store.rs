@@ -19,9 +19,9 @@ use std::path::PathBuf;
 
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_record::experiences::StoreError;
-use splinter_record::tasks::{TaskEntry, TaskSet, TaskStore};
-use splinter_record::StateRoot;
+use splinter_store::experiences::StoreError;
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskStore};
+use splinter_store::StateRoot;
 
 struct Scratch(PathBuf);
 
@@ -34,7 +34,7 @@ impl Scratch {
     }
 
     fn store(&self) -> TaskStore {
-        TaskStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+        TaskStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
             &self.0,
         )))
     }
@@ -96,7 +96,7 @@ fn a_task_is_stored_once_and_read_back_verified() {
     .unwrap();
     let forged = splinter_expdb::model::Entity::keyed(
         "task",
-        splinter_record::address::content_id(&other.task.id).unwrap(),
+        splinter_store::address::content_id(&other.task.id).unwrap(),
         serde_json::to_value(&baud).unwrap(),
     );
     forger.put_entity(&forged).unwrap();

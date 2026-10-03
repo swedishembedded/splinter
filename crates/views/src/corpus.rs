@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use splinter_core::annotation::{Annotation, AnnotationBody, Label, RelationKind};
 use splinter_core::experience::{Experience, ExperienceId, Task};
 use splinter_core::source::SourceId;
-use splinter_record::decision::{decide, Decision};
-use splinter_record::experiences::ExperienceStore;
+use splinter_store::decision::{decide, Decision};
+use splinter_store::experiences::ExperienceStore;
 
 use crate::ViewError;
 

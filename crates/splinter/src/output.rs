@@ -25,7 +25,7 @@ use splinter_campaign::train::{Candidate, Regime};
 use splinter_campaign::verify::Verified;
 use splinter_campaign::CampaignError;
 use splinter_core::source::{Origin, Source};
-use splinter_record::runs::Run;
+use splinter_store::runs::Run;
 
 /// A report a command prints.
 pub trait Report: Serialize {

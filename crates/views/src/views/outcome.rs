@@ -13,7 +13,7 @@
 //! `train`.
 
 use splinter_core::annotation::Strength;
-use splinter_record::decision::reward;
+use splinter_store::decision::reward;
 
 use crate::render::student_turn;
 use crate::trajectory::conversation;

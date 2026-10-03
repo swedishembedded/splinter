@@ -44,7 +44,7 @@ use splinter_policy::train::{
     TrainedPreference,
 };
 use splinter_policy::{ModelSelection, PolicyError};
-use splinter_record::artifacts::ArtifactSpec;
+use splinter_store::artifacts::ArtifactSpec;
 use splinter_views::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
 use sven_sdk::CancelToken;
 
@@ -514,7 +514,7 @@ pub fn train(
     for dataset in &datasets {
         record_dataset_lineage(ctx, dataset)?;
     }
-    let candidate = splinter_record::new_id_with_prefix("candidate");
+    let candidate = splinter_store::new_id_with_prefix("candidate");
     let dir = ctx.root().work().join("train").join(&candidate);
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
     let replay = match (&pin, regime) {

@@ -39,7 +39,7 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
-use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use splinter_views::{
     DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, WriteOptions,
 };
@@ -478,7 +478,7 @@ impl FakeTrainer {
             .artifacts()
             .put_file(
                 &adapter,
-                &splinter_record::artifacts::ArtifactSpec::new("adapter", "test-trainer")
+                &splinter_store::artifacts::ArtifactSpec::new("adapter", "test-trainer")
                     .with_extension(".safetensors")
                     .with_sha256(),
             )

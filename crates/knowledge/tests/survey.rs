@@ -18,8 +18,8 @@
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::survey::{survey, MAX_EXCERPTS, MAX_NAMES};
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 
 const ADVICE: &str = "I advise you to fix a habit of study every morning before you do anything else, and never let a day pass without reading something of history or ethics, for what is not fixed by the pen is lost.";
 
@@ -30,7 +30,7 @@ const BUSINESS: &str = "I have received your favour of the tenth and enclose the
 fn store(test: &str) -> SourceStore {
     let dir = std::env::temp_dir().join(format!("splinter-survey-{test}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+    SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
         dir,
     )))
 }

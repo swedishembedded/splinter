@@ -13,11 +13,11 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
-use splinter_record::maintenance::{Maintained, Pin, Storage};
-use splinter_record::recovery::{
+use splinter_store::maintenance::{Maintained, Pin, Storage};
+use splinter_store::recovery::{
     ArchiveOptions, Archived, Loss, RepairOptions, Repaired, Restored, StateVerify,
 };
-use splinter_record::workspace::Workspace;
+use splinter_store::workspace::Workspace;
 
 use crate::context::Context;
 use crate::error::CampaignError;

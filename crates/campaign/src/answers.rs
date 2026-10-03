@@ -19,7 +19,7 @@
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::source::SourceId;
-use splinter_record::workspace::Workspace;
+use splinter_store::workspace::Workspace;
 
 use crate::error::CampaignError;
 use crate::release::ReleaseId;

@@ -17,9 +17,9 @@ use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_knowledge::tasks::{ModelTaskGenerator, SourceText};
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
 use splinter_sandbox::{Limits, ProcessSandbox, RuntimeEnvironment, RuntimeRegistry};
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 
 /// A generator model that answers each request with the next reply of its
@@ -87,7 +87,7 @@ pub const PART: &str = "notes.md";
 /// `text` stored as a Markdown document in a source store under `scratch`;
 /// the store and the loaded text of its one part.
 pub fn stored(scratch: &Scratch, text: &str) -> (SourceStore, SourceId, SourceText) {
-    let store = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+    let store = SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
         scratch.0.join("state"),
     )));
     let captured = CapturedSource::new(

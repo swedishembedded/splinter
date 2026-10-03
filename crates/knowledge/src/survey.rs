@@ -16,8 +16,8 @@
 
 use serde::Serialize;
 use splinter_core::source::SourceId;
-use splinter_record::error::StoreError;
-use splinter_record::sources::SourceStore;
+use splinter_store::error::StoreError;
+use splinter_store::sources::SourceStore;
 
 use crate::advice::{reads_as_advice, reads_as_judgment};
 use crate::sections::sections;

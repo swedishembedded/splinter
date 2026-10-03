@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use splinter_campaign::model_ref::{ModelRef, RefError};
 use splinter_campaign::Config;
 use splinter_policy::ModelSelection;
-use splinter_record::StateRoot;
+use splinter_store::StateRoot;
 
 fn config() -> Config {
     Config {

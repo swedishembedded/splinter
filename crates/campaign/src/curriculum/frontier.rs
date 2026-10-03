@@ -39,8 +39,8 @@ use splinter_knowledge::concepts::{Concept, ConceptResolver};
 use splinter_lab::frontier::{Distribution, FrontierClass, PassCount};
 pub use splinter_policy::Sampling;
 use splinter_policy::AGENT_SAMPLING;
-use splinter_record::experiences::{ExperienceSet, SetId};
-use splinter_record::tasks::{TaskSet, TaskSetId};
+use splinter_store::experiences::{ExperienceSet, SetId};
+use splinter_store::tasks::{TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

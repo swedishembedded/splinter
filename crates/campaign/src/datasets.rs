@@ -17,8 +17,8 @@ use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::digest::canonical_json;
 use splinter_core::experience::{ExperienceId, PrivilegedKind};
-use splinter_record::experiences::SetId;
-use splinter_record::lineage::DatasetLineage;
+use splinter_store::experiences::SetId;
+use splinter_store::lineage::DatasetLineage;
 pub use splinter_views::Strip;
 use splinter_views::{
     manifest_path, Corpus, Cpt, Critic, DatasetId, DecisionView, DenoiseView, Exclusion, Format,

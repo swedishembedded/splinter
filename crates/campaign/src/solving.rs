@@ -37,8 +37,8 @@ use splinter_core::experience::Provenance;
 use splinter_knowledge::material::teacher_material;
 use splinter_knowledge::tasks::Catalogue;
 use splinter_policy::Sampling;
-use splinter_record::experiences::{ExperienceSet, SetId};
-use splinter_record::tasks::TaskSetId;
+use splinter_store::experiences::{ExperienceSet, SetId};
+use splinter_store::tasks::TaskSetId;
 use sven_sdk::{CancelToken, RunConclusion};
 
 use crate::context::Context;

@@ -21,8 +21,8 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Digest, PrivilegedKind, Span};
 use splinter_core::kinds::DENOISE;
 use splinter_core::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 use splinter_views::{Corpus, Cpt, DenoiseView, Exclusion, Objective, RecordBody, Retrieval, View};
 
 /// A conversation as (role, content, supervised) triples.
@@ -64,7 +64,7 @@ fn span_of(source: &SourceId, needle: &str) -> Span {
 #[test]
 fn retrieval_pairs_the_instruction_with_the_span_it_is_grounded_in() {
     let scratch = Scratch::new("retrieval");
-    let sources = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+    let sources = SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
         &scratch.0,
     )));
     let source = capture(&sources, "/notes.txt", &[("notes.txt", TEXT.as_bytes())]);
@@ -194,7 +194,7 @@ fn denoise_restores_the_passage_of_each_task_once_without_a_solve() {
 #[test]
 fn cpt_yields_each_texts_content_once() {
     let scratch = Scratch::new("cpt");
-    let sources = SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+    let sources = SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
         &scratch.0,
     )));
     let first = capture(

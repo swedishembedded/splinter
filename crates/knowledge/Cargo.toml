@@ -14,7 +14,7 @@ splinter-core = { workspace = true }
 splinter-agent = { workspace = true }
 splinter-lab = { workspace = true }
 splinter-sandbox = { workspace = true }
-splinter-record = { workspace = true }
+splinter-store = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }

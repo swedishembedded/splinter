@@ -12,8 +12,8 @@
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Note {

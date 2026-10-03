@@ -46,7 +46,7 @@ const SUBJECT: &str = "Frobnicator";
 /// generates it.
 async fn original(
     model: &std::sync::Arc<Scripted>,
-    store: &splinter_record::sources::SourceStore,
+    store: &splinter_store::sources::SourceStore,
     source: &splinter_knowledge::tasks::SourceText,
 ) -> Task {
     let report = generator(model.clone(), store.clone(), vec![])

@@ -79,7 +79,7 @@ pub fn check(
     ctx.release_bases();
     let work = ctx.root().sandbox().join(format!(
         "serve-check-{}",
-        splinter_record::new_id_with_prefix("gate")
+        splinter_store::new_id_with_prefix("gate")
     ));
     std::fs::create_dir_all(&work).map_err(crate::error::io(&work))?;
     let result = serve_and_ask(

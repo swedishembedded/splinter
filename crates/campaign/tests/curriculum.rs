@@ -63,8 +63,8 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
 use splinter_knowledge::concepts::Concept;
 use splinter_lab::paired::PairedOutcome;
-use splinter_record::decision::decide as decision;
-use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};
+use splinter_store::decision::decide as decision;
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 
 /// A closed-book recall task asking `instruction`, referenced by `answer`.
@@ -430,7 +430,7 @@ fn learn_keeps_the_frontier_by_default_and_generates_for_queued_concepts() {
         "the passing attempts of one task are one example: {select:#?}"
     );
     assert!(select.selection.duplicates >= 1, "{select:#?}");
-    let stages: Vec<String> = splinter_record::runs::read_run(ctx.workspace(), &run.run)
+    let stages: Vec<String> = splinter_store::runs::read_run(ctx.workspace(), &run.run)
         .unwrap()
         .stages
         .into_iter()

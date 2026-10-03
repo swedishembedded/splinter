@@ -22,8 +22,8 @@ use splinter_lab::verifiers::executable::{
 };
 use splinter_lab::verifiers::mutation::{validate_oracle, MutationPolicy};
 use splinter_lab::verifiers::normalise::Normalisation;
-use splinter_record::sources::SourceStore;
 use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
+use splinter_store::sources::SourceStore;
 
 use crate::gates::normalize;
 

@@ -46,7 +46,7 @@ use splinter_campaign::variants::{generate_variants, VariantsRequest};
 use splinter_campaign::verify::verify_set;
 use splinter_campaign::{CampaignError, Context};
 use splinter_policy::train::{Trained, TrainedPreference};
-use splinter_record::runs::read_run;
+use splinter_store::runs::read_run;
 use sven_sdk::CancelToken;
 
 /// A context whose policy is the manual's, and the tasks `tasks` writes

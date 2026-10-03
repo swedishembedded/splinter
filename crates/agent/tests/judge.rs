@@ -25,13 +25,13 @@ use splinter_core::experience::{
 use splinter_lab::verifiers::calibration::{calibrate, CalibratedJudge};
 use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_lab::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
-use splinter_record::decision::decide;
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
+use splinter_store::decision::decide;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, Trajectory};
 use sven_sdk::model::{
     CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream,

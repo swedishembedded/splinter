@@ -21,10 +21,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
-use splinter_record::artifacts::{ArtifactSpec, ArtifactState, ArtifactStore};
-use splinter_record::experiences::StoreError;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::artifacts::{ArtifactSpec, ArtifactState, ArtifactStore};
+use splinter_store::experiences::StoreError;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 use crate::dataset::{manifest_path, write_dataset, Manifest, WriteOptions};
 use crate::{Projection, ViewError};

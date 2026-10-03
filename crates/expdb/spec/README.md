@@ -81,7 +81,7 @@ overwritten.
 
 ## The pointer protocol
 
-`Pointer.tla` models the protocol `splinter-record` uses for the few mutable
+`Pointer.tla` models the protocol `splinter-store` uses for the few mutable
 names it keeps (an alias, the anchor suite in force) on top of write-once
 signal files. A name is its whole history; a writer reads the latest version
 and claims the next one by creating one file that cannot be created twice. It

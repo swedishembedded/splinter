@@ -32,7 +32,7 @@ use splinter_campaign::tasks::{generate, Generation};
 use splinter_campaign::variants::{generate_variants, VariantsRequest};
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
-use splinter_record::tasks::{TaskEntry, TaskSet};
+use splinter_store::tasks::{TaskEntry, TaskSet};
 use sven_sdk::CancelToken;
 
 /// Three manuals: two disagree about one board, the third is another board.

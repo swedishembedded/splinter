@@ -32,9 +32,9 @@ use splinter_core::annotation::{
 use splinter_core::clock::Clock;
 use splinter_core::experience::{Environment, ExperienceId, Provenance, Task};
 use splinter_lab::verifiers::executable::{evidence_summary, failed_checks};
-use splinter_record::decision::decide;
-use splinter_record::experiences::ExperienceStore;
 use splinter_sandbox::ResolvedEnvironment;
+use splinter_store::decision::decide;
+use splinter_store::experiences::ExperienceStore;
 use sven_sdk::{RunConclusion, Usage};
 use tokio::runtime::Handle;
 

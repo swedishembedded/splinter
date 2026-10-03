@@ -34,7 +34,7 @@ use splinter_lab::verifiers::calibration::{
 };
 use splinter_lab::verifiers::Verifier;
 use splinter_policy::stats::{sign_test, SignTest};
-use splinter_record::experiences::SetId;
+use splinter_store::experiences::SetId;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;

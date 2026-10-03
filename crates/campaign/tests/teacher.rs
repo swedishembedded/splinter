@@ -41,7 +41,7 @@ use splinter_campaign::release::arm;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_policy::train::{Trained, TrainedPreference};
-use splinter_record::decision::decide;
+use splinter_store::decision::decide;
 use sven_sdk::CancelToken;
 
 /// The idle-current question.

@@ -28,8 +28,8 @@
 //! is a different question, [`crate::tasks::grounding`]'s.)
 
 use splinter_core::experience::{PrivilegedKind, Span, Task};
-use splinter_record::error::StoreError;
-use splinter_record::sources::SourceStore;
+use splinter_store::error::StoreError;
+use splinter_store::sources::SourceStore;
 
 use crate::sections::sections;
 

@@ -15,9 +15,9 @@ use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 fn experience(n: usize) -> Experience {
@@ -208,7 +208,7 @@ fn a_long_running_reader_survives_the_files_it_opened_being_collected() {
 /// commit recorded, stays.
 #[test]
 fn collection_sweeps_artifact_files_no_commit_made_official() {
-    use splinter_record::artifacts::{ArtifactSpec, ArtifactStore};
+    use splinter_store::artifacts::{ArtifactSpec, ArtifactStore};
     let root = StateRoot::new(
         std::env::temp_dir().join(format!("splinter-maint-orphan-{}", std::process::id())),
     );

@@ -28,9 +28,9 @@ use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::denoise::{Denoise, GENERATOR};
 use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::annotation;
-use splinter_record::experiences::ExperienceStore;
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
+use splinter_store::experiences::ExperienceStore;
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 use splinter_views::{write_dataset, Corpus, SftFinal, View, WriteOptions};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 use sven_sdk::Engine;
@@ -138,8 +138,8 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         std::env::temp_dir().join(format!("splinter-experience-path-{}", std::process::id())),
     );
     let root = StateRoot::new(&scratch.0);
-    let store = ExperienceStore::new(&splinter_record::workspace::Workspace::at(&root));
-    let sources = SourceStore::new(&splinter_record::workspace::Workspace::at(&root));
+    let store = ExperienceStore::new(&splinter_store::workspace::Workspace::at(&root));
+    let sources = SourceStore::new(&splinter_store::workspace::Workspace::at(&root));
     let task = task(&sources);
     let answer = reference(&task);
     assert_eq!(

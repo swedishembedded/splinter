@@ -46,8 +46,8 @@ use splinter_lab::holdout::holdout_split_records;
 use splinter_lab::paired::PairedOutcome;
 use splinter_lab::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
-use splinter_record::decision::decide;
 use splinter_sandbox::ResolvedEnvironment;
+use splinter_store::decision::decide;
 use splinter_views::DatasetId;
 use sven_sdk::CancelToken;
 

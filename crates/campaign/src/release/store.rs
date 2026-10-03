@@ -27,10 +27,10 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
-use splinter_record::artifacts::ArtifactStore;
-use splinter_record::experiences::StoreError;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::artifacts::ArtifactStore;
+use splinter_store::experiences::StoreError;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 use splinter_views::DatasetId;
 
 use crate::error::CampaignError;

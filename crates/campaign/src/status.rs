@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use splinter_policy::ModelSelection;
-use splinter_record::runs::list_runs;
+use splinter_store::runs::list_runs;
 
 use crate::context::Context;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};

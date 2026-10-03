@@ -12,8 +12,8 @@
 use std::fmt::Write as _;
 
 use splinter_campaign::state::{StateStorage, Unpinned};
-use splinter_record::maintenance::{Maintained, Storage};
-use splinter_record::recovery::{Archived, ArtifactFault, Repaired, Restored, StateVerify};
+use splinter_store::maintenance::{Maintained, Storage};
+use splinter_store::recovery::{Archived, ArtifactFault, Repaired, Restored, StateVerify};
 
 use crate::output::Report;
 

@@ -11,9 +11,9 @@
 //! overwritten, and moving back is one more move.
 #![allow(clippy::unwrap_used)]
 
-use splinter_record::experiences::StoreError;
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::experiences::StoreError;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 fn root(name: &str) -> StateRoot {
     let root = StateRoot::new(

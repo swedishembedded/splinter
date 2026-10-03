@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`splinter-core`.** Splinter's vocabulary - digests, the clock, sources,
+  tasks, experiences, annotations, the chat wire shapes, the system prompt and
+  the self-containment rule - in a crate that performs no I/O and names no
+  store, model or agent runtime.
 - **`splinter-expdb`.** A new standalone crate for a versioned experience graph
   database: immutable files, manifests as the transaction layer, snapshots,
   modality-neutral episodes of streams, queries and training views, with its
@@ -29,9 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
-- **`splinter-store` is now `splinter-record`**, and keeps sources, tasks,
-  experiences, annotations and sets in the experience database instead of one
-  file per object. Annotations are ranked evaluations; a relation is also an
+- **`splinter-store` keeps** sources, tasks, experiences, annotations and sets
+  in the experience database instead of one file per object. Annotations are ranked evaluations; a relation is also an
   edge. Splinter's own content addresses are blake3 (`blake3:<hex>`); digests a
   tool reports, such as an adapter's, stay `sha256:`. State written by earlier
   builds is not read: regenerate it.

@@ -115,8 +115,8 @@ the released adapter answers the same questions from plain `brain serve`.
    learning configuration and its wiring in the runtime builder. (The
    learning design notes that lived in sven and brain are already in
    `.agents/research/`.)
-7. **Experience graph database.** Done for the store: `splinter-store` is now
-   `splinter-record` and keeps sources, tasks, experiences, annotations, sets
+7. **Experience graph database.** Done for the store: `splinter-store`
+   keeps sources, tasks, experiences, annotations, sets
    and runs in `crates/expdb`; each experience is also an attempt in its graph,
    verdicts are ranked evidence about it, and datasets, training runs and
    releases record where they came from. Open: the training views still decide

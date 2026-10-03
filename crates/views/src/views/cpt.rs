@@ -13,7 +13,7 @@
 use std::collections::HashSet;
 
 use splinter_core::digest::Digest;
-use splinter_record::sources::SourceStore;
+use splinter_store::sources::SourceStore;
 
 use super::source_text;
 use crate::{Corpus, Exclusion, Objective, Projection, Provenance, RecordBody, View, ViewError};

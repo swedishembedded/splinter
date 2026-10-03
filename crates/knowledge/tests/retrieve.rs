@@ -25,13 +25,13 @@ use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::retrieve::{
     fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Passage,
 };
-use splinter_record::sources::SourceStore;
-use splinter_record::StateRoot;
+use splinter_store::sources::SourceStore;
+use splinter_store::StateRoot;
 
 fn store(test: &str) -> SourceStore {
     let dir = std::env::temp_dir().join(format!("splinter-retrieve-{test}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    SourceStore::new(&splinter_record::workspace::Workspace::at(&StateRoot::new(
+    SourceStore::new(&splinter_store::workspace::Workspace::at(&StateRoot::new(
         dir,
     )))
 }

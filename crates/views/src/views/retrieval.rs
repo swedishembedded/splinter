@@ -19,7 +19,7 @@
 
 use splinter_core::annotation::Strength;
 use splinter_core::experience::Span;
-use splinter_record::sources::SourceStore;
+use splinter_store::sources::SourceStore;
 
 use super::source_text;
 use crate::render::student_turn;

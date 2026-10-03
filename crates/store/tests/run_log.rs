@@ -11,12 +11,12 @@
 
 use serde_json::json;
 use splinter_core::clock::FixedClock;
-use splinter_record::experiences::StoreError;
-use splinter_record::runs::{
+use splinter_store::experiences::StoreError;
+use splinter_store::runs::{
     cancel_requested, list_runs, read_run, request_cancel, RunLog, RunStatus,
 };
-use splinter_record::workspace::Workspace;
-use splinter_record::StateRoot;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 fn scratch(name: &str) -> StateRoot {
     let path = std::env::temp_dir().join(format!("splinter-runs-{name}-{}", std::process::id()));
