@@ -70,6 +70,35 @@ pub struct FineTune<'a> {
     /// Stops training at the next optimizer step once cancelled; a
     /// cancelled fine-tune exports no adapter and is reported as an error.
     pub cancel: Option<&'a sven_sdk::CancelToken>,
+    /// Hold the frozen base at bf16, half the bytes of fp32: what lets a 7B
+    /// base train on one 24 GiB card. Scoring before and after runs at the
+    /// same tier. brain's default, fp32, when `false`.
+    pub bf16_base: bool,
+    /// The peak learning rate; brain's default when `None`.
+    pub learning_rate: Option<f32>,
+    /// Told after every optimizer step, so a long run can be watched.
+    pub on_step: Option<StepHook<'a>>,
+}
+
+/// A caller's function told of each optimizer step.
+#[derive(Clone, Copy)]
+pub struct StepHook<'a>(pub &'a dyn Fn(&StepReport));
+
+impl std::fmt::Debug for StepHook<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("StepHook")
+    }
+}
+
+/// One completed optimizer step of a fine-tune.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StepReport {
+    /// Steps completed so far.
+    pub step: u32,
+    /// Steps the run will take.
+    pub steps: u32,
+    /// This step's training loss.
+    pub loss: f32,
 }
 
 /// One held-out score: teacher-forced loss and token accuracy over the
@@ -230,7 +259,11 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .adapter_id(format!("{base_id}:splinter:candidate"))
         .steps(request.steps)
         .rank(request.rank)
-        .alpha(request.alpha);
+        .alpha(request.alpha)
+        .bf16_base(request.bf16_base);
+    if let Some(lr) = request.learning_rate {
+        fine_tune = fine_tune.lr(lr);
+    }
     for replayed in request.replay {
         fine_tune = fine_tune.replay(replayed);
     }
@@ -239,7 +272,10 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     }
     let brain_cancel = brain::CancelToken::armed();
     let outcome = fine_tune
-        .run_with(&brain_cancel, poll(request.cancel, &brain_cancel))
+        .run_with(
+            &brain_cancel,
+            poll(request.cancel, &brain_cancel, request.on_step),
+        )
         .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
@@ -387,7 +423,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
     }
     let brain_cancel = brain::CancelToken::armed();
     let outcome = fine_tune
-        .run_with(&brain_cancel, poll(request.cancel, &brain_cancel))
+        .run_with(&brain_cancel, poll(request.cancel, &brain_cancel, None))
         .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
@@ -449,8 +485,16 @@ fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyError> {
 fn poll<'a>(
     cancel: Option<&'a sven_sdk::CancelToken>,
     brain_cancel: &'a brain::CancelToken,
+    on_step: Option<StepHook<'a>>,
 ) -> impl FnMut(&brain::FineTuneProgress) + 'a {
-    move |_| {
+    move |progress| {
+        if let Some(StepHook(report)) = on_step {
+            report(&StepReport {
+                step: progress.step,
+                steps: progress.steps,
+                loss: progress.loss,
+            });
+        }
         if cancel.is_some_and(sven_sdk::CancelToken::is_cancelled) {
             brain_cancel.cancel();
         }
@@ -517,6 +561,32 @@ mod tests {
         assert!(err.contains("at least 2"), "{err}");
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Every optimizer step is reported to the caller, and a cancelled
+    /// caller cancels brain's token at the next step.
+    #[test]
+    fn a_step_is_reported_and_a_cancel_is_forwarded() {
+        let seen = std::cell::RefCell::new(Vec::new());
+        let report = |r: &StepReport| seen.borrow_mut().push((r.step, r.steps, r.loss));
+        let brain_cancel = brain::CancelToken::armed();
+        let caller = sven_sdk::CancelToken::new();
+        let mut step = poll(Some(&caller), &brain_cancel, Some(StepHook(&report)));
+        let progress = |n| brain::FineTuneProgress {
+            step: n,
+            steps: 3,
+            loss: 1.5,
+            lr: 1e-4,
+        };
+        step(&progress(1));
+        assert!(!brain_cancel.is_cancelled());
+        caller.cancel();
+        step(&progress(2));
+        assert!(
+            brain_cancel.is_cancelled(),
+            "the caller's cancel reaches brain"
+        );
+        assert_eq!(*seen.borrow(), vec![(1, 3, 1.5), (2, 3, 1.5)]);
     }
 
     /// A Hugging Face checkpoint trains from its directory, where its

@@ -382,6 +382,9 @@ impl Trainer for BrainTrainer {
             replay: &replayed,
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
+            bf16_base: false,
+            learning_rate: None,
+            on_step: None,
         })
         .map_err(trainer_error)
     }
