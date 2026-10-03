@@ -31,21 +31,25 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splinter_agent::converse::converse_prompted;
-use splinter_agent::solve::{open_book_prompt, solve_prompted, Model, SolveError, SolveOptions};
+use splinter_agent::solve::{
+    open_book_prompt, solve_prompted, Model, Solution, SolveError, SolveOptions,
+};
 use splinter_agent::{CancelToken, RunConclusion};
 use splinter_core::digest::Digest;
-use splinter_core::experience::Provenance;
+use splinter_core::experience::{Provenance, Task};
 use splinter_knowledge::material::teacher_material;
 use splinter_knowledge::tasks::Catalogue;
 use splinter_model::Sampling;
+use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::experiences::{ExperienceSet, SetId};
-use splinter_store::tasks::TaskSetId;
+use splinter_store::tasks::{TaskEntry, TaskSetId};
 
 use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
 use crate::learn::PolicyUsed;
 use crate::tasks::remaining;
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::concurrency::fan_out;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -201,7 +205,10 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         skipped: Vec::new(),
         stopped: None,
     };
-    'tasks: for entry in &set.members {
+    // Plan: what each task is asked, or why it is skipped. Reading the stores
+    // and building the prompts is quick and stays in task order.
+    let mut plans: Vec<Planned> = Vec::new();
+    for entry in &set.members {
         let task = ctx.tasks().get(&entry.task)?;
         let environment = match ctx.environments().for_record(&task.environment) {
             Ok(environment) => environment,
@@ -229,73 +236,78 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         } else {
             task.instruction.clone()
         };
-        for attempt in 0..attempts {
-            if request.cancel.is_cancelled() {
-                return Err(OrchestratorError::Cancelled);
+        plans.push(Planned {
+            entry,
+            task,
+            environment,
+            dialogue,
+            prompt,
+        });
+    }
+
+    // Execute: every attempt of every planned task, as many at once as the
+    // model takes, the results back in task order. An attempt that begins
+    // after a cancel or a spent budget does not run.
+    let items: Vec<(usize, u32)> = (0..plans.len())
+        .flat_map(|plan| (0..attempts).map(move |attempt| (plan, attempt)))
+        .collect();
+    let results = ctx.block_on(fan_out(
+        items,
+        ctx.concurrency_for(request.solver),
+        |(plan, attempt)| {
+            let (plans, model) = (&plans, &model);
+            async move {
+                (
+                    plan,
+                    attempt,
+                    attempt_once(&plans[plan], model, request).await,
+                )
             }
-            if request.deadline.is_some_and(|d| Instant::now() >= d) {
+        },
+    ));
+
+    // Fold in order, as one attempt after another would have been: the first
+    // cancel, spent budget or unusable environment decides what comes after.
+    let mut unusable: Vec<usize> = Vec::new();
+    for (plan, attempt, outcome) in results {
+        if unusable.contains(&plan) {
+            continue;
+        }
+        let Planned { entry, task, .. } = &plans[plan];
+        let solved = match outcome {
+            Attempted::Cancelled => return Err(OrchestratorError::Cancelled),
+            Attempted::BudgetSpent => {
                 report.stopped = Some("the budget was spent before every task was tried".into());
-                break 'tasks;
+                break;
             }
-            let mut options =
-                SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
-            options.cancel = Some(request.cancel.clone());
-            options.stream_idle = model.stream_idle;
-            let solved = if dialogue {
-                ctx.block_on(async {
-                    let student = Student::new(
-                        &model,
-                        &entry.task,
-                        DIALOGUE_TURNS,
-                        &options,
-                        &request.cancel,
-                    )?;
-                    converse_prompted(
-                        &task,
-                        &prompt,
-                        &environment,
-                        model.provider.clone(),
-                        &student,
-                        DIALOGUE_TURNS,
-                        options,
-                    )
-                    .await
-                })
-            } else {
-                ctx.block_on(solve_prompted(
-                    &task,
-                    &prompt,
-                    &environment,
-                    model.provider.clone(),
-                    options,
-                ))
-            };
-            let solution = match solved {
-                Ok(solution) => solution,
-                Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
-                    report.skipped.push(skip(&entry.task, &e));
-                    continue 'tasks;
-                }
-                Err(e) => return Err(e.into()),
-            };
-            *report
-                .conclusions
-                .entry(conclusion_name(solution.conclusion))
-                .or_default() += 1;
-            report.answered += usize::from(solution.final_output.is_some());
-            let provenance = Provenance {
-                generator: entry.generator.clone(),
-                policy: label.clone(),
-                prompt_digests: entry.prompt.iter().cloned().collect(),
-                attempt: (attempts > 1).then_some(attempt),
-                teacher: request.teacher,
-                ..Provenance::new(model.identity.clone(), ctx.clock())
-            };
-            let experience = solution.into_experience(task.clone(), provenance)?;
-            let id = store.put(&experience)?;
-            if !members.contains(&id) {
-                members.push(id);
+            Attempted::Solved(solved) => solved,
+        };
+        let solution = match solved {
+            Ok(solution) => *solution,
+            Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
+                report.skipped.push(skip(&entry.task, &e));
+                unusable.push(plan);
+                continue;
             }
+            Err(e) => return Err(e.into()),
+        };
+        *report
+            .conclusions
+            .entry(conclusion_name(solution.conclusion))
+            .or_default() += 1;
+        report.answered += usize::from(solution.final_output.is_some());
+        let provenance = Provenance {
+            generator: entry.generator.clone(),
+            policy: label.clone(),
+            prompt_digests: entry.prompt.iter().cloned().collect(),
+            attempt: (attempts > 1).then_some(attempt),
+            teacher: request.teacher,
+            ..Provenance::new(model.identity.clone(), ctx.clock())
+        };
+        let experience = solution.into_experience(task.clone(), provenance)?;
+        let id = store.put(&experience)?;
+        if !members.contains(&id) {
+            members.push(id);
         }
     }
     report.solved = members.len();
@@ -315,6 +327,75 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     })?;
     batch.commit()?;
     Ok(report)
+}
+
+/// A task ready to be asked.
+struct Planned<'a> {
+    entry: &'a TaskEntry,
+    task: Task,
+    environment: ResolvedEnvironment,
+    dialogue: bool,
+    prompt: String,
+}
+
+/// How one attempt went.
+enum Attempted {
+    /// A cancel was requested before it began.
+    Cancelled,
+    /// The budget was spent before it began.
+    BudgetSpent,
+    /// It ran.
+    Solved(Result<Box<Solution>, SolveError>),
+}
+
+/// One attempt at `planned`, unless a cancel or the budget forbids beginning.
+async fn attempt_once(
+    planned: &Planned<'_>,
+    model: &Model,
+    request: &SolveRequest<'_>,
+) -> Attempted {
+    if request.cancel.is_cancelled() {
+        return Attempted::Cancelled;
+    }
+    if request.deadline.is_some_and(|d| Instant::now() >= d) {
+        return Attempted::BudgetSpent;
+    }
+    let mut options = SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
+    options.cancel = Some(request.cancel.clone());
+    options.stream_idle = model.stream_idle;
+    let Planned {
+        entry,
+        task,
+        environment,
+        dialogue,
+        prompt,
+    } = planned;
+    let solved = if *dialogue {
+        match Student::new(
+            model,
+            &entry.task,
+            DIALOGUE_TURNS,
+            &options,
+            &request.cancel,
+        ) {
+            Ok(student) => {
+                converse_prompted(
+                    task,
+                    prompt,
+                    environment,
+                    model.provider.clone(),
+                    &student,
+                    DIALOGUE_TURNS,
+                    options,
+                )
+                .await
+            }
+            Err(e) => Err(e.into()),
+        }
+    } else {
+        solve_prompted(task, prompt, environment, model.provider.clone(), options).await
+    };
+    Attempted::Solved(solved.map(Box::new))
 }
 
 /// Why a teacher's solve of a task was skipped: it has nothing to show.

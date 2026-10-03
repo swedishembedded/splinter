@@ -12,6 +12,7 @@
 //! stores a pipeline decides through.
 //!
 //! * [`config`] - the settings, and the only reader of the environment.
+//! * [`concurrency`] - bounded fan-out of work, results in order.
 //! * [`context`] - a [`Runtime`] shared by a process and a [`Context`] for
 //!   one command.
 //! * [`roles`] and [`model_ref`] - who plays each role, and what a model
@@ -30,6 +31,7 @@
 #![warn(missing_docs)]
 
 pub mod answers;
+pub mod concurrency;
 pub mod config;
 pub mod context;
 pub mod error;

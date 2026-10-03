@@ -62,6 +62,7 @@ fn context(scratch: &Scratch) -> Context {
         assistant_model: None,
         bf16_base: false,
         default_budget: None,
+        remote_concurrency: 4,
     };
     Context::new(config, false)
         .unwrap()

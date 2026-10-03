@@ -19,12 +19,14 @@ splinter-model = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["time", "rt-multi-thread"] }
 
 [lints]
 workspace = true

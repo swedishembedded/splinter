@@ -18,6 +18,10 @@ use splinter_store::StateRoot;
 /// lengths, on one 24 GB GPU.
 pub const DEFAULT_POLICY_MODEL: &str = "Qwen/Qwen3-0.6B";
 
+/// How many requests to a model reached over an API are in flight at once,
+/// when the configuration names no width.
+pub const DEFAULT_REMOTE_CONCURRENCY: usize = 4;
+
 /// The settings every command reads.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -61,6 +65,9 @@ pub struct Config {
     /// is refused by name when a run starts. A run on a corpus too large to
     /// read has no end without one.
     pub default_budget: Option<String>,
+    /// How many requests to a model reached over an API may be in flight at
+    /// once. A model run on this machine's device is asked one at a time.
+    pub remote_concurrency: usize,
 }
 
 impl Config {
@@ -85,7 +92,9 @@ impl Config {
     /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
     ///   held at bf16;
     /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
-    ///   names no `--budget`.
+    ///   names no `--budget`;
+    /// * `SPLINTER_REMOTE_CONCURRENCY`, how many requests to a model reached
+    ///   over an API may be in flight at once ([`DEFAULT_REMOTE_CONCURRENCY`]).
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -118,6 +127,10 @@ impl Config {
             bf16_base: var("SPLINTER_BF16_BASE")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
             default_budget: var("SPLINTER_BUDGET"),
+            remote_concurrency: var("SPLINTER_REMOTE_CONCURRENCY")
+                .and_then(|v| v.parse().ok())
+                .filter(|n| *n > 0)
+                .unwrap_or(DEFAULT_REMOTE_CONCURRENCY),
         }
     }
 }

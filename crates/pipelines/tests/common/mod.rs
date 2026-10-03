@@ -115,6 +115,7 @@ pub fn config(scratch: &Scratch) -> Config {
         assistant_model: None,
         bf16_base: false,
         default_budget: None,
+        remote_concurrency: 4,
     }
 }
 
