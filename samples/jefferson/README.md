@@ -152,6 +152,24 @@ software adapter or a fallback was used, and fails it if it never reported a
 discrete GPU. `BRAIN_DEVICE` alone does not choose the card of an in-process
 run; the script also sets `BRAIN_GPU_INDEX`.
 
+## Retrieval
+
+`splinter-jefferson retrieval` measures how well search finds the passage a
+situation was written from: 70 situations over the paragraphs of every letter
+(`recall@k` is the share whose source paragraph is among the first k found).
+
+| method | recall@1 | recall@10 | recall@50 | recall@200 | MRR |
+|---|---|---|---|---|---|
+| lexical (BM25) | 17% | 30% | 43% | 53% | 0.220 | <!-- perf-number: a sample report's measured result -->
+| semantic (Qwen3-Embedding-0.6B) | 41% | 66% | 83% | 91% | 0.489 | <!-- perf-number: a sample report's measured result -->
+| fused (equal-weight reciprocal rank) | 27% | 56% | 77% | 93% | 0.367 | <!-- perf-number: a sample report's measured result -->
+
+A situation put in plain words shares few words with the eighteenth-century
+paragraph it came from, so semantic search finds far more of them than lexical
+search, and fusing the two with equal weight lets the weaker ranking pull the
+better one down at the top while adding a little at depth. Semantic search is
+the primary ranking; lexical is for the exact names and dates it blurs.
+
 ## Limits, stated up front
 
 - A LoRA adapter on a 7B model does not store the corpus. What this measures is
