@@ -20,6 +20,7 @@
 //! scenarios  a writer model drafts situations from letters; code gates them
 //! apply      put the scenarios to a model and measure what it quotes
 //! judge      a judge model of another family rates the answers, checked on controls
+//! retrieval  how well lexical, semantic and fused search find the passage a situation came from
 //! apply-report  the application table: fabricated quotations, citations, recall, agreement
 //! ```
 
@@ -30,6 +31,7 @@ mod corpus;
 mod exam;
 mod grade;
 mod report;
+mod retrieval;
 mod scenarios;
 mod tasks;
 mod works;
@@ -49,6 +51,7 @@ fn main() -> anyhow::Result<()> {
         Some("scenarios") => scenarios_command(&args[1..]),
         Some("apply") => apply_command(&args[1..]),
         Some("judge") => judge_command(&args[1..]),
+        Some("retrieval") => retrieval_command(&args[1..]),
         Some("apply-report") => apply_report_command(&args[1..]),
         _ => anyhow::bail!("usage: splinter-jefferson <corpus|tasks> --resources DIR --out DIR"),
     }
@@ -355,6 +358,30 @@ fn materials_command(args: &[String]) -> anyhow::Result<()> {
         "{} letters and {works} works written under {}",
         files.len(),
         out.display()
+    );
+    Ok(())
+}
+
+fn retrieval_command(args: &[String]) -> anyhow::Result<()> {
+    let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
+    let resources = PathBuf::from(need("--resources")?);
+    let scenarios = writer::read_scenarios(std::path::Path::new(&need("--scenarios")?))?;
+    let letters = corpus::load_letters(&resources)?;
+    let passages = retrieval::letter_passages(&letters);
+    let loaded = flag(args, "--embedder")
+        .map(|path| splinter_policy::embed::Embeddings::load(std::path::Path::new(&path)))
+        .transpose()?;
+    let embedder = loaded.as_ref().map(retrieval::Qwen);
+    let results = retrieval::measure(
+        &passages,
+        &scenarios,
+        embedder
+            .as_ref()
+            .map(|e| e as &dyn splinter_knowledge::retrieve::Embedder),
+    )?;
+    print!(
+        "{}",
+        retrieval::render(passages.len(), scenarios.len(), &results)
     );
     Ok(())
 }
