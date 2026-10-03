@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- `learn` is a pipeline of stages run by an engine, which checks for a cancel and
+  the budget before each stage, skips a stage that does not apply, and records every
+  stage with how long it took and why it failed when it did (`runs show`). Models play
+  named roles - policy, teacher, generator, planner, judge, critic, router - decided by
+  one rule, and a run records who played each. Each sentence of a REPL resolves
+  `policy:<alias>` afresh.
 - **`splinter-store` keeps** sources, tasks, experiences, annotations and sets
   in the experience database instead of one file per object. Annotations are ranked evaluations; a relation is also an
   edge. Splinter's own content addresses are blake3 (`blake3:<hex>`); digests a

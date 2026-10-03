@@ -76,6 +76,7 @@ struct Step {
     stop: Option<&'static str>,
     cancel: bool,
     fail: bool,
+    halt: bool,
 }
 
 impl Step {
@@ -87,6 +88,7 @@ impl Step {
             stop: None,
             cancel: false,
             fail: false,
+            halt: false,
         }
     }
 }
@@ -117,8 +119,11 @@ impl Stage<Vec<String>> for Step {
         if self.fail {
             return Err(OrchestratorError::Refused(format!("{} broke", self.name)));
         }
+        if self.halt {
+            return Ok(StageEnd::halt("nothing worth recording"));
+        }
         Ok(StageEnd {
-            summary: json!({ "stage": self.name }),
+            summary: Some(json!({ "stage": self.name })),
             flow: self
                 .stop
                 .map_or(Flow::Continue, |why| Flow::Stop(why.into())),
@@ -126,7 +131,7 @@ impl Stage<Vec<String>> for Step {
     }
 }
 
-fn pipeline(steps: Vec<Step>) -> Pipeline<Vec<String>> {
+fn pipeline(steps: Vec<Step>) -> Pipeline<'static, Vec<String>> {
     steps
         .into_iter()
         .fold(Pipeline::new(), |pipeline, step| pipeline.then(step))
@@ -250,4 +255,17 @@ fn a_failing_stage_is_recorded_with_why_and_the_failure_propagates() {
     assert_eq!(last.stage, "b");
     assert_eq!(last.error.as_deref(), Some("b broke"));
     assert!(run.stages[0].error.is_none());
+}
+
+#[test]
+fn a_stage_that_found_nothing_to_record_stops_the_run_without_a_record() {
+    let mut halting = Step::new("b");
+    halting.halt = true;
+    let line = pipeline(vec![Step::new("a"), halting, Step::new("c")]);
+    let (result, run) = execute("halt", &line, None);
+    let (ran, stopped) = result.unwrap();
+    assert_eq!(ran, ["a", "b"]);
+    assert_eq!(stopped.as_deref(), Some("nothing worth recording"));
+    let names: Vec<&str> = run.stages.iter().map(|s| s.stage.as_str()).collect();
+    assert_eq!(names, ["a"]);
 }

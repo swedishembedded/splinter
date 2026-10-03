@@ -44,45 +44,29 @@
 //! plan and writes nothing.
 
 mod report;
+mod stages;
 
-use report::PolicyStage;
 pub use report::{LearnPlan, LearnReport, Learned, Planned, PolicyUsed};
+use stages::{Learn, LearnState};
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use splinter_core::source::SourceId;
-use splinter_data::holdout::MIN_SAMPLES;
-use splinter_store::experiences::SetId;
 
-use splinter_knowledge::survey::survey;
+use crate::curriculum::frontier::PassAtK;
+use crate::curriculum::quota::Quotas;
 
-use crate::budget::StageDeadlines;
-use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
-use crate::curriculum::frontier::{select_frontier, PassAtK};
-use crate::curriculum::queue;
-use crate::curriculum::quota::{select_training_set, Quotas};
-use crate::curriculum::teacher::{teach, TeachRequest};
-use crate::datasets::{build, BuildRequest, ViewName, DEFAULT_MIN_STRENGTH};
-use crate::exam::{examine_candidate, Exam};
-use crate::plan::plan as make_plan;
-use crate::release::{release, ReleaseRequest};
-use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
-use crate::sources::{self, SourceTarget};
-use crate::tasks::{check_kinds, generate, Generation, DEFAULT_LEARN_KINDS};
-use crate::train::{
-    train, TrainRequest, Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK,
-    DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
-};
-use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
-use crate::verify::verify_set;
-use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
+use crate::sources::SourceTarget;
+use crate::tasks::{check_kinds, DEFAULT_LEARN_KINDS};
+use crate::train::{Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK, DEFAULT_STEPS};
+
+use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::roles;
-use splinter_orchestrator::runs::{record, Recorder};
+use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
 pub const STAGES: [&str; 15] = [
@@ -236,387 +220,37 @@ pub fn learn(
             dry_run: true,
         })));
     }
-    let pipeline = Pipeline {
-        ctx,
+    let learn = Learn {
         targets: &targets,
         kinds: &kinds,
         planner: planner.as_ref(),
         goal: request.goal.as_deref(),
         deadline: budget.map(|b| Instant::now() + b),
         trainer,
+        policy,
         teacher: &teacher,
         generator: &generator,
         judge: &judge,
         roles_used,
         no_release: request.no_release,
-        distill: request.distill,
         steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
         tuning: Tuning {
             bf16_base: request.tuning.bf16_base || ctx.config().bf16_base,
             learning_rate: request.tuning.learning_rate.or(Some(DEFAULT_LEARNING_RATE)),
         },
-        frontier: measures_frontier.then_some(request.pass_at_k),
         quotas: request.quotas,
     };
+    let frontier = measures_frontier.then_some(request.pass_at_k);
     let recorded = record(ctx, "learn", request, |run| {
-        let mut report = LearnReport::default();
-        pipeline.run(run, &mut report)?;
+        let mut state = LearnState::new(learn, request.distill, frontier);
+        let deadline = state.deadline();
+        let stopped = stages::pipeline().run(ctx, run, &mut state, deadline)?;
+        let mut report = state.report;
+        report.stopped = stopped;
         Ok(report)
     })?;
     Ok(Learned::Ran(Box::new(recorded)))
-}
-
-/// One learn run's inputs, resolved.
-struct Pipeline<'a> {
-    ctx: &'a Context,
-    targets: &'a [SourceTarget],
-    kinds: &'a [String],
-    /// The model that plans the kinds; `None` keeps `kinds`.
-    planner: Option<&'a ModelRef>,
-    goal: Option<&'a str>,
-    deadline: Option<Instant>,
-    trainer: &'a dyn Trainer,
-    teacher: &'a ModelRef,
-    generator: &'a ModelRef,
-    /// The model that judges the exam: another one than the policy when an
-    /// assistant is configured.
-    judge: &'a ModelRef,
-    /// The identity each role in use was given.
-    roles_used: BTreeMap<Role, String>,
-    no_release: bool,
-    /// The teacher answers every task and the student makes no attempt.
-    distill: bool,
-    /// Optimizer steps (`None`: [`auto_steps`] of the dataset), LoRA rank
-    /// and tuning of the training.
-    steps: Option<u32>,
-    rank: u32,
-    tuning: Tuning,
-    /// pass@k's parameters; `None` keeps every task.
-    frontier: Option<PassAtK>,
-    quotas: Quotas,
-}
-
-impl Pipeline<'_> {
-    /// The stages, filling `report` as they finish; returns early (with
-    /// `report.stopped` set) when one leaves the next nothing to do.
-    fn run(
-        &self,
-        run: &mut Recorder<'_>,
-        report: &mut LearnReport,
-    ) -> Result<(), OrchestratorError> {
-        let Self {
-            ctx,
-            targets,
-            kinds,
-            planner,
-            goal,
-            deadline,
-            trainer,
-            teacher,
-            generator,
-            judge,
-            ref roles_used,
-            no_release,
-            distill,
-            steps,
-            rank,
-            tuning,
-            frontier,
-            quotas,
-        } = *self;
-        let policy = ModelRef::policy_default();
-        let stage_deadlines = StageDeadlines::of(Instant::now(), deadline);
-        report.policy = PolicyUsed {
-            alias: POLICY_DEFAULT.into(),
-            release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
-        };
-        report.roles = roles_used.clone();
-        run.stage(
-            "policy",
-            &PolicyStage {
-                policy: &report.policy,
-                roles: &report.roles,
-            },
-        )?;
-        let spent = |stage: &str| {
-            deadline
-                .is_some_and(|d| Instant::now() >= d)
-                .then(|| format!("the budget was spent before the {stage} stage"))
-        };
-
-        let mut source_ids: Vec<SourceId> = Vec::new();
-        for target in targets {
-            let added = sources::add(ctx, target)?;
-            source_ids.push(added.source.id.clone());
-            report.sources.push(added.source);
-        }
-        run.stage("sources", &report.sources)?;
-
-        // The planner chooses the kinds, and whether to distil, from what
-        // the sources hold; otherwise they are as the request named them.
-        let planned_kinds: Vec<String>;
-        let mut distill = distill;
-        let kinds: &[String] = match planner {
-            Some(planner) => {
-                let surveyed = survey(&ctx.sources(), &source_ids)?;
-                let chosen = make_plan(ctx, &surveyed, goal, planner, &run.cancel_token())?;
-                let planned = Planned {
-                    survey: surveyed,
-                    plan: chosen,
-                };
-                run.stage("plan", &planned)?;
-                distill = distill || planned.plan.distill;
-                planned_kinds = planned.plan.kinds.clone();
-                report.plan = Some(planned);
-                &planned_kinds
-            }
-            None => kinds,
-        };
-        let frontier = if distill { None } else { frontier };
-
-        run.check_cancelled()?;
-        let queued = queue::pending(ctx)?;
-        let sections: Vec<_> = queued
-            .iter()
-            .flat_map(|q| q.sections.iter().cloned())
-            .collect();
-        let generated = generate(
-            ctx,
-            &Generation {
-                sources: &source_ids,
-                sections: &sections,
-                kinds,
-                generator,
-                goal,
-                deadline: stage_deadlines.tasks,
-                cancel: run.cancel_token(),
-            },
-        )?;
-        run.stage("tasks", &generated)?;
-        if generated.stopped.is_none() {
-            queue::complete(ctx, &queued)?;
-        }
-        let task_set = generated.task_set.clone();
-        let tasks = generated.tasks;
-        report.tasks = Some(generated);
-        if tasks == 0 {
-            report.stopped = Some("no task was admitted, so there is nothing to solve".into());
-            return Ok(());
-        }
-
-        if let Some(why) = spent("solve") {
-            report.stopped = Some(why);
-            return Ok(());
-        }
-        // The student's own attempts: skipped when distilling.
-        let mut attempts: Option<SetId> = None;
-        let mut solved: Option<Solved> = None;
-        let mut failed = 0;
-        if !distill {
-            let attempted = solve_tasks(
-                ctx,
-                &SolveRequest {
-                    task_set: &task_set,
-                    solver: &policy,
-                    attempts: frontier.map_or(1, |p| p.k),
-                    sampling: frontier.map_or(SamplingChoice::Own, |p| p.sampling_choice()),
-                    teacher: false,
-                    deadline: stage_deadlines.attempts,
-                    cancel: run.cancel_token(),
-                },
-            )?;
-            run.stage("solve", &attempted)?;
-            let graded = attempted.experience_set.clone();
-            report.solve = Some(attempted.clone());
-            solved = Some(attempted);
-
-            run.check_cancelled()?;
-            let verified = verify_set(ctx, &graded, None, &run.cancel_token())?;
-            attempts = Some(graded);
-            run.stage("verify", &verified)?;
-            failed = verified.failed;
-            report.verify = Some(verified);
-        }
-
-        if let Some(why) = spent("teach") {
-            report.stopped = Some(why);
-            return Ok(());
-        }
-        let taught = teach(
-            ctx,
-            &TeachRequest {
-                task_set: &task_set,
-                attempts: attempts.as_ref(),
-                teacher,
-                deadline: stage_deadlines.teach,
-                cancel: run.cancel_token(),
-            },
-        )?;
-        run.stage("teach", &taught)?;
-        let mut sets: Vec<SetId> = Vec::new();
-        let kept_tasks;
-        if let (Some(_), Some(solved)) = (frontier, solved.as_ref()) {
-            let kept = select_frontier(ctx, &task_set, solved, &taught)?;
-            run.stage("frontier", &kept)?;
-            attempts = Some(kept.frontier_experience_set.clone());
-            kept_tasks = kept.frontier_task_set.clone();
-            let d = kept.distribution;
-            report.teach = Some(taught);
-            report.frontier = Some(kept);
-            if d.kept() == 0 {
-                report.stopped = Some(format!(
-                    "no task is worth training on: {} always solved, {} never solved with no \
-                     verified answer, {} unmeasured of {}",
-                    d.always,
-                    d.never,
-                    d.unmeasured,
-                    d.tasks()
-                ));
-                return Ok(());
-            }
-            // Every task kept failed at least one attempt.
-            failed = d.kept();
-        } else {
-            // Every task is kept, and the teacher's verified answers with it.
-            kept_tasks = task_set.clone();
-            sets.push(taught.solve.experience_set.clone());
-            report.teach = Some(taught);
-        }
-
-        if let Some(why) = spent("variants") {
-            report.stopped = Some(why);
-            return Ok(());
-        }
-        let varied = generate_variants(
-            ctx,
-            &VariantsRequest {
-                task_set: &kept_tasks,
-                generator,
-                per_task: DEFAULT_VARIANTS_PER_TASK,
-                deadline,
-                cancel: run.cancel_token(),
-            },
-        )?;
-        run.stage("variants", &varied)?;
-        report.variants = Some(varied);
-
-        if let Some(attempts) = &attempts {
-            sets.insert(0, attempts.clone());
-        }
-        if let (true, Some(attempts)) = (failed > 0, attempts.as_ref()) {
-            if let Some(why) = spent("critique") {
-                report.stopped = Some(why);
-                return Ok(());
-            }
-            let critiqued = critique_set(
-                ctx,
-                &CritiqueRequest {
-                    set: attempts,
-                    critic: &policy,
-                    solver: &policy,
-                    retries: DEFAULT_RETRIES,
-                    deadline,
-                    cancel: run.cancel_token(),
-                },
-            )?;
-            run.stage("critique", &critiqued)?;
-            sets.push(critiqued.revisions.clone());
-            report.critique = Some(critiqued);
-        }
-
-        run.check_cancelled()?;
-        let selected = select_training_set(ctx, &sets, DEFAULT_MIN_STRENGTH, &quotas)?;
-        run.stage("select", &selected)?;
-        let training_set = selected.experience_set.clone();
-        report.select = Some(selected);
-
-        run.check_cancelled()?;
-        let built = match build(
-            ctx,
-            &BuildRequest {
-                sets: vec![training_set],
-                view: ViewName::SftFinal,
-                strip: None,
-                min_strength: None,
-                export_only: false,
-            },
-        ) {
-            Ok(built) => built,
-            Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
-                report.stopped = Some(
-                    "no experience passed verification, so there is nothing to train on".into(),
-                );
-                return Ok(());
-            }
-            Err(e) => return Err(e),
-        };
-        run.stage("dataset", &built)?;
-        let dataset = built.dataset.to_string();
-        let records = built.records;
-        report.dataset = Some(built);
-        if records < MIN_SAMPLES {
-            report.stopped = Some(format!(
-                "{records} record(s) passed; training holds records out for scoring and needs \
-                 at least {MIN_SAMPLES}"
-            ));
-            return Ok(());
-        }
-
-        if let Some(why) = spent("train") {
-            report.stopped = Some(why);
-            return Ok(());
-        }
-        let candidate = train(
-            ctx,
-            &TrainRequest {
-                datasets: vec![dataset],
-                from: policy.clone(),
-                replay_fraction: DEFAULT_REPLAY_FRACTION,
-                steps: steps.unwrap_or_else(|| auto_steps(records)),
-                rank,
-                beta: None,
-                tuning,
-            },
-            trainer,
-            &run.cancel_token(),
-        )?;
-        run.stage("train", &candidate)?;
-        let id = candidate.candidate.clone();
-        report.candidate = Some(candidate);
-        run.check_cancelled()?;
-        // The budget bounds the open-ended stages (see [`crate::budget`]);
-        // training and the exam run to the end, each bounded by its own size.
-        let verified = report.select.as_ref().map(|s| s.experience_set.clone());
-        if let Some(verified) = verified {
-            // The candidate is trained and stored whatever the exam finds; an
-            // exam that cannot run says why in the report and the release
-            // gate still decides.
-            let examined =
-                match examine_candidate(ctx, &id, &policy, &verified, judge, &run.cancel_token()) {
-                    Ok(examined) => examined,
-                    Err(OrchestratorError::Cancelled) => return Err(OrchestratorError::Cancelled),
-                    Err(e) => Exam::NotRun(format!("the exam failed: {e}")),
-                };
-            run.stage("exam", &examined)?;
-            report.exam = Some(examined);
-        }
-        if no_release {
-            return Ok(());
-        }
-        run.check_cancelled()?;
-        match release(ctx, &ReleaseRequest::new(id), &run.cancel_token()) {
-            Ok(released) => {
-                run.stage("release", &released)?;
-                report.release = Some(released);
-            }
-            // A candidate the gate may not judge (its champion moved on) is
-            // still trained; the run says why it was not released.
-            Err(e) if e.is_refusal() => report.stopped = Some(e.to_string()),
-            Err(e) => return Err(e),
-        }
-        Ok(())
-    }
 }
 
 /// A duration as `learn --budget` takes it: whole units of `s`, `m` and
@@ -677,6 +311,12 @@ fn positive(duration: Duration) -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The list a report and a dry run show is the pipeline that runs.
+    #[test]
+    fn the_stage_list_is_the_pipeline() {
+        assert_eq!(stages::pipeline().names(), STAGES);
+    }
 
     #[test]
     fn a_budget_is_whole_units_largest_first() {

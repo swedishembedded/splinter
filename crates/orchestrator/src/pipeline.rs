@@ -43,10 +43,43 @@ pub enum Flow {
 /// What a stage reports when it ends.
 #[derive(Clone, Debug)]
 pub struct StageEnd {
-    /// What the stage did, as the run records it.
-    pub summary: serde_json::Value,
+    /// What the stage did, as the run records it; `None` when it did nothing
+    /// worth a record, and so has none.
+    pub summary: Option<serde_json::Value>,
     /// Whether the pipeline goes on.
     pub flow: Flow,
+}
+
+impl StageEnd {
+    /// A stage that did its work, recorded as `summary`, and the pipeline
+    /// goes on.
+    #[must_use]
+    pub fn done(summary: serde_json::Value) -> Self {
+        Self {
+            summary: Some(summary),
+            flow: Flow::Continue,
+        }
+    }
+
+    /// A stage that did its work, recorded as `summary`, and the pipeline
+    /// ends here for `reason`.
+    #[must_use]
+    pub fn stop(summary: serde_json::Value, reason: impl Into<String>) -> Self {
+        Self {
+            summary: Some(summary),
+            flow: Flow::Stop(reason.into()),
+        }
+    }
+
+    /// A stage that found nothing to record, and the pipeline ends here for
+    /// `reason`.
+    #[must_use]
+    pub fn halt(reason: impl Into<String>) -> Self {
+        Self {
+            summary: None,
+            flow: Flow::Stop(reason.into()),
+        }
+    }
 }
 
 /// One step of a pipeline over the state `S`.
@@ -76,18 +109,81 @@ pub trait Stage<S> {
     ) -> Result<StageEnd, OrchestratorError>;
 }
 
-/// Stages, in order.
-pub struct Pipeline<S> {
-    stages: Vec<Box<dyn Stage<S>>>,
+/// A stage's work as a function over the state.
+pub type StageFn<S> =
+    fn(&Context, &mut Recorder<'_>, &mut S) -> Result<StageEnd, OrchestratorError>;
+
+/// A [`Stage`] made of functions: a pipeline defined as data.
+pub struct FnStage<S> {
+    name: &'static str,
+    enabled: fn(&S) -> bool,
+    honors_budget: bool,
+    run: StageFn<S>,
 }
 
-impl<S> Default for Pipeline<S> {
+impl<S> FnStage<S> {
+    /// A stage named `name` that does `run`, applies to every state and
+    /// honors the budget.
+    #[must_use]
+    pub fn new(name: &'static str, run: StageFn<S>) -> Self {
+        Self {
+            name,
+            enabled: |_| true,
+            honors_budget: true,
+            run,
+        }
+    }
+
+    /// This stage applying only where `enabled` says so.
+    #[must_use]
+    pub fn when(mut self, enabled: fn(&S) -> bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// This stage running whatever the budget.
+    #[must_use]
+    pub fn ignoring_budget(mut self) -> Self {
+        self.honors_budget = false;
+        self
+    }
+}
+
+impl<S> Stage<S> for FnStage<S> {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn enabled(&self, state: &S) -> bool {
+        (self.enabled)(state)
+    }
+
+    fn honors_budget(&self) -> bool {
+        self.honors_budget
+    }
+
+    fn run(
+        &self,
+        ctx: &Context,
+        run: &mut Recorder<'_>,
+        state: &mut S,
+    ) -> Result<StageEnd, OrchestratorError> {
+        (self.run)(ctx, run, state)
+    }
+}
+
+/// Stages, in order.
+pub struct Pipeline<'a, S> {
+    stages: Vec<Box<dyn Stage<S> + 'a>>,
+}
+
+impl<S> Default for Pipeline<'_, S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S> Pipeline<S> {
+impl<'a, S> Pipeline<'a, S> {
     /// A pipeline with no stage yet.
     #[must_use]
     pub fn new() -> Self {
@@ -96,7 +192,7 @@ impl<S> Pipeline<S> {
 
     /// This pipeline followed by `stage`.
     #[must_use]
-    pub fn then(mut self, stage: impl Stage<S> + 'static) -> Self {
+    pub fn then(mut self, stage: impl Stage<S> + 'a) -> Self {
         self.stages.push(Box::new(stage));
         self
     }
@@ -144,7 +240,9 @@ impl<S> Pipeline<S> {
                     return Err(e);
                 }
             };
-            run.stage_measured(stage.name(), &ended.summary, Some(started.elapsed()), None)?;
+            if let Some(summary) = &ended.summary {
+                run.stage_measured(stage.name(), summary, Some(started.elapsed()), None)?;
+            }
             if let Flow::Stop(reason) = ended.flow {
                 return Ok(Some(reason));
             }
