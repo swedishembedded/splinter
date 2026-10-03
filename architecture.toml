@@ -1,76 +1,110 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 #
-# Splinter's crate layering: the authoritative list of which workspace crate
-# may depend on which. scripts/gates/check-architecture.sh enforces it
-# against `cargo metadata` in `make check`. AGENTS.md explains the layers;
-# when the two disagree, this file wins.
+# Splinter's crate layering: the authoritative tier of every workspace crate.
+# scripts/gates/check-architecture.sh enforces it against `cargo metadata` in
+# `make check`; scripts/gates/test-architecture.py is the gate's own
+# specification. AGENTS.md explains the layers; when the two disagree, this
+# file wins.
 #
-# Every workspace package must be listed. `internal` names the Splinter
-# crates it may depend on (normal, build and dev dependencies alike).
-# `brain` says whether it may depend on brain: only the policy crate may, and
-# only on brain's public SDK, the `brain` crate - never an internal
-# `brain-*` crate.
+# Rules:
+#   - A crate may depend (as a normal or build dependency) only on crates in a
+#     STRICTLY LOWER tier, unless the ordered pair is listed in [[same_layer]].
+#     Dev-dependencies are exempt: a test may reach for what production code
+#     must not.
+#   - A [[forbidden]] pair is a design invariant, not an exception: `to` must
+#     not be reachable from `from` over normal dependencies, at any depth. An
+#     external crate counts as reached when any crate on the way depends on it.
+#   - Every [[same_layer]] and [[allow.large_file]] entry is a REVIEWED,
+#     TEMPORARY exception with a `why`. A stale entry (the violation it names
+#     no longer exists) is itself a failure: delete it when the underlying
+#     issue is fixed.
+#   - A declared internal dependency must be named by the crate's sources.
+#   - Only the crates in [brain].allowed depend on brain, and only on its
+#     public SDK, the `brain` crate - never an internal `brain-*` crate.
 
-[crates.splinter-record]
-# The vocabulary and the typed stores over the experience database.
-internal = ["splinter-expdb"]
+[tiers]
+# Ordered low -> high.
+order = [
+    "foundation",  # depends on no other Splinter crate
+    "storage",     # state on disk, and the processes tasks run in
+    "domain",      # what is measured, curated and learned from
+    "adapters",    # the only code that talks to sven or to brain
+    "application", # composes the domain and the adapters
+    "workflow",    # the learning pipelines
+    "sdk",         # the one embedding API
+    "surface",     # user-visible entry points
+    "sample",      # standalone programs; nothing depends on one
+]
 
-[crates.splinter-expdb]
-# The experience graph database. Standalone: it owns its digest, atomic-write
-# and clock primitives, and knows nothing of Splinter's vocabulary.
-internal = []
+[crates]
+splinter-expdb = "foundation"
+splinter-record = "storage"
+splinter-sandbox = "storage"
+splinter-lab = "domain"
+splinter-policy = "adapters"
+splinter-agent = "adapters"
+splinter-views = "application"
+splinter-knowledge = "application"
+splinter-campaign = "workflow"
+splinter = "surface"
+splinter-tool-syntax = "sample"
+splinter-jefferson = "sample"
 
-[crates.splinter-sandbox]
-# Where a solver's code runs; below knowledge (command capture) and agent
-# (the solver's run_code tool), which share its process-running core.
-internal = ["splinter-record"]
-
-[crates.splinter-lab]
-# Executable verifiers run checks in the environment a task names, through
-# the sandbox's one bounded runner rather than a second one of their own.
-internal = ["splinter-record", "splinter-sandbox"]
-
-[crates.splinter-policy]
-internal = ["splinter-lab"]
-brain = true
-
-[crates.splinter-agent]
-# splinter-views as a dev-dependency only: the critique-and-retry specs
-# check that the chain the repair loop records is what the critic, decision
-# and preference views read. The views never depend on the agent. The agent
-# runs whatever model it is handed through sven's provider seam, so it does
-# not depend on the policy.
-internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-views"]
-
-[crates.splinter-knowledge]
-# Model-driven task generators ask their generator model through the
-# agent's closed-book solve, the one way a model is run on a task, and hold
-# every generated instruction to the views' self-containment rule, the one
-# rule for what a student may be shown without the material it lacks.
-internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-agent", "splinter-views"]
-
-[crates.splinter-views]
-internal = ["splinter-record", "splinter-lab", "splinter-policy"]
-
-[crates.splinter-campaign]
-internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-knowledge", "splinter-views"]
-
-[crates.splinter]
-# The binary is grammar and output: it calls the controller and prints the
-# controller's reports, and reaches the store only for the types those
-# reports carry.
-internal = ["splinter-record", "splinter-campaign"]
-
-[crates.splinter-tool-syntax]
-internal = ["splinter-lab", "splinter-policy"]
-
-[crates.splinter-jefferson]
-# A controlled sample: teach a model a public-domain corpus and measure what it kept.
-# It reads quotations with the lab's index and finds advice with the knowledge crate's cues.
-internal = ["splinter-policy", "splinter-lab", "splinter-knowledge"]
+[brain]
+allowed = ["splinter-policy"]
 
 [limits]
-# A source file larger than this is split; the listed exceptions may only
-# shrink, and an entry is removed once its file is back under the limit.
+# A source file larger than this is split; a file that must stay larger for a
+# while is recorded in [[allow.large_file]], whose size may only shrink.
 max_file_lines = 800
+
+[[same_layer]]
+from = "splinter-sandbox"
+to = "splinter-record"
+why = "TEMPORARY. The sandbox names its environments by the record vocabulary's digest and environment types; both move to a vocabulary crate below the storage tier."
+
+[[same_layer]]
+from = "splinter-knowledge"
+to = "splinter-views"
+why = "TEMPORARY. Task admission applies the views' self-containment rule; the rule moves to the vocabulary crate."
+
+[[forbidden]]
+from = "splinter-expdb"
+to = "brain"
+why = "The experience database is a generic store; it knows neither a model nor a trainer."
+
+[[forbidden]]
+from = "splinter-expdb"
+to = "sven-sdk"
+why = "The experience database is a generic store; it knows neither an agent runtime nor a trajectory."
+
+[[forbidden]]
+from = "splinter-record"
+to = "brain"
+why = "Persistence has no model computation in it."
+
+[[forbidden]]
+from = "splinter-sandbox"
+to = "brain"
+why = "A sandbox runs a solver's code; it has no model computation in it."
+
+[[forbidden]]
+from = "splinter-lab"
+to = "brain"
+why = "Measurement must not be able to reach the model it measures, except through what it is handed."
+
+[[forbidden]]
+from = "splinter-agent"
+to = "brain"
+why = "The agent runs whatever model it is handed through sven's provider seam; brain belongs to the policy adapter alone."
+
+[[forbidden]]
+from = "splinter-agent"
+to = "splinter-policy"
+why = "The two adapters do not know each other; the controller hands the agent a model."
+
+[[forbidden]]
+from = "splinter-policy"
+to = "splinter-agent"
+why = "The two adapters do not know each other; the controller hands the agent a model."

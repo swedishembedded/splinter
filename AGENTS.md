@@ -89,9 +89,12 @@ fact inline instead.
 
 ## Architecture
 
-Ten crates in layers; a crate depends only on the ones below it.
-`architecture.toml` is the authoritative edge list and
-`scripts/gates/check-architecture.sh` enforces it against `cargo metadata`.
+Crates in tiers; a crate depends only on crates in a lower tier, except for
+the reviewed same-tier exceptions `architecture.toml` lists. That file is
+authoritative: it names every crate's tier, the pairs that must never be
+reachable from one another, and the exceptions, each with its reason.
+`scripts/gates/check-architecture.sh` enforces it against `cargo metadata`,
+and `scripts/gates/test-architecture.py` is the gate's own specification.
 
 | Crate | Owns | Depends on |
 |---|---|---|
@@ -116,13 +119,17 @@ hooks and gates.
 
 Each is enforced by a gate in `make check` and at commit where it can be:
 
-- **Layering** - edges only as `architecture.toml` lists; only
-  `splinter-policy` depends on brain (`check-architecture`).
+- **Layering** - dependencies point down the tiers, forbidden pairs stay
+  unreachable at any depth, an exception that no longer applies is removed,
+  a declared dependency is used, and only `splinter-policy` depends on brain
+  (`check-architecture`).
 - **Configuration is a value** - only `splinter-campaign`'s `config` module
   reads or writes the environment; everything below takes its settings as
   arguments, and tests build their own `StateRoot` instead of mutating
   process state (`check-env-reads`).
-- **Small files** - no source file over 800 lines (`check-architecture`).
+- **Small files** - no source file over 800 lines; a file that must stay
+  larger for a while is recorded in `architecture.toml` and may only shrink
+  (`check-architecture`).
 - **Documented** - every public item of a library crate has a doc comment
   (`#![warn(missing_docs)]` under clippy `-D warnings`).
 - **No numbers without reproduction** - no unreviewed performance figure in

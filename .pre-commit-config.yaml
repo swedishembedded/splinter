@@ -71,7 +71,7 @@ repos:
         name: crate layering and file size (architecture.toml)
         entry: bash scripts/gates/check-architecture.sh
         language: system
-        files: (\.rs|Cargo\.toml|architecture\.toml)$
+        files: (\.rs|Cargo\.toml|architecture\.toml|scripts/gates/(test-)?architecture\.py)$
         pass_filenames: false
 
       - id: no-perf-numbers
