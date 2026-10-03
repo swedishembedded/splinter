@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 
 use crate::ask::Answerer;
 use crate::corpus::{families, is_exam_family, load_letters};
-use crate::scenarios::{
-    admit, advice_cues, advice_passages, classifier_prompt, writer_prompt, Scenario,
-};
+use splinter_knowledge::advice::advice_cues;
+
+use crate::scenarios::{admit, advice_passages, classifier_prompt, writer_prompt, Scenario};
 use crate::tasks::{surname_of, PERSONA};
 
 /// What the writer produces.

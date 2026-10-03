@@ -110,7 +110,8 @@ impl QuotationVerifier {
 
 /// Lower-case alphanumeric words of `text`: what two printings of a passage
 /// agree on once spacing, punctuation and capitals are set aside.
-fn words(text: &str) -> Vec<String> {
+#[must_use]
+pub fn words(text: &str) -> Vec<String> {
     text.split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())
         .map(str::to_lowercase)
@@ -119,7 +120,8 @@ fn words(text: &str) -> Vec<String> {
 
 /// The passages of `answer` in double quotation marks, straight or curly,
 /// that run at least `min_words` words.
-fn quotations(answer: &str, min_words: usize) -> Vec<String> {
+#[must_use]
+pub fn quotations(answer: &str, min_words: usize) -> Vec<String> {
     let mut found = Vec::new();
     let mut inside: Option<String> = None;
     for c in answer.chars() {
@@ -138,10 +140,35 @@ fn quotations(answer: &str, min_words: usize) -> Vec<String> {
     found
 }
 
-/// `text` as one run of normalised words with a space at both ends, so a
-/// passage is looked up by whole words.
-fn haystack(text: &str) -> String {
-    format!(" {} ", words(text).join(" "))
+/// Texts as runs of normalised words, so a passage is looked up by whole
+/// words, whichever text prints it and however its lines were broken. A
+/// passage is found only inside one text, never across two.
+pub struct TextIndex {
+    haystacks: Vec<String>,
+}
+
+impl TextIndex {
+    /// An index over `texts`.
+    #[must_use]
+    pub fn new<'a>(texts: impl IntoIterator<Item = &'a str>) -> Self {
+        Self {
+            haystacks: texts
+                .into_iter()
+                .map(|text| format!(" {} ", words(text).join(" ")))
+                .collect(),
+        }
+    }
+
+    /// Whether `passage` occurs in one of the texts, word for word.
+    #[must_use]
+    pub fn contains(&self, passage: &str) -> bool {
+        let w = words(passage);
+        if w.is_empty() {
+            return false;
+        }
+        let needle = format!(" {} ", w.join(" "));
+        self.haystacks.iter().any(|h| h.contains(&needle))
+    }
 }
 
 fn runs(text: &str) -> HashSet<String> {
@@ -181,15 +208,9 @@ impl Verifier for QuotationVerifier {
         let Some(answer) = exp.final_output.as_deref() else {
             return Ok(Finding::decided(false, json!({ "answer": false })));
         };
-        let sources: Vec<String> = texts.iter().map(|t| haystack(t)).collect();
+        let index = TextIndex::new(texts.iter().map(String::as_str));
         let quoted = quotations(answer, self.policy.min_words);
-        let invented = quoted
-            .iter()
-            .filter(|q| {
-                let needle = format!(" {} ", words(q).join(" "));
-                !sources.iter().any(|s| s.contains(&needle))
-            })
-            .count();
+        let invented = quoted.iter().filter(|q| !index.contains(q)).count();
 
         let recall = if self.policy.min_reference_recall > 0.0 {
             let reference = match single_reference(task) {

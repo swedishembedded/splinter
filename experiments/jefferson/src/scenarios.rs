@@ -15,39 +15,10 @@
 //! answer makes about what he wrote is true by construction. Code, not the
 //! writer, decides which questions are admitted.
 
+use splinter_knowledge::advice::{advice_cues, is_prose};
+
 use crate::corpus::{words, Letter};
 use crate::grade::mentions;
-
-/// Phrases that mark a passage as advice: a writer telling a correspondent what
-/// to do, what to avoid or what to value.
-const ADVICE_CUES: &[&str] = &[
-    "i advise",
-    "my advice",
-    "i recommend",
-    "you should",
-    "i would have you",
-    "i would recommend",
-    "i would suggest",
-    "i would counsel",
-    "i think it best",
-    "i deem it",
-    "my counsel",
-    "be careful",
-    "be sure",
-    "beware",
-    "never",
-    "always",
-    "do not",
-    "i would not",
-    "let me advise",
-    "let me urge",
-    "i urge",
-    "you will do well",
-    "avoid",
-    "take care",
-    "i hope you will",
-    "let it be your",
-];
 
 /// The fewest and most words a passage may have.
 pub const PASSAGE_WORDS: std::ops::RangeInclusive<usize> = 35..=85;
@@ -76,33 +47,6 @@ impl Scenario {
     pub fn voice(&self) -> String {
         format!("In {}, I advised: \"{}\"", self.source, self.passage)
     }
-}
-
-/// Whether `paragraph` is running prose of a letter, not an index entry, a
-/// table or a list: few digits, no run of capitals, no `TITLE--` entries.
-fn is_prose(paragraph: &str) -> bool {
-    let chars = paragraph.chars().count().max(1);
-    let digits = paragraph.chars().filter(char::is_ascii_digit).count();
-    let dashes = paragraph.matches("--").count();
-    let capitals = paragraph
-        .split_whitespace()
-        .filter(|w| {
-            w.len() > 3
-                && w.chars().all(|c| !c.is_lowercase())
-                && w.chars().any(char::is_alphabetic)
-        })
-        .count();
-    digits * 100 / chars < 2 && dashes < 3 && capitals < 3 && !paragraph.contains('[')
-}
-
-/// How many of the advice cues `paragraph` contains.
-#[must_use]
-pub fn advice_cues(paragraph: &str) -> usize {
-    let lower = paragraph.to_lowercase();
-    ADVICE_CUES
-        .iter()
-        .filter(|cue| lower.contains(*cue))
-        .count()
 }
 
 /// `paragraph` cut to at most the most words of [`PASSAGE_WORDS`], ending at

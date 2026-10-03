@@ -182,13 +182,7 @@ pub fn without_salutation(body: &str) -> String {
 
 /// Lower-case alphanumeric words of `text`: what two printings of a letter
 /// agree on once spacing, punctuation and capitals are set aside.
-#[must_use]
-pub fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
-}
+pub use splinter_lab::verifiers::quotation::words;
 
 /// For each letter, the index of the first letter of its family: letters that
 /// share enough sampled eight-word runs are one letter printed twice.

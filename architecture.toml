@@ -67,7 +67,8 @@ internal = ["splinter-lab", "splinter-policy"]
 
 [crates.splinter-jefferson]
 # A controlled experiment: teach a model a public-domain corpus and measure what it kept.
-internal = ["splinter-policy"]
+# It reads quotations with the lab's index and finds advice with the knowledge crate's cues.
+internal = ["splinter-policy", "splinter-lab", "splinter-knowledge"]
 
 [limits]
 # A source file larger than this is split; the listed exceptions may only

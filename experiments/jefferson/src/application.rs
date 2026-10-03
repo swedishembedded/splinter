@@ -20,10 +20,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_lab::verifiers::quotation::TextIndex;
 
 use crate::ask::Answerer;
 use crate::corpus::words;
-use crate::grade::{fabricated, final_answer, QuoteIndex};
+use crate::grade::{fabricated, final_answer};
 use crate::scenarios::Scenario;
 use crate::tasks::PERSONA;
 
@@ -83,7 +84,7 @@ pub fn cites_letter(answer: &str) -> bool {
 ///
 /// # Errors
 /// A text file that cannot be read.
-pub fn corpus_index(resources: &Path) -> anyhow::Result<QuoteIndex> {
+pub fn corpus_index(resources: &Path) -> anyhow::Result<TextIndex> {
     let mut texts = Vec::new();
     for dir in ["thomas-jefferson", "founding-america"] {
         let dir = resources.join(dir);
@@ -100,7 +101,7 @@ pub fn corpus_index(resources: &Path) -> anyhow::Result<QuoteIndex> {
             }
         }
     }
-    Ok(QuoteIndex::new(texts.iter().map(String::as_str)))
+    Ok(TextIndex::new(texts.iter().map(String::as_str)))
 }
 
 /// What one application run needs.

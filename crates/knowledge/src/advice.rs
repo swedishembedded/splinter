@@ -60,7 +60,8 @@ pub fn advice_cues(text: &str) -> usize {
 /// Whether `text` is running prose and not an index entry, a table or a
 /// list: few digits, no run of capitals, no `TITLE--` entries or footnote
 /// brackets.
-fn is_prose(text: &str) -> bool {
+#[must_use]
+pub fn is_prose(text: &str) -> bool {
     let chars = text.chars().count().max(1);
     let digits = text.chars().filter(char::is_ascii_digit).count();
     let capitals = text

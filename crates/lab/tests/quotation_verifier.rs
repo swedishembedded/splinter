@@ -13,7 +13,9 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
-use splinter_lab::verifiers::quotation::{EvidenceText, QuotationPolicy, QuotationVerifier};
+use splinter_lab::verifiers::quotation::{
+    quotations, words, EvidenceText, QuotationPolicy, QuotationVerifier, TextIndex,
+};
 use splinter_lab::verifiers::{annotation, Verifier, VerifyError};
 use splinter_record::annotation::{AnnotationBody, Outcome, Producer, Strength};
 use splinter_record::clock::FixedClock;
@@ -171,4 +173,39 @@ fn the_verdict_names_counts_and_never_the_quoted_text() {
     let text = evidence.to_string();
     assert!(!text.contains("habit of study"), "{text}");
     assert!(evidence["quotations"].is_number() && evidence["reference_recall"].is_number());
+}
+
+#[test]
+fn a_text_index_finds_a_passage_by_whole_words_whichever_edition_prints_it() {
+    let index = TextIndex::new([
+        "We hold these truths to be self-evident,\nthat all men are created equal, that they\nare endowed by their Creator with certain unalienable rights.",
+        "The pursuit of happiness is a right of every citizen of the union",
+    ]);
+    assert!(
+        index.contains("we hold these truths to be self-evident that all men are created equal")
+    );
+    assert!(index.contains("pursuit of happiness is a right of every citizen"));
+    assert!(
+        !index.contains("pursuit of happiness is a righ"),
+        "words, not letters"
+    );
+    assert!(
+        !index.contains("created equal pursuit of happiness"),
+        "a passage does not span two texts"
+    );
+    assert!(!index.contains("   "), "nothing is not found");
+}
+
+#[test]
+fn quotations_are_the_marked_passages_of_enough_words() {
+    let answer = "He said \"we hold these truths to be self-evident\" and \u{201c}no\u{201d} and \"two words\".";
+    assert_eq!(
+        quotations(answer, 5),
+        ["we hold these truths to be self-evident"]
+    );
+    assert_eq!(quotations(answer, 1).len(), 3);
+    assert_eq!(
+        words("Hello, World-wide  Web!"),
+        ["hello", "world", "wide", "web"]
+    );
 }

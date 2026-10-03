@@ -15,6 +15,8 @@
 
 use regex::Regex;
 
+use splinter_lab::verifiers::quotation::{quotations, TextIndex};
+
 use crate::corpus::words;
 
 /// The answer a model gave, after its reasoning: the visible reply when it
@@ -62,63 +64,18 @@ pub fn work_ok(answer: &str, accepted: &[&str], others: &[&str]) -> bool {
     accepted.iter().any(|a| mentions(answer, a)) && !others.iter().any(|o| mentions(answer, o))
 }
 
-/// The passages of `answer` set in quotation marks that run at least
-/// `min_words` words: what the model presents as his own words.
+/// How many of `answer`'s quotations of at least eight words are not in
+/// `index`'s texts, and how many there are: the fabricated-quotation count a
+/// persona model is held to.
 #[must_use]
-pub fn quotations(answer: &str, min_words: usize) -> Vec<String> {
-    #[allow(clippy::expect_used)]
-    let quoted = Regex::new("[\"\u{201c}]([^\"\u{201c}\u{201d}]{20,})[\"\u{201d}]")
-        .expect("a constant pattern");
-    quoted
-        .captures_iter(answer)
-        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
-        .filter(|q| words(q).len() >= min_words)
-        .collect()
-}
-
-/// The corpus a quotation is looked up in: every text, as one run of
-/// normalised words, so a quoted passage is found whichever edition prints it
-/// and however its lines were broken.
-pub struct QuoteIndex {
-    haystack: String,
-}
-
-impl QuoteIndex {
-    /// An index over `texts`.
-    #[must_use]
-    pub fn new<'a>(texts: impl IntoIterator<Item = &'a str>) -> Self {
-        let mut haystack = String::from(" ");
-        for text in texts {
-            haystack.push_str(&words(text).join(" "));
-            haystack.push_str(" | ");
-        }
-        Self { haystack }
-    }
-
-    /// Whether `quotation` occurs verbatim (words, not punctuation) in the corpus.
-    #[must_use]
-    pub fn contains(&self, quotation: &str) -> bool {
-        let needle = words(quotation).join(" ");
-        !needle.is_empty() && self.is_word_aligned(&needle)
-    }
-
-    fn is_word_aligned(&self, needle: &str) -> bool {
-        self.haystack.match_indices(needle).any(|(at, _)| {
-            let before = self.haystack[..at].chars().next_back();
-            let after = self.haystack[at + needle.len()..].chars().next();
-            before.is_none_or(|c| c == ' ') && after.is_none_or(|c| c == ' ')
-        })
-    }
-}
-
-/// How many of `answer`'s quotations are not in the corpus, and how many
-/// there are: the fabricated-quotation count a persona model is held to.
-#[must_use]
-pub fn fabricated(answer: &str, index: &QuoteIndex) -> (usize, usize) {
-    let quotes = quotations(answer, 8);
+pub fn fabricated(answer: &str, index: &TextIndex) -> (usize, usize) {
+    let quotes = quotations(answer, MIN_QUOTATION_WORDS);
     let missing = quotes.iter().filter(|q| !index.contains(q)).count();
     (missing, quotes.len())
 }
+
+/// The fewest words a quoted passage runs to count as a claim to a passage.
+const MIN_QUOTATION_WORDS: usize = 8;
 
 #[cfg(test)]
 mod tests {
@@ -186,7 +143,7 @@ mod tests {
 
     #[test]
     fn a_quotation_is_found_in_the_corpus_whatever_its_line_breaks_or_punctuation() {
-        let index = QuoteIndex::new([
+        let index = TextIndex::new([
             "We hold these truths to be self-evident,\nthat all men are created equal, that they\nare endowed by their Creator with certain unalienable rights.",
         ]);
         let real = "I wrote \"We hold these truths to be self-evident, that all men are created equal\" and meant it.";
@@ -199,13 +156,5 @@ mod tests {
             (0, 0),
             "under the minimum length a phrase is not a claim to a passage"
         );
-    }
-
-    #[test]
-    fn a_quotation_must_match_whole_words() {
-        let index =
-            QuoteIndex::new(["the pursuit of happiness is a right of every citizen of the union"]);
-        assert!(index.contains("pursuit of happiness is a right of every citizen"));
-        assert!(!index.contains("pursuit of happiness is a righ"));
     }
 }
