@@ -25,7 +25,7 @@ use splinter_data::{
     manifest_path, write_dataset, Format, Objective, Projection, Record, RecordBody,
     RecordMetadata, ViewError,
 };
-use splinter_policy::{BrainDatasetCheck, PolicyError, TrainingCapabilities};
+use splinter_model::{BrainDatasetCheck, PolicyError, TrainingCapabilities};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("policy-views-{name}-{}", std::process::id()));
@@ -88,7 +88,7 @@ fn a_chat_dataset_is_read_whole_and_its_supervision_is_counted_alike() {
     let path = dir.join("sft.jsonl");
     let written = write_dataset(&path, &chat(true), &BrainDatasetCheck).expect("brain accepts it");
 
-    let summary = splinter_policy::train::validate_dataset(&path).expect("the real parser");
+    let summary = splinter_model::train::validate_dataset(&path).expect("the real parser");
     assert_eq!(summary.records, written.records);
     assert_eq!(
         Some(summary.trained_messages),
@@ -126,7 +126,7 @@ fn a_preference_dataset_is_read_pair_for_pair() {
     let written = write_dataset(&path, &pairs, &BrainDatasetCheck).expect("brain accepts it");
     assert_eq!(written.format, Format::GenericPreferenceV1);
 
-    let summary = splinter_policy::train::validate_preference_dataset(&path).expect("real parser");
+    let summary = splinter_model::train::validate_preference_dataset(&path).expect("real parser");
     assert_eq!(summary.pairs, written.records);
     std::fs::remove_dir_all(&dir).ok();
 }

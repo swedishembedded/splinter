@@ -32,7 +32,7 @@ use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::arm;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
-use splinter_policy::train::{Trained, TrainedPreference};
+use splinter_model::train::{Trained, TrainedPreference};
 use sven_sdk::CancelToken;
 
 const LETTER: &str = "# To a young man

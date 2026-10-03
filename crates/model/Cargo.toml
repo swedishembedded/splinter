@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 [package]
-name = "splinter-policy"
+name = "splinter-model"
 description = "The model Splinter trains: in-process inference on brain behind sven's provider seam, model selection, LoRA fine-tuning and held-out scoring. The only crate that touches brain."
 version.workspace = true
 edition.workspace = true

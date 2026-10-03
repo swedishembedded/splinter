@@ -26,8 +26,8 @@ use common::gate::{candidate, decide, device_lock, gate_context, policy, Brain};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::arm;
 use splinter_campaign::Context;
-use splinter_policy::residency::scripted::{ScriptedEvent, ScriptedLoader};
-use splinter_policy::Residency;
+use splinter_model::residency::scripted::{ScriptedEvent, ScriptedLoader};
+use splinter_model::Residency;
 
 /// A scripted loader that holds `lock` while any base it loaded lives.
 fn holding(lock: PathBuf) -> ScriptedLoader {

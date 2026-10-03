@@ -54,7 +54,7 @@ use splinter_campaign::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_R
 use splinter_campaign::Context;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
-use splinter_policy::ModelSelection;
+use splinter_model::ModelSelection;
 use sven_sdk::CancelToken;
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {

@@ -10,7 +10,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-splinter-policy = { workspace = true }
+splinter-model = { workspace = true }
 splinter-eval = { workspace = true }
 splinter-knowledge = { workspace = true }
 splinter-data = { workspace = true }

@@ -594,14 +594,14 @@ fn demonstrate(args: &[String]) -> anyhow::Result<()> {
     // under the checkpoint's own chat template.
     let checked = match std::env::var("BRAIN_QWEN_WEIGHTS") {
         Ok(weights) => {
-            splinter_policy::train::validate_dataset_for(&out, std::path::Path::new(&weights))
+            splinter_model::train::validate_dataset_for(&out, std::path::Path::new(&weights))
         }
         Err(_) => {
             println!(
                 "note: BRAIN_QWEN_WEIGHTS is not set, so the dataset is only parsed, not encoded; \
                  a shape the template cannot mask would not be caught until training starts"
             );
-            splinter_policy::train::validate_dataset(&out)
+            splinter_model::train::validate_dataset(&out)
         }
     };
     match checked {

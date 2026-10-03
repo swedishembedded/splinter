@@ -34,7 +34,7 @@ use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_core::experience::Environment;
 use splinter_data::DatasetStore;
-use splinter_policy::{LoadedModel, ModelSelection, Residency, Sampling};
+use splinter_model::{LoadedModel, ModelSelection, Residency, Sampling};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
     SandboxError,

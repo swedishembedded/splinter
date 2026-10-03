@@ -39,8 +39,8 @@ use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::release::ReleaseId;
 use splinter_data::{DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use splinter_eval::gate::GateConfig;
-use splinter_policy::train::TrainedPreference;
-use splinter_policy::train::{HeldOutScore, Trained};
+use splinter_model::train::TrainedPreference;
+use splinter_model::train::{HeldOutScore, Trained};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::CancelToken;
 

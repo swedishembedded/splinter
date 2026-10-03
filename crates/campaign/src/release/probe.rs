@@ -47,7 +47,7 @@ use splinter_data::DatasetId;
 use splinter_eval::gate::SuiteSummary;
 use splinter_eval::paired::PairedOutcome;
 use splinter_eval::verifiers::Strongest;
-use splinter_policy::local::GREEDY_SAMPLING;
+use splinter_model::local::GREEDY_SAMPLING;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 use sven_sdk::CancelToken;

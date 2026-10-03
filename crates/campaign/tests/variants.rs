@@ -45,7 +45,7 @@ use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::variants::{generate_variants, VariantsRequest};
 use splinter_campaign::verify::verify_set;
 use splinter_campaign::{CampaignError, Context};
-use splinter_policy::train::{Trained, TrainedPreference};
+use splinter_model::train::{Trained, TrainedPreference};
 use splinter_store::runs::read_run;
 use sven_sdk::CancelToken;
 

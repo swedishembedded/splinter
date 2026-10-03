@@ -24,7 +24,7 @@
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use splinter_policy::{LocalWeights, ModelSelection, RemoteModel};
+use splinter_model::{LocalWeights, ModelSelection, RemoteModel};
 
 use crate::config::Config;
 

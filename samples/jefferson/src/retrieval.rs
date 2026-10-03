@@ -17,7 +17,7 @@
 //! the first words of the gold passage.
 
 use splinter_knowledge::retrieve::{fuse, Bm25, Dense, EmbedError, Embedder, Hit, Passage};
-use splinter_policy::embed::Embeddings;
+use splinter_model::embed::Embeddings;
 
 use crate::corpus::{words, Letter};
 use crate::scenarios::Scenario;

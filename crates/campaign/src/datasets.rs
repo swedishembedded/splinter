@@ -23,7 +23,7 @@ use splinter_data::{
     Fraction, Objective, OutcomeView, Preference, Projection, Retrieval, SftFinal, SftStep,
     StoredDataset, VerifierView, View,
 };
-use splinter_policy::{BrainDatasetCheck, TrainingCapabilities};
+use splinter_model::{BrainDatasetCheck, TrainingCapabilities};
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 

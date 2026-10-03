@@ -40,7 +40,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use splinter_agent::solve::Model;
-use splinter_policy::local::GREEDY_SAMPLING;
+use splinter_model::local::GREEDY_SAMPLING;
 use sven_sdk::CancelToken;
 
 use crate::context::Context;
@@ -230,7 +230,7 @@ fn serve_and_ask(
         return Ok(gate::serve(measured));
     }
     let key = read_key(&keys).map_err(Failure::Unmeasured)?;
-    let loaded = splinter_policy::selection::served_model(
+    let loaded = splinter_model::selection::served_model(
         &format!("http://{address}/v1"),
         &key,
         &model,

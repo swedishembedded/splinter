@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use splinter_policy::ModelSelection;
+use splinter_model::ModelSelection;
 use splinter_store::runs::list_runs;
 
 use crate::context::Context;

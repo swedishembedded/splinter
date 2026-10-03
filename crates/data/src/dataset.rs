@@ -11,7 +11,7 @@
 //!   "metadata":{...}}`, where `train` marks what is supervised and
 //!   `metadata` is carried but never rendered. The file is written beside
 //!   its destination, parsed with brain's own dataset parser (through
-//!   `splinter-policy`), and only then moved into place - so a dataset the
+//!   `splinter-model`), and only then moved into place - so a dataset the
 //!   trainer would refuse is never reported written.
 //! * DPO preference pairs are written as brain's `generic-preference-v1`
 //!   ([`Format::GenericPreferenceV1`]): one pair per line,

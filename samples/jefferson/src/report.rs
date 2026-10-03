@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use splinter_policy::stats::sign_test;
+use splinter_model::stats::sign_test;
 
 use crate::exam::Graded;
 use crate::tasks::Kind;

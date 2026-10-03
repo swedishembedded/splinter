@@ -41,8 +41,8 @@ use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_core::release::ReleaseId;
 use splinter_data::DatasetId;
-use splinter_policy::train::{Trained, TrainedPreference};
-use splinter_policy::ModelSelection;
+use splinter_model::train::{Trained, TrainedPreference};
+use splinter_model::ModelSelection;
 use splinter_store::runs::{read_run, RunStatus};
 use sven_sdk::CancelToken;
 
@@ -142,7 +142,7 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         !text.contains("Feedback on an earlier attempt"),
         "the critique is teacher-only: {text}"
     );
-    splinter_policy::train::validate_dataset(&dataset.path).unwrap();
+    splinter_model::train::validate_dataset(&dataset.path).unwrap();
 
     assert_eq!(
         *trainer.handed.lock().unwrap(),

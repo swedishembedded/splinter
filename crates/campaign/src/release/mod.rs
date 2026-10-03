@@ -43,8 +43,8 @@ use serde::Serialize;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_knowledge::concepts::Concept;
-use splinter_policy::local::{load_source, resolve_base};
-use splinter_policy::selection::local_model_name;
+use splinter_model::local::{load_source, resolve_base};
+use splinter_model::selection::local_model_name;
 use sven_sdk::CancelToken;
 
 pub use store::{ReleaseManifest, ReleaseStore, StoredRelease, RELEASE_FORMAT};
@@ -57,7 +57,7 @@ use crate::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use crate::train::{load_candidate, Candidate, TrainingSummary};
 use probe::{pair, Probe, Suite};
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
-use splinter_policy::stats::BrainSignificance;
+use splinter_model::stats::BrainSignificance;
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]

@@ -41,11 +41,11 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_data::holdout::split_dataset_file;
 use splinter_data::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
-use splinter_policy::train::{
+use splinter_model::train::{
     fine_tune, train_preference, FineTune, HeldOutScore, PreferenceScore, PreferenceTune, Trained,
     TrainedPreference,
 };
-use splinter_policy::{ModelSelection, PolicyError};
+use splinter_model::{ModelSelection, PolicyError};
 use splinter_store::artifacts::ArtifactSpec;
 use sven_sdk::CancelToken;
 
@@ -71,7 +71,7 @@ pub const DEFAULT_LORA_ALPHA: f32 = 16.0;
 pub const DEFAULT_REPLAY_FRACTION: f64 = 0.25;
 /// The DPO temperature of a preference fine-tune when a command names none:
 /// brain's default.
-pub use splinter_policy::train::DEFAULT_DPO_BETA;
+pub use splinter_model::train::DEFAULT_DPO_BETA;
 /// The seed of the replay draw: the same records are replayed every time.
 pub const REPLAY_SEED: u64 = 0;
 

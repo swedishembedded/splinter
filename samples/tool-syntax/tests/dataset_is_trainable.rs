@@ -68,7 +68,7 @@ fn the_trainer_accepts_what_this_harness_derives() {
     std::fs::write(&path, &jsonl).expect("write");
 
     // The real parser, from the crate that trains on it.
-    let summary = splinter_policy::train::validate_dataset(&path)
+    let summary = splinter_model::train::validate_dataset(&path)
         .unwrap_or_else(|e| panic!("the trainer rejected a derived dataset: {e}\n{jsonl}"));
 
     assert_eq!(summary.records, 1);

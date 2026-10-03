@@ -12,7 +12,7 @@ publish.workspace = true
 [dependencies]
 splinter-core = { workspace = true }
 sven-sdk = { workspace = true }
-splinter-policy = { workspace = true }
+splinter-model = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

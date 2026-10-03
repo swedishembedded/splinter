@@ -43,7 +43,7 @@ splinter-expdb = "foundation"
 splinter-store = "storage"
 splinter-sandbox = "storage"
 splinter-eval = "domain"
-splinter-policy = "adapters"
+splinter-model = "adapters"
 splinter-agent = "adapters"
 splinter-data = "domain"
 splinter-knowledge = "application"
@@ -53,7 +53,7 @@ splinter-tool-syntax = "sample"
 splinter-jefferson = "sample"
 
 [brain]
-allowed = ["splinter-policy"]
+allowed = ["splinter-model"]
 
 [limits]
 # A source file larger than this is split; a file that must stay larger for a
@@ -113,15 +113,15 @@ why = "Measurement must not be able to reach the model it measures, except throu
 [[forbidden]]
 from = "splinter-agent"
 to = "brain"
-why = "The agent runs whatever model it is handed through sven's provider seam; brain belongs to the policy adapter alone."
+why = "The agent runs whatever model it is handed through sven's provider seam; brain belongs to the model adapter alone."
 
 [[forbidden]]
 from = "splinter-agent"
-to = "splinter-policy"
+to = "splinter-model"
 why = "The two adapters do not know each other; the controller hands the agent a model."
 
 [[forbidden]]
-from = "splinter-policy"
+from = "splinter-model"
 to = "splinter-agent"
 why = "The two adapters do not know each other; the controller hands the agent a model."
 
@@ -132,5 +132,5 @@ why = "A view projects experience into records; which formats a trainer reads, a
 
 [[forbidden]]
 from = "splinter-data"
-to = "splinter-policy"
+to = "splinter-model"
 why = "The model adapter depends on the data crate for the formats it trains, never the reverse."

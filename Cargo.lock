@@ -4046,7 +4046,7 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "splinter-knowledge",
- "splinter-policy",
+ "splinter-model",
  "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
@@ -4120,7 +4120,7 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "splinter-knowledge",
- "splinter-policy",
+ "splinter-model",
  "sven-sdk",
  "tokio",
 ]
@@ -4145,7 +4145,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "splinter-policy"
+name = "splinter-model"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4197,7 +4197,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-core",
- "splinter-policy",
+ "splinter-model",
  "sven-sdk",
  "tokio",
  "toml",

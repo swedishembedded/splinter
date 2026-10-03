@@ -17,8 +17,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use futures::StreamExt;
-use splinter_policy::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
-use splinter_policy::Residency;
+use splinter_model::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
+use splinter_model::Residency;
 use sven_sdk::model::{
     CompletionRequest, Message, MessageContent, ModelProvider, ResponseEvent, Role,
 };

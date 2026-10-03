@@ -36,7 +36,7 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::Provenance;
 use splinter_knowledge::material::teacher_material;
 use splinter_knowledge::tasks::Catalogue;
-use splinter_policy::Sampling;
+use splinter_model::Sampling;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::TaskSetId;
 use sven_sdk::{CancelToken, RunConclusion};

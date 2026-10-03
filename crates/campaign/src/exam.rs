@@ -34,7 +34,7 @@ use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
 };
 use splinter_eval::verifiers::Verifier;
-use splinter_policy::stats::sign_test;
+use splinter_model::stats::sign_test;
 use splinter_store::experiences::SetId;
 use sven_sdk::CancelToken;
 
