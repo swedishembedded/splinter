@@ -369,7 +369,7 @@ fn retrieval_command(args: &[String]) -> anyhow::Result<()> {
     let letters = corpus::load_letters(&resources)?;
     let passages = retrieval::letter_passages(&letters);
     let loaded = flag(args, "--embedder")
-        .map(|path| splinter_policy::embed::Embeddings::load(std::path::Path::new(&path)))
+        .map(|model| splinter_policy::embed::Embeddings::load(&model))
         .transpose()?;
     let embedder = loaded.as_ref().map(retrieval::Qwen);
     let results = retrieval::measure(

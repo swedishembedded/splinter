@@ -14,8 +14,6 @@
 //! Both are truncated at [`MAX_TOKENS`] rather than refused, so one long
 //! section does not stop an index being built.
 
-use std::path::Path;
-
 use brain::{EmbeddingOptions, EmbeddingPipeline};
 
 use crate::error::PolicyError;
@@ -33,16 +31,14 @@ pub struct Embeddings {
 }
 
 impl Embeddings {
-    /// The checkpoint at `path`, a Qwen3-Embedding directory or file.
-    pub fn load(path: &Path) -> Result<Self, PolicyError> {
-        let text = path.to_str().ok_or_else(|| PolicyError::NotUtf8 {
-            path: path.to_path_buf(),
-        })?;
-        let pipeline = EmbeddingPipeline::builder(text)
+    /// The embedding model `model` names: a name in brain's model store
+    /// (`Qwen/Qwen3-Embedding-0.6B`), or a brain-format `.safetensors` file.
+    pub fn load(model: &str) -> Result<Self, PolicyError> {
+        let pipeline = EmbeddingPipeline::builder(model)
             .capacity(MAX_TOKENS + 64)
             .load()
             .map_err(|e| PolicyError::Load {
-                path: path.to_path_buf(),
+                path: model.into(),
                 reason: e.to_string(),
             })?;
         Ok(Self { pipeline })
