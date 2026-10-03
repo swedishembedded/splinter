@@ -682,10 +682,8 @@ impl Pipeline<'_> {
         let id = candidate.candidate.clone();
         report.candidate = Some(candidate);
         run.check_cancelled()?;
-        if let Some(why) = spent("exam") {
-            report.stopped = Some(why);
-            return Ok(());
-        }
+        // The budget bounds the open-ended stages (see [`crate::budget`]);
+        // training and the exam run to the end, each bounded by its own size.
         let verified = report.select.as_ref().map(|s| s.experience_set.clone());
         if let Some(verified) = verified {
             // The candidate is trained and stored whatever the exam finds; an

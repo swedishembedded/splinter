@@ -110,8 +110,9 @@ capped at its share (`select`), become an `sft-final` dataset; a
 candidate is trained on it from the champion; and the release gate
 decides whether it is released (`--no-release` stops at the candidate).
 `--no-frontier` solves each task once, has the teacher solve each one
-that failed, and keeps every task. `--budget` bounds the whole run's
-wall-clock time; `--goal` steers what tasks are asked for; `--dry-run`
+that failed, and keeps every task. `--budget` bounds the run's wall-clock time: task generation stops at
+three tenths of it, the student's attempts at half and the teacher's answers at
+four fifths, and training and the exam then run to the end; `--goal` steers what tasks are asked for; `--dry-run`
 prints the plan and writes nothing. A `learn` that stops before training
 (nothing admitted, no task worth training on, nothing passed, the budget
 spent) or whose candidate the gate blocks says why and exits 1.

@@ -149,6 +149,23 @@ fn an_instruction_that_needs_the_dropped_context_is_excluded_and_counted() {
         "nothing dropped, nothing missing"
     );
 
+    // An instruction that asks about "the writer" or "the letter" points at a
+    // document the student is not shown.
+    for pointing in [
+        "What does the writer believe about debt?",
+        "Why does the author fear a standing army?",
+        "What is the letter's advice on study?",
+        "What does this letter say about wine?",
+    ] {
+        assert!(
+            matches!(
+                check_self_contained(pointing, &dropped),
+                Err(NotSelfContained::Refers { .. })
+            ),
+            "{pointing}"
+        );
+    }
+
     let dependent = solve(
         "According to the passage above, how are experiences named?",
         "2026-09-30T02:00:00.000Z",

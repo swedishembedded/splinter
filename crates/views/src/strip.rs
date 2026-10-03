@@ -72,6 +72,10 @@ pub const REFERRING_PHRASES: &[&str] = &[
     "according to the passage",
     "according to the text",
     "according to the document",
+    "the writer",
+    "the author",
+    "the letter",
+    "this letter",
 ];
 
 /// The shortest run of characters of a dropped privileged item that, found
