@@ -12,6 +12,7 @@
 //!
 //! ```text
 //! corpus     parse the letters, group the editions' printings, split by family
+//! materials  write the training letters and his own works as the directory Splinter learns from
 //! tasks      compile the training set and the frozen exam from the corpus
 //! exam       ask one model (base, or base plus adapter) every exam question
 //! train      fine-tune a LoRA adapter on the training set, through Splinter's trainer
@@ -40,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("corpus") => corpus_command(&args[1..]),
+        Some("materials") => materials_command(&args[1..]),
         Some("tasks") => tasks_command(&args[1..]),
         Some("exam") => exam_command(&args[1..]),
         Some("train") => train_command(&args[1..]),
@@ -306,5 +308,53 @@ fn apply_report_command(args: &[String]) -> anyhow::Result<()> {
     let before = application::read_answers(std::path::Path::new(&need("--before")?))?;
     let after = application::read_answers(std::path::Path::new(&need("--after")?))?;
     print!("{}", application::render(&before, &after));
+    Ok(())
+}
+
+/// Jefferson's own works that are not letters, as files under `resources`.
+const OWN_WORKS: [&str; 5] = [
+    "notes-on-the-state-of-virginia-1853",
+    "a-summary-view-of-the-rights-of-british-america-1774",
+    "life-and-morals-of-jesus-of-nazareth-1904",
+    "manual-of-parliamentary-practice-1820",
+    "declaration-of-independence",
+];
+
+fn materials_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = PathBuf::from(
+        flag(args, "--resources").ok_or_else(|| anyhow::anyhow!("--resources DIR is required"))?,
+    );
+    let out =
+        PathBuf::from(flag(args, "--out").ok_or_else(|| anyhow::anyhow!("--out DIR is required"))?);
+    let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
+    let letters = corpus::load_letters(&resources)?;
+    let family = corpus::families(&letters);
+    let files = corpus::materials(&letters, &family, seed);
+    std::fs::create_dir_all(out.join("letters"))?;
+    std::fs::create_dir_all(out.join("works"))?;
+    for (name, text) in &files {
+        std::fs::write(out.join("letters").join(name), text)?;
+    }
+    let mut works = 0;
+    for stem in OWN_WORKS {
+        let path = resources
+            .join("thomas-jefferson")
+            .join(format!("{stem}.txt"));
+        if !path.is_file() {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+        std::fs::write(
+            out.join("works").join(format!("{stem}.txt")),
+            corpus::strip_gutenberg(&text),
+        )?;
+        works += 1;
+    }
+    println!(
+        "{} letters and {works} works written under {}",
+        files.len(),
+        out.display()
+    );
     Ok(())
 }

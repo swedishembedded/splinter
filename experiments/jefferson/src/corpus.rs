@@ -261,6 +261,33 @@ pub fn is_exam_family(key: &str, seed: u64, percent: u64) -> bool {
     u64::from_le_bytes(first) % 100 < percent
 }
 
+/// The files Splinter is pointed at: for each family of letters that is not
+/// in the exam, the one printing the family is named by, as `(file name,
+/// text)`. A letter of an exam family is in no file in any edition, so what
+/// Splinter learns from leaves the exam unseen.
+#[must_use]
+pub fn materials(letters: &[Letter], family: &[usize], seed: u64) -> Vec<(String, String)> {
+    letters
+        .iter()
+        .enumerate()
+        .filter(|(n, letter)| family[*n] == *n && !is_exam_family(&letter.id, seed, 20))
+        .map(|(_, letter)| {
+            let place = if letter.place.is_empty() {
+                String::new()
+            } else {
+                format!("{}, ", letter.place)
+            };
+            (
+                format!("{}.txt", letter.id),
+                format!(
+                    "To {}\n{place}{}\n\n{}\n",
+                    letter.recipient, letter.year, letter.body
+                ),
+            )
+        })
+        .collect()
+}
+
 /// The clean editions under `resources/thomas-jefferson` that print letters
 /// with a `TO <NAME>.` heading: `(file stem, edition short name)`.
 fn letter_editions() -> Vec<(String, String)> {
@@ -393,6 +420,30 @@ be four months on the way, I cannot tell.
         assert_eq!(family[0], family[2], "the Madison letter in both editions");
         assert_ne!(family[0], family[1], "the Jay letter is another letter");
         assert_eq!(family[2], 0, "a family is named by its first letter");
+    }
+
+    /// The materials Splinter is pointed at hold one printing of every
+    /// training letter and nothing of any exam family, in any edition.
+    #[test]
+    fn the_materials_hold_one_file_per_training_family_and_none_of_the_exam() {
+        let mut letters = parse_letters("washington-v3", WASHINGTON);
+        letters.extend(parse_letters("randolph-v1", RANDOLPH));
+        let family = families(&letters);
+        for seed in 0..40 {
+            let files = materials(&letters, &family, seed);
+            let trained: std::collections::HashSet<usize> = (0..letters.len())
+                .filter(|&n| family[n] == n && !is_exam_family(&letters[n].id, seed, 20))
+                .collect();
+            assert_eq!(files.len(), trained.len(), "seed {seed}");
+            for (name, text) in &files {
+                let owner = letters
+                    .iter()
+                    .position(|l| name.starts_with(&l.id))
+                    .unwrap();
+                assert!(trained.contains(&owner), "{name} is of an exam family");
+                assert!(text.starts_with("To ") && text.contains(&letters[owner].body));
+            }
+        }
     }
 
     #[test]
