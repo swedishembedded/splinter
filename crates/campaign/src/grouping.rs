@@ -12,7 +12,7 @@
 //! that divides such records between training and scoring measures memory of
 //! the print, not learning, so each record carries the group of its evidence
 //! (`splinter_lab::overlap`), and the split keeps a group whole
-//! (`splinter_lab::holdout`).
+//! (`splinter_views::holdout`).
 
 use std::collections::{BTreeMap, BTreeSet};
 

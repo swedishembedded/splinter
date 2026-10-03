@@ -12,7 +12,6 @@ publish.workspace = true
 [dependencies]
 sven-sdk = { workspace = true }
 brain = { workspace = true }
-splinter-lab = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

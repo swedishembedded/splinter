@@ -4093,6 +4093,7 @@ dependencies = [
  "splinter-knowledge",
  "splinter-lab",
  "splinter-policy",
+ "splinter-views",
  "sven-sdk",
  "tokio",
 ]
@@ -4139,7 +4140,6 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
- "splinter-lab",
  "sven-sdk",
  "thiserror 2.0.21",
  "tokio",

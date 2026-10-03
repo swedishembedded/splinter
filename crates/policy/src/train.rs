@@ -22,15 +22,13 @@
 //!   held-out pairs, how much more the tuned adapter prefers each chosen
 //!   answer over its rejected one than the reference does.
 //!
-//! In both, Splinter decides which records are held out ([`holdout_split_records`])
-//! and writes the two halves as separate files, a named adapter is
+//! In both, the caller hands over the dataset already split into the records
+//! to train on and the ones held out, a named adapter is
 //! continued instead of a fresh one started, and brain writes the adapter
 //! and its training record into the attempt directory. What to do with the
 //! scores is the caller's decision.
 
 use std::path::{Path, PathBuf};
-
-use splinter_lab::holdout::holdout_split_records;
 
 use crate::error::PolicyError;
 
@@ -38,20 +36,17 @@ use crate::error::PolicyError;
 /// names none: brain's default.
 pub const DEFAULT_DPO_BETA: f32 = brain::DEFAULT_DPO_BETA;
 
-/// The file names one attempt's split is written under, inside its
-/// attempt directory.
-const TRAIN_FILE: &str = "train.jsonl";
-const HELD_OUT_FILE: &str = "held_out.jsonl";
-
 /// One fine-tune: what to train, on what, and where its files go.
 #[derive(Clone, Debug)]
 pub struct FineTune<'a> {
     /// Base checkpoint directory (the model the agent serves).
     pub model_dir: &'a Path,
-    /// Chat-format JSONL dataset; the newest records are held out.
-    pub dataset: &'a Path,
-    /// This attempt's own directory: the split, the packed dataset, the
-    /// adapter and its training record land here.
+    /// Chat-format JSONL records to train on.
+    pub train: &'a Path,
+    /// Chat-format JSONL records scored before and after, never trained on.
+    pub held_out: &'a Path,
+    /// This attempt's own directory: the packed dataset, the adapter and its
+    /// training record land here.
     pub attempt_dir: &'a Path,
     /// Optimizer steps to train for; warmup is the first fifth of them and
     /// the learning rate decays over all of them.
@@ -239,22 +234,22 @@ pub fn validate_preference_dataset(
         })
 }
 
-/// Fine-tunes a LoRA on `request.dataset` and scores base and tuned on the
+/// Fine-tunes a LoRA on `request.train` and scores base and tuned on the
 /// held-out records.
 pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     let failed = |reason: String| PolicyError::Train {
         dir: request.attempt_dir.to_path_buf(),
         reason,
     };
-    let summary = validate_dataset(request.dataset)?;
-    let (train, held_out) = split_dataset(request.dataset, request.attempt_dir)?;
+    let trained_on = validate_dataset(request.train)?;
+    let held_out_summary = validate_dataset(request.held_out)?;
     let (weights, base_id) = base_weights(request.model_dir)?;
     for replayed in request.replay {
         validate_dataset(replayed)?;
     }
     let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
-        .dataset(train)
-        .held_out(held_out)
+        .dataset(request.train)
+        .held_out(request.held_out)
         .out_dir(request.attempt_dir)
         .adapter_id(format!("{base_id}:splinter:candidate"))
         .steps(request.steps)
@@ -276,7 +271,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
             &brain_cancel,
             poll(request.cancel, &brain_cancel, request.on_step),
         )
-        .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
+        .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
             dir: request.attempt_dir.to_path_buf(),
@@ -299,7 +294,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         training_record: outcome
             .record
             .ok_or_else(|| incomplete("training record"))?,
-        records: summary.records,
+        records: trained_on.records + held_out_summary.records,
         block: outcome.block,
         base: outcome
             .base_score
@@ -318,10 +313,12 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
 pub struct PreferenceTune<'a> {
     /// Base checkpoint directory (the model the agent serves).
     pub model_dir: &'a Path,
-    /// `generic-preference-v1` JSONL pairs; the newest are held out.
-    pub dataset: &'a Path,
-    /// This attempt's own directory: the split, the adapter and its
-    /// training record land here.
+    /// `generic-preference-v1` JSONL pairs to train on.
+    pub train: &'a Path,
+    /// `generic-preference-v1` JSONL pairs scored, never trained on.
+    pub held_out: &'a Path,
+    /// This attempt's own directory: the adapter and its training record
+    /// land here.
     pub attempt_dir: &'a Path,
     /// Optimizer steps, one pair each.
     pub steps: u32,
@@ -399,19 +396,19 @@ pub struct TrainedPreference {
     pub held_out_score: Option<PreferenceScore>,
 }
 
-/// Fine-tunes a LoRA by DPO on `request.dataset`'s pairs and scores it
+/// Fine-tunes a LoRA by DPO on `request.train`'s pairs and scores it
 /// against its reference on the held-out pairs.
 pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreference, PolicyError> {
     let failed = |reason: String| PolicyError::Train {
         dir: request.attempt_dir.to_path_buf(),
         reason,
     };
-    let summary = validate_preference_dataset(request.dataset)?;
-    let (train, held_out) = split_dataset(request.dataset, request.attempt_dir)?;
+    let trained_on = validate_preference_dataset(request.train)?;
+    let held_out_summary = validate_preference_dataset(request.held_out)?;
     let (weights, base_id) = base_weights(request.model_dir)?;
     let mut fine_tune = brain::PreferenceFineTune::from_pretrained(weights.as_str())
-        .dataset(train)
-        .held_out(held_out)
+        .dataset(request.train)
+        .held_out(request.held_out)
         .out_dir(request.attempt_dir)
         .adapter_id(format!("{base_id}:splinter:candidate"))
         .steps(request.steps)
@@ -424,7 +421,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
     let brain_cancel = brain::CancelToken::armed();
     let outcome = fine_tune
         .run_with(&brain_cancel, poll(request.cancel, &brain_cancel, None))
-        .map_err(|e| failed(format!("training on {}: {e}", request.dataset.display())))?;
+        .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
             dir: request.attempt_dir.to_path_buf(),
@@ -445,7 +442,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         training_record: outcome
             .record
             .ok_or_else(|| incomplete("training record"))?,
-        records: summary.pairs,
+        records: trained_on.pairs + held_out_summary.pairs,
         block: outcome.block,
         beta: outcome.beta,
         reference_adapter: outcome.trained_from,
@@ -501,68 +498,9 @@ fn poll<'a>(
     }
 }
 
-/// Writes `dataset`'s records into `dir` as two files - the records to
-/// train on and the newest ones, held out - and returns their paths. A
-/// record is a non-blank line, as the trainer's parser reads it.
-fn split_dataset(dataset: &Path, dir: &Path) -> Result<(PathBuf, PathBuf), PolicyError> {
-    let text = std::fs::read_to_string(dataset).map_err(|source| PolicyError::Io {
-        path: dataset.to_path_buf(),
-        source,
-    })?;
-    let records: Vec<&str> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    let (train, held_out) =
-        holdout_split_records(&records).ok_or_else(|| PolicyError::TooFewRecords {
-            path: dataset.to_path_buf(),
-            records: records.len(),
-        })?;
-    let write = |name: &str, lines: &[&&str]| -> Result<PathBuf, PolicyError> {
-        let path = dir.join(name);
-        let mut body = lines.iter().map(|l| **l).collect::<Vec<_>>().join("\n");
-        body.push('\n');
-        std::fs::write(&path, body).map_err(|source| PolicyError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        Ok(path)
-    };
-    Ok((write(TRAIN_FILE, &train)?, write(HELD_OUT_FILE, &held_out)?))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The newest records are held out in a file of their own, never
-    /// trained on; a dataset too small to hold one out is refused.
-    #[test]
-    fn the_newest_records_are_held_out_in_their_own_file() {
-        let dir = std::env::temp_dir().join(format!("policy-split-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let dataset = dir.join("pool.jsonl");
-        let lines: Vec<String> = (0..12).map(|i| format!("{{\"n\":{i}}}")).collect();
-        std::fs::write(&dataset, format!("{}\n\n", lines.join("\n"))).unwrap();
-
-        let (train, held_out) = split_dataset(&dataset, &dir).unwrap();
-        let read = |p: &Path| -> Vec<String> {
-            std::fs::read_to_string(p)
-                .unwrap()
-                .lines()
-                .map(str::to_string)
-                .collect()
-        };
-        assert_eq!(read(&train), lines[..11]);
-        assert_eq!(read(&held_out), lines[11..]);
-
-        std::fs::write(&dataset, "{\"n\":0}\n").unwrap();
-        let err = split_dataset(&dataset, &dir).unwrap_err().to_string();
-        assert!(err.contains("at least 2"), "{err}");
-
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
 
     /// Every optimizer step is reported to the caller, and a cancelled
     /// caller cancels brain's token at the next step.

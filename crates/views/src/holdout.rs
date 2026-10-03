@@ -2,13 +2,17 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! The rule that decides which records of a training set are held out for
-//! scoring. Pure: no model, no files.
+//! scoring, and the split of a dataset file by it.
 //!
 //! A tenth of the samples (at least one) is held out, the newest, because a
 //! single record's 20-odd token positions cannot carry a verdict on a set of
 //! hundreds: its noise would masquerade as improvement or regression. One
 //! held-out sample is the minimum honest evaluation; scoring on the training
 //! set would read training loss as generalisation.
+
+use std::path::{Path, PathBuf};
+
+use crate::ViewError;
 
 /// The fewest samples [`holdout_split_grouped`] splits: one to train on, one to
 /// hold out.
@@ -88,6 +92,53 @@ fn record_group<S: AsRef<str>>(record: &S) -> Option<String> {
 /// the gate scores what training held out.
 pub fn holdout_split_records<S: AsRef<str>>(records: &[S]) -> Option<(Vec<&S>, Vec<&S>)> {
     holdout_split_grouped(records, record_group)
+}
+
+/// The two halves of a split dataset file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Split {
+    /// The records to train on.
+    pub train: PathBuf,
+    /// The newest records, held out for scoring.
+    pub held_out: PathBuf,
+}
+
+/// The file name the records to train on are written under.
+const TRAIN_FILE: &str = "train.jsonl";
+/// The file name the held-out records are written under.
+const HELD_OUT_FILE: &str = "held_out.jsonl";
+
+/// Writes `dataset`'s records into `dir` as two files - the records to train
+/// on and the ones held out - split by [`holdout_split_records`]. A record is
+/// a non-blank line, as the trainers' parsers read it. Refused when the
+/// dataset has fewer than [`MIN_SAMPLES`] records.
+pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError> {
+    let io = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source| ViewError::Io { path, source }
+    };
+    let text = std::fs::read_to_string(dataset).map_err(io(dataset))?;
+    let records: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    let (train, held_out) =
+        holdout_split_records(&records).ok_or_else(|| ViewError::TooFewRecords {
+            path: dataset.to_path_buf(),
+            records: records.len(),
+        })?;
+    let write = |name: &str, lines: &[&&str]| -> Result<PathBuf, ViewError> {
+        let path = dir.join(name);
+        let mut body = lines.iter().map(|l| **l).collect::<Vec<_>>().join("\n");
+        body.push('\n');
+        std::fs::write(&path, body).map_err(io(&path))?;
+        Ok(path)
+    };
+    Ok(Split {
+        train: write(TRAIN_FILE, &train)?,
+        held_out: write(HELD_OUT_FILE, &held_out)?,
+    })
 }
 
 #[cfg(test)]
@@ -196,5 +247,33 @@ mod tests {
         let (train, val) = holdout_split_grouped(&small, |_| None).unwrap();
         assert_eq!(val.len(), 1, "at least one, even at 10% < 1");
         assert_eq!(train.len(), 8);
+    }
+
+    /// The newest records are held out in a file of their own, never trained
+    /// on; a dataset too small to hold one out is refused.
+    #[test]
+    fn the_newest_records_are_held_out_in_their_own_file() {
+        let dir = std::env::temp_dir().join(format!("views-split-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dataset = dir.join("pool.jsonl");
+        let lines: Vec<String> = (0..12).map(|i| format!("{{\"n\":{i}}}")).collect();
+        std::fs::write(&dataset, format!("{}\n\n", lines.join("\n"))).unwrap();
+
+        let split = split_dataset_file(&dataset, &dir).unwrap();
+        let read = |p: &Path| -> Vec<String> {
+            std::fs::read_to_string(p)
+                .unwrap()
+                .lines()
+                .map(str::to_string)
+                .collect()
+        };
+        assert_eq!(read(&split.train), lines[..11]);
+        assert_eq!(read(&split.held_out), lines[11..]);
+
+        std::fs::write(&dataset, "{\"n\":0}\n").unwrap();
+        let err = split_dataset_file(&dataset, &dir).unwrap_err().to_string();
+        assert!(err.contains("at least 2"), "{err}");
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

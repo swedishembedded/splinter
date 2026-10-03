@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! What a learning run needs to measure honestly: verifiers by strength, the
-//! holdout rule, paired comparison and pass@k.
+//! What a learning run needs to measure honestly: verifiers by strength,
+//! paired comparison and pass@k.
 //!
 //! Swedish Embedded AB implements closed-loop learning systems - agents that
 //! improve from their own verified experience rather than from hand-written
@@ -13,8 +13,6 @@
 //!
 //! # What the parts are for
 //!
-//! * [`holdout`] - the rule that decides which records of a training set
-//!   are held out for scoring.
 //! * [`paired`] - two models graded on the same items, compared only where
 //!   both have a verdict.
 //! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
@@ -33,7 +31,6 @@
 
 pub mod denoise;
 pub mod frontier;
-pub mod holdout;
 pub mod overlap;
 pub mod paired;
 pub mod verifiers;

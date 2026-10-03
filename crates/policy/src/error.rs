@@ -71,17 +71,6 @@ pub enum PolicyError {
         /// brain's parser's error.
         reason: String,
     },
-    /// A dataset too small to hold a record out.
-    #[error(
-        "{path} holds {records} record(s); scoring needs at least {} so one can be held out",
-        splinter_lab::holdout::MIN_SAMPLES
-    )]
-    TooFewRecords {
-        /// The dataset file.
-        path: PathBuf,
-        /// Records in it.
-        records: usize,
-    },
     /// A fine-tune failed, or completed without what it must report.
     #[error("fine-tune in {dir}: {reason}")]
     Train {

@@ -45,6 +45,7 @@ use splinter_policy::train::{
 };
 use splinter_policy::{ModelSelection, PolicyError};
 use splinter_store::artifacts::ArtifactSpec;
+use splinter_views::holdout::split_dataset_file;
 use splinter_views::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
 use sven_sdk::CancelToken;
 
@@ -391,11 +392,12 @@ impl Trainer for BrainTrainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<Trained, CampaignError> {
-        let combined = combine(plan)?;
+        let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
         fine_tune(&FineTune {
             model_dir: &plan.base,
-            dataset: &combined,
+            train: &split.train,
+            held_out: &split.held_out,
             attempt_dir: &plan.dir,
             steps: plan.steps,
             rank: plan.rank,
@@ -416,10 +418,11 @@ impl Trainer for BrainTrainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, CampaignError> {
-        let combined = combine(plan)?;
+        let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
         train_preference(&PreferenceTune {
             model_dir: &plan.base,
-            dataset: &combined,
+            train: &split.train,
+            held_out: &split.held_out,
             attempt_dir: &plan.dir,
             steps: plan.steps,
             rank: plan.rank,

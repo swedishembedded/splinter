@@ -51,6 +51,7 @@
 
 mod corpus;
 mod dataset;
+pub mod holdout;
 mod render;
 mod replay;
 mod store;
@@ -222,7 +223,7 @@ pub struct RecordMetadata {
     pub sources: Vec<Digest>,
     /// The group of overlapping source text it was projected from, when
     /// known: records of one group are held out or trained on together (see
-    /// `splinter_lab::holdout`). Set by whoever has the source text, never
+    /// `crate::holdout`). Set by whoever has the source text, never
     /// by a view.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
@@ -489,6 +490,17 @@ pub enum ViewError {
     /// A record or manifest cannot be serialized.
     #[error("cannot serialize a record: {0}")]
     Serialize(#[from] serde_json::Error),
+    /// A dataset too small to hold a record out.
+    #[error(
+        "{path} holds {records} record(s); scoring needs at least {} so one can be held out",
+        crate::holdout::MIN_SAMPLES
+    )]
+    TooFewRecords {
+        /// The dataset file.
+        path: std::path::PathBuf,
+        /// Records in it.
+        records: usize,
+    },
     /// Brain's parser refused the dataset.
     #[error("{path} is refused by brain's dataset parser: {reason}")]
     Invalid {

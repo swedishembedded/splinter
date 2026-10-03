@@ -195,9 +195,11 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
             started.elapsed().as_secs_f64()
         );
     };
+    let split = splinter_views::holdout::split_dataset_file(&dataset, &attempt)?;
     let request = splinter_policy::train::FineTune {
         model_dir: &base,
-        dataset: &dataset,
+        train: &split.train,
+        held_out: &split.held_out,
         attempt_dir: &attempt,
         steps: u32::try_from(number(args, "--steps", 200)?)?,
         rank: u32::try_from(number(args, "--rank", 16)?)?,
