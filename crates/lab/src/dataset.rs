@@ -406,7 +406,7 @@ pub fn record_from_requests(
 /// trajectory SFT on this checkpoint is a masking problem on the engine side,
 /// not something a dataset producer can work around.
 ///
-/// This is not a consolation prize for this experiment: the measured failure is
+/// This is not a consolation prize for this sample: the measured failure is
 /// that the model acts without investigating, so the first decision is the one
 /// that matters.
 ///

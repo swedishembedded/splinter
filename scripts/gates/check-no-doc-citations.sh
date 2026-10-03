@@ -6,7 +6,7 @@
 #
 # docs/ is user-facing documentation and .agents/ holds contributor rules,
 # knowledge and roadmaps; both get rewritten and reorganised. A comment or
-# string in crates/, experiments/ or scripts/ that names one of their paths is
+# string in crates/, samples/ or scripts/ that names one of their paths is
 # a cross-reference nothing keeps in sync, so it silently rots. State the fact
 # or the reasoning inline instead. scripts/gates/ and scripts/hooks/ are
 # exempt: a gate names the paths it validates, and fails loudly when they move.
@@ -18,14 +18,14 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 PATTERN='\.agents/|docs/[A-Za-z0-9_./-]+\.md'
-SCANNED=(crates experiments scripts)
+SCANNED=(crates samples scripts)
 
 if [ "$#" -gt 0 ]; then
     files=()
     for f in "$@"; do
         case "$f" in
         scripts/gates/* | scripts/hooks/*) continue ;;
-        crates/* | experiments/* | scripts/*) files+=("$f") ;;
+        crates/* | samples/* | scripts/*) files+=("$f") ;;
         esac
     done
     [ "${#files[@]}" -eq 0 ] && exit 0

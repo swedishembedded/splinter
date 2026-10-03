@@ -74,7 +74,7 @@ advised only if its answer is a passage of the writer's own text, word for
 word, and an answer is graded by checking that every passage it quotes is in
 the source and that it gives the advice; no model decides that. A strong
 teacher answers open-book and the policy is trained on those verified answers
-(`--distill`). `experiments/jefferson` measures what that teaches a model
+(`--distill`). `samples/jefferson` measures what that teaches a model
 about Thomas Jefferson's letters, on letters it never saw.
 
 Every stage stores what it makes under the state root by content address,

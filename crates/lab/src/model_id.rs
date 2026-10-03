@@ -13,7 +13,7 @@
 //!   which is served by the base weights and keeps being served by the base
 //!   weights after every promotion.
 //!
-//! Both answer requests. Neither errors. An experiment pointed at the second
+//! Both answer requests. Neither errors. A sample pointed at the second
 //! one measures the base model in both of its arms and reports that learning
 //! achieved nothing - which is indistinguishable from a real null result, and
 //! was in fact observed twice before the cause was found.
@@ -66,7 +66,7 @@ impl ServedModel {
     /// Needed because `SVEN_MODEL` is a command-line argument of the `sven`
     /// binary, not something `sven_sdk::config::load` reads: an application
     /// embedding the SDK has to put the provider and the name on the `Config`
-    /// itself. Which is the better default for an experiment anyway - an arm
+    /// itself. Which is the better default for a sample anyway - an arm
     /// whose weights were chosen by auto-detection is not a controlled arm.
     pub fn provider(&self) -> &'static str {
         "brain"

@@ -16,7 +16,7 @@ dependencies:
 - Knowledge intake: sources, sections, facts and probes, with provenance.
 - Deciding which experience qualifies as training material, and curating
   versioned datasets from it.
-- Experiment design and measurement: verifiers the policy cannot reach,
+- Sample design and measurement: verifiers the policy cannot reach,
   held-out, retention and anchor suites, release gates.
 - Releases: immutable adapters with manifests, the default alias, lineage
   from an answer back to its sources.
@@ -38,7 +38,7 @@ generically. `make check` enforces this (`check-repo-scope`).
 |---|---|---|
 | **sven** | Running agents: tools, sessions, delegation, permissions, the authoritative trajectory of what an agent did | What to learn, training, release decisions |
 | **brain** | Model computation: inference, training algorithms, evaluation arithmetic, checkpoints, adapters, serving | Which experiences qualify, campaign scheduling, release authority |
-| **Splinter** | The learning campaign: intent, task acquisition, evidence admission, dataset curation, experiment scheduling, lineage, release decisions | Re-implementations of anything sven or brain provide |
+| **Splinter** | The learning campaign: intent, task acquisition, evidence admission, dataset curation, run scheduling, lineage, release decisions | Re-implementations of anything sven or brain provide |
 
 Neither sven nor brain depends on Splinter. Splinter consumes both through
 their public SDKs (`sven-sdk`, `brain`); every import of a brain or sven
@@ -106,8 +106,8 @@ Ten crates in layers; a crate depends only on the ones below it.
 | `splinter-campaign` | the controller: `Config` (the only reader of the environment), the context a command works in, model references (`policy:`, `local:`, `remote:`) and the network opt-in, the front door (a sentence classified by the policy through sven's typed call, routed by code), and each stage as a command - sources, tasks, solve, verify, critique, dataset, train (from the champion, with replay), release (the four-check gate, immutable releases, aliases, rollback) and eval - with `learn` composing them into one recorded run; and the curriculum: pass@k with a teacher solving open-book what the policy never solves, the tasks worth training on (failed at least sometimes, with a verified answer), concept mastery across releases from closed-book solves, concepts a failed retention check queues for new tasks, and diversity quotas on a training set | all of the above |
 | `splinter` | the binary: `clap` grammar and output, nothing else | campaign and the types it prints |
 
-Beside the crates: `experiments/<name>` holds one controlled learning
-experiment per directory (a standalone program with a README stating what
+Beside the crates: `samples/<name>` holds one controlled learning
+sample per directory (a standalone program with a README stating what
 was measured), `tasks/<family>` the frozen task families (workspace, hidden
 world, verifier, audit), and `scripts/` the local override, lock pinning,
 hooks and gates.

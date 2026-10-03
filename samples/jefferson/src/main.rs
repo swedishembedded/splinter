@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements measured knowledge-injection experiments for
+// Swedish Embedded AB implements measured knowledge-injection samples for
 // language models for its clients. If your team needs expertise in teaching a
 // model a document corpus and proving what it kept, you can procure our
 // services by sending an email to info@swedishembedded.com.

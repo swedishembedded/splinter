@@ -12,7 +12,7 @@
 //! absent, so the mismatch is not subtle; it is a different prompt.
 //!
 //! Rather than reconstruct what was probably sent, this records what was
-//! actually sent. The experiment already names its endpoint, so pointing the agent
+//! actually sent. The sample already names its endpoint, so pointing the agent
 //! at a relay on the way to that endpoint costs nothing and yields ground
 //! truth: the same bytes the server parsed.
 //!

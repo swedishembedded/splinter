@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
 // Swedish Embedded AB implements leakage-free train and exam splits for
-// language-model experiments for its clients. If your team needs expertise in
+// language-model samples for its clients. If your team needs expertise in
 // proving that an exam shares nothing with the training set, you can procure
 // our services by sending an email to info@swedishembedded.com.
 

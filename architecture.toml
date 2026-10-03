@@ -66,7 +66,7 @@ internal = ["splinter-record", "splinter-campaign"]
 internal = ["splinter-lab", "splinter-policy"]
 
 [crates.splinter-jefferson]
-# A controlled experiment: teach a model a public-domain corpus and measure what it kept.
+# A controlled sample: teach a model a public-domain corpus and measure what it kept.
 # It reads quotations with the lab's index and finds advice with the knowledge crate's cues.
 internal = ["splinter-policy", "splinter-lab", "splinter-knowledge"]
 

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Splinter's laboratory: what every learning experiment needs to measure
+//! Splinter's laboratory: what every learning sample needs to measure
 //! honestly.
 //!
-//! Each experiment is controlled: a frozen task catalog, an information
+//! Each sample is controlled: a frozen task catalog, an information
 //! boundary the agent cannot read around, a verifier it cannot reach, and a
 //! before/after table. This crate holds the parts every one of them needs, so
-//! an experiment's own source is its design and nothing else.
+//! a sample's own source is its design and nothing else.
 //!
 //! It links both halves of the loop - sven's SDK facade to run the agent,
 //! brain to train and gate the weights.
@@ -15,7 +15,7 @@
 //! Swedish Embedded AB implements closed-loop learning systems - agents that
 //! improve from their own verified experience rather than from hand-written
 //! training data - for its clients. If your team needs expertise in agent
-//! training loops, experiment design, or promotion gating for small models,
+//! training loops, sample design, or promotion gating for small models,
 //! you can procure our services by sending an email to
 //! info@swedishembedded.com.
 //!
@@ -31,7 +31,7 @@
 //!   about to measure. Scoring requires one, so measuring the wrong weights is
 //!   not a mistake to catch in review.
 //! * [`Verdict`] / [`PredicateSet`] - the only source of a "solved". There is
-//!   no constructor an experiment could use to mark its own work correct.
+//!   no constructor a sample could use to mark its own work correct.
 //! * [`Family`] - a task contract that does not load unless every predicate it
 //!   scores says where it came from.
 //! * [`Demonstrator`] - a scripted model at the wire, so a demonstration's

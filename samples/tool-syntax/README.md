@@ -103,7 +103,7 @@ later records. The template's own escape is a non-empty `reasoning_content`,
 which `generic-messages-v2` has no field for.
 
 What stays trainable is the **first** decision, whose context is the prompt and
-the request alone. For this experiment that is the decision that matters, because
+the request alone. For this sample that is the decision that matters, because
 the measured failure is acting without investigating.
 
 ## Pre-declared, before any training runs

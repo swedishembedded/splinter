@@ -1,6 +1,6 @@
 # document-to-capability
 
-**Status: experiment design, not implemented.** The claim under test is the
+**Status: study design, not implemented.** The claim under test is the
 one that matters and the one nothing here has yet demonstrated: *exposure to
 a document the agent did not have makes it able to do something it provably
 could not do before, and that ability survives the document going away.*
@@ -22,7 +22,7 @@ model's pass@k at large k is the ceiling, and it is often far above its
 pass@1. Any real algorithm has some presence in pretraining.
 
 So the knowledge has to be **authored by us and absent from every corpus**.
-That is the one property that makes the experiment interpretable, and it is
+That is the one property that makes the study interpretable, and it is
 worth giving up realism for.
 
 ## The task: a toy ISA with an undocumented instruction
@@ -51,7 +51,7 @@ Why this shape:
 
 - **It tests use, not recall.** Reciting "VFMA costs 1 cycle" is not the same
   as writing code that uses it. Those can dissociate, and separating them is
-  the scientific content of the experiment (see the 2x2 below).
+  the scientific content of the study (see the 2x2 below).
 - **The score is continuous.** Cycle count shows partial learning; pass/fail
   does not.
 - **Guessability is measurable**, not assumed - see arm A0.
@@ -64,14 +64,14 @@ Why this shape:
 
 ## The cheap version: no emulator, no new verifier
 
-The toy ISA above is the *good* experiment. It is not the *first* one, because
+The toy ISA above is the *good* study. It is not the *first* one, because
 building a cycle-accurate simulator is most of the work and none of the claim.
 
 The constraint that decides the cheap version: `VerifierSpec` is
 **declarative-only by design** (`crates/vocab/src/verify.rs`) - there is no
 `Command` or `UnitTests` shape, so there is no arbitrary-code-execution surface
 in the vocabulary at all. "Run `cargo test` and check the exit code" is not
-expressible today and should not be added just for an experiment.
+expressible today and should not be added just for a study.
 
 What is expressible is `VerifierSpec::FileHash { path, sha256 }`, and it turns
 out to be exactly the right tool:
@@ -122,7 +122,7 @@ moves knowledge - `/learn` -> `knowledge-extract` -> `FactBatch` -> train ->
 `promote` -> `--watch-adapters` -> `sven-ci` verified task -> `VERDICT_FACT` ->
 reward stamp -> `ingest_dir` - and it proves nothing about capability
 acquisition, because one constant is close to pure recall. Its job is to find
-the plumbing bugs cheaply, before the real experiment is worth running.
+the plumbing bugs cheaply, before the real study is worth running.
 
 ### One property this task does not have
 
@@ -131,7 +131,7 @@ identically. That is correct for an acceptance test, and it is what makes arm
 A0 meaningful. It also means this task is unusable as an RL environment later -
 there is no hill to climb. Training data here comes from the document, not from
 rollouts, so that costs nothing now; it is the reason the toy ISA (scored by
-cycle count) is still the right second experiment.
+cycle count) is still the right second study.
 
 ## The arms
 
@@ -174,7 +174,7 @@ forge.
 `WEIGHTS - BASE` is what went into the parameters. `CONTROL - BASE` is what a
 lookup would have given you for free. **If `CONTROL - BASE` accounts for the
 whole effect, nothing was learned - the agent just wrote itself a note**, and
-that is the single most likely way this experiment produces a false positive.
+that is the single most likely way this study produces a false positive.
 Run all four or claim nothing.
 
 ## Recall versus use: the 2x2 that is the actual result
@@ -193,7 +193,7 @@ to include the knowledge **deployed in worked snippets**, not just asked about.
 That is a design decision to make up front, and a second arm worth running:
 QA-only versus QA-plus-worked-usage.
 
-## Hygiene: the ways this experiment lies to you
+## Hygiene: the ways this study lies to you
 
 Each of these is an assertion in the harness, not a habit:
 
@@ -249,7 +249,7 @@ Missing, in dependency order:
 1. **The `tvm` environment**: simulator, task family, reference implementations,
    cycle-count scorer, the secret instruction, the document, the decoy.
 2. **A task-performance environment**, as opposed to a probe-recall one.
-   `DocumentEnv` scores answers to probe questions; this experiment's real
+   `DocumentEnv` scores answers to probe questions; this study's real
    reward is *cycle count on a held-out task*. That is the actual new piece.
 3. **The production driver** - the chain `ingest_dir -> fit_weighted -> gate ->
    publish` exists only as the `stage_adapter` test helper.

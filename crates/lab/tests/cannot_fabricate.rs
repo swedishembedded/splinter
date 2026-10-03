@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
-//! Spec: an experiment cannot mark its own work correct, and cannot measure the
+//! Spec: a sample cannot mark its own work correct, and cannot measure the
 //! wrong weights.
 //!
 //! This file pins the only routes that exist. The other half of each rule is

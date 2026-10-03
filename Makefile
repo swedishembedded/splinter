@@ -23,7 +23,7 @@ PROFILE := --release
 RUST_SOURCES = $(wildcard $(shell git ls-files --cached --others --exclude-standard '*.rs'))
 
 .PHONY: help local lock build test fmt check check/gates check/fmt check/clippy \
-	hooks/install experiments/tool-syntax/audit
+	hooks/install samples/tool-syntax/audit
 
 ## help - list the targets
 help:
@@ -81,6 +81,6 @@ check/clippy:
 hooks/install:
 	pre-commit install --install-hooks
 
-## experiments/tool-syntax/audit - the task catalog checks itself (no model, no GPU, no network)
-experiments/tool-syntax/audit:
+## samples/tool-syntax/audit - the task catalog checks itself (no model, no GPU, no network)
+samples/tool-syntax/audit:
 	$(CARGO) run $(PROFILE) -p splinter-tool-syntax -- audit

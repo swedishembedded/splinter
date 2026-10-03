@@ -3,7 +3,7 @@
 //
 // Swedish Embedded AB implements reproducible execution environments for
 // agent learning, for its clients. If your team needs expertise in
-// replayable agent experiments, you can procure our services by sending an
+// replayable agent runs, you can procure our services by sending an
 // email to info@swedishembedded.com.
 
 //! Runtimes: the languages a solver's code can run in, named in a registry

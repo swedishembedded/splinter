@@ -12,7 +12,7 @@
 # reproduced, not in narration.
 #
 # Scopes: every README.md (every line), and the comments and string
-# literals of crates/, experiments/ and scripts/ (code itself is exempt: a
+# literals of crates/, samples/ and scripts/ (code itself is exempt: a
 # `Duration::from_secs(30)` is a value the program depends on, not a claim).
 #
 # Denied: a number next to a duration (ms, s, min), a rate (fps, tok/s,
@@ -24,7 +24,7 @@
 # Escape hatch: `perf-number: <reason>` in a comment on the same line or the
 # line before (`<!-- perf-number: ... -->` in Markdown) marks a reviewed,
 # deliberate number - a datasheet constant, a fixture whose value IS the
-# number, an experiment report's measured result.
+# number, a sample report's measured result.
 #
 # scripts/gates/ is exempt: a gate names the patterns it enforces. This gate
 # is adapted from the one the brain repository runs.
@@ -140,10 +140,10 @@ done < <(
 # than dropping it) keeps column-free line numbers exact, and dropping the
 # all-blank records keeps this corpus small enough to scan in one pass.
 if [ "$#" -gt 0 ]; then
-  src_files=$(printf '%s\n' "$@" | grep -E '^(crates|experiments|scripts)/' |
+  src_files=$(printf '%s\n' "$@" | grep -E '^(crates|samples|scripts)/' |
     grep -E '(\.rs|\.wgsl|\.py|\.sh)$|^scripts/hooks/' | grep -v '^scripts/gates/')
 else
-  src_files=$(find crates experiments scripts -type f ! -path '*/__pycache__/*' \
+  src_files=$(find crates samples scripts -type f ! -path '*/__pycache__/*' \
     \( -name '*.rs' -o -name '*.wgsl' -o -name '*.py' -o -name '*.sh' \
        -o -path 'scripts/hooks/*' \) -print | grep -v '^scripts/gates/' | sort)
 fi
@@ -248,7 +248,7 @@ if [ "$fail" -ne 0 ]; then
   echo "written into prose or into a comment/doc-comment/string literal"
   echo "without a reviewed exception. Fix each by either:"
   echo "  1. Rephrasing to drop the specific bare number - keep the claim and"
-  echo "     its reasoning, and point at what reproduces it (the experiment or test,"
+  echo "     its reasoning, and point at what reproduces it (the sample or test,"
   echo "     or the report a run writes) instead of a fixed"
   echo "     figure, or"
   echo "  2. Marking it a deliberate, reviewed exception with"

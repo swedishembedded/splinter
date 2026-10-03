@@ -20,7 +20,7 @@
 //! through a scripted episode exercises the whole loop, which is valuable and
 //! is what the measured arms do - but for building a demonstration it adds a
 //! dependency on the loop behaving, and the loop currently stalls after two
-//! scripted rounds (see the tool-syntax experiment's README). The tools are the part a
+//! scripted rounds (see the tool-syntax sample's README). The tools are the part a
 //! demonstration needs, and they are reachable on their own.
 //!
 //! What this costs, stated plainly: the demonstration is assembled rather than
@@ -106,7 +106,7 @@ impl std::error::Error for PerformError {}
 
 /// Run one action through the real tool executor, in `workspace`.
 ///
-/// `sven` is the binary to use; the caller names it so an experiment is not tied to
+/// `sven` is the binary to use; the caller names it so a sample is not tied to
 /// one install.
 pub fn perform(
     sven: &Path,

@@ -15,7 +15,7 @@ A model that "knows" a corpus should (1) answer questions about passages it was
 trained on, (2) recognise the authors and works behind passages it never saw,
 and (3) when asked what Jefferson wrote, quote what exists and not what sounds
 right. The third is the honesty metric of a persona model. Training can raise
-it or lower it; this experiment reports which.
+it or lower it; this sample reports which.
 
 ## Corpus
 

@@ -3,7 +3,7 @@
 //
 // Swedish Embedded AB implements bounded, replayable execution environments
 // for agent learning, for its clients. If your team needs expertise in agent
-// sandboxing or reproducible agent experiments, you can procure our services
+// sandboxing or reproducible agent runs, you can procure our services
 // by sending an email to info@swedishembedded.com.
 
 //! Where a solver works: bounded process runs, runtimes, sandboxes, and

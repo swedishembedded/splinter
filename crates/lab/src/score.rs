@@ -39,7 +39,7 @@ pub enum Outcome {
 impl Outcome {
     /// The only way to produce a scored outcome: hand over a [`Verdict`], and
     /// a [`Verdict`] can only come from evaluating a task's declared
-    /// predicates. There is deliberately no `Outcome::solved()` - an experiment
+    /// predicates. There is deliberately no `Outcome::solved()` - a sample
     /// that could write one could mark its own work correct, and then the
     /// difference between a measurement and a claim would rest on nobody
     /// having taken a shortcut.

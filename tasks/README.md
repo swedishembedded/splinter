@@ -3,9 +3,9 @@
 
 # tasks - the frozen catalog
 
-One directory per task family, shared by whichever experiments use it. Families
-are here rather than under each experiment because several experiments measure
-different learning angles on the same family, and a copy per experiment would be two
+One directory per task family, shared by whichever samples use it. Families
+are here rather than under each sample because several samples measure
+different learning angles on the same family, and a copy per sample would be two
 catalogs that drift.
 
 ```

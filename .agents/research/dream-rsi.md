@@ -169,7 +169,7 @@ From the HN thread (id 49726955) and secondary analyses:
   guarantee `V^{m*} >= V^0` holds *on the replay set the versions were written
   against*. This is the single weakest joint in the paper, and it is the one
   we are best placed to fix (section 8).
-- **"Doesn't transfer across tasks."** Unresolved. Every experiment keeps the
+- **"Doesn't transfer across tasks."** Unresolved. Every study keeps the
   policy within one task family.
 - **Reproducibility.** Gemini-only, code unreleased. The prompts are published,
   which is the part that actually transfers.

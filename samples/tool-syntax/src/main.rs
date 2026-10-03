@@ -21,7 +21,7 @@
 //! Swedish Embedded AB implements closed-loop learning systems - agents that
 //! improve from their own verified experience rather than from hand-written
 //! training data - for its clients. If your team needs expertise in agent
-//! training loops, experiment design, or promotion gating for small models,
+//! training loops, sample design, or promotion gating for small models,
 //! you can procure our services by sending an email to
 //! info@swedishembedded.com.
 
@@ -90,7 +90,7 @@ fn family_root() -> PathBuf {
 }
 
 /// The catalog checking itself. Delegates to the family's own audit, which is
-/// the same one `make experiments/tool-syntax/audit` runs - there is one audit, not
+/// the same one `make samples/tool-syntax/audit` runs - there is one audit, not
 /// one per caller.
 fn audit() -> anyhow::Result<()> {
     let root = family_root();
@@ -115,8 +115,8 @@ struct BaselineOptions {
     instances: usize,
     run_dir: PathBuf,
     model: ServedModel,
-    /// Named rather than auto-detected on purpose. An experiment that lets
-    /// its endpoint be discovered is an experiment that cannot say afterwards
+    /// Named rather than auto-detected on purpose. A sample that lets
+    /// its endpoint be discovered is a sample that cannot say afterwards
     /// which server produced the number - and on a shared machine the answer
     /// changes between runs.
     base_url: Option<String>,
@@ -360,7 +360,7 @@ async fn run_agent(
 ) -> anyhow::Result<ToolActivity> {
     // `SVEN_MODEL` is an argument of the `sven` binary, not something the
     // SDK's loader reads, and the auto-detected default is a sentinel that
-    // only resolves when exactly one chat model is served. An experiment has
+    // only resolves when exactly one chat model is served. A sample has
     // to name its own weights regardless.
     let mut settings = config::load(None)?;
     settings.model.provider = options.model.provider().to_string();
@@ -618,7 +618,7 @@ fn demonstrate(args: &[String]) -> anyhow::Result<()> {
 }
 
 /// Where the `sven` binary is: `SVEN_BIN`, else the first `sven` on `PATH`.
-/// Named by the environment so an experiment is not tied to one install or
+/// Named by the environment so a sample is not tied to one install or
 /// one build profile.
 fn sven_binary() -> anyhow::Result<PathBuf> {
     if let Ok(path) = std::env::var("SVEN_BIN") {

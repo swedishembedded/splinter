@@ -5,12 +5,12 @@
 //!
 //! Only this module, and only by evaluating a task's declared predicates. That
 //! is the point: an agent's own statement that it finished is a claim, not a
-//! result, and the moment an experiment can write `Outcome::solved()` by hand, the
+//! result, and the moment a sample can write `Outcome::solved()` by hand, the
 //! difference between the two depends on nobody having taken a shortcut.
 //!
 //! So [`Verdict`] has no public constructor. It comes back from
 //! [`PredicateSet::evaluate`] and nothing else, and an [`crate::Outcome`] that
-//! counts towards a score can only be made from one. An experiment cannot mark its
+//! counts towards a score can only be made from one. A sample cannot mark its
 //! own work correct, because there is no function that would let it.
 //!
 //! The same reasoning applies to the other direction. A turn that failed is
@@ -118,7 +118,7 @@ pub struct Verdict {
 
 impl Verdict {
     /// Solved means every declared predicate held. There is no partial credit
-    /// and no threshold: a task the experiment declared in full is either done or
+    /// and no threshold: a task the sample declared in full is either done or
     /// it is not.
     pub fn solved(&self) -> bool {
         self.failed.is_empty()

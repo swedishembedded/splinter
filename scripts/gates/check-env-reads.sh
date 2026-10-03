@@ -8,7 +8,7 @@
 # A setting read deep inside a library is a hidden input: a test cannot set
 # it without mutating process state that parallel tests share, and a second
 # campaign in the same process cannot differ from the first. Everything
-# below the configuration takes its settings as values. Experiments are
+# below the configuration takes its settings as values. Samples are
 # standalone programs and resolve their own inputs.
 #
 # Usage: scripts/gates/check-env-reads.sh [file ...]
