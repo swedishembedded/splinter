@@ -27,15 +27,10 @@
 //! * [`ArmScore`] / [`Outcome`] - what an arm measured and what it refuses to
 //!   claim, including the rule that an infrastructure fault is excluded from
 //!   both the numerator and the denominator.
-//! * [`AdapterPath`] - proof that promoted adapters reach the model an arm is
-//!   about to measure. Scoring requires one, so measuring the wrong weights is
-//!   not a mistake to catch in review.
 //! * [`Verdict`] / [`PredicateSet`] - the only source of a "solved". There is
 //!   no constructor a sample could use to mark its own work correct.
 //! * [`Family`] - a task contract that does not load unless every predicate it
 //!   scores says where it came from.
-//! * [`Demonstrator`] - a scripted model at the wire, so a demonstration's
-//!   observations are produced by the real tool executor rather than invented.
 //! * [`Recorder`] - the exact request the agent sent, captured at the wire.
 //!   An agent's stored history holds neither the system prompt nor the tool
 //!   schemas, so it is not enough to train on.
@@ -46,10 +41,10 @@
 //! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
 //!   a teacher's answer to it was verified, and whether that makes it worth
 //!   training on.
-//! * [`record_from_episode`] - training data from a VERIFIED episode only,
-//!   supervising assistant turns and nothing else, and refusing a transcript
-//!   with a hole in it. [`WireMessage`] is one message of the
-//!   `generic-messages-v2` format those records are written in.
+//! * [`records_from_performance`] - training data from a VERIFIED performance
+//!   only, supervising the assistant's decision and nothing else.
+//!   [`WireMessage`] is one message of the `generic-messages-v2` format those
+//!   records are written in.
 //! * [`SYSTEM_PROMPT`] - the one system turn every model run on a task is
 //!   sent and every chat record starts with, so what the policy is trained
 //!   on is what it sees when it answers.
@@ -72,9 +67,7 @@
 #![warn(missing_docs)]
 
 mod dataset;
-mod demonstrate;
 pub mod denoise;
-mod endpoint;
 mod episode;
 mod family;
 pub mod frontier;
@@ -90,11 +83,9 @@ mod verdict;
 pub mod verifiers;
 
 pub use dataset::{
-    record_from_episode, record_from_requests, records_from_performance, to_jsonl, Excluded,
-    Provenance, Record, RecordMetadata, WireFunction, WireMessage, WireToolCall,
+    records_from_performance, to_jsonl, Excluded, Provenance, Record, RecordMetadata, WireFunction,
+    WireMessage, WireToolCall,
 };
-pub use demonstrate::{Demonstrator, Step};
-pub use endpoint::{AdapterPath, NoAdapterPath};
 pub use episode::{baseline_effective, run_verifier, run_witness, Episode, EpisodeError};
 pub use family::{Family, FamilyError};
 pub use model_id::ServedModel;
