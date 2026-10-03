@@ -80,6 +80,7 @@ mod family;
 pub mod frontier;
 pub mod holdout;
 mod model_id;
+pub mod overlap;
 pub mod paired;
 mod perform;
 mod recorder;
