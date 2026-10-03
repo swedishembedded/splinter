@@ -167,7 +167,8 @@ pub struct LearnArgs {
     /// What the learner is after; steers the tasks generated.
     #[arg(long, value_name = "TEXT")]
     pub goal: Option<String>,
-    /// Task kinds, comma-separated (default: recall).
+    /// Task kinds, comma-separated; when not named, a planner model surveys
+    /// the sources and chooses them.
     #[arg(long, value_delimiter = ',', value_name = "K,..")]
     pub kinds: Vec<String>,
     /// Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
@@ -196,6 +197,10 @@ pub struct LearnArgs {
     /// The model that writes the tasks (default: the policy).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub generator: Option<ModelRef>,
+    /// The model that surveys the sources and plans the learning when no
+    /// --kinds are named (default: the generator).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub planner: Option<ModelRef>,
     /// Optimizer steps of the training.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("Optimizer steps of the training [default: {DEFAULT_STEPS}]"))]

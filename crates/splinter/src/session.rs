@@ -34,8 +34,8 @@ use splinter_campaign::verify::{verify_set, Judge};
 use splinter_campaign::{CampaignError, Config, Context};
 
 use crate::cli::{
-    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, ReleaseCommand,
-    RunsCommand, SourceCommand, StateCommand, TasksCommand,
+    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
+    ReleaseCommand, RunsCommand, SourceCommand, StateCommand, TasksCommand,
 };
 use crate::learn_output;
 use crate::output::{self, emit, shell_words};
@@ -208,31 +208,13 @@ impl Session {
         let json = self.global.json;
         match command {
             Command::Learn(args) => {
-                let request = LearnRequest {
-                    pass_at_k: args.pass_at_k.pass_at_k(),
-                    sources: args.sources,
-                    goal: args.goal,
-                    kinds: args.kinds,
-                    budget: args.budget,
-                    dry_run: args.dry_run,
-                    no_release: args.no_release,
-                    no_frontier: args.no_frontier,
-                    distill: args.distill,
-                    steps: args.steps,
-                    rank: args.rank,
-                    tuning: Tuning {
-                        bf16_base: args.bf16_base,
-                        learning_rate: args.lr,
-                    },
-                    teacher: args.teacher,
-                    generator: args.generator,
-                    ..LearnRequest::default()
-                };
+                let release_asked = !args.no_release;
+                let request = learn_request(args);
                 let learned = learn(ctx, &request, &BrainTrainer)?;
                 emit(json, &learned);
                 let finished = match &learned {
                     Learned::Planned(_) => true,
-                    Learned::Ran(run) => run.report.finished(!args.no_release),
+                    Learned::Ran(run) => run.report.finished(release_asked),
                 };
                 return Ok(if finished { Exit::Ok } else { Exit::Failed });
             }
@@ -509,5 +491,78 @@ impl Session {
             }
         }
         Ok(Exit::Ok)
+    }
+}
+
+/// The `learn` the command line asked for. With no kinds named, a planner
+/// chooses them: naming the kinds is deciding them.
+fn learn_request(args: LearnArgs) -> LearnRequest {
+    LearnRequest {
+        pass_at_k: args.pass_at_k.pass_at_k(),
+        plan: args.kinds.is_empty(),
+        planner: args.planner,
+        sources: args.sources,
+        goal: args.goal,
+        kinds: args.kinds,
+        budget: args.budget,
+        dry_run: args.dry_run,
+        no_release: args.no_release,
+        no_frontier: args.no_frontier,
+        distill: args.distill,
+        steps: args.steps,
+        rank: args.rank,
+        tuning: Tuning {
+            bf16_base: args.bf16_base,
+            learning_rate: args.lr,
+        },
+        teacher: args.teacher,
+        generator: args.generator,
+        ..LearnRequest::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+    use crate::cli::{Cli, Command};
+
+    fn request(words: &[&str]) -> LearnRequest {
+        let mut argv = vec!["splinter"];
+        argv.extend_from_slice(words);
+        match Cli::try_parse_from(argv).unwrap().command {
+            Some(Command::Learn(args)) => learn_request(args),
+            other => panic!("not a learn: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn learn_plans_unless_the_kinds_are_named() {
+        let planned = request(&["learn", "docs"]);
+        assert!(planned.plan && planned.kinds.is_empty());
+        let named = request(&["learn", "docs", "--kinds", "recall,advise"]);
+        assert!(!named.plan, "naming the kinds is deciding them");
+        assert_eq!(named.kinds, ["recall", "advise"]);
+    }
+
+    #[test]
+    fn the_distill_and_training_flags_reach_the_request() {
+        let r = request(&[
+            "learn",
+            "docs",
+            "--distill",
+            "--steps",
+            "300",
+            "--rank",
+            "16",
+            "--lr",
+            "0.0002",
+            "--bf16-base",
+        ]);
+        assert!(r.distill);
+        assert_eq!((r.steps, r.rank), (Some(300), Some(16)));
+        assert!(r.tuning.bf16_base);
+        assert_eq!(r.tuning.learning_rate, Some(0.0002));
     }
 }

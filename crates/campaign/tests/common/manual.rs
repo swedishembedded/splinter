@@ -72,7 +72,12 @@ pub fn variants_reply(prompt: &str) -> Option<String> {
 /// The policy; see the module documentation. It writes the variants of the
 /// tasks it wrote when asked.
 pub fn manual_policy() -> Scripted {
-    Scripted::new(|prompt| {
+    Scripted::new(manual_reply)
+}
+
+/// The policy's reply to `prompt`; see [`manual_policy`].
+pub fn manual_reply(prompt: &str) -> String {
+    {
         if let Some(variants) = variants_reply(prompt) {
             variants
         } else if prompt.contains("You write training tasks") {
@@ -100,5 +105,5 @@ pub fn manual_policy() -> Scripted {
         } else {
             "12 mA".into()
         }
-    })
+    }
 }

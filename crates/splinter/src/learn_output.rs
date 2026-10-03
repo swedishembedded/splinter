@@ -11,6 +11,30 @@ use splinter_campaign::variants::VariantsGenerated;
 
 use crate::output::{source_line, tally, word, Report};
 
+/// What the plan stage found and chose, on one line.
+fn plan_line(summary: &serde_json::Value) -> String {
+    let (survey, plan) = (&summary["survey"], &summary["plan"]);
+    let kinds: Vec<&str> = plan["kinds"]
+        .as_array()
+        .map(|k| k.iter().filter_map(|k| k.as_str()).collect())
+        .unwrap_or_default();
+    let persona = plan["persona"]
+        .as_str()
+        .map_or(String::new(), |p| format!(" as {p}"));
+    let mode = if plan["distill"] == true {
+        ", distil from a teacher"
+    } else {
+        ""
+    };
+    format!(
+        "{} part(s), {} section(s) read as advice -> {}{persona}{mode}: {}",
+        survey["parts"],
+        survey["advice_sections"],
+        kinds.join(", "),
+        plan["rationale"].as_str().unwrap_or("")
+    )
+}
+
 /// One line saying what a finished `learn` stage did, from its summary.
 pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
     let field = |name: &str| match &summary[name] {
@@ -20,6 +44,7 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
     };
     match stage {
         "sources" => format!("{} source(s)", summary.as_array().map_or(0, Vec::len)),
+        "plan" => plan_line(summary),
         "tasks" => format!("{} task(s) in {}", field("tasks"), field("task_set")),
         "solve" => format!(
             "{} solved, {} answered, in {}",
@@ -146,6 +171,10 @@ impl Report for LearnReport {
         stage(&mut out, "policy", policy);
         let sources: String = self.sources.iter().map(|s| source_line(s) + "\n").collect();
         stage(&mut out, "sources", sources);
+        if let Some(planned) = &self.plan {
+            let summary = serde_json::to_value(planned).unwrap_or(serde_json::Value::Null);
+            stage(&mut out, "plan", plan_line(&summary));
+        }
         if let Some(r) = &self.tasks {
             stage(&mut out, "tasks", r.human());
         }
@@ -192,5 +221,31 @@ impl Report for Learned {
             Self::Planned(plan) => plan.human(),
             Self::Ran(run) => run.human(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_plan_stage_says_what_was_chosen_and_why() {
+        let line = stage_line(
+            "plan",
+            &serde_json::json!({
+                "survey": {"parts": 300, "advice_sections": 412},
+                "plan": {"persona": "Thomas Jefferson", "kinds": ["advise", "recall"], "distill": true, "rationale": "the letters hold advice"}
+            }),
+        );
+        assert!(line.contains("advise, recall"), "{line}");
+        assert!(
+            line.contains("distil") && line.contains("Thomas Jefferson"),
+            "{line}"
+        );
+        assert!(
+            line.contains("300 part(s)") && line.contains("412"),
+            "{line}"
+        );
+        assert!(line.contains("the letters hold advice"), "{line}");
     }
 }

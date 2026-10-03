@@ -31,4 +31,5 @@ pub mod denoise;
 pub mod gates;
 pub mod material;
 pub mod sections;
+pub mod survey;
 pub mod tasks;

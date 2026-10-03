@@ -58,6 +58,7 @@ pub mod judge;
 pub mod learn;
 pub mod lineage;
 pub mod model_ref;
+pub mod plan;
 pub mod release;
 pub mod runs;
 pub mod solving;

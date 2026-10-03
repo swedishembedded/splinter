@@ -484,3 +484,15 @@ fn learn_can_distill_and_tune_the_training_it_runs() {
         "no steps is no training"
     );
 }
+
+#[test]
+fn learn_names_the_model_that_plans() {
+    let Command::Learn(plain) = command(&["learn", "docs"]) else {
+        panic!("learn");
+    };
+    assert_eq!(plain.planner, None, "the generator plans by default");
+    let Command::Learn(named) = command(&["learn", "docs", "--planner", "local:./big"]) else {
+        panic!("learn --planner");
+    };
+    assert_eq!(named.planner, Some("local:./big".parse().unwrap()));
+}

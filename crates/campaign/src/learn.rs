@@ -50,6 +50,8 @@ use splinter_lab::holdout::MIN_SAMPLES;
 use splinter_record::experiences::SetId;
 use splinter_record::source::SourceId;
 
+use splinter_knowledge::survey::{survey, Survey};
+
 use crate::context::Context;
 use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};
 use crate::curriculum::frontier::{select_frontier, Frontier, PassAtK};
@@ -59,6 +61,7 @@ use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::datasets::{build, BuildRequest, Built, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::error::CampaignError;
 use crate::model_ref::{ModelRef, POLICY_DEFAULT};
+use crate::plan::{plan as make_plan, Plan};
 use crate::release::{release, ReleaseId, ReleaseRequest, Released};
 use crate::runs::{record, Recorded, Recorder};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
@@ -74,9 +77,9 @@ use crate::variants::{
 use crate::verify::{verify_set, Verified};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 13] = [
-    "policy", "sources", "tasks", "solve", "verify", "teach", "frontier", "variants", "critique",
-    "select", "dataset", "train", "release",
+pub const STAGES: [&str; 14] = [
+    "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "frontier", "variants",
+    "critique", "select", "dataset", "train", "release",
 ];
 
 /// One `learn`.
@@ -86,8 +89,13 @@ pub struct LearnRequest {
     pub sources: Vec<String>,
     /// What the learner is after.
     pub goal: Option<String>,
-    /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`].
+    /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`] unless `plan` is set.
     pub kinds: Vec<String>,
+    /// Let a planner model survey the sources and choose the task kinds,
+    /// and whether to distil. Refused together with `kinds`: one decides.
+    pub plan: bool,
+    /// The model that plans; `None`: the generator, else the policy.
+    pub planner: Option<ModelRef>,
     /// Wall-clock time the whole pipeline may take.
     pub budget: Option<Duration>,
     /// Resolve the plan and write nothing.
@@ -144,6 +152,15 @@ pub struct LearnPlan {
     pub dry_run: bool,
 }
 
+/// What the plan stage found and chose.
+#[derive(Clone, Debug, Serialize)]
+pub struct Planned {
+    /// What the sources hold.
+    pub survey: Survey,
+    /// How the planner chose to learn from them.
+    pub plan: Plan,
+}
+
 /// The policy a run works with, as resolved when it started.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct PolicyUsed {
@@ -161,6 +178,9 @@ pub struct LearnReport {
     pub policy: PolicyUsed,
     /// The sources learned from.
     pub sources: Vec<SourceSummary>,
+    /// The plan stage: the survey and the planner's choice; `None` when no
+    /// plan was asked for.
+    pub plan: Option<Planned>,
     /// The tasks stage.
     pub tasks: Option<TasksGenerated>,
     /// The solve stage.
@@ -214,7 +234,14 @@ pub fn learn(
     request: &LearnRequest,
     trainer: &dyn Trainer,
 ) -> Result<Learned, CampaignError> {
-    let kinds = if request.kinds.is_empty() {
+    if request.plan && !request.kinds.is_empty() {
+        return Err(CampaignError::Refused(
+            "name the task kinds or ask for a plan, not both: one of them decides".into(),
+        ));
+    }
+    let kinds = if request.plan {
+        Vec::new()
+    } else if request.kinds.is_empty() {
         DEFAULT_LEARN_KINDS.iter().map(|k| k.to_string()).collect()
     } else {
         check_kinds(&request.kinds)?
@@ -237,6 +264,9 @@ pub fn learn(
     let policy = ModelRef::policy_default();
     let teacher = request.teacher.clone().unwrap_or_else(|| policy.clone());
     let generator = request.generator.clone().unwrap_or_else(|| policy.clone());
+    let planner = request
+        .plan
+        .then(|| request.planner.clone().unwrap_or_else(|| generator.clone()));
     if request.dry_run {
         return Ok(Learned::Planned(Box::new(LearnPlan {
             state: ctx.root().path().to_path_buf(),
@@ -250,6 +280,7 @@ pub fn learn(
             stages: STAGES
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
+                .filter(|stage| !(!request.plan && *stage == "plan"))
                 .filter(|stage| !(!measures_frontier && *stage == "frontier"))
                 .filter(|stage| {
                     !(request.distill && ["solve", "verify", "critique"].contains(stage))
@@ -262,6 +293,7 @@ pub fn learn(
         ctx,
         targets: &targets,
         kinds: &kinds,
+        planner: planner.as_ref(),
         goal: request.goal.as_deref(),
         deadline: request.budget.map(|b| Instant::now() + b),
         trainer,
@@ -288,6 +320,8 @@ struct Pipeline<'a> {
     ctx: &'a Context,
     targets: &'a [SourceTarget],
     kinds: &'a [String],
+    /// The model that plans the kinds; `None` keeps `kinds`.
+    planner: Option<&'a ModelRef>,
     goal: Option<&'a str>,
     deadline: Option<Instant>,
     trainer: &'a dyn Trainer,
@@ -313,6 +347,7 @@ impl Pipeline<'_> {
             ctx,
             targets,
             kinds,
+            planner,
             goal,
             deadline,
             trainer,
@@ -345,6 +380,28 @@ impl Pipeline<'_> {
             report.sources.push(added.source);
         }
         run.stage("sources", &report.sources)?;
+
+        // The planner chooses the kinds, and whether to distil, from what
+        // the sources hold; otherwise they are as the request named them.
+        let planned_kinds: Vec<String>;
+        let mut distill = distill;
+        let kinds: &[String] = match planner {
+            Some(planner) => {
+                let surveyed = survey(&ctx.sources(), &source_ids)?;
+                let chosen = make_plan(ctx, &surveyed, goal, planner, &run.cancel_token())?;
+                let planned = Planned {
+                    survey: surveyed,
+                    plan: chosen,
+                };
+                run.stage("plan", &planned)?;
+                distill = distill || planned.plan.distill;
+                planned_kinds = planned.plan.kinds.clone();
+                report.plan = Some(planned);
+                &planned_kinds
+            }
+            None => kinds,
+        };
+        let frontier = if distill { None } else { frontier };
 
         run.check_cancelled()?;
         let queued = queue::pending(ctx)?;
