@@ -39,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_core::annotation::{Producer, Strength};
 use splinter_core::digest::Digest;
+use splinter_core::evidence::EXECUTABLE_PRODUCER;
 use splinter_core::experience::{Environment, Experience, Privileged, PrivilegedKind, Task};
 use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST};
 use splinter_sandbox::{
@@ -47,9 +48,6 @@ use splinter_sandbox::{
 
 use super::normalise::Normalisation;
 use super::{privileged_of, Finding, Verifier, VerifyError};
-
-/// The producer name the executable verifier's annotations carry.
-pub const PRODUCER: &str = "splinter-lab/executable";
 
 /// The executable verifier's version.
 pub const VERSION: &str = "2";
@@ -330,48 +328,6 @@ pub(crate) fn run_evidence(
     })
 }
 
-/// A reader's summary of the evidence an executable verdict carries: one
-/// line per check run, naming the runtime it ran in and how the run ended
-/// (`check 1: python 3.12.1, exit code 1`). Digests are left out: they
-/// identify what ran, they do not describe it. `None` when `evidence` is
-/// not in the shape [`ExecutableVerifier`] records, or no check ran.
-#[must_use]
-pub fn evidence_summary(evidence: &serde_json::Value) -> Option<String> {
-    let checks = evidence.get("checks")?.as_array()?;
-    let mut lines = Vec::with_capacity(checks.len());
-    for (index, check) in checks.iter().enumerate() {
-        let runtime = check.get("runtime")?;
-        let name = runtime.get("name")?.as_str()?;
-        let version = runtime.get("version")?.as_str()?;
-        let ending = if check.get("timed_out")?.as_bool()? {
-            "timed out".to_string()
-        } else if let Some(code) = check.get("exit_code").and_then(serde_json::Value::as_i64) {
-            format!("exit code {code}")
-        } else {
-            let signal = check.get("signal").and_then(serde_json::Value::as_i64)?;
-            format!("ended by signal {signal}")
-        };
-        lines.push(format!("check {}: {name} {version}, {ending}", index + 1));
-    }
-    (!lines.is_empty()).then(|| lines.join("\n"))
-}
-
-/// The checks in the evidence an executable verdict carries that did not
-/// meet their expectation, numbered from 1 in the order they ran, as
-/// [`evidence_summary`] numbers them. `None` when `evidence` is not in the
-/// shape [`ExecutableVerifier`] records.
-#[must_use]
-pub fn failed_checks(evidence: &serde_json::Value) -> Option<Vec<usize>> {
-    let checks = evidence.get("checks")?.as_array()?;
-    let mut failed = Vec::new();
-    for (index, check) in checks.iter().enumerate() {
-        if !check.get("passed")?.as_bool()? {
-            failed.push(index + 1);
-        }
-    }
-    Some(failed)
-}
-
 /// Runs a task's authored checks ([`EXECUTABLE_CHECK`]) against the solver's
 /// code: pass iff every check meets its expectation, fail otherwise or
 /// when there is no answer; abstains on a task with no checks, or whose
@@ -394,7 +350,7 @@ impl ExecutableVerifier {
 impl Verifier for ExecutableVerifier {
     fn producer(&self) -> Producer {
         Producer {
-            name: PRODUCER.into(),
+            name: EXECUTABLE_PRODUCER.into(),
             version: VERSION.into(),
         }
     }

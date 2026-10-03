@@ -204,7 +204,7 @@ fn verifier_classifies_a_candidate_by_its_decision_with_execution_evidence() {
     let executed = Annotation {
         experience: id(&fail),
         producer: Producer {
-            name: executable::PRODUCER.into(),
+            name: splinter_core::evidence::EXECUTABLE_PRODUCER.into(),
             version: executable::VERSION.into(),
         },
         body: AnnotationBody::Verdict {

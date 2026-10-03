@@ -40,9 +40,7 @@ use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-use splinter_views::{
-    DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip, WriteOptions,
-};
+use splinter_views::{DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use sven_sdk::CancelToken;
 
 use super::{config, Scratch, Scripted};
@@ -161,9 +159,7 @@ pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
         records,
         excluded: BTreeMap::new(),
     };
-    store_dataset(ctx, &projection, WriteOptions::default())
-        .unwrap()
-        .id
+    store_dataset(ctx, &projection, false).unwrap().id
 }
 
 /// Stores a preference dataset over `n` facts about `topic`: each pair
@@ -208,9 +204,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         records,
         excluded: BTreeMap::new(),
     };
-    store_dataset(ctx, &projection, WriteOptions::default())
-        .unwrap()
-        .id
+    store_dataset(ctx, &projection, false).unwrap().id
 }
 
 /// Writes `n` anchor facts as an anchor file in `dir`.

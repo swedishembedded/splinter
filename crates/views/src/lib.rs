@@ -72,7 +72,8 @@ use splinter_store::experiences::StoreError;
 
 pub use corpus::{Corpus, Entry};
 pub use dataset::{
-    manifest_path, write_dataset, Counts, Dataset, Format, Manifest, WriteOptions, EXPORT_FORMAT,
+    manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest, Unchecked,
+    EXPORT_FORMAT,
 };
 pub use replay::replay_sample;
 pub use store::{DatasetId, DatasetStore, StoredDataset};
@@ -103,26 +104,19 @@ pub enum Objective {
 }
 
 impl Objective {
-    /// The format brain's public SDK trains this objective from, when it
-    /// has a trainer for it: chat fine-tuning trains SFT and classification
-    /// rendered as SFT from [`Format::GenericMessagesV2`], preference
-    /// fine-tuning trains DPO from [`Format::GenericPreferenceV1`]. brain
-    /// has no trainer that reads contrastive triples for the policy model,
-    /// rewarded trajectories or a raw text corpus as a dataset.
+    /// The line format this objective's records are written in: chat lines
+    /// for SFT and classification (rendered as SFT), preference pairs for
+    /// DPO, and Splinter's own export format for the objectives whose
+    /// records no trainer reads as a dataset file (contrastive triples,
+    /// rewarded trajectories, a raw text corpus). Whether a backend trains a
+    /// format is that backend's to say.
     #[must_use]
-    pub fn brain_format(self) -> Option<Format> {
+    pub fn line_format(self) -> Format {
         match self {
-            Self::Sft | Self::Classification => Some(Format::GenericMessagesV2),
-            Self::Dpo => Some(Format::GenericPreferenceV1),
-            Self::Contrastive | Self::Reward | Self::Cpt => None,
+            Self::Sft | Self::Classification => Format::GenericMessagesV2,
+            Self::Dpo => Format::GenericPreferenceV1,
+            Self::Contrastive | Self::Reward | Self::Cpt => Format::SplinterExportV1,
         }
-    }
-
-    /// Whether brain's public SDK trains this objective from a dataset
-    /// file; see [`Objective::brain_format`].
-    #[must_use]
-    pub fn trainable_by_brain(self) -> bool {
-        self.brain_format().is_some()
     }
 }
 
@@ -467,16 +461,6 @@ pub enum ViewError {
     /// a producer bug, not a dataset.
     #[error("no records to write")]
     Empty,
-    /// Brain has no trainer for the objective, and the caller did not ask
-    /// for an export-only file.
-    #[error(
-        "brain cannot train objective {objective:?}; write it with export_only to get \
-         Splinter's export format instead"
-    )]
-    ObjectiveNotTrainable {
-        /// The objective.
-        objective: Objective,
-    },
     /// A record does not have the shape its projection's objective needs.
     #[error("record {index} is a {shape} record, which does not serve objective {objective:?}")]
     Shape {
@@ -501,12 +485,12 @@ pub enum ViewError {
         /// Records in it.
         records: usize,
     },
-    /// Brain's parser refused the dataset.
-    #[error("{path} is refused by brain's dataset parser: {reason}")]
+    /// The dataset's validator refused it.
+    #[error("{path} is refused by the dataset validator: {reason}")]
     Invalid {
         /// The dataset file.
         path: std::path::PathBuf,
-        /// The parser's error.
+        /// The validator's error.
         reason: String,
     },
     /// A file operation failed.

@@ -25,7 +25,7 @@ use splinter_core::chat::WireMessage;
 use splinter_core::experience::{Experience, PrivilegedKind, Task};
 use splinter_views::{
     write_dataset, Corpus, DecisionView, Exclusion, Objective, OutcomeView, Record, RecordBody,
-    SftStep, View, ViewError, WriteOptions,
+    SftStep, Unchecked, View,
 };
 
 const INSTRUCTION: &str = "Compute one plus one with the tool and report it.";
@@ -122,12 +122,7 @@ fn sft_step_supervises_each_action_in_the_context_the_solver_had() {
 
     // Brain's parser accepts the tool-call form.
     let scratch = Scratch::new("sft-step");
-    let dataset = write_dataset(
-        &scratch.0.join("steps.jsonl"),
-        &projection,
-        WriteOptions::default(),
-    )
-    .unwrap();
+    let dataset = write_dataset(&scratch.0.join("steps.jsonl"), &projection, &Unchecked).unwrap();
     assert_eq!((dataset.records, dataset.trained_messages), (2, Some(2)));
 
     // A bad label drops that step; a failed trajectory yields only the
@@ -305,18 +300,11 @@ fn outcome_pairs_a_trajectory_with_its_reward_and_skips_the_unmeasured() {
     );
     assert_eq!(projection.count(Exclusion::NoReward), 2);
 
-    // Brain cannot train on rewards: the writer refuses, and the export
-    // holds only measured rewards.
+    // Rewarded trajectories have no dataset-file trainer, so they are written
+    // in the export format, which holds only measured rewards.
     let scratch = Scratch::new("outcome");
     let path = scratch.0.join("outcome.jsonl");
-    assert!(matches!(
-        write_dataset(&path, &projection, WriteOptions::default()),
-        Err(ViewError::ObjectiveNotTrainable {
-            objective: Objective::Reward
-        })
-    ));
-    assert!(!path.exists());
-    write_dataset(&path, &projection, WriteOptions { export_only: true }).unwrap();
+    write_dataset(&path, &projection, &Unchecked).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     let written: Vec<serde_json::Value> = text
         .lines()

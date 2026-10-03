@@ -15,7 +15,7 @@ use common::*;
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_store::StateRoot;
 use splinter_views::{
-    Corpus, DatasetId, DatasetStore, Format, SftFinal, View, ViewError, WriteOptions,
+    Corpus, DatasetId, DatasetStore, Format, SftFinal, Unchecked, View, ViewError,
 };
 
 fn passed_corpus() -> Corpus {
@@ -40,11 +40,11 @@ fn a_stored_dataset_is_named_by_its_manifest_and_verified_on_read() {
         .project(&passed_corpus())
         .unwrap();
 
-    let stored = store.put(&projection, WriteOptions::default()).unwrap();
+    let stored = store.put(&projection, &Unchecked).unwrap();
     assert_eq!(stored.manifest.format, Format::GenericMessagesV2);
     assert_eq!(stored.manifest.counts.records, 1);
     assert!(stored.path.is_file());
-    let again = store.put(&projection, WriteOptions::default()).unwrap();
+    let again = store.put(&projection, &Unchecked).unwrap();
     assert_eq!(again.id, stored.id, "the same dataset is stored once");
     assert_eq!(store.list().unwrap(), vec![stored.id.clone()]);
     assert_eq!(store.get(&stored.id).unwrap(), stored);

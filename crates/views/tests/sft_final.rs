@@ -20,7 +20,7 @@ use splinter_core::experience::{
 };
 use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_views::{
-    write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, View, ViewError, WriteOptions,
+    write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, Unchecked, View, ViewError,
 };
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
@@ -186,8 +186,7 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
         .unwrap();
     let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
     let dir = scratch("dataset");
-    let dataset =
-        write_dataset(&dir.join("sft.jsonl"), &projection, WriteOptions::default()).unwrap();
+    let dataset = write_dataset(&dir.join("sft.jsonl"), &projection, &Unchecked).unwrap();
     let bytes = std::fs::read(&dataset.path).unwrap();
     assert_eq!(dataset.digest, Digest::of(&bytes));
     assert_eq!(dataset.format, Format::GenericMessagesV2);
@@ -208,7 +207,7 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
     let mut empty = projection.clone();
     empty.records.clear();
     assert!(matches!(
-        write_dataset(&dir.join("empty.jsonl"), &empty, WriteOptions::default()),
+        write_dataset(&dir.join("empty.jsonl"), &empty, &Unchecked),
         Err(ViewError::Empty)
     ));
     assert!(!dir.join("empty.jsonl").exists());

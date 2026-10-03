@@ -10,7 +10,7 @@
 //! answer under `Candidate answer:`, and - when an executable verdict is
 //! among its annotations - a summary of how the checks ran under
 //! `Execution evidence:` (the lab's
-//! `splinter_lab::verifiers::executable::evidence_summary`: runtime and
+//! `splinter_core::evidence::evidence_summary`: runtime and
 //! how each run ended, never digests or privileged checks); the supervised
 //! reply is [`VerifierView::PASS`] or [`VerifierView::FAIL`].
 //!
@@ -20,7 +20,7 @@
 //! writes it as `generic-messages-v2`.
 
 use splinter_core::annotation::{AnnotationBody, Strength};
-use splinter_lab::verifiers::executable;
+use splinter_core::evidence;
 
 use crate::render::{message, student_turn, with_candidate, EXECUTION_HEADING};
 use crate::{
@@ -74,13 +74,13 @@ impl VerifierView {
         let execution: Vec<String> = entry
             .notes
             .iter()
-            .filter(|note| note.producer.name == executable::PRODUCER)
+            .filter(|note| note.producer.name == evidence::EXECUTABLE_PRODUCER)
             .filter_map(|note| match &note.body {
                 AnnotationBody::Verdict {
                     strength: Strength::Executable,
                     evidence,
                     ..
-                } => executable::evidence_summary(evidence),
+                } => evidence::evidence_summary(evidence),
                 _ => None,
             })
             .collect();

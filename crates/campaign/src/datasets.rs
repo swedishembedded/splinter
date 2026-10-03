@@ -17,13 +17,14 @@ use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::digest::canonical_json;
 use splinter_core::experience::{ExperienceId, PrivilegedKind};
+use splinter_policy::{BrainDatasetCheck, TrainingCapabilities};
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 pub use splinter_views::Strip;
 use splinter_views::{
     manifest_path, Corpus, Cpt, Critic, DatasetId, DecisionView, DenoiseView, Exclusion, Format,
     Fraction, Objective, OutcomeView, Preference, Projection, Retrieval, SftFinal, SftStep,
-    StoredDataset, VerifierView, View, WriteOptions,
+    StoredDataset, VerifierView, View,
 };
 
 use crate::context::Context;
@@ -299,13 +300,7 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, CampaignErr
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
     }?;
     assign_groups(ctx, &corpus, &mut projection)?;
-    let stored = store_dataset(
-        ctx,
-        &projection,
-        WriteOptions {
-            export_only: request.export_only,
-        },
-    )?;
+    let stored = store_dataset(ctx, &projection, request.export_only)?;
     Ok(Built::from(stored))
 }
 
@@ -316,9 +311,14 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, CampaignErr
 pub fn store_dataset(
     ctx: &Context,
     projection: &Projection,
-    options: WriteOptions,
+    export_only: bool,
 ) -> Result<StoredDataset, CampaignError> {
-    let stored = ctx.datasets().put(projection, options)?;
+    if !export_only {
+        TrainingCapabilities::BRAIN
+            .require(projection.objective)
+            .map_err(|e| CampaignError::Refused(e.to_string()))?;
+    }
+    let stored = ctx.datasets().put(projection, &BrainDatasetCheck)?;
     record_dataset_lineage(ctx, &stored)?;
     Ok(stored)
 }

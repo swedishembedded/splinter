@@ -10,6 +10,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+splinter-core = { workspace = true }
+splinter-views = { workspace = true }
 sven-sdk = { workspace = true }
 brain = { workspace = true }
 

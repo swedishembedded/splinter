@@ -4,12 +4,11 @@
 //! Spec: a projection becomes a file only in a format its consumer reads
 //! correctly, and never without a manifest that says what is in it.
 //!
-//! Objectives brain trains are written in brain's own format: SFT, and
-//! classification rendered as SFT, as `generic-messages-v2`; preference
-//! pairs as `generic-preference-v1`, each checked by brain's own parser
-//! before it lands. Any other objective is refused unless the caller asks
-//! for Splinter's export-only format, so no file brain would misread is
-//! ever written. Beside every dataset lies its manifest:
+//! Objectives with a chat or preference shape are written as chat lines
+//! (`generic-messages-v2`: SFT, and classification rendered as SFT) and
+//! preference pairs (`generic-preference-v1`); any other objective is written
+//! in Splinter's own export format. A caller's check can refuse a file before
+//! it lands. Beside every dataset lies its manifest:
 //! the view, objective, strip policy, minimum strength, experiences, and
 //! the counts of records and of exclusions by reason.
 
@@ -27,7 +26,7 @@ use splinter_core::experience::{Digest, PrivilegedKind};
 use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_views::{
     manifest_path, write_dataset, Corpus, Format, Objective, Preference, Projection, Record,
-    RecordBody, RecordMetadata, SftFinal, View, ViewError, WriteOptions, EXPORT_FORMAT,
+    RecordBody, RecordMetadata, SftFinal, Unchecked, View, ViewError, EXPORT_FORMAT,
 };
 
 fn graded_corpus() -> (Corpus, Vec<splinter_core::experience::ExperienceId>) {
@@ -63,7 +62,7 @@ fn every_dataset_has_a_content_addressed_manifest_with_its_counts() {
     let scratch = Scratch::new("manifest");
     let path = scratch.0.join("sft.jsonl");
     let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
-    let dataset = write_dataset(&path, &projection, WriteOptions::default()).unwrap();
+    let dataset = write_dataset(&path, &projection, &Unchecked).unwrap();
 
     let (manifest, digest) = manifest(&path);
     assert_eq!(
@@ -91,7 +90,7 @@ fn every_dataset_has_a_content_addressed_manifest_with_its_counts() {
 }
 
 #[test]
-fn a_preference_dataset_is_generic_preference_v1_which_brain_parses() {
+fn a_preference_dataset_is_written_as_generic_preference_v1() {
     // The task carries a hint only the teacher saw; the student prompt of
     // every pair is stripped of it.
     let sum = task(
@@ -119,7 +118,7 @@ fn a_preference_dataset_is_generic_preference_v1_which_brain_parses() {
 
     let scratch = Scratch::new("preference");
     let path = scratch.0.join("dpo.jsonl");
-    let dataset = write_dataset(&path, &projection, WriteOptions::default()).unwrap();
+    let dataset = write_dataset(&path, &projection, &Unchecked).unwrap();
     assert_eq!(dataset.format, Format::GenericPreferenceV1);
     assert_eq!(dataset.records, 1);
     let text = std::fs::read_to_string(&path).unwrap();
@@ -141,18 +140,9 @@ fn a_preference_dataset_is_generic_preference_v1_which_brain_parses() {
             },
         })
     );
-    let summary = splinter_policy::train::validate_preference_dataset(&path).unwrap();
-    assert_eq!(summary.pairs, 1, "brain's own parser reads the pair");
     let (manifest, _) = manifest(&path);
     assert_eq!(manifest["format"], "generic-preference-v1");
     assert_eq!(manifest["experiences"], json!([id(&pass), id(&fail)]));
-
-    // Export is only for what brain cannot train: a preference dataset
-    // keeps brain's format when export is allowed.
-    let exported = scratch.0.join("exported.jsonl");
-    let dataset =
-        write_dataset(&exported, &projection, WriteOptions { export_only: true }).unwrap();
-    assert_eq!(dataset.format, Format::GenericPreferenceV1);
 }
 
 #[test]
@@ -177,7 +167,7 @@ fn a_preference_candidate_carries_the_tool_calls_of_its_final_turn() {
     let projection = Preference::new(Strength::Formal).project(&corpus).unwrap();
     let scratch = Scratch::new("preference-tools");
     let path = scratch.0.join("dpo.jsonl");
-    write_dataset(&path, &projection, WriteOptions::default()).unwrap();
+    write_dataset(&path, &projection, &Unchecked).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     let line: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
     assert_eq!(
@@ -196,11 +186,10 @@ fn a_preference_candidate_carries_the_tool_calls_of_its_final_turn() {
         line["rejected"],
         json!({"role": "assistant", "content": "5"})
     );
-    splinter_policy::train::validate_preference_dataset(&path).unwrap();
 }
 
 #[test]
-fn objectives_brain_cannot_train_are_refused_unless_exported() {
+fn objectives_without_a_chat_or_preference_shape_are_exported() {
     let metadata = |objective| RecordMetadata {
         group: None,
         experiences: Vec::new(),
@@ -240,17 +229,9 @@ fn objectives_brain_cannot_train_are_refused_unless_exported() {
             }],
             excluded: BTreeMap::new(),
         };
-        assert!(!objective.trainable_by_brain(), "{objective:?}");
+        assert_eq!(objective.line_format(), Format::SplinterExportV1);
         let path = scratch.0.join(format!("{objective:?}.jsonl"));
-        let refused = write_dataset(&path, &projection, WriteOptions::default());
-        assert!(
-            matches!(refused, Err(ViewError::ObjectiveNotTrainable { objective: o }) if o == objective),
-            "{objective:?}: {refused:?}"
-        );
-        assert!(!path.exists() && !manifest_path(&path).exists());
-
-        let dataset =
-            write_dataset(&path, &projection, WriteOptions { export_only: true }).unwrap();
+        let dataset = write_dataset(&path, &projection, &Unchecked).unwrap();
         assert_eq!(dataset.format, Format::SplinterExportV1);
         assert_eq!(dataset.trained_messages, None, "not a chat dataset");
         let text = std::fs::read_to_string(&path).unwrap();
@@ -261,15 +242,31 @@ fn objectives_brain_cannot_train_are_refused_unless_exported() {
         assert_eq!(manifest["format"], EXPORT_FORMAT);
     }
 
-    // A trainable objective keeps brain's format even when export is
-    // allowed: one objective, one file shape.
+    // One objective, one file shape.
     let (corpus, _) = graded_corpus();
     let sft = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
-    let dataset = write_dataset(
-        &scratch.0.join("sft.jsonl"),
-        &sft,
-        WriteOptions { export_only: true },
-    )
-    .unwrap();
+    let dataset = write_dataset(&scratch.0.join("sft.jsonl"), &sft, &Unchecked).unwrap();
     assert_eq!(dataset.format, Format::GenericMessagesV2);
+}
+
+#[test]
+fn a_check_that_refuses_a_file_leaves_nothing_at_the_path() {
+    struct Refuses;
+    impl splinter_views::DatasetCheck for Refuses {
+        fn check(&self, _: Format, pending: &std::path::Path, _: usize) -> Result<(), String> {
+            assert!(pending.exists(), "the check reads the file before it lands");
+            Err("not a file this backend reads".into())
+        }
+    }
+    let (corpus, _) = graded_corpus();
+    let scratch = Scratch::new("refused");
+    let path = scratch.0.join("sft.jsonl");
+    let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
+    let refused = write_dataset(&path, &projection, &Refuses);
+    assert!(
+        matches!(&refused, Err(ViewError::Invalid { reason, .. }) if reason.contains("not a file")),
+        "{refused:?}"
+    );
+    assert!(!path.exists() && !manifest_path(&path).exists());
+    assert!(!path.with_extension("pending").exists());
 }

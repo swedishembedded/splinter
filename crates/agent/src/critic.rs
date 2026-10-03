@@ -13,7 +13,7 @@
 //! The critic is shown the task's instruction, the failed answer and a
 //! summary of each verdict on it: its strength and outcome, and for an
 //! executable verdict how each check's run ended and which checks failed
-//! (`splinter_lab::verifiers::executable::evidence_summary` and
+//! (`splinter_core::evidence::evidence_summary` and
 //! `failed_checks`). It is never shown the task's privileged material (the
 //! reference, the checks' code, generated tests, oracles, passages or
 //! hints), nor a judge's reasons, which may quote the reference: [`critic_prompt`]
@@ -30,8 +30,8 @@ use splinter_core::annotation::{
     Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
 };
 use splinter_core::clock::Clock;
+use splinter_core::evidence::{evidence_summary, failed_checks};
 use splinter_core::experience::{Environment, ExperienceId, Provenance, Task};
-use splinter_lab::verifiers::executable::{evidence_summary, failed_checks};
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 use splinter_store::experiences::ExperienceStore;

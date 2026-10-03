@@ -77,12 +77,25 @@ pub enum Format {
     SplinterExportV1,
 }
 
-/// How [`write_dataset`] may write.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct WriteOptions {
-    /// Write an objective brain cannot train in Splinter's export format
-    /// instead of refusing it.
-    pub export_only: bool,
+/// A backend's verdict on a dataset file before it is put in place: the
+/// parser that will read it at training time, run early so a file it would
+/// refuse is never stored.
+pub trait DatasetCheck {
+    /// `Ok` when the file at `pending`, holding `records` records in
+    /// `format`, is one the backend reads whole; the reason it is not
+    /// otherwise.
+    fn check(&self, format: Format, pending: &Path, records: usize) -> Result<(), String>;
+}
+
+/// The check that accepts every file: for a caller with no backend to
+/// consult.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Unchecked;
+
+impl DatasetCheck for Unchecked {
+    fn check(&self, _: Format, _: &Path, _: usize) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// A dataset file, as written and validated.
@@ -96,8 +109,8 @@ pub struct Dataset {
     pub digest: Digest,
     /// Records in it.
     pub records: usize,
-    /// Supervised messages across them, as brain's chat parser counted
-    /// them; `None` for a file that is not a chat dataset.
+    /// Supervised messages across them; `None` for a file that is not a chat
+    /// dataset.
     pub trained_messages: Option<usize>,
     /// The digest of its manifest's bytes.
     pub manifest: Digest,
@@ -147,15 +160,14 @@ pub fn manifest_path(dataset: &Path) -> PathBuf {
     dataset.with_file_name(name)
 }
 
-/// One line of the chat format: exactly the fields brain's parser accepts.
+/// One line of the chat format.
 #[derive(Serialize)]
 struct ChatLine<'a> {
     messages: &'a [splinter_core::chat::WireMessage],
     metadata: &'a RecordMetadata,
 }
 
-/// One line of the preference format: exactly the fields brain's parser
-/// accepts.
+/// One line of the preference format.
 #[derive(Serialize)]
 struct PreferenceLine<'a> {
     prompt: Vec<Turn<'a>>,
@@ -197,22 +209,16 @@ struct ExportLine<'a> {
 }
 
 /// Writes `projection`'s records to `path` in the format its objective maps
-/// to, and its manifest beside it. Refuses an empty projection, a record
-/// whose shape does not serve the objective, an objective brain cannot
-/// train unless `options.export_only`, and a dataset brain's parser
-/// rejects or that trains on nothing; in every case nothing is left at
-/// `path`.
+/// to ([`Objective::line_format`]), and its manifest beside it. Refuses an
+/// empty projection, a record whose shape does not serve the objective, and
+/// a dataset `check` refuses; in every case nothing is left at `path`.
 pub fn write_dataset(
     path: &Path,
     projection: &Projection,
-    options: WriteOptions,
+    check: &dyn DatasetCheck,
 ) -> Result<Dataset, ViewError> {
     let objective = projection.objective;
-    let format = match objective.brain_format() {
-        Some(format) => format,
-        None if options.export_only => Format::SplinterExportV1,
-        None => return Err(ViewError::ObjectiveNotTrainable { objective }),
-    };
+    let format = objective.line_format();
     if projection.records.is_empty() {
         return Err(ViewError::Empty);
     }
@@ -230,22 +236,22 @@ pub fn write_dataset(
     }
     let pending = path.with_extension("pending");
     std::fs::write(&pending, &text).map_err(io(&pending))?;
-    let validated = match format {
-        Format::GenericMessagesV2 => validate_chat(path, &pending).map(Some),
-        Format::GenericPreferenceV1 => {
-            validate_pairs(path, &pending, projection.records.len()).map(|()| None)
-        }
-        Format::SplinterExportV1 => Ok(None),
-    };
-    let trained_messages = match validated {
-        Ok(trained) => trained,
-        Err(e) => {
-            // The refusal is the error worth reporting; a leftover pending
-            // file is harmless and replaced by the next write.
-            let _ = std::fs::remove_file(&pending);
-            return Err(e);
-        }
-    };
+    if let Err(reason) = check.check(format, &pending, projection.records.len()) {
+        // The refusal is the error worth reporting; a leftover pending file
+        // is harmless and replaced by the next write.
+        let _ = std::fs::remove_file(&pending);
+        return Err(invalid(path, reason));
+    }
+    let trained_messages = (format == Format::GenericMessagesV2).then(|| {
+        projection
+            .records
+            .iter()
+            .map(|record| match &record.body {
+                RecordBody::Chat { messages } => messages.iter().filter(|m| m.train).count(),
+                _ => 0,
+            })
+            .sum()
+    });
     let digest = Digest::of(text.as_bytes());
     let manifest = canonical_json(&manifest(projection, format, &digest))?;
     std::fs::rename(&pending, path).map_err(io(path))?;
@@ -307,35 +313,6 @@ fn line(
             metadata: &record.metadata,
         })?,
     })
-}
-
-/// Brain's parser's verdict on the chat dataset written at `pending` for
-/// `path`: its supervised message count, refused when it supervises
-/// nothing.
-fn validate_chat(path: &Path, pending: &Path) -> Result<usize, ViewError> {
-    let summary = splinter_policy::train::validate_dataset(pending)
-        .map_err(|e| invalid(path, format!("{e:#}")))?;
-    if summary.trained_messages == 0 {
-        return Err(invalid(path, "no message is supervised".into()));
-    }
-    Ok(summary.trained_messages)
-}
-
-/// Brain's preference parser's verdict on the pairs written at `pending`
-/// for `path`, refused unless it reads every one of the `records` written.
-fn validate_pairs(path: &Path, pending: &Path, records: usize) -> Result<(), ViewError> {
-    let summary = splinter_policy::train::validate_preference_dataset(pending)
-        .map_err(|e| invalid(path, format!("{e:#}")))?;
-    if summary.pairs != records {
-        return Err(invalid(
-            path,
-            format!(
-                "{records} pair(s) were written but brain's parser read {}",
-                summary.pairs
-            ),
-        ));
-    }
-    Ok(())
 }
 
 fn invalid(path: &Path, reason: String) -> ViewError {

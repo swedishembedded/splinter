@@ -31,7 +31,7 @@ use splinter_lab::verifiers::annotation;
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
-use splinter_views::{write_dataset, Corpus, SftFinal, View, WriteOptions};
+use splinter_views::{write_dataset, Corpus, SftFinal, Unchecked, View};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 use sven_sdk::Engine;
 
@@ -176,12 +176,7 @@ async fn a_source_becomes_a_verified_dataset_through_the_experience_store() {
         .unwrap();
     assert_eq!(projection.records.len(), 1);
 
-    let dataset = write_dataset(
-        &scratch.0.join("sft.jsonl"),
-        &projection,
-        WriteOptions::default(),
-    )
-    .unwrap();
+    let dataset = write_dataset(&scratch.0.join("sft.jsonl"), &projection, &Unchecked).unwrap();
     let text = std::fs::read_to_string(&dataset.path).unwrap();
     assert_eq!(dataset.digest, Digest::of(text.as_bytes()));
     let line: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();

@@ -14,6 +14,8 @@
 //!   model loaded for a command.
 //! * [`train`] - one LoRA fine-tune, supervised (chat) or by DPO
 //!   (preference pairs), scored on held-out records.
+//! * [`capabilities`] - which dataset formats brain trains, and the check of a
+//!   dataset file against brain's own parser before it is stored.
 //! * [`stats`] - brain's paired sign test, which a release decision rests
 //!   on.
 //! * [`error`] - why a model could not be loaded, reached or trained.
@@ -23,6 +25,7 @@
 
 #![warn(missing_docs)]
 
+pub mod capabilities;
 pub mod embed;
 pub mod error;
 pub mod local;
@@ -31,6 +34,7 @@ pub mod selection;
 pub mod stats;
 pub mod train;
 
+pub use capabilities::{BrainDatasetCheck, TrainingCapabilities};
 pub use error::PolicyError;
 pub use local::{LocalWeights, Sampling, AGENT_SAMPLING};
 pub use residency::Residency;

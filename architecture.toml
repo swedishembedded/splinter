@@ -45,7 +45,7 @@ splinter-sandbox = "storage"
 splinter-lab = "domain"
 splinter-policy = "adapters"
 splinter-agent = "adapters"
-splinter-views = "application"
+splinter-views = "domain"
 splinter-knowledge = "application"
 splinter-campaign = "workflow"
 splinter = "surface"
@@ -124,3 +124,13 @@ why = "The two adapters do not know each other; the controller hands the agent a
 from = "splinter-policy"
 to = "splinter-agent"
 why = "The two adapters do not know each other; the controller hands the agent a model."
+
+[[forbidden]]
+from = "splinter-views"
+to = "brain"
+why = "A view projects experience into records; which formats a trainer reads, and whether its parser accepts a file, is the model adapter's to say."
+
+[[forbidden]]
+from = "splinter-views"
+to = "splinter-policy"
+why = "The model adapter depends on the views for the formats it trains, never the reverse."

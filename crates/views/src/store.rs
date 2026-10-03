@@ -26,7 +26,7 @@ use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
-use crate::dataset::{manifest_path, write_dataset, Manifest, WriteOptions};
+use crate::dataset::{manifest_path, write_dataset, DatasetCheck, Manifest};
 use crate::{Projection, ViewError};
 
 const MANIFEST: &str = "dataset_manifest";
@@ -85,7 +85,7 @@ impl DatasetStore {
     pub fn put(
         &self,
         projection: &Projection,
-        options: WriteOptions,
+        check: &dyn DatasetCheck,
     ) -> Result<StoredDataset, ViewError> {
         static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let scratch = self.work.join(format!(
@@ -95,7 +95,7 @@ impl DatasetStore {
         ));
         let _ = fs::remove_dir_all(&scratch);
         fs::create_dir_all(&scratch).map_err(io(&scratch))?;
-        let stored = self.put_from(&scratch, projection, options);
+        let stored = self.put_from(&scratch, projection, check);
         // A scratch directory is only ever a working place.
         let _ = fs::remove_dir_all(&scratch);
         stored
@@ -105,10 +105,10 @@ impl DatasetStore {
         &self,
         scratch: &Path,
         projection: &Projection,
-        options: WriteOptions,
+        check: &dyn DatasetCheck,
     ) -> Result<StoredDataset, ViewError> {
         let file = scratch.join(DATASET_FILE);
-        let written = write_dataset(&file, projection, options)?;
+        let written = write_dataset(&file, projection, check)?;
         // The records file first, then the manifest that makes the dataset
         // official: a crash between them leaves an orphan file and nothing
         // that names it.

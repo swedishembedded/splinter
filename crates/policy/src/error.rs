@@ -15,6 +15,16 @@ pub enum PolicyError {
         /// The path named.
         path: PathBuf,
     },
+    /// brain has no trainer for the objective, and the caller did not ask
+    /// for an export-only file.
+    #[error(
+        "brain cannot train objective {objective:?}; write it with export_only to get \
+         Splinter's export format instead"
+    )]
+    ObjectiveNotTrainable {
+        /// The objective.
+        objective: splinter_views::Objective,
+    },
     /// The embedding model could not embed.
     #[error("embedding: {reason}")]
     Embedding {

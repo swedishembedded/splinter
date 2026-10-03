@@ -15,10 +15,10 @@ mod common;
 
 use common::{experience, python, record, task, verdict, Scratch};
 use splinter_core::annotation::{Outcome, Strength};
+use splinter_core::evidence::{evidence_summary, failed_checks};
 use splinter_core::experience::Environment;
 use splinter_lab::verifiers::executable::{
-    evidence_summary, failed_checks, ExecutableCheck, ExecutableVerifier, Expectation,
-    ExpectedStdout,
+    ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
 };
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_sandbox::Limits;
