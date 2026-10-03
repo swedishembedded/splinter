@@ -13,6 +13,8 @@
 //! * [`material`] - what a teacher is shown of a task: the source
 //!   sections its evidence falls in, its passages and hints - never its
 //!   reference.
+//! * [`retrieve`] - the passages of the sources that bear on a query:
+//!   lexical and semantic ranking, fused.
 //! * [`gates`] - the text rules a generated task is held to: instruction
 //!   normalisation for duplicate detection, and numbers traceable to the
 //!   evidence.
@@ -30,6 +32,7 @@ pub mod concepts;
 pub mod denoise;
 pub mod gates;
 pub mod material;
+pub mod retrieve;
 pub mod sections;
 pub mod survey;
 pub mod tasks;
