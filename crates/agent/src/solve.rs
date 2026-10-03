@@ -48,7 +48,7 @@ use crate::run_code::RunCode;
 use crate::system_prompt::UnderSystemPrompt;
 
 /// The sven mode a solve runs: the conversational agent loop.
-const SOLVER_MODE: &str = "agent";
+pub(crate) const SOLVER_MODE: &str = "agent";
 
 /// The bounds of one solve, handed to sven as its [`RunOptions`] and, for
 /// the stream idle limit, its engine configuration.
@@ -278,7 +278,7 @@ pub async fn solve_prompted(
 
 /// The engine for `environment` under `config`: no built-in tools, and
 /// only the environment's own tool.
-fn engine(
+pub(crate) fn engine(
     environment: &ResolvedEnvironment,
     model: Arc<dyn ModelProvider>,
     config: Config,

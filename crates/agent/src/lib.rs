@@ -27,6 +27,7 @@
 
 #![warn(missing_docs)]
 
+pub mod converse;
 pub mod critic;
 pub mod judge;
 pub mod repair;
