@@ -98,6 +98,11 @@ pub const DEFAULT_REPAIRS: u32 = 1;
 /// How long one request to the generator model may take, by default.
 pub const DEFAULT_REQUEST_DEADLINE: Duration = Duration::from_secs(600);
 
+/// The output tokens one request may generate: room for a whole batch of
+/// tasks. A request that names no budget gets its model's own default, which
+/// for a local model is a few hundred tokens and cuts a batch off mid-reply.
+pub const DEFAULT_REQUEST_MAX_OUTPUT_TOKENS: u64 = 6144;
+
 /// The parameters of generation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GenerationPolicy {
@@ -114,7 +119,8 @@ pub struct GenerationPolicy {
     pub max_overlap: f64,
     /// How long one request may take.
     pub deadline: Duration,
-    /// Output tokens one request may generate; `None` sets no budget.
+    /// Output tokens one request may generate; `None` leaves it to the
+    /// model's own default.
     pub max_output_tokens: Option<u64>,
     /// How many times a reply that is not the shape is sent back to the
     /// model for correction, within the request's deadline and budget.
@@ -122,7 +128,7 @@ pub struct GenerationPolicy {
 }
 
 impl Default for GenerationPolicy {
-    /// The `DEFAULT_*` constants, and no token budget.
+    /// The `DEFAULT_*` constants.
     fn default() -> Self {
         Self {
             tasks_per_request: DEFAULT_TASKS_PER_REQUEST,
@@ -130,7 +136,7 @@ impl Default for GenerationPolicy {
             shingle_words: DEFAULT_SHINGLE_WORDS,
             max_overlap: DEFAULT_MAX_OVERLAP,
             deadline: DEFAULT_REQUEST_DEADLINE,
-            max_output_tokens: None,
+            max_output_tokens: Some(DEFAULT_REQUEST_MAX_OUTPUT_TOKENS),
             repairs: DEFAULT_REPAIRS,
         }
     }

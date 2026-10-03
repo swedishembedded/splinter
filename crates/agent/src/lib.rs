@@ -27,6 +27,7 @@
 
 #![warn(missing_docs)]
 
+mod budget;
 pub mod converse;
 pub mod critic;
 pub mod judge;

@@ -93,6 +93,17 @@ impl SolveOptions {
         options
     }
 
+    /// `model`, limited to this call's output budget a reply where a request
+    /// names no limit of its own; `model` itself when there is no budget. See
+    /// [`crate::budget`].
+    #[must_use]
+    pub fn provider(&self, model: Arc<dyn ModelProvider>) -> Arc<dyn ModelProvider> {
+        match self.max_output_tokens {
+            Some(tokens) => crate::budget::OutputCap::wrap(model, tokens),
+            None => model,
+        }
+    }
+
     /// The sven configuration an engine running these bounds is built with:
     /// sven's default, with the stream idle limit when one is set, in whole
     /// seconds rounded up (sven's unit, where zero means its default) and

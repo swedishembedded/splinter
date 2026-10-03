@@ -125,7 +125,7 @@ impl Student {
         bounds.cancel = Some(cancel.clone());
         let engine = Engine::builder()
             .config(bounds.engine_config())
-            .model_provider(Arc::clone(&model.provider))
+            .model_provider(bounds.provider(Arc::clone(&model.provider)))
             .toolset(Toolset::none())
             .build()?;
         let method = Method::<Said>::new("say_next")

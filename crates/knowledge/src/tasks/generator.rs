@@ -438,7 +438,7 @@ impl ModelTaskGenerator {
             .max_repairs(self.policy.repairs);
         let engine = Engine::builder()
             .config(options.engine_config())
-            .model_provider(self.model.provider.clone())
+            .model_provider(options.provider(self.model.provider.clone()))
             .toolset(Toolset::none())
             .build()?;
         match engine

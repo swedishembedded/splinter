@@ -195,7 +195,7 @@ pub fn plan(
     bounds.cancel = Some(cancel.clone());
     let engine = Engine::builder()
         .config(bounds.engine_config())
-        .model_provider(model.provider)
+        .model_provider(bounds.provider(model.provider))
         .toolset(Toolset::none())
         .build()
         .map_err(call)?;

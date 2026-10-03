@@ -118,3 +118,19 @@ fn a_conversation_is_shown_the_sections_where_the_writer_judges_not_every_sectio
         .collect();
     assert!(texts[0].contains("public debt") && texts[1].contains("habit of study"));
 }
+
+#[tokio::test]
+async fn a_request_carries_an_output_budget_that_holds_a_whole_batch_of_tasks() {
+    let scratch = Scratch::new("converse-budget");
+    let (store, _, source) = stored(&scratch, LETTER);
+    let model = Scripted::new(vec![reply(vec![entry(OPENING, PASSAGE, 1, Some(PASSAGE))])]);
+    generator(model.clone(), store, vec![])
+        .generate(&source, &[&converse()])
+        .await
+        .unwrap();
+    let budget = model.seen.lock().unwrap()[0].max_output_tokens_override;
+    assert!(
+        budget.is_some_and(|tokens| tokens >= 4096),
+        "a model's own default would cut a batch of tasks off mid-reply: {budget:?}"
+    );
+}
