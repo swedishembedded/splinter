@@ -34,12 +34,12 @@ use splinter_agent::schemars::JsonSchema;
 use splinter_agent::typed::TypedCall;
 use splinter_agent::CallError;
 
-use crate::context::Context;
-use crate::error::CampaignError;
-use crate::roles;
 use crate::sources::{SourceTarget, COMMAND_PREFIX};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::roles;
 
 /// The confidence below which the top reading is a question.
 pub const MIN_CONFIDENCE: f64 = 0.7;
@@ -260,13 +260,13 @@ impl Intent {
 /// A reply the policy could not shape into a [`Classification`], even
 /// after sven's corrections, is no reading: it is asked back, as a
 /// sentence that matches no command is, with what was wrong with it.
-pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, CampaignError> {
+pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, OrchestratorError> {
     match classify(ctx, sentence) {
         Ok(mut classification) => {
             repair_paths(&mut classification, sentence);
             Ok(route(&classification, ctx.allow_remote()))
         }
-        Err(CampaignError::Call {
+        Err(OrchestratorError::Call {
             source: CallError::Invalid { detail, .. } | CallError::Postcondition { detail, .. },
             ..
         }) => Ok(Routed::Clarify(Clarification {
@@ -316,7 +316,7 @@ fn repair_paths(classification: &mut Classification, sentence: &str) {
 
 /// The readings of `sentence` by the model that reads sentences: the policy,
 /// or the model the configuration names for the front door.
-pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, CampaignError> {
+pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, OrchestratorError> {
     let reader = roles::assignments(ctx.config(), &RoleOverrides::new())?
         .get(Role::Router)
         .clone();
@@ -338,7 +338,7 @@ pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, Campaig
             }
         });
     ctx.block_on(call.run(&model, &Sentence { sentence }))
-        .map_err(|source| CampaignError::Call {
+        .map_err(|source| OrchestratorError::Call {
             method: "classify_sentence",
             source,
         })

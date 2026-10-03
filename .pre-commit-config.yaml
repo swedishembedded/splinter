@@ -62,7 +62,7 @@ repos:
         pass_filenames: false
 
       - id: env-reads
-        name: only the campaign config reads the environment
+        name: only the orchestrator config reads the environment
         entry: bash scripts/gates/check-env-reads.sh
         language: system
         types: [rust]

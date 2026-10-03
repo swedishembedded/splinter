@@ -21,7 +21,7 @@ use splinter_core::digest::Digest;
 use splinter_core::source::SourceId;
 use splinter_store::workspace::Workspace;
 
-use crate::error::CampaignError;
+use crate::error::OrchestratorError;
 use splinter_core::release::ReleaseId;
 
 const ANSWER: &str = "answer";
@@ -87,22 +87,22 @@ impl AnswerStore {
 
     /// Records `record` and returns its id; recording the same record again is
     /// a no-op.
-    pub fn put(&self, record: &AnswerRecord) -> Result<AnswerId, CampaignError> {
+    pub fn put(&self, record: &AnswerRecord) -> Result<AnswerId, OrchestratorError> {
         Ok(AnswerId(self.workspace.put_document(ANSWER, record)?))
     }
 
     /// The answer `id`, verified against its address.
-    pub fn get(&self, id: &AnswerId) -> Result<AnswerRecord, CampaignError> {
+    pub fn get(&self, id: &AnswerId) -> Result<AnswerRecord, OrchestratorError> {
         self.workspace
             .get_document(ANSWER, &id.0)?
-            .ok_or_else(|| CampaignError::NotFound {
+            .ok_or_else(|| OrchestratorError::NotFound {
                 what: "answer",
                 id: id.to_string(),
             })
     }
 
     /// Every recorded answer's id, in id order.
-    pub fn list(&self) -> Result<Vec<AnswerId>, CampaignError> {
+    pub fn list(&self) -> Result<Vec<AnswerId>, OrchestratorError> {
         Ok(self
             .workspace
             .document_ids(ANSWER)?

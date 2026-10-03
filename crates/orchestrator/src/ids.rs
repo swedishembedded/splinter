@@ -6,14 +6,14 @@
 
 use splinter_core::digest::Digest;
 
-use crate::error::CampaignError;
+use crate::error::OrchestratorError;
 
 /// The fewest hex digits a prefix must give: fewer names too many objects
 /// to be worth resolving.
 pub const MIN_PREFIX: usize = 4;
 
 /// `given` without a leading `blake3:` or `sha256:`.
-pub(crate) fn strip_algorithm(given: &str) -> &str {
+pub fn strip_algorithm(given: &str) -> &str {
     given
         .strip_prefix("blake3:")
         .or_else(|| given.strip_prefix("sha256:"))
@@ -22,18 +22,18 @@ pub(crate) fn strip_algorithm(given: &str) -> &str {
 
 /// The one digest of `stored` that `given` names; `what` names the kind of
 /// object in a refusal.
-pub(crate) fn resolve(
+pub fn resolve(
     what: &'static str,
     given: &str,
     stored: impl IntoIterator<Item = Digest>,
-) -> Result<Digest, CampaignError> {
+) -> Result<Digest, OrchestratorError> {
     let hex = strip_algorithm(given);
-    let not_found = || CampaignError::NotFound {
+    let not_found = || OrchestratorError::NotFound {
         what,
         id: given.to_string(),
     };
     if hex.len() < MIN_PREFIX || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "{given:?} is not a {what} id: give blake3:<hex>, or at least {MIN_PREFIX} hex digits \
              of one"
         )));
@@ -45,7 +45,7 @@ pub(crate) fn resolve(
     let found = matches.next().ok_or_else(not_found)?;
     let more = matches.count();
     if more > 0 {
-        return Err(CampaignError::AmbiguousId {
+        return Err(OrchestratorError::AmbiguousId {
             what,
             id: given.to_string(),
             matches: more + 1,
@@ -74,20 +74,20 @@ mod tests {
         );
         assert!(matches!(
             resolve("source", "ab", stored()),
-            Err(CampaignError::Refused(_))
+            Err(OrchestratorError::Refused(_))
         ));
         assert!(matches!(
             resolve("source", "not-hex", stored()),
-            Err(CampaignError::Refused(_))
+            Err(OrchestratorError::Refused(_))
         ));
         assert!(matches!(
             resolve("source", "0000000000", stored()),
-            Err(CampaignError::NotFound { .. })
+            Err(OrchestratorError::NotFound { .. })
         ));
         let twins = vec![a.clone(), a.clone()];
         assert!(matches!(
             resolve("source", &a.hex()[..6], twins),
-            Err(CampaignError::AmbiguousId { matches: 2, .. })
+            Err(OrchestratorError::AmbiguousId { matches: 2, .. })
         ));
     }
 }

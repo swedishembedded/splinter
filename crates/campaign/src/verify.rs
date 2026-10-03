@@ -39,9 +39,9 @@ use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_store::experiences::SetId;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// The producer of the formal verifier's verdicts on generated tasks.
 pub const FORMAL_PRODUCER: &str = "splinter-lab/exact-match:lenient";
@@ -94,12 +94,12 @@ pub struct Judge {
 impl Judge {
     /// The judge `reference` names, with its stored calibration; refused
     /// when it was never calibrated.
-    pub fn load(ctx: &Context, reference: &ModelRef) -> Result<Self, CampaignError> {
+    pub fn load(ctx: &Context, reference: &ModelRef) -> Result<Self, OrchestratorError> {
         let model = ctx.model(reference)?;
         let producer = judge_verifier(ctx, &model).producer();
         ctx.workspace().refresh()?;
         let calibration = latest_calibration(ctx, &producer)?.ok_or_else(|| {
-            CampaignError::Refused(format!(
+            OrchestratorError::Refused(format!(
                 "judge {reference} has no calibration; its verdicts would stand unmeasured. \
                  Run `splinter judge calibrate <LABELLED-FILE> --judge {reference}` first"
             ))
@@ -107,7 +107,7 @@ impl Judge {
         Ok(Self { model, calibration })
     }
 
-    fn verifier(&self, ctx: &Context) -> Result<Box<dyn Verifier>, CampaignError> {
+    fn verifier(&self, ctx: &Context) -> Result<Box<dyn Verifier>, OrchestratorError> {
         Ok(Box::new(CalibratedJudge::new(
             judge_verifier(ctx, &self.model),
             self.calibration.clone(),
@@ -140,12 +140,13 @@ fn calibration_pointer(producer: &Producer) -> String {
 fn latest_calibration(
     ctx: &Context,
     producer: &Producer,
-) -> Result<Option<Calibration>, CampaignError> {
+) -> Result<Option<Calibration>, OrchestratorError> {
     let Some((_, value)) = ctx.workspace().pointer(&calibration_pointer(producer))? else {
         return Ok(None);
     };
-    let digest = Digest::parse(&value)
-        .map_err(|e| CampaignError::Refused(format!("a calibration pointer is corrupt: {e}")))?;
+    let digest = Digest::parse(&value).map_err(|e| {
+        OrchestratorError::Refused(format!("a calibration pointer is corrupt: {e}"))
+    })?;
     Ok(ctx.workspace().get_document(CALIBRATION, &digest)?)
 }
 
@@ -154,7 +155,7 @@ fn latest_calibration(
 pub(crate) fn store_calibration(
     ctx: &Context,
     calibration: &Calibration,
-) -> Result<Digest, CampaignError> {
+) -> Result<Digest, OrchestratorError> {
     let digest = ctx.workspace().put_document(CALIBRATION, calibration)?;
     let pointer = calibration_pointer(&calibration.producer);
     let current = ctx.workspace().pointer(&pointer)?.map(|(_, value)| value);
@@ -192,14 +193,14 @@ pub(crate) fn verifiers_for(
     task: &Task,
     pool: &[Experience],
     judge: Option<&Judge>,
-) -> Result<Strongest, CampaignError> {
+) -> Result<Strongest, OrchestratorError> {
     let kind = &task.task.kind;
     if kind == DENOISE {
         return Ok(Strongest::new(vec![Box::new(FormalVerifier::new())]));
     }
     let catalogue = Catalogue::builtin();
     let Some(spec) = catalogue.get(kind) else {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "no verifiers are known for task kind {kind:?}"
         )));
     };
@@ -305,7 +306,7 @@ pub fn verify_set(
     set: &SetId,
     judge: Option<&Judge>,
     cancel: &CancelToken,
-) -> Result<Verified, CampaignError> {
+) -> Result<Verified, OrchestratorError> {
     let store = ctx.experiences();
     let batch = ctx.workspace().batch();
     let members = store.get_set(set)?.members;
@@ -317,7 +318,7 @@ pub fn verify_set(
     let mut verified = Vec::new();
     for (id, experience) in members.iter().zip(&experiences) {
         if cancel.is_cancelled() {
-            return Err(CampaignError::Cancelled);
+            return Err(OrchestratorError::Cancelled);
         }
         let task = experience.to_task();
         let unverified = |reason: String| Unverified {

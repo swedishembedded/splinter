@@ -20,9 +20,9 @@ use splinter_knowledge::capture::{
     DEFAULT_MAX_FILE_BYTES,
 };
 
-use crate::context::Context;
-use crate::error::CampaignError;
-use crate::ids;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::ids;
 
 /// The prefix that makes a source a captured command.
 pub const COMMAND_PREFIX: &str = "cmd:";
@@ -52,9 +52,9 @@ impl SourceTarget {
     /// The target `source add` names: one path, or `cmd:` followed by a
     /// command (`cmd:make test`, or `cmd:make` `test` as separate
     /// arguments). A URL is refused.
-    pub fn from_args(args: &[String]) -> Result<Self, CampaignError> {
+    pub fn from_args(args: &[String]) -> Result<Self, OrchestratorError> {
         let Some(first) = args.first() else {
-            return Err(CampaignError::Refused(
+            return Err(OrchestratorError::Refused(
                 "name a file, a directory, or cmd: followed by a command".into(),
             ));
         };
@@ -65,7 +65,7 @@ impl SourceTarget {
                 .chain(args[1..].iter().cloned())
                 .collect();
             if argv.is_empty() {
-                return Err(CampaignError::Refused(format!(
+                return Err(OrchestratorError::Refused(format!(
                     "{COMMAND_PREFIX} names no command to run"
                 )));
             }
@@ -73,7 +73,7 @@ impl SourceTarget {
         }
         refuse_url(first)?;
         if args.len() > 1 {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "one path at a time: {:?} follows {first:?} (a command is {COMMAND_PREFIX}<command>)",
                 args[1]
             )));
@@ -85,7 +85,7 @@ impl SourceTarget {
 
     /// The target one argument of `learn` names: an existing path, `cmd:`
     /// and a whole command, or else a stored source's id.
-    pub fn from_learn_arg(arg: &str) -> Result<Self, CampaignError> {
+    pub fn from_learn_arg(arg: &str) -> Result<Self, OrchestratorError> {
         if let Some(program) = arg.strip_prefix(COMMAND_PREFIX) {
             return Self::from_args(&[format!("{COMMAND_PREFIX}{program}")]);
         }
@@ -98,17 +98,17 @@ impl SourceTarget {
         if hex.len() >= ids::MIN_PREFIX && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Ok(Self::Stored { id: arg.into() });
         }
-        Err(CampaignError::Refused(format!(
+        Err(OrchestratorError::Refused(format!(
             "{arg:?} is not a file, a directory, {COMMAND_PREFIX}<command> or a stored source id"
         )))
     }
 }
 
 /// Refuses `arg` when it is a URL: sources are local.
-fn refuse_url(arg: &str) -> Result<(), CampaignError> {
+fn refuse_url(arg: &str) -> Result<(), OrchestratorError> {
     let lower = arg.to_ascii_lowercase();
     if lower.contains("://") || lower.starts_with("www.") {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "{arg:?} is a URL; Splinter learns from local files, directories and commands only \
              (download it and add the file)"
         )));
@@ -158,7 +158,7 @@ pub struct SourceAdded {
 }
 
 /// Captures `target` and stores it. A stored id is looked up instead.
-pub fn add(ctx: &Context, target: &SourceTarget) -> Result<SourceAdded, CampaignError> {
+pub fn add(ctx: &Context, target: &SourceTarget) -> Result<SourceAdded, OrchestratorError> {
     let store = ctx.sources();
     let captured = match target {
         SourceTarget::Stored { id } => {
@@ -184,8 +184,11 @@ pub fn add(ctx: &Context, target: &SourceTarget) -> Result<SourceAdded, Campaign
 }
 
 /// A file captured as a document, a directory as a repository.
-fn capture_path(ctx: &Context, path: &std::path::Path) -> Result<CapturedSource, CampaignError> {
-    let metadata = std::fs::metadata(path).map_err(crate::error::io(path))?;
+fn capture_path(
+    ctx: &Context,
+    path: &std::path::Path,
+) -> Result<CapturedSource, OrchestratorError> {
+    let metadata = std::fs::metadata(path).map_err(splinter_orchestrator::error::io(path))?;
     Ok(if metadata.is_dir() {
         capture_repository(path, DEFAULT_MAX_FILE_BYTES, ctx.clock())?
     } else {
@@ -201,7 +204,7 @@ pub struct SourceList {
 }
 
 /// Every stored source.
-pub fn list(ctx: &Context) -> Result<SourceList, CampaignError> {
+pub fn list(ctx: &Context) -> Result<SourceList, OrchestratorError> {
     let store = ctx.sources();
     let sources = store
         .list()?
@@ -212,12 +215,12 @@ pub fn list(ctx: &Context) -> Result<SourceList, CampaignError> {
 }
 
 /// The stored source `id` names, whole.
-pub fn show(ctx: &Context, id: &str) -> Result<Source, CampaignError> {
+pub fn show(ctx: &Context, id: &str) -> Result<Source, OrchestratorError> {
     Ok(ctx.sources().get_source(&resolve(ctx, id)?)?)
 }
 
 /// The stored source `id` (or a unique prefix of it) names.
-pub fn resolve(ctx: &Context, id: &str) -> Result<SourceId, CampaignError> {
+pub fn resolve(ctx: &Context, id: &str) -> Result<SourceId, OrchestratorError> {
     let stored = ctx.sources().list()?.into_iter().map(|s| s.0);
     Ok(SourceId(ids::resolve("source", id, stored)?))
 }

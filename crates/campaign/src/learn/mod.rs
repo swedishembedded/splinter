@@ -59,19 +59,15 @@ use splinter_store::experiences::SetId;
 use splinter_knowledge::survey::survey;
 
 use crate::budget::StageDeadlines;
-use crate::context::Context;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
 use crate::curriculum::frontier::{select_frontier, PassAtK};
 use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{build, BuildRequest, ViewName, DEFAULT_MIN_STRENGTH};
-use crate::error::CampaignError;
 use crate::exam::{examine_candidate, Exam};
 use crate::plan::plan as make_plan;
 use crate::release::{release, ReleaseRequest};
-use crate::roles;
-use crate::runs::{record, Recorder};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::sources::{self, SourceTarget};
 use crate::tasks::{check_kinds, generate, Generation, DEFAULT_LEARN_KINDS};
@@ -83,6 +79,10 @@ use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_T
 use crate::verify::verify_set;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::role::{Role, RoleOverrides};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::roles;
+use splinter_orchestrator::runs::{record, Recorder};
 
 /// The stages, in order, as runs and reports name them.
 pub const STAGES: [&str; 15] = [
@@ -154,9 +154,9 @@ pub fn learn(
     ctx: &Context,
     request: &LearnRequest,
     trainer: &dyn Trainer,
-) -> Result<Learned, CampaignError> {
+) -> Result<Learned, OrchestratorError> {
     if request.plan && !request.kinds.is_empty() {
-        return Err(CampaignError::Refused(
+        return Err(OrchestratorError::Refused(
             "name the task kinds or ask for a plan, not both: one of them decides".into(),
         ));
     }
@@ -168,7 +168,7 @@ pub fn learn(
         check_kinds(&request.kinds)?
     };
     if request.sources.is_empty() {
-        return Err(CampaignError::Refused(
+        return Err(OrchestratorError::Refused(
             "name at least one source to learn from".into(),
         ));
     }
@@ -189,14 +189,13 @@ pub fn learn(
     let judge = assignments.get(Role::Judge).clone();
     // The command's budget, else the configured default: a run on a corpus
     // too large to read has no end without one.
-    let budget =
-        match (request.budget, &ctx.config().default_budget) {
-            (Some(named), _) => Some(named),
-            (None, Some(text)) => Some(parse_budget(text).map_err(|e| {
-                CampaignError::Refused(format!("SPLINTER_BUDGET is not usable: {e}"))
-            })?),
-            (None, None) => None,
-        };
+    let budget = match (request.budget, &ctx.config().default_budget) {
+        (Some(named), _) => Some(named),
+        (None, Some(text)) => Some(parse_budget(text).map_err(|e| {
+            OrchestratorError::Refused(format!("SPLINTER_BUDGET is not usable: {e}"))
+        })?),
+        (None, None) => None,
+    };
     let planner = request.plan.then(|| assignments.get(Role::Planner).clone());
     let mut roles_used = BTreeMap::new();
     for (role, model) in [
@@ -301,7 +300,11 @@ struct Pipeline<'a> {
 impl Pipeline<'_> {
     /// The stages, filling `report` as they finish; returns early (with
     /// `report.stopped` set) when one leaves the next nothing to do.
-    fn run(&self, run: &mut Recorder<'_>, report: &mut LearnReport) -> Result<(), CampaignError> {
+    fn run(
+        &self,
+        run: &mut Recorder<'_>,
+        report: &mut LearnReport,
+    ) -> Result<(), OrchestratorError> {
         let Self {
             ctx,
             targets,
@@ -540,7 +543,7 @@ impl Pipeline<'_> {
             },
         ) {
             Ok(built) => built,
-            Err(CampaignError::View(splinter_data::ViewError::Empty)) => {
+            Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
                 report.stopped = Some(
                     "no experience passed verification, so there is nothing to train on".into(),
                 );
@@ -592,7 +595,7 @@ impl Pipeline<'_> {
             let examined =
                 match examine_candidate(ctx, &id, &policy, &verified, judge, &run.cancel_token()) {
                     Ok(examined) => examined,
-                    Err(CampaignError::Cancelled) => return Err(CampaignError::Cancelled),
+                    Err(OrchestratorError::Cancelled) => return Err(OrchestratorError::Cancelled),
                     Err(e) => Exam::NotRun(format!("the exam failed: {e}")),
                 };
             run.stage("exam", &examined)?;
@@ -619,9 +622,9 @@ impl Pipeline<'_> {
 /// A duration as `learn --budget` takes it: whole units of `s`, `m` and
 /// `h`, alone or combined largest first (`30m`, `1h30m`), or bare
 /// seconds.
-pub fn parse_budget(text: &str) -> Result<Duration, CampaignError> {
+pub fn parse_budget(text: &str) -> Result<Duration, OrchestratorError> {
     let refuse = |why: &str| {
-        CampaignError::Refused(format!(
+        OrchestratorError::Refused(format!(
             "{text:?} is not a duration ({why}): e.g. 30m, 2h, 1h30m; units h, m and s"
         ))
     };

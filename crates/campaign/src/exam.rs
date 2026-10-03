@@ -38,13 +38,13 @@ use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
 use splinter_store::experiences::SetId;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use crate::release::arm;
 use crate::release::probe::{answer, greedy, held_out};
 use crate::train::load_candidate;
 use crate::verify::{grounding_verifier, judge_verifier};
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// One arm's verdicts, a task each: `None` where nothing decided.
 type Decided = Vec<Option<bool>>;
@@ -116,7 +116,7 @@ pub struct Examined {
 
 /// An experience of `task` giving the answer of `other`: the control that
 /// should fail.
-fn mismatched(task: &Experience, other: &Experience) -> Result<Experience, CampaignError> {
+fn mismatched(task: &Experience, other: &Experience) -> Result<Experience, OrchestratorError> {
     Ok(Experience::new(
         task.to_task(),
         task.trajectory.clone(),
@@ -127,7 +127,9 @@ fn mismatched(task: &Experience, other: &Experience) -> Result<Experience, Campa
 
 /// The judge's controls: each verified answer right for its task, and the
 /// next one's answer wrong for it.
-fn controls(verified: &[Experience]) -> Result<Vec<(Task, Experience, Outcome)>, CampaignError> {
+fn controls(
+    verified: &[Experience],
+) -> Result<Vec<(Task, Experience, Outcome)>, OrchestratorError> {
     let mut labelled = Vec::with_capacity(verified.len() * 2);
     for (n, exp) in verified.iter().enumerate() {
         let other = &verified[(n + 1) % verified.len()];
@@ -138,13 +140,13 @@ fn controls(verified: &[Experience]) -> Result<Vec<(Task, Experience, Outcome)>,
 }
 
 /// Runs `request`; see the module documentation.
-pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, CampaignError> {
+pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, OrchestratorError> {
     if request.controls.len() < 2 {
-        return Err(CampaignError::Refused(
+        return Err(OrchestratorError::Refused(
             "an exam calibrates its judge on at least two verified answers".into(),
         ));
     }
-    let answers = |reference: &ModelRef| -> Result<(String, Vec<Experience>), CampaignError> {
+    let answers = |reference: &ModelRef| -> Result<(String, Vec<Experience>), OrchestratorError> {
         let model = greedy(ctx, reference)?;
         let given = request
             .tasks
@@ -166,12 +168,12 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Campai
     let judge = CalibratedJudge::new(judge, calibration.clone(), DEFAULT_MIN_PRECISION)?;
     let grounding = grounding_verifier(ctx);
 
-    let grade = |given: &[Experience]| -> Result<(Decided, Decided), CampaignError> {
+    let grade = |given: &[Experience]| -> Result<(Decided, Decided), OrchestratorError> {
         let mut judged = Vec::with_capacity(given.len());
         let mut grounded = Vec::with_capacity(given.len());
         for (task, exp) in request.tasks.iter().zip(given) {
             if request.cancel.is_cancelled() {
-                return Err(CampaignError::Cancelled);
+                return Err(OrchestratorError::Cancelled);
             }
             let decided = |finding: splinter_eval::verifiers::Finding| match finding.outcome {
                 Outcome::Pass => Some(true),
@@ -251,7 +253,7 @@ pub fn examine_candidate(
     verified: &SetId,
     judge: &ModelRef,
     cancel: &CancelToken,
-) -> Result<Exam, CampaignError> {
+) -> Result<Exam, OrchestratorError> {
     let trained = load_candidate(ctx, candidate)?;
     let suite = held_out(ctx, "exam", &trained.datasets)?;
     if suite.tasks.is_empty() {

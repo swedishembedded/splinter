@@ -34,7 +34,6 @@ pub mod anchor;
 pub mod leakage;
 pub mod probe;
 pub mod serve;
-pub mod store;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -46,19 +45,18 @@ use splinter_core::release::ReleaseId;
 use splinter_knowledge::concepts::Concept;
 use splinter_model::local::{load_source, resolve_base};
 use splinter_model::selection::local_model_name;
+use splinter_orchestrator::releases::{ReleaseManifest, StoredRelease, RELEASE_FORMAT};
 
-pub use store::{ReleaseManifest, ReleaseStore, StoredRelease, RELEASE_FORMAT};
-
-use crate::config::Config;
-use crate::context::Context;
 use crate::curriculum::queue::enqueue_retention;
-use crate::error::CampaignError;
 use crate::train::{load_candidate, Candidate};
 use probe::{pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
 use splinter_model::stats::BrainSignificance;
+use splinter_orchestrator::config::Config;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]
@@ -122,9 +120,9 @@ pub fn release(
     ctx: &Context,
     request: &ReleaseRequest,
     cancel: &CancelToken,
-) -> Result<Released, CampaignError> {
+) -> Result<Released, OrchestratorError> {
     if !is_alias_name(&request.alias) {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "{:?} is not an alias name",
             request.alias
         )));
@@ -140,7 +138,7 @@ pub fn release(
             id.as_ref()
                 .map_or("the base alone".to_string(), |id| format!("release {id}"))
         };
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "candidate {} was trained from {}, but {} points at {}; only a candidate trained \
              from the champion can replace it: train again from policy:{}",
             candidate.candidate,
@@ -152,7 +150,7 @@ pub fn release(
     }
     let config = ctx.config();
     if candidate.base != config.policy_base {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "candidate {} sits on {}, not the policy base {}",
             candidate.candidate,
             candidate.base.display(),
@@ -162,7 +160,7 @@ pub fn release(
     let champion = champion_id.as_ref().map(|id| store.get(id)).transpose()?;
     let base_source = load_source(
         &resolve_base(&config.policy_base)
-            .map_err(|e| CampaignError::Refused(format!("the policy base: {e}")))?,
+            .map_err(|e| OrchestratorError::Refused(format!("the policy base: {e}")))?,
     );
     let gate = run_gate(
         ctx,
@@ -211,11 +209,11 @@ fn resume(
     request: &ReleaseRequest,
     made: &StoredRelease,
     champion: Option<ReleaseId>,
-) -> Result<Released, CampaignError> {
+) -> Result<Released, OrchestratorError> {
     let store = ctx.releases();
     if champion.as_ref() != Some(&made.id) {
         if champion != made.manifest.parent {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "candidate {} was released as {}, and {} has moved on since; \
                  train again from policy:{}",
                 made.manifest.candidate, made.id, request.alias, request.alias
@@ -248,11 +246,13 @@ fn manifest(
     ctx: &Context,
     candidate: &Candidate,
     gate: &GateReport,
-) -> Result<ReleaseManifest, CampaignError> {
-    let base_digest = Digest::parse(&candidate.base_digest)
-        .map_err(|e| CampaignError::Refused(format!("candidate {}: {e}", candidate.candidate)))?;
-    let adapter_digest = Digest::parse(&candidate.adapter_digest)
-        .map_err(|e| CampaignError::Refused(format!("candidate {}: {e}", candidate.candidate)))?;
+) -> Result<ReleaseManifest, OrchestratorError> {
+    let base_digest = Digest::parse(&candidate.base_digest).map_err(|e| {
+        OrchestratorError::Refused(format!("candidate {}: {e}", candidate.candidate))
+    })?;
+    let adapter_digest = Digest::parse(&candidate.adapter_digest).map_err(|e| {
+        OrchestratorError::Refused(format!("candidate {}: {e}", candidate.candidate))
+    })?;
     let record = candidate.training_record.clone();
     Ok(ReleaseManifest {
         format: RELEASE_FORMAT.into(),
@@ -288,10 +288,10 @@ type Graded = Result<Outcomes, String>;
 
 /// `result`, with every failure but a cancel turned into its reason: a
 /// check that cannot be measured fails the gate, it does not abort it.
-fn soft<T>(result: Result<T, CampaignError>) -> Result<Result<T, String>, CampaignError> {
+fn soft<T>(result: Result<T, OrchestratorError>) -> Result<Result<T, String>, OrchestratorError> {
     match result {
         Ok(value) => Ok(Ok(value)),
-        Err(CampaignError::Cancelled) => Err(CampaignError::Cancelled),
+        Err(OrchestratorError::Cancelled) => Err(OrchestratorError::Cancelled),
         Err(e) => Ok(Err(e.to_string())),
     }
 }
@@ -307,7 +307,7 @@ fn grade_arm(
     reference: &ModelRef,
     suites: &[&Suite],
     cancel: &CancelToken,
-) -> Result<Vec<Graded>, CampaignError> {
+) -> Result<Vec<Graded>, OrchestratorError> {
     let model = match soft(probe::greedy(ctx, reference))? {
         Ok(model) => model,
         Err(why) => return Ok(suites.iter().map(|_| Err(why.clone())).collect()),
@@ -334,7 +334,7 @@ impl Suites {
         ctx: &Context,
         candidate: &Candidate,
         champion: Option<&StoredRelease>,
-    ) -> Result<Self, CampaignError> {
+    ) -> Result<Self, OrchestratorError> {
         let trained = match soft(leakage::trained_prompts(ctx, candidate))? {
             Ok(trained) => trained,
             Err(why) => {
@@ -359,7 +359,7 @@ impl Suites {
                 "variants",
                 &candidate.datasets,
             )?);
-            Ok::<_, CampaignError>((held_out, variants))
+            Ok::<_, OrchestratorError>((held_out, variants))
         })())?;
         let (held_out, variants) = match improvement {
             Ok((mut held_out, variants)) => {
@@ -415,7 +415,7 @@ fn run_gate(
     base_source: &Path,
     config: &GateConfig,
     cancel: &CancelToken,
-) -> Result<GateReport, CampaignError> {
+) -> Result<GateReport, OrchestratorError> {
     let suites = Suites::build(ctx, candidate, champion)?;
     let all = suites.all();
     let candidate_ref = arm(ctx.config(), Some(&candidate.adapter));
@@ -539,7 +539,7 @@ pub struct ReleaseList {
 }
 
 /// Every release under the state root, verified, oldest first.
-pub fn list(ctx: &Context) -> Result<ReleaseList, CampaignError> {
+pub fn list(ctx: &Context) -> Result<ReleaseList, OrchestratorError> {
     let store = ctx.releases();
     let aliases = store.aliases()?;
     let mut releases = Vec::new();
@@ -574,15 +574,15 @@ pub struct RolledBack {
 }
 
 /// Points `alias` at the release its current one was trained from.
-pub fn rollback(ctx: &Context, alias: &str) -> Result<RolledBack, CampaignError> {
+pub fn rollback(ctx: &Context, alias: &str) -> Result<RolledBack, OrchestratorError> {
     let store = ctx.releases();
     let Some(from) = store.alias(alias)? else {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "alias {alias} points at no release; there is nothing to roll back"
         )));
     };
     let Some(to) = store.get(&from)?.manifest.parent else {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "release {from} is the first {alias} has had; there is no previous release to roll \
              back to"
         )));

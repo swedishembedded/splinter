@@ -141,7 +141,7 @@ fn budget(text: &str) -> Result<Duration, String> {
 
 fn view(text: &str) -> Result<ViewName, String> {
     text.parse()
-        .map_err(|e: splinter_campaign::CampaignError| e.to_string())
+        .map_err(|e: splinter_orchestrator::OrchestratorError| e.to_string())
 }
 
 fn strip(text: &str) -> Result<Strip, String> {
@@ -154,7 +154,7 @@ fn strength(text: &str) -> Result<Strength, String> {
 
 fn suite(text: &str) -> Result<SuiteChoice, String> {
     text.parse()
-        .map_err(|e: splinter_campaign::CampaignError| e.to_string())
+        .map_err(|e: splinter_orchestrator::OrchestratorError| e.to_string())
 }
 
 /// `learn`.

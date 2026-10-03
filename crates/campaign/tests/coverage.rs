@@ -39,7 +39,7 @@ fn part(tag: &str, sections: usize) -> String {
 
 fn run(
     scratch: &Scratch,
-    ctx: &splinter_campaign::Context,
+    ctx: &splinter_orchestrator::Context,
     files: &[(&str, String)],
     deadline: Option<Instant>,
 ) -> splinter_campaign::tasks::TasksGenerated {

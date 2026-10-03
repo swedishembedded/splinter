@@ -43,10 +43,10 @@ use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 pub use splinter_knowledge::tasks::DEFAULT_VARIANTS_PER_TASK;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use crate::tasks::{reason_name, remaining, RejectionNote};
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// One variants request.
 pub struct VariantsRequest<'a> {
@@ -88,7 +88,7 @@ pub struct VariantsGenerated {
 pub fn generate_variants(
     ctx: &Context,
     request: &VariantsRequest<'_>,
-) -> Result<VariantsGenerated, CampaignError> {
+) -> Result<VariantsGenerated, OrchestratorError> {
     let originals = ctx.tasks().get_set(request.task_set)?;
     let policy = GenerationPolicy {
         deadline: remaining(request.deadline, DEFAULT_REQUEST_DEADLINE),
@@ -101,7 +101,7 @@ pub fn generate_variants(
     let mut members: Vec<TaskEntry> = Vec::new();
     for entry in &originals.members {
         if request.cancel.is_cancelled() {
-            return Err(CampaignError::Cancelled);
+            return Err(OrchestratorError::Cancelled);
         }
         if request.deadline.is_some_and(|d| Instant::now() >= d) {
             out.stopped = Some("the budget was spent before every task was covered".into());
@@ -162,7 +162,7 @@ pub fn generate_variants(
 
 /// Every stored variant, with the task it is a variant of: each variant
 /// once, in the order the task sets list them.
-pub(crate) fn stored_variants(ctx: &Context) -> Result<Vec<(Digest, Digest)>, CampaignError> {
+pub(crate) fn stored_variants(ctx: &Context) -> Result<Vec<(Digest, Digest)>, OrchestratorError> {
     let store = ctx.tasks();
     let mut seen = BTreeSet::new();
     let mut variants = Vec::new();
@@ -183,7 +183,7 @@ pub(crate) fn stored_variants(ctx: &Context) -> Result<Vec<(Digest, Digest)>, Ca
 pub(crate) fn refuse_variants<'a>(
     ctx: &Context,
     experiences: impl IntoIterator<Item = &'a Experience>,
-) -> Result<(), CampaignError> {
+) -> Result<(), OrchestratorError> {
     let variants: BTreeSet<Digest> = stored_variants(ctx)?.into_iter().map(|(v, _)| v).collect();
     if variants.is_empty() {
         return Ok(());
@@ -191,7 +191,7 @@ pub(crate) fn refuse_variants<'a>(
     for experience in experiences {
         let task = experience.to_task().without_critiques()?;
         if variants.contains(&task.task.id) {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "task {} is a variant of another: variants are only measured, never trained on",
                 task.task.id
             )));

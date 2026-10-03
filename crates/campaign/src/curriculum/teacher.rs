@@ -32,12 +32,12 @@ use splinter_agent::CancelToken;
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use crate::context::Context;
 use crate::curriculum::frontier::tally;
-use crate::error::CampaignError;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::verify::{verify_set, Verified};
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// One teach stage's inputs and bounds.
 pub struct TeachRequest<'a> {
@@ -68,7 +68,7 @@ pub struct Taught {
 /// Has `request.teacher` solve, open-book, every task of
 /// `request.task_set` that the student's graded attempts never solved, and
 /// grades each solve; see the module documentation.
-pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, CampaignError> {
+pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, OrchestratorError> {
     let set = ctx.tasks().get_set(request.task_set)?;
     let (members, name) = match request.attempts {
         Some(attempts) => {

@@ -39,6 +39,7 @@ splinter-model = { path = "crates/model" }
 splinter-agent = { path = "crates/agent" }
 splinter-knowledge = { path = "crates/knowledge" }
 splinter-campaign = { path = "crates/campaign" }
+splinter-orchestrator = { path = "crates/orchestrator" }
 splinter-data = { path = "crates/data" }
 splinter-sandbox = { path = "crates/sandbox" }
 splinter-expdb = { path = "crates/expdb" }

@@ -11,15 +11,15 @@ use serde::Serialize;
 use splinter_model::ModelSelection;
 use splinter_store::runs::list_runs;
 
-use crate::context::Context;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
-use crate::error::CampaignError;
-use crate::roles;
-use crate::runs::{RunSummary, RECENT_RUNS};
 use crate::train::candidate_count;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::release::ReleaseId;
 use splinter_core::role::{Role, RoleOverrides};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::roles;
+use splinter_orchestrator::runs::{RunSummary, RECENT_RUNS};
 
 /// The policy in use.
 #[derive(Clone, Debug, Serialize)]
@@ -74,7 +74,7 @@ pub struct Status {
 }
 
 /// The status of the state root `ctx` works in.
-pub fn status(ctx: &Context) -> Result<Status, CampaignError> {
+pub fn status(ctx: &Context) -> Result<Status, OrchestratorError> {
     let reference = ModelRef::policy_default();
     let selection = ctx.selection(&reference)?;
     let (base, adapter) = match &selection {

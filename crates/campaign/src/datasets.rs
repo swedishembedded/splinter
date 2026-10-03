@@ -28,12 +28,12 @@ use splinter_model::{BrainDatasetCheck, TrainingCapabilities};
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
-use crate::context::Context;
-use crate::error::{io, CampaignError};
 use crate::grouping::assign_groups;
-use crate::ids;
-use crate::runs::to_json;
 use crate::variants::refuse_variants;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::{io, OrchestratorError};
+use splinter_orchestrator::ids;
+use splinter_orchestrator::runs::to_json;
 
 /// The weakest decision a view counts when a command names none:
 /// consistency admits critiques verified by their retry's outcome and
@@ -112,15 +112,15 @@ impl ViewName {
 }
 
 impl FromStr for ViewName {
-    type Err = CampaignError;
+    type Err = OrchestratorError;
 
-    fn from_str(text: &str) -> Result<Self, CampaignError> {
+    fn from_str(text: &str) -> Result<Self, OrchestratorError> {
         Self::ALL
             .into_iter()
             .find(|view| view.as_str() == text)
             .ok_or_else(|| {
                 let names: Vec<&str> = Self::ALL.iter().map(|v| v.as_str()).collect();
-                CampaignError::Refused(format!(
+                OrchestratorError::Refused(format!(
                     "unknown view {text:?}; the views are {}",
                     names.join(", ")
                 ))
@@ -129,7 +129,7 @@ impl FromStr for ViewName {
 }
 
 /// A `--strip` policy: `all`, `keep:K,..` or `mix:F`.
-pub fn parse_strip(text: &str) -> Result<Strip, CampaignError> {
+pub fn parse_strip(text: &str) -> Result<Strip, OrchestratorError> {
     if text == "all" {
         return Ok(Strip::All);
     }
@@ -142,23 +142,23 @@ pub fn parse_strip(text: &str) -> Result<Strip, CampaignError> {
     }
     if let Some(fraction) = text.strip_prefix("mix:") {
         let value: f64 = fraction.parse().map_err(|_| {
-            CampaignError::Refused(format!("mix:{fraction} needs a fraction in [0, 1]"))
+            OrchestratorError::Refused(format!("mix:{fraction} needs a fraction in [0, 1]"))
         })?;
         let keep_fraction = Fraction::new(value)
-            .map_err(|e| CampaignError::Refused(format!("mix:{fraction}: {e}")))?;
+            .map_err(|e| OrchestratorError::Refused(format!("mix:{fraction}: {e}")))?;
         return Ok(Strip::Mix {
             keep_fraction,
             seed: MIX_SEED,
         });
     }
-    Err(CampaignError::Refused(format!(
+    Err(OrchestratorError::Refused(format!(
         "{text:?} is not a strip policy: all, keep:<kind>,.. or mix:<fraction>"
     )))
 }
 
 /// A privileged kind as `keep:` names it: `passage`, `hint`, `critique`,
 /// `reference`, `oracle`, or `other:<name>`.
-fn privileged_kind(name: &str) -> Result<PrivilegedKind, CampaignError> {
+fn privileged_kind(name: &str) -> Result<PrivilegedKind, OrchestratorError> {
     Ok(match name {
         "passage" => PrivilegedKind::Passage,
         "hint" => PrivilegedKind::Hint,
@@ -168,7 +168,7 @@ fn privileged_kind(name: &str) -> Result<PrivilegedKind, CampaignError> {
         other => match other.strip_prefix("other:").filter(|n| !n.is_empty()) {
             Some(name) => PrivilegedKind::Other(name.to_string()),
             None => {
-                return Err(CampaignError::Refused(format!(
+                return Err(OrchestratorError::Refused(format!(
                     "unknown privileged kind {name:?}: passage, hint, critique, reference, \
                      oracle or other:<name>"
                 )))
@@ -178,14 +178,14 @@ fn privileged_kind(name: &str) -> Result<PrivilegedKind, CampaignError> {
 }
 
 /// A `--min-strength`: `executable`, `formal`, `consistency` or `judged`.
-pub fn parse_strength(text: &str) -> Result<Strength, CampaignError> {
+pub fn parse_strength(text: &str) -> Result<Strength, OrchestratorError> {
     Ok(match text {
         "executable" => Strength::Executable,
         "formal" => Strength::Formal,
         "consistency" => Strength::Consistency,
         "judged" => Strength::Judged,
         _ => {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "{text:?} is not a strength: executable, formal, consistency or judged"
             )))
         }
@@ -241,16 +241,16 @@ impl From<StoredDataset> for Built {
 }
 
 /// Projects `request.sets` through `request.view` and stores the dataset.
-pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, CampaignError> {
+pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, OrchestratorError> {
     let view = request.view;
     if request.strip.is_some() && !view.takes_strip() {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "view {} shows the student no task, so --strip does not apply",
             view.as_str()
         )));
     }
     if request.min_strength.is_some() && !view.takes_min_strength() {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "view {} reads no verdict, so --min-strength does not apply",
             view.as_str()
         )));
@@ -313,11 +313,11 @@ pub fn store_dataset(
     ctx: &Context,
     projection: &Projection,
     export_only: bool,
-) -> Result<StoredDataset, CampaignError> {
+) -> Result<StoredDataset, OrchestratorError> {
     if !export_only {
         TrainingCapabilities::BRAIN
             .require(projection.objective)
-            .map_err(|e| CampaignError::Refused(e.to_string()))?;
+            .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
     let stored = ctx.datasets().put(projection, &BrainDatasetCheck)?;
     record_dataset_lineage(ctx, &stored)?;
@@ -328,7 +328,10 @@ pub fn store_dataset(
 /// recorded yet. It is made official by one commit and its lineage by a second,
 /// so a crash between them leaves a dataset without; this repairs it, and
 /// `train` calls it before spending any time.
-pub fn record_dataset_lineage(ctx: &Context, stored: &StoredDataset) -> Result<(), CampaignError> {
+pub fn record_dataset_lineage(
+    ctx: &Context,
+    stored: &StoredDataset,
+) -> Result<(), OrchestratorError> {
     ctx.workspace().record_dataset(
         &stored.id.0,
         &DatasetLineage {
@@ -341,7 +344,7 @@ pub fn record_dataset_lineage(ctx: &Context, stored: &StoredDataset) -> Result<(
 }
 
 /// The stored dataset `id` (or a unique prefix of it) names, verified.
-pub fn resolve_dataset(ctx: &Context, id: &str) -> Result<StoredDataset, CampaignError> {
+pub fn resolve_dataset(ctx: &Context, id: &str) -> Result<StoredDataset, OrchestratorError> {
     let stored = ctx.datasets().list()?.into_iter().map(|d| d.0);
     let id = DatasetId(ids::resolve("dataset", id, stored)?);
     Ok(ctx.datasets().get(&id)?)
@@ -361,7 +364,7 @@ pub struct Exported {
 /// Copies the dataset `id` names, with its manifest, into `out`, as
 /// `<view>-<id prefix>.jsonl`. An existing file of that name is replaced
 /// only when it already holds the same bytes.
-pub fn export(ctx: &Context, id: &str, out: &Path) -> Result<Exported, CampaignError> {
+pub fn export(ctx: &Context, id: &str, out: &Path) -> Result<Exported, OrchestratorError> {
     let stored = resolve_dataset(ctx, id)?;
     std::fs::create_dir_all(out).map_err(io(out))?;
     let name = format!(
@@ -376,7 +379,7 @@ pub fn export(ctx: &Context, id: &str, out: &Path) -> Result<Exported, CampaignE
         &std::fs::read(&stored.path).map_err(io(&stored.path))?,
     )?;
     let manifest_bytes =
-        canonical_json(&stored.manifest).map_err(|source| CampaignError::Json {
+        canonical_json(&stored.manifest).map_err(|source| OrchestratorError::Json {
             what: "dataset manifest".into(),
             source,
         })?;
@@ -389,11 +392,11 @@ pub fn export(ctx: &Context, id: &str, out: &Path) -> Result<Exported, CampaignE
 }
 
 /// Writes `bytes` to `to`, refusing to replace a different file.
-fn put_once(to: &Path, bytes: &[u8]) -> Result<(), CampaignError> {
+fn put_once(to: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
     match std::fs::read(to) {
         Ok(existing) if existing == bytes => return Ok(()),
         Ok(_) => {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "{} exists and holds something else; export into another directory",
                 to.display()
             )))

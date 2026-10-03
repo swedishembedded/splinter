@@ -29,12 +29,12 @@ use serde::Serialize;
 use splinter_core::experience::PrivilegedKind;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
 
-use crate::context::Context;
 use crate::curriculum::{queue, release_of_label};
-use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
 use splinter_core::model_ref::POLICY_DEFAULT;
 use splinter_core::release::ReleaseId;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// Decided attempts per concept and release the rolling rate is over: the
 /// newest this many.
@@ -94,7 +94,7 @@ pub fn mastery(
     ctx: &Context,
     current: Option<&ReleaseId>,
     window: usize,
-) -> Result<Vec<ConceptMastery>, CampaignError> {
+) -> Result<Vec<ConceptMastery>, OrchestratorError> {
     let store = ctx.experiences();
     let mut resolver = ConceptResolver::new(ctx.sources());
     let mut attempts: BTreeMap<(Concept, Option<ReleaseId>), Vec<Decided>> = BTreeMap::new();
@@ -164,7 +164,7 @@ pub fn mastery(
 }
 
 /// The `n` weakest concepts under the release `policy:default` is now.
-pub fn weakest(ctx: &Context, n: usize) -> Result<MasteryReport, CampaignError> {
+pub fn weakest(ctx: &Context, n: usize) -> Result<MasteryReport, OrchestratorError> {
     let policy = PolicyUsed {
         alias: POLICY_DEFAULT.into(),
         release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),

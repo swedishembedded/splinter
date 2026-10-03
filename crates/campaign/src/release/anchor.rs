@@ -29,9 +29,9 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 
-use crate::context::Context;
-use crate::error::{io, CampaignError};
 use crate::release::probe::Suite;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::{io, OrchestratorError};
 
 /// The most tasks an anchor file may hold.
 pub const MAX_ANCHOR_TASKS: usize = 10_000;
@@ -86,17 +86,17 @@ const POINTER: &str = "anchor";
 
 /// The anchor suite version in force, verified; `None` before one is
 /// frozen.
-pub fn current(ctx: &Context) -> Result<Option<FrozenAnchor>, CampaignError> {
+pub fn current(ctx: &Context) -> Result<Option<FrozenAnchor>, OrchestratorError> {
     ctx.workspace().refresh()?;
     let Some((_, value)) = ctx.workspace().pointer(POINTER)? else {
         return Ok(None);
     };
     let digest = Digest::parse(&value)
-        .map_err(|e| CampaignError::Refused(format!("the anchor pointer is corrupt: {e}")))?;
+        .map_err(|e| OrchestratorError::Refused(format!("the anchor pointer is corrupt: {e}")))?;
     let suite = ctx
         .workspace()
         .get_document(VERSION, &digest)?
-        .ok_or_else(|| CampaignError::NotFound {
+        .ok_or_else(|| OrchestratorError::NotFound {
             what: "anchor suite version",
             id: digest.to_string(),
         })?;
@@ -105,7 +105,7 @@ pub fn current(ctx: &Context) -> Result<Option<FrozenAnchor>, CampaignError> {
 
 /// Reads anchor tasks from `file` (see the module documentation), refusing
 /// the whole file on its first bad line.
-pub fn read_tasks(file: &Path) -> Result<Vec<Task>, CampaignError> {
+pub fn read_tasks(file: &Path) -> Result<Vec<Task>, OrchestratorError> {
     let text = std::fs::read_to_string(file).map_err(io(file))?;
     let catalogue = Catalogue::builtin();
     let mut tasks = Vec::new();
@@ -114,7 +114,7 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, CampaignError> {
             continue;
         }
         let refuse = |why: String| {
-            CampaignError::Refused(format!("{} line {}: {why}", file.display(), index + 1))
+            OrchestratorError::Refused(format!("{} line {}: {why}", file.display(), index + 1))
         };
         let parsed: AnchorLine = serde_json::from_str(line).map_err(|e| {
             refuse(format!(
@@ -154,7 +154,7 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, CampaignError> {
         )?);
     }
     if tasks.is_empty() {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "{} holds no task",
             file.display()
         )));
@@ -165,7 +165,7 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, CampaignError> {
 /// Freezes the tasks in `file` as the anchor suite's next version and puts
 /// it in force; the version in force is kept when it holds the same tasks.
 /// Refused if another process froze one in the meantime.
-pub fn freeze(ctx: &Context, file: &Path) -> Result<FrozenAnchor, CampaignError> {
+pub fn freeze(ctx: &Context, file: &Path) -> Result<FrozenAnchor, OrchestratorError> {
     let tasks = read_tasks(file)?;
     let previous = current(ctx)?;
     if let Some(previous) = previous.as_ref().filter(|p| p.suite.tasks == tasks) {

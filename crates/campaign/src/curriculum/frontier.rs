@@ -43,13 +43,13 @@ use splinter_model::AGENT_SAMPLING;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use crate::context::Context;
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};
-use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::verify::{verify_set, Verified};
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// Attempts per task when a command names none: enough for a task solved
 /// about half the time to show both a pass and a fail most of the time,
@@ -103,16 +103,16 @@ impl PassAtK {
     }
 
     /// Refuses a k below two, and a negative or non-finite temperature.
-    pub fn validate(&self) -> Result<(), CampaignError> {
+    pub fn validate(&self) -> Result<(), OrchestratorError> {
         if self.k < 2 {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "pass@k needs k of at least 2 to find a task sometimes solved; {} given",
                 self.k
             )));
         }
         if let Some(sampling) = &self.sampling {
             if !(sampling.temperature.is_finite() && sampling.temperature >= 0.0) {
-                return Err(CampaignError::Refused(format!(
+                return Err(OrchestratorError::Refused(format!(
                     "a temperature is finite and at least 0; {} given",
                     sampling.temperature
                 )));
@@ -218,7 +218,7 @@ pub struct Frontier {
 pub(crate) fn tally(
     ctx: &Context,
     set: &SetId,
-) -> Result<BTreeMap<Digest, (PassCount, Vec<ExperienceId>)>, CampaignError> {
+) -> Result<BTreeMap<Digest, (PassCount, Vec<ExperienceId>)>, OrchestratorError> {
     let store = ctx.experiences();
     let mut tallied: BTreeMap<Digest, (PassCount, Vec<ExperienceId>)> = BTreeMap::new();
     let members = store.get_set(set)?.members;
@@ -241,7 +241,7 @@ pub fn select_frontier(
     task_set: &TaskSetId,
     solved: &Solved,
     taught: &Taught,
-) -> Result<Frontier, CampaignError> {
+) -> Result<Frontier, OrchestratorError> {
     let set = ctx.tasks().get_set(task_set)?;
     let mut attempts = tally(ctx, &solved.experience_set)?;
     let mut teacher = tally(ctx, &taught.solve.experience_set)?;
@@ -314,7 +314,7 @@ pub fn select_frontier(
 }
 
 /// Records `measurement` once under its address.
-fn record(ctx: &Context, measurement: &Measurement) -> Result<Digest, CampaignError> {
+fn record(ctx: &Context, measurement: &Measurement) -> Result<Digest, OrchestratorError> {
     Ok(ctx.workspace().put_document(MEASUREMENT, measurement)?)
 }
 
@@ -352,7 +352,7 @@ pub struct Measured {
 /// Solves each task of `request.task_set` k times, grades every attempt,
 /// has the teacher solve each task never solved, and keeps the tasks worth
 /// training on; see the module documentation.
-pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, CampaignError> {
+pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, OrchestratorError> {
     request.pass_at_k.validate()?;
     let solve = solve_tasks(
         ctx,

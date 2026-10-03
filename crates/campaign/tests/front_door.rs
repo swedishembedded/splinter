@@ -242,7 +242,7 @@ fn a_model_named_in_the_configuration_reads_the_sentence_instead_of_the_policy()
     settings.front_door_model = Some("local:./reader".into());
     let reader = classifier();
     let policy = Scripted::new(|_| json!({ "candidates": [] }).to_string());
-    let ctx = splinter_campaign::Context::new(settings, false)
+    let ctx = splinter_orchestrator::Context::new(settings, false)
         .unwrap()
         .with_model(
             splinter_core::model_ref::ModelRef::policy_default(),
@@ -270,7 +270,7 @@ fn a_front_door_model_that_is_no_model_reference_is_refused_by_name() {
     let scratch = Scratch::new("front-door-model-bad");
     let mut settings = config(&scratch);
     settings.front_door_model = Some("not a reference".into());
-    let ctx = splinter_campaign::Context::new(settings, false).unwrap();
+    let ctx = splinter_orchestrator::Context::new(settings, false).unwrap();
     let error = interpret(&ctx, "learn ./docs").err().unwrap();
     assert!(error.is_refusal(), "{error}");
     assert!(error.to_string().contains("not a reference"), "{error}");

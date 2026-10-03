@@ -6,8 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::error::CampaignError;
-use crate::ids::{strip_algorithm, MIN_PREFIX};
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::ids::{strip_algorithm, MIN_PREFIX};
 
 use super::{Node, NodeKind, Relation};
 
@@ -81,7 +81,7 @@ impl Graph {
     /// [`MIN_PREFIX`] hex digits of it; or a prefix of any other id (a
     /// candidate's). A prefix naming more than one node is refused with
     /// every node it names.
-    pub(crate) fn resolve(&self, given: &str) -> Result<&Node, CampaignError> {
+    pub(crate) fn resolve(&self, given: &str) -> Result<&Node, OrchestratorError> {
         if let Some(node) = self.nodes.get(given) {
             return Ok(node);
         }
@@ -89,7 +89,7 @@ impl Graph {
         let is_hex = !hex.is_empty() && hex.bytes().all(|b| b.is_ascii_hexdigit());
         let matches: Vec<&Node> = if is_hex {
             if hex.len() < MIN_PREFIX {
-                return Err(CampaignError::Refused(format!(
+                return Err(OrchestratorError::Refused(format!(
                     "{given:?} is too short: give blake3:<hex>, or at least {MIN_PREFIX} hex \
                      digits of an id"
                 )));
@@ -120,12 +120,12 @@ impl Graph {
                 .collect()
         };
         match matches.as_slice() {
-            [] => Err(CampaignError::NotFound {
+            [] => Err(OrchestratorError::NotFound {
                 what: "artifact",
                 id: given.to_string(),
             }),
             [one] => Ok(*one),
-            many => Err(CampaignError::AmbiguousArtifact {
+            many => Err(OrchestratorError::AmbiguousArtifact {
                 id: given.to_string(),
                 candidates: many
                     .iter()
@@ -174,7 +174,8 @@ mod tests {
             graph.resolve("candidate-2026").unwrap().kind,
             NodeKind::Candidate
         );
-        let Err(CampaignError::AmbiguousArtifact { candidates, .. }) = graph.resolve("abcd") else {
+        let Err(OrchestratorError::AmbiguousArtifact { candidates, .. }) = graph.resolve("abcd")
+        else {
             panic!("abcd names two artifacts");
         };
         assert_eq!(candidates.len(), 2);
@@ -182,15 +183,15 @@ mod tests {
         assert!(candidates[1].starts_with("task blake3:abcd2"));
         assert!(matches!(
             graph.resolve("abc"),
-            Err(CampaignError::Refused(_))
+            Err(OrchestratorError::Refused(_))
         ));
         assert!(matches!(
             graph.resolve("ffff"),
-            Err(CampaignError::NotFound { .. })
+            Err(OrchestratorError::NotFound { .. })
         ));
         assert!(matches!(
             graph.resolve("release-x"),
-            Err(CampaignError::NotFound { .. })
+            Err(OrchestratorError::NotFound { .. })
         ));
     }
 }

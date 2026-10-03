@@ -42,9 +42,7 @@ use splinter_agent::solve::Model;
 use splinter_campaign::ask::ask;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::lineage::{lineage, Direction, Lineage, LineageRequest, NodeKind, Relation};
-use splinter_campaign::release::{ReleaseManifest, RELEASE_FORMAT};
 use splinter_campaign::train::Candidate;
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::clock::FixedClock;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
@@ -54,6 +52,8 @@ use splinter_core::release::ReleaseId;
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{Check, GateConfig, GateReport};
+use splinter_orchestrator::releases::{ReleaseManifest, RELEASE_FORMAT};
+use splinter_orchestrator::{Context, OrchestratorError};
 
 /// What the learned fixture holds.
 struct Fixture {
@@ -375,7 +375,7 @@ fn ids_are_refused_when_unknown_or_ambiguous_and_the_report_has_its_documented_s
     )
     .unwrap_err();
     assert!(
-        matches!(unknown, CampaignError::NotFound { .. }) && unknown.is_refusal(),
+        matches!(unknown, OrchestratorError::NotFound { .. }) && unknown.is_refusal(),
         "{unknown}"
     );
 
@@ -482,7 +482,7 @@ fn a_prefix_naming_artifacts_in_two_stores_is_refused_with_the_candidates() {
     )
     .unwrap_err();
     assert!(refused.is_refusal(), "{refused}");
-    let CampaignError::AmbiguousArtifact { candidates, .. } = &refused else {
+    let OrchestratorError::AmbiguousArtifact { candidates, .. } = &refused else {
         panic!("{refused}");
     };
     let listed = refused.to_string();

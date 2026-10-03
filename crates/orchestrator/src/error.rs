@@ -21,7 +21,7 @@ use splinter_core::model_ref::RefError;
 
 /// Why a command failed.
 #[derive(Debug, thiserror::Error)]
-pub enum CampaignError {
+pub enum OrchestratorError {
     /// A model reference is malformed, or needs the network opt-in.
     #[error(transparent)]
     Ref(#[from] RefError),
@@ -128,7 +128,7 @@ pub enum CampaignError {
     },
 }
 
-impl CampaignError {
+impl OrchestratorError {
     /// Whether the command was refused before it did anything - a usage
     /// error rather than a failure of the work.
     #[must_use]
@@ -145,8 +145,8 @@ impl CampaignError {
 }
 
 /// Wraps an I/O error on `path`.
-pub(crate) fn io(path: &std::path::Path) -> impl FnOnce(std::io::Error) -> CampaignError + '_ {
-    move |source| CampaignError::Io {
+pub fn io(path: &std::path::Path) -> impl FnOnce(std::io::Error) -> OrchestratorError + '_ {
+    move |source| OrchestratorError::Io {
         path: path.to_path_buf(),
         source,
     }

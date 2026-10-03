@@ -62,7 +62,7 @@ fn run(
     replies: Vec<&'static str>,
     advice: usize,
 ) -> (
-    Result<splinter_campaign::plan::Plan, splinter_campaign::CampaignError>,
+    Result<splinter_campaign::plan::Plan, splinter_orchestrator::OrchestratorError>,
     Scripted,
     usize,
 ) {
@@ -75,7 +75,7 @@ fn run_surveyed(
     advice: usize,
     judgment: usize,
 ) -> (
-    Result<splinter_campaign::plan::Plan, splinter_campaign::CampaignError>,
+    Result<splinter_campaign::plan::Plan, splinter_orchestrator::OrchestratorError>,
     Scripted,
     usize,
 ) {

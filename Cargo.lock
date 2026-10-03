@@ -4010,6 +4010,7 @@ dependencies = [
  "splinter-campaign",
  "splinter-core",
  "splinter-eval",
+ "splinter-orchestrator",
  "splinter-store",
 ]
 
@@ -4048,6 +4049,7 @@ dependencies = [
  "splinter-eval",
  "splinter-knowledge",
  "splinter-model",
+ "splinter-orchestrator",
  "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
@@ -4158,6 +4160,24 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "sven-sdk",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "splinter-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "splinter-agent",
+ "splinter-core",
+ "splinter-data",
+ "splinter-eval",
+ "splinter-knowledge",
+ "splinter-model",
+ "splinter-sandbox",
+ "splinter-store",
  "thiserror 2.0.21",
  "tokio",
 ]

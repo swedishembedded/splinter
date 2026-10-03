@@ -22,7 +22,6 @@ use splinter_campaign::judge::calibrate_judge;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::lineage::{lineage, LineageRequest};
 use splinter_campaign::release::{self, ReleaseRequest};
-use splinter_campaign::runs::{self, record};
 use splinter_campaign::solving::solve_set;
 use splinter_campaign::sources::{self, SourceTarget};
 use splinter_campaign::state;
@@ -31,9 +30,10 @@ use splinter_campaign::tasks::{self, check_kinds, resolve_set as resolve_task_se
 use splinter_campaign::train::{train, BrainTrainer, TrainRequest, Tuning};
 use splinter_campaign::variants;
 use splinter_campaign::verify::{verify_set, Judge};
-use splinter_campaign::{CampaignError, Config, Context, Runtime};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::Role;
+use splinter_orchestrator::runs::{self, record};
+use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
@@ -74,7 +74,7 @@ pub struct Session {
 
 impl Session {
     /// A session over `config` with the command line's global flags.
-    pub fn new(config: Config, global: Global) -> Result<Self, CampaignError> {
+    pub fn new(config: Config, global: Global) -> Result<Self, OrchestratorError> {
         let runtime = Arc::new(Runtime::new(config, global.allow_remote)?);
         Ok(Self { runtime, global })
     }
@@ -211,7 +211,7 @@ impl Session {
         }
     }
 
-    fn dispatch(&self, command: Command) -> Result<Exit, CampaignError> {
+    fn dispatch(&self, command: Command) -> Result<Exit, OrchestratorError> {
         let context = self.context();
         let ctx = &context;
         let json = self.global.json;
@@ -420,7 +420,7 @@ impl Session {
                     return Ok(Exit::Ok);
                 }
                 let Some(candidate) = args.candidate else {
-                    return Err(CampaignError::Refused(
+                    return Err(OrchestratorError::Refused(
                         "name a candidate to release, or `release list`".into(),
                     ));
                 };

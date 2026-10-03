@@ -20,10 +20,10 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use splinter_campaign::model_ref::resolve;
-use splinter_campaign::Config;
 use splinter_core::model_ref::{ModelRef, RefError};
 use splinter_model::ModelSelection;
+use splinter_orchestrator::model_ref::resolve;
+use splinter_orchestrator::Config;
 use splinter_store::StateRoot;
 
 fn config() -> Config {

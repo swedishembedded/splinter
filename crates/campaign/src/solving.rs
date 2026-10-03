@@ -41,13 +41,13 @@ use splinter_model::Sampling;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::TaskSetId;
 
-use crate::context::Context;
 use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
-use crate::error::CampaignError;
 use crate::learn::PolicyUsed;
 use crate::tasks::remaining;
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// How long one task's solve may take.
 pub const DEFAULT_SOLVE_DEADLINE: Duration = Duration::from_secs(300);
@@ -130,7 +130,7 @@ pub fn solve_set(
     solver: &ModelRef,
     deadline: Option<Instant>,
     cancel: &CancelToken,
-) -> Result<Solved, CampaignError> {
+) -> Result<Solved, OrchestratorError> {
     solve_tasks(
         ctx,
         &SolveRequest {
@@ -150,7 +150,7 @@ pub fn solve_set(
 fn sampled_solver(
     ctx: &Context,
     request: &SolveRequest<'_>,
-) -> Result<(Model, Option<Sampling>), CampaignError> {
+) -> Result<(Model, Option<Sampling>), OrchestratorError> {
     let (sampling, required) = match request.sampling {
         SamplingChoice::Own => return Ok((ctx.model(request.solver)?, None)),
         SamplingChoice::Prefer(sampling) => (sampling, false),
@@ -158,7 +158,7 @@ fn sampled_solver(
     };
     match ctx.resampled(request.solver, sampling)? {
         Some(model) => Ok((model, Some(sampling))),
-        None if required => Err(CampaignError::Refused(format!(
+        None if required => Err(OrchestratorError::Refused(format!(
             "{} samples as its provider does; its sampling cannot be set here",
             request.solver
         ))),
@@ -167,9 +167,9 @@ fn sampled_solver(
 }
 
 /// Solves every task of `request.task_set` `request.attempts` times.
-pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, CampaignError> {
+pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, OrchestratorError> {
     if request.attempts == 0 {
-        return Err(CampaignError::Refused(
+        return Err(OrchestratorError::Refused(
             "a task is solved at least once".into(),
         ));
     }
@@ -184,7 +184,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     };
     let label = policy.as_ref().map(|p| policy_label(p.release.as_ref()));
     let attempts = u32::try_from(request.attempts)
-        .map_err(|_| CampaignError::Refused("too many attempts per task".into()))?;
+        .map_err(|_| OrchestratorError::Refused("too many attempts per task".into()))?;
     let store = ctx.experiences();
     let batch = ctx.workspace().batch();
     let mut members = Vec::new();
@@ -231,7 +231,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         };
         for attempt in 0..attempts {
             if request.cancel.is_cancelled() {
-                return Err(CampaignError::Cancelled);
+                return Err(OrchestratorError::Cancelled);
             }
             if request.deadline.is_some_and(|d| Instant::now() >= d) {
                 report.stopped = Some("the budget was spent before every task was tried".into());

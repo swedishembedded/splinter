@@ -23,14 +23,19 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_campaign::learn::{learn, parse_budget, LearnRequest, Learned};
 use splinter_campaign::train::{TrainPlan, Trainer};
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
+use splinter_orchestrator::{Context, OrchestratorError};
 
 struct NoTraining;
 
 impl Trainer for NoTraining {
-    fn train(&self, _: &Context, _: &TrainPlan, _: &CancelToken) -> Result<Trained, CampaignError> {
+    fn train(
+        &self,
+        _: &Context,
+        _: &TrainPlan,
+        _: &CancelToken,
+    ) -> Result<Trained, OrchestratorError> {
         panic!("a dry run trains nothing")
     }
 
@@ -39,7 +44,7 @@ impl Trainer for NoTraining {
         _: &Context,
         _: &TrainPlan,
         _: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         panic!("a dry run trains nothing")
     }
 }
@@ -48,7 +53,7 @@ fn planned(
     test: &str,
     default_budget: Option<&str>,
     asked: Option<&str>,
-) -> Result<Option<u64>, CampaignError> {
+) -> Result<Option<u64>, OrchestratorError> {
     let scratch = Scratch::new(test);
     let mut settings = config(&scratch);
     settings.default_budget = default_budget.map(str::to_string);

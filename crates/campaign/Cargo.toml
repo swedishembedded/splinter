@@ -11,6 +11,7 @@ publish.workspace = true
 
 [dependencies]
 splinter-core = { workspace = true }
+splinter-orchestrator = { workspace = true }
 splinter-agent = { workspace = true }
 splinter-knowledge = { workspace = true }
 splinter-eval = { workspace = true }

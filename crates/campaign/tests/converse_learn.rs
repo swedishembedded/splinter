@@ -34,9 +34,9 @@ use splinter_campaign::dialogue::{probes_beyond_the_source, STUDENT_ROLE};
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::release::arm;
 use splinter_campaign::train::{TrainPlan, Trainer};
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
+use splinter_orchestrator::{Context, OrchestratorError};
 
 const LETTER: &str = "# To a young man
 
@@ -93,7 +93,7 @@ impl Trainer for Student {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         self.plans.lock().unwrap().push(plan.clone());
         let trained = FakeTrainer::knowing(&[ANCHOR]).train(ctx, plan, cancel)?;
         ctx.add_model(
@@ -111,7 +111,7 @@ impl Trainer for Student {
         _ctx: &Context,
         _plan: &TrainPlan,
         _cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         panic!("learn trains chat datasets only")
     }
 }

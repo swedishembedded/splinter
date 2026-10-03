@@ -37,8 +37,8 @@ use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 use splinter_store::experiences::{ExperienceSet, SetId};
 
-use crate::context::Context;
-use crate::error::CampaignError;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// The largest share of a training set one concept may take by default.
 pub const DEFAULT_MAX_CONCEPT_SHARE: f64 = 0.25;
@@ -71,14 +71,14 @@ impl Default for Quotas {
 
 impl Quotas {
     /// Refuses a share outside `(0, 1]`.
-    pub fn validate(&self) -> Result<(), CampaignError> {
+    pub fn validate(&self) -> Result<(), OrchestratorError> {
         for (name, share) in [
             ("concept", self.max_concept_share),
             ("kind", self.max_kind_share),
             ("strength", self.max_strength_share),
         ] {
             if !(share > 0.0 && share <= 1.0) {
-                return Err(CampaignError::Refused(format!(
+                return Err(OrchestratorError::Refused(format!(
                     "the {name} quota {share} is not a share in (0, 1]"
                 )));
             }
@@ -233,7 +233,7 @@ pub fn select_training_set(
     sets: &[SetId],
     min_strength: Strength,
     quotas: &Quotas,
-) -> Result<Selected, CampaignError> {
+) -> Result<Selected, OrchestratorError> {
     quotas.validate()?;
     let store = ctx.experiences();
     let mut resolver = ConceptResolver::new(ctx.sources());

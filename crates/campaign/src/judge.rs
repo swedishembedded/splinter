@@ -21,11 +21,11 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceId;
 use splinter_eval::verifiers::calibration::{calibrate, Calibration};
 
-use crate::context::Context;
-use crate::error::{io, CampaignError};
 use crate::experiences::resolve_experience;
 use crate::verify::{judge_verifier, store_calibration};
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::{io, OrchestratorError};
 
 /// One line of a labelled file.
 #[derive(Debug, Deserialize)]
@@ -51,19 +51,20 @@ pub fn calibrate_judge(
     ctx: &Context,
     labelled: &Path,
     judge: &ModelRef,
-) -> Result<Calibrated, CampaignError> {
+) -> Result<Calibrated, OrchestratorError> {
     let text = std::fs::read_to_string(labelled).map_err(io(labelled))?;
     let mut examples = Vec::new();
     for (index, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
-        let entry: Labelled = serde_json::from_str(line).map_err(|source| CampaignError::Json {
-            what: format!("{} line {}", labelled.display(), index + 1),
-            source,
-        })?;
+        let entry: Labelled =
+            serde_json::from_str(line).map_err(|source| OrchestratorError::Json {
+                what: format!("{} line {}", labelled.display(), index + 1),
+                source,
+            })?;
         if entry.label == Outcome::Abstain {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "{} line {}: a label is pass or fail",
                 labelled.display(),
                 index + 1
@@ -74,7 +75,7 @@ pub fn calibrate_judge(
         examples.push((experience.to_task(), experience, entry.label));
     }
     if examples.is_empty() {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "{} labels no experience",
             labelled.display()
         )));

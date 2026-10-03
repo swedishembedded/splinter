@@ -34,9 +34,9 @@ use splinter_campaign::release::anchor;
 use splinter_campaign::train::{
     train, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
 };
-use splinter_campaign::Context;
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
+use splinter_orchestrator::Context;
 
 fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
     TrainRequest {

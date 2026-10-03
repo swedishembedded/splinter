@@ -29,10 +29,10 @@ use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::release::arm;
 use splinter_campaign::train::DEFAULT_STEPS;
 use splinter_campaign::train::{TrainPlan, Trainer};
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
+use splinter_orchestrator::{Context, OrchestratorError};
 
 const RECALL_ONLY: &str = r#"{"persona": null, "kinds": ["recall"], "distill": false, "rationale": "the manual states facts"}"#;
 const DISTILLED: &str = r#"{"persona": null, "kinds": ["recall"], "distill": true, "rationale": "the manual is not known to the learner"}"#;
@@ -47,7 +47,7 @@ impl Trainer for Student {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         self.plans.lock().unwrap().push(plan.clone());
         let trained = FakeTrainer::knowing(&[ANCHOR]).train(ctx, plan, cancel)?;
         ctx.add_model(
@@ -65,7 +65,7 @@ impl Trainer for Student {
         _ctx: &Context,
         _plan: &TrainPlan,
         _cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         panic!("learn trains chat datasets only")
     }
 }
@@ -86,7 +86,7 @@ fn run(
     test: &str,
     plan: &'static str,
     request: impl FnOnce(String) -> LearnRequest,
-) -> Result<(splinter_campaign::learn::LearnReport, common::Scratch), CampaignError> {
+) -> Result<(splinter_campaign::learn::LearnReport, common::Scratch), OrchestratorError> {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
         ModelRef::policy_default(),
@@ -157,7 +157,7 @@ fn the_configured_assistant_is_the_default_planner_generator_and_teacher() {
     let scratch = common::Scratch::new("plan-learn-assistant");
     let mut settings = common::config(&scratch);
     settings.assistant_model = Some("local:Qwen/Qwen3-8B".into());
-    let ctx = splinter_campaign::Context::new(settings, false).unwrap();
+    let ctx = splinter_orchestrator::Context::new(settings, false).unwrap();
     let student = Student {
         plans: Mutex::new(Vec::new()),
     };
@@ -198,7 +198,7 @@ fn an_assistant_that_is_no_model_reference_is_refused_by_name() {
     let scratch = common::Scratch::new("plan-learn-assistant-bad");
     let mut settings = common::config(&scratch);
     settings.assistant_model = Some("not a reference".into());
-    let ctx = splinter_campaign::Context::new(settings, false).unwrap();
+    let ctx = splinter_orchestrator::Context::new(settings, false).unwrap();
     let student = Student {
         plans: Mutex::new(Vec::new()),
     };

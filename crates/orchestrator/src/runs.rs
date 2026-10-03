@@ -17,7 +17,7 @@ use splinter_store::runs::{self, list_runs, read_run, Run, RunLog, RunStatus};
 use splinter_store::workspace::Workspace;
 
 use crate::context::Context;
-use crate::error::CampaignError;
+use crate::error::OrchestratorError;
 
 /// How often a running command looks for a cancel request.
 const CANCEL_POLL: Duration = Duration::from_millis(200);
@@ -46,7 +46,11 @@ pub struct Recorder<'a> {
 impl Recorder<'_> {
     /// Records the finished stage `stage` with `summary`, and reports it to
     /// the context's progress receiver.
-    pub fn stage(&mut self, stage: &str, summary: &impl Serialize) -> Result<(), CampaignError> {
+    pub fn stage(
+        &mut self,
+        stage: &str,
+        summary: &impl Serialize,
+    ) -> Result<(), OrchestratorError> {
         let summary = to_json(stage, summary)?;
         self.log.stage(stage, summary.clone(), self.ctx.clock())?;
         self.ctx.report_stage(stage, &summary);
@@ -59,11 +63,11 @@ impl Recorder<'_> {
         self.cancel.clone()
     }
 
-    /// Stops the work with [`CampaignError::Cancelled`] once a cancel was
+    /// Stops the work with [`OrchestratorError::Cancelled`] once a cancel was
     /// requested.
-    pub fn check_cancelled(&self) -> Result<(), CampaignError> {
+    pub fn check_cancelled(&self) -> Result<(), OrchestratorError> {
         if self.cancel.is_cancelled() {
-            Err(CampaignError::Cancelled)
+            Err(OrchestratorError::Cancelled)
         } else {
             Ok(())
         }
@@ -77,8 +81,8 @@ pub fn record<R: Serialize>(
     ctx: &Context,
     command: &str,
     arguments: &impl Serialize,
-    work: impl FnOnce(&mut Recorder<'_>) -> Result<R, CampaignError>,
-) -> Result<Recorded<R>, CampaignError> {
+    work: impl FnOnce(&mut Recorder<'_>) -> Result<R, OrchestratorError>,
+) -> Result<Recorded<R>, OrchestratorError> {
     let arguments = to_json("arguments", arguments)?;
     let log = RunLog::start(ctx.workspace(), command, arguments, ctx.clock())?;
     let run = log.id().to_string();
@@ -109,7 +113,7 @@ pub fn record<R: Serialize>(
             Ok(Recorded { run, report })
         }
         Err(e) => {
-            let status = if cancel.is_cancelled() || matches!(e, CampaignError::Cancelled) {
+            let status = if cancel.is_cancelled() || matches!(e, OrchestratorError::Cancelled) {
                 RunStatus::Cancelled
             } else {
                 RunStatus::Failed
@@ -142,11 +146,8 @@ fn watch_for_cancel(
 }
 
 /// `value` as JSON; `what` names it in the error.
-pub(crate) fn to_json(
-    what: &str,
-    value: &impl Serialize,
-) -> Result<serde_json::Value, CampaignError> {
-    serde_json::to_value(value).map_err(|source| CampaignError::Json {
+pub fn to_json(what: &str, value: &impl Serialize) -> Result<serde_json::Value, OrchestratorError> {
+    serde_json::to_value(value).map_err(|source| OrchestratorError::Json {
         what: what.to_string(),
         source,
     })
@@ -188,7 +189,7 @@ pub struct RunList {
 }
 
 /// Every recorded run.
-pub fn list(ctx: &Context) -> Result<RunList, CampaignError> {
+pub fn list(ctx: &Context) -> Result<RunList, OrchestratorError> {
     Ok(RunList {
         runs: list_runs(ctx.workspace())?
             .iter()
@@ -198,7 +199,7 @@ pub fn list(ctx: &Context) -> Result<RunList, CampaignError> {
 }
 
 /// The run `id`'s whole record.
-pub fn show(ctx: &Context, id: &str) -> Result<Run, CampaignError> {
+pub fn show(ctx: &Context, id: &str) -> Result<Run, OrchestratorError> {
     Ok(read_run(ctx.workspace(), id)?)
 }
 
@@ -212,7 +213,7 @@ pub struct CancelRequested {
 }
 
 /// Asks the run `id` to stop; refused for a run not in progress.
-pub fn cancel(ctx: &Context, id: &str) -> Result<CancelRequested, CampaignError> {
+pub fn cancel(ctx: &Context, id: &str) -> Result<CancelRequested, OrchestratorError> {
     let request = runs::request_cancel(ctx.workspace(), id)?;
     Ok(CancelRequested {
         run: id.to_string(),

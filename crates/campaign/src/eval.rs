@@ -33,15 +33,16 @@ use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_eval::paired::accuracy;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use crate::release::probe::{self, Suite};
-use crate::release::{anchor, arm, StoredRelease};
-use crate::runs::{record, Recorded};
+use crate::release::{anchor, arm};
 use crate::train::load_candidate;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_eval::gate::SuiteSummary;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::releases::StoredRelease;
+use splinter_orchestrator::runs::{record, Recorded};
 
 /// Which suite `eval` grades on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -58,15 +59,15 @@ pub enum SuiteChoice {
 }
 
 impl FromStr for SuiteChoice {
-    type Err = CampaignError;
+    type Err = OrchestratorError;
 
-    fn from_str(text: &str) -> Result<Self, CampaignError> {
+    fn from_str(text: &str) -> Result<Self, OrchestratorError> {
         Ok(match text {
             "held-out" => Self::HeldOut,
             "retention" => Self::Retention,
             "anchor" => Self::Anchor,
             "" => {
-                return Err(CampaignError::Refused(
+                return Err(OrchestratorError::Refused(
                     "a suite is held-out, retention, anchor or a file".into(),
                 ))
             }
@@ -132,7 +133,7 @@ struct Subject {
     earlier: Vec<StoredRelease>,
 }
 
-fn subject(ctx: &Context, named: &str) -> Result<Subject, CampaignError> {
+fn subject(ctx: &Context, named: &str) -> Result<Subject, OrchestratorError> {
     let store = ctx.releases();
     let lineage = |parent: Option<&ReleaseId>| match parent {
         Some(id) => store.lineage(id),
@@ -168,9 +169,9 @@ pub fn eval(
     ctx: &Context,
     request: &EvalRequest,
     cancel: &CancelToken,
-) -> Result<Evaluated, CampaignError> {
+) -> Result<Evaluated, OrchestratorError> {
     if request.freeze.is_some() && request.suite != SuiteChoice::Anchor {
-        return Err(CampaignError::Refused(
+        return Err(OrchestratorError::Refused(
             "--freeze makes an anchor suite; give it with --suite anchor".into(),
         ));
     }
@@ -193,7 +194,7 @@ pub fn eval(
                 scores: Vec::new(),
             });
         }
-        return Err(CampaignError::Refused(
+        return Err(OrchestratorError::Refused(
             "name a candidate or a model reference to evaluate".into(),
         ));
     };
@@ -221,7 +222,7 @@ pub fn eval(
         }
         SuiteChoice::Anchor => {
             let Some(frozen) = &frozen else {
-                return Err(CampaignError::Refused(
+                return Err(OrchestratorError::Refused(
                     "no anchor suite is frozen: `splinter eval --suite anchor --freeze FILE`"
                         .into(),
                 ));
@@ -271,7 +272,7 @@ pub enum EvalReport {
 
 /// The `eval` command: showing the anchor suite is a read; freezing one
 /// or grading a model is a recorded run.
-pub fn evaluate(ctx: &Context, request: &EvalRequest) -> Result<EvalReport, CampaignError> {
+pub fn evaluate(ctx: &Context, request: &EvalRequest) -> Result<EvalReport, OrchestratorError> {
     if request.model.is_none() && request.freeze.is_none() {
         return Ok(EvalReport::Shown(eval(ctx, request, &CancelToken::new())?));
     }
@@ -281,8 +282,8 @@ pub fn evaluate(ctx: &Context, request: &EvalRequest) -> Result<EvalReport, Camp
     Ok(EvalReport::Ran(Box::new(recorded)))
 }
 
-fn no_release(named: &str, suite: &str) -> CampaignError {
-    CampaignError::Refused(format!(
+fn no_release(named: &str, suite: &str) -> OrchestratorError {
+    OrchestratorError::Refused(format!(
         "{named} has no release or candidate data, so there is no {suite} suite for it; \
          name a candidate or a policy alias that points at a release"
     ))

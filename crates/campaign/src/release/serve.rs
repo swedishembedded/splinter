@@ -43,10 +43,10 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_model::local::GREEDY_SAMPLING;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use crate::release::probe::{grade, Probe, Suite};
 use splinter_eval::gate::{self, Check, Disagreement, Serve};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// What starts every line naming the adapter brain serves.
 const STARTUP_PREFIX: &str = "brain serve: ";
@@ -68,7 +68,7 @@ pub fn check(
     in_process: &[Probe],
     startup: Duration,
     cancel: &CancelToken,
-) -> Result<Check<Serve>, CampaignError> {
+) -> Result<Check<Serve>, OrchestratorError> {
     let Some(binary) = binary else {
         return Ok(Check::unmeasured(
             "no brain binary: none on PATH and SPLINTER_BRAIN_BIN is not set",
@@ -81,7 +81,7 @@ pub fn check(
         "serve-check-{}",
         splinter_store::new_id_with_prefix("gate")
     ));
-    std::fs::create_dir_all(&work).map_err(crate::error::io(&work))?;
+    std::fs::create_dir_all(&work).map_err(splinter_orchestrator::error::io(&work))?;
     let result = serve_and_ask(
         ctx,
         &Server {
@@ -101,7 +101,7 @@ pub fn check(
     let _ = std::fs::remove_dir_all(&work);
     match result {
         Ok(check) => Ok(check),
-        Err(Failure::Cancelled) => Err(CampaignError::Cancelled),
+        Err(Failure::Cancelled) => Err(OrchestratorError::Cancelled),
         Err(Failure::Unmeasured(why)) => Ok(Check::unmeasured(why)),
     }
 }
@@ -239,7 +239,7 @@ fn serve_and_ask(
     .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
     let served = Model::new(loaded.provider(), loaded.identity());
     let answers = grade(ctx, &served, sample, cancel).map_err(|e| match e {
-        CampaignError::Cancelled => Failure::Cancelled,
+        OrchestratorError::Cancelled => Failure::Cancelled,
         other => Failure::Unmeasured(format!("asking the served candidate: {other}")),
     })?;
     measured.sampled = sample.tasks.len();

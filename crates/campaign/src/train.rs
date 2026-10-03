@@ -52,12 +52,12 @@ use splinter_model::train::{
 use splinter_model::{ModelSelection, PolicyError};
 use splinter_store::artifacts::ArtifactSpec;
 
-use crate::context::{Context, PolicyPin};
 use crate::datasets::{record_dataset_lineage, resolve_dataset};
-use crate::error::{io, CampaignError};
 use crate::release::probe::split_records;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_orchestrator::context::{Context, PolicyPin};
+use splinter_orchestrator::error::{io, OrchestratorError};
 
 /// The peak learning rate a `learn` run trains a LoRA adapter at when none is
 /// given: the rate that moves a low-rank update in the few hundred steps of a
@@ -250,7 +250,7 @@ impl Candidate {
         }
     }
 
-    fn from_stored(ctx: &Context, stored: StoredCandidate) -> Result<Self, CampaignError> {
+    fn from_stored(ctx: &Context, stored: StoredCandidate) -> Result<Self, OrchestratorError> {
         Ok(Self {
             adapter: ctx.artifacts().path(&stored.adapter_artifact)?,
             candidate: stored.candidate,
@@ -284,7 +284,7 @@ pub trait Trainer {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError>;
+    ) -> Result<Trained, OrchestratorError>;
 
     /// Trains the preference adapter `plan` describes into `plan.dir`,
     /// stopping when `cancel` fires.
@@ -293,7 +293,7 @@ pub trait Trainer {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError>;
+    ) -> Result<TrainedPreference, OrchestratorError>;
 }
 
 /// Trains with brain's LoRA fine-tunes: chat fine-tuning for the
@@ -307,7 +307,7 @@ impl Trainer for BrainTrainer {
         _ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
         fine_tune(&FineTune {
@@ -333,7 +333,7 @@ impl Trainer for BrainTrainer {
         _ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
         train_preference(&PreferenceTune {
             model_dir: &plan.base,
@@ -352,7 +352,7 @@ impl Trainer for BrainTrainer {
 }
 
 /// `plan`'s datasets concatenated in order into one file in its directory.
-fn combine(plan: &TrainPlan) -> Result<PathBuf, CampaignError> {
+fn combine(plan: &TrainPlan) -> Result<PathBuf, OrchestratorError> {
     let combined = plan.dir.join("dataset.jsonl");
     let mut text = String::new();
     for dataset in &plan.datasets {
@@ -362,19 +362,19 @@ fn combine(plan: &TrainPlan) -> Result<PathBuf, CampaignError> {
     Ok(combined)
 }
 
-fn trainer_error(e: PolicyError) -> CampaignError {
+fn trainer_error(e: PolicyError) -> OrchestratorError {
     match e {
-        PolicyError::Cancelled { .. } => CampaignError::Cancelled,
-        other => CampaignError::Train(other.to_string()),
+        PolicyError::Cancelled { .. } => OrchestratorError::Cancelled,
+        other => OrchestratorError::Train(other.to_string()),
     }
 }
 
 /// The stored dataset `id` names and the regime brain trains it by,
 /// refused when brain cannot train it.
-pub fn trainable(ctx: &Context, id: &str) -> Result<(StoredDataset, Regime), CampaignError> {
+pub fn trainable(ctx: &Context, id: &str) -> Result<(StoredDataset, Regime), OrchestratorError> {
     let dataset = resolve_dataset(ctx, id)?;
     let Some(regime) = regime_of(dataset.manifest.format) else {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "dataset {} is export-only ({:?} records); brain cannot train it",
             dataset.id, dataset.manifest.objective
         )));
@@ -388,12 +388,14 @@ pub fn train(
     request: &TrainRequest,
     trainer: &dyn Trainer,
     cancel: &CancelToken,
-) -> Result<Candidate, CampaignError> {
+) -> Result<Candidate, OrchestratorError> {
     if request.datasets.is_empty() {
-        return Err(CampaignError::Refused("name at least one dataset".into()));
+        return Err(OrchestratorError::Refused(
+            "name at least one dataset".into(),
+        ));
     }
     let fraction = Fraction::new(request.replay_fraction).map_err(|e| {
-        CampaignError::Refused(format!("replay fraction {}: {e}", request.replay_fraction))
+        OrchestratorError::Refused(format!("replay fraction {}: {e}", request.replay_fraction))
     })?;
     let resolved = request
         .datasets
@@ -402,7 +404,7 @@ pub fn train(
         .collect::<Result<Vec<_>, _>>()?;
     let regime = resolved[0].1;
     if let Some((other, _)) = resolved.iter().find(|(_, r)| *r != regime) {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "dataset {} holds {:?} records but {} holds {:?} records; one run trains one \
              regime",
             other.id, other.manifest.objective, resolved[0].0.id, resolved[0].0.manifest.objective
@@ -412,14 +414,14 @@ pub fn train(
         (Regime::Dpo, beta) => beta.unwrap_or(DEFAULT_DPO_BETA),
         (Regime::Sft, None) => DEFAULT_DPO_BETA,
         (Regime::Sft, Some(_)) => {
-            return Err(CampaignError::Refused(
+            return Err(OrchestratorError::Refused(
                 "beta applies to preference datasets only; these are chat datasets".into(),
             ))
         }
     };
     let datasets: Vec<StoredDataset> = resolved.into_iter().map(|(d, _)| d).collect();
     let ModelSelection::Local(weights) = ctx.selection(&request.from)? else {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "{} is reached over the network and cannot be trained here",
             request.from
         )));
@@ -482,7 +484,7 @@ fn keep_candidate(
     request: &TrainRequest,
     candidate: &str,
     regime: Regime,
-) -> Result<Candidate, CampaignError> {
+) -> Result<Candidate, OrchestratorError> {
     let artifacts = ctx.artifacts();
     let adapter = artifacts.put_file(
         &trained.adapter,
@@ -491,9 +493,9 @@ fn keep_candidate(
             .with_sha256(),
     )?;
     let reported = Digest::parse(&trained.adapter_digest)
-        .map_err(|e| CampaignError::Train(format!("brain's adapter digest: {e}")))?;
+        .map_err(|e| OrchestratorError::Train(format!("brain's adapter digest: {e}")))?;
     if adapter.sha256.as_ref() != Some(&reported) {
-        return Err(CampaignError::Train(format!(
+        return Err(OrchestratorError::Train(format!(
             "brain reported the adapter as {reported} but its file hashes to {}",
             adapter
                 .sha256
@@ -507,7 +509,7 @@ fn keep_candidate(
             &ArtifactSpec::new("replay", "splinter-train").with_extension(".jsonl"),
         )?;
         if replay.as_ref().and_then(|r| r.digest.as_ref()) != Some(&kept.digest) {
-            return Err(CampaignError::Train(
+            return Err(OrchestratorError::Train(
                 "the replayed records changed while they were being kept".into(),
             ));
         }
@@ -515,7 +517,7 @@ fn keep_candidate(
     let record_text =
         std::fs::read_to_string(&trained.training_record).map_err(io(&trained.training_record))?;
     let training_record =
-        serde_json::from_str(&record_text).map_err(|source| CampaignError::Json {
+        serde_json::from_str(&record_text).map_err(|source| OrchestratorError::Json {
             what: trained.training_record.display().to_string(),
             source,
         })?;
@@ -608,7 +610,7 @@ fn draw_replay(
     release: &ReleaseId,
     fraction: Fraction,
     dir: &Path,
-) -> Result<ReplaySample, CampaignError> {
+) -> Result<ReplaySample, OrchestratorError> {
     let lineage = ctx.releases().lineage(release)?;
     let mut sample = ReplaySample {
         fraction: fraction.get(),
@@ -646,13 +648,13 @@ fn draw_replay(
 }
 
 /// The candidate `id` (or a unique prefix of it) names, as trained.
-pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, CampaignError> {
+pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, OrchestratorError> {
     let all = stored_candidates(ctx)?;
     let matching: Vec<&StoredCandidate> =
         all.iter().filter(|c| c.candidate.starts_with(id)).collect();
     let found = match matching.as_slice() {
         [] => {
-            return Err(CampaignError::NotFound {
+            return Err(OrchestratorError::NotFound {
                 what: "candidate",
                 id: id.into(),
             })
@@ -661,7 +663,7 @@ pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, CampaignErro
         many => match many.iter().find(|c| c.candidate == id) {
             Some(exact) => *exact,
             None => {
-                return Err(CampaignError::AmbiguousId {
+                return Err(OrchestratorError::AmbiguousId {
                     what: "candidate",
                     id: id.into(),
                     matches: many.len(),
@@ -672,7 +674,7 @@ pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, CampaignErro
     Candidate::from_stored(ctx, found.clone())
 }
 
-fn stored_candidates(ctx: &Context) -> Result<Vec<StoredCandidate>, CampaignError> {
+fn stored_candidates(ctx: &Context) -> Result<Vec<StoredCandidate>, OrchestratorError> {
     ctx.workspace().refresh()?;
     let mut all = Vec::new();
     for id in ctx.workspace().documents_in_order(CANDIDATE)? {
@@ -688,7 +690,7 @@ fn stored_candidates(ctx: &Context) -> Result<Vec<StoredCandidate>, CampaignErro
 }
 
 /// Every trained candidate's id, oldest first.
-pub fn candidate_ids(ctx: &Context) -> Result<Vec<String>, CampaignError> {
+pub fn candidate_ids(ctx: &Context) -> Result<Vec<String>, OrchestratorError> {
     Ok(stored_candidates(ctx)?
         .into_iter()
         .map(|c| c.candidate)
@@ -696,6 +698,6 @@ pub fn candidate_ids(ctx: &Context) -> Result<Vec<String>, CampaignError> {
 }
 
 /// How many candidates were trained under the state root.
-pub fn candidate_count(ctx: &Context) -> Result<usize, CampaignError> {
+pub fn candidate_count(ctx: &Context) -> Result<usize, OrchestratorError> {
     Ok(candidate_ids(ctx)?.len())
 }

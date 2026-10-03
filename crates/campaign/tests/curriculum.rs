@@ -54,7 +54,6 @@ use splinter_campaign::release::anchor;
 use splinter_campaign::solving::solve_set;
 use splinter_campaign::status::status;
 use splinter_campaign::verify::verify_set;
-use splinter_campaign::Context;
 use splinter_core::annotation::Strength;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
@@ -64,6 +63,7 @@ use splinter_eval::gate::SuiteSummary;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport};
 use splinter_eval::paired::PairedOutcome;
 use splinter_knowledge::concepts::Concept;
+use splinter_orchestrator::Context;
 use splinter_store::decision::decide as decision;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 

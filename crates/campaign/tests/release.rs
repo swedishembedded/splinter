@@ -51,11 +51,11 @@ use splinter_agent::CancelToken;
 use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
 use splinter_campaign::release::{anchor, list, release, rollback, ReleaseRequest, Released};
 use splinter_campaign::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
-use splinter_campaign::Context;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_model::ModelSelection;
+use splinter_orchestrator::Context;
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
     anchor::freeze(ctx, &anchor_file(&scratch.0, 4)).unwrap();

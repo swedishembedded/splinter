@@ -19,9 +19,9 @@ use splinter_store::recovery::{
 };
 use splinter_store::workspace::Workspace;
 
-use crate::context::Context;
-use crate::error::CampaignError;
-use crate::runs::{record, Recorded};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::runs::{record, Recorded};
 
 /// What `state status` reports.
 #[derive(Clone, Debug, Serialize)]
@@ -37,7 +37,7 @@ pub struct StateStorage {
 }
 
 /// The storage of the state root `ctx` works in.
-pub fn storage(ctx: &Context) -> Result<StateStorage, CampaignError> {
+pub fn storage(ctx: &Context) -> Result<StateStorage, OrchestratorError> {
     Ok(StateStorage {
         state: ctx.root().path().to_path_buf(),
         storage: ctx.workspace().storage()?,
@@ -49,7 +49,7 @@ pub fn storage(ctx: &Context) -> Result<StateStorage, CampaignError> {
 /// Merges small files, indexes the rest and retires finished writers; with
 /// `collect`, also deletes what nothing reaches and is past its grace
 /// period. Recorded as a run.
-pub fn maintain(ctx: &Context, collect: bool) -> Result<Recorded<Maintained>, CampaignError> {
+pub fn maintain(ctx: &Context, collect: bool) -> Result<Recorded<Maintained>, OrchestratorError> {
     record(
         ctx,
         "state maintain",
@@ -60,7 +60,7 @@ pub fn maintain(ctx: &Context, collect: bool) -> Result<Recorded<Maintained>, Ca
 
 /// Checks the database and the artifacts it tracks; see
 /// [`Workspace::verify`].
-pub fn verify(ctx: &Context, deep: bool) -> Result<StateVerify, CampaignError> {
+pub fn verify(ctx: &Context, deep: bool) -> Result<StateVerify, OrchestratorError> {
     Ok(ctx.workspace().verify(deep)?)
 }
 
@@ -69,7 +69,7 @@ pub fn repair(
     ctx: &Context,
     from: Vec<PathBuf>,
     accept_loss: bool,
-) -> Result<Repaired, CampaignError> {
+) -> Result<Repaired, OrchestratorError> {
     Ok(ctx
         .workspace()
         .repair(&RepairOptions { from, accept_loss })?)
@@ -81,7 +81,7 @@ pub fn archive(
     file: &Path,
     no_artifacts: bool,
     since: Option<PathBuf>,
-) -> Result<Archived, CampaignError> {
+) -> Result<Archived, OrchestratorError> {
     Ok(ctx.workspace().archive(
         file,
         &ArchiveOptions {
@@ -93,7 +93,7 @@ pub fn archive(
 
 /// Unpacks `archives` into the context's empty state root; see
 /// [`Workspace::restore`].
-pub fn restore(ctx: &Context, archives: &[PathBuf]) -> Result<Restored, CampaignError> {
+pub fn restore(ctx: &Context, archives: &[PathBuf]) -> Result<Restored, OrchestratorError> {
     Ok(Workspace::restore(ctx.root(), archives)?)
 }
 
@@ -105,7 +105,7 @@ pub struct Unpinned {
 }
 
 /// Releases the snapshot `holder` keeps alive.
-pub fn unpin(ctx: &Context, holder: &str) -> Result<Unpinned, CampaignError> {
+pub fn unpin(ctx: &Context, holder: &str) -> Result<Unpinned, OrchestratorError> {
     ctx.workspace().release_pin(holder)?;
     Ok(Unpinned {
         unpinned: holder.to_owned(),

@@ -15,9 +15,9 @@ use splinter_core::experience::{Experience, ExperienceId};
 use splinter_store::decision::decide;
 use splinter_store::experiences::SetId;
 
-use crate::context::Context;
-use crate::error::CampaignError;
-use crate::ids;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::ids;
 
 pub use splinter_agent::replay::{CallReplay, ReplayedCall};
 
@@ -43,7 +43,7 @@ pub struct SetList {
 }
 
 /// Every stored experience set.
-pub fn list(ctx: &Context) -> Result<SetList, CampaignError> {
+pub fn list(ctx: &Context) -> Result<SetList, OrchestratorError> {
     let store = ctx.experiences();
     let experience_sets = store
         .list_sets()?
@@ -56,7 +56,7 @@ pub fn list(ctx: &Context) -> Result<SetList, CampaignError> {
                 id,
             })
         })
-        .collect::<Result<_, CampaignError>>()?;
+        .collect::<Result<_, OrchestratorError>>()?;
     Ok(SetList { experience_sets })
 }
 
@@ -153,14 +153,14 @@ pub enum ExperienceShow {
 
 /// The experience set or experience `id` names; with `graph`, the
 /// relations around it.
-pub fn show(ctx: &Context, id: &str, graph: bool) -> Result<ExperienceShow, CampaignError> {
+pub fn show(ctx: &Context, id: &str, graph: bool) -> Result<ExperienceShow, OrchestratorError> {
     let store = ctx.experiences();
     let (start, set) = match resolve_set(ctx, id) {
         Ok(set_id) => {
             let set = store.get_set(&set_id)?;
             (set.members.clone(), Some((set_id, set)))
         }
-        Err(CampaignError::NotFound { .. }) => (vec![resolve_experience(ctx, id)?], None),
+        Err(OrchestratorError::NotFound { .. }) => (vec![resolve_experience(ctx, id)?], None),
         Err(e) => return Err(e),
     };
     if graph {
@@ -175,7 +175,7 @@ pub fn show(ctx: &Context, id: &str, graph: bool) -> Result<ExperienceShow, Camp
                 let notes = store.annotations(member)?.annotations;
                 Ok(line(member, &experience, &notes))
             })
-            .collect::<Result<_, CampaignError>>()?;
+            .collect::<Result<_, OrchestratorError>>()?;
         return Ok(ExperienceShow::Set {
             id: set_id,
             name: set.name,
@@ -185,7 +185,7 @@ pub fn show(ctx: &Context, id: &str, graph: bool) -> Result<ExperienceShow, Camp
     let id = start
         .into_iter()
         .next()
-        .ok_or_else(|| CampaignError::NotFound {
+        .ok_or_else(|| OrchestratorError::NotFound {
             what: "experience",
             id: id.to_string(),
         })?;
@@ -203,7 +203,7 @@ pub fn show(ctx: &Context, id: &str, graph: bool) -> Result<ExperienceShow, Camp
 fn relation_graph(
     ctx: &Context,
     start: Vec<ExperienceId>,
-) -> Result<ExperienceShow, CampaignError> {
+) -> Result<ExperienceShow, OrchestratorError> {
     let store = ctx.experiences();
     // Relations are recorded on the experience they start from; finding
     // the ones that end at an experience means reading every log once.
@@ -250,7 +250,7 @@ fn relation_graph(
             let notes = store.annotations(id)?.annotations;
             Ok(line(id, &experience, &notes))
         })
-        .collect::<Result<_, CampaignError>>()?;
+        .collect::<Result<_, OrchestratorError>>()?;
     Ok(ExperienceShow::Graph {
         nodes,
         edges: edges
@@ -262,13 +262,13 @@ fn relation_graph(
 }
 
 /// The stored experience set `id` (or a unique prefix of it) names.
-pub fn resolve_set(ctx: &Context, id: &str) -> Result<SetId, CampaignError> {
+pub fn resolve_set(ctx: &Context, id: &str) -> Result<SetId, OrchestratorError> {
     let stored = ctx.experiences().list_sets()?.into_iter().map(|s| s.0);
     Ok(SetId(ids::resolve("experience set", id, stored)?))
 }
 
 /// The stored experience `id` (or a unique prefix of it) names.
-pub fn resolve_experience(ctx: &Context, id: &str) -> Result<ExperienceId, CampaignError> {
+pub fn resolve_experience(ctx: &Context, id: &str) -> Result<ExperienceId, OrchestratorError> {
     let stored = ctx.experiences().list()?.into_iter().map(|e| e.0);
     Ok(ExperienceId(ids::resolve("experience", id, stored)?))
 }
@@ -299,11 +299,11 @@ pub struct Replayed {
 /// of the experience set it names, each in the environment it records
 /// ([`splinter_agent::replay`]). An environment that no longer resolves to
 /// the recorded one is refused.
-pub fn replay(ctx: &Context, id: &str) -> Result<Replayed, CampaignError> {
+pub fn replay(ctx: &Context, id: &str) -> Result<Replayed, OrchestratorError> {
     let store = ctx.experiences();
     let members = match resolve_set(ctx, id) {
         Ok(set) => store.get_set(&set)?.members,
-        Err(CampaignError::NotFound { .. }) => vec![resolve_experience(ctx, id)?],
+        Err(OrchestratorError::NotFound { .. }) => vec![resolve_experience(ctx, id)?],
         Err(e) => return Err(e),
     };
     let mut experiences = Vec::with_capacity(members.len());

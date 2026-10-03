@@ -21,8 +21,8 @@ use splinter_core::experience::Experience;
 use splinter_data::{Corpus, Projection};
 use splinter_eval::overlap::overlap_groups;
 
-use crate::context::Context;
-use crate::error::CampaignError;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// Sets each record of `projection` to the group of the source text its
 /// experience is grounded in. A record grounded in several texts takes the
@@ -31,7 +31,7 @@ pub(crate) fn assign_groups(
     ctx: &Context,
     corpus: &Corpus,
     projection: &mut Projection,
-) -> Result<(), CampaignError> {
+) -> Result<(), OrchestratorError> {
     let evidence = |e: &Experience| -> Vec<Digest> {
         e.evidence.iter().map(|span| span.source.clone()).collect()
     };

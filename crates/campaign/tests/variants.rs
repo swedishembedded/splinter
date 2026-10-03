@@ -44,9 +44,9 @@ use splinter_campaign::tasks::{generate, Generation};
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::variants::{generate_variants, VariantsRequest};
 use splinter_campaign::verify::verify_set;
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
+use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_store::runs::read_run;
 
 /// A context whose policy is the manual's, and the tasks `tasks` writes
@@ -215,7 +215,7 @@ impl Trainer for Student {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         for dataset in &plan.datasets {
             self.handed
                 .lock()
@@ -235,7 +235,7 @@ impl Trainer for Student {
         _ctx: &Context,
         _plan: &TrainPlan,
         _cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         panic!("learn trains chat datasets only")
     }
 }

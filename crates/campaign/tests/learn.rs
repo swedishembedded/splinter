@@ -38,12 +38,12 @@ use splinter_agent::CancelToken;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::release::{anchor, rollback};
 use splinter_campaign::train::{TrainPlan, Trainer};
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::dataset::DatasetId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
+use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_store::runs::{read_run, RunStatus};
 
 /// Training as a test double: keeps what it was handed, and trains the
@@ -59,7 +59,7 @@ impl Trainer for RecordingTrainer {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         self.handed
             .lock()
             .unwrap()
@@ -72,7 +72,7 @@ impl Trainer for RecordingTrainer {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         self.handed
             .lock()
             .unwrap()
@@ -244,7 +244,7 @@ impl Trainer for AliasMover {
         ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         ctx.releases()
             .move_alias(
                 "default",
@@ -266,7 +266,7 @@ impl Trainer for AliasMover {
         _ctx: &Context,
         _plan: &TrainPlan,
         _cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         panic!("learn trains chat datasets only")
     }
 }

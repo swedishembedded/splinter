@@ -9,7 +9,7 @@
 //! source is ([`SourceIdentity::label`]): output captured from a command
 //! says nothing of which program printed it.
 //!
-//! Every answer is recorded ([`crate::answers`]) with the model that gave
+//! Every answer is recorded ([`splinter_orchestrator::answers`]) with the model that gave
 //! it and, asked through `policy:<alias>`, the release the alias resolved
 //! to, so an answer traces back to what it was learned from.
 
@@ -22,13 +22,13 @@ use splinter_core::source::SourceId;
 use splinter_knowledge::tasks::SourceIdentity;
 use splinter_sandbox::ResolvedEnvironment;
 
-use crate::answers::{AnswerId, AnswerRecord, ANSWER_FORMAT};
-use crate::context::Context;
-use crate::error::CampaignError;
 use crate::solving::conclusion_name;
 use crate::sources;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_orchestrator::answers::{AnswerId, AnswerRecord, ANSWER_FORMAT};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// How long one answer may take.
 pub const DEFAULT_ASK_DEADLINE: Duration = Duration::from_secs(300);
@@ -64,9 +64,9 @@ pub fn ask(
     question: &str,
     open_book: Option<&str>,
     policy: &ModelRef,
-) -> Result<Answer, CampaignError> {
+) -> Result<Answer, OrchestratorError> {
     if question.trim().is_empty() {
-        return Err(CampaignError::Refused("the question is empty".into()));
+        return Err(OrchestratorError::Refused("the question is empty".into()));
     }
     let (instruction, open_book) = match open_book {
         None => (question.to_string(), None),
@@ -98,13 +98,15 @@ pub fn ask(
         model.provider.clone(),
         options,
     ))?;
-    let answer = solution.final_output.ok_or_else(|| CampaignError::Model {
-        model: model.identity.clone(),
-        detail: format!(
-            "it gave no answer (its run ended: {})",
-            conclusion_name(solution.conclusion)
-        ),
-    })?;
+    let answer = solution
+        .final_output
+        .ok_or_else(|| OrchestratorError::Model {
+            model: model.identity.clone(),
+            detail: format!(
+                "it gave no answer (its run ended: {})",
+                conclusion_name(solution.conclusion)
+            ),
+        })?;
     let record = AnswerRecord {
         format: ANSWER_FORMAT.into(),
         question: question.to_string(),
@@ -129,7 +131,7 @@ pub fn ask(
 /// The source's text parts, each under its name; refused past
 /// [`MAX_OPEN_BOOK_BYTES`] rather than cut, since a cut would silently
 /// change what the model was shown.
-fn material(ctx: &Context, id: &SourceId) -> Result<Vec<String>, CampaignError> {
+fn material(ctx: &Context, id: &SourceId) -> Result<Vec<String>, OrchestratorError> {
     let store = ctx.sources();
     let source = store.get_source(id)?;
     let mut parts = Vec::new();
@@ -145,7 +147,7 @@ fn material(ctx: &Context, id: &SourceId) -> Result<Vec<String>, CampaignError> 
         let piece = format!("--- {} ---\n{text}", identity.label());
         bytes_shown += piece.len();
         if bytes_shown > MAX_OPEN_BOOK_BYTES {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "source {id} holds more than {MAX_OPEN_BOOK_BYTES} bytes of text, more than one \
                  question can carry"
             )));
@@ -153,7 +155,7 @@ fn material(ctx: &Context, id: &SourceId) -> Result<Vec<String>, CampaignError> 
         parts.push(piece);
     }
     if parts.is_empty() {
-        return Err(CampaignError::Refused(format!(
+        return Err(OrchestratorError::Refused(format!(
             "source {id} has no text part to show"
         )));
     }

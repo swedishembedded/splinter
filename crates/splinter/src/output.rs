@@ -16,16 +16,16 @@ use splinter_campaign::experiences::{
 };
 use splinter_campaign::front_door::Routed;
 use splinter_campaign::judge::Calibrated;
-use splinter_campaign::runs::{CancelRequested, Recorded, RunList};
 use splinter_campaign::solving::Solved;
 use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
 use splinter_campaign::status::Status;
 use splinter_campaign::tasks::{TaskSetList, TaskShow, TasksGenerated};
 use splinter_campaign::train::Candidate;
 use splinter_campaign::verify::Verified;
-use splinter_campaign::CampaignError;
 use splinter_core::source::{Origin, Source};
 use splinter_core::training::Regime;
+use splinter_orchestrator::runs::{CancelRequested, Recorded, RunList};
+use splinter_orchestrator::OrchestratorError;
 use splinter_store::runs::Run;
 
 /// A report a command prints.
@@ -50,7 +50,7 @@ pub fn emit(json: bool, report: &impl Report) {
 
 /// Prints why a command failed: on stderr always, and as
 /// `{"error": ..., "refused": ...}` on stdout with `--json`.
-pub fn error(json: bool, error: &CampaignError) {
+pub fn error(json: bool, error: &OrchestratorError) {
     eprintln!("splinter: {error}");
     if json {
         let value =

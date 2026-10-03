@@ -28,9 +28,9 @@ use splinter_agent::typed::TypedCall;
 use splinter_agent::CancelToken;
 use splinter_knowledge::survey::Survey;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// How long the planner may take.
 pub const PLAN_DEADLINE: Duration = Duration::from_secs(300);
@@ -178,7 +178,7 @@ pub fn plan(
     goal: Option<&str>,
     planner: &ModelRef,
     cancel: &CancelToken,
-) -> Result<Plan, CampaignError> {
+) -> Result<Plan, OrchestratorError> {
     let model = ctx.model(planner)?;
     let facts = Arc::new(survey.clone());
     let call = TypedCall::<Plan>::new("plan_learning", task(), ROLE, PLAN_DEADLINE)
@@ -192,7 +192,7 @@ pub fn plan(
             sources: survey,
         },
     ))
-    .map_err(|source| CampaignError::Call {
+    .map_err(|source| OrchestratorError::Call {
         method: "plan_learning",
         source,
     })

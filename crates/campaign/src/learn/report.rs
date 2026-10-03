@@ -24,13 +24,13 @@ use crate::datasets::Built;
 use crate::exam::Exam;
 use crate::plan::Plan;
 use crate::release::Released;
-use crate::runs::Recorded;
 use crate::solving::Solved;
 use crate::sources::{SourceSummary, SourceTarget};
 use crate::tasks::TasksGenerated;
 use crate::train::Candidate;
 use crate::variants::VariantsGenerated;
 use crate::verify::Verified;
+use splinter_orchestrator::runs::Recorded;
 
 /// What a dry run reports: the plan, and nothing written.
 #[derive(Clone, Debug, Serialize)]

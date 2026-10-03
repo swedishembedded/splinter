@@ -43,10 +43,10 @@ use splinter_knowledge::tasks::{
 };
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
-use crate::context::Context;
-use crate::error::CampaignError;
-use crate::ids;
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::ids;
 
 /// Sections one generation request shows the model: enough context for
 /// tasks that combine sections, few enough that a small model keeps its
@@ -80,16 +80,18 @@ pub fn known_kinds() -> Vec<String> {
 }
 
 /// `names` checked against [`known_kinds`], each once, in the order given.
-pub fn check_kinds(names: &[String]) -> Result<Vec<String>, CampaignError> {
+pub fn check_kinds(names: &[String]) -> Result<Vec<String>, OrchestratorError> {
     if names.is_empty() {
-        return Err(CampaignError::Refused("name at least one task kind".into()));
+        return Err(OrchestratorError::Refused(
+            "name at least one task kind".into(),
+        ));
     }
     let known = known_kinds();
     let mut seen = BTreeSet::new();
     let mut kinds = Vec::new();
     for name in names {
         if !known.contains(name) {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "unknown task kind {name:?}; the kinds are {}",
                 known.join(", ")
             )));
@@ -164,7 +166,10 @@ pub struct TasksGenerated {
 
 /// Generates tasks of `request.kinds` from `request.sources` and stores
 /// them as a task set.
-pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerated, CampaignError> {
+pub fn generate(
+    ctx: &Context,
+    request: &Generation<'_>,
+) -> Result<TasksGenerated, OrchestratorError> {
     let catalogue = Catalogue::builtin();
     let model_kinds: Vec<TaskKind> = request
         .kinds
@@ -195,7 +200,7 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
         parts.sort_by_cached_key(|p| Digest::of(p.name.as_bytes()));
         for part in parts {
             if request.cancel.is_cancelled() {
-                return Err(CampaignError::Cancelled);
+                return Err(OrchestratorError::Cancelled);
             }
             if request.deadline.is_some_and(|d| Instant::now() >= d) {
                 stopped = Some("the budget was spent before every part was covered".into());
@@ -239,7 +244,7 @@ pub fn generate(ctx: &Context, request: &Generation<'_>) -> Result<TasksGenerate
         if let Some(generator) = &generator {
             for section in request.sections {
                 if request.cancel.is_cancelled() {
-                    return Err(CampaignError::Cancelled);
+                    return Err(OrchestratorError::Cancelled);
                 }
                 if request.deadline.is_some_and(|d| Instant::now() >= d) {
                     stopped = Some("the budget was spent before every section was covered".into());
@@ -292,12 +297,12 @@ fn model_generator(
     ctx: &Context,
     request: &Generation<'_>,
     kinds: &[TaskKind],
-) -> Result<ModelTaskGenerator, CampaignError> {
+) -> Result<ModelTaskGenerator, OrchestratorError> {
     let model = ctx.model(request.generator)?;
     let mut runtimes = Vec::new();
     for name in kinds.iter().filter_map(|k| k.runtime.as_deref()) {
         let runtime = ctx.environments().runtime(name).map_err(|e| {
-            CampaignError::Refused(format!(
+            OrchestratorError::Refused(format!(
                 "task kinds that run {name} need it available here: {e}"
             ))
         })?;
@@ -320,7 +325,7 @@ fn generate_part(
     text: &SourceText,
     kinds: &[TaskKind],
     batch: &mut Batch,
-) -> Result<(), CampaignError> {
+) -> Result<(), OrchestratorError> {
     // A kind with a focus is shown only the sections it is about, by
     // itself; the rest are shown every section together.
     let (focused, general): (Vec<&TaskKind>, Vec<&TaskKind>) =
@@ -369,7 +374,7 @@ fn run_windows(
     kinds: &[&TaskKind],
     cap: Option<usize>,
     batch: &mut Batch,
-) -> Result<(), CampaignError> {
+) -> Result<(), OrchestratorError> {
     let windows = spread(positions.chunks(SECTIONS_PER_REQUEST).collect(), cap);
     for window in windows {
         if batch.deadline.is_some_and(|d| Instant::now() >= d) {
@@ -453,7 +458,7 @@ impl Batch {
         kind: &str,
         task: Task,
         provenance: Provenance<'_>,
-    ) -> Result<(), CampaignError> {
+    ) -> Result<(), OrchestratorError> {
         let id = ctx.tasks().put(&task)?;
         if self.seen.insert(id.clone()) {
             self.per_kind.entry(kind.to_string()).or_default().admitted += 1;
@@ -596,7 +601,7 @@ pub struct TaskSetList {
 }
 
 /// Every stored task set.
-pub fn list(ctx: &Context) -> Result<TaskSetList, CampaignError> {
+pub fn list(ctx: &Context) -> Result<TaskSetList, OrchestratorError> {
     let store = ctx.tasks();
     let task_sets = store
         .list_sets()?
@@ -609,7 +614,7 @@ pub fn list(ctx: &Context) -> Result<TaskSetList, CampaignError> {
                 id,
             })
         })
-        .collect::<Result<_, CampaignError>>()?;
+        .collect::<Result<_, OrchestratorError>>()?;
     Ok(TaskSetList { task_sets })
 }
 
@@ -647,7 +652,7 @@ pub enum TaskShow {
 }
 
 /// The task set or task `id` names.
-pub fn show(ctx: &Context, id: &str) -> Result<TaskShow, CampaignError> {
+pub fn show(ctx: &Context, id: &str) -> Result<TaskShow, OrchestratorError> {
     let store = ctx.tasks();
     match resolve_set(ctx, id) {
         Ok(set_id) => {
@@ -664,14 +669,14 @@ pub fn show(ctx: &Context, id: &str) -> Result<TaskShow, CampaignError> {
                         generator: entry.generator,
                     })
                 })
-                .collect::<Result<_, CampaignError>>()?;
+                .collect::<Result<_, OrchestratorError>>()?;
             Ok(TaskShow::Set {
                 id: set_id,
                 name: set.name,
                 tasks,
             })
         }
-        Err(CampaignError::NotFound { .. }) => {
+        Err(OrchestratorError::NotFound { .. }) => {
             let task_id = ids::resolve("task set or task", id, store.list()?)?;
             Ok(TaskShow::Task {
                 task: Box::new(store.get(&task_id)?),
@@ -682,7 +687,7 @@ pub fn show(ctx: &Context, id: &str) -> Result<TaskShow, CampaignError> {
 }
 
 /// The stored task set `id` (or a unique prefix of it) names.
-pub fn resolve_set(ctx: &Context, id: &str) -> Result<TaskSetId, CampaignError> {
+pub fn resolve_set(ctx: &Context, id: &str) -> Result<TaskSetId, OrchestratorError> {
     let stored = ctx.tasks().list_sets()?.into_iter().map(|s| s.0);
     Ok(TaskSetId(ids::resolve("task set", id, stored)?))
 }

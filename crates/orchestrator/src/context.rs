@@ -55,8 +55,8 @@ use splinter_store::StateRoot;
 
 use crate::answers::AnswerStore;
 use crate::config::Config;
-use crate::error::CampaignError;
-use crate::release::ReleaseStore;
+use crate::error::OrchestratorError;
+use crate::releases::ReleaseStore;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 
@@ -112,8 +112,8 @@ pub struct Runtime {
 impl Runtime {
     /// A runtime over `config`, with `allow_remote` as the command line's
     /// network opt-in, stamping records with the wall clock.
-    pub fn new(config: Config, allow_remote: bool) -> Result<Self, CampaignError> {
-        let runtime = tokio::runtime::Runtime::new().map_err(CampaignError::Runtime)?;
+    pub fn new(config: Config, allow_remote: bool) -> Result<Self, OrchestratorError> {
+        let runtime = tokio::runtime::Runtime::new().map_err(OrchestratorError::Runtime)?;
         let environments = Environments::process(&config.state_root);
         let workspace = Workspace::at(&config.state_root);
         Ok(Self {
@@ -255,13 +255,13 @@ impl Runtime {
 
     /// Runs `future` to completion on the runtime. Must not be called from
     /// inside an async task.
-    pub(crate) fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+    pub fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
         self.runtime.block_on(future)
     }
 
     /// A handle to the runtime, for the lower crates that block on it
     /// themselves.
-    pub(crate) fn handle(&self) -> tokio::runtime::Handle {
+    pub fn handle(&self) -> tokio::runtime::Handle {
         self.runtime.handle().clone()
     }
 
@@ -273,7 +273,7 @@ impl Runtime {
         reference: &ModelRef,
         adapter: Option<PathBuf>,
         selection: &ModelSelection,
-    ) -> Result<Model, CampaignError> {
+    ) -> Result<Model, OrchestratorError> {
         if let Some(model) = self.lock_handed_in().get(reference) {
             return Ok(model.clone());
         }
@@ -284,7 +284,7 @@ impl Runtime {
         let local = selection.local().is_some();
         let loaded = selection
             .load(&self.residency)
-            .map_err(|e| CampaignError::Model {
+            .map_err(|e| OrchestratorError::Model {
                 model: reference.to_string(),
                 detail: format!("{e:#}"),
             })?;
@@ -311,7 +311,7 @@ impl Runtime {
         adapter: Option<PathBuf>,
         selection: &ModelSelection,
         sampling: Sampling,
-    ) -> Result<Option<Model>, CampaignError> {
+    ) -> Result<Option<Model>, OrchestratorError> {
         let model = self.model(reference, adapter.clone(), selection)?;
         let provider = self
             .lock_models()
@@ -389,7 +389,7 @@ impl Context {
     /// A context over its own runtime on `config`, with `allow_remote` as
     /// the command line's network opt-in, stamping records with the wall
     /// clock: for a process that runs one command.
-    pub fn new(config: Config, allow_remote: bool) -> Result<Self, CampaignError> {
+    pub fn new(config: Config, allow_remote: bool) -> Result<Self, OrchestratorError> {
         Ok(Self::on(Arc::new(Runtime::new(config, allow_remote)?)))
     }
 
@@ -442,7 +442,7 @@ impl Context {
     /// The selection `reference` resolves to, without loading it: refused
     /// for a remote model without the network opt-in, and for a policy
     /// alias other than `default` that points at no release.
-    pub fn selection(&self, reference: &ModelRef) -> Result<ModelSelection, CampaignError> {
+    pub fn selection(&self, reference: &ModelRef) -> Result<ModelSelection, OrchestratorError> {
         Ok(self.resolve(reference)?.1)
     }
 
@@ -451,12 +451,12 @@ impl Context {
     fn resolve(
         &self,
         reference: &ModelRef,
-    ) -> Result<(Option<PathBuf>, ModelSelection), CampaignError> {
+    ) -> Result<(Option<PathBuf>, ModelSelection), OrchestratorError> {
         let adapter = match reference {
             ModelRef::Policy(alias) => {
                 let pin = self.policy_pin(alias)?;
                 if pin.is_none() && alias != splinter_core::model_ref::POLICY_DEFAULT {
-                    return Err(CampaignError::NotFound {
+                    return Err(OrchestratorError::NotFound {
                         what: "release alias",
                         id: alias.clone(),
                     });
@@ -476,7 +476,7 @@ impl Context {
 
     /// The release `alias` points at, resolved on this context's first ask
     /// and the same on every later one; `None` when it points at none.
-    pub fn policy_pin(&self, alias: &str) -> Result<Option<PolicyPin>, CampaignError> {
+    pub fn policy_pin(&self, alias: &str) -> Result<Option<PolicyPin>, OrchestratorError> {
         let mut pins = self
             .pins
             .lock()
@@ -503,7 +503,7 @@ impl Context {
     /// Drops `alias`'s pin and the policy model this context's runtime
     /// loaded for it, so the next use resolves the alias afresh: for the
     /// context's own release or rollback, which moved it.
-    pub(crate) fn repin_policy(&self, alias: &str) {
+    pub fn repin_policy(&self, alias: &str) {
         self.pins
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -513,7 +513,7 @@ impl Context {
     }
 
     /// The model `reference` names, loaded on first use.
-    pub fn model(&self, reference: &ModelRef) -> Result<Model, CampaignError> {
+    pub fn model(&self, reference: &ModelRef) -> Result<Model, OrchestratorError> {
         let (adapter, selection) = self.resolve(reference)?;
         self.runtime.model(reference, adapter, &selection)
     }
@@ -525,14 +525,14 @@ impl Context {
         &self,
         reference: &ModelRef,
         sampling: Sampling,
-    ) -> Result<Option<Model>, CampaignError> {
+    ) -> Result<Option<Model>, OrchestratorError> {
         let (adapter, selection) = self.resolve(reference)?;
         self.runtime
             .resampled(reference, adapter, &selection, sampling)
     }
 
     /// Reports a finished stage to the progress receiver, if any.
-    pub(crate) fn report_stage(&self, stage: &str, summary: &serde_json::Value) {
+    pub fn report_stage(&self, stage: &str, summary: &serde_json::Value) {
         if let Some(progress) = &self.progress {
             progress(stage, summary);
         }
@@ -592,7 +592,10 @@ impl Environments {
     /// The environment `recorded` names, resolved here. Whether it is
     /// still the same environment is the solve's check, against the
     /// snapshot.
-    pub fn for_record(&self, recorded: &Environment) -> Result<ResolvedEnvironment, CampaignError> {
+    pub fn for_record(
+        &self,
+        recorded: &Environment,
+    ) -> Result<ResolvedEnvironment, OrchestratorError> {
         if recorded.kind == Environment::CLOSED_BOOK {
             return Ok(ResolvedEnvironment::ClosedBook);
         }
@@ -600,7 +603,7 @@ impl Environments {
             .kind
             .strip_prefix(splinter_sandbox::environment::RUNTIME_KIND_PREFIX)
             .ok_or_else(|| {
-                CampaignError::Refused(format!(
+                OrchestratorError::Refused(format!(
                     "environment {:?} is neither closed-book nor a runtime",
                     recorded.kind
                 ))

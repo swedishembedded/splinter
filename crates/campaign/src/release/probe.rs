@@ -52,12 +52,12 @@ use splinter_model::local::GREEDY_SAMPLING;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 
-use crate::context::Context;
-use crate::error::{io, CampaignError};
 use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::variants::stored_variants;
 use crate::verify::verifiers_for;
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::{io, OrchestratorError};
 
 /// Why a task was left out of a suite: it is not solved closed-book.
 pub const NOT_CLOSED_BOOK: &str = "not_closed_book";
@@ -126,7 +126,7 @@ impl Suite {
 pub(crate) fn split_records(
     ctx: &Context,
     datasets: &[DatasetId],
-) -> Result<(Vec<String>, Vec<String>), CampaignError> {
+) -> Result<(Vec<String>, Vec<String>), OrchestratorError> {
     let mut records = Vec::new();
     for id in datasets {
         let stored = ctx.datasets().get(id)?;
@@ -152,7 +152,7 @@ pub fn held_out(
     ctx: &Context,
     name: impl Into<String>,
     datasets: &[DatasetId],
-) -> Result<Suite, CampaignError> {
+) -> Result<Suite, OrchestratorError> {
     let (_, held_out) = split_records(ctx, datasets)?;
     let mut suite = Suite::of_tasks(name, Vec::new());
     for record in &held_out {
@@ -172,7 +172,7 @@ pub fn trained_variants(
     ctx: &Context,
     name: impl Into<String>,
     datasets: &[DatasetId],
-) -> Result<Suite, CampaignError> {
+) -> Result<Suite, OrchestratorError> {
     let (trained_on, _) = split_records(ctx, datasets)?;
     let mut trained = BTreeSet::new();
     for line in &trained_on {
@@ -191,7 +191,7 @@ pub fn trained_variants(
 
 /// The address of the task the record `line` was trained from: its task
 /// as generated when that can be found, else the one its metadata names.
-fn trained_task(ctx: &Context, line: &str) -> Result<Option<Digest>, CampaignError> {
+fn trained_task(ctx: &Context, line: &str) -> Result<Option<Digest>, OrchestratorError> {
     if let Some(task) = record_task(ctx, line)? {
         return Ok(Some(task.without_critiques()?.task.id));
     }
@@ -216,7 +216,7 @@ struct RecordOrigin {
 
 /// The task the dataset record `line` was projected from, when it can be
 /// found.
-fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, CampaignError> {
+fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, OrchestratorError> {
     let Ok(record) = serde_json::from_str::<RecordLine>(line) else {
         return Ok(None);
     };
@@ -237,7 +237,7 @@ fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, CampaignError>
 /// The model `reference` names, decoding greedily
 /// ([`GREEDY_SAMPLING`]); as it samples where its sampling cannot be set
 /// here (a model reached over an API, or handed in rather than loaded).
-pub fn greedy(ctx: &Context, reference: &ModelRef) -> Result<Model, CampaignError> {
+pub fn greedy(ctx: &Context, reference: &ModelRef) -> Result<Model, OrchestratorError> {
     match ctx.resampled(reference, GREEDY_SAMPLING)? {
         Some(model) => Ok(model),
         None => ctx.model(reference),
@@ -261,7 +261,7 @@ pub fn grade(
     model: &Model,
     suite: &Suite,
     cancel: &CancelToken,
-) -> Result<Vec<Probe>, CampaignError> {
+) -> Result<Vec<Probe>, OrchestratorError> {
     suite
         .tasks
         .iter()
@@ -276,9 +276,9 @@ pub(crate) fn answer(
     model: &Model,
     task: &Task,
     cancel: &CancelToken,
-) -> Result<Experience, CampaignError> {
+) -> Result<Experience, OrchestratorError> {
     if cancel.is_cancelled() {
-        return Err(CampaignError::Cancelled);
+        return Err(OrchestratorError::Cancelled);
     }
     let mut options = SolveOptions::new(DEFAULT_SOLVE_DEADLINE);
     options.cancel = Some(cancel.clone());
@@ -290,7 +290,7 @@ pub(crate) fn answer(
         options,
     ))?;
     if cancel.is_cancelled() {
-        return Err(CampaignError::Cancelled);
+        return Err(OrchestratorError::Cancelled);
     }
     Ok(solution.into_experience(
         task.clone(),
@@ -303,7 +303,7 @@ fn grade_one(
     model: &Model,
     task: &Task,
     cancel: &CancelToken,
-) -> Result<Probe, CampaignError> {
+) -> Result<Probe, OrchestratorError> {
     let experience = answer(ctx, model, task, cancel)?;
     let verifiers: Strongest = verifiers_for(ctx, task, &[], None)?;
     let verification = verifiers.run(task, &experience)?;

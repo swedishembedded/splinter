@@ -17,11 +17,11 @@ use splinter_core::source::Origin;
 use splinter_store::experiences::StoreError;
 use splinter_store::sources::SourceStore;
 
-use crate::context::Context;
-use crate::error::CampaignError;
-use crate::release::StoredRelease;
 use crate::train::{candidate_ids, load_candidate};
 use splinter_core::training::ReplaySample;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::releases::StoredRelease;
 
 use super::graph::Graph;
 use super::{NodeKind, Relation};
@@ -30,7 +30,7 @@ use super::{NodeKind, Relation};
 const EXCERPT_CHARS: usize = 100;
 
 /// The graph of everything under `ctx`'s state root.
-pub(super) fn load(ctx: &Context) -> Result<Graph, CampaignError> {
+pub(super) fn load(ctx: &Context) -> Result<Graph, OrchestratorError> {
     let mut graph = Graph::default();
     sources(ctx, &mut graph)?;
     tasks(ctx, &mut graph)?;
@@ -57,7 +57,7 @@ fn missing(kind: &str) -> impl FnOnce() -> String + '_ {
     move || format!("{kind} (no record of it under the state root)")
 }
 
-fn sources(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn sources(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     let store = ctx.sources();
     for id in store.list()? {
         let source = store.get_source(&id)?;
@@ -85,7 +85,7 @@ fn sources(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
 
 /// Adds the span node for `span` and its edge to the source part or the
 /// content it indexes; returns its id.
-fn span(store: &SourceStore, graph: &mut Graph, span: &Span) -> Result<String, CampaignError> {
+fn span(store: &SourceStore, graph: &mut Graph, span: &Span) -> Result<String, OrchestratorError> {
     let id = format!("span:{}:{}-{}", span.source.hex(), span.start, span.end);
     if graph.contains(&id) {
         return Ok(id);
@@ -122,7 +122,7 @@ fn span(store: &SourceStore, graph: &mut Graph, span: &Span) -> Result<String, C
 }
 
 /// Adds `task` and its evidence.
-fn task(store: &SourceStore, graph: &mut Graph, task: &Task) -> Result<(), CampaignError> {
+fn task(store: &SourceStore, graph: &mut Graph, task: &Task) -> Result<(), OrchestratorError> {
     let id = task.task.id.as_str();
     graph.record(
         id,
@@ -136,7 +136,7 @@ fn task(store: &SourceStore, graph: &mut Graph, task: &Task) -> Result<(), Campa
     Ok(())
 }
 
-fn tasks(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn tasks(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     let sources = ctx.sources();
     let store = ctx.tasks();
     for id in store.list()? {
@@ -176,7 +176,7 @@ fn experience_label(experience: &Experience) -> String {
     format!("{} answered {answer}", experience.provenance.solver)
 }
 
-fn experiences(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn experiences(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     let sources = ctx.sources();
     let store = ctx.experiences();
     for id in store.list()? {
@@ -254,7 +254,7 @@ fn experiences(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
     Ok(())
 }
 
-fn datasets(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn datasets(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     let store = ctx.datasets();
     for id in store.list()? {
         let manifest = store.get(&id)?.manifest;
@@ -335,7 +335,7 @@ fn training(
     graph.link(id, Relation::Adapter, adapter);
 }
 
-fn candidates(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn candidates(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     for id in candidate_ids(ctx)? {
         let candidate = load_candidate(ctx, &id)?;
         graph.record(
@@ -358,7 +358,7 @@ fn candidates(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
     Ok(())
 }
 
-fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     let store = ctx.releases();
     let aliases = store.aliases()?;
     for id in store.list()? {
@@ -400,7 +400,7 @@ fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
     Ok(())
 }
 
-fn answers(ctx: &Context, graph: &mut Graph) -> Result<(), CampaignError> {
+fn answers(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
     let store = ctx.answers();
     for id in store.list()? {
         let record = store.get(&id)?;

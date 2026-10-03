@@ -24,11 +24,11 @@ use splinter_agent::repair::{Repair, RepairBudget, Stop};
 use splinter_agent::CancelToken;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use crate::tasks::remaining;
 use crate::verify::{verifiers_for, Unverified};
 use splinter_core::model_ref::ModelRef;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// Retries per failed experience when a command names none.
 pub const DEFAULT_RETRIES: usize = 1;
@@ -79,7 +79,7 @@ pub struct CritiqueRequest<'a> {
 pub fn critique_set(
     ctx: &Context,
     request: &CritiqueRequest<'_>,
-) -> Result<Critiqued, CampaignError> {
+) -> Result<Critiqued, OrchestratorError> {
     let store = ctx.experiences();
     let batch = ctx.workspace().batch();
     let members = store.get_set(request.set)?.members;
@@ -105,7 +105,7 @@ pub fn critique_set(
     let decisions = store.decisions(&members)?;
     for (id, experience) in members.iter().zip(&pool) {
         if request.cancel.is_cancelled() {
-            return Err(CampaignError::Cancelled);
+            return Err(OrchestratorError::Cancelled);
         }
         if decisions.get(id).is_none_or(|d| d.passed) {
             report.not_failed += 1;

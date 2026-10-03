@@ -34,7 +34,7 @@ use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
-use crate::error::CampaignError;
+use crate::error::OrchestratorError;
 use splinter_core::model_ref::is_alias_name;
 use splinter_core::training::{ReplaySample, TrainingSummary};
 use splinter_eval::gate::GateReport;
@@ -110,10 +110,10 @@ impl ReleaseStore {
     /// whose SHA-256 is the manifest's adapter digest, and records where the
     /// release came from, in one commit. Refused when the release already
     /// exists: a release is written once.
-    pub fn put(&self, manifest: &ReleaseManifest) -> Result<StoredRelease, CampaignError> {
+    pub fn put(&self, manifest: &ReleaseManifest) -> Result<StoredRelease, OrchestratorError> {
         let artifact = self.artifacts.get(&manifest.adapter_artifact)?;
         if artifact.sha256.as_ref() != Some(&manifest.adapter_digest) {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "the adapter {} is kept with SHA-256 {}, not the {} the manifest names",
                 artifact.digest,
                 artifact
@@ -134,11 +134,11 @@ impl ReleaseStore {
 
     /// The release `id`, verified: the manifest hashes to `id`, and its
     /// adapter is there at the size that was kept.
-    pub fn get(&self, id: &ReleaseId) -> Result<StoredRelease, CampaignError> {
+    pub fn get(&self, id: &ReleaseId) -> Result<StoredRelease, OrchestratorError> {
         let manifest: ReleaseManifest =
             self.workspace
                 .get_document(RELEASE, &id.0)?
-                .ok_or_else(|| CampaignError::NotFound {
+                .ok_or_else(|| OrchestratorError::NotFound {
                     what: "release",
                     id: id.to_string(),
                 })?;
@@ -151,7 +151,7 @@ impl ReleaseStore {
     }
 
     /// Every stored release's id, in id order.
-    pub fn list(&self) -> Result<Vec<ReleaseId>, CampaignError> {
+    pub fn list(&self) -> Result<Vec<ReleaseId>, OrchestratorError> {
         Ok(self
             .workspace
             .document_ids(RELEASE)?
@@ -162,7 +162,10 @@ impl ReleaseStore {
 
     /// The release made from `candidate`, if one was made: a candidate is
     /// released at most once.
-    pub fn of_candidate(&self, candidate: &str) -> Result<Option<StoredRelease>, CampaignError> {
+    pub fn of_candidate(
+        &self,
+        candidate: &str,
+    ) -> Result<Option<StoredRelease>, OrchestratorError> {
         for id in self.list()? {
             let release = self.get(&id)?;
             if release.manifest.candidate == candidate {
@@ -173,27 +176,28 @@ impl ReleaseStore {
     }
 
     /// The release `alias` points at; `None` when it points nowhere yet.
-    pub fn alias(&self, alias: &str) -> Result<Option<ReleaseId>, CampaignError> {
+    pub fn alias(&self, alias: &str) -> Result<Option<ReleaseId>, OrchestratorError> {
         let name = self.pointer(alias)?;
         self.workspace.refresh()?;
         match self.workspace.pointer(&name)? {
             None => Ok(None),
             Some((_, value)) => Digest::parse(&value)
                 .map(|digest| Some(ReleaseId(digest)))
-                .map_err(|e| CampaignError::Refused(format!("alias {alias} is corrupt: {e}"))),
+                .map_err(|e| OrchestratorError::Refused(format!("alias {alias} is corrupt: {e}"))),
         }
     }
 
     /// Every alias and the release it points at.
-    pub fn aliases(&self) -> Result<BTreeMap<String, ReleaseId>, CampaignError> {
+    pub fn aliases(&self) -> Result<BTreeMap<String, ReleaseId>, OrchestratorError> {
         self.workspace.refresh()?;
         let mut aliases = BTreeMap::new();
         for (name, value) in self.workspace.pointers(ALIAS_PREFIX)? {
             let Some(alias) = name.strip_prefix(ALIAS_PREFIX).filter(|a| is_alias_name(a)) else {
                 continue;
             };
-            let digest = Digest::parse(&value)
-                .map_err(|e| CampaignError::Refused(format!("alias {alias} is corrupt: {e}")))?;
+            let digest = Digest::parse(&value).map_err(|e| {
+                OrchestratorError::Refused(format!("alias {alias} is corrupt: {e}"))
+            })?;
             aliases.insert(alias.to_string(), ReleaseId(digest));
         }
         Ok(aliases)
@@ -208,7 +212,7 @@ impl ReleaseStore {
         from: Option<&ReleaseId>,
         to: &ReleaseId,
         at: &str,
-    ) -> Result<(), CampaignError> {
+    ) -> Result<(), OrchestratorError> {
         self.get(to)?;
         let pointer = self.pointer(alias)?;
         match self
@@ -218,7 +222,7 @@ impl ReleaseStore {
             Ok(_) => Ok(()),
             Err(StoreError::PointerConflict {
                 found, expected, ..
-            }) => Err(CampaignError::Refused(format!(
+            }) => Err(OrchestratorError::Refused(format!(
                 "alias {alias} moved to {} while this was decided against {}; decide again",
                 found.unwrap_or_else(|| "nothing".into()),
                 expected.unwrap_or_else(|| "nothing".into()),
@@ -229,7 +233,10 @@ impl ReleaseStore {
 
     /// Where an alias has pointed, oldest first: the release and when it was
     /// moved there.
-    pub fn alias_history(&self, alias: &str) -> Result<Vec<(ReleaseId, String)>, CampaignError> {
+    pub fn alias_history(
+        &self,
+        alias: &str,
+    ) -> Result<Vec<(ReleaseId, String)>, OrchestratorError> {
         let pointer = self.pointer(alias)?;
         self.workspace.refresh()?;
         self.workspace
@@ -238,18 +245,20 @@ impl ReleaseStore {
             .map(|m| {
                 Digest::parse(&m.value)
                     .map(|d| (ReleaseId(d), m.at))
-                    .map_err(|e| CampaignError::Refused(format!("alias {alias} is corrupt: {e}")))
+                    .map_err(|e| {
+                        OrchestratorError::Refused(format!("alias {alias} is corrupt: {e}"))
+                    })
             })
             .collect()
     }
 
     /// `id` and the releases it descends from, newest first.
-    pub fn lineage(&self, id: &ReleaseId) -> Result<Vec<StoredRelease>, CampaignError> {
+    pub fn lineage(&self, id: &ReleaseId) -> Result<Vec<StoredRelease>, OrchestratorError> {
         let mut lineage: Vec<StoredRelease> = Vec::new();
         let mut next = Some(id.clone());
         while let Some(id) = next {
             if lineage.len() >= MAX_LINEAGE || lineage.iter().any(|r| r.id == id) {
-                return Err(CampaignError::Refused(format!(
+                return Err(OrchestratorError::Refused(format!(
                     "the lineage of release {id} does not end; the release store is corrupt"
                 )));
             }
@@ -260,9 +269,9 @@ impl ReleaseStore {
         Ok(lineage)
     }
 
-    fn pointer(&self, alias: &str) -> Result<String, CampaignError> {
+    fn pointer(&self, alias: &str) -> Result<String, OrchestratorError> {
         if !is_alias_name(alias) {
-            return Err(CampaignError::Refused(format!(
+            return Err(OrchestratorError::Refused(format!(
                 "{alias:?} is not an alias name: a lowercase letter, then up to 63 lowercase \
                  letters, digits, - or _"
             )));

@@ -126,7 +126,7 @@ fn setup(
     judge: Scripted,
 ) -> (
     Scratch,
-    splinter_campaign::Context,
+    splinter_orchestrator::Context,
     Vec<Task>,
     Vec<Experience>,
 ) {
@@ -159,7 +159,7 @@ fn setup(
 }
 
 fn run(
-    ctx: &splinter_campaign::Context,
+    ctx: &splinter_orchestrator::Context,
     tasks: &[Task],
     controls: &[Experience],
 ) -> splinter_campaign::exam::Examined {

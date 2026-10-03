@@ -30,7 +30,6 @@ use splinter_campaign::release::{arm, release, ReleaseRequest, Released};
 use splinter_campaign::train::{
     train, Candidate, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
-use splinter_campaign::{CampaignError, Context};
 use splinter_core::annotation::Strength;
 use splinter_core::chat::WireMessage;
 use splinter_core::clock::FixedClock;
@@ -45,6 +44,7 @@ use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, S
 use splinter_eval::gate::GateConfig;
 use splinter_model::train::Trained;
 use splinter_model::train::TrainedPreference;
+use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use super::{config, Scratch, Scripted};
@@ -504,7 +504,7 @@ impl Trainer for FakeTrainer {
         ctx: &Context,
         plan: &TrainPlan,
         _cancel: &CancelToken,
-    ) -> Result<Trained, CampaignError> {
+    ) -> Result<Trained, OrchestratorError> {
         self.called.lock().unwrap().push(Regime::Sft);
         let fake = self.fake(ctx, plan);
         Ok(Trained {
@@ -524,7 +524,7 @@ impl Trainer for FakeTrainer {
         ctx: &Context,
         plan: &TrainPlan,
         _cancel: &CancelToken,
-    ) -> Result<TrainedPreference, CampaignError> {
+    ) -> Result<TrainedPreference, OrchestratorError> {
         self.called.lock().unwrap().push(Regime::Dpo);
         let fake = self.fake(ctx, plan);
         Ok(TrainedPreference {

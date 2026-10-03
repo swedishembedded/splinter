@@ -55,9 +55,9 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use graph::Graph;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// What kind of artifact a node is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -301,7 +301,7 @@ impl Lineage {
 }
 
 /// The lineage of the artifact `request.id` names.
-pub fn lineage(ctx: &Context, request: &LineageRequest) -> Result<Lineage, CampaignError> {
+pub fn lineage(ctx: &Context, request: &LineageRequest) -> Result<Lineage, OrchestratorError> {
     // What other processes committed since this one last looked.
     ctx.workspace().refresh()?;
     let graph = load::load(ctx)?;

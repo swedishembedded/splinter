@@ -16,21 +16,22 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Fallbacks, ModelAssignments, RoleOverrides};
 
 use crate::config::Config;
-use crate::error::CampaignError;
+use crate::error::OrchestratorError;
 
 /// The models the configuration names as fallbacks for roles.
-pub fn fallbacks(config: &Config) -> Result<Fallbacks, CampaignError> {
-    let parse = |what: &str, text: &Option<String>| -> Result<Option<ModelRef>, CampaignError> {
-        text.as_ref()
-            .map(|text| {
-                text.parse::<ModelRef>().map_err(|e| {
-                    CampaignError::Refused(format!(
-                        "the {what} model {text:?} is not a model reference: {e}"
-                    ))
+pub fn fallbacks(config: &Config) -> Result<Fallbacks, OrchestratorError> {
+    let parse =
+        |what: &str, text: &Option<String>| -> Result<Option<ModelRef>, OrchestratorError> {
+            text.as_ref()
+                .map(|text| {
+                    text.parse::<ModelRef>().map_err(|e| {
+                        OrchestratorError::Refused(format!(
+                            "the {what} model {text:?} is not a model reference: {e}"
+                        ))
+                    })
                 })
-            })
-            .transpose()
-    };
+                .transpose()
+        };
     Ok(Fallbacks {
         assistant: parse("assistant", &config.assistant_model)?,
         front_door: parse("front door", &config.front_door_model)?,
@@ -42,6 +43,6 @@ pub fn fallbacks(config: &Config) -> Result<Fallbacks, CampaignError> {
 pub fn assignments(
     config: &Config,
     named: &RoleOverrides,
-) -> Result<ModelAssignments, CampaignError> {
+) -> Result<ModelAssignments, OrchestratorError> {
     Ok(ModelAssignments::resolve(named, &fallbacks(config)?))
 }

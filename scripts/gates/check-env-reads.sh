@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-# Only splinter-campaign's config module reads or writes the process
+# Only splinter-orchestrator's config module reads or writes the process
 # environment.
 #
 # A setting read deep inside a library is a hidden input: a test cannot set
@@ -15,7 +15,7 @@
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-ALLOWED=crates/campaign/src/config.rs
+ALLOWED=crates/orchestrator/src/config.rs
 PATTERN='std::env::(var|var_os|vars|set_var|remove_var)\b'
 
 if [ "$#" -gt 0 ]; then files=("$@"); else mapfile -t files < <(git ls-files --cached --others --exclude-standard 'crates/*.rs'); fi

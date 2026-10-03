@@ -31,9 +31,9 @@ use splinter_core::digest::{canonical_json, Digest};
 use splinter_knowledge::concepts::{Concept, ConceptResolver, SectionRef};
 use splinter_store::experiences::StoreError;
 
-use crate::context::Context;
-use crate::error::CampaignError;
 use splinter_eval::gate::GateReport;
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
 
 const ENTRY: &str = "queue_entry";
 const PREFIX: &str = "queue-";
@@ -58,8 +58,8 @@ pub struct QueuedConcept {
     pub queued_at: String,
 }
 
-fn pointer_of(concept: &Concept) -> Result<String, CampaignError> {
-    let bytes = canonical_json(concept).map_err(|source| CampaignError::Json {
+fn pointer_of(concept: &Concept) -> Result<String, OrchestratorError> {
+    let bytes = canonical_json(concept).map_err(|source| OrchestratorError::Json {
         what: "concept".into(),
         source,
     })?;
@@ -70,21 +70,25 @@ fn pointer_of(concept: &Concept) -> Result<String, CampaignError> {
 fn entry_of(
     ctx: &Context,
     pointer: &str,
-) -> Result<(Option<String>, Option<QueuedConcept>), CampaignError> {
+) -> Result<(Option<String>, Option<QueuedConcept>), OrchestratorError> {
     let Some((_, value)) = ctx.workspace().pointer(pointer)? else {
         return Ok((None, None));
     };
     if value == DONE {
         return Ok((Some(value), None));
     }
-    let digest = Digest::parse(&value)
-        .map_err(|e| CampaignError::Refused(format!("queue pointer {pointer} is corrupt: {e}")))?;
+    let digest = Digest::parse(&value).map_err(|e| {
+        OrchestratorError::Refused(format!("queue pointer {pointer} is corrupt: {e}"))
+    })?;
     Ok((Some(value), ctx.workspace().get_document(ENTRY, &digest)?))
 }
 
 /// Queues the concepts of every task a failed retention suite of `gate`
 /// lost; returns them, each once, in order.
-pub fn enqueue_retention(ctx: &Context, gate: &GateReport) -> Result<Vec<Concept>, CampaignError> {
+pub fn enqueue_retention(
+    ctx: &Context,
+    gate: &GateReport,
+) -> Result<Vec<Concept>, OrchestratorError> {
     let Some(retention) = &gate.retention.measured else {
         return Ok(Vec::new());
     };
@@ -157,7 +161,7 @@ pub fn enqueue_retention(ctx: &Context, gate: &GateReport) -> Result<Vec<Concept
 }
 
 /// Every queued concept, in concept order.
-pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, CampaignError> {
+pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, OrchestratorError> {
     ctx.workspace().refresh()?;
     let mut queued: Vec<QueuedConcept> = Vec::new();
     for (_, value) in ctx.workspace().pointers(PREFIX)? {
@@ -165,7 +169,7 @@ pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, CampaignError> {
             continue;
         }
         let digest = Digest::parse(&value)
-            .map_err(|e| CampaignError::Refused(format!("a queue pointer is corrupt: {e}")))?;
+            .map_err(|e| OrchestratorError::Refused(format!("a queue pointer is corrupt: {e}")))?;
         if let Some(entry) = ctx.workspace().get_document(ENTRY, &digest)? {
             queued.push(entry);
         }
@@ -175,7 +179,7 @@ pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, CampaignError> {
 }
 
 /// Takes `done` off the queue.
-pub fn complete(ctx: &Context, done: &[QueuedConcept]) -> Result<(), CampaignError> {
+pub fn complete(ctx: &Context, done: &[QueuedConcept]) -> Result<(), OrchestratorError> {
     for entry in done {
         let pointer = pointer_of(&entry.concept)?;
         let (from, _) = entry_of(ctx, &pointer)?;

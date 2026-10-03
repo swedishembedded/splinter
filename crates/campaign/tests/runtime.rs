@@ -63,7 +63,8 @@ fn a_model_handed_to_the_runtime_answers_every_command() {
     // The base arm the gate context handed in, with no adapter.
     let base = arm(ctx.config(), None);
 
-    let identity = |context: &splinter_campaign::Context| context.model(&base).unwrap().identity;
+    let identity =
+        |context: &splinter_orchestrator::Context| context.model(&base).unwrap().identity;
     let before = identity(&runtime.context());
     assert_eq!(identity(&runtime.context()), before);
 }
