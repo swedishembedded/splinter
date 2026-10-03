@@ -50,6 +50,7 @@ splinter-data = "measurement"
 splinter-knowledge = "domain"
 splinter-orchestrator = "application"
 splinter-pipelines = "workflow"
+splinter-sdk = "sdk"
 splinter = "surface"
 splinter-tool-syntax = "sample"
 splinter-jefferson = "sample"
@@ -59,9 +60,15 @@ allowed = ["splinter-model"]
 
 [sven]
 # Only the agent runs sven and only the model adapter serves it a provider.
-# The two samples drive sven's engine directly until the SDK offers what they
-# need.
-allowed = ["splinter-agent", "splinter-model", "splinter-tool-syntax", "splinter-jefferson"]
+# A caller that drives sven's engine itself does so through the agent module
+# the SDK re-exports.
+allowed = ["splinter-agent", "splinter-model"]
+
+[surface]
+# The command line and every sample depend on the SDK and on nothing else of
+# Splinter's: if one needs more, the SDK is missing something.
+tiers = ["surface", "sample"]
+only = "splinter-sdk"
 
 [limits]
 # A source file larger than this is split; a file that must stay larger for a

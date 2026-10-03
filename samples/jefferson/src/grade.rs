@@ -15,7 +15,7 @@
 
 use regex::Regex;
 
-use splinter_eval::verifiers::quotation::{quotations, TextIndex};
+use splinter_sdk::measure::verifiers::quotation::{quotations, TextIndex};
 
 use crate::corpus::words;
 

@@ -6,9 +6,9 @@
 
 use std::fmt::Write as _;
 
-use splinter_eval::gate::{Check, GateReport};
-use splinter_pipelines::eval::{EvalReport, Evaluated};
-use splinter_pipelines::release::{ReleaseList, Released, RolledBack};
+use splinter_sdk::eval::{EvalReport, Evaluated};
+use splinter_sdk::measure::gate::{Check, GateReport};
+use splinter_sdk::release::{ReleaseList, Released, RolledBack};
 
 use crate::output::{tally, Report};
 

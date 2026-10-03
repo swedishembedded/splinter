@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use splinter_pipelines::lineage::{Branch, Lineage, Node};
+use splinter_sdk::lineage::{Branch, Lineage, Node};
 
 use crate::output::Report;
 

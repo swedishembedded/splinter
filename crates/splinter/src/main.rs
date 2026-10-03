@@ -30,8 +30,8 @@ mod state_output;
 use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser};
-use splinter_orchestrator::Config;
-use splinter_store::StateRoot;
+use splinter_sdk::store::StateRoot;
+use splinter_sdk::Config;
 
 use cli::Cli;
 use session::Session;

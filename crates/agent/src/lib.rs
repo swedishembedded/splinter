@@ -39,5 +39,6 @@ pub mod solve;
 mod system_prompt;
 pub mod typed;
 
+pub use sven_sdk as sven;
 pub use sven_sdk::schemars;
 pub use sven_sdk::{CallError, CancelToken, RunConclusion};

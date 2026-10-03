@@ -15,7 +15,7 @@
 //! answer makes about what he wrote is true by construction. Code, not the
 //! writer, decides which questions are admitted.
 
-use splinter_knowledge::advice::{advice_cues, is_prose};
+use splinter_sdk::knowledge::advice::{advice_cues, is_prose};
 
 use crate::corpus::{words, Letter};
 use crate::grade::mentions;

@@ -64,7 +64,7 @@ impl ServedModel {
     /// The provider sven routes this model through.
     ///
     /// Needed because `SVEN_MODEL` is a command-line argument of the `sven`
-    /// binary, not something `sven_sdk::config::load` reads: an application
+    /// binary, not something `splinter_sdk::agent::sven::config::load` reads: an application
     /// embedding the SDK has to put the provider and the name on the `Config`
     /// itself. Which is the better default for a sample anyway - an arm
     /// whose weights were chosen by auto-detection is not a controlled arm.

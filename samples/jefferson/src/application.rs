@@ -20,7 +20,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_eval::verifiers::quotation::TextIndex;
+use splinter_sdk::measure::verifiers::quotation::TextIndex;
 
 use crate::ask::Answerer;
 use crate::corpus::words;

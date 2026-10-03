@@ -27,11 +27,11 @@
 
 use std::path::PathBuf;
 
+use splinter_sdk::agent::sven::{config, Engine, SessionEvent};
 use splinter_tool_syntax::{
     baseline_effective, capture_path, records_from_performance, run_verifier, run_witness,
     to_jsonl, upstream_of, Action, ArmScore, Episode, Family, Outcome, Recorder, ServedModel,
 };
-use sven_sdk::{config, Engine, SessionEvent};
 
 const USAGE: &str = "\
 usage: splinter-tool-syntax <command> [options]
@@ -428,7 +428,7 @@ async fn run_agent(
 struct ToolActivity {
     calls: usize,
     /// Everything the model was shown and everything it said.
-    transcript: Vec<sven_sdk::Turn>,
+    transcript: Vec<splinter_sdk::agent::sven::Turn>,
     /// One entry per failed call: the tool and the first line of what it
     /// said. Kept because "11 tool calls and nothing changed" is not a
     /// diagnosis, and the difference between a model that cannot form a call
@@ -594,14 +594,14 @@ fn demonstrate(args: &[String]) -> anyhow::Result<()> {
     // under the checkpoint's own chat template.
     let checked = match std::env::var("BRAIN_QWEN_WEIGHTS") {
         Ok(weights) => {
-            splinter_model::train::validate_dataset_for(&out, std::path::Path::new(&weights))
+            splinter_sdk::model::train::validate_dataset_for(&out, std::path::Path::new(&weights))
         }
         Err(_) => {
             println!(
                 "note: BRAIN_QWEN_WEIGHTS is not set, so the dataset is only parsed, not encoded; \
                  a shape the template cannot mask would not be caught until training starts"
             );
-            splinter_model::train::validate_dataset(&out)
+            splinter_sdk::model::train::validate_dataset(&out)
         }
     };
     match checked {

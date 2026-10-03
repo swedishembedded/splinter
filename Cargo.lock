@@ -4007,11 +4007,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
- "splinter-core",
- "splinter-eval",
- "splinter-orchestrator",
- "splinter-pipelines",
- "splinter-store",
+ "splinter-sdk",
 ]
 
 [[package]]
@@ -4097,11 +4093,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "splinter-data",
- "splinter-eval",
- "splinter-knowledge",
- "splinter-model",
- "sven-sdk",
+ "splinter-sdk",
  "tokio",
 ]
 
@@ -4196,6 +4188,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-sdk"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "splinter-agent",
+ "splinter-core",
+ "splinter-data",
+ "splinter-eval",
+ "splinter-knowledge",
+ "splinter-model",
+ "splinter-orchestrator",
+ "splinter-pipelines",
+ "splinter-sandbox",
+ "splinter-store",
+]
+
+[[package]]
 name = "splinter-store"
 version = "0.1.0"
 dependencies = [
@@ -4217,9 +4227,7 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
- "splinter-core",
- "splinter-model",
- "sven-sdk",
+ "splinter-sdk",
  "tokio",
  "toml",
 ]

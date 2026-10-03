@@ -8,25 +8,23 @@
 use std::fmt::Write as _;
 
 use serde::Serialize;
-use splinter_core::source::{Origin, Source};
-use splinter_core::training::Regime;
-use splinter_orchestrator::runs::{CancelRequested, Recorded, RunList};
-use splinter_orchestrator::OrchestratorError;
-use splinter_pipelines::ask::Answer;
-use splinter_pipelines::critique::Critiqued;
-use splinter_pipelines::datasets::{Built, Exported};
-use splinter_pipelines::experiences::{
-    CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList,
-};
-use splinter_pipelines::judge::Calibrated;
-use splinter_pipelines::router::Routed;
-use splinter_pipelines::solving::Solved;
-use splinter_pipelines::sources::{SourceAdded, SourceList, SourceSummary};
-use splinter_pipelines::status::Status;
-use splinter_pipelines::tasks::{TaskSetList, TaskShow, TasksGenerated};
-use splinter_pipelines::train::Candidate;
-use splinter_pipelines::verify::Verified;
-use splinter_store::runs::Run;
+use splinter_sdk::ask::Answer;
+use splinter_sdk::critique::Critiqued;
+use splinter_sdk::datasets::{Built, Exported};
+use splinter_sdk::experiences::{CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList};
+use splinter_sdk::judge::Calibrated;
+use splinter_sdk::router::Routed;
+use splinter_sdk::runs::{CancelRequested, Recorded, RunList};
+use splinter_sdk::solving::Solved;
+use splinter_sdk::sources::{SourceAdded, SourceList, SourceSummary};
+use splinter_sdk::status::Status;
+use splinter_sdk::store::runs::Run;
+use splinter_sdk::tasks::{TaskSetList, TaskShow, TasksGenerated};
+use splinter_sdk::train::Candidate;
+use splinter_sdk::verify::Verified;
+use splinter_sdk::vocabulary::source::{Origin, Source};
+use splinter_sdk::vocabulary::training::Regime;
+use splinter_sdk::Error;
 
 /// A report a command prints.
 pub trait Report: Serialize {
@@ -50,7 +48,7 @@ pub fn emit(json: bool, report: &impl Report) {
 
 /// Prints why a command failed: on stderr always, and as
 /// `{"error": ..., "refused": ...}` on stdout with `--json`.
-pub fn error(json: bool, error: &OrchestratorError) {
+pub fn error(json: bool, error: &Error) {
     eprintln!("splinter: {error}");
     if json {
         let value =

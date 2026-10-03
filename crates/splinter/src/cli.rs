@@ -9,18 +9,18 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
-use splinter_core::annotation::Strength;
-use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
-use splinter_pipelines::critique::DEFAULT_RETRIES;
-use splinter_pipelines::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
-use splinter_pipelines::datasets::{parse_strength, parse_strip, Strip, ViewName};
-use splinter_pipelines::eval::SuiteChoice;
-use splinter_pipelines::learn::parse_budget;
-use splinter_pipelines::lineage::Direction;
-use splinter_pipelines::train::{
+use splinter_sdk::critique::DEFAULT_RETRIES;
+use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
+use splinter_sdk::datasets::{parse_strength, parse_strip, Strip, ViewName};
+use splinter_sdk::eval::SuiteChoice;
+use splinter_sdk::learn::parse_budget;
+use splinter_sdk::lineage::Direction;
+use splinter_sdk::train::{
     DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
 };
-use splinter_pipelines::variants::DEFAULT_VARIANTS_PER_TASK;
+use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
+use splinter_sdk::vocabulary::annotation::Strength;
+use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
 
 /// A learning agent with its own model. Tell it what to learn - a document,
 /// a repository, a command's output - and it generates tasks from it,
@@ -132,7 +132,7 @@ pub enum Command {
 /// A model reference, for clap.
 fn model_ref(text: &str) -> Result<ModelRef, String> {
     text.parse()
-        .map_err(|e: splinter_core::model_ref::RefError| e.to_string())
+        .map_err(|e: splinter_sdk::vocabulary::model_ref::RefError| e.to_string())
 }
 
 fn budget(text: &str) -> Result<Duration, String> {
@@ -140,8 +140,7 @@ fn budget(text: &str) -> Result<Duration, String> {
 }
 
 fn view(text: &str) -> Result<ViewName, String> {
-    text.parse()
-        .map_err(|e: splinter_orchestrator::OrchestratorError| e.to_string())
+    text.parse().map_err(|e: splinter_sdk::Error| e.to_string())
 }
 
 fn strip(text: &str) -> Result<Strip, String> {
@@ -153,8 +152,7 @@ fn strength(text: &str) -> Result<Strength, String> {
 }
 
 fn suite(text: &str) -> Result<SuiteChoice, String> {
-    text.parse()
-        .map_err(|e: splinter_orchestrator::OrchestratorError| e.to_string())
+    text.parse().map_err(|e: splinter_sdk::Error| e.to_string())
 }
 
 /// `learn`.

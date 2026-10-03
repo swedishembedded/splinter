@@ -186,7 +186,7 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
     );
     std::fs::create_dir_all(&attempt)?;
     let started = std::time::Instant::now();
-    let report = |r: &splinter_model::train::StepReport| {
+    let report = |r: &splinter_sdk::model::train::StepReport| {
         eprintln!(
             "step {}/{} loss {:.4} elapsed {:.0}s",
             r.step,
@@ -195,8 +195,8 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
             started.elapsed().as_secs_f64()
         );
     };
-    let split = splinter_data::holdout::split_dataset_file(&dataset, &attempt)?;
-    let request = splinter_model::train::FineTune {
+    let split = splinter_sdk::data::holdout::split_dataset_file(&dataset, &attempt)?;
+    let request = splinter_sdk::model::train::FineTune {
         model_dir: &base,
         train: &split.train,
         held_out: &split.held_out,
@@ -209,9 +209,9 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         cancel: None,
         bf16_base: args.iter().any(|a| a == "--bf16"),
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
-        on_step: Some(splinter_model::train::StepHook(&report)),
+        on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
-    let trained = splinter_model::train::fine_tune(&request)?;
+    let trained = splinter_sdk::model::train::fine_tune(&request)?;
     let summary = serde_json::json!({
         "adapter": trained.adapter,
         "adapter_digest": trained.adapter_digest,
@@ -371,7 +371,7 @@ fn retrieval_command(args: &[String]) -> anyhow::Result<()> {
     let letters = corpus::load_letters(&resources)?;
     let passages = retrieval::letter_passages(&letters);
     let loaded = flag(args, "--embedder")
-        .map(|model| splinter_model::embed::Embeddings::load(&model))
+        .map(|model| splinter_sdk::model::embed::Embeddings::load(&model))
         .transpose()?;
     let embedder = loaded.as_ref().map(retrieval::Qwen);
     let results = retrieval::measure(
@@ -379,7 +379,7 @@ fn retrieval_command(args: &[String]) -> anyhow::Result<()> {
         &scenarios,
         embedder
             .as_ref()
-            .map(|e| e as &dyn splinter_knowledge::retrieve::Embedder),
+            .map(|e| e as &dyn splinter_sdk::knowledge::retrieve::Embedder),
     )?;
     print!(
         "{}",

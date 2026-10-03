@@ -16,8 +16,8 @@
 //! mean reciprocal rank. A passage is found when the retrieved paragraph holds
 //! the first words of the gold passage.
 
-use splinter_knowledge::retrieve::{fuse, Bm25, Dense, EmbedError, Embedder, Hit, Passage};
-use splinter_model::embed::Embeddings;
+use splinter_sdk::knowledge::retrieve::{fuse, Bm25, Dense, EmbedError, Embedder, Hit, Passage};
+use splinter_sdk::model::embed::Embeddings;
 
 use crate::corpus::{words, Letter};
 use crate::scenarios::Scenario;
@@ -34,7 +34,7 @@ pub fn letter_passages(letters: &[Letter]) -> Vec<Passage> {
     for letter in letters {
         for (n, paragraph) in letter.body.split("\n\n").enumerate() {
             if paragraph.split_whitespace().count()
-                >= splinter_knowledge::retrieve::MIN_PASSAGE_WORDS
+                >= splinter_sdk::knowledge::retrieve::MIN_PASSAGE_WORDS
             {
                 found.push(Passage::of_text(&letter.id, n, paragraph));
             }

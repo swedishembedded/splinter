@@ -30,7 +30,7 @@
 //! travels with the record so the question stays answerable afterwards.
 
 use serde::{Deserialize, Serialize};
-use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
+use splinter_sdk::vocabulary::chat::{WireFunction, WireMessage, WireToolCall};
 
 use crate::Verdict;
 

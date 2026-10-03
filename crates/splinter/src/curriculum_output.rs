@@ -7,10 +7,10 @@
 
 use std::fmt::Write as _;
 
-use splinter_pipelines::curriculum::frontier::{Frontier, Measured};
-use splinter_pipelines::curriculum::mastery::{MasteryReport, ReleaseMastery};
-use splinter_pipelines::curriculum::quota::Selected;
-use splinter_pipelines::curriculum::teacher::Taught;
+use splinter_sdk::curriculum::frontier::{Frontier, Measured};
+use splinter_sdk::curriculum::mastery::{MasteryReport, ReleaseMastery};
+use splinter_sdk::curriculum::quota::Selected;
+use splinter_sdk::curriculum::teacher::Taught;
 
 use crate::output::Report;
 

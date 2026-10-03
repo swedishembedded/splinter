@@ -11,29 +11,29 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_core::model_ref::ModelRef;
-use splinter_core::role::Role;
-use splinter_orchestrator::runs::{self, record};
-use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
-use splinter_pipelines::ask::ask;
-use splinter_pipelines::critique::{critique_set, CritiqueRequest};
-use splinter_pipelines::curriculum::frontier::{measure, MeasureRequest};
-use splinter_pipelines::datasets::{build, export, BuildRequest};
-use splinter_pipelines::eval::{evaluate, EvalRequest};
-use splinter_pipelines::experiences::{self, resolve_set};
-use splinter_pipelines::judge::calibrate_judge;
-use splinter_pipelines::learn::{learn, LearnRequest, Learned};
-use splinter_pipelines::lineage::{lineage, LineageRequest};
-use splinter_pipelines::release::{self, ReleaseRequest};
-use splinter_pipelines::router::{interpret, Routed};
-use splinter_pipelines::solving::solve_set;
-use splinter_pipelines::sources::{self, SourceTarget};
-use splinter_pipelines::state;
-use splinter_pipelines::status::status;
-use splinter_pipelines::tasks::{self, check_kinds, resolve_set as resolve_task_set};
-use splinter_pipelines::train::{train, BrainTrainer, TrainRequest, Tuning};
-use splinter_pipelines::variants;
-use splinter_pipelines::verify::{verify_set, Judge};
+use splinter_sdk::ask::ask;
+use splinter_sdk::critique::{critique_set, CritiqueRequest};
+use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
+use splinter_sdk::datasets::{build, export, BuildRequest};
+use splinter_sdk::eval::{evaluate, EvalRequest};
+use splinter_sdk::experiences::{self, resolve_set};
+use splinter_sdk::judge::calibrate_judge;
+use splinter_sdk::learn::{learn, LearnRequest, Learned};
+use splinter_sdk::lineage::{lineage, LineageRequest};
+use splinter_sdk::release::{self, ReleaseRequest};
+use splinter_sdk::router::{interpret, Routed};
+use splinter_sdk::runs::{self, record};
+use splinter_sdk::solving::solve_set;
+use splinter_sdk::sources::{self, SourceTarget};
+use splinter_sdk::state;
+use splinter_sdk::status::status;
+use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
+use splinter_sdk::train::{train, TrainRequest, Tuning};
+use splinter_sdk::variants;
+use splinter_sdk::verify::{verify_set, Judge};
+use splinter_sdk::vocabulary::model_ref::ModelRef;
+use splinter_sdk::vocabulary::role::Role;
+use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
@@ -68,30 +68,31 @@ impl From<Exit> for std::process::ExitCode {
 
 /// See the module documentation.
 pub struct Session {
-    runtime: Arc<Runtime>,
+    splinter: Splinter,
     global: Global,
 }
 
 impl Session {
     /// A session over `config` with the command line's global flags.
-    pub fn new(config: Config, global: Global) -> Result<Self, OrchestratorError> {
-        let runtime = Arc::new(Runtime::new(config, global.allow_remote)?);
-        Ok(Self { runtime, global })
-    }
-
-    /// The context of one command: its own pins on the shared runtime, so
-    /// each sentence of a REPL resolves `policy:<alias>` afresh.
-    fn context(&self) -> Context {
-        let verbose = self.global.verbose > 0;
-        self.runtime
-            .context()
-            .with_progress(Box::new(move |stage, summary| {
+    pub fn new(config: Config, global: Global) -> Result<Self, Error> {
+        let verbose = global.verbose > 0;
+        let splinter = Splinter::builder(config)
+            .allow_remote(global.allow_remote)
+            .progress(Arc::new(move |stage, summary| {
                 if verbose {
                     eprintln!("[{stage}] {summary}");
                 } else {
                     eprintln!("[{stage}] {}", learn_output::stage_line(stage, summary));
                 }
             }))
+            .build()?;
+        Ok(Self { splinter, global })
+    }
+
+    /// The context of one command: its own pins on the shared runtime, so
+    /// each sentence of a REPL resolves `policy:<alias>` afresh.
+    fn context(&self) -> Context {
+        self.splinter.context()
     }
 
     /// Runs `command`, prints its report, and says how it ended.
@@ -211,7 +212,7 @@ impl Session {
         }
     }
 
-    fn dispatch(&self, command: Command) -> Result<Exit, OrchestratorError> {
+    fn dispatch(&self, command: Command) -> Result<Exit, Error> {
         let context = self.context();
         let ctx = &context;
         let json = self.global.json;
@@ -219,7 +220,7 @@ impl Session {
             Command::Learn(args) => {
                 let release_asked = !args.no_release;
                 let request = learn_request(args);
-                let learned = learn(ctx, &request, &BrainTrainer)?;
+                let learned = learn(ctx, &request, self.splinter.trainer())?;
                 emit(json, &learned);
                 let finished = match &learned {
                     Learned::Planned(_) => true,
@@ -410,7 +411,7 @@ impl Session {
                     tuning: Tuning::default(),
                 };
                 let candidate = record(ctx, "train", &request, |run| {
-                    train(ctx, &request, &BrainTrainer, &run.cancel_token())
+                    train(ctx, &request, self.splinter.trainer(), &run.cancel_token())
                 })?;
                 emit(json, &candidate);
             }
@@ -420,7 +421,7 @@ impl Session {
                     return Ok(Exit::Ok);
                 }
                 let Some(candidate) = args.candidate else {
-                    return Err(OrchestratorError::Refused(
+                    return Err(Error::Refused(
                         "name a candidate to release, or `release list`".into(),
                     ));
                 };

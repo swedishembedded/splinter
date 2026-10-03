@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-sdk"
+description = "The one way to embed Splinter: a handle that owns the runtime and the trainer and runs every command as a recorded run, with the vocabulary and the layers a caller works with."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+splinter-agent = { workspace = true }
+splinter-core = { workspace = true }
+splinter-data = { workspace = true }
+splinter-eval = { workspace = true }
+splinter-knowledge = { workspace = true }
+splinter-model = { workspace = true }
+splinter-orchestrator = { workspace = true }
+splinter-pipelines = { workspace = true }
+splinter-sandbox = { workspace = true }
+splinter-store = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

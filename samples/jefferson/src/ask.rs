@@ -17,11 +17,11 @@ use std::path::Path;
 use std::time::Instant;
 
 use futures::StreamExt;
-use splinter_model::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
-use splinter_model::Residency;
-use sven_sdk::model::{
+use splinter_sdk::agent::sven::model::{
     CompletionRequest, Message, MessageContent, ModelProvider, ResponseEvent, Role,
 };
+use splinter_sdk::model::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
+use splinter_sdk::model::Residency;
 
 /// What a model said to one question.
 #[derive(Clone, Debug, Default)]

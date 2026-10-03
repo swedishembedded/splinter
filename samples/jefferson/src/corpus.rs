@@ -180,7 +180,7 @@ pub fn without_salutation(body: &str) -> String {
 
 /// Lower-case alphanumeric words of `text`: what two printings of a letter
 /// agree on once spacing, punctuation and capitals are set aside.
-pub use splinter_eval::verifiers::quotation::words;
+pub use splinter_sdk::measure::verifiers::quotation::words;
 
 /// For each letter, the index of the first letter of its family: letters
 /// that print the same text, found by Splinter's own overlap rule over what
@@ -192,7 +192,7 @@ pub fn families(letters: &[Letter]) -> Vec<usize> {
         .map(|letter| without_salutation(&letter.body))
         .collect();
     let texts: Vec<&str> = bodies.iter().map(String::as_str).collect();
-    splinter_eval::overlap::overlap_groups(&texts)
+    splinter_sdk::measure::overlap::overlap_groups(&texts)
 }
 
 /// Whether the family named `key` belongs to the exam: a seeded hash of the
