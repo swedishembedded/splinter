@@ -9,8 +9,7 @@
 //! final output: the user turn is the student's turn (see [`Strip`]), the
 //! answer under `Candidate answer:`, and - when an executable verdict is
 //! among its annotations - a summary of how the checks ran under
-//! `Execution evidence:` (the lab's
-//! `splinter_core::evidence::evidence_summary`: runtime and
+//! `Execution evidence:` (`splinter_core::evidence::evidence_summary`: runtime and
 //! how each run ended, never digests or privileged checks); the supervised
 //! reply is [`VerifierView::PASS`] or [`VerifierView::FAIL`].
 //!

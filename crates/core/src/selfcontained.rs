@@ -78,7 +78,7 @@ pub enum NotSelfContained {
 
 /// Whether `item` is never context the instruction relies on: what grades
 /// an answer (the reference, and the executable checks and generated tests
-/// the lab's verifiers run), and a critique of an earlier attempt.
+/// the executable verifiers run), and a critique of an earlier attempt.
 fn never_context(item: &Privileged) -> bool {
     match &item.kind {
         PrivilegedKind::Reference | PrivilegedKind::Critique => true,

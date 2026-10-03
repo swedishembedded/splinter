@@ -10,8 +10,8 @@
 //! refuses a dataset after the GPU has been claimed, or worse, one that
 //! accepts it and supervises the wrong spans.
 //!
-//! So the check runs the real parser, through the policy crate that trains
-//! on the lab's output - which is also why this test lives here.
+//! So the check runs the real parser, through the model adapter that trains
+//! on this harness's output - which is also why this test lives here.
 
 // A test file: its fixture helpers panic on a broken fixture, which is the
 // failure report.

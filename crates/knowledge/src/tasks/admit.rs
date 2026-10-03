@@ -425,7 +425,7 @@ impl Admission {
 }
 
 /// The task's checks of privileged kind `kind` run against `answer` in the
-/// kind's runtime, through the lab's executable verifier.
+/// kind's runtime, through the executable verifier.
 fn run_checks(
     context: &Context<'_>,
     task: &Task,
