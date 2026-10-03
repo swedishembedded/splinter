@@ -107,7 +107,7 @@ pub struct BrainLoader;
 
 impl BaseLoader for BrainLoader {
     fn load(&self, checkpoint: &Path, context_tokens: u32) -> Result<Box<dyn Engine>, PolicyError> {
-        let source = load_source(checkpoint);
+        let source = crate::local::load_source(checkpoint);
         let mut builder =
             TextGenerationPipeline::builder(utf8(&source)?).capacity(context_tokens.max(1));
         // A brain-format checkpoint carries no tokenizer; the one beside it
@@ -124,24 +124,6 @@ impl BaseLoader for BrainLoader {
             reason: e.to_string(),
         })?;
         Ok(Box::new(ChatPipeline::from(pipeline)))
-    }
-}
-
-/// What brain is asked to open for `checkpoint`: a `model.safetensors`
-/// beside a `config.json` is a Hugging Face checkpoint, whose architecture is
-/// read from that config, so it opens as its directory; any other file
-/// (brain's own format, a GGUF) opens as itself.
-fn load_source(checkpoint: &Path) -> PathBuf {
-    match checkpoint.parent() {
-        Some(dir)
-            if checkpoint
-                .file_name()
-                .is_some_and(|n| n == "model.safetensors")
-                && dir.join("config.json").is_file() =>
-        {
-            dir.to_path_buf()
-        }
-        _ => checkpoint.to_path_buf(),
     }
 }
 

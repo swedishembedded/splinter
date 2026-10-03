@@ -418,14 +418,15 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
     })
 }
 
-/// The checkpoint file under `model_dir`, as the UTF-8 path brain takes,
+/// What brain trains from under `model_dir`, as the UTF-8 path it takes
+/// (the directory of a Hugging Face checkpoint, else the checkpoint file),
 /// and the base id an adapter's card names. brain resolves a directory only
-/// in its model store's layout, so the file is resolved here; its
+/// in its model store's layout, so the source is resolved here; its
 /// directory supplies the tokenizer and chat template. The card names what
 /// produced the adapter and what it sits on, so an adapter is traceable to
 /// its own training evidence.
 fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyError> {
-    let weights = crate::local::resolve_base(model_dir)?;
+    let weights = crate::local::load_source(&crate::local::resolve_base(model_dir)?);
     let weights = weights
         .to_str()
         .ok_or_else(|| PolicyError::NotUtf8 {
@@ -516,5 +517,32 @@ mod tests {
         assert!(err.contains("at least 2"), "{err}");
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A Hugging Face checkpoint trains from its directory, where its
+    /// `config.json` is; a brain-format file trains as itself.
+    #[test]
+    fn a_hugging_face_base_is_trained_from_its_directory() {
+        let root = std::env::temp_dir().join(format!("policy-base-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let hf = root.join("DeepSeek-R1-Distill-Qwen-1.5B");
+        let native = root.join("Qwen3-0.6B");
+        std::fs::create_dir_all(&hf).unwrap();
+        std::fs::create_dir_all(&native).unwrap();
+        std::fs::write(hf.join("model.safetensors"), b"x").unwrap();
+        std::fs::write(hf.join("config.json"), b"{}").unwrap();
+        std::fs::write(native.join("model.brain.safetensors"), b"x").unwrap();
+        std::fs::write(native.join("config.json"), b"{}").unwrap();
+
+        let (weights, base_id) = base_weights(&hf).unwrap();
+        assert_eq!(weights, hf.to_str().unwrap());
+        assert_eq!(base_id, "local/DeepSeek-R1-Distill-Qwen-1.5B");
+        let (weights, _) = base_weights(&native).unwrap();
+        assert_eq!(
+            weights,
+            native.join("model.brain.safetensors").to_str().unwrap()
+        );
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -42,7 +42,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use splinter_knowledge::concepts::Concept;
-use splinter_policy::local::resolve_base;
+use splinter_policy::local::{load_source, resolve_base};
 use splinter_policy::selection::local_model_name;
 use splinter_record::digest::Digest;
 use sven_sdk::CancelToken;
@@ -158,13 +158,15 @@ pub fn release(
         )));
     }
     let champion = champion_id.as_ref().map(|id| store.get(id)).transpose()?;
-    let base_file = resolve_base(&config.policy_base)
-        .map_err(|e| CampaignError::Refused(format!("the policy base: {e}")))?;
+    let base_source = load_source(
+        &resolve_base(&config.policy_base)
+            .map_err(|e| CampaignError::Refused(format!("the policy base: {e}")))?,
+    );
     let gate = run_gate(
         ctx,
         &candidate,
         champion.as_ref(),
-        &base_file,
+        &base_source,
         &request.gate,
         cancel,
     )?;
@@ -408,7 +410,7 @@ fn run_gate(
     ctx: &Context,
     candidate: &Candidate,
     champion: Option<&StoredRelease>,
-    base_file: &Path,
+    base_source: &Path,
     config: &GateConfig,
     cancel: &CancelToken,
 ) -> Result<GateReport, CampaignError> {
@@ -489,7 +491,7 @@ fn run_gate(
             serve::check(
                 ctx,
                 ctx.config().brain_binary.as_deref(),
-                base_file,
+                base_source,
                 &candidate.adapter,
                 &candidate.adapter_digest,
                 &sample,

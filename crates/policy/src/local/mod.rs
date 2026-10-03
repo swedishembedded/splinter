@@ -184,6 +184,24 @@ pub fn resolve_base(specified: &Path) -> Result<PathBuf, PolicyError> {
     })
 }
 
+/// What brain is asked to open for `checkpoint`: a `model.safetensors`
+/// beside a `config.json` is a Hugging Face checkpoint, whose architecture is
+/// read from that config, so it opens as its directory; any other file
+/// (brain's own format, a GGUF) opens as itself.
+pub fn load_source(checkpoint: &Path) -> PathBuf {
+    match checkpoint.parent() {
+        Some(dir)
+            if checkpoint
+                .file_name()
+                .is_some_and(|n| n == "model.safetensors")
+                && dir.join("config.json").is_file() =>
+        {
+            dir.to_path_buf()
+        }
+        _ => checkpoint.to_path_buf(),
+    }
+}
+
 #[async_trait::async_trait]
 impl ModelProvider for LocalQwen {
     fn name(&self) -> &str {
@@ -312,5 +330,27 @@ mod tests {
         std::fs::write(dir.join("model.safetensors"), b"x").unwrap();
         assert_eq!(resolve_base(&dir).unwrap(), dir.join("model.safetensors"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_hugging_face_checkpoint_is_opened_as_its_directory() {
+        let root = std::env::temp_dir().join(format!("splinter-hf-source-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let hf = root.join("hf");
+        let brain_format = root.join("brain");
+        std::fs::create_dir_all(&hf).unwrap();
+        std::fs::create_dir_all(&brain_format).unwrap();
+        // The model's architecture lives in config.json; the bare file does not
+        // carry it, so only the directory loads.
+        std::fs::write(hf.join("model.safetensors"), b"x").unwrap();
+        std::fs::write(hf.join("config.json"), b"{}").unwrap();
+        // A brain-format file declares itself under its own name.
+        std::fs::write(brain_format.join("model.brain.safetensors"), b"x").unwrap();
+        std::fs::write(brain_format.join("config.json"), b"{}").unwrap();
+
+        assert_eq!(load_source(&hf.join("model.safetensors")), hf);
+        let brain_file = brain_format.join("model.brain.safetensors");
+        assert_eq!(load_source(&brain_file), brain_file);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }
