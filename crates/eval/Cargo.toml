@@ -11,7 +11,7 @@ publish.workspace = true
 
 [dependencies]
 splinter-core = { workspace = true }
-sven-sdk = { workspace = true }
+atif = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 serde = { workspace = true }

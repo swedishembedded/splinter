@@ -25,11 +25,11 @@
 //! schema is the shape the model is shown), so sven parses the reply and
 //! sends a malformed one back for correction.
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use splinter_core::experience::Environment;
 use splinter_eval::verifiers::executable::{ExecutableCheck, Expectation, ExpectedStdout};
 use splinter_eval::verifiers::normalise::Normalisation;
-use sven_sdk::schemars::JsonSchema;
 
 /// One reply of the shape [`Reply`] parses, shown to the model beside the
 /// schema: a small model copies an example far more reliably than it reads
@@ -42,19 +42,17 @@ pub(crate) const REPLY_EXAMPLE: &str = r#"{"tasks": [{"instruction": "At what ba
 /// reference.
 pub(crate) const VARIANTS_EXAMPLE: &str = r#"{"tasks": [{"instruction": "Which baud rate is the Zelkor K4 board's console UART set to?", "subject": "Zelkor K4 board", "reference": "115200 baud", "evidence": [{"section": 0}]}]}"#;
 
-/// A generator model's reply.
+/// A generator model's reply: the tasks it proposed, before any is trusted.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[schemars(crate = "sven_sdk::schemars")]
-pub(crate) struct Reply {
+pub struct Reply {
     pub(crate) tasks: Vec<Candidate>,
 }
 
 /// One task as the model wrote it, before anything about it is trusted.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[schemars(crate = "sven_sdk::schemars")]
-pub(crate) struct Candidate {
+pub struct Candidate {
     pub(crate) instruction: String,
     /// What the instruction is about - a product, document, tool,
     /// component or version - as the source names it.
@@ -75,8 +73,7 @@ pub(crate) struct Candidate {
 /// Where in the sections a candidate says its answer comes from.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[schemars(crate = "sven_sdk::schemars")]
-pub(crate) struct Citation {
+pub struct Citation {
     /// The section's position in the list the model was shown.
     pub(crate) section: usize,
     /// Verbatim text of that section; the whole section when absent.
@@ -87,8 +84,7 @@ pub(crate) struct Citation {
 /// A check or test as the model wrote it.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[schemars(crate = "sven_sdk::schemars")]
-pub(crate) struct Check {
+pub struct Check {
     code: String,
     #[serde(default)]
     stdin: Option<String>,

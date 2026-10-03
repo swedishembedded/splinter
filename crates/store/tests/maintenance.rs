@@ -11,6 +11,7 @@
 //! pinned snapshot or a young file still needs.
 #![allow(clippy::unwrap_used)]
 
+use atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -18,7 +19,6 @@ use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 fn experience(n: usize) -> Experience {
     let task = Task::new(

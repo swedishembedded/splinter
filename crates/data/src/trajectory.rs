@@ -27,8 +27,8 @@
 //!   not representable, and the whole trajectory is refused: a record with
 //!   a hole in its context would teach from a state the solver never saw.
 
+use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
-use sven_sdk::atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 
 use crate::render::message;
 

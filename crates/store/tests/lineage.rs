@@ -12,6 +12,7 @@
 //! the run that made it, each once however often it is reported.
 #![allow(clippy::unwrap_used)]
 
+use atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
@@ -22,7 +23,6 @@ use splinter_store::experiences::ExperienceStore;
 use splinter_store::lineage::DatasetLineage;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 fn experience(answer: &str) -> Experience {
     let task = Task::new(

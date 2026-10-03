@@ -53,6 +53,8 @@ futures = "0.3"
 libc = "0.2"
 # Content-defined chunking, so a small edit to a large object re-stores a few chunks.
 fastcdc = "3"
+# The JSON schema of a typed call's reply; the version sven's typed calls use.
+schemars = { version = "1", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

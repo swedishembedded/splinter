@@ -11,20 +11,19 @@ publish.workspace = true
 
 [dependencies]
 splinter-core = { workspace = true }
-splinter-agent = { workspace = true }
 splinter-eval = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
-sven-sdk = { workspace = true }
+schemars = { workspace = true }
+async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 futures = { workspace = true }
 
 [lints]

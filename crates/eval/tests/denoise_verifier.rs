@@ -10,6 +10,7 @@
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
+use atif::{AgentProfile, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -21,7 +22,6 @@ use splinter_eval::denoise::FormalVerifier;
 use splinter_eval::verifiers::formal::ExactMatchVerifier;
 use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_eval::verifiers::{annotation, Verifier};
-use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const REFERENCE: &str = "the quick brown fox";
 

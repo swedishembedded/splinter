@@ -12,6 +12,7 @@
 
 use std::path::PathBuf;
 
+use atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -22,7 +23,6 @@ use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_data::{
     write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, Unchecked, View, ViewError,
 };
-use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 const INSTRUCTION: &str = "Restore the passage: brown quick the fox";
 const ANSWER: &str = "the quick brown fox";

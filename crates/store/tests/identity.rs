@@ -21,6 +21,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use atif::{AgentProfile, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -31,7 +32,6 @@ use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const STAMP: &str = "2026-09-30T12:00:00.000Z";
 const TEXT: &str = "The quick brown fox jumps over the lazy dog.";

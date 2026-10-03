@@ -15,7 +15,7 @@ splinter-store = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
-sven-sdk = { workspace = true }
+atif = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

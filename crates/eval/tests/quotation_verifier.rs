@@ -12,6 +12,7 @@
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
+use atif::{AgentProfile, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -22,7 +23,6 @@ use splinter_eval::verifiers::quotation::{
     quotations, words, EvidenceText, QuotationPolicy, QuotationVerifier, TextIndex,
 };
 use splinter_eval::verifiers::{annotation, Verifier, VerifyError};
-use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const LETTER: &str = "Dear Peter,--I advise you to fix a habit of study every morning before \
     you do anything else.\nNever let a day pass without reading something of history or ethics, \

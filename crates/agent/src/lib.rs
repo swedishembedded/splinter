@@ -31,6 +31,7 @@ mod budget;
 pub mod converse;
 pub mod critic;
 pub mod judge;
+pub mod proposer;
 pub mod repair;
 pub mod replay;
 pub mod run_code;

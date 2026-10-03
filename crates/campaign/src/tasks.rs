@@ -21,6 +21,9 @@
 //! ([`splinter_knowledge::tasks::dedup::contradictions`]): two sources may
 //! well disagree, and a model trained on both answers learns neither.
 
+use std::sync::Arc;
+
+use splinter_agent::proposer::SvenProposer;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
@@ -304,10 +307,10 @@ fn model_generator(
         deadline: remaining(request.deadline, DEFAULT_REQUEST_DEADLINE),
         ..GenerationPolicy::default()
     };
-    Ok(ModelTaskGenerator::new(model, ctx.sources())
+    let proposer = SvenProposer::new(model).with_cancel(request.cancel.clone());
+    Ok(ModelTaskGenerator::new(Arc::new(proposer), ctx.sources())
         .with_runtimes(runtimes)
-        .with_policy(policy)
-        .with_cancel(request.cancel.clone()))
+        .with_policy(policy))
 }
 
 /// One text part, a window of sections at a time.

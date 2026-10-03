@@ -21,12 +21,12 @@
 
 use std::collections::BTreeMap;
 
+use atif::StepOrigin;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_expdb::ingest::Collector;
 use splinter_expdb::model::{Action, PolicyRef, ReproLevel, State, TaskDefinition, TaskInstance};
 use splinter_expdb::{ContentId, RecordId};
-use sven_sdk::atif::StepOrigin;
 
 use crate::error::StoreError;
 use crate::workspace::Workspace;

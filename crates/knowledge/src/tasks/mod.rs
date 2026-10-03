@@ -59,7 +59,8 @@ pub mod dedup;
 pub mod variants;
 
 mod admit;
-mod reply;
+pub mod propose;
+pub mod reply;
 
 use std::collections::BTreeMap;
 use std::time::Duration;

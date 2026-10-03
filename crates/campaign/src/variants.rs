@@ -26,6 +26,9 @@
 //! ([`refuse_variants`]), and the gate leaves out any variant whose wording
 //! the candidate trained on ([`crate::release::leakage`]).
 
+use std::sync::Arc;
+
+use splinter_agent::proposer::SvenProposer;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
@@ -91,9 +94,9 @@ pub fn generate_variants(
         deadline: remaining(request.deadline, DEFAULT_REQUEST_DEADLINE),
         ..GenerationPolicy::default()
     };
-    let generator = ModelTaskGenerator::new(ctx.model(request.generator)?, ctx.sources())
-        .with_policy(policy)
-        .with_cancel(request.cancel.clone());
+    let proposer =
+        SvenProposer::new(ctx.model(request.generator)?).with_cancel(request.cancel.clone());
+    let generator = ModelTaskGenerator::new(Arc::new(proposer), ctx.sources()).with_policy(policy);
     let mut out = VariantsGenerated::default();
     let mut members: Vec<TaskEntry> = Vec::new();
     for entry in &originals.members {

@@ -9,8 +9,8 @@
 //! The generator: a source part's sections shown to a generator model,
 //! closed-book, and its proposals admitted by code.
 //!
-//! The model is asked through a typed sven call ([`Engine::call_with`])
-//! with no tools, bounded by a deadline and an optional output-token
+//! The model is asked through a [`TaskProposer`] - a typed call with no
+//! tools in the adapter that runs it - bounded by a deadline and an optional output-token
 //! budget that cover every attempt: the kind's brief and rules are the
 //! call's task, followed by [`Reply`]'s schema as the reply's shape
 //! (shown in the prompt, since a local model cannot be constrained to
@@ -24,8 +24,9 @@
 //! which product or document they belong to, and "what baud rate does the
 //! console run at?" has a different answer for every board.
 
+use std::sync::Arc;
+
 use serde::Serialize;
-use splinter_agent::solve::{Model, SolveOptions};
 use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceError;
 use splinter_core::source::{Origin, PartRef, SourceId};
@@ -33,12 +34,12 @@ use splinter_eval::verifiers::mutation::MutationPolicy;
 use splinter_sandbox::RuntimeEnvironment;
 use splinter_store::error::StoreError;
 use splinter_store::sources::SourceStore;
-use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
 use super::admit::{Admission, Proposal, Refusal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
+use super::propose::{ProposalRequest, ProposeError, Proposed, TaskProposer};
 use super::reply::{Reply, REPLY_EXAMPLE};
-use super::{GenerationPolicy, GenerationReport, Rejection, GENERATOR};
+use super::{GenerationPolicy, GenerationReport, GENERATOR};
 use crate::sections::{sections, title, Section};
 
 /// The name of the typed call a generator model is sent.
@@ -278,7 +279,7 @@ pub enum GenerateError {
     Task(#[from] ExperienceError),
     /// The generator model could not be run.
     #[error("the generator model could not run: {0}")]
-    Model(#[from] CallError),
+    Model(#[from] ProposeError),
     /// A sandbox or verifier failed while admitting a task.
     #[error("admitting a task failed: {0}")]
     Admission(#[from] splinter_eval::verifiers::VerifyError),
@@ -291,12 +292,11 @@ pub enum GenerateError {
 /// documentation.
 #[derive(Clone)]
 pub struct ModelTaskGenerator {
-    pub(super) model: Model,
+    pub(super) model: Arc<dyn TaskProposer>,
     pub(super) store: SourceStore,
     runtimes: Vec<RuntimeEnvironment>,
     pub(super) policy: GenerationPolicy,
     pub(super) mutation: MutationPolicy,
-    cancel: Option<CancelToken>,
 }
 
 impl ModelTaskGenerator {
@@ -304,14 +304,13 @@ impl ModelTaskGenerator {
     /// experience's provenance records for that model), resolving evidence
     /// through `store`, with the default policies and no runtime.
     #[must_use]
-    pub fn new(model: Model, store: SourceStore) -> Self {
+    pub fn new(model: Arc<dyn TaskProposer>, store: SourceStore) -> Self {
         Self {
             model,
             store,
             runtimes: Vec::new(),
             policy: GenerationPolicy::default(),
             mutation: MutationPolicy::default(),
-            cancel: None,
         }
     }
 
@@ -337,19 +336,10 @@ impl ModelTaskGenerator {
         self
     }
 
-    /// Stops the request in progress, and every later one, once `cancel`
-    /// is cancelled: a stopped request has no reply, rejected as
-    /// [`super::Rejection::NoReply`].
-    #[must_use]
-    pub fn with_cancel(mut self, cancel: CancelToken) -> Self {
-        self.cancel = Some(cancel);
-        self
-    }
-
     /// The name admitted tasks record as their generator.
     #[must_use]
     pub fn generator_name(&self) -> String {
-        format!("{GENERATOR}:{}", self.model.identity)
+        format!("{GENERATOR}:{}", self.model.identity())
     }
 
     /// One batch: a request per entry of `kinds`, each for tasks of that
@@ -362,7 +352,7 @@ impl ModelTaskGenerator {
         kinds: &[&TaskKind],
     ) -> Result<GenerationReport, GenerateError> {
         self.policy.validate()?;
-        if self.model.identity.trim().is_empty() {
+        if self.model.identity().trim().is_empty() {
             return Err(GenerateError::Parameter {
                 name: "identity",
                 reason: "the generator model needs an identity".into(),
@@ -420,47 +410,32 @@ impl ModelTaskGenerator {
     }
 
     /// The model's reply to `brief` over `shown`, asked as the typed call
-    /// `method`: the tasks it proposed, or why there are none - no reply before a bound stopped the call,
-    /// or a reply still malformed after correction.
+    /// `method`: the tasks it proposed, or why there are none - no reply
+    /// before a bound stopped the call, or a reply still malformed after
+    /// correction.
     pub(super) async fn request<I: Serialize + ?Sized>(
         &self,
         method: &str,
         brief: &str,
         shown: &I,
     ) -> Result<Result<Reply, Refusal>, GenerateError> {
-        let mut options = SolveOptions::new(self.policy.deadline);
-        options.max_output_tokens = self.policy.max_output_tokens;
-        options.cancel = self.cancel.clone();
-        options.stream_idle = self.model.stream_idle;
-        let method = Method::<Reply>::new(method)
-            .task(brief)
-            .role(ROLE)
-            .max_repairs(self.policy.repairs);
-        let engine = Engine::builder()
-            .config(options.engine_config())
-            .model_provider(options.provider(self.model.provider.clone()))
-            .toolset(Toolset::none())
-            .build()?;
-        match engine
-            .call_with(&method, shown, options.run_options())
-            .await
-        {
-            Ok(reply) => Ok(Ok(reply)),
-            Err(CallError::Invalid {
-                attempts,
-                detail,
-                last,
-                ..
-            }) => Ok(Err((
-                Rejection::Malformed,
-                format!("{detail} (after {attempts} attempt(s)); last reply: {last}"),
-            ))),
-            Err(CallError::Stopped { conclusion }) => Ok(Err((
-                Rejection::NoReply,
-                format!("the call ended without a reply: {conclusion:?}"),
-            ))),
-            Err(e) => Err(e.into()),
-        }
+        let input = serde_json::to_value(shown).unwrap_or_else(|e| {
+            // Integers and strings always serialize.
+            unreachable!("sections serialize: {e}")
+        });
+        let request = ProposalRequest {
+            method,
+            brief,
+            role: ROLE,
+            input,
+            deadline: self.policy.deadline,
+            max_output_tokens: self.policy.max_output_tokens,
+            repairs: self.policy.repairs,
+        };
+        Ok(match self.model.propose(&request).await? {
+            Proposed::Replied(reply) => Ok(reply),
+            Proposed::Declined { rejection, detail } => Err((rejection, detail)),
+        })
     }
 }
 

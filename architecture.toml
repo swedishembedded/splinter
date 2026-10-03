@@ -28,7 +28,8 @@
 order = [
     "foundation",  # depends on no other Splinter crate
     "storage",     # state on disk, and the processes tasks run in
-    "domain",      # what is measured, curated and learned from
+    "measurement", # what is measured, and the training data projected from experience
+    "domain",      # what is learned from, built on the measurements
     "adapters",    # the only code that talks to sven or to brain
     "application", # composes the domain and the adapters
     "workflow",    # the learning pipelines
@@ -42,11 +43,11 @@ splinter-core = "foundation"
 splinter-expdb = "foundation"
 splinter-store = "storage"
 splinter-sandbox = "storage"
-splinter-eval = "domain"
+splinter-eval = "measurement"
 splinter-model = "adapters"
 splinter-agent = "adapters"
-splinter-data = "domain"
-splinter-knowledge = "application"
+splinter-data = "measurement"
+splinter-knowledge = "domain"
 splinter-campaign = "workflow"
 splinter = "surface"
 splinter-tool-syntax = "sample"
@@ -134,3 +135,38 @@ why = "A view projects experience into records; which formats a trainer reads, a
 from = "splinter-data"
 to = "splinter-model"
 why = "The model adapter depends on the data crate for the formats it trains, never the reverse."
+
+[[forbidden]]
+from = "splinter-knowledge"
+to = "sven-sdk"
+why = "Intake and task admission ask a model through a proposer they are handed; running it on an agent runtime is the agent adapter's."
+
+[[forbidden]]
+from = "splinter-knowledge"
+to = "splinter-agent"
+why = "The agent adapter depends on knowledge for the shape of a proposal, never the reverse."
+
+[[forbidden]]
+from = "splinter-knowledge"
+to = "brain"
+why = "Intake and task admission have no model computation in them."
+
+[[forbidden]]
+from = "splinter-store"
+to = "sven-sdk"
+why = "Persistence stores sven's trajectory format (atif) and knows nothing of an agent runtime."
+
+[[forbidden]]
+from = "splinter-sandbox"
+to = "sven-sdk"
+why = "A sandbox runs a solver's code; it knows nothing of an agent runtime."
+
+[[forbidden]]
+from = "splinter-eval"
+to = "sven-sdk"
+why = "Measurement reads a trajectory (atif) and knows nothing of an agent runtime."
+
+[[forbidden]]
+from = "splinter-data"
+to = "sven-sdk"
+why = "Training data is projected from a trajectory (atif) and knows nothing of an agent runtime."

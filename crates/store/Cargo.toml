@@ -12,7 +12,7 @@ publish.workspace = true
 [dependencies]
 splinter-core = { workspace = true }
 splinter-expdb = { workspace = true }
-sven-sdk = { workspace = true }
+atif = { workspace = true }
 
 blake3 = { workspace = true }
 zstd = { workspace = true }

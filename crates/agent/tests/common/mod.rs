@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
+use splinter_agent::proposer::SvenProposer;
 use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
@@ -121,8 +122,11 @@ pub fn generator(
     store: SourceStore,
     runtimes: Vec<RuntimeEnvironment>,
 ) -> ModelTaskGenerator {
-    ModelTaskGenerator::new(Model::new(model, "scripted/generator-1"), store)
-        .with_runtimes(runtimes)
+    ModelTaskGenerator::new(
+        Arc::new(SvenProposer::new(Model::new(model, "scripted/generator-1"))),
+        store,
+    )
+    .with_runtimes(runtimes)
 }
 
 /// One generated task as the model writes it.

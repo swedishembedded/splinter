@@ -13,6 +13,7 @@ publish.workspace = true
 splinter-core = { workspace = true }
 sven-sdk = { workspace = true }
 splinter-eval = { workspace = true }
+splinter-knowledge = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 

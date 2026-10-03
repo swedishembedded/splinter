@@ -17,6 +17,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use atif::{AgentProfile, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{
     Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
@@ -32,7 +33,6 @@ use splinter_store::decision::reward;
 use splinter_store::experiences::{ExperienceSet, ExperienceStore, StoreError};
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use sven_sdk::atif::{AgentProfile, Trajectory};
 
 /// A fresh state root per test, removed when dropped.
 struct Scratch(PathBuf);

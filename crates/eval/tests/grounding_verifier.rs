@@ -20,6 +20,7 @@
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
+use atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -27,7 +28,6 @@ use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_eval::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
 use splinter_eval::verifiers::quotation::EvidenceText;
 use splinter_eval::verifiers::{annotation, Verifier, VerifyError};
-use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 const LETTER: &str = "Dear Peter,--I received your letter of the tenth and the three books you \
     sent from Paris. I read Homer in 1760 at Williamsburg under Doctor Small, and I commend the \

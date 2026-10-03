@@ -26,11 +26,11 @@
 
 use std::collections::HashSet;
 
+use atif::{MessageBody, StepOrigin};
 use serde_json::json;
 use splinter_core::annotation::{Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Task};
-use sven_sdk::atif::{MessageBody, StepOrigin};
 
 use super::quotation::{quotations, words, EvidenceText, TextIndex};
 use super::{Finding, Verifier, VerifyError};

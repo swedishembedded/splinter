@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use atif::{AgentProfile, Trajectory};
 use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
@@ -20,7 +21,6 @@ use splinter_eval::verifiers::{annotation, Verifier};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };
-use sven_sdk::atif::{AgentProfile, Trajectory};
 
 /// A scratch directory removed when dropped.
 pub struct Scratch(pub PathBuf);

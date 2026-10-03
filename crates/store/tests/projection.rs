@@ -16,6 +16,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
 use splinter_core::annotation::{
     Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
@@ -31,7 +32,6 @@ use splinter_expdb::{Config, Database};
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
-use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 struct Scratch(PathBuf);
 

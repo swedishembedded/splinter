@@ -150,7 +150,7 @@ fn a_preference_candidate_carries_the_tool_calls_of_its_final_turn() {
     let sum = task("arithmetic", "What is two plus two?", Vec::new());
     // The final turn answers and calls a tool in the same step.
     let mut last = call(2, "call-1", "run_code", json!({"code": "print(2+2)"}), "4");
-    last.message = sven_sdk::atif::MessageBody::Text("4".into());
+    last.message = atif::MessageBody::Text("4".into());
     let pass = experience(
         &sum,
         trajectory(vec![user(1, &sum.instruction), last]),

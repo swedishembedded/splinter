@@ -9,6 +9,10 @@
 
 use std::path::PathBuf;
 
+use atif::{
+    AgentProfile, ObservationEntry, StepObservation, StepOrigin, ToolInvocation, TraceStep,
+    Trajectory,
+};
 use serde_json::json;
 use splinter_core::annotation::{
     Annotation, AnnotationBody, Label, Outcome, Producer, RelationKind, Strength,
@@ -19,10 +23,6 @@ use splinter_core::experience::{
     Environment, Experience, ExperienceId, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_core::prompt::SYSTEM_PROMPT;
-use sven_sdk::atif::{
-    AgentProfile, ObservationEntry, StepObservation, StepOrigin, ToolInvocation, TraceStep,
-    Trajectory,
-};
 
 /// Text that only the teacher ever saw; no record may contain it unless a
 /// strip policy explicitly keeps it.
