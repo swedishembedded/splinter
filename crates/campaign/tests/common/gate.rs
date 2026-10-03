@@ -144,6 +144,7 @@ pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
                 ],
             },
             metadata: RecordMetadata {
+                group: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
                 sources: Vec::new(),
@@ -190,6 +191,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
                 rejected: message("assistant", "I do not know.".into(), true),
             },
             metadata: RecordMetadata {
+                group: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
                 sources: Vec::new(),

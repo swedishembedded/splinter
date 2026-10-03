@@ -40,7 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::solve::{solve, Model, SolveOptions};
-use splinter_lab::holdout::holdout_split;
+use splinter_lab::holdout::holdout_split_records;
 use splinter_lab::paired::PairedOutcome;
 use splinter_lab::verifiers::Strongest;
 use splinter_policy::local::GREEDY_SAMPLING;
@@ -148,8 +148,11 @@ pub(crate) fn split_records(
                 .map(str::to_string),
         );
     }
-    Ok(match holdout_split(&records) {
-        Some((train, held_out)) => (train.to_vec(), held_out.to_vec()),
+    Ok(match holdout_split_records(&records) {
+        Some((train, held_out)) => (
+            train.into_iter().cloned().collect(),
+            held_out.into_iter().cloned().collect(),
+        ),
         None => (records, Vec::new()),
     })
 }

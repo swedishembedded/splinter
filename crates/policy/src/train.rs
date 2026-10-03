@@ -22,7 +22,7 @@
 //!   held-out pairs, how much more the tuned adapter prefers each chosen
 //!   answer over its rejected one than the reference does.
 //!
-//! In both, Splinter decides which records are held out ([`holdout_split`])
+//! In both, Splinter decides which records are held out ([`holdout_split_records`])
 //! and writes the two halves as separate files, a named adapter is
 //! continued instead of a fresh one started, and brain writes the adapter
 //! and its training record into the attempt directory. What to do with the
@@ -30,7 +30,7 @@
 
 use std::path::{Path, PathBuf};
 
-use splinter_lab::holdout::holdout_split;
+use splinter_lab::holdout::holdout_split_records;
 
 use crate::error::PolicyError;
 
@@ -514,13 +514,14 @@ fn split_dataset(dataset: &Path, dir: &Path) -> Result<(PathBuf, PathBuf), Polic
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect();
-    let (train, held_out) = holdout_split(&records).ok_or_else(|| PolicyError::TooFewRecords {
-        path: dataset.to_path_buf(),
-        records: records.len(),
-    })?;
-    let write = |name: &str, lines: &[&str]| -> Result<PathBuf, PolicyError> {
+    let (train, held_out) =
+        holdout_split_records(&records).ok_or_else(|| PolicyError::TooFewRecords {
+            path: dataset.to_path_buf(),
+            records: records.len(),
+        })?;
+    let write = |name: &str, lines: &[&&str]| -> Result<PathBuf, PolicyError> {
         let path = dir.join(name);
-        let mut body = lines.join("\n");
+        let mut body = lines.iter().map(|l| **l).collect::<Vec<_>>().join("\n");
         body.push('\n');
         std::fs::write(&path, body).map_err(|source| PolicyError::Io {
             path: path.clone(),
@@ -528,7 +529,7 @@ fn split_dataset(dataset: &Path, dir: &Path) -> Result<(PathBuf, PathBuf), Polic
         })?;
         Ok(path)
     };
-    Ok((write(TRAIN_FILE, train)?, write(HELD_OUT_FILE, held_out)?))
+    Ok((write(TRAIN_FILE, &train)?, write(HELD_OUT_FILE, &held_out)?))
 }
 
 #[cfg(test)]

@@ -54,6 +54,7 @@ pub mod error;
 pub mod eval;
 pub mod experiences;
 pub mod front_door;
+mod grouping;
 mod ids;
 pub mod judge;
 pub mod learn;

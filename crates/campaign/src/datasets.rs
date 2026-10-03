@@ -28,6 +28,7 @@ use splinter_views::{
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};
+use crate::grouping::assign_groups;
 use crate::ids;
 use crate::runs::to_json;
 use crate::variants::refuse_variants;
@@ -277,7 +278,7 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, CampaignErr
     let strength = request.min_strength.unwrap_or(DEFAULT_MIN_STRENGTH);
     let strip = request.strip.clone().unwrap_or_default();
     let source_store = ctx.sources();
-    let projection = match view {
+    let mut projection = match view {
         ViewName::SftFinal => SftFinal::new(strength).with_strip(strip).project(&corpus),
         ViewName::SftStep => SftStep::new(strength).with_strip(strip).project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
@@ -297,6 +298,7 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, CampaignErr
         ViewName::Denoise => DenoiseView::new().with_strip(strip).project(&corpus),
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
     }?;
+    assign_groups(ctx, &corpus, &mut projection)?;
     let stored = store_dataset(
         ctx,
         &projection,

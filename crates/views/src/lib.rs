@@ -220,6 +220,12 @@ pub struct RecordMetadata {
     /// reads sources.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<Digest>,
+    /// The group of overlapping source text it was projected from, when
+    /// known: records of one group are held out or trained on together (see
+    /// `splinter_lab::holdout`). Set by whoever has the source text, never
+    /// by a view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     /// The view that projected it.
     pub view: String,
     /// The objective it serves.
@@ -335,6 +341,7 @@ impl Projection {
                 experiences: provenance.experiences,
                 task: provenance.task,
                 sources: provenance.sources,
+                group: None,
                 view: self.view.clone(),
                 objective: self.objective,
             },
