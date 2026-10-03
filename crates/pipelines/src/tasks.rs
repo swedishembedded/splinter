@@ -60,6 +60,14 @@ pub const SECTIONS_PER_REQUEST: usize = 3;
 /// it reaches.
 pub const MAX_WINDOWS_PER_PART: usize = 4;
 
+/// How many proposals of a kind are refused before its admission rate is
+/// judged.
+pub const MIN_PROPOSALS_BEFORE_GIVING_UP: usize = 24;
+
+/// The share of a kind's proposals that must be admitted for it to be asked
+/// for again once [`MIN_PROPOSALS_BEFORE_GIVING_UP`] have been made.
+pub const MIN_ADMISSION_RATE: f64 = 0.1;
+
 /// The seed denoise tasks are generated with, so the same part always
 /// yields the same task.
 pub const DENOISE_SEED: u64 = 0;
@@ -162,6 +170,9 @@ pub struct TasksGenerated {
     pub sections: usize,
     /// Why generation stopped before every part was covered, if it did.
     pub stopped: Option<String>,
+    /// The kinds generation gave up on and why: asked for until their
+    /// proposals were refused too often to be worth another request.
+    pub dropped: BTreeMap<String, String>,
 }
 
 /// Generates tasks of `request.kinds` from `request.sources` and stores
@@ -276,6 +287,7 @@ pub fn generate(
         rejections: batch.rejections,
         sections,
         stopped,
+        dropped: batch.dropped,
     })
 }
 
@@ -381,8 +393,12 @@ fn run_windows(
             batch.expired = true;
             return Ok(());
         }
+        let active = batch.still_worth_asking(kinds);
+        if active.is_empty() {
+            return Ok(());
+        }
         let shown = text.clone().select(window)?;
-        let report = match ctx.block_on(generator.generate(&shown, kinds)) {
+        let report = match ctx.block_on(generator.generate(&shown, &active)) {
             Ok(report) => report,
             Err(GenerateError::NoSections) => return Ok(()),
             Err(e) => return Err(e.into()),
@@ -448,9 +464,40 @@ struct Batch {
     deadline: Option<Instant>,
     /// Whether the deadline passed with windows still to cover.
     expired: bool,
+    /// The kinds given up on, and why.
+    dropped: BTreeMap<String, String>,
 }
 
 impl Batch {
+    /// `kinds` without those the sources have shown they cannot satisfy: a
+    /// kind with at least [`MIN_PROPOSALS_BEFORE_GIVING_UP`] proposals of which
+    /// fewer than [`MIN_ADMISSION_RATE`] were admitted is dropped, and why is
+    /// recorded. Questions about letters, for one, rarely name a subject, and
+    /// asking a kind that needs one for every window spends the budget on
+    /// proposals that are all refused.
+    fn still_worth_asking<'k>(&mut self, kinds: &[&'k TaskKind]) -> Vec<&'k TaskKind> {
+        let mut active = Vec::with_capacity(kinds.len());
+        for &kind in kinds {
+            if self.dropped.contains_key(&kind.name) {
+                continue;
+            }
+            let tally = self.per_kind.get(&kind.name);
+            let (admitted, rejected) = tally.map_or((0, 0), |t| (t.admitted, t.rejected));
+            let proposed = admitted + rejected;
+            if proposed >= MIN_PROPOSALS_BEFORE_GIVING_UP
+                && (admitted as f64) < MIN_ADMISSION_RATE * proposed as f64
+            {
+                self.dropped.insert(
+                    kind.name.clone(),
+                    format!("admitted {admitted} of {proposed} proposals, too few to keep asking"),
+                );
+            } else {
+                active.push(kind);
+            }
+        }
+        active
+    }
+
     /// Stores `task` and adds it to the set, once.
     fn admit(
         &mut self,

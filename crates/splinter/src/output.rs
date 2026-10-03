@@ -225,6 +225,9 @@ impl Report for TasksGenerated {
             let detail: String = r.detail.chars().take(REJECTION_DETAIL_CHARS).collect();
             let _ = writeln!(out, "    {} {}: {}", r.kind, r.reason, detail.trim());
         }
+        for (kind, why) in &self.dropped {
+            let _ = writeln!(out, "  gave up on {kind}: {why}");
+        }
         if let Some(why) = &self.stopped {
             let _ = writeln!(out, "  stopped: {why}");
         }

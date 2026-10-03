@@ -157,3 +157,45 @@ fn parts_are_visited_in_a_stable_order_that_does_not_follow_their_names() {
     sorted.sort_unstable();
     assert_eq!(sorted, (0..8).collect::<Vec<_>>(), "every part is visited");
 }
+
+/// Three proposals a request, none of which names a subject, so each is
+/// refused: the way a question about a letter fails a kind that asks for one.
+fn unadmittable() -> Scripted {
+    Scripted::new(|prompt| {
+        if !prompt.contains("You write training tasks") {
+            return String::new();
+        }
+        let task = |n: u32| {
+            json!({
+                "instruction": format!("What is stated in the passage, question {n}?"),
+                "reference": "it is stated",
+                "evidence": [{ "section": 0, "quote": "is stated here" }]
+            })
+        };
+        json!({ "tasks": [task(1), task(2), task(3)] }).to_string()
+    })
+}
+
+#[test]
+fn a_kind_the_sources_cannot_satisfy_is_given_up_on_instead_of_asked_for_on_every_window() {
+    let policy = unadmittable();
+    let (scratch, ctx) = scratch_context("coverage-give-up", policy.clone(), false);
+    let files: Vec<(String, String)> = (0..12)
+        .map(|n| (format!("p{n}.md"), part(&format!("P{n}"), 20)))
+        .collect();
+    let named: Vec<(&str, String)> = files.iter().map(|(n, t)| (n.as_str(), t.clone())).collect();
+    let generated = run(&scratch, &ctx, &named, None);
+
+    let asked = requests(&policy).len();
+    assert!(
+        asked * 3 < 12 * MAX_WINDOWS_PER_PART * 3 / 2,
+        "{asked} requests: a kind that was refused every time kept being asked for"
+    );
+    assert!(
+        asked >= 8,
+        "it was asked for enough times to be sure: {asked}"
+    );
+    let why = generated.dropped.get("recall").expect("it says it gave up");
+    assert!(why.contains("admitted 0"), "{why}");
+    assert_eq!(generated.tasks, 0);
+}
