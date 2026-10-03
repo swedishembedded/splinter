@@ -25,7 +25,7 @@ use std::sync::Arc;
 use sven_sdk::model::ModelProvider;
 use sven_sdk::{RunConclusion, Usage};
 
-use crate::solve::{engine, Solution, SolveError, SolveOptions, SOLVER_MODE};
+use crate::solve::{engine, is_empty_reply, Solution, SolveError, SolveOptions, SOLVER_MODE};
 use splinter_core::experience::Task;
 use splinter_sandbox::ResolvedEnvironment;
 
@@ -79,7 +79,16 @@ pub async fn converse_prompted(
     let mut usage = Usage::default();
     let mut conclusion = RunConclusion::Success;
     for _ in 0..turns.max(1) {
-        let outcome = agent.send_with(&said, options.run_options()).await?;
+        let outcome = match agent.send_with(&said, options.run_options()).await {
+            Ok(outcome) => outcome,
+            // A reply of nothing ends the dialogue unanswered, as a stopped
+            // run does: half a dialogue teaches nothing.
+            Err(e) if is_empty_reply(&e) => {
+                conclusion = RunConclusion::AgentError;
+                break;
+            }
+            Err(e) => return Err(e.into()),
+        };
         usage = add(usage, &outcome.usage);
         conclusion = outcome.conclusion;
         if conclusion != RunConclusion::Success {

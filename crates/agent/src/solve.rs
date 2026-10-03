@@ -277,7 +277,18 @@ pub async fn solve_prompted(
     }
     let engine = engine(environment, model, options.engine_config())?;
     let mut agent = engine.agent(SOLVER_MODE);
-    let outcome = agent.send_with(prompt, options.run_options()).await?;
+    let outcome = match agent.send_with(prompt, options.run_options()).await {
+        Ok(outcome) => outcome,
+        Err(e) if is_empty_reply(&e) => {
+            return Ok(Solution {
+                trajectory: agent.trajectory(),
+                final_output: None,
+                conclusion: RunConclusion::AgentError,
+                usage: Usage::default(),
+            })
+        }
+        Err(e) => return Err(e.into()),
+    };
     let final_output = (outcome.conclusion == RunConclusion::Success).then_some(outcome.reply);
     Ok(Solution {
         trajectory: agent.trajectory(),
@@ -285,6 +296,17 @@ pub async fn solve_prompted(
         conclusion: outcome.conclusion,
         usage: outcome.usage,
     })
+}
+
+/// What sven reports when a model's replies were all empty.
+const EMPTY_REPLY: &str = "model returned no content and no tool calls";
+
+/// Whether `error` is a model that replied with nothing, which a reasoning
+/// model does when it spends its whole reply budget thinking. That is a task
+/// it did not answer, not a failure of the run: a measurement over many tasks
+/// goes on, where an outage would stop it.
+pub(crate) fn is_empty_reply(error: &CallError) -> bool {
+    matches!(error, CallError::Infrastructure(inner) if inner.to_string().contains(EMPTY_REPLY))
 }
 
 /// The engine for `environment` under `config`: no built-in tools, and

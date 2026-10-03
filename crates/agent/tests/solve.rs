@@ -380,3 +380,17 @@ async fn every_request_runs_under_splinters_system_prompt() {
         assert_eq!(request.system_dynamic_suffix, None);
     }
 }
+
+#[tokio::test]
+async fn a_model_that_replies_with_nothing_gave_no_answer_and_that_is_not_an_error() {
+    // A reasoning model can spend its whole reply budget thinking and say
+    // nothing: that is an unanswered task, so a measurement over many tasks
+    // goes on, where an infrastructure failure would stop it.
+    let model = Scripted::new(|_| vec![ResponseEvent::Done]);
+    let task = task(Environment::closed_book(), "What is six times seven?");
+    let solution = solve(&task, &ResolvedEnvironment::ClosedBook, model, options())
+        .await
+        .unwrap();
+    assert_eq!(solution.final_output, None);
+    assert_eq!(solution.conclusion, RunConclusion::AgentError);
+}
