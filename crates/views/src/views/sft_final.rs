@@ -10,10 +10,13 @@
 //! the student's turn (see [`Strip`]), not supervised, and the final output
 //! as the assistant turn, the only supervised one. The trajectory's
 //! intermediate steps stay out of the record. One candidate per experience.
+//! A dialogue (a trajectory of several user steps) is the exception: its
+//! record is the whole conversation with every reply supervised.
 
 use splinter_record::annotation::Strength;
 
 use crate::render::{message, student_turn};
+use crate::trajectory::dialogue;
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -54,10 +57,12 @@ impl SftFinal {
             .as_deref()
             .ok_or(Exclusion::NoFinalOutput)?;
         let turn = student_turn(entry, &self.strip)?;
-        let messages = vec![
-            message("user", &turn, false),
-            message("assistant", answer, true),
-        ];
+        let messages = dialogue(&entry.experience.trajectory, &turn).unwrap_or_else(|| {
+            vec![
+                message("user", &turn, false),
+                message("assistant", answer, true),
+            ]
+        });
         Ok((
             RecordBody::Chat { messages },
             Provenance::of(vec![entry.id.clone()]),

@@ -19,6 +19,10 @@
 //! * An agent step with tool calls is an action; so is the last agent step
 //!   when it answers without one (the final answer). An agent step with
 //!   neither text nor calls adds nothing and is skipped.
+//! * A dialogue - a trajectory with a second user step and no tool call -
+//!   is the exception: [`dialogue`] renders it whole, the later user steps
+//!   (the other speaker's own words) as user turns and every reply
+//!   supervised.
 //! * Image content and an observation that answers no call of its step are
 //!   not representable, and the whole trajectory is refused: a record with
 //!   a hole in its context would teach from a state the solver never saw.
@@ -120,6 +124,48 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
         }
     }
     Some(Conversation { messages, actions })
+}
+
+/// `trajectory` as one conversation of alternating turns, every reply
+/// supervised, with `student_turn` as the first user turn and the later user
+/// steps as they were said; `None` when it is not a dialogue (fewer than two
+/// user steps), holds a tool call, an image or a step copied from another
+/// trajectory, or does not alternate user then agent.
+pub(crate) fn dialogue(trajectory: &Trajectory, student_turn: &str) -> Option<Vec<WireMessage>> {
+    let mut messages = Vec::new();
+    let mut users = 0usize;
+    for step in &trajectory.steps {
+        match step.source {
+            StepOrigin::System => {}
+            StepOrigin::User => {
+                if messages
+                    .last()
+                    .is_some_and(|m: &WireMessage| m.role == "user")
+                {
+                    return None;
+                }
+                users += 1;
+                let text = if users == 1 {
+                    student_turn.to_string()
+                } else {
+                    text_of(&step.message)?
+                };
+                messages.push(message("user", &text, false));
+            }
+            StepOrigin::Agent => {
+                if !wire_calls(step).is_empty()
+                    || step.observation.is_some()
+                    || step.is_excluded_from_sft()
+                    || messages.last().map(|m| m.role.as_str()) != Some("user")
+                {
+                    return None;
+                }
+                messages.push(message("assistant", &text_of(&step.message)?, true));
+            }
+        }
+    }
+    let ends_on_reply = messages.last().is_some_and(|m| m.role == "assistant");
+    (users >= 2 && ends_on_reply).then_some(messages)
 }
 
 /// The tool calls `step` made, in `generic-messages-v2`'s tool-call form

@@ -22,7 +22,7 @@ use splinter_record::experience::{
 use splinter_views::{
     write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, View, ViewError, WriteOptions,
 };
-use sven_sdk::atif::{AgentProfile, Trajectory};
+use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 const INSTRUCTION: &str = "Restore the passage: brown quick the fox";
 const ANSWER: &str = "the quick brown fox";
@@ -213,4 +213,79 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
     ));
     assert!(!dir.join("empty.jsonl").exists());
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A dialogue of three exchanges: the first user step is what the teacher
+/// was prompted with, the later ones are the other speaker's own words.
+fn dialogue() -> Experience {
+    let task = Task::new(
+        "converse",
+        Vec::new(),
+        Environment {
+            kind: "closed-book".into(),
+            spec: json!({}),
+            snapshot: None,
+        },
+        INSTRUCTION,
+        Vec::new(),
+    )
+    .unwrap();
+    let profile = AgentProfile {
+        name: "t".into(),
+        version: "1".into(),
+        model_name: None,
+        tool_definitions: None,
+        extra: None,
+    };
+    let mut trajectory = Trajectory::new("ATIF-v1.7", profile);
+    let step = |id: u64, origin: StepOrigin, text: &str| TraceStep::new(id, origin, text);
+    trajectory.steps = vec![
+        step(1, StepOrigin::User, &format!("{PASSAGE}\n\n{INSTRUCTION}")),
+        step(2, StepOrigin::Agent, "First reply."),
+        step(3, StepOrigin::User, "And then?"),
+        step(4, StepOrigin::Agent, "Second reply."),
+        step(5, StepOrigin::User, "Why so?"),
+        step(6, StepOrigin::Agent, "Third reply."),
+    ];
+    Experience::new(
+        task,
+        trajectory,
+        Some("First reply.\n\nSecond reply.\n\nThird reply.".into()),
+        Provenance::new("scripted", &FixedClock::new("2026-09-30T00:00:00.000Z")),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_dialogue_is_one_record_supervising_every_reply_and_none_of_the_teachers_context() {
+    let exp = dialogue();
+    let records = project(
+        &SftFinal::new(Strength::Judged),
+        &exp,
+        &[verdict(&exp, Outcome::Pass, Strength::Judged)],
+    );
+    let [record] = &records[..] else {
+        panic!("one record, got {records:?}")
+    };
+    let RecordBody::Chat { messages } = &record.body else {
+        panic!("a chat record, got {record:?}")
+    };
+    let turns: Vec<(&str, &str, bool)> = messages
+        .iter()
+        .map(|m| (m.role.as_str(), m.content.as_str(), m.train))
+        .collect();
+    assert_eq!(
+        turns,
+        [
+            ("system", SYSTEM_PROMPT, false),
+            ("user", INSTRUCTION, false),
+            ("assistant", "First reply.", true),
+            ("user", "And then?", false),
+            ("assistant", "Second reply.", true),
+            ("user", "Why so?", false),
+            ("assistant", "Third reply.", true),
+        ]
+    );
+    let text = serde_json::to_string(record).unwrap();
+    assert!(!text.contains("TEACHER-ONLY"), "{text}");
 }
