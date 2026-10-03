@@ -267,6 +267,12 @@ impl Admission {
                 Err(e) => return refuse((Rejection::Unresolved, e.to_string())),
             }
         }
+        if kind.reference_verbatim && !is_passage_of(&candidate.reference, &texts) {
+            return refuse((
+                Rejection::NotQuoted,
+                "the reference is not a passage of its evidence word for word".into(),
+            ));
+        }
         let privileged = match privileged(context, &candidate, &evidence) {
             Ok(privileged) => privileged,
             Err(refusal) => return refuse(refusal),
@@ -499,6 +505,24 @@ fn evidence(context: &Context<'_>, candidate: &Candidate) -> Result<Vec<Span>, R
         ));
     }
     Ok(spans)
+}
+
+/// Whether `reference` is a run of whole words of one of `texts`, ignoring
+/// case, punctuation and line breaks: it was copied, not reworded.
+fn is_passage_of(reference: &str, texts: &[String]) -> bool {
+    let words = |text: &str| -> Vec<String> {
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect()
+    };
+    let wanted = words(reference);
+    !wanted.is_empty()
+        && texts.iter().any(|text| {
+            words(text)
+                .windows(wanted.len())
+                .any(|run| run == wanted.as_slice())
+        })
 }
 
 /// The candidate's privileged items: its reference, hints, checks and

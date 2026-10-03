@@ -70,7 +70,7 @@ use splinter_record::experience::Task;
 
 pub use generator::{GenerateError, ModelTaskGenerator, SourceIdentity, SourceText};
 pub use kind::{
-    AnswerForm, Catalogue, KindError, Material, SolverEnvironment, TaskKind, VerifierKind,
+    AnswerForm, Catalogue, Focus, KindError, Material, SolverEnvironment, TaskKind, VerifierKind,
 };
 pub use variants::{can_vary, DEFAULT_VARIANTS_PER_TASK};
 
@@ -190,6 +190,9 @@ pub enum Rejection {
     NotSelfContained,
     /// A text reference is not supported by its evidence.
     Ungrounded,
+    /// A kind whose reference is the source author's own words has a
+    /// reference that is not a passage of its evidence word for word.
+    NotQuoted,
     /// A computed reference does not pass its own checks.
     ChecksFailed,
     /// A generated test fails the reference or survives its mutants.

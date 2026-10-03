@@ -24,6 +24,7 @@
 
 #![warn(missing_docs)]
 
+pub mod advice;
 pub mod capture;
 pub mod concepts;
 pub mod denoise;

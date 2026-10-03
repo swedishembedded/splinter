@@ -215,7 +215,7 @@ impl SourceText {
     }
 
     /// The text of the section at `position`.
-    pub(crate) fn section_text(&self, position: usize) -> Option<&str> {
+    pub fn section_text(&self, position: usize) -> Option<&str> {
         self.sections.get(position)?.text(&self.text)
     }
 }

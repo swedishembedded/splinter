@@ -25,11 +25,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_knowledge::advice::advice_sections;
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
 use splinter_knowledge::tasks::dedup::{contradictions, Asked};
 use splinter_knowledge::tasks::{
-    Catalogue, GenerateError, GenerationPolicy, ModelTaskGenerator, Rejection, SourceText,
+    Catalogue, Focus, GenerateError, GenerationPolicy, ModelTaskGenerator, Rejection, SourceText,
     TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_lab::denoise::KIND as DENOISE_KIND;
@@ -299,11 +300,37 @@ fn generate_part(
     kinds: &[TaskKind],
     batch: &mut Batch,
 ) -> Result<(), CampaignError> {
-    let kind_refs: Vec<&TaskKind> = kinds.iter().collect();
-    let positions: Vec<usize> = (0..text.sections().len()).collect();
+    // A kind with a focus is shown only the sections it is about, by
+    // itself; the rest are shown every section together.
+    let (focused, general): (Vec<&TaskKind>, Vec<&TaskKind>) =
+        kinds.iter().partition(|kind| kind.focus.is_some());
+    if !general.is_empty() {
+        let positions: Vec<usize> = (0..text.sections().len()).collect();
+        run_windows(ctx, generator, text, &positions, &general, batch)?;
+    }
+    for kind in focused {
+        let positions = match kind.focus {
+            Some(Focus::Advice) => advice_sections(text),
+            None => continue,
+        };
+        run_windows(ctx, generator, text, &positions, &[kind], batch)?;
+    }
+    Ok(())
+}
+
+/// The sections of `text` at `positions`, a window of
+/// [`SECTIONS_PER_REQUEST`] at a time, put to the generator for `kinds`.
+fn run_windows(
+    ctx: &Context,
+    generator: &ModelTaskGenerator,
+    text: &SourceText,
+    positions: &[usize],
+    kinds: &[&TaskKind],
+    batch: &mut Batch,
+) -> Result<(), CampaignError> {
     for window in positions.chunks(SECTIONS_PER_REQUEST) {
         let shown = text.clone().select(window)?;
-        let report = match ctx.block_on(generator.generate(&shown, &kind_refs)) {
+        let report = match ctx.block_on(generator.generate(&shown, kinds)) {
             Ok(report) => report,
             Err(GenerateError::NoSections) => return Ok(()),
             Err(e) => return Err(e.into()),

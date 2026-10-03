@@ -29,6 +29,7 @@ use splinter_lab::verifiers::executable::ExecutableVerifier;
 use splinter_lab::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifier};
 use splinter_lab::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_lab::verifiers::normalise::Normalisation;
+use splinter_lab::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
 use splinter_lab::verifiers::{verify_and_annotate, Strongest, Verifier};
 use splinter_record::annotation::{AnnotationBody, Outcome, Producer};
 use splinter_record::digest::Digest;
@@ -52,6 +53,19 @@ pub const STATED_PRODUCER: &str = "splinter-lab/reference-stated:lenient";
 /// The stated-reference verifier's version: bumped with its normalisation
 /// or its bound on the answer's length.
 pub const STATED_VERSION: &str = "1";
+
+/// The producer of the quotation verifier's verdicts.
+pub const QUOTATION_PRODUCER: &str = "splinter-lab/quotation";
+
+/// The quotation verifier's version: bumped with its policy or the way it
+/// reads a quotation.
+pub const QUOTATION_VERSION: &str = "1";
+
+/// The fewest words a quoted passage runs to count as a claim to a passage.
+pub const QUOTATION_MIN_WORDS: usize = 8;
+
+/// The share of the reference advice an answer must reproduce.
+pub const QUOTATION_MIN_RECALL: f64 = 0.5;
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -195,6 +209,17 @@ pub(crate) fn verifiers_for(
             VerifierKind::Consistency => verifiers.push(Box::new(AgreementVerifier::new(
                 pool.to_vec(),
                 Normalisation::LENIENT,
+            ))),
+            VerifierKind::Quotation => verifiers.push(Box::new(QuotationVerifier::new(
+                Producer {
+                    name: QUOTATION_PRODUCER.into(),
+                    version: QUOTATION_VERSION.into(),
+                },
+                Box::new(StoredEvidence::new(ctx.sources())),
+                QuotationPolicy {
+                    min_words: QUOTATION_MIN_WORDS,
+                    min_reference_recall: QUOTATION_MIN_RECALL,
+                },
             ))),
             VerifierKind::Judged => {
                 if let Some(judge) = judge {

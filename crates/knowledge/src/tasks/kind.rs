@@ -100,6 +100,19 @@ pub enum VerifierKind {
     Consistency,
     /// A judge model of another identity.
     Judged,
+    /// Every passage the answer quotes is in the task's source text word for
+    /// word, and the answer gives the reference advice.
+    Quotation,
+}
+
+/// Which sections of a source a kind is asked about: a kind that is only
+/// about some of what a source says is shown only those sections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Focus {
+    /// Sections that read as advice: a writer telling a correspondent what
+    /// to do, what to avoid or what to value.
+    Advice,
 }
 
 fn one() -> usize {
@@ -134,6 +147,24 @@ pub struct TaskKind {
     /// Distinct sections the evidence must span; at least one.
     #[serde(default = "one")]
     pub min_sections: usize,
+    /// Which sections of a source the generator is shown for this kind;
+    /// every section when `None`.
+    #[serde(default)]
+    pub focus: Option<Focus>,
+    /// Whether the reference must be a passage of the cited evidence word for
+    /// word: for a kind whose answer is what a source's author wrote, so the
+    /// task cannot teach a paraphrase the model made up.
+    #[serde(default)]
+    pub reference_verbatim: bool,
+    /// Whether the instruction must name its subject; see
+    /// [`TaskKind::names_subject`]. A kind addressed to the author of the
+    /// source (what would you advise) names none.
+    #[serde(default = "yes")]
+    pub subject_required: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// Why a kind is not consistent.
@@ -208,7 +239,7 @@ impl TaskKind {
     /// answer depends on and names no subject.
     #[must_use]
     pub fn names_subject(&self) -> bool {
-        !self.answer.is_computed() && !self.shows_material
+        !self.answer.is_computed() && !self.shows_material && self.subject_required
     }
 
     /// Whether the kind's answer is one exact fact taken from the source -
@@ -240,7 +271,7 @@ impl Catalogue {
         Self::default()
     }
 
-    /// The kinds Splinter ships: recall, explain, predict, construct,
+    /// The kinds Splinter ships: recall, advise, explain, predict, construct,
     /// debug, counterexample, transform, classify, retrieve, multi-turn and
     /// combine.
     #[must_use]
@@ -287,11 +318,16 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
         requires: Vec::new(),
         verifiers: verifiers.to_vec(),
         min_sections: 1,
+        focus: None,
+        reference_verbatim: false,
+        subject_required: true,
     }
 }
 
 fn builtin_kinds() -> Vec<TaskKind> {
-    use VerifierKind::{Consistency, Executable, Formal, Judged, MutationValidated, Stated};
+    use VerifierKind::{
+        Consistency, Executable, Formal, Judged, MutationValidated, Quotation, Stated,
+    };
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
         text(
@@ -300,6 +336,28 @@ fn builtin_kinds() -> Vec<TaskKind> {
              reference is the fact, as short as it can be while complete.",
             &[Stated, Judged],
         ),
+        TaskKind {
+            name: "advise".into(),
+            brief: "Write up to {count} requests for advice, each the message of someone \
+                    describing a concrete predicament in their own words and asking what the \
+                    writer of the sections would advise. The reference is the writer's advice \
+                    itself: a passage of the sections, copied word for word, of at most 85 \
+                    words, that answers the predicament. Cite that same passage as the \
+                    evidence quote. The instruction must stand on its own: do not mention the \
+                    sections, a letter, a date or the person written to, and do not give the \
+                    advice."
+                .into(),
+            answer: AnswerForm::Text,
+            shows_material: false,
+            environment: SolverEnvironment::ClosedBook,
+            runtime: None,
+            requires: Vec::new(),
+            verifiers: vec![Quotation, Judged],
+            min_sections: 1,
+            focus: Some(Focus::Advice),
+            reference_verbatim: true,
+            subject_required: false,
+        },
         text(
             "explain",
             "Write up to {count} requests to explain why or how something the sections \
@@ -321,6 +379,9 @@ fn builtin_kinds() -> Vec<TaskKind> {
             requires: Vec::new(),
             verifiers: vec![Formal],
             min_sections: 1,
+            focus: None,
+            reference_verbatim: false,
+            subject_required: true,
         },
         TaskKind {
             name: "construct".into(),
@@ -336,6 +397,9 @@ fn builtin_kinds() -> Vec<TaskKind> {
             requires: vec![Material::ChecksOrTests],
             verifiers: vec![Executable, MutationValidated],
             min_sections: 1,
+            focus: None,
+            reference_verbatim: false,
+            subject_required: true,
         },
         TaskKind {
             name: "debug".into(),
@@ -352,6 +416,9 @@ fn builtin_kinds() -> Vec<TaskKind> {
             requires: vec![Material::Checks],
             verifiers: vec![Executable],
             min_sections: 1,
+            focus: None,
+            reference_verbatim: false,
+            subject_required: true,
         },
         text(
             "counterexample",
@@ -392,6 +459,9 @@ fn builtin_kinds() -> Vec<TaskKind> {
         ),
         TaskKind {
             min_sections: 2,
+            focus: None,
+            reference_verbatim: false,
+            subject_required: true,
             ..text(
                 "combine",
                 "Write up to {count} questions that can only be answered by combining facts \
