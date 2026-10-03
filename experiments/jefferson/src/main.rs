@@ -249,7 +249,7 @@ fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
         exam: number(args, "--exam", 40)?,
         seed: flag(args, "--seed").map_or(Ok(1), |s| s.parse())?,
     };
-    let (train, exam, rejected) = writer::generate(&options, &out)?;
+    let made = writer::generate(&options, &out)?;
     let mut sft = String::new();
     for scenario in writer::read_scenarios(&out.join("scenarios.jsonl"))?
         .iter()
@@ -259,7 +259,10 @@ fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
         sft.push('\n');
     }
     std::fs::write(out.join("sft-scenarios.jsonl"), sft)?;
-    println!("scenarios: {train} train, {exam} exam; {rejected} questions rejected by the gates");
+    println!(
+        "scenarios: {} train, {} exam; {} candidates were not advice; {} questions rejected by the gates",
+        made.train, made.exam, made.not_advice, made.rejected
+    );
     Ok(())
 }
 

@@ -6,8 +6,8 @@
 // using one model to write questions that code then holds to the source, you
 // can procure our services by sending an email to info@swedishembedded.com.
 
-//! Scenarios: a situation a statesman might put to Jefferson, written from a
-//! passage of one of his letters, answered in his own recorded words.
+//! Scenarios: a predicament put to Jefferson, written from a passage of one of
+//! his letters in which he advises someone, answered in his own recorded words.
 //!
 //! A model of another family (not the one being trained) writes only the
 //! question. The answer is never written by a model: it is the passage, quoted
@@ -18,41 +18,35 @@
 use crate::corpus::{words, Letter};
 use crate::grade::mentions;
 
-/// Words that mark a passage as stating a principle or a judgement rather
-/// than business: the topics the founding argued over.
-const THEMES: &[&str] = &[
-    "liberty",
-    "freedom",
-    "right",
-    "rights",
-    "government",
-    "constitution",
-    "republic",
-    "people",
-    "religion",
-    "conscience",
-    "education",
-    "union",
-    "law",
-    "laws",
-    "tyranny",
-    "power",
-    "consent",
-    "equal",
-    "opinion",
-    "principle",
-    "principles",
-    "happiness",
-    "press",
-    "militia",
-    "executive",
-    "legislature",
-    "judiciary",
-    "slavery",
-    "commerce",
-    "agriculture",
-    "citizens",
-    "property",
+/// Phrases that mark a passage as advice: a writer telling a correspondent what
+/// to do, what to avoid or what to value.
+const ADVICE_CUES: &[&str] = &[
+    "i advise",
+    "my advice",
+    "i recommend",
+    "you should",
+    "i would have you",
+    "i would recommend",
+    "i would suggest",
+    "i would counsel",
+    "i think it best",
+    "i deem it",
+    "my counsel",
+    "be careful",
+    "be sure",
+    "beware",
+    "never",
+    "always",
+    "do not",
+    "i would not",
+    "let me advise",
+    "let me urge",
+    "i urge",
+    "you will do well",
+    "avoid",
+    "take care",
+    "i hope you will",
+    "let it be your",
 ];
 
 /// The fewest and most words a passage may have.
@@ -80,7 +74,7 @@ impl Scenario {
     /// The training answer: his own words, quoted, with their source.
     #[must_use]
     pub fn voice(&self) -> String {
-        format!("In {}, I wrote: \"{}\"", self.source, self.passage)
+        format!("In {}, I advised: \"{}\"", self.source, self.passage)
     }
 }
 
@@ -101,14 +95,14 @@ fn is_prose(paragraph: &str) -> bool {
     digits * 100 / chars < 2 && dashes < 3 && capitals < 3 && !paragraph.contains('[')
 }
 
-/// How much of `paragraph` is about the founding's themes: the share of its
-/// words that name one.
-fn theme_score(paragraph: &str) -> f64 {
-    let w = words(paragraph);
-    if w.is_empty() {
-        return 0.0;
-    }
-    w.iter().filter(|x| THEMES.contains(&x.as_str())).count() as f64 / w.len() as f64
+/// How many of the advice cues `paragraph` contains.
+#[must_use]
+pub fn advice_cues(paragraph: &str) -> usize {
+    let lower = paragraph.to_lowercase();
+    ADVICE_CUES
+        .iter()
+        .filter(|cue| lower.contains(*cue))
+        .count()
 }
 
 /// `paragraph` cut to at most the most words of [`PASSAGE_WORDS`], ending at
@@ -127,30 +121,41 @@ fn cut_to_sentences(paragraph: &str) -> Option<String> {
         .then_some(kept)
 }
 
-/// The passage of `letter` that most states a principle, or `None` when the
-/// letter has none: running prose of the right size on the founding's themes.
+/// The passages of `letter` that read as advice, strongest first: running
+/// prose of the right size, in whole sentences, with at least one advice cue.
 #[must_use]
-pub fn best_passage(letter: &Letter) -> Option<String> {
-    letter
+pub fn advice_passages(letter: &Letter) -> Vec<String> {
+    let mut found: Vec<(usize, String)> = letter
         .body
         .split("\n\n")
         .filter(|p| is_prose(p))
         .filter_map(cut_to_sentences)
-        .map(|p| (theme_score(&p), p))
-        .filter(|(score, _)| *score >= 0.04)
-        .max_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, p)| p)
+        .map(|p| (advice_cues(&p), p))
+        .filter(|(cues, _)| *cues >= 1)
+        .collect();
+    found.sort_by_key(|(cues, _)| std::cmp::Reverse(*cues));
+    found.into_iter().map(|(_, p)| p).collect()
+}
+
+/// What the classifier model is asked: whether the passage is advice.
+#[must_use]
+pub fn classifier_prompt(passage: &str) -> String {
+    format!(
+        "Below is a passage from a letter.\n\n\"{passage}\"\n\n\
+         Is the writer giving the person he writes to concrete advice or counsel: telling \
+         them what to do, what to avoid or what to value? Reply with one word: YES or NO."
+    )
 }
 
 /// What the writer model is asked, given the passage.
 #[must_use]
 pub fn writer_prompt(passage: &str) -> String {
     format!(
-        "Below is a passage from a letter by Thomas Jefferson.\n\n\"{passage}\"\n\n\
-         Write one question that a citizen or a statesman might put to Jefferson about a situation \
-         in which the judgement or principle in this passage would decide the answer. The question \
-         must stand on its own: do not mention the passage, a letter, a date or the person written to. \
-         Reply with the question only, in at most two sentences."
+        "Below is a passage from a letter by Thomas Jefferson in which he advises someone.\n\n\"{passage}\"\n\n\
+         Write the message that person might have sent to ask for that advice: two to four sentences \
+         describing a concrete predicament in their own words, ending by asking what Jefferson would \
+         advise. It must stand on its own: do not mention the passage, a letter, a date or the person \
+         written to, and do not give the advice. Reply with the message only."
     )
 }
 
@@ -179,10 +184,19 @@ pub fn admit(
 ) -> Result<String, Rejection> {
     let question = raw.trim().trim_matches('"').trim().to_string();
     let count = question.split_whitespace().count();
-    if !(8..=70).contains(&count) || !question.ends_with('?') || question.contains('\n') {
+    let lower = question.to_lowercase();
+    let asks = [
+        "advise",
+        "advice",
+        "counsel",
+        "what should",
+        "what would you",
+    ]
+    .iter()
+    .any(|w| lower.contains(w));
+    if !(12..=120).contains(&count) || !question.ends_with('?') || !asks {
         return Err(Rejection::Shape);
     }
-    let lower = question.to_lowercase();
     if mentions(&question, recipient_surname)
         || mentions(&question, &year.to_string())
         || ["passage", "letter", "excerpt", "jefferson wrote"]
@@ -210,86 +224,70 @@ mod tests {
         Letter {
             id: "w-1".into(),
             edition: "w".into(),
-            recipient: "James Madison".into(),
+            recipient: "Peter Carr".into(),
             place: "Paris".into(),
-            year: 1789,
+            year: 1785,
             body: body.into(),
         }
     }
 
-    const PRINCIPLE: &str = "I hold it to be a fundamental principle that the people are the only legitimate \
-        fountain of power, and that every government should rest on the consent of the governed. \
-        Where the people are well informed they can be trusted with their own government, and liberty \
-        is safe in their hands; where they are not, no constitution can preserve it for long.";
+    const ADVICE: &str = "I advise you to fix a habit of study every morning before you do anything else. \
+        Never let a day pass without reading something of history or ethics, and always write down \
+        what you have read, for the memory fails what the pen has not fixed. Do not spend your evenings \
+        in idle company, and be careful of debt, which is the surest enemy of a young man's independence.";
 
     #[test]
-    fn the_passage_chosen_states_a_principle_in_whole_sentences() {
+    fn advice_is_found_by_its_cues_in_whole_sentences() {
         let business = "I have received your favour of the tenth and enclose the bill of lading for the \
             hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month if the wind holds fair and the convoy keeps together.";
-        let found =
-            best_passage(&letter(&format!("{business}\n\n{PRINCIPLE}"))).unwrap_or_default();
-        assert!(
-            found.starts_with("I hold it to be a fundamental principle"),
-            "{found}"
-        );
-        assert!(found.ends_with('.'));
-        assert!(PASSAGE_WORDS.contains(&found.split_whitespace().count()));
+        assert_eq!(advice_cues(business), 0);
+        let found = advice_passages(&letter(&format!("{business}\n\n{ADVICE}")));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].starts_with("I advise you to fix a habit of study"));
+        assert!(found[0].ends_with('.'));
+        assert!(PASSAGE_WORDS.contains(&found[0].split_whitespace().count()));
+        assert!(advice_cues(&found[0]) >= 4);
     }
 
     #[test]
-    fn index_entries_and_tables_are_not_prose() {
+    fn index_entries_and_tables_are_not_advice() {
         let index = "AMERICA, U. STATES OF--Imperfections of Articles of Confederation, 78. A New Constitution \
-            for, necessary, 78. Views of U. States prevalent in Europe, 407, 413. Views of public affairs of U. States in A. D. 1785, 423. English calumnies against, 427.";
-        assert_eq!(best_passage(&letter(index)), None);
-        assert_eq!(best_passage(&letter("Short note about nothing.")), None);
+            for, necessary, 78. Views of U. States prevalent in Europe, 407, 413. Never to be forgotten, always, 423. English calumnies against, 427.";
+        assert!(advice_passages(&letter(index)).is_empty());
+        assert!(advice_passages(&letter("Short note about nothing.")).is_empty());
     }
 
     #[test]
-    fn a_question_is_admitted_only_when_it_stands_alone() {
-        let ok = "A legislature wants to restrict who may read political pamphlets; may a free government do so?";
-        assert_eq!(admit(ok, PRINCIPLE, "Madison", 1789).as_deref(), Ok(ok));
+    fn the_classifier_and_the_judge_are_read_the_same_way() {
+        assert!(classifier_prompt(ADVICE).contains("YES or NO"));
+        assert!(writer_prompt(ADVICE).contains("do not give the advice"));
+    }
+
+    #[test]
+    fn a_question_is_admitted_only_when_it_asks_for_advice_and_stands_alone() {
+        let ok = "I am nineteen and have finished my first year at college, but I find my mornings slip away \
+            in idleness and my evenings in company; what would you advise me to do about my habits?";
+        assert_eq!(admit(ok, ADVICE, "Carr", 1785).as_deref(), Ok(ok));
         assert_eq!(
-            admit("Why?", PRINCIPLE, "Madison", 1789),
+            admit("What now?", ADVICE, "Carr", 1785),
             Err(Rejection::Shape)
         );
+        let no_ask = "I am nineteen and have finished my first year at college, and I find my mornings slip away in idleness and evenings in company, is that normal?";
+        assert_eq!(admit(no_ask, ADVICE, "Carr", 1785), Err(Rejection::Shape));
         assert_eq!(
-            admit(
-                "This is not a question at all but a statement of some length",
-                PRINCIPLE,
-                "Madison",
-                1789
-            ),
-            Err(Rejection::Shape)
-        );
-        assert_eq!(
-            admit(
-                "What did you tell Madison about the trust a free people can place in itself?",
-                PRINCIPLE,
-                "Madison",
-                1789
-            ),
+            admit("My cousin Carr and I are at college and our mornings are idle, so what would you advise us both to do now?", ADVICE, "Carr", 1785),
             Err(Rejection::GivesItAway)
         );
         assert_eq!(
-            admit(
-                "What does the passage say about the consent of the governed and power?",
-                PRINCIPLE,
-                "Madison",
-                1789
-            ),
+            admit("Does the passage mean I should study every morning? What would you advise me about my idle hours at college?", ADVICE, "Carr", 1785),
             Err(Rejection::GivesItAway)
         );
         assert_eq!(
-            admit("Should every government rest on the consent of the governed or on tradition alone?", PRINCIPLE, "Madison", 1789),
+            admit("Should I fix a habit of study every morning before I do anything else? What would you advise a young man at college today?", ADVICE, "Carr", 1785),
             Err(Rejection::Copies)
         );
         assert_eq!(
-            admit(
-                "In 1789, how far should a convention trust the voters with a constitution?",
-                PRINCIPLE,
-                "Madison",
-                1789
-            ),
+            admit("In 1785 I was a student with idle mornings and I would like to know what you would advise me to do about it now?", ADVICE, "Carr", 1785),
             Err(Rejection::GivesItAway)
         );
     }
@@ -301,11 +299,11 @@ mod tests {
             family: "f".into(),
             split: "train".into(),
             question: "q?".into(),
-            passage: PRINCIPLE.into(),
-            source: "my letter to James Madison in 1789".into(),
+            passage: ADVICE.into(),
+            source: "my letter to Peter Carr in 1785".into(),
         };
         let voice = scenario.voice();
-        assert!(voice.starts_with("In my letter to James Madison in 1789, I wrote: \""));
-        assert!(voice.contains(PRINCIPLE) && voice.ends_with('"'));
+        assert!(voice.starts_with("In my letter to Peter Carr in 1785, I advised: \""));
+        assert!(voice.contains(ADVICE) && voice.ends_with('"'));
     }
 }
