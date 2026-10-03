@@ -41,6 +41,7 @@ use splinter_campaign::release::arm;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_store::decision::decide;
 
@@ -157,6 +158,24 @@ fn learn_teaches_a_fact_the_policy_never_answers_closed_book() {
         panic!("a learn that is not a dry run runs");
     };
     let report = &run.report;
+    // The run records who played each role it used.
+    for role in [
+        Role::Policy,
+        Role::Critic,
+        Role::Teacher,
+        Role::Generator,
+        Role::Judge,
+    ] {
+        assert!(
+            report.roles.contains_key(&role),
+            "{role}: {:?}",
+            report.roles
+        );
+    }
+    assert!(
+        !report.roles.contains_key(&Role::Planner),
+        "no plan was asked for"
+    );
 
     // Closed-book, the student solves nothing; the teacher, shown each
     // task's passage, answers both, and both answers are verified.

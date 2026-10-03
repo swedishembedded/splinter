@@ -43,6 +43,12 @@
 //! nothing to work on or the budget is spent; `--dry-run` resolves the
 //! plan and writes nothing.
 
+mod report;
+
+use report::PolicyStage;
+pub use report::{LearnPlan, LearnReport, Learned, Planned, PolicyUsed};
+
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -50,34 +56,33 @@ use splinter_core::source::SourceId;
 use splinter_data::holdout::MIN_SAMPLES;
 use splinter_store::experiences::SetId;
 
-use splinter_knowledge::survey::{survey, Survey};
+use splinter_knowledge::survey::survey;
 
 use crate::budget::StageDeadlines;
 use crate::context::Context;
-use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};
-use crate::curriculum::frontier::{select_frontier, Frontier, PassAtK};
+use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
+use crate::curriculum::frontier::{select_frontier, PassAtK};
 use crate::curriculum::queue;
-use crate::curriculum::quota::{select_training_set, Quotas, Selected};
-use crate::curriculum::teacher::{teach, Taught, TeachRequest};
-use crate::datasets::{build, BuildRequest, Built, ViewName, DEFAULT_MIN_STRENGTH};
+use crate::curriculum::quota::{select_training_set, Quotas};
+use crate::curriculum::teacher::{teach, TeachRequest};
+use crate::datasets::{build, BuildRequest, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::error::CampaignError;
 use crate::exam::{examine_candidate, Exam};
-use crate::plan::{plan as make_plan, Plan};
-use crate::release::{release, ReleaseRequest, Released};
-use crate::runs::{record, Recorded, Recorder};
+use crate::plan::plan as make_plan;
+use crate::release::{release, ReleaseRequest};
+use crate::roles;
+use crate::runs::{record, Recorder};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
-use crate::sources::{self, SourceSummary, SourceTarget};
-use crate::tasks::{check_kinds, generate, Generation, TasksGenerated, DEFAULT_LEARN_KINDS};
+use crate::sources::{self, SourceTarget};
+use crate::tasks::{check_kinds, generate, Generation, DEFAULT_LEARN_KINDS};
 use crate::train::{
-    train, Candidate, TrainRequest, Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK,
+    train, TrainRequest, Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK,
     DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
 };
-use crate::variants::{
-    generate_variants, VariantsGenerated, VariantsRequest, DEFAULT_VARIANTS_PER_TASK,
-};
-use crate::verify::{verify_set, Verified};
+use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
+use crate::verify::verify_set;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
-use splinter_core::release::ReleaseId;
+use splinter_core::role::{Role, RoleOverrides};
 
 /// The stages, in order, as runs and reports name them.
 pub const STAGES: [&str; 15] = [
@@ -115,8 +120,6 @@ pub struct LearnRequest {
     /// Let a planner model survey the sources and choose the task kinds,
     /// and whether to distil. Refused together with `kinds`: one decides.
     pub plan: bool,
-    /// The model that plans; `None`: the generator, else the policy.
-    pub planner: Option<ModelRef>,
     /// Wall-clock time the whole pipeline may take.
     pub budget: Option<Duration>,
     /// Resolve the plan and write nothing.
@@ -137,122 +140,13 @@ pub struct LearnRequest {
     pub rank: Option<u32>,
     /// The base's precision and the learning rate of the training.
     pub tuning: Tuning,
-    /// The model that teaches what the policy never solves; `None`: the
-    /// policy itself.
-    pub teacher: Option<ModelRef>,
-    /// The model that writes the tasks; `None`: the policy itself.
-    pub generator: Option<ModelRef>,
+    /// The models this run names for roles (teacher, generator, planner);
+    /// a role not named is played as [`splinter_core::role`] says.
+    pub roles: RoleOverrides,
     /// k and the sampling of the frontier's pass@k.
     pub pass_at_k: PassAtK,
     /// The diversity quotas on the training set.
     pub quotas: Quotas,
-}
-
-/// What a dry run reports: the plan, and nothing written.
-#[derive(Clone, Debug, Serialize)]
-pub struct LearnPlan {
-    /// The state root the run would write under.
-    pub state: std::path::PathBuf,
-    /// The sources, as they would be captured.
-    pub sources: Vec<SourceTarget>,
-    /// The task kinds.
-    pub kinds: Vec<String>,
-    /// The goal.
-    pub goal: Option<String>,
-    /// The budget, in seconds.
-    pub budget_secs: Option<u64>,
-    /// The model that solves, critiques and retries.
-    pub policy: String,
-    /// The model that writes the tasks.
-    pub generator: String,
-    /// The model that teaches what the policy never solves.
-    pub teacher: String,
-    /// The model that surveys the sources and plans, when a plan is asked
-    /// for.
-    pub planner: Option<String>,
-    /// The stages, in order.
-    pub stages: Vec<&'static str>,
-    /// Always `true`: nothing was written.
-    pub dry_run: bool,
-}
-
-/// What the plan stage found and chose.
-#[derive(Clone, Debug, Serialize)]
-pub struct Planned {
-    /// What the sources hold.
-    pub survey: Survey,
-    /// How the planner chose to learn from them.
-    pub plan: Plan,
-}
-
-/// The policy a run works with, as resolved when it started.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct PolicyUsed {
-    /// The alias.
-    pub alias: String,
-    /// The release it pointed at; `None` when it pointed at none, and the
-    /// run works from the base.
-    pub release: Option<ReleaseId>,
-}
-
-/// What a `learn` run reports, stage by stage.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct LearnReport {
-    /// The policy the whole run used.
-    pub policy: PolicyUsed,
-    /// The sources learned from.
-    pub sources: Vec<SourceSummary>,
-    /// The plan stage: the survey and the planner's choice; `None` when no
-    /// plan was asked for.
-    pub plan: Option<Planned>,
-    /// The tasks stage.
-    pub tasks: Option<TasksGenerated>,
-    /// The solve stage.
-    pub solve: Option<Solved>,
-    /// The verify stage.
-    pub verify: Option<Verified>,
-    /// The teach stage: the teacher's graded solves of the tasks never
-    /// solved.
-    pub teach: Option<Taught>,
-    /// The frontier stage: pass@k, and the tasks kept.
-    pub frontier: Option<Frontier>,
-    /// The variants stage: the tasks kept, asked in other words.
-    pub variants: Option<VariantsGenerated>,
-    /// The critique stage.
-    pub critique: Option<Critiqued>,
-    /// The select stage: the training set under the quotas.
-    pub select: Option<Selected>,
-    /// The dataset stage.
-    pub dataset: Option<Built>,
-    /// The candidate trained.
-    pub candidate: Option<Candidate>,
-    /// The release gate on it, and the release when it passed.
-    pub release: Option<Released>,
-    /// The exam stage: base against candidate on held-out tasks, graded by a
-    /// calibrated judge and by the grounding check.
-    pub exam: Option<Exam>,
-    /// Why the pipeline stopped before training or releasing, if it did.
-    pub stopped: Option<String>,
-}
-
-impl LearnReport {
-    /// Whether the run got as far as it was asked: a candidate trained,
-    /// and released unless the release was not asked for.
-    #[must_use]
-    pub fn finished(&self, release_asked: bool) -> bool {
-        self.candidate.is_some()
-            && (!release_asked || self.release.as_ref().is_some_and(|r| r.release.is_some()))
-    }
-}
-
-/// What `learn` did: the plan of a dry run, or the recorded run.
-#[derive(Clone, Debug, Serialize)]
-#[serde(untagged)]
-pub enum Learned {
-    /// A dry run's plan.
-    Planned(Box<LearnPlan>),
-    /// A run and its report.
-    Ran(Box<Recorded<LearnReport>>),
 }
 
 /// Runs `request`, training with `trainer`.
@@ -289,25 +183,10 @@ pub fn learn(
         .map(|s| SourceTarget::from_learn_arg(s))
         .collect::<Result<Vec<_>, _>>()?;
     let policy = ModelRef::policy_default();
-    // The roles a command names win; then the configured assistant; then
-    // the policy itself.
-    let assistant = match &ctx.config().assistant_model {
-        Some(text) => Some(text.parse::<ModelRef>().map_err(|e| {
-            CampaignError::Refused(format!(
-                "the assistant model {text:?} is not a model reference: {e}"
-            ))
-        })?),
-        None => None,
-    };
-    let role = |named: &Option<ModelRef>| {
-        named
-            .clone()
-            .or_else(|| assistant.clone())
-            .unwrap_or_else(|| policy.clone())
-    };
-    let teacher = role(&request.teacher);
-    let generator = role(&request.generator);
-    let judge = role(&None);
+    let assignments = roles::assignments(ctx.config(), &request.roles)?;
+    let teacher = assignments.get(Role::Teacher).clone();
+    let generator = assignments.get(Role::Generator).clone();
+    let judge = assignments.get(Role::Judge).clone();
     // The command's budget, else the configured default: a run on a corpus
     // too large to read has no end without one.
     let budget =
@@ -318,11 +197,20 @@ pub fn learn(
             })?),
             (None, None) => None,
         };
-    let planner = request.plan.then(|| match (&request.planner, &assistant) {
-        (Some(named), _) => named.clone(),
-        (None, Some(assistant)) => assistant.clone(),
-        (None, None) => generator.clone(),
-    });
+    let planner = request.plan.then(|| assignments.get(Role::Planner).clone());
+    let mut roles_used = BTreeMap::new();
+    for (role, model) in [
+        (Role::Policy, &policy),
+        (Role::Critic, assignments.get(Role::Critic)),
+        (Role::Teacher, &teacher),
+        (Role::Generator, &generator),
+        (Role::Judge, &judge),
+    ]
+    .into_iter()
+    .chain(planner.as_ref().map(|p| (Role::Planner, p)))
+    {
+        roles_used.insert(role, ctx.selection(model)?.identity());
+    }
     if request.dry_run {
         return Ok(Learned::Planned(Box::new(LearnPlan {
             state: ctx.root().path().to_path_buf(),
@@ -360,6 +248,7 @@ pub fn learn(
         teacher: &teacher,
         generator: &generator,
         judge: &judge,
+        roles_used,
         no_release: request.no_release,
         distill: request.distill,
         steps: request.steps,
@@ -394,6 +283,8 @@ struct Pipeline<'a> {
     /// The model that judges the exam: another one than the policy when an
     /// assistant is configured.
     judge: &'a ModelRef,
+    /// The identity each role in use was given.
+    roles_used: BTreeMap<Role, String>,
     no_release: bool,
     /// The teacher answers every task and the student makes no attempt.
     distill: bool,
@@ -422,6 +313,7 @@ impl Pipeline<'_> {
             teacher,
             generator,
             judge,
+            ref roles_used,
             no_release,
             distill,
             steps,
@@ -436,7 +328,14 @@ impl Pipeline<'_> {
             alias: POLICY_DEFAULT.into(),
             release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
         };
-        run.stage("policy", &report.policy)?;
+        report.roles = roles_used.clone();
+        run.stage(
+            "policy",
+            &PolicyStage {
+                policy: &report.policy,
+                roles: &report.roles,
+            },
+        )?;
         let spent = |stage: &str| {
             deadline
                 .is_some_and(|d| Instant::now() >= d)

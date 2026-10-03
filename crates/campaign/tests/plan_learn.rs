@@ -31,6 +31,7 @@ use splinter_campaign::train::DEFAULT_STEPS;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 
 const RECALL_ONLY: &str = r#"{"persona": null, "kinds": ["recall"], "distill": false, "rationale": "the manual states facts"}"#;
@@ -167,7 +168,10 @@ fn the_configured_assistant_is_the_default_planner_generator_and_teacher() {
                 sources: vec![scratch.0.display().to_string()],
                 plan: true,
                 dry_run: true,
-                generator,
+                roles: generator
+                    .map(|g| (Role::Generator, g))
+                    .into_iter()
+                    .collect(),
                 ..LearnRequest::default()
             },
             &student,

@@ -36,8 +36,10 @@ use splinter_agent::CallError;
 
 use crate::context::Context;
 use crate::error::CampaignError;
+use crate::roles;
 use crate::sources::{SourceTarget, COMMAND_PREFIX};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::{Role, RoleOverrides};
 
 /// The confidence below which the top reading is a question.
 pub const MIN_CONFIDENCE: f64 = 0.7;
@@ -315,14 +317,9 @@ fn repair_paths(classification: &mut Classification, sentence: &str) {
 /// The readings of `sentence` by the model that reads sentences: the policy,
 /// or the model the configuration names for the front door.
 pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, CampaignError> {
-    let reader = match &ctx.config().front_door_model {
-        Some(text) => text.parse::<ModelRef>().map_err(|e| {
-            CampaignError::Refused(format!(
-                "the front door model {text:?} is not a model reference: {e}"
-            ))
-        })?,
-        None => ModelRef::policy_default(),
-    };
+    let reader = roles::assignments(ctx.config(), &RoleOverrides::new())?
+        .get(Role::Router)
+        .clone();
     let model = ctx.model(&reader)?;
     let mut task = format!("{TASK}\n\nFor example:");
     for (example, classified) in EXAMPLES {

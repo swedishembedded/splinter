@@ -87,8 +87,28 @@ fn status_and_source_list_print_their_documented_fields() {
     assert_eq!(code, 0, "{status}");
     assert_eq!(
         keys(&status),
-        ["concepts", "counts", "policy", "recent_runs", "state"]
+        [
+            "concepts",
+            "counts",
+            "policy",
+            "recent_runs",
+            "roles",
+            "state"
+        ]
     );
+    assert_eq!(
+        keys(&status["roles"]),
+        [
+            "critic",
+            "generator",
+            "judge",
+            "planner",
+            "policy",
+            "router",
+            "teacher"
+        ]
+    );
+    assert_eq!(status["roles"]["teacher"], "policy:default");
     assert_eq!(
         keys(&status["concepts"]),
         ["concepts", "measured", "policy", "queued", "weakest"]

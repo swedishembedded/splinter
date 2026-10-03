@@ -64,6 +64,7 @@ pub mod lineage;
 pub mod model_ref;
 pub mod plan;
 pub mod release;
+pub mod roles;
 pub mod runs;
 pub mod solving;
 pub mod sources;

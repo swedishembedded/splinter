@@ -4,6 +4,7 @@
 //! `status`: the policy in use, the most recent runs, what the stores
 //! hold, and the concepts the policy has mastered least.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -13,10 +14,12 @@ use splinter_store::runs::list_runs;
 use crate::context::Context;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
 use crate::error::CampaignError;
+use crate::roles;
 use crate::runs::{RunSummary, RECENT_RUNS};
 use crate::train::candidate_count;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::release::ReleaseId;
+use splinter_core::role::{Role, RoleOverrides};
 
 /// The policy in use.
 #[derive(Clone, Debug, Serialize)]
@@ -59,6 +62,9 @@ pub struct Status {
     pub state: PathBuf,
     /// The policy in use.
     pub policy: PolicyStatus,
+    /// The model each role gets when a command names none, as the reference
+    /// commands use for it.
+    pub roles: BTreeMap<Role, String>,
     /// The most recent runs, oldest first.
     pub recent_runs: Vec<RunSummary>,
     /// What the stores hold.
@@ -90,6 +96,10 @@ pub fn status(ctx: &Context) -> Result<Status, CampaignError> {
             adapter,
             release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
         },
+        roles: roles::assignments(ctx.config(), &RoleOverrides::new())?
+            .iter()
+            .map(|(role, model)| (role, model.to_string()))
+            .collect(),
         recent_runs,
         counts: Counts {
             sources: ctx.sources().list()?.len(),

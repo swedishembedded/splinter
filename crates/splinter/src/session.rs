@@ -33,6 +33,7 @@ use splinter_campaign::variants;
 use splinter_campaign::verify::{verify_set, Judge};
 use splinter_campaign::{CampaignError, Config, Context, Runtime};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::Role;
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
@@ -508,7 +509,6 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
     LearnRequest {
         pass_at_k: args.pass_at_k.pass_at_k(),
         plan: args.kinds.is_empty(),
-        planner: args.planner,
         sources: args.sources,
         goal: args.goal,
         kinds: args.kinds,
@@ -523,8 +523,14 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
             bf16_base: args.bf16_base,
             learning_rate: args.lr,
         },
-        teacher: args.teacher,
-        generator: args.generator,
+        roles: [
+            (Role::Planner, args.planner),
+            (Role::Teacher, args.teacher),
+            (Role::Generator, args.generator),
+        ]
+        .into_iter()
+        .filter_map(|(role, model)| model.map(|m| (role, m)))
+        .collect(),
         ..LearnRequest::default()
     }
 }

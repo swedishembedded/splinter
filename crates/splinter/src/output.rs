@@ -628,6 +628,15 @@ impl Report for Status {
             c.datasets,
             c.candidates
         );
+        let assigned: Vec<String> = self
+            .roles
+            .iter()
+            .filter(|(_, model)| model.as_str() != self.policy.reference)
+            .map(|(role, model)| format!("{role} = {model}"))
+            .collect();
+        if !assigned.is_empty() {
+            let _ = writeln!(out, "roles:  {}", assigned.join(", "));
+        }
         if self.recent_runs.is_empty() {
             out.push_str("runs:   none recorded\n");
         }
