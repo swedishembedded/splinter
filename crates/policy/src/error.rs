@@ -15,6 +15,12 @@ pub enum PolicyError {
         /// The path named.
         path: PathBuf,
     },
+    /// The embedding model could not embed.
+    #[error("embedding: {reason}")]
+    Embedding {
+        /// brain's error.
+        reason: String,
+    },
     /// A path brain must be given as UTF-8 is not.
     #[error("{path} is not valid UTF-8")]
     NotUtf8 {

@@ -23,6 +23,7 @@
 
 #![warn(missing_docs)]
 
+pub mod embed;
 pub mod error;
 pub mod local;
 pub mod residency;
