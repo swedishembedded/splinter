@@ -27,7 +27,7 @@
 
 use std::path::PathBuf;
 
-use splinter_lab::{
+use splinter_tool_syntax::{
     baseline_effective, capture_path, records_from_performance, run_verifier, run_witness,
     to_jsonl, upstream_of, Action, ArmScore, Episode, Family, Outcome, Recorder, ServedModel,
 };
@@ -304,7 +304,7 @@ async fn one_episode(
     hidden: &str,
     options: &BaselineOptions,
     through: Option<&str>,
-) -> anyhow::Result<(splinter_lab::Verdict, String)> {
+) -> anyhow::Result<(splinter_tool_syntax::Verdict, String)> {
     let mut episode = Episode::start(family, dir, hidden).map_err(|e| anyhow::anyhow!("{e}"))?;
     let before = baseline_effective(family, &episode).map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -640,13 +640,17 @@ fn one_demonstration(
     hidden: &str,
     prompt: &serde_json::Value,
     sven: &std::path::Path,
-) -> anyhow::Result<(splinter_lab::Verdict, Vec<splinter_lab::Record>, String)> {
+) -> anyhow::Result<(
+    splinter_tool_syntax::Verdict,
+    Vec<splinter_tool_syntax::Record>,
+    String,
+)> {
     let mut episode = Episode::start(family, dir, hidden).map_err(|e| anyhow::anyhow!("{e}"))?;
     let before = baseline_effective(family, &episode).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let env = episode.agent_env();
     let actions = demonstration(family, hidden)?;
-    let performed = splinter_lab::perform_all(sven, episode.workspace(), &env, &actions)
+    let performed = splinter_tool_syntax::perform_all(sven, episode.workspace(), &env, &actions)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     episode.stop();

@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use splinter_lab::{Outcome, PredicateSet};
+use splinter_tool_syntax::{Outcome, PredicateSet};
 
 fn observed(pairs: &[(&str, bool)]) -> BTreeMap<String, bool> {
     pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect()

@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-lab"
-description = "Splinter's laboratory harness for learning runs: task packages, information boundary, served-model identity, and measurement."
+description = "What a learning run measures with: verifiers by strength, the holdout rule, paired comparison, pass@k and the wire shapes training data is written in."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,8 +16,6 @@ splinter-record = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-toml = { workspace = true }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 
 [lints]
 workspace = true

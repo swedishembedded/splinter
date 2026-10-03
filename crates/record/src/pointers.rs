@@ -10,7 +10,7 @@
 //! alias `default` means or the version of the anchor suite in force.
 //!
 //! A pointer is its whole history, never a value overwritten. Version `n+1` is
-//! claimed by creating one file that cannot be created twice, so when two
+//! claimed by writing one signal that cannot be written twice, so when two
 //! processes move a pointer from the same value exactly one wins and the other
 //! learns it lost; there is no lock file to go stale. Moving a pointer back is
 //! moving it to an older value, and what it pointed at, and when, stays on

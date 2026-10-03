@@ -4111,8 +4111,6 @@ dependencies = [
  "splinter-sandbox",
  "sven-sdk",
  "thiserror 2.0.21",
- "tokio",
- "toml",
 ]
 
 [[package]]
@@ -4168,6 +4166,7 @@ dependencies = [
  "splinter-policy",
  "sven-sdk",
  "tokio",
+ "toml",
 ]
 
 [[package]]

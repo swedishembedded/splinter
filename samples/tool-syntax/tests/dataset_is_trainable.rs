@@ -19,7 +19,7 @@
 
 use std::collections::BTreeMap;
 
-use splinter_lab::{records_from_performance, to_jsonl, PredicateSet, Verdict};
+use splinter_tool_syntax::{records_from_performance, to_jsonl, PredicateSet, Verdict};
 
 fn verdict(pass: bool) -> Verdict {
     let set = PredicateSet::new(["done"]).expect("one predicate");
@@ -43,7 +43,9 @@ fn performed() -> Vec<(String, String, String)> {
     )]
 }
 
-fn derive(verdict: &Verdict) -> Result<Vec<splinter_lab::Record>, splinter_lab::Excluded> {
+fn derive(
+    verdict: &Verdict,
+) -> Result<Vec<splinter_tool_syntax::Record>, splinter_tool_syntax::Excluded> {
     records_from_performance(
         "config-discovery",
         "staging",
