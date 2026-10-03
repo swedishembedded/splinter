@@ -56,6 +56,11 @@ pub struct Config {
     /// Hold a base the policy trains at bf16: for a base too large for the
     /// card at fp32, which is a fact about the machine, not the run.
     pub bf16_base: bool,
+    /// How long a learning run may take when its command names no budget, as
+    /// `--budget` writes it (`6h`). Parsed where it is used, so a bad value
+    /// is refused by name when a run starts. A run on a corpus too large to
+    /// read has no end without one.
+    pub default_budget: Option<String>,
 }
 
 impl Config {
@@ -78,7 +83,9 @@ impl Config {
     /// * `SPLINTER_ASSISTANT_MODEL`, a model reference that plans, writes
     ///   tasks and teaches in place of the policy;
     /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
-    ///   held at bf16.
+    ///   held at bf16;
+    /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
+    ///   names no `--budget`.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -110,6 +117,7 @@ impl Config {
             assistant_model: var("SPLINTER_ASSISTANT_MODEL"),
             bf16_base: var("SPLINTER_BF16_BASE")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+            default_budget: var("SPLINTER_BUDGET"),
         }
     }
 }

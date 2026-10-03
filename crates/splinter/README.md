@@ -172,7 +172,8 @@ and teach nothing. A plan can choose it too.
 A run needs no flags. The configuration names what a machine knows:
 `SPLINTER_ASSISTANT_MODEL` is the stronger model that plans, writes tasks and
 teaches when the command names none, `SPLINTER_FRONT_DOOR_MODEL` reads the
-sentence, and `SPLINTER_BF16_BASE` holds a large policy's base at bf16 so it
+sentence, and `SPLINTER_BUDGET` is how long a `learn` may take when it names no `--budget`
+(a sentence names none), and `SPLINTER_BF16_BASE` holds a large policy's base at bf16 so it
 trains on one card. Unless `--steps` is given a run trains about two passes
 over what it learned, within bounds, at a learning rate suited to a short
 LoRA run.

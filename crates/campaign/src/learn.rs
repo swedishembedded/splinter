@@ -307,6 +307,16 @@ pub fn learn(
     let teacher = role(&request.teacher);
     let generator = role(&request.generator);
     let judge = role(&None);
+    // The command's budget, else the configured default: a run on a corpus
+    // too large to read has no end without one.
+    let budget =
+        match (request.budget, &ctx.config().default_budget) {
+            (Some(named), _) => Some(named),
+            (None, Some(text)) => Some(parse_budget(text).map_err(|e| {
+                CampaignError::Refused(format!("SPLINTER_BUDGET is not usable: {e}"))
+            })?),
+            (None, None) => None,
+        };
     let planner = request.plan.then(|| match (&request.planner, &assistant) {
         (Some(named), _) => named.clone(),
         (None, Some(assistant)) => assistant.clone(),
@@ -318,7 +328,7 @@ pub fn learn(
             sources: targets,
             kinds,
             goal: request.goal.clone(),
-            budget_secs: request.budget.map(|b| b.as_secs()),
+            budget_secs: budget.map(|b| b.as_secs()),
             policy: ctx.selection(&policy)?.identity(),
             teacher: ctx.selection(&teacher)?.identity(),
             generator: ctx.selection(&generator)?.identity(),
@@ -344,7 +354,7 @@ pub fn learn(
         kinds: &kinds,
         planner: planner.as_ref(),
         goal: request.goal.as_deref(),
-        deadline: request.budget.map(|b| Instant::now() + b),
+        deadline: budget.map(|b| Instant::now() + b),
         trainer,
         teacher: &teacher,
         generator: &generator,

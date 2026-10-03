@@ -114,6 +114,7 @@ pub fn config(scratch: &Scratch) -> Config {
         front_door_model: None,
         assistant_model: None,
         bf16_base: false,
+        default_budget: None,
     }
 }
 
