@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use splinter_lab::SYSTEM_PROMPT;
+use splinter_core::prompt::SYSTEM_PROMPT;
 use sven_sdk::model::{CompletionRequest, Message, ModelProvider, ResponseStream, Role};
 
 /// `inner`, sent every request under [`SYSTEM_PROMPT`].

@@ -4,7 +4,7 @@
 //! The denoise view: a denoise task's corrupted passage and its original,
 //! with no solve needed.
 //!
-//! A denoise task (kind `splinter_lab::denoise::KIND`) carries its answer
+//! A denoise task (kind `splinter_core::kinds::DENOISE`) carries its answer
 //! as its reference, so the task alone is supervision. Candidates are the
 //! corpus's tasks, then the tasks of its experiences, whatever their
 //! verdicts; each task yields at most one record (a repeat counts as
@@ -17,7 +17,7 @@ use std::collections::HashSet;
 
 use splinter_core::digest::Digest;
 use splinter_core::experience::{PrivilegedKind, Task};
-use splinter_lab::denoise::KIND;
+use splinter_core::kinds::DENOISE;
 
 use crate::render::message;
 use crate::{
@@ -92,7 +92,7 @@ impl View for DenoiseView {
         let attempted = corpus.entries().iter().map(|e| e.experience.to_task());
         let mut seen: HashSet<Digest> = HashSet::new();
         for task in corpus.tasks().iter().cloned().chain(attempted) {
-            if task.task.kind != KIND {
+            if task.task.kind != DENOISE {
                 continue;
             }
             if !seen.insert(task.task.id.clone()) {

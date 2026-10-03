@@ -20,7 +20,7 @@
 //! 3. it states the original's reference (case, whitespace and closing
 //!    punctuation aside): a question with another answer asks about another
 //!    fact;
-//! 4. its instruction stands on its own ([`splinter_views::check_self_contained`]);
+//! 4. its instruction stands on its own ([`splinter_core::selfcontained::check_self_contained`]);
 //! 5. it still names the original's subject (case and whitespace aside):
 //!    a rewording that drops it asks a question with many answers;
 //! 6. it is new: not the original's instruction, nor a sibling's, by the
@@ -33,7 +33,7 @@
 
 use serde::Serialize;
 use splinter_core::experience::{Privileged, PrivilegedKind, Task};
-use splinter_views::check_self_contained;
+use splinter_core::selfcontained::check_self_contained;
 
 use super::dedup::{Repeat, Seen};
 use super::generator::{GenerateError, ModelTaskGenerator};

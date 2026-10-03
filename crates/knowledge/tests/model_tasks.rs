@@ -28,10 +28,9 @@ use common::{about, entry, generator, python, reply, stored, Scratch, Scripted, 
 use serde_json::json;
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, PrivilegedKind};
+use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST};
 use splinter_core::source::{CapturedSource, Origin, PartContent, Revision};
 use splinter_knowledge::tasks::{Catalogue, Rejection, SourceText, TaskKind};
-use splinter_lab::verifiers::executable::CHECK_KIND;
-use splinter_lab::verifiers::mutation::TEST_KIND;
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 use sven_sdk::model::ResponseFormat;
@@ -209,8 +208,8 @@ async fn a_construct_task_is_admitted_only_when_its_reference_passes_and_its_tes
     let task = &report.admitted[0].task;
     assert_eq!(task.environment.kind, "runtime:python3");
     let kinds: Vec<&PrivilegedKind> = task.privileged.iter().map(|p| &p.kind).collect();
-    assert!(kinds.contains(&&PrivilegedKind::Other(CHECK_KIND.into())));
-    assert!(kinds.contains(&&PrivilegedKind::Other(TEST_KIND.into())));
+    assert!(kinds.contains(&&PrivilegedKind::Other(EXECUTABLE_CHECK.into())));
+    assert!(kinds.contains(&&PrivilegedKind::Other(GENERATED_TEST.into())));
     assert!(kinds.contains(&&PrivilegedKind::Reference));
 }
 

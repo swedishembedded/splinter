@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-lab"
-description = "What a learning run measures with: verifiers by strength, the holdout rule, paired comparison, pass@k and the wire shapes training data is written in."
+description = "What a learning run measures with: verifiers by strength, the holdout rule, paired comparison and pass@k."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

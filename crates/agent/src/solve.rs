@@ -32,7 +32,7 @@
 //! question the agent puts with its no-user answer.
 
 pub use crate::run_code::RUN_CODE;
-pub use splinter_lab::SYSTEM_PROMPT;
+pub use splinter_core::prompt::SYSTEM_PROMPT;
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -150,7 +150,7 @@ pub fn manifest_path(dataset: &Path) -> PathBuf {
 /// One line of the chat format: exactly the fields brain's parser accepts.
 #[derive(Serialize)]
 struct ChatLine<'a> {
-    messages: &'a [splinter_lab::WireMessage],
+    messages: &'a [splinter_core::chat::WireMessage],
     metadata: &'a RecordMetadata,
 }
 
@@ -171,13 +171,13 @@ struct Turn<'a> {
     role: &'a str,
     content: &'a str,
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
-    tool_calls: &'a [splinter_lab::WireToolCall],
+    tool_calls: &'a [splinter_core::chat::WireToolCall],
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<&'a str>,
 }
 
-impl<'a> From<&'a splinter_lab::WireMessage> for Turn<'a> {
-    fn from(message: &'a splinter_lab::WireMessage) -> Self {
+impl<'a> From<&'a splinter_core::chat::WireMessage> for Turn<'a> {
+    fn from(message: &'a splinter_core::chat::WireMessage) -> Self {
         Self {
             role: &message.role,
             content: &message.content,

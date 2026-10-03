@@ -12,7 +12,7 @@
 //! A check ([`ExecutableCheck`]) is code and what running it must produce:
 //! an exit code, standard output compared under a [`Normalisation`], or
 //! both. It travels with the task as a privileged item of kind
-//! [`CHECK_KIND`], so the solver never sees it. The program run is the
+//! [`EXECUTABLE_CHECK`], so the solver never sees it. The program run is the
 //! solver's code ([`program_text`] of its final output) followed by the
 //! check's code, in one file, so a check calls what the solver defined.
 //!
@@ -40,23 +40,13 @@ use serde_json::json;
 use splinter_core::annotation::{Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, Privileged, PrivilegedKind, Task};
+use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST};
 use splinter_sandbox::{
     CodeCall, CodeResult, ResolvedEnvironment, RuntimeEnvironment, SandboxError,
 };
 
 use super::normalise::Normalisation;
 use super::{privileged_of, Finding, Verifier, VerifyError};
-
-/// The privileged kind an authored check travels as.
-pub const CHECK_KIND: &str = "executable-check";
-
-/// The privileged kind of a check that established a task's reference by
-/// running code the instruction shows (what does this program print): the
-/// code alone, run with no solution before it, must produce the reference.
-/// It proves the reference, it does not grade an answer - an answer is
-/// text, not code to run - so [`ExecutableVerifier`] never reads it as a
-/// check of the solver.
-pub const OUTPUT_CHECK_KIND: &str = "output-check";
 
 /// The producer name the executable verifier's annotations carry.
 pub const PRODUCER: &str = "splinter-lab/executable";
@@ -146,13 +136,13 @@ impl Expectation {
 impl ExecutableCheck {
     /// This check as an authored check a task carries.
     pub fn as_check(&self) -> Result<Privileged, serde_json::Error> {
-        self.as_privileged(CHECK_KIND)
+        self.as_privileged(EXECUTABLE_CHECK)
     }
 
     /// This check as a generated test, admitted only after mutation
     /// validation (see [`super::mutation`]).
     pub fn as_generated_test(&self) -> Result<Privileged, serde_json::Error> {
-        self.as_privileged(super::mutation::TEST_KIND)
+        self.as_privileged(GENERATED_TEST)
     }
 
     fn as_privileged(&self, kind: &str) -> Result<Privileged, serde_json::Error> {
@@ -382,7 +372,7 @@ pub fn failed_checks(evidence: &serde_json::Value) -> Option<Vec<usize>> {
     Some(failed)
 }
 
-/// Runs a task's authored checks ([`CHECK_KIND`]) against the solver's
+/// Runs a task's authored checks ([`EXECUTABLE_CHECK`]) against the solver's
 /// code: pass iff every check meets its expectation, fail otherwise or
 /// when there is no answer; abstains on a task with no checks, or whose
 /// checks name an environment it was not offered.
@@ -414,17 +404,17 @@ impl Verifier for ExecutableVerifier {
     }
 
     fn verify(&self, task: &Task, exp: &Experience) -> Result<Finding, VerifyError> {
-        self.check(task, CHECK_KIND, exp.final_output.as_deref())
+        self.check(task, EXECUTABLE_CHECK, exp.final_output.as_deref())
     }
 }
 
 impl ExecutableVerifier {
     /// Runs the task's checks of privileged kind `kind` against `output`,
     /// an answer whose code ([`program_text`]) each check is appended to:
-    /// the verdict [`Verifier::verify`] gives for [`CHECK_KIND`] and the
+    /// the verdict [`Verifier::verify`] gives for [`EXECUTABLE_CHECK`] and the
     /// experience's final output. A generator uses it to admit a task only
     /// when its reference passes its own checks, and to run an
-    /// [`OUTPUT_CHECK_KIND`] check with an empty answer.
+    /// [`splinter_core::kinds::OUTPUT_CHECK`] check with an empty answer.
     pub fn check(
         &self,
         task: &Task,

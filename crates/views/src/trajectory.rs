@@ -9,7 +9,7 @@
 //!   user step is not representable: an experience records one
 //!   instruction.
 //! * System steps are left out: every record starts with the one system
-//!   turn every solve runs under (`splinter_lab::SYSTEM_PROMPT`), which
+//!   turn every solve runs under (`splinter_core::prompt::SYSTEM_PROMPT`), which
 //!   the projection puts first.
 //! * An agent step is one assistant message - its text and every tool
 //!   call it made, in `generic-messages-v2`'s tool-call form with the
@@ -27,7 +27,7 @@
 //!   not representable, and the whole trajectory is refused: a record with
 //!   a hole in its context would teach from a state the solver never saw.
 
-use splinter_lab::{WireFunction, WireMessage, WireToolCall};
+use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
 use sven_sdk::atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 
 use crate::render::message;

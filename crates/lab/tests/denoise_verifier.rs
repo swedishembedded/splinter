@@ -16,7 +16,8 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
-use splinter_lab::denoise::{FormalVerifier, KIND};
+use splinter_core::kinds::DENOISE;
+use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::formal::ExactMatchVerifier;
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_lab::verifiers::{annotation, Verifier};
@@ -82,7 +83,7 @@ fn judged_by(verifier: &dyn Verifier, exp: &Experience) -> (Outcome, Strength, s
 #[test]
 fn a_whitespace_variant_of_the_reference_passes_at_formal_strength() {
     let (outcome, strength, evidence) = outcome_of(&experience(
-        KIND,
+        DENOISE,
         Some(REFERENCE),
         Some("  the quick\n brown\tfox "),
     ));
@@ -96,9 +97,9 @@ fn a_whitespace_variant_of_the_reference_passes_at_formal_strength() {
 
 #[test]
 fn a_different_answer_or_no_answer_fails() {
-    let (outcome, _, _) = outcome_of(&experience(KIND, Some(REFERENCE), Some("the brown fox")));
+    let (outcome, _, _) = outcome_of(&experience(DENOISE, Some(REFERENCE), Some("the brown fox")));
     assert_eq!(outcome, Outcome::Fail);
-    let (outcome, _, _) = outcome_of(&experience(KIND, Some(REFERENCE), None));
+    let (outcome, _, _) = outcome_of(&experience(DENOISE, Some(REFERENCE), None));
     assert_eq!(outcome, Outcome::Fail);
 }
 
@@ -107,7 +108,7 @@ fn it_abstains_on_what_it_cannot_judge() {
     let (outcome, strength, _) =
         outcome_of(&experience("recall", Some(REFERENCE), Some(REFERENCE)));
     assert_eq!((outcome, strength), (Outcome::Abstain, Strength::Formal));
-    let (outcome, _, _) = outcome_of(&experience(KIND, None, Some(REFERENCE)));
+    let (outcome, _, _) = outcome_of(&experience(DENOISE, None, Some(REFERENCE)));
     assert_eq!(outcome, Outcome::Abstain);
 }
 

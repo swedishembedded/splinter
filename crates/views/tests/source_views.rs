@@ -19,8 +19,8 @@ use common::*;
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Digest, PrivilegedKind, Span};
+use splinter_core::kinds::DENOISE;
 use splinter_core::source::{CapturedSource, Origin, PartContent, PartRef, SourceId};
-use splinter_lab::denoise::KIND;
 use splinter_record::sources::SourceStore;
 use splinter_record::StateRoot;
 use splinter_views::{Corpus, Cpt, DenoiseView, Exclusion, Objective, RecordBody, Retrieval, View};
@@ -125,12 +125,12 @@ fn denoise_restores_the_passage_of_each_task_once_without_a_solve() {
     const ORIGINAL: &str = "the quick brown fox jumps";
     let instruction = "Restore the original passage: quick the brown jumps";
     let denoise = task(
-        KIND,
+        DENOISE,
         instruction,
         vec![privileged(PrivilegedKind::Reference, ORIGINAL)],
     );
     let unsolved = task(
-        KIND,
+        DENOISE,
         "Restore the original passage: dog lazy the",
         vec![privileged(PrivilegedKind::Reference, "the lazy dog")],
     );

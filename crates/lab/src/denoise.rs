@@ -21,12 +21,10 @@ use splinter_core::annotation::{Producer, Strength};
 use splinter_core::experience::{Experience, Task};
 
 use crate::verifiers::formal::ExactMatchVerifier;
+use splinter_core::kinds::DENOISE;
+
 use crate::verifiers::normalise::Normalisation;
 use crate::verifiers::{Finding, Verifier, VerifyError};
-
-/// The task kind denoise tasks carry, shared by the generator and this
-/// verifier.
-pub const KIND: &str = "denoise";
 
 /// The producer name the verifier's annotations carry.
 pub const PRODUCER: &str = "splinter-lab/denoise-formal";
@@ -53,7 +51,7 @@ impl FormalVerifier {
             name: PRODUCER.into(),
             version: VERSION.into(),
         };
-        Self(ExactMatchVerifier::new(producer, Normalisation::WHITESPACE).for_kind(KIND))
+        Self(ExactMatchVerifier::new(producer, Normalisation::WHITESPACE).for_kind(DENOISE))
     }
 }
 

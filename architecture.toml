@@ -60,11 +60,6 @@ allowed = ["splinter-policy"]
 # while is recorded in [[allow.large_file]], whose size may only shrink.
 max_file_lines = 800
 
-[[same_layer]]
-from = "splinter-knowledge"
-to = "splinter-views"
-why = "TEMPORARY. Task admission applies the views' self-containment rule; the rule moves to the vocabulary crate."
-
 [[forbidden]]
 from = "splinter-core"
 to = "splinter-expdb"

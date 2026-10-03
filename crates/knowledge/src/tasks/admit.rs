@@ -15,15 +15,15 @@ use std::collections::BTreeSet;
 use splinter_core::annotation::Outcome;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
+use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK};
+use splinter_core::selfcontained::check_self_contained;
 use splinter_lab::verifiers::executable::{
-    program_text, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout, CHECK_KIND,
-    OUTPUT_CHECK_KIND,
+    program_text, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
 };
 use splinter_lab::verifiers::mutation::{validate_oracle, MutationPolicy};
 use splinter_lab::verifiers::normalise::Normalisation;
 use splinter_record::sources::SourceStore;
 use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
-use splinter_views::check_self_contained;
 
 use crate::gates::normalize;
 
@@ -375,7 +375,7 @@ impl Admission {
         let grounded = match kind.answer {
             AnswerForm::Text => grounded_text(),
             AnswerForm::Program => self.program_passes(context, &task, &candidate)?,
-            AnswerForm::Output => run_checks(context, &task, OUTPUT_CHECK_KIND, "")?,
+            AnswerForm::Output => run_checks(context, &task, OUTPUT_CHECK, "")?,
         };
         Ok(match grounded {
             Ok(()) => Ok(Accepted { task, question }),
@@ -392,7 +392,8 @@ impl Admission {
         candidate: &Candidate,
     ) -> Result<Result<(), Refusal>, GenerateError> {
         if !candidate.checks.is_empty() {
-            if let Err(refusal) = run_checks(context, task, CHECK_KIND, &candidate.reference)? {
+            if let Err(refusal) = run_checks(context, task, EXECUTABLE_CHECK, &candidate.reference)?
+            {
                 return Ok(Err(refusal));
             }
         }
@@ -603,11 +604,8 @@ fn privileged(
         })
     };
     for (list, item_kind) in [
-        (&candidate.checks, CHECK_KIND),
-        (
-            &candidate.tests,
-            splinter_lab::verifiers::mutation::TEST_KIND,
-        ),
+        (&candidate.checks, EXECUTABLE_CHECK),
+        (&candidate.tests, GENERATED_TEST),
     ] {
         for check in list {
             let Some(check) = check.to_check(environment.clone()) else {
@@ -632,7 +630,7 @@ fn privileged(
             },
             environment,
         };
-        items.push(as_item(check, OUTPUT_CHECK_KIND)?);
+        items.push(as_item(check, OUTPUT_CHECK)?);
     }
     Ok(items)
 }

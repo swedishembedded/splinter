@@ -24,7 +24,7 @@
 //! 3. it carries the material its kind requires, and an open-book kind's
 //!    material is in the instruction verbatim;
 //! 4. its instruction stands on its own
-//!    ([`splinter_views::check_self_contained`]): for a closed-book kind the
+//!    ([`splinter_core::selfcontained::check_self_contained`]): for a closed-book kind the
 //!    evidence counts as material the student does not see;
 //! 5. it names its subject, when its kind must
 //!    ([`TaskKind::names_subject`]): `subject` is the product, document,

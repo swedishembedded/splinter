@@ -27,7 +27,7 @@
 //! ([`greedy`]), so a verdict is the weights', not one draw's.
 //!
 //! A probe runs under the one system prompt every solve runs under and
-//! every training record shows (`splinter_lab::SYSTEM_PROMPT`). Grading is
+//! every training record shows (`splinter_core::prompt::SYSTEM_PROMPT`). Grading is
 //! by the task kind's own verifiers, without a judge, and the store's
 //! decision rule over their verdicts: `Some(true)` right, `Some(false)`
 //! wrong, `None` when no verifier decided. Each [`Probe`] keeps the answer

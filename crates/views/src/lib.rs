@@ -35,7 +35,7 @@
 //! is decided by a [`Strip`] policy: by default only the instruction, never
 //! what only the teacher saw - also when the experience is a teacher's
 //! solve, prompted with the task's grounding material. A view drops
-//! privileged context only from an instruction [`check_self_contained`]
+//! privileged context only from an instruction [`splinter_core::selfcontained::check_self_contained`]
 //! accepts; see [`strip`](Strip) for the rules.
 //!
 //! [`write_dataset`] writes a projection in the one format its objective
@@ -62,9 +62,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::annotation::Strength;
+use splinter_core::chat::WireMessage;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{ExperienceError, ExperienceId};
-use splinter_lab::{WireMessage, SYSTEM_PROMPT};
+use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_record::decision::decide;
 use splinter_record::experiences::StoreError;
 
@@ -74,9 +75,7 @@ pub use dataset::{
 };
 pub use replay::replay_sample;
 pub use store::{DatasetId, DatasetStore, StoredDataset};
-pub use strip::{
-    check_self_contained, Fraction, NotSelfContained, Strip, MIN_QUOTED_CHARS, REFERRING_PHRASES,
-};
+pub use strip::{Fraction, Strip};
 pub use views::{
     Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Retrieval, SftFinal, SftStep,
     VerifierView,

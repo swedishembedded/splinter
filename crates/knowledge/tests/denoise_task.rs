@@ -66,7 +66,7 @@ fn the_task_is_deterministic_and_its_evidence_resolves_through_the_store() {
             .generate(&stored, "design.md", &bytes)
             .unwrap()
     );
-    assert_eq!(task.task.kind, splinter_lab::denoise::KIND);
+    assert_eq!(task.task.kind, splinter_core::kinds::DENOISE);
 
     let [span] = &task.evidence[..] else {
         panic!("one evidence span, got {:?}", task.evidence)

@@ -2,8 +2,7 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! What a learning run needs to measure honestly: verifiers by strength, the
-//! holdout rule, paired comparison, pass@k, and the shapes training data is
-//! written in.
+//! holdout rule, paired comparison and pass@k.
 //!
 //! Swedish Embedded AB implements closed-loop learning systems - agents that
 //! improve from their own verified experience rather than from hand-written
@@ -21,11 +20,6 @@
 //! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
 //!   a teacher's answer to it was verified, and whether that makes it worth
 //!   training on.
-//! * [`WireMessage`] - one message of the `generic-messages-v2` format
-//!   training records are written in.
-//! * [`SYSTEM_PROMPT`] - the one system turn every model run on a task is
-//!   sent and every chat record starts with, so what the policy is trained
-//!   on is what it sees when it answers.
 //! * [`verifiers`] - verifiers by strength (executable, formal, consistency,
 //!   judged), each grading an experience from its output and the task's
 //!   privileged material alone, and the composite that annotates every
@@ -42,9 +36,4 @@ pub mod frontier;
 pub mod holdout;
 pub mod overlap;
 pub mod paired;
-mod system_prompt;
 pub mod verifiers;
-mod wire;
-
-pub use system_prompt::SYSTEM_PROMPT;
-pub use wire::{WireFunction, WireMessage, WireToolCall};

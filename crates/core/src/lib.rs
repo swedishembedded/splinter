@@ -20,6 +20,11 @@
 //! * [`annotation`] - what is said about an experience after the fact:
 //!   verdicts, step labels and relations. Never a rewrite of the experience.
 //!
+//! * [`chat`] and [`prompt`] - the shapes a conversation is written in, and the
+//!   one system turn every model run on a task is sent.
+//! * [`kinds`] and [`selfcontained`] - the names tasks travel under, and the
+//!   rule that an instruction must stand on its own.
+//!
 //! This crate performs no I/O. It knows no store, no model and no agent
 //! runtime: it is the language they share, and the invariants every record
 //! in it keeps no matter who builds one.
@@ -27,7 +32,11 @@
 #![warn(missing_docs)]
 
 pub mod annotation;
+pub mod chat;
 pub mod clock;
 pub mod digest;
 pub mod experience;
+pub mod kinds;
+pub mod prompt;
+pub mod selfcontained;
 pub mod source;

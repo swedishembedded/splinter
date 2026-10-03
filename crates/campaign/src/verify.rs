@@ -24,8 +24,9 @@ use splinter_agent::solve::Model;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, ExperienceId, Task};
+use splinter_core::kinds::DENOISE;
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
-use splinter_lab::denoise::{FormalVerifier, KIND as DENOISE_KIND};
+use splinter_lab::denoise::FormalVerifier;
 use splinter_lab::verifiers::calibration::{CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION};
 use splinter_lab::verifiers::consistency::AgreementVerifier;
 use splinter_lab::verifiers::executable::ExecutableVerifier;
@@ -193,7 +194,7 @@ pub(crate) fn verifiers_for(
     judge: Option<&Judge>,
 ) -> Result<Strongest, CampaignError> {
     let kind = &task.task.kind;
-    if kind == DENOISE_KIND {
+    if kind == DENOISE {
         return Ok(Strongest::new(vec![Box::new(FormalVerifier::new())]));
     }
     let catalogue = Catalogue::builtin();

@@ -33,10 +33,10 @@ use splinter_campaign::train::{
 };
 use splinter_campaign::{CampaignError, Context};
 use splinter_core::annotation::Strength;
+use splinter_core::chat::WireMessage;
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_lab::WireMessage;
 use splinter_policy::train::TrainedPreference;
 use splinter_policy::train::{HeldOutScore, Trained};
 use splinter_record::tasks::{TaskEntry, TaskSet, TaskSetId};

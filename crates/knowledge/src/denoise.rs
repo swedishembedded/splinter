@@ -23,8 +23,8 @@
 use splinter_core::experience::{
     Digest, Environment, ExperienceError, Privileged, PrivilegedKind, Span, Task,
 };
+use splinter_core::kinds::DENOISE;
 use splinter_core::source::{PartRef, Source, SourceId};
-use splinter_lab::denoise::KIND;
 
 /// Words in a denoise passage, when the part has that many.
 pub const SPAN_WORDS: usize = 12;
@@ -147,7 +147,7 @@ impl Denoise {
             corrupted.join(" ")
         );
         Ok(Task::new(
-            KIND,
+            DENOISE,
             vec![span.clone()],
             Environment::closed_book(),
             instruction,

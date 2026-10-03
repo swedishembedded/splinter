@@ -37,13 +37,12 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Task};
 use splinter_sandbox::{CodeCall, RuntimeEnvironment};
 
+use splinter_core::kinds::GENERATED_TEST;
+
 use super::executable::{
     assemble, parse_checks, program_text, run_check, run_evidence, ExecutableCheck, Offered,
 };
 use super::{single_reference, Finding, Verifier, VerifyError};
-
-/// The privileged kind a generated test travels as.
-pub const TEST_KIND: &str = "generated-test";
 
 /// The producer name the verifier's annotations carry.
 pub const PRODUCER: &str = "splinter-lab/mutation-validated";
@@ -376,7 +375,7 @@ pub fn validate_oracle(
     Ok(validation)
 }
 
-/// Grades a solution with the task's generated tests ([`TEST_KIND`]) that
+/// Grades a solution with the task's generated tests ([`GENERATED_TEST`]) that
 /// mutation admits against its one reference: pass iff it passes every
 /// admitted test, fail otherwise or when there is no answer; abstains when
 /// the task has no reference, no test is admitted, or a test's environment
@@ -418,7 +417,7 @@ impl Verifier for MutationValidatedVerifier {
             Ok(reference) => program_text(reference),
             Err(abstain) => return Ok(abstain),
         };
-        let tests = parse_checks(task, TEST_KIND)?;
+        let tests = parse_checks(task, GENERATED_TEST)?;
         if tests.is_empty() {
             return Ok(Finding::abstain(
                 "the task carries no generated tests",

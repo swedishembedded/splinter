@@ -17,10 +17,8 @@ mod common;
 use common::*;
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::experience::{Experience, Privileged, PrivilegedKind};
-use splinter_views::{
-    check_self_contained, Corpus, Exclusion, Fraction, NotSelfContained, RecordBody, SftFinal,
-    Strip, View, ViewError, MIN_QUOTED_CHARS,
-};
+use splinter_core::selfcontained::{check_self_contained, NotSelfContained, MIN_QUOTED_CHARS};
+use splinter_views::{Corpus, Exclusion, Fraction, RecordBody, SftFinal, Strip, View, ViewError};
 
 const PASSAGE: &str = "TEACHER-ONLY passage: the store keeps every experience under its digest.";
 const HINT: &str = "TEACHER-ONLY hint: think about content addressing.";
@@ -194,11 +192,10 @@ fn an_instruction_that_needs_the_dropped_context_is_excluded_and_counted() {
 /// justification for dropping them.
 #[test]
 fn dropping_checks_tests_and_critiques_needs_no_justification() {
-    use splinter_lab::verifiers::executable::{CHECK_KIND, OUTPUT_CHECK_KIND};
-    use splinter_lab::verifiers::mutation::TEST_KIND;
+    use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK};
 
     let signature = "def clamp(value, low, high): return the value clamped";
-    let mut grading: Vec<Privileged> = [CHECK_KIND, TEST_KIND, OUTPUT_CHECK_KIND]
+    let mut grading: Vec<Privileged> = [EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK]
         .iter()
         .map(|kind| privileged(PrivilegedKind::Other((*kind).into()), signature))
         .collect();

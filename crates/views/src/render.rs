@@ -4,8 +4,8 @@
 //! The text views put into a student's input, in one place so every view
 //! renders the same parts the same way.
 
+use splinter_core::chat::WireMessage;
 use splinter_core::experience::Experience;
-use splinter_lab::WireMessage;
 
 use crate::{Entry, Exclusion, Strip};
 

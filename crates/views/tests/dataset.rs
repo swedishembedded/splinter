@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::experience::{Digest, PrivilegedKind};
-use splinter_lab::SYSTEM_PROMPT;
+use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_views::{
     manifest_path, write_dataset, Corpus, Format, Objective, Preference, Projection, Record,
     RecordBody, RecordMetadata, SftFinal, View, ViewError, WriteOptions, EXPORT_FORMAT,
