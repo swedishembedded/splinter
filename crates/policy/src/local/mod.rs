@@ -174,7 +174,9 @@ impl LocalQwen {
 }
 
 /// A directory pointing at a checkpoint resolves to the checkpoint inside
-/// it; a file passes through. Mirrors brain's own `resolve_base`.
+/// it; a file passes through. A sharded Hugging Face checkpoint has no single
+/// file to resolve to, so its directory is the checkpoint. Mirrors brain's
+/// own `resolve_base`.
 pub fn resolve_base(specified: &Path) -> Result<PathBuf, PolicyError> {
     if specified.is_file() {
         return Ok(specified.to_path_buf());
@@ -185,10 +187,32 @@ pub fn resolve_base(specified: &Path) -> Result<PathBuf, PolicyError> {
             return Ok(candidate);
         }
     }
+    if is_sharded_hugging_face(specified) {
+        return Ok(specified.to_path_buf());
+    }
     // Anything else: refuse here, where the caller can name the directory,
     // rather than inside the checkpoint open.
     Err(PolicyError::NoCheckpoint {
         path: specified.to_path_buf(),
+    })
+}
+
+/// Whether `dir` holds a Hugging Face checkpoint split across numbered
+/// `model-*.safetensors` shards (or named by a shard index): its `config.json`
+/// declares the architecture, so the directory is what brain opens.
+fn is_sharded_hugging_face(dir: &Path) -> bool {
+    if !dir.join("config.json").is_file() {
+        return false;
+    }
+    if dir.join("model.safetensors.index.json").is_file() {
+        return true;
+    }
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("model-") && name.ends_with(".safetensors")
+        })
     })
 }
 
@@ -342,6 +366,29 @@ mod tests {
         std::fs::write(dir.join("model.safetensors"), b"x").unwrap();
         assert_eq!(resolve_base(&dir).unwrap(), dir.join("model.safetensors"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_sharded_hugging_face_directory_resolves_to_itself() {
+        let root = std::env::temp_dir().join(format!("policy-sharded-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let sharded = root.join("sharded");
+        let bare = root.join("bare");
+        std::fs::create_dir_all(&sharded).unwrap();
+        std::fs::create_dir_all(&bare).unwrap();
+        // The 7B distill's layout: config, an index and numbered shards, no
+        // single model.safetensors.
+        std::fs::write(sharded.join("config.json"), b"{}").unwrap();
+        std::fs::write(sharded.join("model.safetensors.index.json"), b"{}").unwrap();
+        std::fs::write(sharded.join("model-00001-of-000002.safetensors"), b"x").unwrap();
+        std::fs::write(sharded.join("model-00002-of-000002.safetensors"), b"x").unwrap();
+        // Shards with no config name no architecture, so nothing to open.
+        std::fs::write(bare.join("model-00001-of-000002.safetensors"), b"x").unwrap();
+
+        assert_eq!(resolve_base(&sharded).unwrap(), sharded);
+        assert_eq!(load_source(&resolve_base(&sharded).unwrap()), sharded);
+        assert!(resolve_base(&bare).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
