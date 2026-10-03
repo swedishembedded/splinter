@@ -30,6 +30,8 @@
 
 use std::path::{Path, PathBuf};
 
+use splinter_core::training::{HeldOutScore, PreferenceScore};
+
 use crate::error::PolicyError;
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
@@ -96,34 +98,24 @@ pub struct StepReport {
     pub loss: f32,
 }
 
-/// One held-out score: teacher-forced loss and token accuracy over the
-/// supervised positions of the held-out records.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct HeldOutScore {
-    /// Mean per-token cross-entropy over the supervised positions; lower is
-    /// better. `None` when no position was scored.
-    pub loss: Option<f32>,
-    /// Fraction of supervised positions, 0.0-1.0, where the greedy argmax
-    /// matched the true next token; `None` when no position was scored.
-    pub token_accuracy: Option<f64>,
-    /// Supervised token positions the two numbers above were computed over.
-    pub positions: usize,
-    /// Held-out records scored.
-    pub records: usize,
-    /// Held-out records skipped (too long for the scoring row, or not
-    /// encodable).
-    pub skipped: usize,
+/// brain's held-out score as Splinter records it.
+fn held_out_score(s: brain::HeldOutScore) -> HeldOutScore {
+    HeldOutScore {
+        loss: s.loss,
+        token_accuracy: s.token_accuracy,
+        positions: s.positions,
+        records: s.records,
+        skipped: s.skipped,
+    }
 }
 
-impl From<brain::HeldOutScore> for HeldOutScore {
-    fn from(s: brain::HeldOutScore) -> Self {
-        Self {
-            loss: s.loss,
-            token_accuracy: s.token_accuracy,
-            positions: s.positions,
-            records: s.records,
-            skipped: s.skipped,
-        }
+/// brain's preference score as Splinter records it.
+fn preference_score(s: brain::PreferenceScore) -> PreferenceScore {
+    PreferenceScore {
+        accuracy: s.accuracy,
+        mean_margin: s.mean_margin,
+        pairs: s.pairs,
+        skipped: s.skipped,
     }
 }
 
@@ -298,12 +290,12 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         block: outcome.block,
         base: outcome
             .base_score
-            .ok_or_else(|| incomplete("base score"))?
-            .into(),
+            .map(held_out_score)
+            .ok_or_else(|| incomplete("base score"))?,
         tuned: outcome
             .tuned_score
-            .ok_or_else(|| incomplete("tuned score"))?
-            .into(),
+            .map(held_out_score)
+            .ok_or_else(|| incomplete("tuned score"))?,
     })
 }
 
@@ -336,35 +328,6 @@ pub struct PreferenceTune<'a> {
     /// Stops training at the next optimizer step once cancelled; a
     /// cancelled fine-tune exports no adapter and is reported as an error.
     pub cancel: Option<&'a sven_sdk::CancelToken>,
-}
-
-/// brain's preference score of a tuned adapter against its reference on a
-/// set of pairs.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct PreferenceScore {
-    /// Fraction, 0.0-1.0, of scored pairs where the tuned model prefers the
-    /// chosen answer more than the reference does; `None` when no pair was
-    /// scored.
-    pub accuracy: Option<f32>,
-    /// Mean over scored pairs of the reference-normalised log-probability
-    /// margin of chosen over rejected, in nats (without `beta`); `None`
-    /// when no pair was scored.
-    pub mean_margin: Option<f32>,
-    /// Pairs scored.
-    pub pairs: usize,
-    /// Pairs skipped because a candidate does not fit the model's context.
-    pub skipped: usize,
-}
-
-impl From<brain::PreferenceScore> for PreferenceScore {
-    fn from(s: brain::PreferenceScore) -> Self {
-        Self {
-            accuracy: s.accuracy,
-            mean_margin: s.mean_margin,
-            pairs: s.pairs,
-            skipped: s.skipped,
-        }
-    }
 }
 
 /// What one preference fine-tune produced.
@@ -446,8 +409,8 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         block: outcome.block,
         beta: outcome.beta,
         reference_adapter: outcome.trained_from,
-        train_score: outcome.train_score.map(PreferenceScore::from),
-        held_out_score: outcome.held_out_score.map(PreferenceScore::from),
+        train_score: outcome.train_score.map(preference_score),
+        held_out_score: outcome.held_out_score.map(preference_score),
     })
 }
 

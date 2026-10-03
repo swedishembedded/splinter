@@ -29,8 +29,8 @@ use std::str::FromStr;
 
 use serde::Serialize;
 use splinter_agent::CancelToken;
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
-use splinter_data::DatasetId;
 use splinter_eval::paired::accuracy;
 
 use crate::context::Context;

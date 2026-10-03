@@ -32,10 +32,11 @@ use common::gate::{
 use splinter_agent::CancelToken;
 use splinter_campaign::release::anchor;
 use splinter_campaign::train::{
-    train, Regime, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
+    train, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::Context;
-use splinter_data::DatasetId;
+use splinter_core::dataset::DatasetId;
+use splinter_core::training::Regime;
 
 fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
     TrainRequest {

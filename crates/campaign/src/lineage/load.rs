@@ -20,7 +20,8 @@ use splinter_store::sources::SourceStore;
 use crate::context::Context;
 use crate::error::CampaignError;
 use crate::release::StoredRelease;
-use crate::train::{candidate_ids, load_candidate, ReplaySample};
+use crate::train::{candidate_ids, load_candidate};
+use splinter_core::training::ReplaySample;
 
 use super::graph::Graph;
 use super::{NodeKind, Relation};
@@ -314,7 +315,7 @@ fn replay(graph: &mut Graph, replay: &ReplaySample) -> Option<String> {
 fn training(
     graph: &mut Graph,
     id: &str,
-    datasets: &[splinter_data::DatasetId],
+    datasets: &[splinter_core::dataset::DatasetId],
     parent: Option<&splinter_core::release::ReleaseId>,
     sample: Option<&ReplaySample>,
     adapter: &str,

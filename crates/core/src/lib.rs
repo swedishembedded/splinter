@@ -25,7 +25,8 @@
 //! * [`evidence`] - how an executable verdict's evidence reads back.
 //! * [`model_ref`] and [`role`] - how a command names a model, and which
 //!   model plays which role in a run.
-//! * [`release`] - what names a release.
+//! * [`dataset`], [`release`] and [`training`] - what names a dataset and a
+//!   release, and the record of how a candidate was trained.
 //! * [`kinds`] and [`selfcontained`] - the names tasks travel under, and the
 //!   rule that an instruction must stand on its own.
 //!
@@ -38,6 +39,7 @@
 pub mod annotation;
 pub mod chat;
 pub mod clock;
+pub mod dataset;
 pub mod digest;
 pub mod evidence;
 pub mod experience;
@@ -48,3 +50,4 @@ pub mod release;
 pub mod role;
 pub mod selfcontained;
 pub mod source;
+pub mod training;

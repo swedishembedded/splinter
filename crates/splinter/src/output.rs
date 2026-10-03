@@ -21,10 +21,11 @@ use splinter_campaign::solving::Solved;
 use splinter_campaign::sources::{SourceAdded, SourceList, SourceSummary};
 use splinter_campaign::status::Status;
 use splinter_campaign::tasks::{TaskSetList, TaskShow, TasksGenerated};
-use splinter_campaign::train::{Candidate, Regime};
+use splinter_campaign::train::Candidate;
 use splinter_campaign::verify::Verified;
 use splinter_campaign::CampaignError;
 use splinter_core::source::{Origin, Source};
+use splinter_core::training::Regime;
 use splinter_store::runs::Run;
 
 /// A report a command prints.

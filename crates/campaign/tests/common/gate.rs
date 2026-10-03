@@ -28,20 +28,23 @@ use splinter_agent::CancelToken;
 use splinter_campaign::datasets::store_dataset;
 use splinter_campaign::release::{arm, release, ReleaseRequest, Released};
 use splinter_campaign::train::{
-    train, Candidate, Regime, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
+    train, Candidate, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::{CampaignError, Context};
 use splinter_core::annotation::Strength;
 use splinter_core::chat::WireMessage;
 use splinter_core::clock::FixedClock;
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
-use splinter_data::{DatasetId, Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
+use splinter_core::training::HeldOutScore;
+use splinter_core::training::Regime;
+use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use splinter_eval::gate::GateConfig;
+use splinter_model::train::Trained;
 use splinter_model::train::TrainedPreference;
-use splinter_model::train::{HeldOutScore, Trained};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use super::{config, Scratch, Scripted};

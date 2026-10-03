@@ -53,9 +53,10 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::curriculum::queue::enqueue_retention;
 use crate::error::CampaignError;
-use crate::train::{load_candidate, Candidate, TrainingSummary};
+use crate::train::{load_candidate, Candidate};
 use probe::{pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
+use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
 use splinter_model::stats::BrainSignificance;
 

@@ -39,12 +39,15 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::CancelToken;
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
+use splinter_core::training::{
+    HeldOutScore, PreferenceSummary, Regime, ReplaySample, ReplaySource,
+};
 use splinter_data::holdout::split_dataset_file;
-use splinter_data::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
+use splinter_data::{replay_sample, Format, Fraction, StoredDataset};
 use splinter_model::train::{
-    fine_tune, train_preference, FineTune, HeldOutScore, PreferenceScore, PreferenceTune, Trained,
-    TrainedPreference,
+    fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
 };
 use splinter_model::{ModelSelection, PolicyError};
 use splinter_store::artifacts::ArtifactSpec;
@@ -80,29 +83,14 @@ const CANDIDATE: &str = "candidate";
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
 
-/// How a candidate was trained, decided by its datasets' objective.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Regime {
-    /// Supervised fine-tuning on chat records (`generic-messages-v2`); the
-    /// regime of a record that names none.
-    #[default]
-    Sft,
-    /// Direct preference optimisation on chosen/rejected pairs
-    /// (`generic-preference-v1`).
-    Dpo,
-}
-
-impl Regime {
-    /// The regime a dataset of `format` is trained by; `None` for a format
-    /// brain does not train.
-    #[must_use]
-    pub fn of(format: Format) -> Option<Self> {
-        match format {
-            Format::GenericMessagesV2 => Some(Self::Sft),
-            Format::GenericPreferenceV1 => Some(Self::Dpo),
-            Format::SplinterExportV1 => None,
-        }
+/// The regime a dataset of `format` is trained by; `None` for a format
+/// brain does not train.
+#[must_use]
+pub fn regime_of(format: Format) -> Option<Regime> {
+    match format {
+        Format::GenericMessagesV2 => Some(Regime::Sft),
+        Format::GenericPreferenceV1 => Some(Regime::Dpo),
+        Format::SplinterExportV1 => None,
     }
 }
 
@@ -139,34 +127,6 @@ pub struct TrainRequest {
     pub tuning: Tuning,
 }
 
-/// Where the replayed records came from.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ReplaySource {
-    /// The earlier release.
-    pub release: ReleaseId,
-    /// Its datasets.
-    pub datasets: Vec<DatasetId>,
-    /// Its records that were trained on, which the sample is drawn from.
-    pub available: usize,
-    /// Of those, the ones replayed.
-    pub sampled: usize,
-}
-
-/// The earlier records replayed beside the new ones.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ReplaySample {
-    /// The fraction of each release's training records drawn.
-    pub fraction: f64,
-    /// The draw's seed.
-    pub seed: u64,
-    /// Each earlier release trained on chat records, oldest first.
-    pub sources: Vec<ReplaySource>,
-    /// Records replayed in all.
-    pub records: usize,
-    /// The digest of the replay file; `None` when nothing was drawn.
-    pub digest: Option<Digest>,
-}
-
 /// Everything a trainer needs, resolved.
 #[derive(Clone, Debug)]
 pub struct TrainPlan {
@@ -194,50 +154,6 @@ pub struct TrainPlan {
     pub beta: f32,
     /// The base's precision and the learning rate.
     pub tuning: Tuning,
-}
-
-/// A preference candidate's measurements: brain's preference score of the
-/// adapter against the reference it was trained against.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct PreferenceSummary {
-    /// The DPO temperature it trained with.
-    pub beta: f32,
-    /// The digest of the adapter the reference carried (the one
-    /// continued); `None` when the reference was the base alone.
-    pub reference_adapter: Option<String>,
-    /// On the pairs trained on; `None` when not measured.
-    pub train_score: Option<PreferenceScore>,
-    /// On the held-out pairs; `None` when not measured.
-    pub held_out_score: Option<PreferenceScore>,
-}
-
-/// How a candidate was trained, as its release records it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TrainingSummary {
-    /// The reference it was trained from.
-    pub from: String,
-    /// Optimizer steps.
-    pub steps: u32,
-    /// LoRA rank asked for.
-    pub rank: u32,
-    /// Records in the new datasets.
-    pub records: usize,
-    /// How it was trained.
-    #[serde(default)]
-    pub regime: Regime,
-    /// The base on the held-out records; `None` when not measured (the
-    /// preference regime measures preferences instead).
-    #[serde(default)]
-    pub base_score: Option<HeldOutScore>,
-    /// The base with the adapter on the same records; `None` when not
-    /// measured.
-    #[serde(default)]
-    pub tuned_score: Option<HeldOutScore>,
-    /// The preference measurements; `None` for the supervised regime.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preference: Option<PreferenceSummary>,
-    /// brain's own training record of the adapter.
-    pub record: serde_json::Value,
 }
 
 /// A trained candidate, as stored: everything but where its adapter file is.
@@ -457,7 +373,7 @@ fn trainer_error(e: PolicyError) -> CampaignError {
 /// refused when brain cannot train it.
 pub fn trainable(ctx: &Context, id: &str) -> Result<(StoredDataset, Regime), CampaignError> {
     let dataset = resolve_dataset(ctx, id)?;
-    let Some(regime) = Regime::of(dataset.manifest.format) else {
+    let Some(regime) = regime_of(dataset.manifest.format) else {
         return Err(CampaignError::Refused(format!(
             "dataset {} is export-only ({:?} records); brain cannot train it",
             dataset.id, dataset.manifest.objective

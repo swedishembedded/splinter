@@ -43,15 +43,16 @@ use splinter_campaign::ask::ask;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::lineage::{lineage, Direction, Lineage, LineageRequest, NodeKind, Relation};
 use splinter_campaign::release::{ReleaseManifest, RELEASE_FORMAT};
-use splinter_campaign::train::{Candidate, TrainingSummary};
+use splinter_campaign::train::Candidate;
 use splinter_campaign::{CampaignError, Context};
 use splinter_core::clock::FixedClock;
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, ExperienceId, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
-use splinter_data::DatasetId;
+use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{Check, GateConfig, GateReport};
 
 /// What the learned fixture holds.

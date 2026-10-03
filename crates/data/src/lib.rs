@@ -64,6 +64,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use splinter_core::annotation::Strength;
 use splinter_core::chat::WireMessage;
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{ExperienceError, ExperienceId};
 use splinter_core::prompt::SYSTEM_PROMPT;
@@ -76,7 +77,7 @@ pub use dataset::{
     EXPORT_FORMAT,
 };
 pub use replay::replay_sample;
-pub use store::{DatasetId, DatasetStore, StoredDataset};
+pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use views::{
     Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Retrieval, SftFinal, SftStep,

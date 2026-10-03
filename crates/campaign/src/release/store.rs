@@ -26,17 +26,17 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
-use splinter_data::DatasetId;
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
 use crate::error::CampaignError;
-use crate::train::{ReplaySample, TrainingSummary};
 use splinter_core::model_ref::is_alias_name;
+use splinter_core::training::{ReplaySample, TrainingSummary};
 use splinter_eval::gate::GateReport;
 
 const RELEASE: &str = "release";
