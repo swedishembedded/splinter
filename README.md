@@ -5,9 +5,12 @@
 
 # Splinter
 
-A learning agent with its own model. Tell it what to learn, in plain
-language; it learns it, measures that it did, and releases a better version
-of itself.
+**Splinter turns agent experience into better local models.**
+
+It runs agents against real tasks, records what happened, verifies the
+outcomes, extracts training data from what was verified, trains a local
+model, and releases the result only when held-out evidence shows it improved.
+You tell it what to learn, in plain language:
 
 ```
 splinter "Learn all the facts about the STM32 reference manual from <path-to-manual>"
@@ -15,21 +18,67 @@ splinter "Learn what we can do with brain command line options"
 splinter "Explain brain command line flags without interacting with brain"
 ```
 
+One system carries the whole loop:
+
+```text
+   task --> experience --> evidence --> dataset --> training --> evaluation --> release
+    |           |             |            |            |            |             |
+ generated   an agent's    verified by   projected   a LoRA on    held-out,     an immutable
+ from what   run, kept     code a model  from the    the local    retention,    adapter with a
+ you point   whole and     cannot reach  experience  base, with   anchor and    manifest, on
+ it at       never edited                            replay       serve checks  plain brain
+```
+
+## What it is built on
+
 Splinter is built on two standalone projects and replaces neither:
 
 - **sven** runs the agent: tools, sessions, delegation, and a trustworthy
   record of what the agent did.
 - **brain** runs the model: inference, training, evaluation and serving.
 
-What Splinter releases is an ordinary brain adapter with a manifest. It runs
-on plain `brain serve`, and plain sven can use it through its brain
-provider; neither needs Splinter installed.
+Splinter decides what is learned: which tasks to write, which experience
+qualifies as training data, what to train, and whether the result is better.
+What it releases is an ordinary brain adapter with a manifest. It runs on plain
+`brain serve`, and plain sven can use it through its brain provider; neither
+needs Splinter installed.
 
-## Status
+## What it learns from
 
-Early. The command line (`crates/splinter/README.md`) runs the learning
-pipeline one stage per verb - sources, tasks, solve, verify, critique,
-dataset, train, release - and `learn` runs them all as one recorded run:
+| Source | How |
+|---|---|
+| A document | chunked into addressable sections; facts and held-out probes are extracted and held to the text by code |
+| A directory of text | surveyed, then a planner model chooses what to teach from a menu; each choice is held to the sources |
+| A command-line tool | the tool's real output is captured as a source with provenance, then goes through the document path |
+| An agent's own attempts | solved closed-book or in a runtime, graded by the task kind's verifiers, critiqued and retried |
+
+## What it produces
+
+| Product | What it is |
+|---|---|
+| Experience | an agent's recorded run, immutable and content-addressed; verdicts, rewards and labels are facts derived about it |
+| Datasets | training records projected from experience for one objective, with a manifest naming where every record came from |
+| Candidates | a LoRA adapter trained from the champion on the new material plus a replay of everything learned before |
+| Releases | an immutable adapter with a manifest of every number the release gate measured, and lineage back to the sources |
+
+## Current status
+
+| Capability | Status |
+|---|---|
+| Learn from documents, repositories and command output | working |
+| Closed-book solving, verification, critique and retry | working |
+| Pass@k frontier selection with a teacher for what the policy never solves | working |
+| Supervised fine-tuning with replay, preference fine-tuning by DPO | working |
+| Four-check release gate, immutable releases, rollback | working |
+| Lineage from an answer back to the source bytes | working |
+| Models by role (policy, teacher, generator, planner, judge, critic, router) | working |
+| Several tasks in flight for a model reached over an API | working |
+| The Rust SDK (`splinter-sdk`) | working, young: the API will move |
+| Training from rewarded trajectories, raw text, contrastive pairs | planned: projected as an export format; no trainer reads it yet |
+| A `chat` intent at the front door | planned |
+| Resuming a pipeline from a checkpoint | planned |
+
+## Quick start
 
 ```bash
 splinter eval --suite anchor --freeze general.jsonl   # once: the anchor suite
@@ -37,6 +86,36 @@ splinter learn docs/p100-manual.md --goal "the P100 console and power limits"
 splinter status
 splinter "what baud rate does the P100 console run at?"
 ```
+
+The command line (`crates/splinter/README.md`) runs the pipeline one stage per
+verb - sources, tasks, solve, verify, critique, dataset, train, release - and
+`learn` runs them all as one recorded run.
+
+## The Rust SDK
+
+Everything the command line does, a program can do through one dependency:
+
+```rust
+use splinter_sdk::learn::LearnRequest;
+use splinter_sdk::Splinter;
+
+let splinter = Splinter::from_env()?;
+let learned = splinter.learn(&LearnRequest {
+    sources: vec!["./manual.md".into()],
+    goal: Some("the console and power limits".into()),
+    ..LearnRequest::default()
+})?;
+```
+
+A `Splinter` owns what a process shares - the runtime with its loaded models,
+the trainer, where progress is reported - and hands each command a context of
+its own, so a policy alias that moves between two commands is seen by the
+second. Every command that writes state runs as a recorded run
+(`Splinter::run`), readable and cancellable from any process. The command line
+and every program in `samples/` depend on the SDK and on nothing else of
+Splinter's.
+
+## How the loop works
 
 Every question Splinter writes names what it is about - the product,
 document, tool or version - so that someone who has never seen the source
