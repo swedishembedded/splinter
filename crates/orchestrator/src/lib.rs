@@ -17,6 +17,7 @@
 //! * [`roles`] and [`model_ref`] - who plays each role, and what a model
 //!   reference resolves to under the configuration.
 //! * [`runs`] - the recorded run and its cross-process cancel.
+//! * [`pipeline`] - stages run in order over one state, each recorded.
 //! * [`releases`] and [`answers`] - the release store with its aliases, and
 //!   the answers `ask` gave.
 //! * [`ids`] - an id, or a unique prefix of one, resolved against what a
@@ -34,6 +35,7 @@ pub mod context;
 pub mod error;
 pub mod ids;
 pub mod model_ref;
+pub mod pipeline;
 pub mod releases;
 pub mod roles;
 pub mod runs;

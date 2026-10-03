@@ -44,6 +44,12 @@ pub struct Recorder<'a> {
 }
 
 impl Recorder<'_> {
+    /// The run's id (`runs show <run>`).
+    #[must_use]
+    pub fn id(&self) -> &str {
+        self.log.id()
+    }
+
     /// Records the finished stage `stage` with `summary`, and reports it to
     /// the context's progress receiver.
     pub fn stage(
@@ -51,8 +57,22 @@ impl Recorder<'_> {
         stage: &str,
         summary: &impl Serialize,
     ) -> Result<(), OrchestratorError> {
+        self.stage_measured(stage, summary, None, None)
+    }
+
+    /// [`Self::stage`], with how long the stage took and why it failed when
+    /// it did.
+    pub fn stage_measured(
+        &mut self,
+        stage: &str,
+        summary: &impl Serialize,
+        duration: Option<Duration>,
+        error: Option<String>,
+    ) -> Result<(), OrchestratorError> {
         let summary = to_json(stage, summary)?;
-        self.log.stage(stage, summary.clone(), self.ctx.clock())?;
+        let duration_ms = duration.map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+        self.log
+            .stage(stage, summary.clone(), duration_ms, error, self.ctx.clock())?;
         self.ctx.report_stage(stage, &summary);
         Ok(())
     }

@@ -587,7 +587,17 @@ impl Report for Run {
             self.updated_at
         );
         for stage in &self.stages {
-            let _ = writeln!(out, "  {} finished {}", stage.stage, stage.finished_at);
+            let took = stage.duration_ms.map_or(String::new(), |ms| {
+                format!(" in {:.1}s", ms as f64 / 1000.0)
+            });
+            let _ = writeln!(
+                out,
+                "  {} finished {}{took}",
+                stage.stage, stage.finished_at
+            );
+            if let Some(error) = &stage.error {
+                let _ = writeln!(out, "    failed: {error}");
+            }
         }
         if let Some(error) = &self.error {
             let _ = writeln!(out, "  error: {error}");

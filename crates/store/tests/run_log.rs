@@ -42,7 +42,16 @@ fn a_run_records_its_stages_and_how_it_ended() {
         RunStatus::Running
     );
 
-    run.stage("solve", json!({ "solved": 2 }), &clock).unwrap();
+    run.stage("solve", json!({ "solved": 2 }), None, None, &clock)
+        .unwrap();
+    run.stage(
+        "verify",
+        json!({}),
+        Some(1500),
+        Some("it broke".into()),
+        &clock,
+    )
+    .unwrap();
     run.finish(
         RunStatus::Completed,
         json!({ "experience_set": "sha256:cd" }),
@@ -56,8 +65,16 @@ fn a_run_records_its_stages_and_how_it_ended() {
     let recorded = read_run(&other, &id).unwrap();
     assert_eq!(recorded.command, "solve");
     assert_eq!(recorded.status, RunStatus::Completed);
-    assert_eq!(recorded.stages.len(), 1);
+    assert_eq!(recorded.stages.len(), 2);
     assert_eq!(recorded.stages[0].summary["solved"], 2);
+    // A stage recorded without timing reads back without it, as every stage
+    // recorded before stages were timed does.
+    assert_eq!(
+        (recorded.stages[0].duration_ms, &recorded.stages[0].error),
+        (None, &None)
+    );
+    assert_eq!(recorded.stages[1].duration_ms, Some(1500));
+    assert_eq!(recorded.stages[1].error.as_deref(), Some("it broke"));
     assert_eq!(recorded.outputs["experience_set"], "sha256:cd");
     assert_eq!(list_runs(&other).unwrap().len(), 1);
     assert!(matches!(

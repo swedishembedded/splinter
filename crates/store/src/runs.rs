@@ -67,6 +67,13 @@ pub struct RunStage {
     pub finished_at: String,
     /// What it did, as the command reports it.
     pub summary: serde_json::Value,
+    /// How long it ran, in milliseconds; absent from a run recorded before
+    /// stages were timed, and from a stage that was not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+    /// Why it failed, when it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// A run's record.
@@ -166,11 +173,14 @@ impl RunLog {
         &self.run.id
     }
 
-    /// Appends the finished stage `stage` with `summary`.
+    /// Appends the finished stage `stage` with `summary`, how long it took
+    /// when that was measured, and why it failed when it did.
     pub fn stage(
         &mut self,
         stage: &str,
         summary: serde_json::Value,
+        duration_ms: Option<u64>,
+        error: Option<String>,
         clock: &dyn Clock,
     ) -> Result<(), StoreError> {
         let now = clock.utc_now();
@@ -179,13 +189,20 @@ impl RunLog {
             self.events,
             "stage",
             &now,
-            json!({ "stage": stage, "summary": summary }),
+            json!({
+                "stage": stage,
+                "summary": summary,
+                "duration_ms": duration_ms,
+                "error": error,
+            }),
         ))?;
         self.events += 1;
         self.run.stages.push(RunStage {
             stage: stage.to_string(),
             finished_at: now.clone(),
             summary,
+            duration_ms,
+            error,
         });
         self.run.updated_at = now;
         Ok(())
@@ -302,6 +319,8 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
                     stage: text(&e["body"]["stage"]),
                     finished_at: text(&e["at"]),
                     summary: e["body"]["summary"].clone(),
+                    duration_ms: e["body"]["duration_ms"].as_u64(),
+                    error: e["body"]["error"].as_str().map(str::to_string),
                 });
                 run.updated_at = text(&e["at"]);
             }
