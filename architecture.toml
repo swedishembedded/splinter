@@ -48,7 +48,7 @@ internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-vie
 # agent's closed-book solve, the one way a model is run on a task, and hold
 # every generated instruction to the views' self-containment rule, the one
 # rule for what a student may be shown without the material it lacks.
-internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-policy", "splinter-agent", "splinter-views"]
+internal = ["splinter-record", "splinter-sandbox", "splinter-lab", "splinter-agent", "splinter-views"]
 
 [crates.splinter-views]
 internal = ["splinter-record", "splinter-lab", "splinter-policy"]

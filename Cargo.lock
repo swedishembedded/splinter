@@ -4093,7 +4093,6 @@ dependencies = [
  "serde_json",
  "splinter-agent",
  "splinter-lab",
- "splinter-policy",
  "splinter-record",
  "splinter-sandbox",
  "splinter-views",

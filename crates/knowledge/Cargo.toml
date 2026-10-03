@@ -12,7 +12,6 @@ publish.workspace = true
 [dependencies]
 splinter-agent = { workspace = true }
 splinter-lab = { workspace = true }
-splinter-policy = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-record = { workspace = true }
 splinter-views = { workspace = true }
