@@ -1,13 +1,54 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 <!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
 
-# jefferson - does source-grounded fine-tuning teach a model the Jefferson corpus?
+# jefferson - can Splinter, alone, learn to think like Thomas Jefferson?
 
-Teach a local model Thomas Jefferson's letters and the founding-era works he
-argued from, then measure, on questions fixed before training, what it kept,
-what it can recognise in text it never saw, and how often it invents a
-quotation. Everything runs on the GPUs; a run that touches the CPU backend is
-stopped.
+Splinter is given one sentence and a directory of what Jefferson wrote:
+
+```bash
+splinter "Learn to think like Thomas Jefferson based on the materials he has written in directory ./materials"
+```
+
+Everything else is Splinter's own work: it captures the directory, surveys it,
+plans what to teach (the planner is a model, held to the survey by code),
+generates tasks and conversations grounded in the letters, has a teacher answer
+them open-book, verifies every answer by code, trains a LoRA adapter on the
+verified answers, examines the adapter against its base on letters it never
+saw under a calibrated judge, and releases it only if the gate passes. This
+sample supplies the materials and an independent check; it supplies no logic
+Splinter lacks.
+
+## Running it
+
+```bash
+# 1. The public-domain texts (checksummed) and the directory Splinter learns from.
+python3 resources/founding-america/fetch.py
+splinter-jefferson materials --resources RESOURCES --out ./materials
+
+# 2. Splinter does the rest. The roles are named by the configuration:
+#    the policy to train, and the assistant that plans, writes, teaches and judges.
+SPLINTER_ASSISTANT_MODEL=local:Qwen/Qwen3-8B SPLINTER_BF16_BASE=1 \
+  splinter "Learn to think like Thomas Jefferson based on the materials he has written in directory ./materials" --budget 8h
+```
+
+The `learn` report names each stage's result, including the exam: how often the
+judge says the base's and the adapter's answers give what a held-out letter
+says, how often either states a number or name the letter does not hold, and a
+paired sign test of the two. The judge is calibrated on controls made from the
+run's own verified answers first; one that cannot tell them apart grades
+nothing and the report says no claim is made.
+
+`materials` writes the letters of the training families and Jefferson's own
+works, and withholds the exam families for the independent check below.
+Splinter makes its own held-out split from what it is given, by group of
+overlapping text, so its exam and the independent one are different letters.
+
+## The independent check
+
+The commands below are a second measurement that Splinter's own stages do not
+share code with, so the two can disagree. They ask the base and the adapter
+Splinter produced a set of questions fixed before training and read the answers
+without Splinter's judge.
 
 ## The question
 
