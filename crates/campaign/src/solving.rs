@@ -32,6 +32,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use splinter_agent::converse::converse_prompted;
 use splinter_agent::solve::{open_book_prompt, solve_prompted, Model, SolveError, SolveOptions};
+use splinter_agent::{CancelToken, RunConclusion};
 use splinter_core::digest::Digest;
 use splinter_core::experience::Provenance;
 use splinter_knowledge::material::teacher_material;
@@ -39,7 +40,6 @@ use splinter_knowledge::tasks::Catalogue;
 use splinter_model::Sampling;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::TaskSetId;
-use sven_sdk::{CancelToken, RunConclusion};
 
 use crate::context::Context;
 use crate::curriculum::policy_label;

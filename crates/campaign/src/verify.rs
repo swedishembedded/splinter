@@ -21,6 +21,7 @@ use std::time::Duration;
 use serde::Serialize;
 use splinter_agent::judge::JudgeVerifier;
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, ExperienceId, Task};
@@ -37,7 +38,6 @@ use splinter_eval::verifiers::quotation::{QuotationPolicy, QuotationVerifier, St
 use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_store::experiences::SetId;
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

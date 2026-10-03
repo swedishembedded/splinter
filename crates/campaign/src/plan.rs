@@ -23,10 +23,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use splinter_agent::solve::SolveOptions;
+use splinter_agent::schemars::JsonSchema;
+use splinter_agent::typed::TypedCall;
+use splinter_agent::CancelToken;
 use splinter_knowledge::survey::Survey;
-use sven_sdk::schemars::JsonSchema;
-use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
 
 use crate::context::Context;
 use crate::error::CampaignError;
@@ -82,7 +82,7 @@ pub const MENU: [(&str, &str); 5] = [
 
 /// How to learn from the sources.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[schemars(crate = "sven_sdk::schemars")]
+#[schemars(crate = "splinter_agent::schemars")]
 pub struct Plan {
     /// Who the learner is becoming, when the goal is to think like a person.
     pub persona: Option<String>,
@@ -181,31 +181,19 @@ pub fn plan(
 ) -> Result<Plan, CampaignError> {
     let model = ctx.model(planner)?;
     let facts = Arc::new(survey.clone());
-    let method = Method::<Plan>::new("plan_learning")
-        .task(task())
-        .role(ROLE)
+    let call = TypedCall::<Plan>::new("plan_learning", task(), ROLE, PLAN_DEADLINE)
+        .max_output_tokens(PLAN_MAX_OUTPUT_TOKENS)
+        .cancel(cancel.clone())
         .postcondition(move |chosen: &Plan| check(chosen, &facts));
-    let call = |source: CallError| CampaignError::Call {
-        method: "plan_learning",
-        source,
-    };
-    let mut bounds = SolveOptions::new(PLAN_DEADLINE);
-    bounds.max_output_tokens = Some(PLAN_MAX_OUTPUT_TOKENS);
-    bounds.stream_idle = model.stream_idle;
-    bounds.cancel = Some(cancel.clone());
-    let engine = Engine::builder()
-        .config(bounds.engine_config())
-        .model_provider(bounds.provider(model.provider))
-        .toolset(Toolset::none())
-        .build()
-        .map_err(call)?;
-    ctx.block_on(engine.call_with(
-        &method,
+    ctx.block_on(call.run(
+        &model,
         &Brief {
             goal,
             sources: survey,
         },
-        bounds.run_options(),
     ))
-    .map_err(call)
+    .map_err(|source| CampaignError::Call {
+        method: "plan_learning",
+        source,
+    })
 }

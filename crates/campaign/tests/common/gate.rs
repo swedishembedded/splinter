@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_campaign::datasets::store_dataset;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{arm, release, ReleaseRequest, Released};
@@ -42,7 +43,6 @@ use splinter_eval::gate::GateConfig;
 use splinter_model::train::TrainedPreference;
 use splinter_model::train::{HeldOutScore, Trained};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-use sven_sdk::CancelToken;
 
 use super::{config, Scratch, Scripted};
 

@@ -27,6 +27,7 @@
 //! produces can reach a training set.
 
 use serde::Serialize;
+use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Experience, Task};
 use splinter_eval::significance::SignTest;
@@ -36,7 +37,6 @@ use splinter_eval::verifiers::calibration::{
 use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
 use splinter_store::experiences::SetId;
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

@@ -47,6 +47,7 @@ use common::gate::{
     BASE_BYTES, FACTS, NOW,
 };
 use common::Scratch;
+use splinter_agent::CancelToken;
 use splinter_campaign::eval::{eval, EvalRequest, SuiteChoice};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{anchor, list, release, rollback, ReleaseRequest, Released};
@@ -55,7 +56,6 @@ use splinter_campaign::Context;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_model::ModelSelection;
-use sven_sdk::CancelToken;
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
     anchor::freeze(ctx, &anchor_file(&scratch.0, 4)).unwrap();

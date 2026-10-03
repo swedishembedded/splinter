@@ -17,9 +17,10 @@ use async_trait::async_trait;
 use splinter_knowledge::tasks::propose::{ProposalRequest, ProposeError, Proposed, TaskProposer};
 use splinter_knowledge::tasks::reply::Reply;
 use splinter_knowledge::tasks::Rejection;
-use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
+use sven_sdk::{CallError, CancelToken};
 
-use crate::solve::{Model, SolveOptions};
+use crate::solve::Model;
+use crate::typed::TypedCall;
 
 /// A [`TaskProposer`] that asks `model` through a typed sven call.
 #[derive(Clone)]
@@ -55,24 +56,16 @@ impl TaskProposer for SvenProposer {
     }
 
     async fn propose(&self, request: &ProposalRequest<'_>) -> Result<Proposed, ProposeError> {
-        let mut options = SolveOptions::new(request.deadline);
-        options.max_output_tokens = request.max_output_tokens;
-        options.cancel = self.cancel.clone();
-        options.stream_idle = self.model.stream_idle;
-        let method = Method::<Reply>::new(request.method)
-            .task(request.brief)
-            .role(request.role)
-            .max_repairs(request.repairs);
-        let engine = Engine::builder()
-            .config(options.engine_config())
-            .model_provider(options.provider(self.model.provider.clone()))
-            .toolset(Toolset::none())
-            .build()
-            .map_err(|e| ProposeError(e.to_string()))?;
-        match engine
-            .call_with(&method, &request.input, options.run_options())
-            .await
-        {
+        let mut call = TypedCall::<Reply>::new(
+            request.method,
+            request.brief,
+            request.role,
+            request.deadline,
+        )
+        .repairs(request.repairs);
+        call.max_output_tokens = request.max_output_tokens;
+        call.cancel = self.cancel.clone();
+        match call.run(&self.model, &request.input).await {
             Ok(reply) => Ok(Proposed::Replied(reply)),
             Err(CallError::Invalid {
                 attempts,

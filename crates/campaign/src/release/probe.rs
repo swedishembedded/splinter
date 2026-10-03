@@ -40,6 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 use splinter_agent::solve::{solve, Model, SolveOptions};
+use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
 use splinter_data::holdout::holdout_split_records;
@@ -50,7 +51,6 @@ use splinter_eval::verifiers::Strongest;
 use splinter_model::local::GREEDY_SAMPLING;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};

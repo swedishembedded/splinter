@@ -37,3 +37,7 @@ pub mod replay;
 pub mod run_code;
 pub mod solve;
 mod system_prompt;
+pub mod typed;
+
+pub use sven_sdk::schemars;
+pub use sven_sdk::{CallError, CancelToken, RunConclusion};

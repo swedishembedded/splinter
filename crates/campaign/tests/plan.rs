@@ -22,10 +22,10 @@ mod common;
 use std::sync::{Arc, Mutex};
 
 use common::{scratch_context, Scripted};
+use splinter_agent::CancelToken;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::plan::{plan, MIN_ADVICE_SECTIONS, MIN_JUDGMENT_SECTIONS};
 use splinter_knowledge::survey::Survey;
-use sven_sdk::CancelToken;
 
 fn survey(advice_sections: usize, judgment_sections: usize) -> Survey {
     Survey {

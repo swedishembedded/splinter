@@ -34,6 +34,7 @@ use common::manual::{
 };
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_campaign::datasets::{build, BuildRequest, ViewName};
 use splinter_campaign::learn::{learn, LearnRequest, Learned, STAGES};
 use splinter_campaign::model_ref::ModelRef;
@@ -47,7 +48,6 @@ use splinter_campaign::verify::verify_set;
 use splinter_campaign::{CampaignError, Context};
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_store::runs::read_run;
-use sven_sdk::CancelToken;
 
 /// A context whose policy is the manual's, and the tasks `tasks` writes
 /// from the manual (recall, and denoise, which cannot be varied).

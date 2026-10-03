@@ -33,6 +33,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use serde::Serialize;
+use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceId;
 use splinter_eval::frontier::{Distribution, FrontierClass, PassCount};
@@ -41,7 +42,6 @@ pub use splinter_model::Sampling;
 use splinter_model::AGENT_SAMPLING;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::{TaskSet, TaskSetId};
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};

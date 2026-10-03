@@ -9,7 +9,7 @@
 //! The front door: a sentence becomes one of the commands.
 //!
 //! The policy model classifies the sentence through sven's typed method
-//! call ([`sven_sdk::Method`] returning [`Classification`], bounded by
+//! call (a typed call returning [`Classification`], bounded by
 //! [`CLASSIFY_DEADLINE`] and [`CLASSIFY_MAX_OUTPUT_TOKENS`]): candidate
 //! [`Intent`]s, each with its arguments and a confidence. What happens next
 //! is decided here, by [`route`], never by the model:
@@ -30,9 +30,9 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use splinter_agent::solve::SolveOptions;
-use sven_sdk::schemars::JsonSchema;
-use sven_sdk::{CallError, Engine, Method, Toolset};
+use splinter_agent::schemars::JsonSchema;
+use splinter_agent::typed::TypedCall;
+use splinter_agent::CallError;
 
 use crate::context::Context;
 use crate::error::CampaignError;
@@ -53,7 +53,7 @@ pub const CLASSIFY_MAX_OUTPUT_TOKENS: u64 = 1024;
 
 /// What a sentence asks Splinter to do.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[schemars(crate = "sven_sdk::schemars")]
+#[schemars(crate = "splinter_agent::schemars")]
 #[serde(tag = "verb", rename_all = "snake_case")]
 pub enum Intent {
     /// Learn from sources: files, directories, or `cmd:<command>` whose
@@ -94,7 +94,7 @@ pub enum Intent {
 
 /// One reading of a sentence.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[schemars(crate = "sven_sdk::schemars")]
+#[schemars(crate = "splinter_agent::schemars")]
 pub struct Candidate {
     /// What the sentence asks for, read this way.
     pub intent: Intent,
@@ -104,7 +104,7 @@ pub struct Candidate {
 
 /// Every plausible reading of a sentence.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[schemars(crate = "sven_sdk::schemars")]
+#[schemars(crate = "splinter_agent::schemars")]
 pub struct Classification {
     /// The readings, most likely first; empty when none fits.
     pub candidates: Vec<Candidate>,
@@ -328,9 +328,8 @@ pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, Campaig
     for (example, classified) in EXAMPLES {
         task.push_str(&format!("\n{example:?} is classified as {classified}"));
     }
-    let method = Method::<Classification>::new("classify_sentence")
-        .task(task)
-        .role(ROLE)
+    let call = TypedCall::<Classification>::new("classify_sentence", task, ROLE, CLASSIFY_DEADLINE)
+        .max_output_tokens(CLASSIFY_MAX_OUTPUT_TOKENS)
         .postcondition(|c: &Classification| {
             if c.candidates
                 .iter()
@@ -341,21 +340,11 @@ pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, Campaig
                 Err("every confidence must be between 0 and 1".into())
             }
         });
-    let call = |source| CampaignError::Call {
-        method: "classify_sentence",
-        source,
-    };
-    let mut bounds = SolveOptions::new(CLASSIFY_DEADLINE);
-    bounds.max_output_tokens = Some(CLASSIFY_MAX_OUTPUT_TOKENS);
-    bounds.stream_idle = model.stream_idle;
-    let engine = Engine::builder()
-        .config(bounds.engine_config())
-        .model_provider(bounds.provider(model.provider))
-        .toolset(Toolset::none())
-        .build()
-        .map_err(call)?;
-    ctx.block_on(engine.call_with(&method, &Sentence { sentence }, bounds.run_options()))
-        .map_err(call)
+    ctx.block_on(call.run(&model, &Sentence { sentence }))
+        .map_err(|source| CampaignError::Call {
+            method: "classify_sentence",
+            source,
+        })
 }
 
 /// What to do with `classification`; see the module documentation.

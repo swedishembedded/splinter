@@ -40,8 +40,8 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_model::local::GREEDY_SAMPLING;
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

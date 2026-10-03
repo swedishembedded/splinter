@@ -56,6 +56,12 @@ splinter-jefferson = "sample"
 [brain]
 allowed = ["splinter-model"]
 
+[sven]
+# Only the agent runs sven and only the model adapter serves it a provider.
+# The two samples drive sven's engine directly until the SDK offers what they
+# need.
+allowed = ["splinter-agent", "splinter-model", "splinter-tool-syntax", "splinter-jefferson"]
+
 [limits]
 # A source file larger than this is split; a file that must stay larger for a
 # while is recorded in [[allow.large_file]], whose size may only shrink.

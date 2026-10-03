@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use splinter_agent::critic::Critic;
 use splinter_agent::repair::{Repair, RepairBudget, Stop};
+use splinter_agent::CancelToken;
 use splinter_store::experiences::{ExperienceSet, SetId};
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

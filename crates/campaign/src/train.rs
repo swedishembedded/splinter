@@ -38,6 +38,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_data::holdout::split_dataset_file;
 use splinter_data::{replay_sample, DatasetId, Format, Fraction, StoredDataset};
@@ -47,7 +48,6 @@ use splinter_model::train::{
 };
 use splinter_model::{ModelSelection, PolicyError};
 use splinter_store::artifacts::ArtifactSpec;
-use sven_sdk::CancelToken;
 
 use crate::context::{Context, PolicyPin};
 use crate::datasets::{record_dataset_lineage, resolve_dataset};

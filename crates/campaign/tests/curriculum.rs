@@ -43,6 +43,7 @@ use common::manual::{BAUD_QUESTION, BAUD_QUOTE, MANUAL};
 use common::{scratch_context, Scripted, POLICY};
 use serde_json::json;
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_campaign::curriculum::frontier::{measure, MeasureRequest, PassAtK};
 use splinter_campaign::curriculum::mastery::weakest;
 use splinter_campaign::curriculum::queue::{enqueue_retention, pending};
@@ -65,7 +66,6 @@ use splinter_eval::paired::PairedOutcome;
 use splinter_knowledge::concepts::Concept;
 use splinter_store::decision::decide as decision;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-use sven_sdk::CancelToken;
 
 /// A closed-book recall task asking `instruction`, referenced by `answer`.
 fn recall(instruction: &str, answer: &str) -> Task {

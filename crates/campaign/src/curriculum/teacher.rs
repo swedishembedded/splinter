@@ -28,9 +28,9 @@
 use std::time::Instant;
 
 use serde::Serialize;
+use splinter_agent::CancelToken;
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::{TaskSet, TaskSetId};
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::curriculum::frontier::tally;

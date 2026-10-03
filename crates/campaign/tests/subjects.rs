@@ -25,6 +25,7 @@ mod common;
 
 use common::{scratch_context, Scripted};
 use serde_json::json;
+use splinter_agent::CancelToken;
 use splinter_campaign::ask::ask;
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::sources::{self, SourceTarget};
@@ -33,7 +34,6 @@ use splinter_campaign::variants::{generate_variants, VariantsRequest};
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_store::tasks::{TaskEntry, TaskSet};
-use sven_sdk::CancelToken;
 
 /// Three manuals: two disagree about one board, the third is another board.
 const MANUALS: [(&str, &str); 3] = [

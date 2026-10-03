@@ -19,10 +19,13 @@
      the way).
   3. Only the crates in `[brain].allowed` depend on brain, and only on its
      public SDK, `brain`: an internal `brain-*` crate is refused.
-  4. A declared internal dependency must be named by the crate's sources.
-  5. When `[surface]` is set, the crates in its tiers may depend on the one
+  4. Only the crates in `[sven].allowed` depend (normally) on sven, and only
+     on its public SDK, `sven-sdk`: an internal `sven-*` crate is refused.
+     A dev-dependency may drive sven directly, so a test can script an agent.
+  5. A declared internal dependency must be named by the crate's sources.
+  6. When `[surface]` is set, the crates in its tiers may depend on the one
      workspace crate it names and on nothing else of the workspace's.
-  6. No tracked .rs file exceeds `max_file_lines`, except a file recorded in
+  7. No tracked .rs file exceeds `max_file_lines`, except a file recorded in
      `[[allow.large_file]]`, whose recorded size may only shrink; an entry
      for a file back under the limit is itself a failure.
 
@@ -71,6 +74,7 @@ def check(arch, packages, file_lines, mentions):
     failures += _tiers(arch, crates, rank, internal)
     failures += _forbidden(arch, internal, external)
     failures += _brain(arch, packages)
+    failures += _sven(arch, packages)
     failures += _unused(packages, members, mentions)
     failures += _surface(arch, crates, internal)
     failures += _large_files(arch, file_lines)
@@ -144,6 +148,24 @@ def _brain(arch, packages):
                 failures.append(f"{pkg['name']} -> {name}: a brain crate beyond the public SDK; use `brain`, and publish what it lacks in the brain SDK")
             elif name == "brain" and pkg["name"] not in allowed:
                 failures.append(f"{pkg['name']} -> brain: only {', '.join(sorted(allowed))} may depend on brain")
+    return failures
+
+
+def _sven(arch, packages):
+    rule = arch.get("sven")
+    if rule is None:
+        return []
+    failures = []
+    allowed = set(rule.get("allowed", []))
+    for pkg in packages:
+        for dep in pkg["deps"]:
+            name = dep["name"]
+            if dep["kind"] not in NORMAL:
+                continue
+            if name.startswith("sven-") and name != "sven-sdk":
+                failures.append(f"{pkg['name']} -> {name}: a sven crate beyond the public SDK; use `sven-sdk`, and publish what it lacks in the sven SDK")
+            elif name == "sven-sdk" and pkg["name"] not in allowed:
+                failures.append(f"{pkg['name']} -> sven-sdk: only {', '.join(sorted(allowed))} may depend on sven")
     return failures
 
 

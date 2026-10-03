@@ -28,10 +28,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::Serialize;
+use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_data::DatasetId;
 use splinter_eval::paired::accuracy;
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

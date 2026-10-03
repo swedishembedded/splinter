@@ -29,13 +29,13 @@ use common::gate::{
     anchor_file, dataset, decide, gate_context, policy, preference_dataset, released, Brain,
     FakeTrainer, ANCHOR, FACTS,
 };
+use splinter_agent::CancelToken;
 use splinter_campaign::release::anchor;
 use splinter_campaign::train::{
     train, Regime, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
 };
 use splinter_campaign::Context;
 use splinter_data::DatasetId;
-use sven_sdk::CancelToken;
 
 fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
     TrainRequest {

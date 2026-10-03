@@ -28,6 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{PrivilegedKind, Task};
 use splinter_core::kinds::DENOISE as DENOISE_KIND;
@@ -41,7 +42,6 @@ use splinter_knowledge::tasks::{
     TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

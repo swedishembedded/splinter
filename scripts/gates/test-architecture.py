@@ -146,6 +146,26 @@ class Gate(unittest.TestCase):
         out = self.failures(lambda a, p, f: p[3]["deps"].append({"name": "brain-core", "kind": None}))
         self.assertIn("model -> brain-core", out)
 
+    def test_only_an_allowed_crate_depends_on_sven(self):
+        def mutate(a, p, f):
+            a["sven"] = {"allowed": ["model"]}
+        self.assertEqual(self.failures(mutate), "")
+
+        def leak(a, p, f):
+            mutate(a, p, f)
+            p[2]["deps"].append({"name": "sven-sdk", "kind": None})
+        self.assertIn("eval -> sven-sdk: only model may depend on sven", self.failures(leak))
+
+        def internal(a, p, f):
+            mutate(a, p, f)
+            p[3]["deps"].append({"name": "sven-model", "kind": None})
+        self.assertIn("model -> sven-model: a sven crate beyond the public SDK", self.failures(internal))
+
+        def test_only(a, p, f):
+            mutate(a, p, f)
+            p[2]["deps"].append({"name": "sven-sdk", "kind": "dev"})
+        self.assertEqual(self.failures(test_only), "", "a test may drive sven directly")
+
     def test_a_dependency_the_sources_never_name_fails(self):
         arch, packages, files = workspace()
         out = "\n".join(run(arch, packages, files, mentions=lambda pk, dep, kind: dep != "store"))

@@ -34,6 +34,7 @@ use common::gate::{anchor_file, gate_context, put_base, released, Brain, FakeTra
 use common::manual::{manual_policy as policy, MANUAL};
 use common::scratch_context;
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::model_ref::ModelRef;
 use splinter_campaign::release::{anchor, rollback};
@@ -44,7 +45,6 @@ use splinter_data::DatasetId;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
 use splinter_store::runs::{read_run, RunStatus};
-use sven_sdk::CancelToken;
 
 /// Training as a test double: keeps what it was handed, and trains the
 /// fixtures' fake adapter.

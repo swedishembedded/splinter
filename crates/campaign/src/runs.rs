@@ -12,9 +12,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
+use splinter_agent::CancelToken;
 use splinter_store::runs::{self, list_runs, read_run, Run, RunLog, RunStatus};
 use splinter_store::workspace::Workspace;
-use sven_sdk::CancelToken;
 
 use crate::context::Context;
 use crate::error::CampaignError;

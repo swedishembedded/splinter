@@ -23,6 +23,7 @@ use common::gate::{gate_context, Brain, FakeTrainer, ANCHOR};
 use common::manual::{manual_reply, MANUAL};
 use common::Scripted;
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_campaign::learn::auto_steps;
 use splinter_campaign::learn::{learn, LearnRequest, Learned};
 use splinter_campaign::model_ref::ModelRef;
@@ -31,7 +32,6 @@ use splinter_campaign::train::DEFAULT_STEPS;
 use splinter_campaign::train::{TrainPlan, Trainer};
 use splinter_campaign::{CampaignError, Context};
 use splinter_model::train::{Trained, TrainedPreference};
-use sven_sdk::CancelToken;
 
 const RECALL_ONLY: &str = r#"{"persona": null, "kinds": ["recall"], "distill": false, "rationale": "the manual states facts"}"#;
 const DISTILLED: &str = r#"{"persona": null, "kinds": ["recall"], "distill": true, "rationale": "the manual is not known to the learner"}"#;

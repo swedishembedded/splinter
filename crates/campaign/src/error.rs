@@ -72,7 +72,7 @@ pub enum CampaignError {
         /// The method.
         method: &'static str,
         /// What failed.
-        source: sven_sdk::CallError,
+        source: splinter_agent::CallError,
     },
     /// The run was cancelled.
     #[error("cancelled")]

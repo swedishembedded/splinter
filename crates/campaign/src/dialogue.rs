@@ -20,14 +20,13 @@
 //! training view replaces that message with the task's own instruction, so
 //! neither the rules nor the material reach the student.
 
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 use splinter_agent::converse::{Exchange, Interlocutor};
+use splinter_agent::schemars::JsonSchema;
 use splinter_agent::solve::{Model, SolveOptions};
+use splinter_agent::typed::{TypedCall, TypedSession};
+use splinter_agent::{CallError, CancelToken};
 use splinter_core::digest::Digest;
-use sven_sdk::schemars::JsonSchema;
-use sven_sdk::{CancelToken, Engine, Method, Toolset};
 
 /// The exchanges one dialogue runs to at most: long enough to follow up,
 /// short enough that the material is not used up and the teacher has no
@@ -74,7 +73,7 @@ pub(crate) fn teacher_instruction(instruction: &str) -> String {
 
 /// The other speaker's one message.
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-#[schemars(crate = "sven_sdk::schemars")]
+#[schemars(crate = "splinter_agent::schemars")]
 struct Said {
     /// What they say next.
     message: String,
@@ -103,8 +102,7 @@ date, a figure or an event that bears on what they said - as someone curious wou
 
 /// The other speaker, played by a model.
 pub(crate) struct Student {
-    engine: Engine,
-    method: Method<Said>,
+    session: TypedSession<Said>,
     probe: bool,
     turns: usize,
 }
@@ -118,19 +116,10 @@ impl Student {
         turns: usize,
         options: &SolveOptions,
         cancel: &CancelToken,
-    ) -> Result<Self, sven_sdk::CallError> {
-        let mut bounds = SolveOptions::new(options.deadline);
-        bounds.max_output_tokens = Some(MESSAGE_MAX_OUTPUT_TOKENS);
-        bounds.stream_idle = model.stream_idle;
-        bounds.cancel = Some(cancel.clone());
-        let engine = Engine::builder()
-            .config(bounds.engine_config())
-            .model_provider(bounds.provider(Arc::clone(&model.provider)))
-            .toolset(Toolset::none())
-            .build()?;
-        let method = Method::<Said>::new("say_next")
-            .task(TASK)
-            .role(STUDENT_ROLE)
+    ) -> Result<Self, CallError> {
+        let session = TypedCall::<Said>::new("say_next", TASK, STUDENT_ROLE, options.deadline)
+            .max_output_tokens(MESSAGE_MAX_OUTPUT_TOKENS)
+            .cancel(cancel.clone())
             .postcondition(|said: &Said| {
                 let n = said.message.chars().count();
                 if n == 0 || n > MAX_MESSAGE_CHARS {
@@ -140,10 +129,10 @@ impl Student {
                 } else {
                     Ok(())
                 }
-            });
+            })
+            .start(model)?;
         Ok(Self {
-            engine,
-            method,
+            session,
             probe: probes_beyond_the_source(task),
             turns,
         })
@@ -164,9 +153,8 @@ impl Interlocutor for Student {
                 .collect(),
             ask: (last && self.probe).then_some(PROBE),
         };
-        let options = SolveOptions::new(std::time::Duration::from_secs(120)).run_options();
-        self.engine
-            .call_with(&self.method, &brief, options)
+        self.session
+            .call_within(&brief, std::time::Duration::from_secs(120))
             .await
             .ok()
             .map(|said| said.message.trim().to_string())
