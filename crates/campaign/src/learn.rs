@@ -52,6 +52,7 @@ use splinter_record::source::SourceId;
 
 use splinter_knowledge::survey::{survey, Survey};
 
+use crate::budget::StageDeadlines;
 use crate::context::Context;
 use crate::critique::{critique_set, CritiqueRequest, Critiqued, DEFAULT_RETRIES};
 use crate::curriculum::frontier::{select_frontier, Frontier, PassAtK};
@@ -419,6 +420,7 @@ impl Pipeline<'_> {
             quotas,
         } = *self;
         let policy = ModelRef::policy_default();
+        let stage_deadlines = StageDeadlines::of(Instant::now(), deadline);
         report.policy = PolicyUsed {
             alias: POLICY_DEFAULT.into(),
             release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
@@ -474,7 +476,7 @@ impl Pipeline<'_> {
                 kinds,
                 generator,
                 goal,
-                deadline,
+                deadline: stage_deadlines.tasks,
                 cancel: run.cancel_token(),
             },
         )?;
@@ -507,7 +509,7 @@ impl Pipeline<'_> {
                     attempts: frontier.map_or(1, |p| p.k),
                     sampling: frontier.map_or(SamplingChoice::Own, |p| p.sampling_choice()),
                     teacher: false,
-                    deadline,
+                    deadline: stage_deadlines.attempts,
                     cancel: run.cancel_token(),
                 },
             )?;
@@ -534,7 +536,7 @@ impl Pipeline<'_> {
                 task_set: &task_set,
                 attempts: attempts.as_ref(),
                 teacher,
-                deadline,
+                deadline: stage_deadlines.teach,
                 cancel: run.cancel_token(),
             },
         )?;

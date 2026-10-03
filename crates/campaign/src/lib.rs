@@ -44,6 +44,7 @@
 
 pub mod answers;
 pub mod ask;
+pub mod budget;
 pub mod config;
 pub mod context;
 pub mod critique;
