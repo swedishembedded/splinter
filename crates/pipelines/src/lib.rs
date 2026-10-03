@@ -37,7 +37,7 @@
 //!   [`answers`] - every answer `ask` gave, and what gave it.
 //! * [`lineage`] - from any artifact, where it came from and what came
 //!   from it.
-//! * [`front_door`] - a sentence becomes a command, decided by code.
+//! * [`router`] - a sentence becomes a command: a classifier reads it, code decides.
 
 #![warn(missing_docs)]
 
@@ -50,13 +50,13 @@ pub mod dialogue;
 pub mod eval;
 pub mod exam;
 pub mod experiences;
-pub mod front_door;
 mod grouping;
 pub mod judge;
 pub mod learn;
 pub mod lineage;
 pub mod plan;
 pub mod release;
+pub mod router;
 pub mod solving;
 pub mod sources;
 pub mod state;

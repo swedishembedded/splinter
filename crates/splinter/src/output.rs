@@ -18,8 +18,8 @@ use splinter_pipelines::datasets::{Built, Exported};
 use splinter_pipelines::experiences::{
     CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList,
 };
-use splinter_pipelines::front_door::Routed;
 use splinter_pipelines::judge::Calibrated;
+use splinter_pipelines::router::Routed;
 use splinter_pipelines::solving::Solved;
 use splinter_pipelines::sources::{SourceAdded, SourceList, SourceSummary};
 use splinter_pipelines::status::Status;

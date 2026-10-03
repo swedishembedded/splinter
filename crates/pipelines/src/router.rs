@@ -6,12 +6,13 @@
 // your team needs expertise in typed model interfaces, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! The front door: a sentence becomes one of the commands.
+//! The router: a sentence becomes one of the commands.
 //!
-//! The policy model classifies the sentence through sven's typed method
-//! call (a typed call returning [`Classification`], bounded by
-//! [`CLASSIFY_DEADLINE`] and [`CLASSIFY_MAX_OUTPUT_TOKENS`]): candidate
-//! [`Intent`]s, each with its arguments and a confidence. What happens next
+//! An [`IntentClassifier`] reads the sentence - [`GenerativeClassifier`]
+//! asks the model playing the router role through a typed call returning
+//! [`Classification`], bounded by
+//! [`CLASSIFY_DEADLINE`] and [`CLASSIFY_MAX_OUTPUT_TOKENS`] - and answers
+//! with candidate [`Intent`]s, each with its arguments and a confidence. What happens next
 //! is decided here, by [`route`], never by the model:
 //!
 //! 1. the candidates are ranked by confidence; none at all is a question;
@@ -255,13 +256,40 @@ impl Intent {
     }
 }
 
-/// Classifies `sentence` with the policy model and routes the result.
+/// Something that reads a sentence into candidate commands. Which commands
+/// run is [`route`]'s decision, never the classifier's.
+pub trait IntentClassifier {
+    /// The readings of `sentence`.
+    fn classify(&self, ctx: &Context, sentence: &str) -> Result<Classification, OrchestratorError>;
+}
+
+/// The classifier that asks the model playing the router role.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GenerativeClassifier;
+
+impl IntentClassifier for GenerativeClassifier {
+    fn classify(&self, ctx: &Context, sentence: &str) -> Result<Classification, OrchestratorError> {
+        classify(ctx, sentence)
+    }
+}
+
+/// Classifies `sentence` with the model playing the router role and routes
+/// the result.
+pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, OrchestratorError> {
+    interpret_with(&GenerativeClassifier, ctx, sentence)
+}
+
+/// Classifies `sentence` with `classifier` and routes the result.
 ///
-/// A reply the policy could not shape into a [`Classification`], even
+/// A reply the classifier could not shape into a [`Classification`], even
 /// after sven's corrections, is no reading: it is asked back, as a
 /// sentence that matches no command is, with what was wrong with it.
-pub fn interpret(ctx: &Context, sentence: &str) -> Result<Routed, OrchestratorError> {
-    match classify(ctx, sentence) {
+pub fn interpret_with(
+    classifier: &dyn IntentClassifier,
+    ctx: &Context,
+    sentence: &str,
+) -> Result<Routed, OrchestratorError> {
+    match classifier.classify(ctx, sentence) {
         Ok(mut classification) => {
             repair_paths(&mut classification, sentence);
             Ok(route(&classification, ctx.allow_remote()))
@@ -314,8 +342,8 @@ fn repair_paths(classification: &mut Classification, sentence: &str) {
     }
 }
 
-/// The readings of `sentence` by the model that reads sentences: the policy,
-/// or the model the configuration names for the front door.
+/// The readings of `sentence` by the model playing the router role: the
+/// policy, or the model the configuration names for the front door.
 pub fn classify(ctx: &Context, sentence: &str) -> Result<Classification, OrchestratorError> {
     let reader = roles::assignments(ctx.config(), &RoleOverrides::new())?
         .get(Role::Router)

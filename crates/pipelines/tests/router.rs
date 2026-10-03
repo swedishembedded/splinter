@@ -16,7 +16,7 @@ mod common;
 
 use common::{config, scratch_context, Scratch, Scripted, POLICY};
 use serde_json::json;
-use splinter_pipelines::front_door::{interpret, Intent, Routed};
+use splinter_pipelines::router::{interpret, interpret_with, Intent, Routed};
 
 /// The classification the scripted policy gives each sentence.
 fn classifier() -> Scripted {
@@ -274,4 +274,59 @@ fn a_front_door_model_that_is_no_model_reference_is_refused_by_name() {
     let error = interpret(&ctx, "learn ./docs").err().unwrap();
     assert!(error.is_refusal(), "{error}");
     assert!(error.to_string().contains("not a reference"), "{error}");
+}
+
+/// A classifier that returns what it was given: routing without a model.
+struct Canned(Vec<(Intent, f64)>);
+
+impl splinter_pipelines::router::IntentClassifier for Canned {
+    fn classify(
+        &self,
+        _: &splinter_orchestrator::Context,
+        _: &str,
+    ) -> Result<splinter_pipelines::router::Classification, splinter_orchestrator::OrchestratorError>
+    {
+        Ok(splinter_pipelines::router::Classification {
+            candidates: self
+                .0
+                .iter()
+                .map(
+                    |(intent, confidence)| splinter_pipelines::router::Candidate {
+                        intent: intent.clone(),
+                        confidence: *confidence,
+                    },
+                )
+                .collect(),
+        })
+    }
+}
+
+#[test]
+fn routing_is_decided_by_code_whatever_classifier_read_the_sentence() {
+    let (_scratch, ctx) = scratch_context("router-canned", Scripted::new(|_| String::new()), false);
+    let routed = interpret_with(
+        &Canned(vec![(Intent::Status, 0.95)]),
+        &ctx,
+        "how are things?",
+    )
+    .unwrap();
+    assert!(
+        matches!(routed, Routed::Execute(Intent::Status)),
+        "{routed:?}"
+    );
+
+    // The classifier's own confidence does not make a destructive command
+    // run on a guess.
+    let routed = interpret_with(
+        &Canned(vec![(
+            Intent::CancelRun {
+                run: "run-1".into(),
+            },
+            0.99,
+        )]),
+        &ctx,
+        "stop it",
+    )
+    .unwrap();
+    assert!(matches!(routed, Routed::Clarify(_)), "{routed:?}");
 }
