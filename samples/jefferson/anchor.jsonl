@@ -1,0 +1,40 @@
+{"instruction": "What is the capital of France?", "reference": "Paris", "kind": "recall"}
+{"instruction": "What is the capital of Japan?", "reference": "Tokyo", "kind": "recall"}
+{"instruction": "What is the capital of Italy?", "reference": "Rome", "kind": "recall"}
+{"instruction": "What is the capital of Egypt?", "reference": "Cairo", "kind": "recall"}
+{"instruction": "What is the capital of Canada?", "reference": "Ottawa", "kind": "recall"}
+{"instruction": "What is the capital of Australia?", "reference": "Canberra", "kind": "recall"}
+{"instruction": "What is the chemical symbol for gold?", "reference": "Au", "kind": "recall"}
+{"instruction": "What is the chemical symbol for sodium?", "reference": "Na", "kind": "recall"}
+{"instruction": "What is the chemical symbol for iron?", "reference": "Fe", "kind": "recall"}
+{"instruction": "What is the chemical symbol for water?", "reference": "H2O", "kind": "recall"}
+{"instruction": "How many days are in a leap year?", "reference": "366", "kind": "recall"}
+{"instruction": "How many sides does a hexagon have?", "reference": "six", "kind": "recall"}
+{"instruction": "What is seven multiplied by eight?", "reference": "56", "kind": "recall"}
+{"instruction": "What is the square root of 144?", "reference": "12", "kind": "recall"}
+{"instruction": "What is fifteen plus twenty-seven?", "reference": "42", "kind": "recall"}
+{"instruction": "What is one hundred divided by four?", "reference": "25", "kind": "recall"}
+{"instruction": "How many minutes are in an hour?", "reference": "60", "kind": "recall"}
+{"instruction": "How many continents are there?", "reference": "seven", "kind": "recall"}
+{"instruction": "What is the largest planet in the solar system?", "reference": "Jupiter", "kind": "recall"}
+{"instruction": "What is the closest planet to the sun?", "reference": "Mercury", "kind": "recall"}
+{"instruction": "What planet is known as the red planet?", "reference": "Mars", "kind": "recall"}
+{"instruction": "What gas do plants absorb from the air for photosynthesis?", "reference": "carbon dioxide", "kind": "recall"}
+{"instruction": "What is the hardest natural substance?", "reference": "diamond", "kind": "recall"}
+{"instruction": "What is the boiling point of water in degrees Celsius at sea level?", "reference": "100", "kind": "recall"}
+{"instruction": "Who wrote the play Romeo and Juliet?", "reference": "Shakespeare", "kind": "recall"}
+{"instruction": "Who painted the Mona Lisa?", "reference": "Leonardo", "kind": "recall"}
+{"instruction": "What language is spoken in Brazil?", "reference": "Portuguese", "kind": "recall"}
+{"instruction": "What is the largest ocean on Earth?", "reference": "Pacific", "kind": "recall"}
+{"instruction": "What is the longest river in Africa?", "reference": "Nile", "kind": "recall"}
+{"instruction": "In what year did the Second World War end?", "reference": "1945", "kind": "recall"}
+{"instruction": "What is the freezing point of water in degrees Fahrenheit?", "reference": "32", "kind": "recall"}
+{"instruction": "How many players are on a soccer team on the field?", "reference": "eleven", "kind": "recall"}
+{"instruction": "What is the past tense of the verb go?", "reference": "went", "kind": "recall"}
+{"instruction": "What is the plural of the word mouse?", "reference": "mice", "kind": "recall"}
+{"instruction": "What is the opposite of the word ancient?", "reference": "modern", "kind": "recall"}
+{"instruction": "What is the first month of the year?", "reference": "January", "kind": "recall"}
+{"instruction": "What color do you get by mixing blue and yellow?", "reference": "green", "kind": "recall"}
+{"instruction": "How many legs does a spider have?", "reference": "eight", "kind": "recall"}
+{"instruction": "What is the largest land animal?", "reference": "elephant", "kind": "recall"}
+{"instruction": "What organ pumps blood through the human body?", "reference": "heart", "kind": "recall"}

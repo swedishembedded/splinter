@@ -25,10 +25,15 @@ Splinter lacks.
 python3 resources/founding-america/fetch.py
 splinter-jefferson materials --resources RESOURCES --out ./materials
 
-# 2. Splinter does the rest. The roles are named by the configuration:
-#    the policy to train, and the assistant that plans, writes, teaches and judges.
-SPLINTER_ASSISTANT_MODEL=local:Qwen/Qwen3-8B SPLINTER_BF16_BASE=1 \
-  splinter "Learn to think like Thomas Jefferson based on the materials he has written in directory ./materials" --budget 8h
+# 2. Freeze the general-knowledge suite the release gate holds the adapter to, so
+#    that learning Jefferson is checked against forgetting everything else.
+splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl
+
+# 3. Splinter does the rest. The roles are named by the configuration:
+#    the policy to train, the assistant that plans, writes, teaches and judges,
+#    and how long the run may take (a sentence names no budget).
+SPLINTER_ASSISTANT_MODEL=local:Qwen/Qwen3-8B SPLINTER_BF16_BASE=1 SPLINTER_BUDGET=8h \
+  splinter "Learn to think like Thomas Jefferson based on the materials he has written in directory ./materials"
 ```
 
 The `learn` report names each stage's result, including the exam: how often the
