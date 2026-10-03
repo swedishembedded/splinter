@@ -128,3 +128,31 @@ the released adapter answers the same questions from plain `brain serve`.
    into one archive and recover from copies. The
    read model is in memory, so opening a very large database costs time
    proportional to its size; `splinter state maintain` keeps it down.
+8. **Layers, roles, pipelines and the SDK.** Done: the crates sit in tiers that
+   `architecture.toml` states and `check-architecture` enforces (dependencies
+   point down, forbidden pairs are unreachable at any depth, an exception that
+   no longer applies fails, only the two adapters touch sven and only the model
+   adapter touches brain, the command line and every sample depend on the SDK
+   alone). The vocabulary (`splinter-core`) performs no I/O. Models play named
+   roles decided by one rule and a run records who played each. `learn` is a
+   pipeline of stages run by an engine that checks for a cancel and the budget,
+   skips a stage that does not apply, and records every stage with its time and
+   its failure; each sentence of a REPL resolves a policy alias afresh; a model
+   reached over an API is asked several tasks at once. `splinter-sdk` is the
+   embedding API. Open:
+   - The SDK re-exports by layer; narrowing it to the types a caller needs, and
+     giving each stage command a typed method on `Splinter`, is the next step.
+   - The trainer (`BrainTrainer`) and the `brain serve` check sit in the
+     pipelines crate because they are written against the pipelines' plan and
+     the run's context; they move to the model adapter once they take plain
+     arguments.
+   - The typed stores that embed higher-tier types (releases, answers, datasets,
+     candidates, lineage) live with the crate whose types they embed rather than
+     in the store.
+   - A `chat` intent at the router.
+   - Trainers for the objectives whose records are only exported today
+     (rewarded trajectories, raw text, contrastive pairs): the model adapter
+     advertises what it can train (`TrainingCapabilities`), and a pipeline
+     asks for an objective by name.
+   - Resuming a pipeline from where it stopped: a stage's summary is recorded;
+     its output is not yet enough to restart from.
