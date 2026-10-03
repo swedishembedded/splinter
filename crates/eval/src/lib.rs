@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! What a learning run needs to measure honestly: verifiers by strength,
+//! Measurement: what a learning run needs to measure honestly: verifiers by strength,
 //! paired comparison and pass@k.
 //!
 //! Swedish Embedded AB implements closed-loop learning systems - agents that
@@ -26,6 +26,11 @@
 //!   experience against the reference passage it never showed the solver.
 //! * [`overlap`] - texts that print one passage form a group, so a held-out
 //!   split can keep a group whole.
+
+//!
+//! Every verdict names its producer, and those names keep the `splinter-lab/`
+//! prefix this crate was first published under: they are recorded in each
+//! annotation, and the decision rule and the views read them back.
 
 #![warn(missing_docs)]
 

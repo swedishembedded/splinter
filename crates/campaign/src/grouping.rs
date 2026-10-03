@@ -11,7 +11,7 @@
 //! Sources overlap: two editions print the same letter. A held-out split
 //! that divides such records between training and scoring measures memory of
 //! the print, not learning, so each record carries the group of its evidence
-//! (`splinter_lab::overlap`), and the split keeps a group whole
+//! (`splinter_eval::overlap`), and the split keeps a group whole
 //! (`splinter_data::holdout`).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use splinter_core::digest::Digest;
 use splinter_core::experience::Experience;
 use splinter_data::{Corpus, Projection};
-use splinter_lab::overlap::overlap_groups;
+use splinter_eval::overlap::overlap_groups;
 
 use crate::context::Context;
 use crate::error::CampaignError;

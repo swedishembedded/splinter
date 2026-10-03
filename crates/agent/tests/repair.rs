@@ -39,8 +39,8 @@ use splinter_data::{
     Corpus, Critic as CriticView, DecisionView, Exclusion, Preference, RecordBody, SftFinal, Strip,
     View,
 };
-use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
-use splinter_lab::verifiers::{verify_and_annotate, Strongest};
+use splinter_eval::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
+use splinter_eval::verifiers::{verify_and_annotate, Strongest};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };

@@ -24,7 +24,7 @@ use splinter_core::experience::PrivilegedKind;
 use splinter_data::{
     Corpus, Critic, Exclusion, Objective, Preference, RecordBody, VerifierView, View,
 };
-use splinter_lab::verifiers::executable;
+use splinter_eval::verifiers::executable;
 
 const INSTRUCTION: &str = "What is two plus two? Reply with the number only.";
 

@@ -17,10 +17,10 @@ use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
 use splinter_core::kinds::DENOISE;
-use splinter_lab::denoise::FormalVerifier;
-use splinter_lab::verifiers::formal::ExactMatchVerifier;
-use splinter_lab::verifiers::normalise::Normalisation;
-use splinter_lab::verifiers::{annotation, Verifier};
+use splinter_eval::denoise::FormalVerifier;
+use splinter_eval::verifiers::formal::ExactMatchVerifier;
+use splinter_eval::verifiers::normalise::Normalisation;
+use splinter_eval::verifiers::{annotation, Verifier};
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const REFERENCE: &str = "the quick brown fox";

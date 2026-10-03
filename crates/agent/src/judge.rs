@@ -15,7 +15,7 @@
 //! it. It answers with `PASS`, `FAIL` or `ABSTAIN` as the first word and a
 //! reason after it; a reply that does not start that way is an abstention.
 //! A judge refuses to grade an experience its own model produced. Gate it
-//! with [`CalibratedJudge`](splinter_lab::verifiers::calibration::CalibratedJudge)
+//! with [`CalibratedJudge`](splinter_eval::verifiers::calibration::CalibratedJudge)
 //! to make its verdicts stand only where it was measured precise.
 
 use std::time::Duration;
@@ -24,7 +24,7 @@ use serde_json::json;
 use splinter_core::annotation::{Outcome, Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, PrivilegedKind, Task};
-use splinter_lab::verifiers::{Finding, Verifier, VerifyError};
+use splinter_eval::verifiers::{Finding, Verifier, VerifyError};
 use splinter_sandbox::ResolvedEnvironment;
 use tokio::runtime::Handle;
 

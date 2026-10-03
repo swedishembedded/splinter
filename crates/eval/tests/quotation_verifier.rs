@@ -18,10 +18,10 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
-use splinter_lab::verifiers::quotation::{
+use splinter_eval::verifiers::quotation::{
     quotations, words, EvidenceText, QuotationPolicy, QuotationVerifier, TextIndex,
 };
-use splinter_lab::verifiers::{annotation, Verifier, VerifyError};
+use splinter_eval::verifiers::{annotation, Verifier, VerifyError};
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const LETTER: &str = "Dear Peter,--I advise you to fix a habit of study every morning before \

@@ -19,7 +19,7 @@
 //!
 //! The datasets are concatenated in the order given into the candidate's
 //! own directory, and the newest records of that file are held out
-//! (`splinter_lab::holdout`). Trained from `policy:<alias>`, a candidate
+//! (`splinter_eval::holdout`). Trained from `policy:<alias>`, a candidate
 //! continues the adapter of the release the alias was resolved to - never
 //! the base weights once a release exists. A supervised candidate trained
 //! so also replays a seeded sample of every earlier release's chat

@@ -24,9 +24,9 @@ use serde_json::json;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
-use splinter_lab::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
-use splinter_lab::verifiers::quotation::EvidenceText;
-use splinter_lab::verifiers::{annotation, Verifier, VerifyError};
+use splinter_eval::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
+use splinter_eval::verifiers::quotation::EvidenceText;
+use splinter_eval::verifiers::{annotation, Verifier, VerifyError};
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 
 const LETTER: &str = "Dear Peter,--I received your letter of the tenth and the three books you \

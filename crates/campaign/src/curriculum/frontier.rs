@@ -14,7 +14,7 @@
 //! kind's own verifiers (the verify stage, no judge); a teacher solves,
 //! open-book, each task no graded attempt solved, and is graded the same
 //! way ([`super::teacher`]); [`select_frontier`] tallies each task's
-//! graded attempts and the teacher's ([`splinter_lab::frontier`]) and
+//! graded attempts and the teacher's ([`splinter_eval::frontier`]) and
 //! keeps the tasks worth training on: those the student fails at least
 //! sometimes and that have a verified answer - a passing attempt of its
 //! own (the frontier proper) or a teacher's (taught). Every attempt stays
@@ -35,8 +35,8 @@ use std::time::Instant;
 use serde::Serialize;
 use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceId;
+use splinter_eval::frontier::{Distribution, FrontierClass, PassCount};
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
-use splinter_lab::frontier::{Distribution, FrontierClass, PassCount};
 pub use splinter_policy::Sampling;
 use splinter_policy::AGENT_SAMPLING;
 use splinter_store::experiences::{ExperienceSet, SetId};

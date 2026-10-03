@@ -41,7 +41,7 @@ the released adapter answers the same questions from plain `brain serve`.
 
 1. **Repository.** Done: hooks, gates, cargo dependencies on the sven and
    brain remotes with a pinned lock, and a gitignored local override.
-2. **Import the prototype.** Done: `crates/splinter`, `crates/lab`,
+2. **Import the prototype.** Done: `crates/splinter`, `crates/eval`,
    `samples/tool-syntax` and `tasks/` here, and sven no longer carries
    them or any brain dependency. sven's own standalone task-and-verify
    sample is tracked in sven's `sdk-framework` roadmap, because it needs

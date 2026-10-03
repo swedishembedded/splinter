@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::annotation::Outcome;
 use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceId;
-use splinter_lab::verifiers::calibration::{calibrate, Calibration};
+use splinter_eval::verifiers::calibration::{calibrate, Calibration};
 
 use crate::context::Context;
 use crate::error::{io, CampaignError};

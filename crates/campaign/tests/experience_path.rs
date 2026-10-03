@@ -26,9 +26,9 @@ use splinter_core::experience::{Digest, Experience, Privileged, PrivilegedKind, 
 use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_data::{write_dataset, Corpus, SftFinal, Unchecked, View};
+use splinter_eval::denoise::FormalVerifier;
+use splinter_eval::verifiers::annotation;
 use splinter_knowledge::denoise::{Denoise, GENERATOR};
-use splinter_lab::denoise::FormalVerifier;
-use splinter_lab::verifiers::annotation;
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;

@@ -17,11 +17,11 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
 use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK};
 use splinter_core::selfcontained::check_self_contained;
-use splinter_lab::verifiers::executable::{
+use splinter_eval::verifiers::executable::{
     program_text, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
 };
-use splinter_lab::verifiers::mutation::{validate_oracle, MutationPolicy};
-use splinter_lab::verifiers::normalise::Normalisation;
+use splinter_eval::verifiers::mutation::{validate_oracle, MutationPolicy};
+use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
 use splinter_store::sources::SourceStore;
 
@@ -177,7 +177,7 @@ impl Admission {
                 .as_ref()
                 .map(|env| ResolvedEnvironment::Runtime(env.clone()).record())
                 .transpose()
-                .map_err(splinter_lab::verifiers::VerifyError::from)?;
+                .map_err(splinter_eval::verifiers::VerifyError::from)?;
             let context = Context {
                 source,
                 kind: &proposal.kind,

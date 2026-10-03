@@ -11,7 +11,7 @@ publish.workspace = true
 
 [dependencies]
 splinter-policy = { workspace = true }
-splinter-lab = { workspace = true }
+splinter-eval = { workspace = true }
 splinter-knowledge = { workspace = true }
 splinter-data = { workspace = true }
 sven-sdk = { workspace = true }

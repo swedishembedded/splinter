@@ -22,9 +22,9 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
-use splinter_lab::verifiers::calibration::{calibrate, CalibratedJudge};
-use splinter_lab::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
-use splinter_lab::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
+use splinter_eval::verifiers::calibration::{calibrate, CalibratedJudge};
+use splinter_eval::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
+use splinter_eval::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };

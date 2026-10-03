@@ -23,7 +23,7 @@ use crate::experience::ExperienceId;
 /// What produced an annotation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Producer {
-    /// The producer's name, e.g. `splinter-lab/denoise-formal`.
+    /// The producer's name, e.g. `splinter-eval/denoise-formal`.
     pub name: String,
     /// Its version, so a changed grader is distinguishable from the old one.
     pub version: String,

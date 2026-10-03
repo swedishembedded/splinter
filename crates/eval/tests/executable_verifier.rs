@@ -17,10 +17,10 @@ use common::{experience, python, record, task, verdict, Scratch};
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::evidence::{evidence_summary, failed_checks};
 use splinter_core::experience::Environment;
-use splinter_lab::verifiers::executable::{
+use splinter_eval::verifiers::executable::{
     ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
 };
-use splinter_lab::verifiers::normalise::Normalisation;
+use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_sandbox::Limits;
 
 const CORRECT: &str = "Here it is:\n```python\ndef add(a, b):\n    return a + b\n```\n";

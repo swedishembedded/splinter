@@ -42,7 +42,7 @@ splinter-core = "foundation"
 splinter-expdb = "foundation"
 splinter-store = "storage"
 splinter-sandbox = "storage"
-splinter-lab = "domain"
+splinter-eval = "domain"
 splinter-policy = "adapters"
 splinter-agent = "adapters"
 splinter-data = "domain"
@@ -106,7 +106,7 @@ to = "brain"
 why = "A sandbox runs a solver's code; it has no model computation in it."
 
 [[forbidden]]
-from = "splinter-lab"
+from = "splinter-eval"
 to = "brain"
 why = "Measurement must not be able to reach the model it measures, except through what it is handed."
 

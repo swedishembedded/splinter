@@ -16,7 +16,7 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
-use splinter_lab::verifiers::{annotation, Verifier};
+use splinter_eval::verifiers::{annotation, Verifier};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry,
 };

@@ -17,9 +17,9 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
-use splinter_lab::verifiers::formal::StatedReferenceVerifier;
-use splinter_lab::verifiers::normalise::Normalisation;
-use splinter_lab::verifiers::{annotation, Verifier};
+use splinter_eval::verifiers::formal::StatedReferenceVerifier;
+use splinter_eval::verifiers::normalise::Normalisation;
+use splinter_eval::verifiers::{annotation, Verifier};
 use sven_sdk::atif::{AgentProfile, Trajectory};
 
 fn experience(reference: Option<&str>, output: Option<&str>) -> Experience {

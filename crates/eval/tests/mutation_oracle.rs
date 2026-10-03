@@ -14,8 +14,8 @@ mod common;
 
 use common::{experience, python, record, reference, task, verdict, Scratch};
 use splinter_core::annotation::{Outcome, Strength};
-use splinter_lab::verifiers::executable::{ExecutableCheck, Expectation};
-use splinter_lab::verifiers::mutation::{
+use splinter_eval::verifiers::executable::{ExecutableCheck, Expectation};
+use splinter_eval::verifiers::mutation::{
     mutants, validate_oracle, MutationOperator, MutationPolicy, MutationValidatedVerifier,
 };
 use splinter_sandbox::Limits;

@@ -24,7 +24,7 @@
 //!   recorded beside it - the decision view reads both kinds, and would
 //!   derive the same record twice;
 //! * the critique receives its verdict by outcome (see
-//!   `splinter_lab::verifiers::critique`): pass when the retry passes where
+//!   `splinter_eval::verifiers::critique`): pass when the retry passes where
 //!   the failed attempt failed, fail when it still fails, an abstention when
 //!   the retry did not finish or reached no decision;
 //! * when the revision passes and the failed attempt failed at the same
@@ -52,8 +52,8 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{
     ExperienceError, ExperienceId, Privileged, PrivilegedKind, Provenance, Task,
 };
-use splinter_lab::verifiers::critique::{critique_verdict, preferred, RetryOutcome};
-use splinter_lab::verifiers::{verify_and_annotate, Strongest, VerifyError};
+use splinter_eval::verifiers::critique::{critique_verdict, preferred, RetryOutcome};
+use splinter_eval::verifiers::{verify_and_annotate, Strongest, VerifyError};
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::{decide, Decision};
 use splinter_store::experiences::{ExperienceStore, StoreError};

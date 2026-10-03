@@ -29,7 +29,7 @@ use splinter_agent::solve::{Model, SolveOptions};
 use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceError;
 use splinter_core::source::{Origin, PartRef, SourceId};
-use splinter_lab::verifiers::mutation::MutationPolicy;
+use splinter_eval::verifiers::mutation::MutationPolicy;
 use splinter_sandbox::RuntimeEnvironment;
 use splinter_store::error::StoreError;
 use splinter_store::sources::SourceStore;
@@ -281,7 +281,7 @@ pub enum GenerateError {
     Model(#[from] CallError),
     /// A sandbox or verifier failed while admitting a task.
     #[error("admitting a task failed: {0}")]
-    Admission(#[from] splinter_lab::verifiers::VerifyError),
+    Admission(#[from] splinter_eval::verifiers::VerifyError),
     /// The blocking admission step did not complete.
     #[error("the admission step did not complete: {0}")]
     Join(#[from] tokio::task::JoinError),

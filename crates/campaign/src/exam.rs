@@ -29,10 +29,10 @@
 use serde::Serialize;
 use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Experience, Task};
-use splinter_lab::verifiers::calibration::{
+use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
 };
-use splinter_lab::verifiers::Verifier;
+use splinter_eval::verifiers::Verifier;
 use splinter_policy::stats::{sign_test, SignTest};
 use splinter_store::experiences::SetId;
 use sven_sdk::CancelToken;
@@ -172,7 +172,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Campai
             if request.cancel.is_cancelled() {
                 return Err(CampaignError::Cancelled);
             }
-            let decided = |finding: splinter_lab::verifiers::Finding| match finding.outcome {
+            let decided = |finding: splinter_eval::verifiers::Finding| match finding.outcome {
                 Outcome::Pass => Some(true),
                 Outcome::Fail => Some(false),
                 Outcome::Abstain => None,

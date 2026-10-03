@@ -19,7 +19,7 @@ sven-sdk = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-splinter-lab = { workspace = true }
+splinter-eval = { workspace = true }
 
 [lints]
 workspace = true

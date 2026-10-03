@@ -12,7 +12,7 @@
 //! phrase stay apart. A group is named by the index of its first text, so the
 //! answer does not depend on how the texts are ordered after the first.
 
-use splinter_lab::overlap::overlap_groups;
+use splinter_eval::overlap::overlap_groups;
 
 /// `n` distinct words, so two passages built from different seeds share none.
 fn passage(seed: &str, n: usize) -> String {
