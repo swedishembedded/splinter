@@ -450,6 +450,11 @@ fn briefings_command(args: &[String]) -> anyhow::Result<()> {
         api_key: &key,
         model: &model,
     };
+    let side = match flag(args, "--of").as_deref() {
+        None | Some("exam") => split::Split::Exam,
+        Some("train") => split::Split::Train,
+        Some(other) => anyhow::bail!("--of is exam or train, not {other:?}"),
+    };
     run::briefings_command(
         &resources,
         &documents,
@@ -457,6 +462,7 @@ fn briefings_command(args: &[String]) -> anyhow::Result<()> {
             served,
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
         },
+        side,
     )
 }
 

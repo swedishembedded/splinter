@@ -464,14 +464,20 @@ pub fn briefings_command(
     resources: &Path,
     documents: &[Document],
     mine: &Mine<'_>,
+    side: Split,
 ) -> anyhow::Result<()> {
-    let letters = exam_letters(resources, documents)?;
-    let path = reconstruction_dir(resources)?.join("briefings.jsonl");
+    let letters = letters_of(resources, documents, side)?;
+    let file = if side == Split::Exam {
+        "briefings.jsonl"
+    } else {
+        "briefings-train.jsonl"
+    };
+    let path = reconstruction_dir(resources)?.join(file);
     let helper = crate::helper::Helper::served(&mine.served)?;
     let asked = crate::reconstruct::brief_all(&helper, &letters, &path, mine.limit)?;
     let made = crate::reconstruct::read_briefings(&path)?.len();
     println!(
-        "held-out letters of his: {}  asked this run: {asked}  briefings made: {made}",
+        "letters of his on the {side:?} side: {}  asked this run: {asked}  briefings made: {made}",
         letters.len()
     );
     Ok(())
