@@ -190,6 +190,13 @@ fn the_rubric_accepts_an_answer_that_quotes_or_restates_the_reference() {
         rubric.contains("repeating the reference is not a fault"),
         "{rubric}"
     );
+    // Saying more than the reference is not a fault; saying nothing it asks
+    // for is: an answer that dodges the question, or only says it cannot tell,
+    // gives nothing the reference holds.
+    assert!(rubric.contains("consistent with"), "{rubric}");
+    assert!(!rubric.contains("adds claims"), "{rubric}");
+    assert!(rubric.contains("dodges"), "{rubric}");
+    assert!(rubric.contains("cannot tell"), "{rubric}");
 }
 
 #[test]

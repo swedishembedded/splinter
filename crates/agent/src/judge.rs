@@ -35,7 +35,7 @@ pub const PRODUCER: &str = "splinter-agent/judge";
 
 /// The judge's version: bumped whenever its prompt or reply parsing
 /// changes.
-pub const VERSION: &str = "2";
+pub const VERSION: &str = "3";
 
 /// The task kind of the closed-book task a judge is asked.
 pub const JUDGE_TASK_KIND: &str = "judge";
@@ -46,12 +46,14 @@ pub const REASON_CAP_CHARS: usize = 500;
 /// What the judge is told to do, before the task, reference and answer.
 const INSTRUCTIONS: &str = "You are grading an answer to a task. You see the task, reference \
 material the solver never saw, and the solver's answer. The reference is what a correct answer \
-rests on, often the passage the task was written from. Judge only whether the answer gives \
-what the reference says in reply to the task: an answer may quote the reference or say it in \
-other words, and repeating the reference is not a fault when it answers the task. FAIL an \
-answer that contradicts the reference, is about something else, or adds claims the reference \
-does not support. Reply with one word on the first line - PASS, FAIL, or ABSTAIN when you \
-cannot tell - and give your reason on the next line.";
+rests on, often the passage the task was written from. Judge whether the answer gives what the \
+reference says in reply to the task. PASS an answer that is consistent with the reference and \
+draws on it: it may quote the reference or say it in other words, repeating the reference is not \
+a fault when it answers the task, and saying more than the reference does is not a fault when it \
+agrees with it. FAIL an answer that contradicts the reference, is about something else, dodges \
+the question, or only says that it cannot tell: such an answer gives nothing the reference holds. \
+Reply with one word on the first line - PASS, FAIL, or ABSTAIN when you cannot tell - and give \
+your reason on the next line.";
 
 /// A model grading answers closed-book. See the module documentation.
 pub struct JudgeVerifier {
