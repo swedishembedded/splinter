@@ -1,0 +1,30 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# Findings ledger
+
+Each defect seen while building and running this sample, with the evidence, the
+cause as best known, where it was repaired, and what verified the repair. An
+open finding stays here until a run shows it gone; a repaired one stays so a
+recurrence is recognised. The list is what was observed, not a claim that
+nothing else is wrong.
+
+Status: `repaired`, `mitigated` (the effect is controlled, the cause remains),
+`open`.
+
+| Id | Sev | What was seen | Cause | Layer | Status | Verified by |
+|---|---|---|---|---|---|---|
+| F-001 | high | The inference engine's release binary did not build on its main branch. | A module path that exists only in another crate, and two crate-private helpers it called. | Brain, `perf_longctx` | repaired | The release binary builds; the commit that exposes the helpers. |
+| F-002 | high | Training or scoring any pulled Hugging Face checkpoint failed: the weights were read from the manifest file. | A compound manifest anchors the entry at `brain.manifest.json` and names the checkpoint in its `weights` role; `resolve_base` returned the anchor. | Brain, loader | repaired | A regression specification (pulled checkpoint directory, by path and by id); then a real 1.5B and a real 7B fine-tune, and the adapter reloaded and served in a fresh process. |
+| F-003 | high | A 27B model decoded about 10 tokens a second, a third of what the same model does when the GPU is driven through CUDA. Brain's documentation quoted figures from two P40 cards as what the model does. | The default backend drives the GPU through wgpu and leaves the tensor cores idle; the docs recorded pre-tensor-core numbers. | Brain, docs; run configuration | repaired (docs), open (selection) | Timed both backends on one server. Open: the in-process trainer and answerer report a Vulkan adapter even with the CUDA backend requested; not yet shown to use CUDA. |
+| F-004 | med | Four concurrent requests to the 27B took four times as long as one. | The model serves one sequence at a time; no batching. | Brain, serving | open | Measured: aggregate throughput equals single-stream. It bounds the helper-model budget. |
+| F-005 | high | The 27B model said Samuel Adams co-authored the Declaration of Independence, and, asked again, that he did not sign it. He signed it and did not draft it. | Model limitation on the subject. | Helper models | mitigated | By design: every claim a helper makes is checked against the corpus by code, and a helper's judgement never outranks a verifier. Not yet measured as a rate. |
+| F-006 | med | The corpus parser skips about 18 real source notes (3%) whose headings are not in the shapes it knows. | Heading shapes the OCR mangles beyond the tolerance. | Sample, `corpus` | open | Every skipped note is listed in `skipped.jsonl` with its reason. |
+| F-007 | med | The editor's footnotes, citations of other books, sit inside the bodies of documents. Two documents appear to share text only because both cite the same book. | Footnotes are printed at the foot of the page and the OCR interleaves them. | Sample, `corpus` | open | Found by an independent audit of shared runs. The family grouping ignores runs many documents share, which contains the effect; the text is still not clean. |
+| F-008 | high | A split that looked leak-free was not: 37 of 89 held-out documents shared an eight-word run with a training document, some sharing dozens of runs. | The overlap grouping compares only the start of each text, so a passage reused deep inside a longer text is not seen. | Sample, `split` | repaired | A specification for a passage reused inside two longer texts, one for incidental sharing, one for boilerplate, one for the leak check; then an independent audit of the new freeze: at most four shared runs between any held-out and training document, apart from the footnote citation of F-007. |
+| F-009 | med | The first exam could not ask what kind of document a newspaper piece is: examinable families had to hold his own voice, and newspaper pieces never do. | An exam-eligibility rule that conflated "his voice" with "a settled kind". | Sample, `split` | repaired | A specification for newspaper families; the new freeze examines every kind. |
+| F-010 | med | A clipped opening: with more than one paragraph after a salutation the question's opening lost its first characters. | The cut point was computed from string lengths that stopped matching once paragraphs were joined. | Sample, `tasks` | repaired | A specification with three paragraphs after a salutation, red before the fix. Found in review, not by a run. |
+| F-011 | low | The freeze was regenerated twice before any training. | Two defects (F-008, F-009) in how the split was made. | Process | recorded | Nothing had read either earlier freeze. The guard that refuses a different freeze stays on; a deliberate re-freeze is a deletion made by hand and recorded here. |
+| F-012 | low | The temporal test has only a handful of documents in his own voice. | Few of his writings from 1790 on are in this edition. | Data | open | Counts in the `freeze` output. Other collections are needed before the temporal result means much. |
+| F-013 | low | The repository's gates need Python 3.11 (`tomllib`); the host has 3.9. | Host environment. | Environment | mitigated | A user-level `tomllib` shim over `tomli`, outside the repository. |
+| F-014 | low | The committed lock file pins a brain revision that is in no local checkout, so a plain build fails here. | The lock names a revision published elsewhere. | Environment | mitigated | `make lock` against the local checkouts for builds; the committed lock is changed only by the entries a commit adds. |
