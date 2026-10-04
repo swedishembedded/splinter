@@ -44,7 +44,9 @@ run's own verified answers first; one that cannot tell them apart grades
 nothing and the report says no claim is made.
 
 `materials` writes the letters of the training families and Jefferson's own
-works, and withholds the exam families for the independent check below.
+works (not the Life and Morals of Jesus of Nazareth, which is the Gospels cut and
+arranged with a modern editor's introduction, and would put a quarter of the
+corpus in other voices), and withholds the exam families for the independent check below.
 Splinter makes its own held-out split from what it is given, by group of
 overlapping text, so its exam and the independent one are different letters.
 

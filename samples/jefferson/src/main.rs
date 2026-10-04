@@ -323,10 +323,12 @@ fn apply_report_command(args: &[String]) -> anyhow::Result<()> {
 }
 
 /// Jefferson's own works that are not letters, as files under `resources`.
-const OWN_WORKS: [&str; 5] = [
+/// The Life and Morals of Jesus of Nazareth is not among them: it is the
+/// Gospels cut and arranged, with a modern editor's introduction, and what it
+/// would teach is not Jefferson's prose.
+const OWN_WORKS: [&str; 4] = [
     "notes-on-the-state-of-virginia-1853",
     "a-summary-view-of-the-rights-of-british-america-1774",
-    "life-and-morals-of-jesus-of-nazareth-1904",
     "manual-of-parliamentary-practice-1820",
     "declaration-of-independence",
 ];
