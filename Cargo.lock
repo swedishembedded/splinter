@@ -4011,6 +4011,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-adams"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
 name = "splinter-agent"
 version = "0.1.0"
 dependencies = [

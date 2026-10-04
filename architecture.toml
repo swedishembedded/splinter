@@ -54,6 +54,7 @@ splinter-sdk = "sdk"
 splinter = "surface"
 splinter-tool-syntax = "sample"
 splinter-jefferson = "sample"
+splinter-adams = "sample"
 
 [brain]
 allowed = ["splinter-model"]
