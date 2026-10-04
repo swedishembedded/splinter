@@ -18,9 +18,10 @@
 //! on file order, and its manifest is hashed so a later change to what was
 //! held out is visible.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use splinter_sdk::measure::overlap::overlap_groups;
+use splinter_sdk::measure::verifiers::quotation::words;
 
 use crate::curate::Document;
 
@@ -72,21 +73,88 @@ pub fn assign(docs: &[Document], seed: u64, exam_percent: u64) -> Vec<Assignment
         .collect()
 }
 
-/// The family of each document: its texts' overlap group, named by the
-/// smallest document id in it so the name does not depend on file order.
-fn families(docs: &[Document]) -> Vec<String> {
+/// Words in a run: a stretch of this many words in the same order is not a
+/// coincidence of idiom but a passage.
+const RUN_WORDS: usize = 8;
+/// Distinct shared runs that make two texts one: a phrase two letters happen to
+/// share is a few runs; a resolution reused inside an article is dozens.
+const MIN_SHARED_RUNS: usize = 5;
+/// A run held by more texts than this is a formula of the period's letters and
+/// joins none of them.
+const MAX_HOLDERS: usize = 6;
+
+/// The pairs of documents (by index, the smaller first) that are one text in
+/// part or whole: they share an overlap group, or at least [`MIN_SHARED_RUNS`]
+/// distinct passages of the whole body, however far in.
+fn related(docs: &[Document]) -> BTreeSet<(usize, usize)> {
     let texts: Vec<&str> = docs.iter().map(|d| d.body.as_str()).collect();
     let groups = overlap_groups(&texts);
+    let mut pairs = BTreeSet::new();
+    for i in 0..docs.len() {
+        for j in i + 1..docs.len() {
+            if groups[i] == groups[j] {
+                pairs.insert((i, j));
+            }
+        }
+    }
+
+    let mut holders: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, doc) in docs.iter().enumerate() {
+        let words = words(&doc.body);
+        for run in words.windows(RUN_WORDS) {
+            let held = holders.entry(run.join(" ")).or_default();
+            if held.last() != Some(&i) {
+                held.push(i);
+            }
+        }
+    }
+    let mut shared: HashMap<(usize, usize), usize> = HashMap::new();
+    for held in holders
+        .values()
+        .filter(|h| (2..=MAX_HOLDERS).contains(&h.len()))
+    {
+        for (n, &i) in held.iter().enumerate() {
+            for &j in &held[n + 1..] {
+                *shared.entry((i, j)).or_default() += 1;
+            }
+        }
+    }
+    pairs.extend(
+        shared
+            .into_iter()
+            .filter(|&(_, runs)| runs >= MIN_SHARED_RUNS)
+            .map(|(pair, _)| pair),
+    );
+    pairs
+}
+
+/// The family of each document: the documents related to it, however
+/// indirectly, named by the smallest document id among them so the name does
+/// not depend on file order.
+fn families(docs: &[Document]) -> Vec<String> {
+    let mut parent: Vec<usize> = (0..docs.len()).collect();
+    fn root(parent: &mut [usize], mut x: usize) -> usize {
+        while parent[x] != x {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        x
+    }
+    for (i, j) in related(docs) {
+        let (ri, rj) = (root(&mut parent, i), root(&mut parent, j));
+        parent[ri.max(rj)] = ri.min(rj);
+    }
+    let roots: Vec<usize> = (0..docs.len()).map(|i| root(&mut parent, i)).collect();
     let mut smallest: BTreeMap<usize, &str> = BTreeMap::new();
-    for (doc, group) in docs.iter().zip(&groups) {
-        let entry = smallest.entry(*group).or_insert(doc.id.as_str());
+    for (doc, root) in docs.iter().zip(&roots) {
+        let entry = smallest.entry(*root).or_insert(doc.id.as_str());
         if doc.id.as_str() < *entry {
             *entry = doc.id.as_str();
         }
     }
-    groups
+    roots
         .iter()
-        .map(|g| format!("family-{}", smallest[g]))
+        .map(|r| format!("family-{}", smallest[r]))
         .collect()
 }
 
@@ -171,27 +239,27 @@ pub struct Leak {
     pub held_out_doc: String,
 }
 
-/// Every pair (training, held out) of `docs` that is one text printed twice.
+/// Every pair (training, held out) of `docs` that is one text in part or whole.
 pub fn leaks(docs: &[Document], assignments: &[Assignment]) -> Vec<Leak> {
     let split_of: BTreeMap<&str, Split> = assignments
         .iter()
         .map(|a| (a.doc_id.as_str(), a.split))
         .collect();
-    let texts: Vec<&str> = docs.iter().map(|d| d.body.as_str()).collect();
-    let groups = overlap_groups(&texts);
     let mut found = Vec::new();
-    for (i, a) in docs.iter().enumerate() {
-        for (j, b) in docs.iter().enumerate() {
-            if groups[i] == groups[j]
-                && split_of[a.id.as_str()] == Split::Train
-                && split_of[b.id.as_str()] != Split::Train
-            {
-                found.push(Leak {
-                    train_doc: a.id.clone(),
-                    held_out_doc: b.id.clone(),
-                });
-            }
-        }
+    for (i, j) in related(docs) {
+        let (a, b) = (&docs[i], &docs[j]);
+        let (train, held) = match (
+            split_of[a.id.as_str()] == Split::Train,
+            split_of[b.id.as_str()] == Split::Train,
+        ) {
+            (true, false) => (a, b),
+            (false, true) => (b, a),
+            _ => continue,
+        };
+        found.push(Leak {
+            train_doc: train.id.clone(),
+            held_out_doc: held.id.clone(),
+        });
     }
     found
 }
@@ -308,6 +376,88 @@ mod tests {
             );
             assert_eq!(side(&a, "print-a").family, side(&a, "print-b").family);
         }
+    }
+
+    /// A document of its own prose with `shared` words of another text inside it.
+    fn quoting(id: &str, seed: u32, shared: &str) -> Document {
+        let own = prose(seed, 150);
+        doc(
+            id,
+            1771,
+            Authorship::DraftInHand,
+            format!("{own} {shared} {}", prose(seed + 5000, 150)),
+        )
+    }
+
+    #[test]
+    fn a_passage_reused_inside_two_longer_texts_makes_them_one_family() {
+        let passage = prose(910, 40);
+        let mut docs = corpus(30);
+        docs.push(quoting("resolve-a", 1, &passage));
+        docs.push(quoting("resolve-b", 2, &passage));
+        for seed in 0..30 {
+            let a = assign(&docs, seed, 50);
+            assert_eq!(
+                side(&a, "resolve-a").family,
+                side(&a, "resolve-b").family,
+                "seed {seed}"
+            );
+            assert_eq!(
+                side(&a, "resolve-a").split,
+                side(&a, "resolve-b").split,
+                "seed {seed}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_few_words_two_texts_happen_to_share_do_not_make_them_one_family() {
+        let phrase = prose(911, 10);
+        let mut docs = corpus(10);
+        docs.push(quoting("a", 1, &phrase));
+        docs.push(quoting("b", 2, &phrase));
+        let a = assign(&docs, 3, 50);
+        assert_ne!(side(&a, "a").family, side(&a, "b").family);
+    }
+
+    #[test]
+    fn boilerplate_held_by_many_texts_joins_none_of_them() {
+        let formula = prose(912, 40);
+        let docs: Vec<Document> = (0..12)
+            .map(|i| quoting(&format!("d{i}"), 20 + i, &formula))
+            .collect();
+        let a = assign(&docs, 3, 50);
+        let families: std::collections::BTreeSet<&str> =
+            a.iter().map(|x| x.family.as_str()).collect();
+        assert_eq!(families.len(), 12);
+    }
+
+    #[test]
+    fn a_leak_is_found_by_shared_passages_even_when_the_families_differ() {
+        let passage = prose(913, 40);
+        let docs = vec![
+            quoting("held", 1, &passage),
+            quoting("trained", 2, &passage),
+        ];
+        let assignments = vec![
+            Assignment {
+                doc_id: "held".into(),
+                family: "f1".into(),
+                split: Split::Exam,
+            },
+            Assignment {
+                doc_id: "trained".into(),
+                family: "f2".into(),
+                split: Split::Train,
+            },
+        ];
+        assert_eq!(
+            leaks(&docs, &assignments),
+            vec![Leak {
+                train_doc: "trained".into(),
+                held_out_doc: "held".into()
+            }]
+        );
     }
 
     #[test]
