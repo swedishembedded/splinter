@@ -228,14 +228,20 @@ fn is_sharded_hugging_face(dir: &Path) -> bool {
 }
 
 /// The largest context `checkpoint` supports: the `max_position_embeddings`
-/// of the `config.json` beside it. A checkpoint with no such config (brain's
+/// of the `config.json` in its directory, or beside its file. A checkpoint with no such config (brain's
 /// own format, a GGUF) states no maximum, so its context has to be named.
 pub fn maximum_context_tokens(checkpoint: &Path) -> Result<u32, PolicyError> {
     let unknown = |reason: String| PolicyError::Load {
         path: checkpoint.to_path_buf(),
         reason: format!("{reason}; name a context with local:<checkpoint>@<tokens>"),
     };
-    let config = load_source(checkpoint).join("config.json");
+    let source = load_source(checkpoint);
+    let directory = if source.is_dir() {
+        source.as_path()
+    } else {
+        source.parent().unwrap_or(Path::new("."))
+    };
+    let config = directory.join("config.json");
     let text = std::fs::read_to_string(&config).map_err(|e| {
         unknown(format!(
             "no context maximum: cannot read {}: {e}",
@@ -458,6 +464,12 @@ mod tests {
         std::fs::write(bare.join("model.safetensors"), b"x").unwrap();
         assert_eq!(
             maximum_context_tokens(&hf.join("model.safetensors")).unwrap(),
+            40960
+        );
+        // A brain-format file in a store directory, its config beside it.
+        std::fs::write(hf.join("model.brain.safetensors"), b"x").unwrap();
+        assert_eq!(
+            maximum_context_tokens(&hf.join("model.brain.safetensors")).unwrap(),
             40960
         );
         // No stated maximum: refused with the way to name one, never guessed.
