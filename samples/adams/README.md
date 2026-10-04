@@ -37,22 +37,34 @@ what he believed.
 | `train-dpo` | Preference-optimises an adapter on the pairs, continuing from the supervised adapter, which then is the reference. |
 | `transfer-exam` | Asks a model every benchmark question, graded by the grounding rules with no judge. |
 | `briefings`, `reconstruct-replies`, `judge`, `reconstruct-report` | The reconstruction benchmark: a held-out letter is briefed as the situation it answered, a model writes the reply, and a judge calibrated on controls scores it against what the real letter does. |
+| `grpo` | Builds a task family for brain's reinforcement-learning loop: present-day situations and the passages he may be shown, rewarded in named parts by the same rules (the layout, the verdict on whether his method applies, every other rule), with no model judging. The pool the loop trains on and the pool its own gate draws from are disjoint. It runs, but a two-step trial over the 1.5B model took 27 minutes, so no result is claimed for the 7B (see `FINDINGS.md`). |
 | `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. |
 
 The `exam` split is questions about documents the model never saw. The `seen`
 split is a sample of training questions. A gain on `seen` and none on `exam` is
 memorisation; a gain on both is learning.
 
+## The three ways the model is asked
+
+The system message is the mode, and it is part of what the adapter is trained and tested under:
+
+| Mode | System message | What the model is shown |
+|---|---|---|
+| Historical reconstruction | `reconstruct::SYSTEM` | A briefing of a situation he faced; it writes the reply he would send. |
+| Source-grounded application | `respond::SYSTEM` | A present-day situation, the facts, and passages from his papers with their document ids; it must quote only those. |
+| Internalized transfer | `respond::SYSTEM` | The same situation and facts with no passages: what it has learned. A quotation here is a fabrication by definition. |
+
 ## What is not built
 
-Reinforcement training (GRPO) is not built; brain exposes the loop and Splinter
-does not yet drive it. Also still to do: historical stimulus-and-response
-reconstruction, a modern-fact researcher separate from the persona, a verifier
-model, a judge for anything the rules cannot grade, and the other primary
-collections (the manuscript papers, committee records, Founders Online, the
-delegates' letters). The temporal holdout is small: few documents of his last
-years survive in this edition. See `FINDINGS.md` for the defects found so far
-and what each repair was verified by.
+Reinforcement training has no result: the task family and reward are built and
+the loop runs, but too slowly here to teach the student anything within a
+session. Also still to do: a modern-fact researcher separate from the persona,
+a verifier model, a judge for anything the rules cannot grade beyond the
+reconstruction benchmark's, and the other primary collections (the manuscript
+papers, committee records, Founders Online, the delegates' letters). The
+temporal holdout is small: few documents of his last years survive in this
+edition. See `FINDINGS.md` for the defects found so far and what each repair
+was verified by.
 
 ## Running it
 
