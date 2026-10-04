@@ -36,6 +36,13 @@ impl Authorship {
         self <= Authorship::CommitteeCoauthored
     }
 
+    /// Is there a settled answer to "what kind of document is this", so that
+    /// a question about its kind can be graded: his own text or a newspaper
+    /// piece under a pseudonym, but not a text only an editor ascribes to him.
+    pub fn has_a_settled_kind(self) -> bool {
+        self <= Authorship::PseudonymousAttributed
+    }
+
     /// May the text support a hypothesis about how he reasoned.
     pub fn supports_principles(self) -> bool {
         self <= Authorship::EditorAttributed
@@ -169,6 +176,23 @@ mod tests {
         }
         for a in [SecondaryQuoted, ContextOnly] {
             assert!(!a.supports_principles(), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn a_kind_is_settled_for_his_own_text_and_for_newspaper_pieces_but_not_for_ascriptions() {
+        use Authorship::*;
+        for a in [
+            DirectAutograph,
+            SignedScribal,
+            DraftInHand,
+            CommitteeCoauthored,
+            PseudonymousAttributed,
+        ] {
+            assert!(a.has_a_settled_kind(), "{a:?}");
+        }
+        for a in [EditorAttributed, SecondaryQuoted, ContextOnly] {
+            assert!(!a.has_a_settled_kind(), "{a:?}");
         }
     }
 

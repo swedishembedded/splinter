@@ -41,8 +41,8 @@ pub struct Assignment {
     pub split: Split,
 }
 
-/// Put every document on a side. `exam_percent` of the families that hold his
-/// voice (0 to 100) are examined on; every document dated in the temporal
+/// Put every document on a side. `exam_percent` of the families whose kind is
+/// settled (his own text, a committee's, a newspaper piece) are examined on; every document dated in the temporal
 /// holdout, and every family that has one, is kept for that test.
 pub fn assign(docs: &[Document], seed: u64, exam_percent: u64) -> Vec<Assignment> {
     let families = families(docs);
@@ -54,7 +54,7 @@ pub fn assign(docs: &[Document], seed: u64, exam_percent: u64) -> Vec<Assignment
         let docs = &members[family];
         if docs.iter().any(|d| d.temporal_holdout) {
             Split::Temporal
-        } else if docs.iter().any(|d| d.authorship.is_voice())
+        } else if docs.iter().any(|d| d.authorship.has_a_settled_kind())
             && family_hash(seed, family) < exam_percent
         {
             Split::Exam
@@ -327,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn only_families_that_hold_his_voice_are_examined() {
+    fn a_family_whose_kind_is_unsettled_is_never_examined() {
         let docs: Vec<Document> = (0..100)
             .map(|i| {
                 doc(
@@ -339,6 +339,21 @@ mod tests {
             })
             .collect();
         assert!(assign(&docs, 5, 50).iter().all(|a| a.split == Split::Train));
+    }
+
+    #[test]
+    fn a_family_of_newspaper_pieces_can_be_examined_so_every_attribution_is_tested() {
+        let docs: Vec<Document> = (0..100)
+            .map(|i| {
+                doc(
+                    &format!("d{i}"),
+                    1770,
+                    Authorship::PseudonymousAttributed,
+                    prose(i, 120),
+                )
+            })
+            .collect();
+        assert!(assign(&docs, 5, 50).iter().any(|a| a.split == Split::Exam));
     }
 
     #[test]
