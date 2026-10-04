@@ -181,8 +181,9 @@ the new material's held-out questions - the facts it was trained on asked
 in other words, which `learn` has the generator model write for each task
 kept and which are never trained on - kept what earlier releases
 learned, held a frozen anchor suite of general tasks, and runs on plain
-`brain serve` with the same answers (to within the numerical noise of
-two processes decoding one model). A held-out question
+`brain serve` with the same answers (the same text to within the numerical
+noise of two processes decoding one model, or the same meaning in other
+words). A held-out question
 the candidate was trained on (the same question, or a near duplicate,
 among its training records) is left out of those measurements and
 counted as leaked. An executable check passes only when it is seen to run to its

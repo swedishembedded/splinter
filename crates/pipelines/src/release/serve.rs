@@ -20,9 +20,14 @@
 //! wrote (`--api-keys-out`), decoded greedily as the in-process arms
 //! were ([`GREEDY_SAMPLING`]) so the two answers compare serving rather
 //! than two draws and, as in-process, without a reasoning block, and
-//! graded as in-process. A task is answered alike ([`alike`]) when the
-//! verdict is the same and the final answer is the same up to the
-//! numerical noise of two processes decoding one model; at least
+//! graded as in-process. A task is answered alike when the verdict is the
+//! same and the final answer is the same text up to the numerical noise of
+//! two processes decoding one model ([`alike`]) or, worded otherwise, says
+//! the same thing ([`meaning::says_the_same`]: nearer in meaning to its own
+//! in-process answer than to the answer to any other task, so the
+//! comparison cannot call everything alike). A served model may sample, and
+//! its kernels sum in another order, so the wording is not what must
+//! survive; the meaning is. At least
 //! [`gate::SERVE_AGREEMENT_PERCENT`] percent of the tasks must be. Each
 //! task answered differently is reported with both answers. The server is
 //! stopped when the check ends, however it ends.
@@ -41,8 +46,10 @@ use std::time::{Duration, Instant};
 
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
+use splinter_model::embed::Embeddings;
 use splinter_model::local::GREEDY_SAMPLING;
 
+use crate::release::meaning;
 use crate::release::probe::{grade, Probe, Suite};
 use splinter_eval::gate::{self, Check, Disagreement, Serve};
 use splinter_orchestrator::context::Context;
@@ -243,8 +250,13 @@ fn serve_and_ask(
         other => Failure::Unmeasured(format!("asking the served candidate: {other}")),
     })?;
     measured.sampled = sample.tasks.len();
-    for ((task, served), local) in sample.tasks.iter().zip(&answers).zip(in_process) {
-        if alike(served, local) {
+    // The server has answered everything it will be asked.
+    drop(running);
+    let agree = agreements(&answers, in_process).map_err(Failure::Unmeasured)?;
+    for (((task, served), local), agreed) in
+        sample.tasks.iter().zip(&answers).zip(in_process).zip(agree)
+    {
+        if agreed {
             measured.agreed += 1;
         } else {
             measured.disagreed.push(Disagreement {
@@ -256,8 +268,58 @@ fn serve_and_ask(
             });
         }
     }
-    drop(running);
     Ok(gate::serve(measured))
+}
+
+/// The embedding model that compares what two answers say.
+const MEANING_MODEL: &str = "Qwen/Qwen3-Embedding-0.6B";
+
+/// Per task, whether the served answer is the in-process one: [`alike`] as
+/// text, or - the same verdict, but worded differently - saying the same
+/// thing ([`meaning::says_the_same`]). The embedding model is loaded only
+/// when some task is not alike as text.
+fn agreements(served: &[Probe], in_process: &[Probe]) -> Result<Vec<bool>, String> {
+    let mut agree: Vec<bool> = served
+        .iter()
+        .zip(in_process)
+        .map(|(s, l)| alike(s, l))
+        .collect();
+    // Tasks answered on both sides with the same verdict, not yet agreed.
+    let reworded: Vec<usize> = (0..agree.len())
+        .filter(|&i| {
+            !agree[i]
+                && served[i].verdict == in_process[i].verdict
+                && served[i].answer.is_some()
+                && in_process[i].answer.is_some()
+        })
+        .collect();
+    if reworded.is_empty() {
+        return Ok(agree);
+    }
+    // The control is every task answered on both sides, so an answer must
+    // be nearer its own counterpart than to the other tasks' answers.
+    let answered: Vec<usize> = (0..agree.len())
+        .filter(|&i| served[i].answer.is_some() && in_process[i].answer.is_some())
+        .collect();
+    let texts = |probes: &[Probe]| -> Vec<String> {
+        answered
+            .iter()
+            .filter_map(|&i| probes[i].answer.clone())
+            .collect()
+    };
+    let embed = |texts: &[String]| {
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        Embeddings::load(MEANING_MODEL)
+            .and_then(|model| model.passages(&refs))
+            .map_err(|e| format!("comparing what the answers say: {e}"))
+    };
+    let same = meaning::says_the_same(&embed(&texts(served))?, &embed(&texts(in_process))?);
+    for (&task, same) in answered.iter().zip(same) {
+        if reworded.contains(&task) {
+            agree[task] = same;
+        }
+    }
+    Ok(agree)
 }
 
 /// How much of the shorter of two answers the longer must begin with, in
