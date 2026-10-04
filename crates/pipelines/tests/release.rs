@@ -273,8 +273,24 @@ fn each_failing_check_blocks_the_release_and_says_why() {
 }
 
 #[test]
-fn a_served_candidate_that_answers_in_other_words_is_not_released() {
+fn a_served_candidate_that_says_the_same_in_other_words_is_released() {
+    // A server that samples, or sums in another order, words one answer
+    // otherwise; what serving must keep is what the answer says.
     let (scratch, ctx) = gate_context("release-divergent", Brain::Divergent);
+    freeze_anchor(&scratch, &ctx);
+    let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+
+    let decided = decide(&ctx, &good);
+    let gate = &decided.gate;
+    assert!(gate.passed && decided.release.is_some(), "{gate:#?}");
+    let serve = gate.serve.measured.as_ref().unwrap();
+    assert_eq!(serve.served_digest, good.adapter_digest);
+    assert_eq!((serve.sampled, serve.agreed), (6, 6), "{serve:#?}");
+}
+
+#[test]
+fn a_served_candidate_that_answers_something_else_is_not_released() {
+    let (scratch, ctx) = gate_context("release-different", Brain::Different);
     freeze_anchor(&scratch, &ctx);
     let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
 
@@ -286,17 +302,11 @@ fn a_served_candidate_that_answers_in_other_words_is_not_released() {
     );
     assert!(!gate.serve.passed && decided.release.is_none(), "{gate:#?}");
     let serve = gate.serve.measured.as_ref().unwrap();
-    assert_eq!(serve.served_digest, good.adapter_digest);
     assert_eq!((serve.sampled, serve.agreed), (6, 0));
     let first = &serve.disagreed[0];
     assert_eq!(
         (first.in_process.as_deref(), first.served.as_deref()),
-        (Some("alpha-54"), Some("ALPHA-54."))
-    );
-    assert_eq!(
-        (first.in_process_verdict, first.served_verdict),
-        (Some(true), Some(true)),
-        "graded the same, answered differently"
+        (Some("alpha-54"), Some("The weather is mild in spring."))
     );
     let why = gate.serve.reason.as_deref().unwrap();
     assert!(why.contains("answered differently"), "{why}");

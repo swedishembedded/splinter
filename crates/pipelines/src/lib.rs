@@ -47,7 +47,6 @@ pub mod critique;
 pub mod curriculum;
 pub mod datasets;
 pub mod dialogue;
-pub mod embedder;
 pub mod eval;
 pub mod exam;
 pub mod experiences;

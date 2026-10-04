@@ -236,6 +236,9 @@ pub enum Brain {
     /// The stand-in, reporting the real digest and answering in other
     /// words than the candidate in-process, graded the same.
     Divergent,
+    /// The stand-in, reporting the real digest and answering something
+    /// else than the candidate in-process, whatever it is asked.
+    Different,
 }
 
 /// The file standing for the device being held: while it exists, the
@@ -266,7 +269,7 @@ pub fn gate_context(test: &str, brain: Brain) -> (Scratch, Context) {
     let mut config = config(&scratch);
     config.brain_binary = match brain {
         Brain::Missing => None,
-        Brain::Honest | Brain::WrongDigest | Brain::Divergent => {
+        Brain::Honest | Brain::WrongDigest | Brain::Divergent | Brain::Different => {
             Some(fake_brain(&scratch.0, brain))
         }
     };
@@ -275,8 +278,47 @@ pub fn gate_context(test: &str, brain: Brain) -> (Scratch, Context) {
         .unwrap()
         .with_clock(Box::new(FixedClock::new(NOW)))
         .with_model(base, knower(&[ANCHOR]));
+    // What the serve check compares is what answers say: words, not the
+    // embedding model.
+    ctx.set_embedder(Arc::new(BagOfWords));
     put_base(&ctx);
     (scratch, ctx)
+}
+
+/// Texts embedded as the words they hold: lower-cased, split at everything
+/// that is not a letter or a digit, hashed into a fixed number of buckets. Two
+/// texts of the same words are one point, and texts sharing none are apart.
+pub struct BagOfWords;
+
+impl splinter_knowledge::retrieve::Embedder for BagOfWords {
+    fn name(&self) -> String {
+        "bag-of-words".into()
+    }
+
+    fn embed(
+        &self,
+        texts: &[&str],
+    ) -> Result<Vec<Vec<f32>>, splinter_knowledge::retrieve::EmbedError> {
+        const BUCKETS: usize = 64;
+        Ok(texts
+            .iter()
+            .map(|text| {
+                let mut v = vec![0.0f32; BUCKETS];
+                for word in text
+                    .to_lowercase()
+                    .split(|c: char| !c.is_alphanumeric())
+                    .filter(|w| !w.is_empty())
+                {
+                    let hash = word.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+                        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+                    });
+                    v[usize::try_from(hash % BUCKETS as u64).unwrap_or(0)] += 1.0;
+                }
+                let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1.0);
+                v.into_iter().map(|x| x / norm).collect()
+            })
+            .collect())
+    }
 }
 
 /// The gate with a short server start, for a stand-in that starts at once.
@@ -554,6 +596,7 @@ fn fake_brain(dir: &Path, brain: Brain) -> PathBuf {
     let script = FAKE_BRAIN
         .replace("@WRONG@", python(brain == Brain::WrongDigest))
         .replace("@DIVERGENT@", python(brain == Brain::Divergent))
+        .replace("@DIFFERENT@", python(brain == Brain::Different))
         .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string());
     std::fs::write(&path, script).unwrap();
     #[cfg(unix)]
@@ -589,6 +632,8 @@ def reply(text):
         answer = m.group(1) + "-" + m.group(2)
     else:
         answer = "I do not know."
+    if @DIFFERENT@:
+        return "The weather is mild in spring."
     if @DIVERGENT@:
         return answer.upper().rstrip(".") + "."
     return answer + "\n"

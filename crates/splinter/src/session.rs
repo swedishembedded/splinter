@@ -15,7 +15,6 @@ use splinter_sdk::ask::{ask, ask_retrieving};
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest};
-use splinter_sdk::embedder::ModelEmbedder;
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::examine;
 use splinter_sdk::experiences::{self, resolve_set};
@@ -247,7 +246,7 @@ impl Session {
                                 .into(),
                         ));
                     }
-                    let embedder = ModelEmbedder::load_default()?;
+                    let embedder = ctx.embedder()?;
                     let reader = reader_of(ctx, retrieve)?;
                     let rerank = reader.as_ref().map(|reader| Rerank {
                         reranker: reader,
@@ -260,7 +259,7 @@ impl Session {
                             &args.question,
                             &retrieve.sources,
                             retrieve.passages,
-                            &embedder,
+                            &*embedder,
                             rerank,
                             &args.policy,
                         )?,
@@ -510,12 +509,12 @@ impl Session {
                 let retrieval = if retrieve.sources.is_empty() {
                     None
                 } else {
-                    embedder = ModelEmbedder::load_default()?;
-                    library = library_of(ctx, &retrieve.sources, &embedder)?.1;
+                    embedder = ctx.embedder()?;
+                    library = library_of(ctx, &retrieve.sources, &*embedder)?.1;
                     reader = reader_of(ctx, retrieve)?;
                     Some(Retrieval {
                         library: &library,
-                        embedder: &embedder,
+                        embedder: &*embedder,
                         passages: retrieve.passages,
                         rerank: reader.as_ref().map(|reader| Rerank {
                             reranker: reader,

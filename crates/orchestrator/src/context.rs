@@ -33,6 +33,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+use crate::embedding::{ModelEmbedder, SharedEmbedder};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -105,6 +107,7 @@ pub struct Runtime {
     clock: Box<dyn Clock + Send + Sync>,
     runtime: tokio::runtime::Runtime,
     handed_in: Mutex<HashMap<ModelRef, Model>>,
+    embedder: Mutex<Option<SharedEmbedder>>,
     models: Mutex<HashMap<ModelKey, Held>>,
     residency: Residency,
     environments: Environments,
@@ -124,6 +127,7 @@ impl Runtime {
             clock: Box::new(SystemClock),
             runtime,
             handed_in: Mutex::new(HashMap::new()),
+            embedder: Mutex::new(None),
             models: Mutex::new(HashMap::new()),
             residency: Residency::default(),
             environments,
@@ -154,6 +158,30 @@ impl Runtime {
     /// Answers `reference` with `model` from now on, instead of loading it.
     pub fn add_model(&self, reference: ModelRef, model: Model) {
         self.lock_handed_in().insert(reference, model);
+    }
+
+    /// Embeds with `embedder` from now on, instead of loading the default
+    /// embedding model.
+    pub fn set_embedder(&self, embedder: SharedEmbedder) {
+        *self
+            .embedder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(embedder);
+    }
+
+    /// The embedder this runtime embeds with: the one handed in, else the
+    /// default embedding model, loaded on first use and kept.
+    pub fn embedder(&self) -> Result<SharedEmbedder, OrchestratorError> {
+        let mut held = self
+            .embedder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(embedder) = held.as_ref() {
+            return Ok(Arc::clone(embedder));
+        }
+        let loaded: SharedEmbedder = Arc::new(ModelEmbedder::load_default()?);
+        *held = Some(Arc::clone(&loaded));
+        Ok(loaded)
     }
 
     /// How many bases are resident on the device for this runtime's

@@ -10,19 +10,31 @@
 //! The model runtime's embeddings as retrieval's [`Embedder`]: retrieval
 //! knows no model, and the model runtime knows no retrieval.
 
+use std::sync::{Arc, Mutex};
+
 use splinter_knowledge::retrieve::{EmbedError, Embedder};
 use splinter_model::embed::{Embeddings, DEFAULT_MODEL};
-use splinter_orchestrator::error::OrchestratorError;
+
+use crate::error::OrchestratorError;
+
+/// An embedder shared by everything that runs on a runtime.
+pub type SharedEmbedder = Arc<dyn Embedder + Send + Sync>;
 
 /// A loaded embedding model, as an [`Embedder`].
-pub struct ModelEmbedder(Embeddings);
+pub struct ModelEmbedder(Mutex<Embeddings>);
 
 impl ModelEmbedder {
     /// The default embedding model ([`DEFAULT_MODEL`]), loaded.
     pub fn load_default() -> Result<Self, OrchestratorError> {
         Embeddings::load(DEFAULT_MODEL)
-            .map(Self)
+            .map(|loaded| Self(Mutex::new(loaded)))
             .map_err(|e| OrchestratorError::Refused(format!("the embedding model: {e}")))
+    }
+
+    fn model(&self) -> std::sync::MutexGuard<'_, Embeddings> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -32,13 +44,13 @@ impl Embedder for ModelEmbedder {
     }
 
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        self.0
+        self.model()
             .passages(texts)
             .map_err(|e| EmbedError::Failed(e.to_string()))
     }
 
     fn embed_query(&self, query: &str) -> Result<Vec<f32>, EmbedError> {
-        self.0
+        self.model()
             .query(query)
             .map_err(|e| EmbedError::Failed(e.to_string()))
     }

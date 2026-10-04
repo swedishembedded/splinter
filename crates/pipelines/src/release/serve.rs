@@ -46,7 +46,6 @@ use std::time::{Duration, Instant};
 
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_model::embed::{Embeddings, DEFAULT_MODEL};
 use splinter_model::local::GREEDY_SAMPLING;
 
 use crate::release::meaning;
@@ -252,7 +251,7 @@ fn serve_and_ask(
     measured.sampled = sample.tasks.len();
     // The server has answered everything it will be asked.
     drop(running);
-    let agree = agreements(&answers, in_process).map_err(Failure::Unmeasured)?;
+    let agree = agreements(ctx, &answers, in_process).map_err(Failure::Unmeasured)?;
     for (((task, served), local), agreed) in
         sample.tasks.iter().zip(&answers).zip(in_process).zip(agree)
     {
@@ -275,7 +274,7 @@ fn serve_and_ask(
 /// text, or - the same verdict, but worded differently - saying the same
 /// thing ([`meaning::says_the_same`]). The embedding model is loaded only
 /// when some task is not alike as text.
-fn agreements(served: &[Probe], in_process: &[Probe]) -> Result<Vec<bool>, String> {
+fn agreements(ctx: &Context, served: &[Probe], in_process: &[Probe]) -> Result<Vec<bool>, String> {
     let mut agree: Vec<bool> = served
         .iter()
         .zip(in_process)
@@ -304,10 +303,13 @@ fn agreements(served: &[Probe], in_process: &[Probe]) -> Result<Vec<bool>, Strin
             .filter_map(|&i| probes[i].answer.clone())
             .collect()
     };
+    let embedder = ctx
+        .embedder()
+        .map_err(|e| format!("comparing what the answers say: {e}"))?;
     let embed = |texts: &[String]| {
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-        Embeddings::load(DEFAULT_MODEL)
-            .and_then(|model| model.passages(&refs))
+        embedder
+            .embed(&refs)
             .map_err(|e| format!("comparing what the answers say: {e}"))
     };
     let same = meaning::says_the_same(&embed(&texts(served))?, &embed(&texts(in_process))?);

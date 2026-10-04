@@ -34,6 +34,7 @@ pub mod answers;
 pub mod concurrency;
 pub mod config;
 pub mod context;
+pub mod embedding;
 pub mod error;
 pub mod ids;
 pub mod model_ref;
