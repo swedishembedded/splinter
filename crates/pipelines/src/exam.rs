@@ -33,7 +33,7 @@ use serde::Serialize;
 use splinter_agent::solve::with_system_addendum;
 use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
-use splinter_core::experience::{Experience, PrivilegedKind, Provenance, Task};
+use splinter_core::experience::{Experience, Task};
 use splinter_eval::paired::{by_cluster, PairedOutcome};
 use splinter_eval::significance::SignTest;
 use splinter_eval::verifiers::calibration::{
@@ -43,6 +43,7 @@ use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
 
 use crate::grouping::task_clusters;
+use crate::judging::{controls, reference};
 use crate::release::arm;
 use crate::release::probe::{answer_prompted, greedy, held_out, trained_tasks};
 use crate::retrieval::Retrieval;
@@ -226,49 +227,6 @@ pub struct Examined {
     /// The candidate with retrieval against the candidate alone, by the same
     /// rule; `None` when there is no retrieval arm.
     pub paired_retrieval: Option<SignTest>,
-}
-
-/// An experience of `task` answered with `answer`, as the exam's controls
-/// are: by no model.
-fn answered(ctx: &Context, task: &Task, answer: &str) -> Result<Experience, OrchestratorError> {
-    Ok(Experience::answered_without_a_run(
-        task.clone(),
-        answer,
-        Provenance::new(CONTROLS_SOURCE, ctx.clock()),
-    )?)
-}
-
-/// What a control's provenance names as its solver: not a model.
-const CONTROLS_SOURCE: &str = "splinter/exam-controls";
-
-/// The reference of `task`, the answer it is controlled with.
-fn reference(task: &Task) -> Option<&str> {
-    task.privileged
-        .iter()
-        .find(|p| p.kind == PrivilegedKind::Reference)
-        .map(|p| p.content.as_str())
-}
-
-/// The judge's controls: each task's reference right for it, and the next
-/// task's reference wrong for it. A task with no reference, or the same one
-/// as its neighbour's, makes no control.
-fn controls(
-    ctx: &Context,
-    tasks: &[Task],
-) -> Result<Vec<(Task, Experience, Outcome)>, OrchestratorError> {
-    let mut labelled = Vec::with_capacity(tasks.len() * 2);
-    for (n, task) in tasks.iter().enumerate() {
-        let other = &tasks[(n + 1) % tasks.len()];
-        let (Some(right), Some(wrong)) = (reference(task), reference(other)) else {
-            continue;
-        };
-        if right == wrong {
-            continue;
-        }
-        labelled.push((task.clone(), answered(ctx, task, right)?, Outcome::Pass));
-        labelled.push((task.clone(), answered(ctx, task, wrong)?, Outcome::Fail));
-    }
-    Ok(labelled)
 }
 
 /// Runs `request`; see the module documentation.

@@ -36,6 +36,9 @@ use splinter_pipelines::sources::{self, SourceTarget};
 
 const LETTER: &str = "# To a young man\n\n## Habits\n\nKeep habit1 and habit2 and habit3 and habit4 and habit5 and habit6 each morning, for a settled mind needs them.\n";
 
+/// A second letter, from another family of sources, on the same matter.
+const LETTER_B: &str = "# To a friend\n\n## Habits\n\nHold to habit1 and habit2 and habit3 and habit4 and habit5 and habit6 at the close of day, since a quiet conscience wants them.\n";
+
 fn task(n: usize, span: &Span) -> Task {
     Task::new(
         "advise",
@@ -102,19 +105,27 @@ fn setup(
     Vec<Task>,
 ) {
     let (scratch, ctx) = scratch_context(test, Scripted::new(|_| String::new()), false);
-    let path = scratch.0.join("letter.md");
-    std::fs::write(&path, LETTER).unwrap();
-    let id = sources::add(
-        &ctx,
-        &SourceTarget::from_learn_arg(&path.display().to_string()).unwrap(),
-    )
-    .unwrap()
-    .source
-    .id;
-    let source = ctx.sources().get_source(&id).unwrap();
-    let content = source.parts[0].content.clone();
-    let span = Span::new(content, 0, LETTER.len() as u64).unwrap();
-    let tasks: Vec<Task> = (1..=6).map(|n| task(n, &span)).collect();
+    let span_of = |name: &str, text: &str| -> Span {
+        let path = scratch.0.join(name);
+        std::fs::write(&path, text).unwrap();
+        let id = sources::add(
+            &ctx,
+            &SourceTarget::from_learn_arg(&path.display().to_string()).unwrap(),
+        )
+        .unwrap()
+        .source
+        .id;
+        let content = ctx.sources().get_source(&id).unwrap().parts[0]
+            .content
+            .clone();
+        Span::new(content, 0, text.len() as u64).unwrap()
+    };
+    // Two families of sources: the first three tasks are about one letter,
+    // the last three about another.
+    let (first, second) = (span_of("letter.md", LETTER), span_of("friend.md", LETTER_B));
+    let tasks: Vec<Task> = (1..=6)
+        .map(|n| task(n, if n <= 3 { &first } else { &second }))
+        .collect();
     let controls = tasks.clone();
     for (name, script) in [
         ("base", arm(false, None)),
@@ -166,10 +177,10 @@ fn the_report_compares_the_arms_by_a_calibrated_judge_and_counts_invented_specif
         "{candidate:#?}"
     );
     let paired = report.paired.as_ref().unwrap();
-    // Six questions about one letter are one unit of evidence: the tuned
-    // arm won them all, and that is one win, which proves nothing.
-    assert_eq!(report.families, 1);
-    assert_eq!((paired.discordant, paired.candidate_wins), (1, 1));
+    // Three questions about each of two letters are two units of evidence:
+    // the tuned arm won all six, which is two wins.
+    assert_eq!(report.families, 2);
+    assert_eq!((paired.discordant, paired.candidate_wins), (2, 2));
     assert!(paired.p_value > 0.05, "{paired:?}");
     // The vague base states nothing the letter lacks; the tuned arm invented a
     // year once, though the judge still says it gave the advice.
@@ -281,7 +292,7 @@ fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with
     // The scripted base knows nothing whatever it is told, so the tuned
     // model beats it prompted as it beats it unprompted.
     let against = report.paired_vs_prompted.as_ref().unwrap();
-    assert_eq!((against.discordant, against.candidate_wins), (1, 1));
+    assert_eq!((against.discordant, against.candidate_wins), (2, 2));
 }
 
 /// Every text alike: a library of one passage needs no meaning to find it.
@@ -317,16 +328,19 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
             "scripted/reader",
         ),
     );
-    let evidence = &tasks[0].evidence[0];
-    let passage = Passage {
+    let passage_of = |task: &Task, section: usize, text: &str| Passage {
         source: None,
         part: "letter.md".into(),
-        section: 0,
-        content: Some(evidence.source.clone()),
-        range: 0..LETTER.len(),
-        text: LETTER.into(),
+        section,
+        content: Some(task.evidence[0].source.clone()),
+        range: 0..text.len(),
+        text: text.into(),
     };
-    let library = Library::new(vec![passage], &Flat).unwrap();
+    let passages = vec![
+        passage_of(&tasks[0], 0, LETTER),
+        passage_of(&tasks[5], 0, LETTER_B),
+    ];
+    let library = Library::new(passages, &Flat).unwrap();
     let retrieval = Retrieval {
         library: &library,
         embedder: &Flat,
@@ -362,5 +376,5 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
         .iter()
         .all(|t| t.evidence_found && t.alone == Some(false) && t.with_passages == Some(true)));
     let against = report.paired_retrieval.as_ref().unwrap();
-    assert_eq!((against.discordant, against.candidate_wins), (1, 1));
+    assert_eq!((against.discordant, against.candidate_wins), (2, 2));
 }
