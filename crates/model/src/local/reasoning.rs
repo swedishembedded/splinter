@@ -65,13 +65,17 @@ pub const CLOSED_THINK: &str = "<think>\n\n</think>\n\n";
 
 /// `dataset` (JSON Lines of chat records) with each supervised assistant turn
 /// that has no closed think block of its own made to start with
-/// [`CLOSED_THINK`]. A record with `tools` is left alone: its turns call
-/// tools, which are not answers.
+/// [`CLOSED_THINK`]. A record that lists tools is left alone: its turns call
+/// tools, which are not answers. An empty list is no tools.
 pub fn closed_think_blocks(dataset: &str) -> Result<String, serde_json::Error> {
     let mut out = String::with_capacity(dataset.len() + 64);
     for line in dataset.lines().map(str::trim).filter(|l| !l.is_empty()) {
         let mut record: serde_json::Value = serde_json::from_str(line)?;
-        if record.get("tools").is_none() {
+        let has_tools = record
+            .get("tools")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|tools| !tools.is_empty());
+        if !has_tools {
             let messages = record
                 .get_mut("messages")
                 .and_then(serde_json::Value::as_array_mut);
@@ -203,5 +207,21 @@ mod tests {
         assert_eq!((content(0), content(1)), ("s".into(), "q".into()));
         assert_eq!(lines[0]["metadata"]["view"], "sft-final");
         assert_eq!(lines[1]["messages"][0]["content"], "call");
+    }
+
+    /// A record that lists no tools is a plain chat record: writers that
+    /// always emit the field must get the same rendering as those that omit it.
+    #[test]
+    fn an_empty_tools_list_is_no_tools() {
+        let mut value = serde_json::json!({"messages": [
+            {"role": "assistant", "content": "answer", "train": true}
+        ]});
+        value["tools"] = serde_json::json!([]);
+        let rewritten = closed_think_blocks(&value.to_string()).unwrap();
+        let line: serde_json::Value = serde_json::from_str(rewritten.trim()).unwrap();
+        assert_eq!(
+            line["messages"][0]["content"],
+            format!("{CLOSED_THINK}answer")
+        );
     }
 }
