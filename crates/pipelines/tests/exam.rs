@@ -225,3 +225,24 @@ fn a_task_an_arm_answered_with_nothing_is_counted_unanswered_and_the_exam_goes_o
     );
     assert_eq!(report.base.unanswered, 0);
 }
+
+#[test]
+fn an_exam_of_a_model_against_itself_is_refused() {
+    let (_scratch, ctx, tasks, controls) = setup("exam-itself", judge(false));
+    let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
+    let refused = exam(
+        &ctx,
+        &ExamRequest {
+            tasks: &tasks,
+            controls: &controls,
+            base: &model("tuned"),
+            candidate: &model("tuned"),
+            judge: &model("judge"),
+            cancel: CancelToken::new(),
+        },
+    );
+    assert!(
+        matches!(&refused, Err(splinter_orchestrator::OrchestratorError::Refused(why)) if why.contains("itself")),
+        "{refused:?}"
+    );
+}

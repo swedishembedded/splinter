@@ -182,6 +182,11 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
             "scripted/judge",
         ),
     );
+    // The exam measures the candidate against the base it continued.
+    ctx.add_model(
+        splinter_pipelines::release::arm(ctx.config(), None),
+        Model::new(Arc::new(policy()), common::POLICY),
+    );
     let id = &report.candidate.as_ref().unwrap().candidate;
     let Exam::Ran(examined) = examine(&ctx, id, Some(&judge), &CancelToken::new()).unwrap() else {
         panic!("the exam of a stored candidate runs");

@@ -222,6 +222,12 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             "an exam calibrates its judge on at least two tasks with a reference".into(),
         ));
     }
+    if request.base == request.candidate {
+        return Err(OrchestratorError::Refused(
+            "the exam would compare the model with itself: the base and the candidate are one"
+                .into(),
+        ));
+    }
     let answers = |reference: &ModelRef| -> Result<(String, Vec<Experience>), OrchestratorError> {
         let model = greedy(ctx, reference)?;
         let given = request
@@ -340,7 +346,7 @@ fn spaced<T: Clone>(items: &[T], most: usize) -> Vec<T> {
 }
 
 /// The `exam` command: the stored candidate `candidate` examined against the
-/// policy it continues, by `judge` (else the judge role's model); see
+/// model it continues (its parent release, else the base), by `judge` (else the judge role's model); see
 /// [`examine_candidate`].
 pub fn examine(
     ctx: &Context,
@@ -354,7 +360,20 @@ pub fn examine(
             .get(Role::Judge)
             .clone(),
     };
-    examine_candidate(ctx, candidate, &ModelRef::policy_default(), &judge, cancel)
+    // The candidate is measured against what it continues - the release it
+    // was trained from, or the base alone - not against what the alias
+    // points at now, which is the candidate itself once it is released.
+    let trained = load_candidate(ctx, candidate)?;
+    let continued = trained
+        .parent
+        .as_ref()
+        .map(|id| ctx.releases().get(id))
+        .transpose()?;
+    let base = arm(
+        ctx.config(),
+        continued.as_ref().map(|r| r.adapter.as_path()),
+    );
+    examine_candidate(ctx, candidate, &base, &judge, cancel)
 }
 
 /// Examines the trained candidate `candidate` against `base` on its held-out
