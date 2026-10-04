@@ -44,6 +44,12 @@ four hex digits that names exactly one stored object.
 gave it and, asked through `policy:<alias>`, the release the alias
 resolved to; its report carries the answer's `id` and that `release`.
 
+Passages are built, not found: a part's paragraphs are merged forward until a
+passage holds about 120 words (a header goes with what it heads, a signature with
+what precedes it), a paragraph over 260 words is split at sentence ends, and a
+fragment too short to say anything is left out, so an embedding is of something
+with a referent and none is cut off by the embedder.
+
 `--open-book` shows the model the whole text of one source. `--retrieve`
 shows it instead the `--passages` (default 6) passages of the named sources
 that bear on the question: ranked by meaning (Qwen3-Embedding), with a

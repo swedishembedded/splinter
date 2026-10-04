@@ -26,7 +26,8 @@
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::retrieve::{
-    fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Library, Passage, RerankError, Reranker,
+    fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Library, Passage, RerankError,
+    Reranker, MAX_PASSAGE_WORDS,
 };
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
@@ -68,32 +69,84 @@ const VIRGINIA: &str = "The university of Virginia should teach every science us
 const TOBACCO: &str = "The tobacco shipped to Havre by the brig Eliza was sold at a poor price, and the merchants complain of the duties laid upon the hogsheads.";
 const EDUCATION: &str = "Education of the people is the surest foundation of liberty, and a nation that wishes to be free must see that its youth are taught to reason.";
 
+/// `n` words, a section's worth, as one sentence ending in a full stop, each
+/// section told apart by `tag`.
+fn sentence(tag: &str, n: usize) -> String {
+    let body: Vec<String> = (0..n.saturating_sub(1))
+        .map(|i| format!("{tag}{i}"))
+        .collect();
+    format!("{} end.", body.join(" "))
+}
+
+fn words_of(text: &str) -> usize {
+    text.split_whitespace().count()
+}
+
 #[test]
-fn the_sources_become_passages_addressed_by_part_and_section() {
-    let store = store("passages");
-    let id = put(
-        &store,
-        &[
-            (
-                "to-carr.txt",
-                &format!("{VIRGINIA}\n\nToo short to say anything.\n\n{TOBACCO}"),
-            ),
-            ("to-jay.txt", EDUCATION),
-        ],
+fn short_sections_merge_into_a_passage_that_can_say_something() {
+    // A letter is a header, a few short paragraphs and a signature: each alone
+    // is a fragment without a referent. They merge, in order, until a passage
+    // is long enough to stand for something, and a header goes with what it
+    // heads.
+    let store = store("passages-merge");
+    let letter = format!(
+        "TO MR. MADISON. Paris, 1787.\n\n{}\n\n{}\n\n{}\n\n{}\n\nYours.",
+        sentence("a", 40),
+        sentence("b", 40),
+        sentence("c", 40),
+        sentence("d", 40),
     );
+    let id = put(&store, &[("to-madison.txt", &letter)]);
     let found = passages(&store, &[id]).unwrap();
-    let addresses: Vec<(String, usize)> =
-        found.iter().map(|p| (p.part.clone(), p.section)).collect();
-    assert_eq!(
-        addresses,
-        [
-            ("to-carr.txt".to_string(), 0),
-            ("to-carr.txt".to_string(), 2),
-            ("to-jay.txt".to_string(), 0)
-        ],
-        "a section too short to say anything is not a passage"
+    assert_eq!(found.len(), 2, "{found:#?}");
+    assert!(found[0].text.starts_with("TO MR. MADISON. Paris, 1787."));
+    assert!(found[0].text.contains("a0") && found[0].text.contains("c0"));
+    assert!(found[1].text.contains("d0"));
+    assert!(
+        found.iter().all(|p| !p.text.trim_end().ends_with("Yours."))
+            || found[1].text.contains("d0"),
+        "a signature is no passage of its own"
     );
-    assert!(found[0].text.starts_with("The university of Virginia"));
+    assert_eq!(
+        (found[0].part.as_str(), found[0].section),
+        ("to-madison.txt", 0)
+    );
+}
+
+#[test]
+fn a_passage_is_exactly_the_bytes_of_its_range() {
+    let store = store("passages-range");
+    let text = format!(
+        "{}\n\n{}\n\n{}",
+        sentence("a", 50),
+        sentence("b", 50),
+        sentence("c", 50)
+    );
+    let id = put(&store, &[("letter.txt", &text)]);
+    for p in passages(&store, &[id]).unwrap() {
+        assert_eq!(&text[p.range.clone()], p.text);
+    }
+}
+
+#[test]
+fn a_very_long_section_is_split_at_sentence_ends_into_passages_that_fit() {
+    let store = store("passages-split");
+    let sentences: Vec<String> = (0..40).map(|n| sentence(&format!("s{n}w"), 30)).collect();
+    let long = sentences.join(" ");
+    let id = put(&store, &[("long.txt", &long)]);
+    let found = passages(&store, &[id]).unwrap();
+    assert!(found.len() >= 4, "{} passages", found.len());
+    assert!(
+        found.iter().all(|p| words_of(&p.text) <= MAX_PASSAGE_WORDS),
+        "{:?}",
+        found.iter().map(|p| words_of(&p.text)).collect::<Vec<_>>()
+    );
+    assert!(
+        found.iter().all(|p| p.text.trim_end().ends_with("end.")),
+        "cut at a sentence end"
+    );
+    let rebuilt: Vec<&str> = found.iter().map(|p| p.text.as_str()).collect();
+    assert!(rebuilt.join(" ") == long, "nothing lost, nothing repeated");
 }
 
 #[test]
