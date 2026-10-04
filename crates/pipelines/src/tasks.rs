@@ -344,15 +344,13 @@ fn generate_part(
         kinds.iter().partition(|kind| kind.focus.is_some());
     if !general.is_empty() {
         let positions: Vec<usize> = (0..text.sections().len()).collect();
-        run_windows(
-            ctx,
-            generator,
+        let pass = Pass {
             text,
-            &positions,
-            &general,
-            Some(MAX_WINDOWS_PER_PART),
-            batch,
-        )?;
+            positions: &positions,
+            kinds: &general,
+            cap: Some(MAX_WINDOWS_PER_PART),
+        };
+        run_windows(ctx, generator, &pass, batch)?;
     }
     for kind in focused {
         let positions = match kind.focus {
@@ -360,7 +358,13 @@ fn generate_part(
             Some(Focus::Judgment) => judgment_sections(text),
             None => continue,
         };
-        run_windows(ctx, generator, text, &positions, &[kind], None, batch)?;
+        let pass = Pass {
+            text,
+            positions: &positions,
+            kinds: &[kind],
+            cap: None,
+        };
+        run_windows(ctx, generator, &pass, batch)?;
     }
     Ok(())
 }
@@ -376,17 +380,32 @@ fn spread<T: Copy>(windows: Vec<T>, cap: Option<usize>) -> Vec<T> {
     }
 }
 
-/// The sections of `text` at `positions`, a window of
-/// [`SECTIONS_PER_REQUEST`] at a time, put to the generator for `kinds`.
+/// One pass over a text part: which of its sections, for which kinds, and
+/// how many requests it may make.
+#[derive(Clone, Copy)]
+struct Pass<'a> {
+    text: &'a SourceText,
+    /// The sections put to the generator.
+    positions: &'a [usize],
+    kinds: &'a [&'a TaskKind],
+    /// The most windows asked; `None` asks for every one.
+    cap: Option<usize>,
+}
+
+/// The sections of the pass, a window of [`SECTIONS_PER_REQUEST`] at a time,
+/// put to the generator for its kinds.
 fn run_windows(
     ctx: &Context,
     generator: &ModelTaskGenerator,
-    text: &SourceText,
-    positions: &[usize],
-    kinds: &[&TaskKind],
-    cap: Option<usize>,
+    pass: &Pass<'_>,
     batch: &mut Batch,
 ) -> Result<(), OrchestratorError> {
+    let Pass {
+        text,
+        positions,
+        kinds,
+        cap,
+    } = *pass;
     let windows = spread(positions.chunks(SECTIONS_PER_REQUEST).collect(), cap);
     for window in windows {
         if batch.deadline.is_some_and(|d| Instant::now() >= d) {

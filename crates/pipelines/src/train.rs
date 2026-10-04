@@ -479,25 +479,46 @@ pub fn train(
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),
     };
-    let record = keep_candidate(ctx, &plan, &replay, trained, request, &candidate, regime);
+    let record = keep_candidate(
+        ctx,
+        Finished {
+            plan: &plan,
+            replay: &replay,
+            trained,
+            request,
+            candidate: &candidate,
+            regime,
+        },
+    );
     // The directory was only ever a working place; the adapter and the
     // replay are kept as artifacts and everything else is reproducible.
     let _ = std::fs::remove_dir_all(&dir);
     record
 }
 
+/// A finished training: what was planned, asked and produced, for the
+/// candidate it made.
+struct Finished<'a> {
+    plan: &'a TrainPlan,
+    replay: &'a Option<ReplaySample>,
+    trained: Outcome,
+    request: &'a TrainRequest,
+    candidate: &'a str,
+    regime: Regime,
+}
+
 /// Keeps what training produced: the adapter and the replayed records as
 /// artifacts, then the candidate's record and the training that made it in one
 /// commit.
-fn keep_candidate(
-    ctx: &Context,
-    plan: &TrainPlan,
-    replay: &Option<ReplaySample>,
-    trained: Outcome,
-    request: &TrainRequest,
-    candidate: &str,
-    regime: Regime,
-) -> Result<Candidate, OrchestratorError> {
+fn keep_candidate(ctx: &Context, finished: Finished<'_>) -> Result<Candidate, OrchestratorError> {
+    let Finished {
+        plan,
+        replay,
+        trained,
+        request,
+        candidate,
+        regime,
+    } = finished;
     let artifacts = ctx.artifacts();
     let adapter = artifacts.put_file(
         &trained.adapter,
