@@ -23,9 +23,9 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::measure::verifiers::quotation::TextIndex;
 
 use crate::corpus::words;
-use crate::grade::{fabricated, final_answer};
 use crate::scenarios::Scenario;
 use crate::tasks::PERSONA;
+use splinter_sdk::measure::verifiers::answer::{fabricated, final_answer};
 use splinter_sdk::model::answer::Answerer;
 
 /// One answered scenario.

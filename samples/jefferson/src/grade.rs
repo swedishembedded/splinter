@@ -13,48 +13,12 @@
 //! A model's own claim to know something is not evidence. These checks read
 //! the answer text and compare it with a reference the model never saw.
 
-use regex::Regex;
-
-use splinter_sdk::measure::verifiers::quotation::{quotations, TextIndex};
-
-use crate::corpus::words;
-
-/// The answer a model gave, after its reasoning: the visible reply when it
-/// closed its reasoning block; when it finished without closing it, everything
-/// it wrote (a model fine-tuned on direct answers answers inside the block it
-/// was handed open); and nothing when it ran out of tokens still reasoning,
-/// because its thoughts name candidates it may go on to reject.
-#[must_use]
-pub fn final_answer(thinking: &str, text: &str, truncated: bool) -> Option<String> {
-    if !text.trim().is_empty() {
-        return Some(text.trim().to_string());
-    }
-    (!truncated && !thinking.trim().is_empty()).then(|| thinking.trim().to_string())
-}
-
-/// Whether `answer` contains `needle` as whole words, ignoring case.
-#[must_use]
-pub fn mentions(answer: &str, needle: &str) -> bool {
-    let a = words(answer);
-    let n = words(needle);
-    !n.is_empty() && a.windows(n.len()).any(|w| w == n.as_slice())
-}
+use splinter_sdk::measure::verifiers::answer::mentions;
 
 /// An answer to "who was it written to?": it names the surname.
 #[must_use]
 pub fn recipient_ok(answer: &str, surname: &str) -> bool {
     mentions(answer, surname)
-}
-
-/// An answer to "in what year?": it states the year, and no other year of the
-/// era, so a list of guesses does not pass.
-#[must_use]
-pub fn year_ok(answer: &str, year: u16) -> bool {
-    #[allow(clippy::expect_used)]
-    let era = Regex::new(r"\b1[5-9]\d\d\b").expect("a constant pattern");
-    let years: Vec<&str> = era.find_iter(answer).map(|m| m.as_str()).collect();
-    let wanted = year.to_string();
-    years.contains(&wanted.as_str()) && years.iter().all(|y| *y == wanted)
 }
 
 /// An answer to "which work is this from?": it names the work, and no other
@@ -63,19 +27,6 @@ pub fn year_ok(answer: &str, year: u16) -> bool {
 pub fn work_ok(answer: &str, accepted: &[&str], others: &[&str]) -> bool {
     accepted.iter().any(|a| mentions(answer, a)) && !others.iter().any(|o| mentions(answer, o))
 }
-
-/// How many of `answer`'s quotations of at least eight words are not in
-/// `index`'s texts, and how many there are: the fabricated-quotation count a
-/// persona model is held to.
-#[must_use]
-pub fn fabricated(answer: &str, index: &TextIndex) -> (usize, usize) {
-    let quotes = quotations(answer, MIN_QUOTATION_WORDS);
-    let missing = quotes.iter().filter(|q| !index.contains(q)).count();
-    (missing, quotes.len())
-}
-
-/// The fewest words a quoted passage runs to count as a claim to a passage.
-const MIN_QUOTATION_WORDS: usize = 8;
 
 #[cfg(test)]
 mod tests {
@@ -87,17 +38,6 @@ mod tests {
         assert!(recipient_ok("It went to madison, I believe.", "Madison"));
         assert!(!recipient_ok("To Madisonian Society members.", "Madison"));
         assert!(!recipient_ok("I do not know.", "Madison"));
-    }
-
-    #[test]
-    fn a_year_must_be_the_only_year_stated() {
-        assert!(year_ok("I wrote it in 1789, from Paris.", 1789));
-        assert!(
-            !year_ok("Perhaps 1788 or 1789.", 1789),
-            "a list of guesses fails"
-        );
-        assert!(!year_ok("In 1790.", 1789));
-        assert!(!year_ok("Some years ago.", 1789));
     }
 
     #[test]
@@ -115,46 +55,5 @@ mod tests {
             &others
         ));
         assert!(!work_ok("The Leviathan.", &accepted, &others));
-    }
-
-    #[test]
-    fn the_answer_is_the_visible_reply_else_a_finished_block_else_nothing() {
-        assert_eq!(
-            final_answer("thinking text", "  the reply ", false).as_deref(),
-            Some("the reply")
-        );
-        assert_eq!(
-            final_answer("thinking", "the reply", true).as_deref(),
-            Some("the reply"),
-            "a closed block then cut off"
-        );
-        assert_eq!(
-            final_answer(" answered inside the block ", "  ", false).as_deref(),
-            Some("answered inside the block"),
-            "finished without closing the block"
-        );
-        assert_eq!(
-            final_answer("still weighing Madison or Jay", "", true),
-            None,
-            "ran out of tokens thinking"
-        );
-        assert_eq!(final_answer("", "", false), None);
-    }
-
-    #[test]
-    fn a_quotation_is_found_in_the_corpus_whatever_its_line_breaks_or_punctuation() {
-        let index = TextIndex::new([
-            "We hold these truths to be self-evident,\nthat all men are created equal, that they\nare endowed by their Creator with certain unalienable rights.",
-        ]);
-        let real = "I wrote \"We hold these truths to be self-evident, that all men are created equal\" and meant it.";
-        let invented = "I said \"liberty is the first gift of nature and the last concern of a republic\" often.";
-        assert_eq!(fabricated(real, &index), (0, 1));
-        assert_eq!(fabricated(invented, &index), (1, 1));
-        assert_eq!(fabricated("no quotation at all", &index), (0, 0));
-        assert_eq!(
-            fabricated("a short \"words only here\" quote is not counted", &index),
-            (0, 0),
-            "under the minimum length a phrase is not a claim to a passage"
-        );
     }
 }

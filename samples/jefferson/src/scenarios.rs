@@ -18,7 +18,7 @@
 use splinter_sdk::knowledge::advice::{advice_cues, is_prose};
 
 use crate::corpus::{words, Letter};
-use crate::grade::mentions;
+use splinter_sdk::measure::verifiers::answer::mentions;
 
 /// The fewest and most words a passage may have.
 pub const PASSAGE_WORDS: std::ops::RangeInclusive<usize> = 35..=85;

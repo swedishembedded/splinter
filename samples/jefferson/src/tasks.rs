@@ -164,8 +164,8 @@ pub fn letter_tasks(letter: &Letter, family_key: &str, seed: u64) -> Vec<Task> {
     }
     let opening = excerpt(letter, 50);
     if opening.split_whitespace().count() < 40
-        || crate::grade::mentions(&opening, &surname)
-        || crate::grade::mentions(&opening, &letter.year.to_string())
+        || splinter_sdk::measure::verifiers::answer::mentions(&opening, &surname)
+        || splinter_sdk::measure::verifiers::answer::mentions(&opening, &letter.year.to_string())
     {
         return Vec::new();
     }

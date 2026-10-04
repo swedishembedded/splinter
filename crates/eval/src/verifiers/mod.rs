@@ -34,6 +34,7 @@
 //! for a model. Call it from a thread that may block (a plain thread, or
 //! the runtime's blocking pool), never from inside an async task.
 
+pub mod answer;
 pub mod calibration;
 pub mod consistency;
 pub mod critique;

@@ -17,9 +17,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::grade::{final_answer, recipient_ok, work_ok, year_ok};
+use crate::grade::{recipient_ok, work_ok};
 use crate::tasks::{Kind, Task, PERSONA};
 use crate::works::{rival_names, WORKS};
+use splinter_sdk::measure::verifiers::answer::{final_answer, year_ok};
 use splinter_sdk::model::answer::Answerer;
 
 /// One graded answer.
