@@ -33,6 +33,18 @@ pub enum Kind {
     Work,
 }
 
+impl Kind {
+    /// The kind's name as an exam record carries it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Recipient => "recipient",
+            Kind::Year => "year",
+            Kind::Work => "work",
+        }
+    }
+}
+
 /// One task: the question, the reference answer and the answer in the
 /// model's voice that training uses.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

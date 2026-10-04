@@ -5,6 +5,10 @@
 //!
 //! * [`answer`] - one local model, with or without an adapter, answering one
 //!   question at a time, greedily: what an evaluation asks.
+//! * [`exam`] - a frozen exam run against one local model, resumable, each
+//!   answer graded by code and recorded as one line.
+//! * [`report`] - two arms of an exam paired question by question, with the
+//!   paired sign test.
 //! * [`local`] - brain's chat pipeline in-process behind sven's
 //!   `ModelProvider` seam: load, stream a generation, stop it cleanly.
 //! * [`residency`] - the one owner of resident bases: one loaded copy per
@@ -31,7 +35,9 @@ pub mod answer;
 pub mod capabilities;
 pub mod embed;
 pub mod error;
+pub mod exam;
 pub mod local;
+pub mod report;
 pub mod residency;
 pub mod selection;
 pub mod stats;

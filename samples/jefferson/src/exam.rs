@@ -11,39 +11,33 @@
 //! Results are appended one line per question and the run resumes where it
 //! stopped, so an interrupted run costs nothing already measured.
 
-use std::collections::HashSet;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use splinter_sdk::measure::verifiers::answer::year_ok;
+use splinter_sdk::model::exam::{Model, Question};
 
 use crate::grade::{recipient_ok, work_ok};
 use crate::tasks::{Kind, Task, PERSONA};
 use crate::works::{rival_names, WORKS};
-use splinter_sdk::measure::verifiers::answer::{final_answer, year_ok};
-use splinter_sdk::model::answer::Answerer;
 
-/// One graded answer.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Graded {
-    /// The task it answers.
-    pub id: String,
-    /// What the task asked.
-    pub kind: Kind,
-    /// `exam` or `seen`.
-    pub split: String,
-    /// The reference the answer was compared with.
-    pub reference: String,
-    /// The answer, cut for the record; `None` when the model gave none.
-    pub answer: Option<String>,
-    /// Whether the answer is right.
-    pub correct: bool,
-    /// Tokens generated.
-    pub tokens: u32,
-    /// Whether the budget ran out.
-    pub truncated: bool,
-    /// Seconds the answer took.
-    pub seconds: f64,
+pub use splinter_sdk::model::exam::{read_results, Graded};
+
+impl Question for Task {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &str {
+        self.kind.name()
+    }
+    fn split(&self) -> &str {
+        &self.split
+    }
+    fn reference(&self) -> &str {
+        &self.reference
+    }
+    fn prompt(&self) -> &str {
+        &self.prompt
+    }
 }
 
 /// Whether `answer` is a right answer to `task`.
@@ -76,21 +70,6 @@ pub fn read_tasks(path: &Path) -> anyhow::Result<Vec<Task>> {
         .collect()
 }
 
-/// Reads every graded answer of a results file; none when it does not exist.
-///
-/// # Errors
-/// The file exists and a line is not a graded answer.
-pub fn read_results(path: &Path) -> anyhow::Result<Vec<Graded>> {
-    if !path.is_file() {
-        return Ok(Vec::new());
-    }
-    std::fs::read_to_string(path)?
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())))
-        .collect()
-}
-
 /// What one exam run needs.
 pub struct Run {
     /// The frozen exam, JSON lines of tasks.
@@ -117,50 +96,14 @@ pub struct Run {
 /// The model cannot be loaded or a generation fails.
 pub fn run(run: &Run) -> anyhow::Result<usize> {
     let tasks = read_tasks(&run.exam)?;
-    let done: HashSet<String> = read_results(&run.out)?.into_iter().map(|g| g.id).collect();
-    let todo: Vec<&Task> = tasks.iter().filter(|t| !done.contains(&t.id)).collect();
-    let todo = &todo[..run.limit.map_or(todo.len(), |n| n.min(todo.len()))];
-    if todo.is_empty() {
-        return Ok(0);
-    }
-    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), 4096, "jefferson")?;
-    let runtime = tokio::runtime::Runtime::new()?;
-    let mut out = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&run.out)?;
-    for (n, task) in todo.iter().enumerate() {
-        let reply = runtime.block_on(answerer.ask(
-            run.system.as_deref().unwrap_or(PERSONA),
-            &task.prompt,
-            run.max_tokens,
-        ))?;
-        let answer = final_answer(&reply.thinking, &reply.text, reply.truncated);
-        let graded = Graded {
-            id: task.id.clone(),
-            kind: task.kind,
-            split: task.split.clone(),
-            reference: task.reference.clone(),
-            correct: answer.as_deref().is_some_and(|a| is_correct(task, a)),
-            answer: answer.map(|a| a.chars().take(400).collect()),
-            tokens: reply.tokens,
-            truncated: reply.truncated,
-            seconds: reply.seconds,
-        };
-        writeln!(out, "{}", serde_json::to_string(&graded)?)?;
-        out.flush()?;
-        eprintln!(
-            "[{}/{}] {:?} {} correct={} thinking={} chars, visible={} chars",
-            n + 1,
-            todo.len(),
-            graded.kind,
-            graded.split,
-            graded.correct,
-            reply.thinking.chars().count(),
-            reply.text.chars().count()
-        );
-    }
-    Ok(todo.len())
+    let model = Model {
+        base: &run.base,
+        adapter: run.adapter.as_deref(),
+        system: run.system.as_deref().unwrap_or(PERSONA),
+        max_tokens: run.max_tokens,
+        label: "jefferson",
+    };
+    splinter_sdk::model::exam::run(&tasks, &run.out, run.limit, &model, &is_correct)
 }
 
 #[cfg(test)]
