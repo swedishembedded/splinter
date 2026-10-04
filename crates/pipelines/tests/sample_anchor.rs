@@ -26,7 +26,7 @@ fn the_samples_anchor_suite_freezes_and_freezing_it_again_changes_nothing() {
     let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/jefferson/anchor.jsonl");
     let (_scratch, ctx) = scratch_context("sample-anchor", Scripted::new(|_| String::new()), false);
     let first = anchor::freeze(&ctx, &file).unwrap();
-    assert_eq!(first.suite.tasks.len(), 40);
+    assert_eq!(first.suite.tasks.len(), 70);
     assert_eq!(first.suite.version, 1);
     let again = anchor::freeze(&ctx, &file).unwrap();
     assert_eq!((again.suite.version, again.digest), (1, first.digest));
