@@ -49,7 +49,11 @@ shows it instead the `--passages` (default 6) passages of the named sources
 that bear on the question: ranked by meaning (Qwen3-Embedding), with a
 fixed share of the tail given to the passages only the question's exact
 words find (a name, a date), each under its part and section. The answer
-records the sources and `splinter lineage` links it to them.
+records the sources and `splinter lineage` links it to them. The passages'
+vectors are made once and kept in the state as derived data (an artifact found
+by a pointer named for the embedding model and the passages' text), so other
+sources, changed text or another model is another index and a second question
+over the same sources embeds nothing.
 
 ## Models
 

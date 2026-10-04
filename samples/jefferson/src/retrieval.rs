@@ -47,6 +47,10 @@ pub fn letter_passages(letters: &[Letter]) -> Vec<Passage> {
 pub struct Qwen<'a>(pub &'a Embeddings);
 
 impl Embedder for Qwen<'_> {
+    fn name(&self) -> String {
+        splinter_sdk::model::embed::DEFAULT_MODEL.to_string()
+    }
+
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
         self.0
             .passages(texts)

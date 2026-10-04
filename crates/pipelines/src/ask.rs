@@ -24,10 +24,11 @@ use serde::Serialize;
 use splinter_agent::solve::{open_book_prompt, solve, SolveOptions};
 use splinter_core::experience::{Environment, Task};
 use splinter_core::source::SourceId;
-use splinter_knowledge::retrieve::{passages, Embedder, Library};
+use splinter_knowledge::retrieve::{passages, Embedder};
 use splinter_knowledge::tasks::SourceIdentity;
 use splinter_sandbox::ResolvedEnvironment;
 
+use crate::index;
 use crate::solving::conclusion_name;
 use crate::sources;
 use splinter_core::model_ref::ModelRef;
@@ -113,13 +114,10 @@ pub fn ask_retrieving(
             "the sources hold no passage to retrieve".into(),
         ));
     }
-    let embedding = |e: splinter_knowledge::retrieve::EmbedError| {
-        OrchestratorError::Refused(format!("retrieval: {e}"))
-    };
-    let library = Library::new(found, embedder).map_err(embedding)?;
+    let library = index::library(ctx, found, embedder)?;
     let shown = library
         .find(question, embedder, passages_shown.max(1))
-        .map_err(embedding)?;
+        .map_err(|e| OrchestratorError::Refused(format!("retrieval: {e}")))?;
     let material: Vec<String> = shown
         .iter()
         .map(|p| format!("--- {}, section {} ---\n{}", p.part, p.section + 1, p.text))

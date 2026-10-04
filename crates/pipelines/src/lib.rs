@@ -52,6 +52,7 @@ pub mod eval;
 pub mod exam;
 pub mod experiences;
 mod grouping;
+pub mod index;
 pub mod judge;
 pub mod learn;
 pub mod lineage;

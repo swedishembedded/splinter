@@ -43,6 +43,36 @@ impl Library {
         })
     }
 
+    /// The library of `passages` whose `vectors` an embedder made earlier,
+    /// one per passage (see [`Library::vectors`]): the embedder is then
+    /// needed only for queries. Refused when the counts differ, or the
+    /// vectors are not all of one size.
+    pub fn from_vectors(
+        passages: Vec<Passage>,
+        vectors: Vec<Vec<f32>>,
+    ) -> Result<Self, EmbedError> {
+        let size = vectors.first().map_or(0, Vec::len);
+        if vectors.len() != passages.len() || vectors.iter().any(|v| v.len() != size) {
+            return Err(EmbedError::Malformed {
+                wanted: passages.len(),
+                got: vectors.len(),
+            });
+        }
+        let bm25 = Bm25::new(&passages);
+        Ok(Self {
+            passages,
+            bm25,
+            dense: Dense::from_vectors(vectors),
+        })
+    }
+
+    /// The vector of every passage, in the order of [`Library::passages`]:
+    /// what to keep so that the passages need not be embedded again.
+    #[must_use]
+    pub fn vectors(&self) -> &[Vec<f32>] {
+        self.dense.vectors()
+    }
+
     /// Every passage, in the order the library was made from.
     #[must_use]
     pub fn passages(&self) -> &[Passage] {

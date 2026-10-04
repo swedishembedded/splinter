@@ -30,6 +30,10 @@ const LETTERS: &str = "# Letters\n\n## To Carr\n\nEducation of the people is the
 struct Concepts;
 
 impl Embedder for Concepts {
+    fn name(&self) -> String {
+        "concepts".into()
+    }
+
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
         Ok(texts
             .iter()
@@ -113,4 +117,90 @@ fn a_source_with_no_passage_to_retrieve_is_refused() {
         &ModelRef::policy_default(),
     );
     assert!(matches!(refused, Err(OrchestratorError::Refused(_))));
+}
+
+/// Concepts, counting the passages it is asked to embed (queries are free).
+struct Counting(std::sync::atomic::AtomicUsize);
+
+impl Embedder for Counting {
+    fn name(&self) -> String {
+        "counting-concepts".into()
+    }
+
+    fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        self.0
+            .fetch_add(texts.len(), std::sync::atomic::Ordering::SeqCst);
+        Concepts.embed(texts)
+    }
+
+    fn embed_query(&self, query: &str) -> Result<Vec<f32>, EmbedError> {
+        Concepts.embed(&[query]).map(|mut v| v.remove(0))
+    }
+}
+
+#[test]
+fn the_passages_of_a_source_are_embedded_once_and_the_index_is_kept() {
+    let (scratch, ctx) = scratch_context("ask-index", Scripted::new(str::to_string), false);
+    let path = scratch.0.join("letters.md");
+    std::fs::write(&path, LETTERS).unwrap();
+    let source = sources::add(
+        &ctx,
+        &SourceTarget::from_learn_arg(&path.display().to_string()).unwrap(),
+    )
+    .unwrap()
+    .source
+    .id
+    .to_string();
+    let embedder = Counting(0.into());
+    let ask = |question: &str| {
+        ask_retrieving(
+            &ctx,
+            question,
+            std::slice::from_ref(&source),
+            1,
+            &embedder,
+            &ModelRef::policy_default(),
+        )
+        .unwrap()
+        .answer
+    };
+    let first = ask("How should a young person learn?");
+    let embedded = embedder.0.load(std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(embedded, 2, "the two passages of the letters, once");
+    let second = ask("How should a young person learn?");
+    assert_eq!(
+        embedder.0.load(std::sync::atomic::Ordering::SeqCst),
+        embedded,
+        "the kept index serves the second question"
+    );
+    assert!(second.contains("surest foundation of liberty") && first.contains("surest foundation"));
+    // Another embedder makes other vectors: its index is its own.
+    let other = Counting(0.into());
+    ask_retrieving(
+        &ctx,
+        "anything",
+        std::slice::from_ref(&source),
+        1,
+        &Renamed(&other),
+        &ModelRef::policy_default(),
+    )
+    .unwrap();
+    assert_eq!(other.0.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
+
+/// An embedder under another name.
+struct Renamed<'a>(&'a Counting);
+
+impl Embedder for Renamed<'_> {
+    fn name(&self) -> String {
+        "renamed".into()
+    }
+
+    fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        self.0.embed(texts)
+    }
+
+    fn embed_query(&self, query: &str) -> Result<Vec<f32>, EmbedError> {
+        self.0.embed_query(query)
+    }
 }

@@ -30,6 +30,11 @@ pub enum EmbedError {
 
 /// Makes the vectors dense search ranks by. The model runtime implements it.
 pub trait Embedder {
+    /// What the vectors come from: two embedders with one name make the same
+    /// vectors, so a stored index is reused only under the name it was made
+    /// with.
+    fn name(&self) -> String;
+
     /// One vector per text, all of one size.
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError>;
 
@@ -80,6 +85,22 @@ impl Dense {
             vectors.extend(made.into_iter().map(unit));
         }
         Ok(Self { vectors })
+    }
+
+    /// The index of passages whose `vectors` were made earlier (see
+    /// [`Dense::vectors`]), one per passage, by the embedder that will
+    /// embed the queries.
+    #[must_use]
+    pub fn from_vectors(vectors: Vec<Vec<f32>>) -> Self {
+        Self {
+            vectors: vectors.into_iter().map(unit).collect(),
+        }
+    }
+
+    /// The unit-length vector of every passage, in the order of the passages.
+    #[must_use]
+    pub fn vectors(&self) -> &[Vec<f32>] {
+        &self.vectors
     }
 
     /// The `k` passages nearest to `query` by cosine, best first.

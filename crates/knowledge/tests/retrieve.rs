@@ -118,6 +118,10 @@ fn lexical_search_weighs_rare_words_and_is_not_won_by_length() {
 struct Concepts;
 
 impl Embedder for Concepts {
+    fn name(&self) -> String {
+        "concepts".into()
+    }
+
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
         Ok(texts
             .iter()
@@ -216,4 +220,45 @@ fn a_library_never_repeats_a_passage_the_two_searches_both_find() {
     texts.dedup();
     assert_eq!(texts.len(), hits.len());
     assert_eq!(hits[0].text, EDUCATION);
+}
+
+/// Concepts, counting the passages it is asked to embed (queries are free).
+struct Counting(std::sync::atomic::AtomicUsize);
+
+impl Embedder for Counting {
+    fn name(&self) -> String {
+        "counting".into()
+    }
+
+    fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        self.0
+            .fetch_add(texts.len(), std::sync::atomic::Ordering::SeqCst);
+        Concepts.embed(texts)
+    }
+
+    fn embed_query(&self, query: &str) -> Result<Vec<f32>, EmbedError> {
+        Concepts.embed(&[query]).map(|mut v| v.remove(0))
+    }
+}
+
+#[test]
+fn a_library_rebuilt_from_its_vectors_answers_alike_without_embedding_a_passage() {
+    let found = vec![passage(TOBACCO), passage(EDUCATION), passage(VIRGINIA)];
+    let built = Library::new(found.clone(), &Concepts).unwrap();
+    let embedder = Counting(0.into());
+    let rebuilt = Library::from_vectors(found, built.vectors().to_vec()).unwrap();
+    let ask = |library: &Library| -> Vec<String> {
+        library
+            .find("how should a young person learn", &embedder, 3)
+            .unwrap()
+            .iter()
+            .map(|p| p.text.clone())
+            .collect()
+    };
+    assert_eq!(ask(&built), ask(&rebuilt));
+    assert_eq!(embedder.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(
+        Library::from_vectors(vec![passage(TOBACCO)], built.vectors().to_vec()).is_err(),
+        "a vector for every passage, no more and no fewer"
+    );
 }

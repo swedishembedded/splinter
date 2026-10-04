@@ -27,6 +27,10 @@ impl ModelEmbedder {
 }
 
 impl Embedder for ModelEmbedder {
+    fn name(&self) -> String {
+        DEFAULT_MODEL.to_string()
+    }
+
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
         self.0
             .passages(texts)
