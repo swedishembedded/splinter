@@ -152,3 +152,37 @@ fn a_conversation_needs_sections_where_the_writer_judges_and_not_advice_alone() 
     assert!(result.is_err());
     assert!(asked >= 2, "it was sent back before being refused");
 }
+
+#[test]
+fn a_goal_to_think_like_a_person_needs_a_kind_that_teaches_their_judgment() {
+    // Recall and explanation alone teach the facts of the writing, not how
+    // the writer reasons: with advice and judgment in the sources, a plan that
+    // names a person and chooses neither is sent back.
+    let facts_only = r#"{"persona": "Thomas Jefferson", "kinds": ["recall", "explain"], "distill": true, "rationale": "the letters hold facts"}"#;
+    let (result, _, asked) = run_surveyed(
+        "plan-persona-facts-only",
+        vec![facts_only, GOOD],
+        MIN_ADVICE_SECTIONS,
+        MIN_JUDGMENT_SECTIONS,
+    );
+    assert_eq!(result.unwrap().kinds, ["advise", "recall"]);
+    assert_eq!(asked, 2, "the facts-only plan was sent back");
+
+    // Where the sources hold no advice and no judgment there is nothing to
+    // teach: the facts-only plan stands.
+    let (result, _, asked) = run_surveyed("plan-persona-no-judgment", vec![facts_only], 0, 0);
+    assert_eq!(result.unwrap().kinds, ["recall", "explain"]);
+    assert_eq!(asked, 1);
+
+    // No person, no such rule.
+    let nobody =
+        r#"{"persona": null, "kinds": ["recall"], "distill": false, "rationale": "a datasheet"}"#;
+    let (result, _, asked) = run_surveyed(
+        "plan-no-persona",
+        vec![nobody],
+        MIN_ADVICE_SECTIONS,
+        MIN_JUDGMENT_SECTIONS,
+    );
+    assert!(result.is_ok());
+    assert_eq!(asked, 1);
+}

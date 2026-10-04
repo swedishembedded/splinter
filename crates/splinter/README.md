@@ -148,7 +148,10 @@ a few excerpts) and shows the survey and the goal to a planner model (the
 model `--planner` names, else the configured assistant, else the generator).
 The planner chooses from a menu of task kinds, whether to distil, and who the
 learner is becoming; code holds the choice to the survey, so a plan cannot
-teach advice the sources do not hold. A plan that breaks a rule is sent back
+teach advice the sources do not hold, and a plan that names a person while the
+sources hold advice or judgment must choose a kind that teaches how they judge
+(`advise`, `converse`), facts alone being no way to think like someone. The
+person becomes the policy's system prompt, in training and afterwards. A plan that breaks a rule is sent back
 once with the rule it broke and then refused: a run that cannot be planned
 says so, and no default replaces its plan. The survey and the plan are in the
 report, and naming `--kinds` as well is refused: one of the two decides.

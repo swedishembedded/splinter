@@ -27,6 +27,7 @@ use splinter_agent::schemars::JsonSchema;
 use splinter_agent::typed::TypedCall;
 use splinter_agent::CancelToken;
 use splinter_knowledge::survey::Survey;
+use splinter_knowledge::tasks::Catalogue;
 
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
@@ -136,6 +137,23 @@ fn check(plan: &Plan, survey: &Survey) -> Result<(), String> {
             "the survey found {} section(s) in which the writer judges and at least \
              {MIN_JUDGMENT_SECTIONS} are needed to teach a conversation; choose other kinds",
             survey.judgment_sections
+        ));
+    }
+    // To think like a person is to judge as they did, which facts alone do not
+    // teach: where the sources hold advice or judgment, the plan teaches it.
+    let catalogue = Catalogue::builtin();
+    let teaches_judgment = plan
+        .kinds
+        .iter()
+        .any(|k| catalogue.get(k).is_some_and(|spec| spec.focus.is_some()));
+    let supports_judgment = survey.advice_sections >= MIN_ADVICE_SECTIONS
+        || survey.judgment_sections >= MIN_JUDGMENT_SECTIONS;
+    if plan.persona.is_some() && supports_judgment && !teaches_judgment {
+        return Err(format!(
+            "the goal is to think like a person and the survey found {} section(s) of advice and \
+             {} in which the writer judges: choose a kind that teaches how they judge (advise, \
+             converse), not facts alone",
+            survey.advice_sections, survey.judgment_sections
         ));
     }
     if plan.rationale.trim().is_empty() {
