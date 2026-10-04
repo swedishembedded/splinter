@@ -40,6 +40,55 @@ pub trait Question {
     fn prompt(&self) -> &str;
 }
 
+/// One of several samples of a question: the same question, asked again under
+/// an id that names which sample it is, so a model that is not deterministic is
+/// measured by the share of its samples right, not by one draw.
+pub struct Sample<'a, Q> {
+    inner: &'a Q,
+    id: String,
+}
+
+impl<Q> Sample<'_, Q> {
+    /// The question being sampled.
+    pub fn question(&self) -> &Q {
+        self.inner
+    }
+}
+
+impl<Q: Question> Question for Sample<'_, Q> {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &str {
+        self.inner.kind()
+    }
+    fn split(&self) -> &str {
+        self.inner.split()
+    }
+    fn reference(&self) -> &str {
+        self.inner.reference()
+    }
+    fn prompt(&self) -> &str {
+        self.inner.prompt()
+    }
+}
+
+/// Every question `times` over, each under the id `question@n`
+/// ([`crate::report::SAMPLE_SEPARATOR`]); a run that stops resumes at the
+/// sample it reached.
+#[must_use]
+pub fn samples<Q: Question>(questions: &[Q], times: usize) -> Vec<Sample<'_, Q>> {
+    questions
+        .iter()
+        .flat_map(|q| {
+            (0..times.max(1)).map(move |n| Sample {
+                inner: q,
+                id: format!("{}{}{n}", q.id(), crate::report::SAMPLE_SEPARATOR),
+            })
+        })
+        .collect()
+}
+
 /// How an answer was graded: whether it is right, and the separate named
 /// checks that verdict is made of, each true when the answer passes it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -407,5 +456,30 @@ mod tests {
         assert!(read_results(Path::new("/nonexistent/results.jsonl"))
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn a_sampled_question_is_asked_once_per_sample_under_its_own_id_and_resumes() {
+        let d = dir();
+        let out = d.path().join("r.jsonl");
+        let qs = questions(2);
+        let all = samples(&qs, 3);
+        assert_eq!(all.len(), 6);
+        let ids: Vec<&str> = all.iter().map(|s| s.id()).collect();
+        assert_eq!(ids, ["q0@0", "q0@1", "q0@2", "q1@0", "q1@1", "q1@2"]);
+        assert_eq!(all[4].prompt(), "when?");
+        assert_eq!(all[4].question().id, "q1");
+        let mut ask = |_: &Sample<'_, Q>| {
+            Ok(Reply {
+                text: "1770".into(),
+                ..Reply::default()
+            })
+        };
+        run_with(&all, &out, Some(4), &mut ask, &|_, _| true.into()).unwrap();
+        assert_eq!(
+            run_with(&all, &out, None, &mut ask, &|_, _| true.into()).unwrap(),
+            2
+        );
+        assert_eq!(samples(&qs, 0).len(), 2, "there is always one sample");
     }
 }

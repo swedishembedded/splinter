@@ -473,6 +473,7 @@ fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
             framing: framing_flag(args)?,
             decoding: decoding_flag(args)?,
             examples: few_shot_flag(args, &resources)?,
+            samples: number(args, "--samples", 1)?,
         },
         &documents,
     )

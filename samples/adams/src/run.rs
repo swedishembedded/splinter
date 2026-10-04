@@ -484,6 +484,9 @@ pub struct TransferExam {
     pub decoding: Decoding,
     /// Worked examples shown in the system message, none for an empty string.
     pub examples: String,
+    /// How many times each question is asked: more than one, with a sampling
+    /// decoding, measures a model that is not deterministic by its share right.
+    pub samples: usize,
 }
 
 /// Ask one model every benchmark question, in both modes, graded by the rules.
@@ -507,10 +510,16 @@ pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow
         label: "adams",
         decoding: e.decoding,
     };
-    let asked =
+    let asked = if e.samples > 1 {
+        let sampled = splinter_sdk::model::exam::samples(&questions, e.samples);
+        splinter_sdk::model::exam::run(&sampled, &e.out, e.limit, &model, &|s, answer| {
+            s.question().verdict(answer, documents)
+        })?
+    } else {
         splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &|task, answer| {
             task.verdict(answer, documents)
-        })?;
+        })?
+    };
     println!("asked {asked} questions; results in {}", e.out.display());
     Ok(())
 }

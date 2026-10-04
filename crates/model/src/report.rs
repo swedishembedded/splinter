@@ -12,11 +12,11 @@
 //! got right, who gained and who lost, how many went unanswered, and whether
 //! the gain is more than the paired sign test allows chance to explain.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write;
 
 use crate::exam::Graded;
-use crate::stats::sign_test;
+use crate::stats::{bootstrap_interval, sign_test, Interval};
 
 /// The graded pairs of one (split, kind-position, kind) group, the base's
 /// answer first.
@@ -195,6 +195,53 @@ pub fn check_rows(
         .collect()
 }
 
+/// Resamples and level of the interval the report prints.
+const BOOTSTRAP_ITERATIONS: usize = 2000;
+const CONFIDENCE: f64 = 0.95;
+
+/// The separator between a question's id and which sample of it an answer is.
+pub const SAMPLE_SEPARATOR: char = '@';
+
+/// For each question, the share of its answers that were right. A question
+/// asked once is 0 or 1; one sampled several times (ids `question@0`,
+/// `question@1`, ...) is the share of its samples, which is what a model that
+/// is not deterministic is measured by.
+#[must_use]
+pub fn item_rates(results: &[Graded]) -> BTreeMap<String, f64> {
+    let mut counts: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+    for g in results {
+        let item = g.id.split(SAMPLE_SEPARATOR).next().unwrap_or(&g.id);
+        let cell = counts.entry(item.to_string()).or_default();
+        cell.0 += usize::from(g.correct);
+        cell.1 += 1;
+    }
+    counts
+        .into_iter()
+        .map(|(item, (right, asked))| (item, right as f64 / asked as f64))
+        .collect()
+}
+
+/// The mean per-question difference in the share right, `after` minus
+/// `before`, over the questions both answered, with a bootstrap interval over
+/// the questions: the paired interval of a gain, with the number of questions
+/// it rests on. `None` with fewer than two shared questions.
+#[must_use]
+pub fn paired_rate_difference(
+    before: &[Graded],
+    after: &[Graded],
+    iterations: usize,
+    level: f64,
+    seed: u64,
+) -> Option<(usize, Interval)> {
+    let (before, after) = (item_rates(before), item_rates(after));
+    let differences: Vec<f64> = before
+        .iter()
+        .filter_map(|(item, b)| after.get(item).map(|a| a - b))
+        .collect();
+    bootstrap_interval(&differences, iterations, level, seed)
+        .map(|interval| (differences.len(), interval))
+}
+
 /// The report as a Markdown table, with the evidence a reader needs to judge
 /// it: how many questions, how many went unanswered, and who gained and lost.
 /// `chance` gives the chance level of a kind where one exists.
@@ -230,6 +277,43 @@ pub fn render(
             row.p_value,
             100.0 * row.modal_reference
         );
+    }
+    let intervals: Vec<(String, String, usize, Interval)> = rows(before, after, kind_order)
+        .iter()
+        .filter_map(|row| {
+            let of = |results: &[Graded]| -> Vec<Graded> {
+                results
+                    .iter()
+                    .filter(|g| g.split == row.split && g.kind == row.kind)
+                    .cloned()
+                    .collect()
+            };
+            paired_rate_difference(&of(before), &of(after), BOOTSTRAP_ITERATIONS, CONFIDENCE, 1)
+                .map(|(n, interval)| (row.split.clone(), row.kind.clone(), n, interval))
+        })
+        .collect();
+    if !intervals.is_empty() {
+        let _ = writeln!(
+            out,
+            "\nThe change in the share of each question answered right, after minus before, with a {:.0}% bootstrap interval over the questions (a gain whose interval includes zero is not established):\n",
+            100.0 * CONFIDENCE
+        );
+        let _ = writeln!(out, "| split | question | questions | change | interval |");
+        let _ = writeln!(out, "|---|---|---|---|---|");
+        for (split, kind, n, interval) in intervals {
+            let _ = writeln!(
+                out,
+                "| {split} | {kind} | {n} | {:+.3} | [{:+.3}, {:+.3}]{} |",
+                interval.mean,
+                interval.low,
+                interval.high,
+                if interval.above_zero() {
+                    " above zero"
+                } else {
+                    ""
+                }
+            );
+        }
     }
     let named = check_rows(before, after);
     if !named.is_empty() {
@@ -458,5 +542,59 @@ mod tests {
             })
             .collect();
         assert!(per_reference(&before, &before).is_empty());
+    }
+
+    #[test]
+    fn a_question_sampled_several_times_is_the_share_of_its_samples_right() {
+        let sample = |id: &str, correct: bool| graded(id, "exam", "transfer", correct, true);
+        let rates = item_rates(&[
+            sample("q1@0", true),
+            sample("q1@1", false),
+            sample("q1@2", true),
+            sample("q1@3", true),
+            sample("q2", false),
+        ]);
+        assert_eq!(rates["q1"], 0.75);
+        assert_eq!(rates["q2"], 0.0);
+    }
+
+    #[test]
+    fn a_paired_difference_is_over_the_questions_both_arms_answered() {
+        let arm = |right: &[(&str, bool)]| -> Vec<Graded> {
+            right
+                .iter()
+                .map(|(id, ok)| graded(id, "exam", "t", *ok, true))
+                .collect()
+        };
+        let before = arm(&[
+            ("a", false),
+            ("b", false),
+            ("c", false),
+            ("d", true),
+            ("only-before", true),
+        ]);
+        let after = arm(&[("a", true), ("b", true), ("c", true), ("d", true)]);
+        let (items, interval) = paired_rate_difference(&before, &after, 1000, 0.95, 1).unwrap();
+        assert_eq!(items, 4, "the question only one arm answered is left out");
+        assert!((interval.mean - 0.75).abs() < 1e-12);
+        assert!(interval.low > 0.0 || interval.high <= 1.0);
+        assert!(paired_rate_difference(&before[..1], &after, 100, 0.95, 1).is_none());
+    }
+
+    #[test]
+    fn the_report_prints_the_paired_interval_of_the_change_per_kind_of_question() {
+        let before: Vec<Graded> = (0..12)
+            .map(|n| graded(&n.to_string(), "exam", "work", false, true))
+            .collect();
+        let after: Vec<Graded> = (0..12)
+            .map(|n| graded(&n.to_string(), "exam", "work", true, true))
+            .collect();
+        let text = render(&before, &after, &[], &|_| None);
+        assert!(
+            text.contains("| exam | work | 12 | +1.000 | [+1.000, +1.000] above zero |"),
+            "{text}"
+        );
+        let tie = render(&before, &before, &[], &|_| None);
+        assert!(tie.contains("| +0.000 | [+0.000, +0.000] |"), "{tie}");
     }
 }
