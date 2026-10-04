@@ -38,3 +38,33 @@
 {"instruction": "How many legs does a spider have?", "reference": "eight", "kind": "recall"}
 {"instruction": "What is the largest land animal?", "reference": "elephant", "kind": "recall"}
 {"instruction": "What organ pumps blood through the human body?", "reference": "heart", "kind": "recall"}
+{"instruction": "A shirt costs 20 dollars and is discounted by 25 percent. What is the final price in dollars? Answer with the number.", "reference": "15", "kind": "recall"}
+{"instruction": "A train travels 60 miles an hour for 3 hours and then 40 miles an hour for 2 hours. How many miles does it travel in total? Answer with the number.", "reference": "260", "kind": "recall"}
+{"instruction": "Anna has 3 boxes with 12 pencils each and gives away 10 pencils. How many pencils are left? Answer with the number.", "reference": "26", "kind": "recall"}
+{"instruction": "A rectangle is 8 meters long and 5 meters wide. What is its perimeter in meters? Answer with the number.", "reference": "26", "kind": "recall"}
+{"instruction": "If 5 workers build a wall in 12 days, how many days do 10 workers need at the same pace? Answer with the number.", "reference": "6", "kind": "recall"}
+{"instruction": "A tank holds 200 liters and is filled to three quarters. How many liters are in it? Answer with the number.", "reference": "150", "kind": "recall"}
+{"instruction": "Tom is twice as old as Sam, and Sam is 9. How old will Tom be in 4 years? Answer with the number.", "reference": "22", "kind": "recall"}
+{"instruction": "A book has 240 pages and Maya reads 30 pages a day. How many days does she need to finish it? Answer with the number.", "reference": "8", "kind": "recall"}
+{"instruction": "Eggs cost 3 dollars a dozen. How many dollars do 30 eggs cost, at the same price per egg? Answer with the number.", "reference": "7.5", "kind": "recall"}
+{"instruction": "What is 15 percent of 80? Answer with the number.", "reference": "12", "kind": "recall"}
+{"instruction": "A car uses 6 liters of fuel per 100 kilometers. How many liters does it use for 250 kilometers? Answer with the number.", "reference": "15", "kind": "recall"}
+{"instruction": "The sum of three consecutive integers is 72. What is the smallest? Answer with the number.", "reference": "23", "kind": "recall"}
+{"instruction": "A recipe needs 2 cups of flour for 8 cookies. How many cups are needed for 20 cookies? Answer with the number.", "reference": "5", "kind": "recall"}
+{"instruction": "A store sells pens at 4 for 6 dollars. How many dollars do 10 pens cost? Answer with the number.", "reference": "15", "kind": "recall"}
+{"instruction": "How many seconds are in 2 hours? Answer with the number.", "reference": "7200", "kind": "recall"}
+{"instruction": "A square has an area of 49 square meters. What is its side length in meters? Answer with the number.", "reference": "7", "kind": "recall"}
+{"instruction": "Lena saves 15 dollars a week. After how many weeks has she saved 120 dollars? Answer with the number.", "reference": "8", "kind": "recall"}
+{"instruction": "What is the next number in the sequence 3, 6, 12, 24? Answer with the number.", "reference": "48", "kind": "recall"}
+{"instruction": "A bus has 40 seats and 35 are taken. What percent of the seats are free? Answer with the number.", "reference": "12.5", "kind": "recall"}
+{"instruction": "If x plus 7 equals 19, what is x? Answer with the number.", "reference": "12", "kind": "recall"}
+{"instruction": "Name the largest planet of the solar system. Reply with a single word.", "reference": "Jupiter", "kind": "recall"}
+{"instruction": "Spell the word 'cat' backwards. Reply with only the letters.", "reference": "tac", "kind": "recall"}
+{"instruction": "Which month comes right after March? Reply with a single word.", "reference": "April", "kind": "recall"}
+{"instruction": "What is the chemical symbol for gold? Reply with only the symbol.", "reference": "Au", "kind": "recall"}
+{"instruction": "Answer yes or no with one word: is an elephant a mammal?", "reference": "Yes", "kind": "recall"}
+{"instruction": "What color do you get by mixing blue and yellow? Reply with one word.", "reference": "Green", "kind": "recall"}
+{"instruction": "How many legs does a spider have? Reply with only the number.", "reference": "8", "kind": "recall"}
+{"instruction": "Give the plural of 'mouse' as one word.", "reference": "mice", "kind": "recall"}
+{"instruction": "What is the opposite of 'ancient'? Reply with one word.", "reference": "modern", "kind": "recall"}
+{"instruction": "What is the freezing point of water in degrees Celsius? Reply with only the number.", "reference": "0", "kind": "recall"}
