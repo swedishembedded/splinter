@@ -493,3 +493,22 @@ fn a_preference_pair_is_framed_as_the_supervised_record_of_the_same_prompt() {
         );
     }
 }
+
+#[test]
+fn a_few_shot_block_shows_the_first_n_training_examples_whole_and_nothing_else() {
+    let (train, bench) = split_principles();
+    let built = build(
+        &[result(&train, Case::Clear, FIT)],
+        &[train, bench],
+        &docs(),
+    );
+    assert_eq!(few_shot_block(&built.sft, 0), "");
+    let one = few_shot_block(&built.sft, 1);
+    let first = &built.sft[0]["messages"];
+    assert!(one.contains(first[1]["content"].as_str().unwrap()), "{one}");
+    assert!(one.contains(first[2]["content"].as_str().unwrap()), "{one}");
+    assert!(
+        !one.contains("Example 2."),
+        "the second record is not shown"
+    );
+}

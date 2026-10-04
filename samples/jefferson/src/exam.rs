@@ -14,6 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use splinter_sdk::measure::verifiers::answer::year_ok;
+use splinter_sdk::model::answer::Decoding;
 use splinter_sdk::model::exam::{Model, Question};
 
 use crate::grade::{recipient_ok, work_ok};
@@ -102,6 +103,7 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         system: run.system.as_deref().unwrap_or(PERSONA),
         max_tokens: run.max_tokens,
         label: "jefferson",
+        decoding: Decoding::Greedy,
     };
     splinter_sdk::model::exam::run(&tasks, &run.out, run.limit, &model, &|task, answer| {
         is_correct(task, answer).into()

@@ -291,6 +291,23 @@ pub fn reconstruction_sft(
         .collect()
 }
 
+/// Examples to show a model in its system message instead of training it: the
+/// first `n` of `records` (chat records of training principles), each as the
+/// question and the whole answer. Empty for none.
+pub fn few_shot_block(records: &[Value], n: usize) -> String {
+    let mut out = String::new();
+    for (i, record) in records.iter().take(n).enumerate() {
+        let message = |role: usize| record["messages"][role]["content"].as_str().unwrap_or("");
+        out.push_str(&format!(
+            "Example {}.\nQuestion:\n{}\n\nAnswer:\n{}\n\n",
+            i + 1,
+            message(1),
+            message(2)
+        ));
+    }
+    out
+}
+
 /// The datasets, and what was left out and why.
 #[derive(Debug, Default)]
 pub struct Built {

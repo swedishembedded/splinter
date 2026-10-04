@@ -21,7 +21,7 @@ use sven_sdk::model::{
 };
 
 use crate::error::PolicyError;
-use crate::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
+use crate::local::{LocalQwen, LocalWeights, Sampling, GREEDY_SAMPLING};
 use crate::residency::Residency;
 
 /// What a model said to one question.
@@ -37,6 +37,76 @@ pub struct Reply {
     pub truncated: bool,
     /// Wall-clock seconds the answer took.
     pub seconds: f64,
+}
+
+/// How a model decodes its answers.
+///
+/// Greedy is the default for measurement: a question then has one answer for
+/// a given set of weights. A reasoning model that is only ever asked greedily
+/// with its reasoning off is handicapped, so an exam can also let it think,
+/// or sample, to give a baseline its due.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum Decoding {
+    /// Argmax, reasoning off.
+    #[default]
+    Greedy,
+    /// Argmax, with the model reasoning before it answers.
+    Thinking,
+    /// Sampled at this temperature, reasoning off.
+    Sampled(f32),
+    /// Sampled at this temperature, with the model reasoning first.
+    SampledThinking(f32),
+}
+
+/// The default temperature of the sampled decodings.
+const DEFAULT_SAMPLE_TEMPERATURE: f32 = 0.6;
+
+impl Decoding {
+    /// The sampling this decoding stands for.
+    #[must_use]
+    pub fn sampling(self) -> Sampling {
+        let (temperature, thinking) = match self {
+            Self::Greedy => (0.0, false),
+            Self::Thinking => (0.0, true),
+            Self::Sampled(t) => (t, false),
+            Self::SampledThinking(t) => (t, true),
+        };
+        Sampling {
+            temperature,
+            thinking,
+            ..GREEDY_SAMPLING
+        }
+    }
+}
+
+impl std::str::FromStr for Decoding {
+    type Err = String;
+
+    /// `greedy`, `thinking`, `sample[:T]` or `sample-thinking[:T]`.
+    fn from_str(s: &str) -> Result<Self, String> {
+        let (name, temperature) = match s.split_once(':') {
+            Some((name, t)) => (
+                name,
+                Some(
+                    t.parse::<f32>()
+                        .ok()
+                        .filter(|t| t.is_finite() && *t > 0.0)
+                        .ok_or_else(|| format!("{t:?} is not a positive temperature"))?,
+                ),
+            ),
+            None => (s, None),
+        };
+        let at = temperature.unwrap_or(DEFAULT_SAMPLE_TEMPERATURE);
+        match (name, temperature) {
+            ("greedy", None) => Ok(Self::Greedy),
+            ("thinking", None) => Ok(Self::Thinking),
+            ("sample", _) => Ok(Self::Sampled(at)),
+            ("sample-thinking", _) => Ok(Self::SampledThinking(at)),
+            _ => Err(format!(
+                "unknown decoding {s:?}: use greedy, thinking, sample[:T] or sample-thinking[:T]"
+            )),
+        }
+    }
 }
 
 /// A loaded model, with its adapter if it has one.
@@ -57,13 +127,27 @@ impl Answerer {
         context_tokens: u32,
         label: &str,
     ) -> Result<Self, PolicyError> {
+        Self::load_with(base, adapter, context_tokens, label, Decoding::Greedy)
+    }
+
+    /// [`Self::load`], decoding as `decoding` says.
+    ///
+    /// # Errors
+    /// The checkpoint cannot be opened or the adapter does not fit it.
+    pub fn load_with(
+        base: &Path,
+        adapter: Option<&Path>,
+        context_tokens: u32,
+        label: &str,
+        decoding: Decoding,
+    ) -> Result<Self, PolicyError> {
         let residency = Residency::default();
         let weights = LocalWeights {
             base: base.to_path_buf(),
             adapter: adapter.map(Path::to_path_buf),
             context_tokens,
         };
-        let model = LocalQwen::load(&residency, &weights, label)?.resampled(GREEDY_SAMPLING);
+        let model = LocalQwen::load(&residency, &weights, label)?.resampled(decoding.sampling());
         Ok(Self {
             model,
             _residency: residency,
@@ -100,5 +184,30 @@ impl Answerer {
         }
         reply.seconds = started.elapsed().as_secs_f64();
         Ok(reply)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_decoding_is_read_from_its_name_and_says_whether_the_model_reasons_and_samples() {
+        assert_eq!("greedy".parse(), Ok(Decoding::Greedy));
+        assert_eq!("thinking".parse(), Ok(Decoding::Thinking));
+        assert_eq!("sample".parse(), Ok(Decoding::Sampled(0.6)));
+        assert_eq!("sample:0.3".parse(), Ok(Decoding::Sampled(0.3)));
+        assert_eq!(
+            "sample-thinking:0.7".parse(),
+            Ok(Decoding::SampledThinking(0.7))
+        );
+        for bad in ["greedy:0.5", "sample:0", "sample:hot", "think", ""] {
+            assert!(bad.parse::<Decoding>().is_err(), "{bad:?}");
+        }
+        assert_eq!(Decoding::Greedy.sampling(), GREEDY_SAMPLING);
+        let thinking = Decoding::Thinking.sampling();
+        assert!(thinking.thinking && thinking.temperature == 0.0);
+        let sampled = Decoding::Sampled(0.6).sampling();
+        assert!(!sampled.thinking && sampled.temperature == 0.6);
     }
 }

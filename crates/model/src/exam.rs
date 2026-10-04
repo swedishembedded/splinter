@@ -19,7 +19,11 @@ use serde::{Deserialize, Serialize};
 
 use splinter_eval::verifiers::answer::final_answer;
 
-use crate::answer::{Answerer, Reply};
+use crate::answer::{Answerer, Decoding, Reply};
+
+/// Context a model is loaded with: room for a prompt, and for a reasoning
+/// model to think before it answers.
+const CONTEXT_TOKENS: u32 = 8192;
 
 /// One question of an exam: what is asked, what it is compared with, and which
 /// kind and side of the split it belongs to.
@@ -182,6 +186,8 @@ pub struct Model<'a> {
     pub max_tokens: u32,
     /// The name the model's records carry.
     pub label: &'a str,
+    /// How it decodes: greedily with its reasoning off unless told otherwise.
+    pub decoding: Decoding,
 }
 
 /// The exam against a local model. The model is loaded only when something is
@@ -199,7 +205,13 @@ pub fn run<Q: Question>(
     if pending(questions, out, limit)?.is_empty() {
         return Ok(0);
     }
-    let answerer = Answerer::load(model.base, model.adapter, 4096, model.label)?;
+    let answerer = Answerer::load_with(
+        model.base,
+        model.adapter,
+        CONTEXT_TOKENS,
+        model.label,
+        model.decoding,
+    )?;
     let runtime = tokio::runtime::Runtime::new()?;
     let mut ask =
         |q: &Q| runtime.block_on(answerer.ask(model.system, q.prompt(), model.max_tokens));

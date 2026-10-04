@@ -39,6 +39,7 @@
 
 mod anchor;
 mod attribution;
+mod baseline;
 mod corpus;
 mod curate;
 mod datasets;
@@ -77,6 +78,7 @@ fn main() -> anyhow::Result<()> {
         Some("build-data") => build_data_command(&args[1..]),
         Some("train-dpo") => train_dpo_command(&args[1..]),
         Some("transfer-exam") => transfer_exam_command(&args[1..]),
+        Some("constant-baseline") => constant_baseline_command(&args[1..]),
         Some("grpo") => grpo_command(&args[1..]),
         Some("anchor-exam") => anchor_exam_command(&args[1..]),
         Some("briefings") => briefings_command(&args[1..]),
@@ -434,6 +436,18 @@ fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {
     })
 }
 
+fn constant_baseline_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    run::constant_baseline_command(
+        &flag(args, "--benchmark").map_or_else(
+            || resources.join("datasets").join("benchmark.jsonl"),
+            Into::into,
+        ),
+        std::path::Path::new(&need(args, "--out")?),
+        &read_documents(&resources)?,
+    )
+}
+
 fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     let documents = read_documents(&resources)?;
@@ -449,6 +463,8 @@ fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
             max_tokens: number(args, "--max-tokens", 700)?,
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
             framing: framing_flag(args)?,
+            decoding: decoding_flag(args)?,
+            examples: few_shot_flag(args, &resources)?,
         },
         &documents,
     )
@@ -498,7 +514,35 @@ fn reconstruct_replies_command(args: &[String]) -> anyhow::Result<()> {
         max_tokens: number(args, "--max-tokens", 500)?,
         limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
         framing: framing_flag(args)?,
+        decoding: decoding_flag(args)?,
     })
+}
+
+/// How the model decodes: `--decoding greedy|thinking|sample[:T]|sample-thinking[:T]`,
+/// default greedy. A reasoning model asked greedily with its reasoning off is a
+/// handicapped baseline, so the exam can let it think.
+fn decoding_flag(args: &[String]) -> anyhow::Result<splinter_sdk::model::answer::Decoding> {
+    flag(args, "--decoding")
+        .map_or(Ok(splinter_sdk::model::answer::Decoding::Greedy), |v| {
+            v.parse()
+        })
+        .map_err(|e: String| anyhow::anyhow!(e))
+}
+
+/// `--few-shot N`: worked examples from the training records, shown in the
+/// system message, for a baseline that is prompted instead of trained.
+fn few_shot_flag(args: &[String], resources: &std::path::Path) -> anyhow::Result<String> {
+    let n: usize = number(args, "--few-shot", 0)?;
+    if n == 0 {
+        return Ok(String::new());
+    }
+    let text = std::fs::read_to_string(resources.join("datasets").join("sft-transfer.jsonl"))?;
+    let records: Vec<serde_json::Value> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(serde_json::from_str)
+        .collect::<Result<_, _>>()?;
+    Ok(datasets::few_shot_block(&records, n))
 }
 
 /// How the exam frames the persona: `--framing full|identity|plain`, default full.
