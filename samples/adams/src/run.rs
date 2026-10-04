@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements measured fine-tuning of language models on
+// historical records for its clients. If your team needs expertise in training
+// a model on a source corpus and proving what it kept, you can procure our
+// services by sending an email to info@swedishembedded.com.
+
+//! The commands that take the frozen split to a trained adapter and a measured
+//! before-and-after: build the tasks, train, ask the exam, report.
+
+use std::path::{Path, PathBuf};
+
+use crate::curate::Document;
+use crate::split::{self, Assignment, Split};
+use crate::tasks::{self, PERSONA};
+
+/// The assignments the freeze command wrote.
+fn read_assignments(resources: &Path) -> anyhow::Result<Vec<Assignment>> {
+    let path = resources.join("frozen").join("assignments.jsonl");
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("{}: {e}; run the freeze command first", path.display()))?;
+    text.lines()
+        .map(|line| {
+            let v: serde_json::Value = serde_json::from_str(line)?;
+            let field = |name: &str| {
+                v[name]
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| anyhow::anyhow!("{}: no {name}", path.display()))
+            };
+            let split: Split = serde_json::from_value(v["split"].clone())?;
+            Ok(Assignment {
+                doc_id: field("doc_id")?,
+                family: field("family")?,
+                split,
+            })
+        })
+        .collect()
+}
+
+/// Build the training set, the frozen exam and the seen sample from the
+/// frozen split, after checking once more that nothing leaks.
+pub fn tasks_command(
+    resources: &Path,
+    documents: &[Document],
+    seen_per_kind: usize,
+) -> anyhow::Result<()> {
+    let assignments = read_assignments(resources)?;
+    let leaks = split::leaks(documents, &assignments);
+    anyhow::ensure!(
+        leaks.is_empty(),
+        "{} training documents share text with held-out ones",
+        leaks.len()
+    );
+    let built = tasks::build(documents, &assignments, seen_per_kind);
+    tasks::write_all(&built, &resources.join("tasks"))?;
+    for kind in tasks::KIND_ORDER {
+        let count = |set: &[tasks::Task]| set.iter().filter(|t| t.kind.name() == kind).count();
+        println!(
+            "{kind:>13}: train {:>4}  exam {:>4}  seen {:>3}",
+            count(&built.train),
+            count(&built.exam),
+            count(&built.seen)
+        );
+    }
+    println!(
+        "training records: {}  exam questions: {}  seen questions: {}",
+        built.train.len(),
+        built.exam.len(),
+        built.seen.len()
+    );
+    Ok(())
+}
+
+/// What one training run needs.
+pub struct Train {
+    pub base: PathBuf,
+    pub dataset: PathBuf,
+    pub attempt: PathBuf,
+    pub steps: u32,
+    pub rank: u32,
+    pub alpha: f32,
+    pub learning_rate: Option<f32>,
+    pub bf16: bool,
+}
+
+/// Fine-tune a LoRA adapter on the training set through Splinter's trainer,
+/// scoring it on the records the trainer holds out, and record the summary.
+pub fn train_command(t: &Train) -> anyhow::Result<()> {
+    std::fs::create_dir_all(&t.attempt)?;
+    let started = std::time::Instant::now();
+    let report = |r: &splinter_sdk::model::train::StepReport| {
+        eprintln!(
+            "step {}/{} loss {:.4} elapsed {:.0}s",
+            r.step,
+            r.steps,
+            r.loss,
+            started.elapsed().as_secs_f64()
+        );
+    };
+    let split = splinter_sdk::data::holdout::split_dataset_file(&t.dataset, &t.attempt)?;
+    let request = splinter_sdk::model::train::FineTune {
+        model_dir: &t.base,
+        train: &split.train,
+        held_out: &split.held_out,
+        attempt_dir: &t.attempt,
+        steps: t.steps,
+        rank: t.rank,
+        alpha: t.alpha,
+        replay: &[],
+        continue_from: None,
+        cancel: None,
+        bf16_base: t.bf16,
+        learning_rate: t.learning_rate,
+        on_step: Some(splinter_sdk::model::train::StepHook(&report)),
+    };
+    let trained = splinter_sdk::model::train::fine_tune(&request)?;
+    let summary = serde_json::json!({
+        "adapter": trained.adapter,
+        "adapter_digest": trained.adapter_digest,
+        "base_digest": trained.base_digest,
+        "records": trained.records,
+        "block": trained.block,
+        "steps": t.steps,
+        "seconds": started.elapsed().as_secs_f64(),
+        "held_out_before": {"loss": trained.base.loss, "token_accuracy": trained.base.token_accuracy, "positions": trained.base.positions},
+        "held_out_after": {"loss": trained.tuned.loss, "token_accuracy": trained.tuned.token_accuracy, "positions": trained.tuned.positions},
+    });
+    let text = serde_json::to_string_pretty(&summary)?;
+    std::fs::write(t.attempt.join("summary.json"), &text)?;
+    println!("{text}");
+    Ok(())
+}
+
+/// What one exam run needs.
+pub struct Exam {
+    pub tasks: PathBuf,
+    pub out: PathBuf,
+    pub base: PathBuf,
+    pub adapter: Option<PathBuf>,
+    pub max_tokens: u32,
+    pub limit: Option<usize>,
+}
+
+/// Ask one model, with or without its adapter, every question not yet
+/// answered in `out`.
+pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
+    let questions = tasks::read_tasks(&e.tasks)?;
+    let model = splinter_sdk::model::exam::Model {
+        base: &e.base,
+        adapter: e.adapter.as_deref(),
+        system: PERSONA,
+        max_tokens: e.max_tokens,
+        label: "adams",
+    };
+    let asked =
+        splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &tasks::is_correct)?;
+    println!("asked {asked} questions; results in {}", e.out.display());
+    Ok(())
+}
+
+/// The before-and-after table, with the paired sign test, of two result files.
+pub fn report_command(before: &Path, after: &Path) -> anyhow::Result<()> {
+    let before = splinter_sdk::model::exam::read_results(before)?;
+    let after = splinter_sdk::model::exam::read_results(after)?;
+    print!(
+        "{}",
+        splinter_sdk::model::report::render(&before, &after, &tasks::KIND_ORDER, &tasks::chance)
+    );
+    Ok(())
+}

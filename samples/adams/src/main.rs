@@ -20,13 +20,19 @@
 //! identify   is this author line and year the Samuel Adams being modelled
 //! corpus     parse the fetched volumes of Cushing's edition into curated documents
 //! freeze     split the documents once, before any training: train, exam, temporal
+//! tasks      build the training set, the frozen exam and the seen sample
+//! train      fine-tune a LoRA adapter on the training set
+//! exam       ask one model (base, or base plus adapter) every exam question
+//! report     the before-and-after table, with the paired sign test
 //! ```
 
 mod attribution;
 mod corpus;
 mod curate;
 mod document;
+mod run;
 mod split;
+mod tasks;
 
 use document::{Date, Identity, Period};
 
@@ -36,7 +42,13 @@ fn main() -> anyhow::Result<()> {
         Some("identify") => identify_command(&args[1..]),
         Some("corpus") => corpus_command(&args[1..]),
         Some("freeze") => freeze_command(&args[1..]),
-        _ => anyhow::bail!("usage: splinter-adams <identify|corpus|freeze> ..."),
+        Some("tasks") => tasks_command(&args[1..]),
+        Some("train") => train_command(&args[1..]),
+        Some("exam") => exam_command(&args[1..]),
+        Some("report") => report_command(&args[1..]),
+        _ => anyhow::bail!(
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report> ..."
+        ),
     }
 }
 
@@ -233,4 +245,57 @@ fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// A flag that must be given.
+fn need(args: &[String], name: &str) -> anyhow::Result<String> {
+    flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"))
+}
+
+/// A numeric flag, or its default.
+fn number<T: std::str::FromStr>(args: &[String], name: &str, default: T) -> anyhow::Result<T>
+where
+    T::Err: std::fmt::Display,
+{
+    flag(args, name).map_or(Ok(default), |v| {
+        v.parse().map_err(|e| anyhow::anyhow!("{name} {v}: {e}"))
+    })
+}
+
+fn tasks_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    run::tasks_command(&resources, &documents, number(args, "--seen-per-kind", 40)?)
+}
+
+fn train_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    run::train_command(&run::Train {
+        base: need(args, "--base")?.into(),
+        dataset: resources.join("tasks").join("sft.jsonl"),
+        attempt: need(args, "--attempt")?.into(),
+        steps: number(args, "--steps", 500)?,
+        rank: number(args, "--rank", 16)?,
+        alpha: number(args, "--alpha", 32.0)?,
+        learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
+        bf16: args.iter().any(|a| a == "--bf16"),
+    })
+}
+
+fn exam_command(args: &[String]) -> anyhow::Result<()> {
+    run::exam_command(&run::Exam {
+        tasks: need(args, "--tasks")?.into(),
+        out: need(args, "--out")?.into(),
+        base: need(args, "--base")?.into(),
+        adapter: flag(args, "--adapter").map(Into::into),
+        max_tokens: number(args, "--max-tokens", 400)?,
+        limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+    })
+}
+
+fn report_command(args: &[String]) -> anyhow::Result<()> {
+    run::report_command(
+        std::path::Path::new(&need(args, "--before")?),
+        std::path::Path::new(&need(args, "--after")?),
+    )
 }
