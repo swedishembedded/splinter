@@ -30,6 +30,7 @@
 //! produces can reach a training set.
 
 use serde::Serialize;
+use splinter_agent::solve::with_system_addendum;
 use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Experience, PrivilegedKind, Provenance, Task};
@@ -66,6 +67,10 @@ pub struct ExamRequest<'a> {
     pub candidate: &'a ModelRef,
     /// The judge.
     pub judge: &'a ModelRef,
+    /// The goal the base is also asked under, as a prompt-only baseline: the
+    /// training is worth what it adds beyond telling the base what the goal
+    /// is. `None` adds no such arm.
+    pub prompted: Option<&'a str>,
     /// Stops the exam.
     pub cancel: CancelToken,
 }
@@ -165,11 +170,16 @@ pub struct Examined {
     pub judge: JudgeTrust,
     /// The base.
     pub base: ArmResult,
+    /// The base asked under the goal; `None` when no goal was given.
+    pub prompted: Option<ArmResult>,
     /// The candidate.
     pub candidate: ArmResult,
     /// The judged results compared over the tasks both were judged on; `None`
     /// when the judge is not trusted or no task was judged for both.
     pub paired: Option<SignTest>,
+    /// The candidate against the prompted base, by the same rule; `None`
+    /// when there is no prompted arm.
+    pub paired_vs_prompted: Option<SignTest>,
 }
 
 /// An experience of `task` answered with `answer`, as the exam's controls
@@ -228,8 +238,15 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 .into(),
         ));
     }
-    let answers = |reference: &ModelRef| -> Result<(String, Vec<Experience>), OrchestratorError> {
-        let model = greedy(ctx, reference)?;
+    let answers = |reference: &ModelRef,
+                   goal: Option<&str>|
+     -> Result<(String, Vec<Experience>), OrchestratorError> {
+        let mut model = greedy(ctx, reference)?;
+        if let Some(goal) = goal {
+            model.provider =
+                with_system_addendum(model.provider.clone(), &format!("Your purpose: {goal}"));
+            model.identity = format!("{}+prompted", model.identity);
+        }
         let given = request
             .tasks
             .iter()
@@ -239,8 +256,12 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     };
     // Both arms answer before the judge is loaded, so the device swaps models
     // as few times as it can.
-    let (base_model, base_answers) = answers(request.base)?;
-    let (candidate_model, candidate_answers) = answers(request.candidate)?;
+    let (base_model, base_answers) = answers(request.base, None)?;
+    let prompted_answers = request
+        .prompted
+        .map(|goal| answers(request.base, Some(goal)))
+        .transpose()?;
+    let (candidate_model, candidate_answers) = answers(request.candidate, None)?;
 
     // The judge is a different model from the arms' and needs the device for
     // itself: two resident bases at once do not fit a card the size of the
@@ -280,6 +301,11 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     };
     let (base_judged, base_grounded) = grade(&base_answers)?;
     let (candidate_judged, candidate_grounded) = grade(&candidate_answers)?;
+    let prompted = prompted_answers
+        .map(|(model, given)| {
+            grade(&given).map(|(judged, grounded)| (model, given, judged, grounded))
+        })
+        .transpose()?;
 
     let arm = |model: String,
                given: &[Experience],
@@ -292,11 +318,18 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         checked: grounded.iter().flatten().count(),
         invented: grounded.iter().flatten().filter(|held| !**held).count(),
     };
-    let pairs: Vec<(bool, bool)> = candidate_judged
-        .iter()
-        .zip(&base_judged)
-        .filter_map(|(c, b)| Some(((*c)?, (*b)?)))
-        .collect();
+    let pairs_against = |other: &[Option<bool>]| -> Vec<(bool, bool)> {
+        candidate_judged
+            .iter()
+            .zip(other)
+            .filter_map(|(c, o)| Some(((*c)?, (*o)?)))
+            .collect()
+    };
+    let pairs = pairs_against(&base_judged);
+    let pairs_vs_prompted = prompted
+        .as_ref()
+        .map(|(_, _, judged, _)| pairs_against(judged))
+        .unwrap_or_default();
     Ok(Examined {
         tasks: request.tasks.len(),
         judge: JudgeTrust {
@@ -308,6 +341,9 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             misjudged: misjudged(&labelled, &measurements),
         },
         base: arm(base_model, &base_answers, &base_judged, &base_grounded),
+        prompted: prompted
+            .as_ref()
+            .map(|(model, given, judged, grounded)| arm(model.clone(), given, judged, grounded)),
         candidate: arm(
             candidate_model,
             &candidate_answers,
@@ -315,6 +351,8 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             &candidate_grounded,
         ),
         paired: (trusted && !pairs.is_empty()).then(|| sign_test(&pairs)),
+        paired_vs_prompted: (trusted && !pairs_vs_prompted.is_empty())
+            .then(|| sign_test(&pairs_vs_prompted)),
     })
 }
 
@@ -352,6 +390,7 @@ pub fn examine(
     ctx: &Context,
     candidate: &str,
     judge: Option<&ModelRef>,
+    prompted: Option<&str>,
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
     let judge = match judge {
@@ -373,7 +412,7 @@ pub fn examine(
         ctx.config(),
         continued.as_ref().map(|r| r.adapter.as_path()),
     );
-    examine_candidate(ctx, candidate, &base, &judge, cancel)
+    examine_candidate(ctx, candidate, &base, &judge, prompted, cancel)
 }
 
 /// Examines the trained candidate `candidate` against `base` on its held-out
@@ -385,6 +424,7 @@ pub fn examine_candidate(
     candidate: &str,
     base: &ModelRef,
     judge: &ModelRef,
+    prompted: Option<&str>,
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
     let trained = load_candidate(ctx, candidate)?;
@@ -417,6 +457,7 @@ pub fn examine_candidate(
             base,
             candidate: &candidate,
             judge,
+            prompted,
             cancel: cancel.clone(),
         },
     )?;

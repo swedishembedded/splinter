@@ -371,6 +371,10 @@ pub struct VerifyArgs {
     /// A calibrated judge for the kinds a judge grades.
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,
+    /// Also ask the base under this goal, as a prompt-only baseline the
+    /// candidate is compared with (`learn` uses its goal).
+    #[arg(long, value_name = "GOAL")]
+    pub prompt: Option<String>,
 }
 
 /// `critique`.
@@ -541,6 +545,10 @@ pub struct ExamArgs {
     /// The model that judges (default: the judge role's model).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,
+    /// Also ask the base under this goal, as a prompt-only baseline the
+    /// candidate is compared with (`learn` uses its goal).
+    #[arg(long, value_name = "GOAL")]
+    pub prompt: Option<String>,
 }
 
 /// `lineage`.

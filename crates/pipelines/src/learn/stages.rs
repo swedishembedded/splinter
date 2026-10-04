@@ -475,6 +475,7 @@ fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) ->
         id,
         &st.learn.policy,
         st.learn.judge,
+        st.learn.goal,
         &run.cancel_token(),
     ) {
         Ok(examined) => examined,

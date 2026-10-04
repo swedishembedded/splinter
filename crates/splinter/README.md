@@ -30,7 +30,7 @@ splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [-
 splinter release <CANDIDATE-ID> [--alias NAME] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
-splinter exam CANDIDATE [--judge REF]
+splinter exam CANDIDATE [--judge REF] [--prompt GOAL]
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -155,7 +155,11 @@ reproduced, and an answer that quotes nothing or invents a quotation fails.
 The exam (`splinter exam CANDIDATE`, and the `exam` stage of `learn`) measures
 what the release gate's code-only grading cannot: whether a candidate gives, in
 its own words, what a held-out task's reference says. It puts the same held-out
-tasks to the policy and the candidate closed-book. A judge compares each answer
+tasks to what the candidate continues (its parent release, else the base) and
+to the candidate, closed-book. With `--prompt GOAL` (the `exam` stage of `learn`
+passes its goal) the base is asked once more under the goal as one added system
+line, and the candidate is also compared with that: training is worth what it
+adds beyond telling the base what the goal is. A judge compares each answer
 with the reference, and code separately checks whether the answer states a
 number, name or quotation the task's source does not hold. Before the judge
 grades an arm it is calibrated on controls made from the tasks' own references
@@ -163,7 +167,9 @@ grades an arm it is calibrated on controls made from the tasks' own references
 model wrote; a judge that cannot tell them apart grades nothing and the report
 says it makes no claim. A task an arm gave no answer to counts as not done and
 is reported as unanswered. The result is a paired sign test of the judged
-results, and it never reaches a training set.
+results, and it never reaches a training set. Each control the judge did not
+judge as labelled is reported with the answer and the judge's reason, so a judge
+that is not trusted can be seen failing.
 
 The `converse` kind teaches how the writer talks and reasons. Its task is the
 opening message of someone speaking to the writer, with a passage of the

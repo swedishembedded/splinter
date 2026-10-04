@@ -141,6 +141,7 @@ fn run(
             base: &model("base"),
             candidate: &model("tuned"),
             judge: &model("judge"),
+            prompted: None,
             cancel: CancelToken::new(),
         },
     )
@@ -238,6 +239,7 @@ fn an_exam_of_a_model_against_itself_is_refused() {
             base: &model("tuned"),
             candidate: &model("tuned"),
             judge: &model("judge"),
+            prompted: None,
             cancel: CancelToken::new(),
         },
     );
@@ -245,4 +247,31 @@ fn an_exam_of_a_model_against_itself_is_refused() {
         matches!(&refused, Err(splinter_orchestrator::OrchestratorError::Refused(why)) if why.contains("itself")),
         "{refused:?}"
     );
+}
+
+#[test]
+fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with() {
+    let (_scratch, ctx, tasks, controls) = setup("exam-prompted", judge(false));
+    let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
+    let (base, tuned, judge) = (model("base"), model("tuned"), model("judge"));
+    let request = |prompted| ExamRequest {
+        tasks: &tasks,
+        controls: &controls,
+        base: &base,
+        candidate: &tuned,
+        judge: &judge,
+        prompted,
+        cancel: CancelToken::new(),
+    };
+    let without = exam(&ctx, &request(None)).unwrap();
+    assert!(without.prompted.is_none() && without.paired_vs_prompted.is_none());
+
+    let report = exam(&ctx, &request(Some("think like a clerk"))).unwrap();
+    let prompted = report.prompted.as_ref().unwrap();
+    assert_eq!(prompted.model, "scripted/base+prompted", "{prompted:#?}");
+    assert_eq!(prompted.judged, 6);
+    // The scripted base knows nothing whatever it is told, so the tuned
+    // model beats it prompted as it beats it unprompted.
+    let against = report.paired_vs_prompted.as_ref().unwrap();
+    assert_eq!((against.discordant, against.candidate_wins), (6, 6));
 }

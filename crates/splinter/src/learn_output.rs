@@ -55,16 +55,26 @@ fn exam_line(summary: &serde_json::Value) -> String {
     } else {
         "NOT trusted, so no claim"
     };
-    let test = ran["paired"].as_object().map_or(String::new(), |t| {
+    let won = |t: &serde_json::Value, against: &str| {
+        t.as_object().map_or(String::new(), |t| {
+            format!(
+                "; the candidate won {} of {} discordant task(s) against {against}, p = {:.4}",
+                t["candidate_wins"],
+                t["discordant"],
+                t["p_value"].as_f64().unwrap_or(1.0)
+            )
+        })
+    };
+    let test = won(&ran["paired"], "the base");
+    let prompted = ran["prompted"].as_object().map_or(String::new(), |_| {
         format!(
-            "; the candidate won {} of {} discordant task(s), p = {:.4}",
-            t["candidate_wins"],
-            t["discordant"],
-            t["p_value"].as_f64().unwrap_or(1.0)
+            "; base asked under the goal {}{}",
+            arm(&ran["prompted"]),
+            won(&ran["paired_vs_prompted"], "it")
         )
     });
     format!(
-        "{} task(s), judge {} {trust}: base {}; candidate {}{test}",
+        "{} task(s), judge {} {trust}: base {}; candidate {}{test}{prompted}",
         ran["tasks"],
         judge["judge"].as_str().unwrap_or("?"),
         arm(&ran["base"]),

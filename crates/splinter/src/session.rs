@@ -471,7 +471,11 @@ impl Session {
                 emit(json, &evaluate(ctx, &request)?);
             }
             Command::Exam(args) => {
-                let arguments = json!({ "candidate": args.candidate, "judge": args.judge });
+                let arguments = json!({
+                    "candidate": args.candidate,
+                    "judge": args.judge,
+                    "prompt": args.prompt,
+                });
                 emit(
                     json,
                     &record(ctx, "exam", &arguments, |run| {
@@ -479,6 +483,7 @@ impl Session {
                             ctx,
                             &args.candidate,
                             args.judge.as_ref(),
+                            args.prompt.as_deref(),
                             &run.cancel_token(),
                         )
                     })?,
