@@ -82,12 +82,24 @@ fn exam_line(summary: &serde_json::Value) -> String {
                 t["p_value"].as_f64().unwrap_or(1.0)
             )
         });
+        let right = |found: bool, key: &str| {
+            r["by_task"].as_array().map_or(0, |tasks| {
+                tasks
+                    .iter()
+                    .filter(|t| t["evidence_found"] == found && t[key] == true)
+                    .count()
+            })
+        };
         format!(
-            "; candidate with {} retrieved passage(s) {} (retrieval found the task's evidence for {}/{}){wins}",
+            "; candidate with {} retrieved passage(s) {} (retrieval found the task's evidence for {}/{}; of those, right with the passages {} and alone {}; of the rest, with {} and alone {}){wins}",
             r["passages"],
             arm(&ran["retrieval"]["arm"]),
             r["hits"],
-            r["tasks"]
+            r["tasks"],
+            right(true, "with_passages"),
+            right(true, "alone"),
+            right(false, "with_passages"),
+            right(false, "alone"),
         )
     });
     format!(

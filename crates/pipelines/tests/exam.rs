@@ -351,6 +351,13 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
     assert_eq!(with.arm.model, "scripted/reader+retrieval");
     assert_eq!(with.arm.judged_right, 6, "{with:#?}");
     assert_eq!((with.hits, with.tasks, with.passages), (6, 6, 3));
+    // Task by task: was the evidence found, and how did the candidate fare
+    // without the passages and with them.
+    assert_eq!(with.by_task.len(), 6);
+    assert!(with
+        .by_task
+        .iter()
+        .all(|t| t.evidence_found && t.alone == Some(false) && t.with_passages == Some(true)));
     let against = report.paired_retrieval.as_ref().unwrap();
     assert_eq!((against.discordant, against.candidate_wins), (6, 6));
 }

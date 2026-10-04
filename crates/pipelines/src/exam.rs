@@ -178,6 +178,23 @@ pub struct RetrievalResult {
     pub tasks: usize,
     /// Passages shown with each.
     pub passages: usize,
+    /// Each task: what retrieval found and how the candidate fared.
+    pub by_task: Vec<RetrievalTask>,
+}
+
+/// One task of the retrieval arm.
+#[derive(Clone, Debug, Serialize)]
+pub struct RetrievalTask {
+    /// The task.
+    pub task: String,
+    /// Whether a retrieved passage overlaps the evidence the task was
+    /// written from.
+    pub evidence_found: bool,
+    /// The candidate's judged verdict without the passages; `None` where the
+    /// judge did not decide.
+    pub alone: Option<bool>,
+    /// And with them.
+    pub with_passages: Option<bool>,
 }
 
 /// What the exam reports.
@@ -418,6 +435,18 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 .count(),
             tasks: request.tasks.len(),
             passages: retrieval.passages,
+            by_task: request
+                .tasks
+                .iter()
+                .zip(found)
+                .zip(candidate_judged.iter().zip(&arm_of.2))
+                .map(|((task, found), (alone, with))| RetrievalTask {
+                    task: task.task.id.to_string(),
+                    evidence_found: found.finds_the_evidence_of(task),
+                    alone: *alone,
+                    with_passages: *with,
+                })
+                .collect(),
         });
     Ok(Examined {
         tasks: request.tasks.len(),
