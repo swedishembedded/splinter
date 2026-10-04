@@ -44,6 +44,7 @@ build:
 ## test - run every test (no model, no GPU needed)
 test:
 	$(CARGO) test $(PROFILE) --workspace
+	python3 samples/adams/test_fetch.py
 
 ## fmt - format Splinter's own sources (never a dependency's)
 fmt:
