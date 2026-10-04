@@ -178,3 +178,23 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
     assert!(plan.tuning.bf16_base);
     assert_eq!(plan.tuning.learning_rate, Some(2e-4));
 }
+
+#[test]
+fn a_machine_configured_to_hold_bases_at_bf16_trains_at_bf16_whichever_command_trains() {
+    // A base too large for the card at fp32 is a fact about the machine: a
+    // training that names no tuning still holds it at bf16, or it does not fit.
+    let scratch = common::Scratch::new("train-machine-bf16");
+    let mut settings = common::config(&scratch);
+    settings.bf16_base = true;
+    let ctx = Context::new(settings, false).unwrap();
+    let chat = dataset(&ctx, "alpha", FACTS);
+    let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
+    train(
+        &ctx,
+        &request(&[&chat], None),
+        &trainer,
+        &CancelToken::new(),
+    )
+    .unwrap();
+    assert!(trainer.plans.lock().unwrap()[0].tuning.bf16_base);
+}

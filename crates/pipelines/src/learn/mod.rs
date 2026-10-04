@@ -236,7 +236,7 @@ pub fn learn(
         steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
         tuning: Tuning {
-            bf16_base: request.tuning.bf16_base || ctx.config().bf16_base,
+            bf16_base: request.tuning.bf16_base,
             learning_rate: request.tuning.learning_rate.or(Some(DEFAULT_LEARNING_RATE)),
         },
         quotas: request.quotas,

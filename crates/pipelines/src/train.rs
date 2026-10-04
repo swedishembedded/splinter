@@ -457,7 +457,12 @@ pub fn train(
         steps: request.steps,
         rank: request.rank,
         beta,
-        tuning: request.tuning,
+        // A base too large for the card at fp32 is a fact about the machine,
+        // not about the command that trains it.
+        tuning: Tuning {
+            bf16_base: request.tuning.bf16_base || ctx.config().bf16_base,
+            ..request.tuning
+        },
     };
     // A fine-tune loads its own copy of the base: the device holds no
     // other while it trains.
