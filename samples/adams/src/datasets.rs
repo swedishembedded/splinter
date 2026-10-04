@@ -43,15 +43,86 @@ pub enum Break {
     Anachronism,
 }
 
-/// A quotation that is in no document of his.
-const INVENTED_QUOTE: &str =
-    "liberty is the first gift of nature to every citizen of the commonwealth";
-/// A fact no situation gave.
-const INVENTED_FACT: &str =
-    "- MODERN_OBSERVATION: the organisation has 4000 employees across 17 offices";
-/// A word from after his death, in a line labelled as his.
-const ANACHRONISM: &str =
-    "- SOURCE_INFERRED: he would have used the internet to write to every town";
+/// Quotations that are in no document of his. A pool, so that what a pair
+/// teaches is not one memorised string.
+const INVENTED_QUOTES: [&str; 6] = [
+    "liberty is the first gift of nature to every citizen of the commonwealth",
+    "no assembly was ever so wise as the plain judgment of the people met together",
+    "let every man set his hand to the petition before the winter is out",
+    "the cause of the colonies is the cause of every honest man in the world",
+    "i have never known a ministry that was not afraid of a united people",
+    "whatever is decided in secret will be undone in the open before the year ends",
+];
+/// Facts no situation gave.
+const INVENTED_FACTS: [&str; 6] = [
+    "- MODERN_OBSERVATION: the organisation has 4000 employees across 17 offices",
+    "- MODERN_OBSERVATION: the board has already voted to cut the budget in half",
+    "- MODERN_OBSERVATION: the previous director resigned over the same dispute last spring",
+    "- MODERN_OBSERVATION: a regulator has opened an investigation into the matter",
+    "- MODERN_OBSERVATION: most of the staff have said they will walk out on Friday",
+    "- MODERN_OBSERVATION: the largest customer has threatened to leave within a month",
+];
+/// Lines labelled as his that use a word from after his death.
+const ANACHRONISMS: [&str; 6] = [
+    "- SOURCE_INFERRED: he would have used the internet to write to every town",
+    "- SOURCE_INFERRED: he would have kept the correspondence in a database",
+    "- SOURCE_INFERRED: he would have sent the same email to every committee",
+    "- SOURCE_INFERRED: he would have posted the resolution on a website",
+    "- SOURCE_INFERRED: he would have convened the towns online",
+    "- SOURCE_INFERRED: he would have wanted the software to keep a record",
+];
+
+/// One of `pool`, chosen by a hash of `key`, so the same answer is always
+/// broken the same way and different answers are broken differently.
+fn pick<'a>(pool: &[&'a str], key: &str) -> &'a str {
+    pool[usize::from(blake3::hash(key.as_bytes()).as_bytes()[0]) % pool.len()]
+}
+
+/// `answer` with the first line starting with any of `labels` replaced by
+/// `line`, so the broken answer is as long as the good one; with no such line,
+/// `line` is added at the end.
+fn replacing_line(answer: &str, labels: &[&str], line: &str) -> String {
+    let mut done = false;
+    let mut lines: Vec<String> = answer
+        .lines()
+        .map(|l| {
+            let hit = !done && labels.iter().any(|label| l.trim_start().starts_with(label));
+            if hit {
+                done = true;
+                line.to_string()
+            } else {
+                l.to_string()
+            }
+        })
+        .collect();
+    if !done {
+        lines.push(line.to_string());
+    }
+    lines.join("\n")
+}
+
+/// The most lines restating the situation's facts that a training answer
+/// keeps: the situation is in the prompt, and a block that copies it back is
+/// loss spent on copying.
+const MAX_RESTATED_FACTS: usize = 2;
+
+/// An answer as it is taught: at most [`MAX_RESTATED_FACTS`] lines of
+/// MODERN_OBSERVATION, every other line as it was. Idempotent, and it only
+/// removes lines the rules do not need, so a checked answer stays checked.
+pub fn shape(answer: &str) -> String {
+    let mut kept = 0usize;
+    answer
+        .lines()
+        .filter(|line| {
+            if !line.trim_start().starts_with("- MODERN_OBSERVATION:") {
+                return true;
+            }
+            kept += 1;
+            kept <= MAX_RESTATED_FACTS
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 /// The span of the first double-quoted passage in `line`, quotes excluded.
 fn quote_span(line: &str) -> Option<(usize, usize)> {
@@ -92,14 +163,20 @@ pub fn breaks(answer: &str, scenario: &Scenario, docs: &[&Document]) -> Vec<(Bre
                 if !replaced && line.trim_start().starts_with("- SOURCE_DIRECT:") =>
             {
                 replaced = true;
-                format!("{}{}{}", &line[..start], INVENTED_QUOTE, &line[end..])
+                format!(
+                    "{}{}{}",
+                    &line[..start],
+                    pick(&INVENTED_QUOTES, answer),
+                    &line[end..]
+                )
             }
             _ => (*line).to_string(),
         })
         .collect();
     if !replaced {
         fabricated.push(format!(
-            "- SOURCE_DIRECT: \"{INVENTED_QUOTE}\" [cushing-1-1]"
+            "- SOURCE_DIRECT: \"{}\" [cushing-1-1]",
+            pick(&INVENTED_QUOTES, answer)
         ));
     }
     candidates.push((Break::FabricatedQuote, fabricated.join("\n")));
@@ -116,8 +193,22 @@ pub fn breaks(answer: &str, scenario: &Scenario, docs: &[&Document]) -> Vec<(Bre
         changed[first] = format!("Applicability: {}", flipped(stated));
         candidates.push((Break::FlippedApplicability, changed.join("\n")));
     }
-    candidates.push((Break::InventedFact, format!("{answer}\n{INVENTED_FACT}")));
-    candidates.push((Break::Anachronism, format!("{answer}\n{ANACHRONISM}")));
+    candidates.push((
+        Break::InventedFact,
+        replacing_line(
+            answer,
+            &["- MODERN_OBSERVATION:"],
+            pick(&INVENTED_FACTS, answer),
+        ),
+    ));
+    candidates.push((
+        Break::Anachronism,
+        replacing_line(
+            answer,
+            &["- PERSONA_TRANSFER:", "- SOURCE_INFERRED:"],
+            pick(&ANACHRONISMS, answer),
+        ),
+    ));
 
     candidates
         .into_iter()
@@ -138,10 +229,12 @@ pub fn internalized(answer: &str, principle: &Principle) -> Option<String> {
             if std::mem::replace(&mut seen, true) {
                 return None;
             }
-            Some(format!(
-                "- SOURCE_INFERRED: my papers show this habit: {}",
-                principle.description
-            ))
+            // In the first person, from what he is recorded as doing, not the
+            // principle's third-person statement of it.
+            principle
+                .expected_behavior
+                .first()
+                .map(|done| format!("- SOURCE_INFERRED: my papers show that I would {done}"))
         })
         .collect();
     let text = lines.join("\n");
@@ -387,10 +480,11 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
             built.excluded.push((id, why));
             continue;
         }
+        let taught = shape(&answer.text);
         let with_passages = respond::student_prompt(scenario, &principle.support);
         let without = respond::student_prompt(scenario, &[]);
-        let own_words = internalized(&answer.text, principle)
-            .filter(|t| respond::check(t, scenario, &[]).is_ok());
+        let own_words =
+            internalized(&taught, principle).filter(|t| respond::check(t, scenario, &[]).is_ok());
 
         if is_benchmark(&principle.id) {
             let task = |mode: Mode, prompt: &String, evidence_docs: Vec<String>| TransferTask {
@@ -412,11 +506,11 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
                 .push(task(Mode::Internalized, &without, Vec::new()));
             continue;
         }
-        built.sft.push(sft_record(&with_passages, &answer.text));
-        for (kind, text) in breaks(&answer.text, scenario, &evidence) {
+        built.sft.push(sft_record(&with_passages, &taught));
+        for (kind, text) in breaks(&taught, scenario, &evidence) {
             built.preference.push(pair(
                 &with_passages,
-                &answer.text,
+                &taught,
                 &text,
                 kind,
                 Mode::Retrieval,

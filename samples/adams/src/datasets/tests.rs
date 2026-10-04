@@ -137,7 +137,11 @@ fn the_internalized_answer_says_what_his_papers_show_and_quotes_nothing() {
             && !text.contains("\"Let the Committee"),
         "{text}"
     );
-    assert!(text.contains("SOURCE_INFERRED") && text.contains(&p.description));
+    assert!(text.contains("SOURCE_INFERRED") && text.contains("I would write to the towns"));
+    assert!(
+        !text.contains(&p.description),
+        "the line is in the first person, not the principle's third-person statement: {text}"
+    );
     let s = scenario(&p, Case::Clear);
     assert_eq!(respond::check(&text, &s, &[]), Ok(()), "{text}");
 }
@@ -547,4 +551,57 @@ fn a_benchmark_that_has_been_written_is_frozen_and_a_changed_one_goes_under_a_ne
         std::fs::read_to_string(dir.path().join("benchmark.jsonl")).unwrap(),
         before
     );
+}
+
+const CROWDED: &str = "Applicability: APPLIES\n\nI would have each team put its own case in writing.\n\nGrounding:\n- SOURCE_DIRECT: \"Let the Committee write to every Town\" [d1]\n- MODERN_OBSERVATION: There are five regional teams\n- MODERN_OBSERVATION: The platform group announced one date\n- MODERN_OBSERVATION: There are five regional teams again\n- PERSONA_TRANSFER: the committee method carried to the teams\n";
+
+#[test]
+fn a_target_keeps_two_restatements_of_the_facts_and_every_other_line() {
+    let shaped = shape(CROWDED);
+    assert_eq!(shaped.matches("MODERN_OBSERVATION").count(), 2);
+    assert!(
+        shaped.contains("There are five regional teams\n") && shaped.contains("announced one date")
+    );
+    assert!(
+        !shaped.contains("again"),
+        "the surplus restatement goes: {shaped}"
+    );
+    assert!(shaped.contains("SOURCE_DIRECT") && shaped.contains("PERSONA_TRANSFER"));
+    assert_eq!(shape(&shaped), shaped, "shaping twice changes nothing");
+    assert_eq!(shape(FIT), FIT, "an answer within the limit is untouched");
+}
+
+#[test]
+fn an_invented_fact_replaces_a_restated_one_so_the_broken_answer_is_no_longer_than_the_good_one() {
+    let p = principle(1);
+    let s = scenario(&p, Case::Clear);
+    let d = docs();
+    let evidence: Vec<&Document> = d.iter().collect();
+    let broken = breaks(FIT, &s, &evidence);
+    for kind in [Break::InventedFact, Break::Anachronism] {
+        let (_, text) = broken.iter().find(|(k, _)| *k == kind).unwrap();
+        assert_eq!(
+            text.lines().count(),
+            FIT.lines().count(),
+            "{kind:?} replaces a line: {text}"
+        );
+    }
+}
+
+#[test]
+fn the_invented_material_is_drawn_from_a_pool_so_a_pair_does_not_teach_one_string() {
+    let p = principle(1);
+    let s = scenario(&p, Case::Clear);
+    let d = docs();
+    let evidence: Vec<&Document> = d.iter().collect();
+    let mut facts = std::collections::HashSet::new();
+    for n in 0..40 {
+        let answer = FIT.replace("regional teams", &format!("regional teams of group {n}"));
+        for (kind, text) in breaks(&answer, &s, &evidence) {
+            if kind == Break::InventedFact {
+                facts.insert(text.lines().nth(6).unwrap_or_default().to_string());
+            }
+        }
+    }
+    assert!(facts.len() >= 3, "{facts:?}");
 }
