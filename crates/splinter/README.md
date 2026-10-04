@@ -196,7 +196,9 @@ judge as labelled is reported with the answer and the judge's reason, so a judge
 that is not trusted can be seen failing.
 
 The `converse` kind teaches how the writer talks and reasons. Its task is the
-opening message of someone speaking to the writer, with a passage of the
+opening message of someone speaking to the writer (admitted only in the first or
+second person: a situation, a decision, a question put to them; "What does he say
+about ..." is refused, and the generator told so), with a passage of the
 writer's text as its reference. A teacher shown the passage answers as the
 writer, and a model that is never shown it plays the other speaker, following
 up for up to three exchanges; the training record is the whole conversation

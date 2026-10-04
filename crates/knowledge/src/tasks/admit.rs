@@ -298,6 +298,15 @@ impl Admission {
             return refuse((Rejection::NotSelfContained, why.to_string()));
         }
 
+        if kind.dialogue && !speaks_to_the_writer(&candidate.instruction) {
+            return refuse((
+                Rejection::WrongForm,
+                "the opening of a conversation speaks as a person to the writer, in the first or \
+                 second person, and this one asks about the writer"
+                    .into(),
+            ));
+        }
+
         let subject = match subject(context, &candidate) {
             Ok(subject) => subject,
             Err(refusal) => return refuse(refusal),
@@ -426,6 +435,19 @@ impl Admission {
 
 /// The task's checks of privileged kind `kind` run against `answer` in the
 /// kind's runtime, through the executable verifier.
+/// Whether `instruction` is a person speaking to someone: it uses the first or
+/// second person ("I keep meaning to ...", "how do you ..."). A question about
+/// a named writer in the third person does not.
+fn speaks_to_the_writer(instruction: &str) -> bool {
+    const PERSON: [&str; 10] = [
+        "i", "i'm", "i've", "i'd", "my", "me", "we", "our", "you", "your",
+    ];
+    instruction
+        .to_lowercase()
+        .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+        .any(|word| PERSON.contains(&word))
+}
+
 fn run_checks(
     context: &Context<'_>,
     task: &Task,

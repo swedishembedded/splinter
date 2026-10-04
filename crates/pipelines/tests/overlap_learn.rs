@@ -110,7 +110,7 @@ fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_
             };
             let passage: String = text.split(' ').take(40).collect::<Vec<_>>().join(" ");
             json!({ "tasks": [{
-                "instruction": format!("question {n} about {seed}xa matters"),
+                "instruction": format!("I wonder, question {n}: how do you weigh {seed}xa matters?"),
                 "reference": passage,
                 "evidence": [{ "section": 0, "quote": passage }]
             }]})

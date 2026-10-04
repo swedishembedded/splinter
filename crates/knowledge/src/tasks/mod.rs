@@ -195,6 +195,10 @@ pub enum Rejection {
     MaterialNotShown,
     /// The instruction does not stand on its own.
     NotSelfContained,
+    /// The instruction is not in the form the kind asks for: the opening of
+    /// a conversation speaks as a person to the writer, and does not ask
+    /// about them.
+    WrongForm,
     /// A text reference is not supported by its evidence.
     Ungrounded,
     /// A kind whose reference is the source author's own words has a
@@ -235,6 +239,12 @@ impl Rejection {
                  about, and never say \"the letter\", \"the writer\", \"the author\", \"the \
                  passage\" or \"the document\" - someone who has never seen the source must \
                  understand it.",
+            ),
+            Self::WrongForm => Some(
+                "Write each opening as a person speaking to the writer, in the first or \
+                 second person: their own situation, a decision, a question put to the writer \
+                 (\"I ... how do you ...\"). Never ask about the writer (\"What does he say \
+                 about ...\", \"What did Jefferson think of ...\").",
             ),
             Self::NoSubject => Some(
                 "Name the subject in the instruction in the words the source uses for it: a \

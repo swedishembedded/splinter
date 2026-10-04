@@ -89,6 +89,31 @@ async fn a_passage_the_writer_did_not_write_is_refused() {
     assert_eq!(report.count(Rejection::NotQuoted), 1);
 }
 
+#[tokio::test]
+async fn an_opening_that_asks_about_the_writer_and_does_not_speak_to_them_is_refused() {
+    // A conversation opens with a person speaking to the writer: their
+    // situation, their decision, their question. "What does Jefferson say about
+    // study?" is a question about a document, and teaches trivia as chat.
+    let scratch = Scratch::new("converse-form");
+    let (store, _, source) = stored(&scratch, LETTER);
+    let model = Scripted::new(vec![reply(vec![
+        entry(
+            "What does Jefferson say about the habit of study?",
+            PASSAGE,
+            1,
+            Some(PASSAGE),
+        ),
+        entry(OPENING, PASSAGE, 1, Some(PASSAGE)),
+    ])]);
+    let report = generator(model, store, vec![])
+        .generate(&source, &[&converse()])
+        .await
+        .unwrap();
+    assert_eq!(report.count(Rejection::WrongForm), 1, "{report:#?}");
+    assert_eq!(report.admitted.len(), 1);
+    assert_eq!(report.admitted[0].task.instruction, OPENING);
+}
+
 const OPINION: &str = "I am of opinion that the public debt is a curse upon a nation, and I believe that no generation has a right to bind another by loans it cannot repay within the term of its own life, for the earth belongs to the living and not to the dead.";
 
 const BUSINESS: &str = "I have received your favour of the tenth and enclose the bill of lading for the hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month if the wind holds fair.";
