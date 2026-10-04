@@ -32,7 +32,7 @@ use crate::scenario::{Case, Scenario};
 
 /// The system message the student is asked under: the persona, the format and
 /// the rule that what it cannot source it says it cannot.
-pub const SYSTEM: &str = "You are Samuel Adams (1722-1803), applying the method of your own papers to a present-day problem you never met. Answer in the first person. Begin with one line, `Applicability:`, then APPLIES, PARTLY, DOES_NOT_APPLY or NEEDS_INFORMATION. Give practical advice, or ask for what you cannot responsibly decide without. End with a `Grounding:` block, one line per claim, each starting with its label: SOURCE_DIRECT (your own words, quoted, then the document id in square brackets), SOURCE_INFERRED (what your papers show), MODERN_OBSERVATION (a fact you were given), PERSONA_TRANSFER (your method carried to this problem), SPECULATION. Quote only what is in the passages you are shown. Say plainly what the record does not show.";
+pub const SYSTEM: &str = "You are Samuel Adams (1722-1803), applying the method of your own papers to a present-day problem you never met. Answer in the first person. Begin with one line, `Applicability:`, then APPLIES, PARTLY, DOES_NOT_APPLY or NEEDS_INFORMATION. Give practical advice, or ask for what you cannot responsibly decide without. End with a `Grounding:` block, one line per claim, each starting with its label: SOURCE_DIRECT (your own words, quoted, then the document id in square brackets), SOURCE_INFERRED (what your papers show), MODERN_OBSERVATION (a fact you were given), PERSONA_TRANSFER (your method carried to this problem), SPECULATION. Quote only what is in the passages you are shown. State no number that is not in the situation, the facts or the passages. Say plainly what the record does not show.";
 
 /// Whether his method applies, as an answer says it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -92,6 +92,14 @@ pub fn student_prompt(scenario: &Scenario, evidence: &[Found]) -> String {
     prompt
 }
 
+/// The numbers in `text`: every word that has a digit in it, lower-cased.
+fn numbers_in(text: &str) -> HashSet<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.chars().any(|c| c.is_ascii_digit()))
+        .map(str::to_lowercase)
+        .collect()
+}
+
 /// Say what is wrong with an answer, in words the drafter can act on, or
 /// nothing if it keeps every word.
 fn describe(violation: &Violation) -> String {
@@ -127,6 +135,23 @@ pub fn check(text: &str, scenario: &Scenario, docs: &[&Document]) -> Result<(), 
             .map(describe)
             .collect::<Vec<_>>()
             .join("; "));
+    }
+    let given: String = std::iter::once(scenario.situation.as_str())
+        .chain(scenario.observations.iter().map(String::as_str))
+        .chain(std::iter::once(scenario.request.as_str()))
+        .chain(docs.iter().map(|d| d.body.as_str()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let allowed = numbers_in(&given);
+    if let Some(invented) = {
+        let mut stated: Vec<String> = numbers_in(&grounded.body)
+            .into_iter()
+            .filter(|n| !allowed.contains(n))
+            .collect();
+        stated.sort();
+        stated.into_iter().next()
+    } {
+        return Err(format!("the answer states a number the situation never gave: {invented}; use only numbers that are in the situation, the facts or the passages"));
     }
     let quotes_him = grounded
         .items
@@ -432,6 +457,36 @@ mod tests {
         assert!(check(&none, &scenario(Case::Clear), &refs(&d))
             .unwrap_err()
             .contains("SOURCE_DIRECT"));
+    }
+
+    #[test]
+    fn a_number_the_answer_states_that_the_situation_never_gave_is_refused() {
+        let d = docs();
+        let invented = FIT.replace(
+            "I would have each team",
+            "Within 40 days I would have each team",
+        );
+        let why = check(&invented, &scenario(Case::Clear), &refs(&d)).unwrap_err();
+        assert!(why.contains("number") && why.contains("40"), "{why}");
+    }
+
+    #[test]
+    fn a_number_from_the_situation_the_facts_or_the_passages_is_allowed() {
+        let d = docs();
+        let mut s = scenario(Case::Clear);
+        s.situation =
+            "Five regional teams want different migration dates for 800 engineers.".into();
+        s.observations
+            .push("The old platform retires in 2027.".into());
+        let from_situation = FIT.replace(
+            "I would have each team",
+            "For the 800 engineers I would have each team",
+        );
+        assert_eq!(check(&from_situation, &s, &refs(&d)), Ok(()));
+        let from_fact = FIT.replace("gather them", "gather them before 2027 arrives and");
+        assert_eq!(check(&from_fact, &s, &refs(&d)), Ok(()));
+        let from_request = FIT.replace("I would have", "I would, being asked, have");
+        assert_eq!(check(&from_request, &s, &refs(&d)), Ok(()));
     }
 
     #[test]

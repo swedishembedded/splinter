@@ -185,7 +185,9 @@ impl TransferTask {
             principle_id: String::new(),
             case: self.case,
             domain: String::new(),
-            situation: String::new(),
+            // The prompt holds the situation, the facts, the request and the
+            // passages: everything a number in the answer may have come from.
+            situation: self.prompt.clone(),
             observations: self.observations.clone(),
             request: String::new(),
             conditions_present: Vec::new(),
