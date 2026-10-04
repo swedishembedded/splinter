@@ -29,6 +29,7 @@
 //! build-data build the supervised records, preference pairs and frozen benchmark from the checked answers
 //! train-dpo  preference-optimise an adapter on the pairs
 //! transfer-exam  ask a model every benchmark question, graded by the rules
+//! grpo       train an adapter by GRPO, rewarded by the rules, and gate it on unseen situations
 //! anchor-exam  ask a model general questions under no persona: a retention check
 //! briefings  brief each held-out letter of his: the situation it answered, and what the real letter does
 //! reconstruct-replies  have one model write the reply to every briefing
@@ -43,6 +44,7 @@ mod curate;
 mod datasets;
 mod document;
 mod grounding;
+mod grpo;
 mod helper;
 mod judge;
 mod miner;
@@ -74,13 +76,14 @@ fn main() -> anyhow::Result<()> {
         Some("build-data") => build_data_command(&args[1..]),
         Some("train-dpo") => train_dpo_command(&args[1..]),
         Some("transfer-exam") => transfer_exam_command(&args[1..]),
+        Some("grpo") => grpo_command(&args[1..]),
         Some("anchor-exam") => anchor_exam_command(&args[1..]),
         Some("briefings") => briefings_command(&args[1..]),
         Some("reconstruct-replies") => reconstruct_replies_command(&args[1..]),
         Some("judge") => judge_command(&args[1..]),
         Some("reconstruct-report") => reconstruct_report_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|grpo|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
         ),
     }
 }
@@ -519,5 +522,26 @@ fn anchor_exam_command(args: &[String]) -> anyhow::Result<()> {
         std::path::Path::new(&need(args, "--base")?),
         flag(args, "--adapter").as_deref().map(std::path::Path::new),
         flag(args, "--limit").map(|v| v.parse()).transpose()?,
+    )
+}
+
+fn grpo_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    run::grpo_command(
+        &resources,
+        &documents,
+        &run::Grpo {
+            base: need(args, "--base")?.into(),
+            checkpoint: need(args, "--checkpoint")?.into(),
+            out: need(args, "--out")?.into(),
+            steps: number(args, "--steps", 60)?,
+            group_size: number(args, "--group", 4)?,
+            max_new: number(args, "--max-new", 600)?,
+            learning_rate: number(args, "--lr", 5e-5)?,
+            temperature: number(args, "--temperature", 0.8)?,
+            rank: number(args, "--rank", 16)?,
+            gate_one_in: number(args, "--gate-one-in", 5)?,
+        },
     )
 }

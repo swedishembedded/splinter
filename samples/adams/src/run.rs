@@ -645,3 +645,116 @@ pub fn anchor_exam_command(
     println!("asked {asked} questions; results in {}", out.display());
     Ok(())
 }
+
+/// Tokens a training row keeps beyond the longest prompt and the completion budget.
+const ROW_MARGIN_TOKENS: usize = 16;
+
+/// What one reinforcement-learning cycle needs.
+pub struct Grpo {
+    /// The Hugging Face checkpoint directory: the tokenizer and the model's name.
+    pub base: PathBuf,
+    /// The same model as one brain checkpoint file, which brain's loop trains
+    /// from (`brain qwen3 import --hf BASE --out FILE`).
+    pub checkpoint: PathBuf,
+    pub out: PathBuf,
+    pub steps: u32,
+    pub group_size: usize,
+    pub max_new: usize,
+    pub learning_rate: f32,
+    pub temperature: f32,
+    pub rank: u32,
+    /// One in this many scenarios is kept for the loop's own gate.
+    pub gate_one_in: usize,
+}
+
+/// The scenarios a model may be trained on: every checked result of a principle
+/// that is not in the benchmark, with the passages it may quote.
+fn grpo_items(resources: &Path, documents: &[Document]) -> anyhow::Result<Vec<crate::grpo::Item>> {
+    let results = crate::transfer::read_results(&resources.join("transfer").join("results.jsonl"))?;
+    let principles = read_principles(resources)?;
+    let mut items = Vec::new();
+    for result in results.iter().filter(|r| r.error.is_none()) {
+        let (Some(scenario), Some(principle)) = (
+            &result.scenario,
+            principles.iter().find(|p| p.id == result.principle_id),
+        ) else {
+            continue;
+        };
+        if crate::datasets::is_benchmark(&principle.id) {
+            continue;
+        }
+        let cited: Vec<&str> = principle
+            .support
+            .iter()
+            .map(|f| f.doc_id.as_str())
+            .collect();
+        let docs: Vec<(String, String)> = documents
+            .iter()
+            .filter(|d| cited.contains(&d.id.as_str()))
+            .map(|d| (d.id.clone(), d.body.clone()))
+            .collect();
+        items.push(crate::grpo::Item {
+            scenario: scenario.clone(),
+            evidence: principle.support.clone(),
+            documents: docs,
+        });
+    }
+    Ok(items)
+}
+
+/// Train an adapter by GRPO on the situations, rewarded by the rules, and gate
+/// it against the untouched base on situations it was not trained on.
+pub fn grpo_command(resources: &Path, documents: &[Document], g: &Grpo) -> anyhow::Result<()> {
+    use splinter_sdk::model::rl::{
+        ChatMessage, ChatRequest, ChatTokenizer, Improve, ImproveOptions,
+    };
+    let tokenizer = std::sync::Arc::new(ChatTokenizer::from_model_dir(&g.base)?);
+    let encoder = std::sync::Arc::clone(&tokenizer);
+    let encode: crate::grpo::Encode = std::sync::Arc::new(move |system: &str, user: &str| {
+        let request = ChatRequest::new(vec![ChatMessage::system(system), ChatMessage::user(user)])
+            .thinking(false);
+        Ok(encoder.prompt_ids(&request)?)
+    });
+    let decoder = std::sync::Arc::clone(&tokenizer);
+    let decode: crate::grpo::Decode = std::sync::Arc::new(move |ids: &[u32]| decoder.decode(ids));
+
+    let env = crate::grpo::AdamsEnv::new(grpo_items(resources, documents)?, g.gate_one_in, encode);
+    env.preflight()?;
+    let (train, gate) = env.pools();
+    // Rows as long as the prompts and completions need, not as long as the model's context.
+    let max_seq_len = env.longest_prompt()? + g.max_new + ROW_MARGIN_TOKENS;
+    println!("situations to train on: {train}  kept for the gate: {gate}  training row: {max_seq_len} tokens");
+    std::fs::create_dir_all(&g.out)?;
+    let cycle = Improve::from_pretrained(g.checkpoint.to_string_lossy())?
+        .arch("qwen3")
+        .adapter_dir(g.out.join("adapters"))
+        .work_dir(g.out.join("work"))
+        .lora(g.rank)
+        .seed(0)
+        .held_out_seed(crate::grpo::GATE_SEED_BASE);
+    let options = ImproveOptions {
+        group_size: g.group_size,
+        temperature: g.temperature,
+        max_new: g.max_new,
+        steps: g.steps,
+        lr: g.learning_rate,
+        seed: 0,
+        max_seq_len: Some(max_seq_len),
+        ..ImproveOptions::default()
+    };
+    let started = std::time::Instant::now();
+    let outcome = cycle.run(env, crate::grpo::AdamsVerifier::new(decode), &options)?;
+    let summary = serde_json::json!({
+        "decision": format!("{:?}", outcome.decision),
+        "p_value": outcome.p_value,
+        "effect_size": outcome.effect_size,
+        "entropy_ratio": outcome.entropy_ratio,
+        "adapter": outcome.adapter_path,
+        "steps": g.steps, "group_size": g.group_size, "max_new": g.max_new, "learning_rate": g.learning_rate,
+        "seconds": started.elapsed().as_secs_f64(),
+    });
+    let text = serde_json::to_string_pretty(&summary)?;
+    std::fs::write(g.out.join("summary.json"), &text)?;
+    println!("{text}");
+    Ok(())
+}

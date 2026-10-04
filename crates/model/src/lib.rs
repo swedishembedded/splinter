@@ -9,6 +9,8 @@
 //!   answer graded by code and recorded as one line.
 //! * [`report`] - two arms of an exam paired question by question, with the
 //!   paired sign test.
+//! * [`rl`] - brain's reinforcement-learning surface: an environment, a
+//!   verifier, and the chat tokenizer a prompt is read through.
 //! * [`local`] - brain's chat pipeline in-process behind sven's
 //!   `ModelProvider` seam: load, stream a generation, stop it cleanly.
 //! * [`residency`] - the one owner of resident bases: one loaded copy per
@@ -39,6 +41,7 @@ pub mod exam;
 pub mod local;
 pub mod report;
 pub mod residency;
+pub mod rl;
 pub mod selection;
 pub mod stats;
 pub mod train;
