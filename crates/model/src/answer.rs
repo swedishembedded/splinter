@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements in-process serving of local language models
-// on the customer's own GPUs for its clients. If your team needs expertise in
-// running a fine-tuned model on local accelerators without a serving
-// process, you can procure our services by sending an email to
-// info@swedishembedded.com.
+// Swedish Embedded AB implements repeatable evaluation of locally run
+// language models for its clients. If your team needs expertise in measuring
+// what a fine-tune changed, you can procure our services by sending an email
+// to info@swedishembedded.com.
 
 //! One local model answering one question at a time, greedily.
 //!
-//! The exam asks the same model twice: with no adapter, then with the one
+//! An evaluation asks the same model twice: with no adapter, then with the one
 //! training produced. Greedy decoding means a question has one answer for a
 //! given set of weights, so a difference between the two is the weights'.
 
@@ -17,11 +16,13 @@ use std::path::Path;
 use std::time::Instant;
 
 use futures::StreamExt;
-use splinter_sdk::agent::sven::model::{
+use sven_sdk::model::{
     CompletionRequest, Message, MessageContent, ModelProvider, ResponseEvent, Role,
 };
-use splinter_sdk::model::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
-use splinter_sdk::model::Residency;
+
+use crate::error::PolicyError;
+use crate::local::{LocalQwen, LocalWeights, GREEDY_SAMPLING};
+use crate::residency::Residency;
 
 /// What a model said to one question.
 #[derive(Clone, Debug, Default)]
@@ -45,20 +46,24 @@ pub struct Answerer {
 }
 
 impl Answerer {
-    /// Loads the base at `base`, attaching `adapter` when given.
+    /// Loads the base at `base`, attaching `adapter` when given. `label` names
+    /// the model in the provider seam's records.
     ///
     /// # Errors
     /// The checkpoint cannot be opened or the adapter does not fit it.
-    pub fn load(base: &Path, adapter: Option<&Path>, context_tokens: u32) -> anyhow::Result<Self> {
+    pub fn load(
+        base: &Path,
+        adapter: Option<&Path>,
+        context_tokens: u32,
+        label: &str,
+    ) -> Result<Self, PolicyError> {
         let residency = Residency::default();
         let weights = LocalWeights {
             base: base.to_path_buf(),
             adapter: adapter.map(Path::to_path_buf),
             context_tokens,
         };
-        let model = LocalQwen::load(&residency, &weights, "jefferson")
-            .map_err(|e| anyhow::anyhow!("loading {}: {e}", base.display()))?
-            .resampled(GREEDY_SAMPLING);
+        let model = LocalQwen::load(&residency, &weights, label)?.resampled(GREEDY_SAMPLING);
         Ok(Self {
             model,
             _residency: residency,

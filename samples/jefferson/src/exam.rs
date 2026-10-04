@@ -17,10 +17,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ask::Answerer;
 use crate::grade::{final_answer, recipient_ok, work_ok, year_ok};
 use crate::tasks::{Kind, Task, PERSONA};
 use crate::works::{rival_names, WORKS};
+use splinter_sdk::model::answer::Answerer;
 
 /// One graded answer.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -122,7 +122,7 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
     if todo.is_empty() {
         return Ok(0);
     }
-    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), 4096)?;
+    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), 4096, "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     let mut out = std::fs::OpenOptions::new()
         .create(true)

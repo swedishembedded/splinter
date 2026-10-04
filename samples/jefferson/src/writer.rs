@@ -11,9 +11,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::ask::Answerer;
 use crate::corpus::{families, is_exam_family, load_letters};
 use splinter_sdk::knowledge::advice::advice_cues;
+use splinter_sdk::model::answer::Answerer;
 
 use crate::scenarios::{admit, advice_passages, classifier_prompt, writer_prompt, Scenario};
 use crate::tasks::{surname_of, PERSONA};
@@ -108,7 +108,7 @@ pub struct Generated {
 /// # Errors
 /// The corpus or the writer model cannot be read, or a generation fails.
 pub fn generate(options: &Options, out: &Path) -> anyhow::Result<Generated> {
-    let writer = Answerer::load(&options.writer, None, 4096)?;
+    let writer = Answerer::load(&options.writer, None, 4096, "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     // Each scenario is written as it is kept: a long run that stops early
     // leaves everything it had made.

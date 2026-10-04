@@ -3,6 +3,8 @@
 
 //! The model Splinter trains, and the only crate that touches brain.
 //!
+//! * [`answer`] - one local model, with or without an adapter, answering one
+//!   question at a time, greedily: what an evaluation asks.
 //! * [`local`] - brain's chat pipeline in-process behind sven's
 //!   `ModelProvider` seam: load, stream a generation, stop it cleanly.
 //! * [`residency`] - the one owner of resident bases: one loaded copy per
@@ -25,6 +27,7 @@
 
 #![warn(missing_docs)]
 
+pub mod answer;
 pub mod capabilities;
 pub mod embed;
 pub mod error;

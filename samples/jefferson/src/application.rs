@@ -22,11 +22,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use splinter_sdk::measure::verifiers::quotation::TextIndex;
 
-use crate::ask::Answerer;
 use crate::corpus::words;
 use crate::grade::{fabricated, final_answer};
 use crate::scenarios::Scenario;
 use crate::tasks::PERSONA;
+use splinter_sdk::model::answer::Answerer;
 
 /// One answered scenario.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -160,7 +160,7 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         return Ok(0);
     }
     let index = corpus_index(&run.resources)?;
-    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), 4096)?;
+    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), 4096, "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     let mut out = std::fs::OpenOptions::new()
         .create(true)
@@ -255,7 +255,7 @@ pub fn judge_all(
     let by_id: std::collections::HashMap<&str, &Scenario> =
         all.iter().map(|s| (s.id.as_str(), s)).collect();
     let mut rows = read_answers(answers)?;
-    let judge = Answerer::load(judge_base, None, 4096)?;
+    let judge = Answerer::load(judge_base, None, 4096, "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     let ask = |question: &str, passage: &str, answer: &str| -> anyhow::Result<Option<bool>> {
         let reply = runtime.block_on(judge.ask(

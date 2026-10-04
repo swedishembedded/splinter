@@ -25,7 +25,6 @@
 //! ```
 
 mod application;
-mod ask;
 mod build;
 mod corpus;
 mod exam;
