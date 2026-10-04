@@ -308,6 +308,12 @@ pub fn few_shot_block(records: &[Value], n: usize) -> String {
     out
 }
 
+/// The benchmark's file name unless a new one is asked for: a written
+/// benchmark is frozen under its name, so a changed one needs another.
+pub const BENCHMARK_FILE: &str = "benchmark.jsonl";
+/// The ledger that pins each benchmark file to its content.
+const FROZEN_LEDGER: &str = "FROZEN.json";
+
 /// The datasets, and what was left out and why.
 #[derive(Debug, Default)]
 pub struct Built {
@@ -434,12 +440,12 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
     built
 }
 
-/// Write `sft-transfer.jsonl`, `preference-transfer.jsonl`, `benchmark.jsonl`
-/// and `excluded.jsonl` under `dir`, each atomically.
+/// Write `sft-transfer.jsonl`, `preference-transfer.jsonl`, the benchmark
+/// (`benchmark_file`) and `excluded.jsonl` under `dir`, each atomically.
 ///
 /// # Errors
-/// A file cannot be written.
-pub fn write_all(built: &Built, dir: &std::path::Path) -> anyhow::Result<()> {
+/// A file cannot be written, or `benchmark_file` is frozen at other content.
+pub fn write_all(built: &Built, dir: &std::path::Path, benchmark_file: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir)?;
     let lines =
         |rows: Vec<Value>| -> String { rows.into_iter().map(|r| format!("{r}\n")).collect() };
@@ -447,7 +453,7 @@ pub fn write_all(built: &Built, dir: &std::path::Path) -> anyhow::Result<()> {
         ("sft-transfer.jsonl", lines(built.sft.clone())),
         ("preference-transfer.jsonl", lines(built.preference.clone())),
         (
-            "benchmark.jsonl",
+            benchmark_file,
             lines(built.benchmark.iter().map(|t| json!(t)).collect()),
         ),
         (
@@ -461,12 +467,18 @@ pub fn write_all(built: &Built, dir: &std::path::Path) -> anyhow::Result<()> {
             ),
         ),
     ];
-    for (name, text) in files {
+    // The benchmark is checked before anything is written, so a refused one
+    // leaves every file as it was.
+    let ledger = splinter_sdk::data::frozen::Ledger::at(dir.join(FROZEN_LEDGER));
+    let benchmark_text = &files[2].1;
+    ledger.check(benchmark_file, benchmark_text.as_bytes())?;
+    for (name, text) in &files {
         let path = dir.join(name);
         let tmp = path.with_extension("part");
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, &path)?;
     }
+    ledger.pin(benchmark_file, benchmark_text.as_bytes())?;
     Ok(())
 }
 

@@ -79,6 +79,7 @@ fn main() -> anyhow::Result<()> {
         Some("train-dpo") => train_dpo_command(&args[1..]),
         Some("transfer-exam") => transfer_exam_command(&args[1..]),
         Some("constant-baseline") => constant_baseline_command(&args[1..]),
+        Some("pin") => run::pin_command(std::path::Path::new(&need(&args[1..], "--file")?)),
         Some("grpo") => grpo_command(&args[1..]),
         Some("anchor-exam") => anchor_exam_command(&args[1..]),
         Some("briefings") => briefings_command(&args[1..]),
@@ -413,7 +414,9 @@ fn flags(args: &[String], name: &str) -> Vec<String> {
 fn build_data_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     let documents = read_documents(&resources)?;
-    run::build_data_command(&resources, &documents)
+    let benchmark =
+        flag(args, "--benchmark-file").unwrap_or_else(|| datasets::BENCHMARK_FILE.to_string());
+    run::build_data_command(&resources, &documents, &benchmark)
 }
 
 fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {

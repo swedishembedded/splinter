@@ -302,14 +302,50 @@ pub fn transfer_command(
     Ok(())
 }
 
+/// Freeze `file`: pin its content in the ledger beside it, so a later run that
+/// would write or score against other content under its name is refused.
+pub fn pin_command(file: &Path) -> anyhow::Result<()> {
+    let name = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("{}: not a file name", file.display()))?;
+    let ledger = splinter_sdk::data::frozen::Ledger::at(file.with_file_name("FROZEN.json"));
+    let status = ledger.pin(name, &std::fs::read(file)?)?;
+    println!("{name}: {status:?}, frozen in {}", ledger.path().display());
+    Ok(())
+}
+
+/// Refuse a frozen file whose content is no longer what was frozen: an exam
+/// is only ever scored against the questions it was frozen with. A file that
+/// is not frozen yet is allowed, with a note.
+pub fn ensure_unchanged(file: &Path) -> anyhow::Result<()> {
+    use splinter_sdk::data::frozen::{Ledger, Status};
+    let name = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("{}: not a file name", file.display()))?;
+    let ledger = Ledger::at(file.with_file_name("FROZEN.json"));
+    if ledger.check(name, &std::fs::read(file)?)? == Status::New {
+        eprintln!(
+            "note: {} is not frozen; `pin` it before any arm is scored against it",
+            file.display()
+        );
+    }
+    Ok(())
+}
+
 /// Build the transfer datasets from the checked results, and prove with the
 /// trainer's own parsers that it would read what was written.
-pub fn build_data_command(resources: &Path, documents: &[Document]) -> anyhow::Result<()> {
+pub fn build_data_command(
+    resources: &Path,
+    documents: &[Document],
+    benchmark_file: &str,
+) -> anyhow::Result<()> {
     let results = crate::transfer::read_results(&resources.join("transfer").join("results.jsonl"))?;
     let principles = read_principles(resources)?;
     let built = crate::datasets::build(&results, &principles, documents);
     let dir = resources.join("datasets");
-    crate::datasets::write_all(&built, &dir)?;
+    crate::datasets::write_all(&built, &dir, benchmark_file)?;
     let chat = splinter_sdk::model::train::validate_dataset(&dir.join("sft-transfer.jsonl"))?;
     let pairs = splinter_sdk::model::train::validate_preference_dataset(
         &dir.join("preference-transfer.jsonl"),
@@ -439,6 +475,7 @@ pub struct TransferExam {
 
 /// Ask one model every benchmark question, in both modes, graded by the rules.
 pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow::Result<()> {
+    ensure_unchanged(&e.benchmark)?;
     let questions = crate::datasets::read_benchmark(&e.benchmark)?;
     let system = if e.examples.is_empty() {
         e.framing.system(crate::respond::SYSTEM).to_string()

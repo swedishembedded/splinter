@@ -79,6 +79,7 @@ pub struct Replies {
 
 /// Have one model write the reply to every briefing, in full.
 pub fn replies_command(r: &Replies) -> anyhow::Result<()> {
+    ensure_unchanged(&r.briefings)?;
     let briefings = crate::reconstruct::read_briefings(&r.briefings)?;
     let answerer = splinter_sdk::model::answer::Answerer::load_with(
         &r.base,

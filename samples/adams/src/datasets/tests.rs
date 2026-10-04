@@ -333,7 +333,7 @@ fn the_files_round_trip_and_the_benchmark_is_readable_as_questions() {
         &docs(),
     );
     let dir = tempfile::tempdir().unwrap();
-    write_all(&built, dir.path()).unwrap();
+    write_all(&built, dir.path(), BENCHMARK_FILE).unwrap();
     assert_eq!(
         read_benchmark(&dir.path().join("benchmark.jsonl")).unwrap(),
         built.benchmark
@@ -510,5 +510,41 @@ fn a_few_shot_block_shows_the_first_n_training_examples_whole_and_nothing_else()
     assert!(
         !one.contains("Example 2."),
         "the second record is not shown"
+    );
+}
+
+#[test]
+fn a_benchmark_that_has_been_written_is_frozen_and_a_changed_one_goes_under_a_new_name() {
+    let (train, bench) = split_principles();
+    let first = build(
+        &[result(&bench, Case::Clear, FIT)],
+        &[train.clone(), bench.clone()],
+        &docs(),
+    );
+    let dir = tempfile::tempdir().unwrap();
+    write_all(&first, dir.path(), BENCHMARK_FILE).unwrap();
+    write_all(&first, dir.path(), BENCHMARK_FILE).unwrap();
+
+    let mut changed = build(
+        &[result(&bench, Case::SurfaceAnalogy, NON_FIT)],
+        &[train, bench],
+        &docs(),
+    );
+    changed.sft.clear();
+    let before = std::fs::read_to_string(dir.path().join("benchmark.jsonl")).unwrap();
+    let err = write_all(&changed, dir.path(), BENCHMARK_FILE)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("frozen") && err.contains("new name"), "{err}");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("benchmark.jsonl")).unwrap(),
+        before,
+        "the frozen benchmark is untouched"
+    );
+    write_all(&changed, dir.path(), "benchmark-v2.jsonl").unwrap();
+    assert!(dir.path().join("benchmark-v2.jsonl").exists());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("benchmark.jsonl")).unwrap(),
+        before
     );
 }

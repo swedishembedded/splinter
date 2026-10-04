@@ -51,6 +51,7 @@
 
 mod corpus;
 mod dataset;
+pub mod frozen;
 pub mod holdout;
 mod render;
 mod replay;

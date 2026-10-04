@@ -20,6 +20,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 splinter-eval = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
