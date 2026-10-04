@@ -123,6 +123,17 @@ pub fn dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
 /// numbered `facts`, in that order; as with [`dataset`], only the tasks of
 /// the newest tenth are put in the task store.
 pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
+    dataset_under(ctx, topic, facts, None)
+}
+
+/// [`dataset_of`], its records opening with `prompt` as the system turn
+/// when one is given, and the manifest naming it.
+pub fn dataset_under(
+    ctx: &Context,
+    topic: &str,
+    facts: &[usize],
+    prompt: Option<&str>,
+) -> DatasetId {
     let n = facts.len();
     let held_out_from = n - (n / 10).max(1);
     let mut records = Vec::new();
@@ -163,6 +174,10 @@ pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
         records,
         excluded: BTreeMap::new(),
         system_prompt: None,
+    };
+    let projection = match prompt {
+        Some(prompt) => projection.with_system_prompt(prompt),
+        None => projection,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }

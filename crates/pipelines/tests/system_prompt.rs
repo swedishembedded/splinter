@@ -18,10 +18,14 @@ mod common;
 
 use std::sync::Arc;
 
+use common::gate::{
+    anchor_file, candidate_on, dataset_under, decide, gate_context, Brain, ANCHOR, FACTS,
+};
 use common::{scratch_context, Scripted};
 use splinter_agent::solve::{Model, SYSTEM_PROMPT};
 use splinter_core::model_ref::ModelRef;
 use splinter_pipelines::ask::ask;
+use splinter_pipelines::release::anchor;
 
 const PERSONA: &str = "You are a surveyor of the old school. Answer as one.";
 
@@ -49,4 +53,38 @@ fn a_model_is_asked_under_its_own_system_prompt_and_another_under_the_default() 
     ask(&ctx, "How do you measure?", None, &assistant).unwrap();
     assert_eq!(policy.systems.lock().unwrap()[0], [PERSONA]);
     assert_eq!(other.systems.lock().unwrap()[0], [SYSTEM_PROMPT]);
+}
+
+#[test]
+fn a_release_answers_under_the_prompt_its_datasets_were_trained_under() {
+    let (scratch, ctx) = gate_context("system-prompt-release", Brain::Honest);
+    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    let facts: Vec<usize> = (0..FACTS).collect();
+    let data = dataset_under(&ctx, "alpha", &facts, Some(PERSONA));
+    let (candidate, _) = candidate_on(&ctx, data, &[ANCHOR, "alpha"]);
+    // What a candidate was trained under is what its datasets say.
+    assert_eq!(
+        ctx.system_prompt_of(&candidate.datasets)
+            .unwrap()
+            .as_deref(),
+        Some(PERSONA)
+    );
+    // Datasets of two people are refused.
+    let other = dataset_under(&ctx, "beta", &facts, Some("You are a mason."));
+    let both = [candidate.datasets[0].clone(), other];
+    assert!(ctx.system_prompt_of(&both).is_err());
+
+    let decided = decide(&ctx, &candidate);
+    assert!(decided.release.is_some(), "{:#?}", decided.gate);
+    // A later command resolves the alias afresh and finds the persona.
+    ctx.add_model(
+        ModelRef::policy_default(),
+        Model::new(
+            Arc::new(Scripted::new(|_| "ok".into())),
+            "scripted/released",
+        ),
+    );
+    let asking = splinter_orchestrator::Context::on(std::sync::Arc::clone(ctx.runtime()));
+    let model = asking.model(&ModelRef::policy_default()).unwrap();
+    assert_eq!(model.system.as_deref(), Some(PERSONA));
 }

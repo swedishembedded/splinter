@@ -326,8 +326,9 @@ impl Projection {
     }
 
     /// The same projection with `prompt` as the first turn of every
-    /// conversation in place of the default, and recorded as the prompt the
-    /// projection trains under.
+    /// conversation in place of the default - inserted where a conversation
+    /// has no system turn - and recorded as the prompt the projection trains
+    /// under.
     #[must_use]
     pub fn with_system_prompt(mut self, prompt: &str) -> Self {
         for record in &mut self.records {
@@ -338,11 +339,10 @@ impl Projection {
                 RecordBody::Preference { prompt, .. } => Some(prompt),
                 _ => None,
             };
-            if let Some(first) = messages
-                .and_then(|m| m.first_mut())
-                .filter(|m| m.role == "system")
-            {
-                first.content = prompt.to_string();
+            let Some(messages) = messages else { continue };
+            match messages.first_mut().filter(|m| m.role == "system") {
+                Some(first) => first.content = prompt.to_string(),
+                None => messages.insert(0, render::message("system", prompt, false)),
             }
         }
         self.system_prompt = Some(prompt.to_string());

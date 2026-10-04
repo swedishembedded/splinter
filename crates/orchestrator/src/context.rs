@@ -94,6 +94,9 @@ pub struct PolicyPin {
     pub release: ReleaseId,
     /// That release's adapter file.
     pub adapter: PathBuf,
+    /// The system prompt the release was trained under, when it is not the
+    /// default ([`Context::system_prompt_of`]).
+    pub system_prompt: Option<String>,
 }
 
 /// The services every command of a process shares: the configuration and
@@ -550,10 +553,12 @@ impl Context {
         let pin = match store.alias(alias)? {
             Some(release) => {
                 let stored = store.get(&release)?;
+                let system_prompt = self.system_prompt_of(&stored.manifest.datasets)?;
                 Some(PolicyPin {
                     alias: alias.to_string(),
                     release,
                     adapter: stored.adapter,
+                    system_prompt,
                 })
             }
             None => None,
@@ -574,10 +579,55 @@ impl Context {
             .drop_loaded(&ModelRef::Policy(alias.to_string()));
     }
 
-    /// The model `reference` names, loaded on first use.
+    /// The system prompt the models trained on `datasets` answer under: the
+    /// one their manifests record, `None` when it is the default. Datasets
+    /// that record different prompts are refused: a model cannot have been
+    /// trained to be two people.
+    pub fn system_prompt_of(
+        &self,
+        datasets: &[splinter_core::dataset::DatasetId],
+    ) -> Result<Option<String>, OrchestratorError> {
+        let store = self.datasets();
+        let mut prompt: Option<String> = None;
+        for id in datasets {
+            let recorded = store.get(id)?.manifest.system_prompt;
+            match (&prompt, recorded) {
+                (_, None) => {}
+                (None, Some(recorded)) => prompt = Some(recorded),
+                (Some(held), Some(recorded)) if *held != recorded => {
+                    return Err(OrchestratorError::Refused(format!(
+                        "dataset {id} was written under another system prompt than the others: a \
+                         model trained on both would be asked under neither"
+                    )));
+                }
+                (Some(_), Some(_)) => {}
+            }
+        }
+        Ok(prompt)
+    }
+
+    /// The model `reference` names, loaded on first use, answering under the
+    /// system prompt its release was trained under.
     pub fn model(&self, reference: &ModelRef) -> Result<Model, OrchestratorError> {
         let (adapter, selection) = self.resolve(reference)?;
-        self.runtime.model(reference, adapter, &selection)
+        let model = self.runtime.model(reference, adapter, &selection)?;
+        self.with_release_prompt(reference, model)
+    }
+
+    /// `model`, answering under the system prompt of the release
+    /// `reference` names, if it names one that was trained under another
+    /// than the default.
+    fn with_release_prompt(
+        &self,
+        reference: &ModelRef,
+        mut model: Model,
+    ) -> Result<Model, OrchestratorError> {
+        if let ModelRef::Policy(alias) = reference {
+            if let Some(prompt) = self.policy_pin(alias)?.and_then(|pin| pin.system_prompt) {
+                model.system = Some(prompt);
+            }
+        }
+        Ok(model)
     }
 
     /// The model `reference` names, sampling as `sampling` says; `None`
@@ -590,7 +640,9 @@ impl Context {
     ) -> Result<Option<Model>, OrchestratorError> {
         let (adapter, selection) = self.resolve(reference)?;
         self.runtime
-            .resampled(reference, adapter, &selection, sampling)
+            .resampled(reference, adapter, &selection, sampling)?
+            .map(|model| self.with_release_prompt(reference, model))
+            .transpose()
     }
 
     /// Reports a finished stage to the progress receiver, if any.

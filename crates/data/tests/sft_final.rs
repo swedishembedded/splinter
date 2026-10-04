@@ -325,3 +325,35 @@ fn a_projection_opens_its_records_with_a_persons_prompt_and_the_manifest_says_so
     assert_eq!(manifest_of(&written.path)["system_prompt"], PERSONA);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_prompt_is_inserted_where_a_conversation_has_no_system_turn() {
+    use splinter_core::chat::WireMessage;
+    let turn = |role: &str, content: &str, train: bool| WireMessage {
+        role: role.into(),
+        content: content.into(),
+        tool_calls: Vec::new(),
+        tool_call_id: None,
+        train,
+    };
+    let exp = experience();
+    let mut corpus = Corpus::new();
+    corpus
+        .insert(
+            exp.clone(),
+            vec![verdict(&exp, Outcome::Pass, Strength::Formal)],
+        )
+        .unwrap();
+    let mut projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
+    if let RecordBody::Chat { messages } = &mut projection.records[0].body {
+        messages.remove(0);
+        assert_eq!(messages[0].role, "user");
+    }
+    let projection = projection.with_system_prompt("You are a surveyor.");
+    let RecordBody::Chat { messages } = &projection.records[0].body else {
+        panic!("a chat record");
+    };
+    let roles: Vec<&str> = messages.iter().map(|m| m.role.as_str()).collect();
+    assert_eq!(roles, ["system", "user", "assistant"]);
+    assert_eq!(messages[0], turn("system", "You are a surveyor.", false));
+}
