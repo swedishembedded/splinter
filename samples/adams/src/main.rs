@@ -19,12 +19,14 @@
 //! ```text
 //! identify   is this author line and year the Samuel Adams being modelled
 //! corpus     parse the fetched volumes of Cushing's edition into curated documents
+//! freeze     split the documents once, before any training: train, exam, temporal
 //! ```
 
 mod attribution;
 mod corpus;
 mod curate;
 mod document;
+mod split;
 
 use document::{Date, Identity, Period};
 
@@ -33,7 +35,8 @@ fn main() -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("identify") => identify_command(&args[1..]),
         Some("corpus") => corpus_command(&args[1..]),
-        _ => anyhow::bail!("usage: splinter-adams <identify|corpus> ..."),
+        Some("freeze") => freeze_command(&args[1..]),
+        _ => anyhow::bail!("usage: splinter-adams <identify|corpus|freeze> ..."),
     }
 }
 
@@ -154,4 +157,80 @@ fn print_corpus_report(
         *reasons.entry(s.reason).or_default() += 1;
     }
     println!("skipped because: {reasons:?}");
+}
+
+/// The documents the corpus command wrote.
+fn read_documents(resources: &std::path::Path) -> anyhow::Result<Vec<curate::Document>> {
+    let path = resources.join("curated").join("documents.jsonl");
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("{}: {e}; run the corpus command first", path.display()))?;
+    text.lines()
+        .map(|line| {
+            serde_json::from_str(line).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
+        })
+        .collect()
+}
+
+/// Split the corpus into train, exam and temporal, write what was held out
+/// with its digest, and refuse to replace a freeze that says something else.
+fn freeze_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(
+        flag(args, "--resources").ok_or_else(|| anyhow::anyhow!("--resources DIR is required"))?,
+    );
+    let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
+    let exam_percent: u64 = flag(args, "--exam-percent").map_or(Ok(20), |s| s.parse())?;
+    anyhow::ensure!(exam_percent <= 100, "--exam-percent is a percentage");
+    let documents = read_documents(&resources)?;
+    let assignments = split::assign(&documents, seed, exam_percent);
+    let leaks = split::leaks(&documents, &assignments);
+    anyhow::ensure!(
+        leaks.is_empty(),
+        "{} training documents share text with held-out ones, first: {:?}",
+        leaks.len(),
+        leaks[0]
+    );
+    let manifest = split::manifest(&documents, &assignments, seed, exam_percent);
+    let digest = split::digest(&manifest);
+
+    let dir = resources.join("frozen");
+    let recorded = dir.join("FROZEN.blake3");
+    if let Ok(previous) = std::fs::read_to_string(&recorded) {
+        anyhow::ensure!(previous.trim() == digest, "a frozen split already exists ({}) and this run would make {digest}; the exam is never regenerated", previous.trim());
+    }
+    std::fs::create_dir_all(&dir)?;
+    write_atomic(
+        &dir.join("split.json"),
+        serde_json::to_string_pretty(&manifest)?.as_bytes(),
+    )?;
+    write_atomic(
+        &dir.join("assignments.jsonl"),
+        assignment_lines(&assignments)?.as_bytes(),
+    )?;
+    write_atomic(&recorded, format!("{digest}\n").as_bytes())?;
+    println!("frozen {digest}");
+    println!(
+        "train: {}  exam: {}  temporal: {}",
+        manifest.train,
+        manifest.exam.len(),
+        manifest.temporal.len()
+    );
+    Ok(())
+}
+
+fn assignment_lines(assignments: &[split::Assignment]) -> anyhow::Result<String> {
+    let mut text = String::new();
+    for a in assignments {
+        text.push_str(&serde_json::to_string(
+            &serde_json::json!({"doc_id": a.doc_id, "family": a.family, "split": a.split}),
+        )?);
+        text.push('\n');
+    }
+    Ok(text)
+}
+
+fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
+    let tmp = path.with_extension("part");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
 }

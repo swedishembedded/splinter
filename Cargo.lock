@@ -4015,9 +4015,11 @@ name = "splinter-adams"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "regex",
  "serde",
  "serde_json",
+ "splinter-sdk",
 ]
 
 [[package]]
