@@ -16,6 +16,7 @@ use splinter_core::release::ReleaseId;
 use splinter_core::role::Role;
 use splinter_knowledge::survey::Survey;
 
+use crate::author::Authored;
 use crate::critique::Critiqued;
 use crate::curriculum::frontier::Frontier;
 use crate::curriculum::quota::Selected;
@@ -110,6 +111,8 @@ pub struct LearnReport {
     /// The teach stage: the teacher's graded solves of the tasks never
     /// solved.
     pub teach: Option<Taught>,
+    /// The author stage: the writer's own passages put forward as answers.
+    pub authored: Option<Authored>,
     /// The frontier stage: pass@k, and the tasks kept.
     pub frontier: Option<Frontier>,
     /// The variants stage: the tasks kept, asked in other words.

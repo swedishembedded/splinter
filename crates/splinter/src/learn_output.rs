@@ -141,6 +141,15 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
             field("critiqued"),
             field("repaired")
         ),
+        "author" => summary["skipped"].as_str().map_or_else(
+            || {
+                format!(
+                    "{} of {} passage(s) of the writer's own words fit their messages, {} refused",
+                    summary["kept"], summary["tasks"], summary["refused"]
+                )
+            },
+            |why| format!("skipped: {why}"),
+        ),
         "teach" => format!(
             "{} task(s) never solved closed-book; the teacher's answer verified for {}",
             summary["solve"]["solved"], summary["verify"]["passed"]

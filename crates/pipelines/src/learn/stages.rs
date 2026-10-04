@@ -30,6 +30,7 @@ use std::collections::BTreeMap;
 
 use super::auto_steps;
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
+use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
 use crate::curriculum::frontier::{select_frontier, PassAtK};
@@ -153,6 +154,12 @@ impl<'a> LearnState<'a> {
         self.learn.deadline
     }
 
+    /// Whether some kind of the run has the writer's own passage as its
+    /// reference, which the author stage puts forward as the answer.
+    fn authors(&self) -> bool {
+        self.kinds.iter().any(|name| kind_authors(name))
+    }
+
     fn uses_frontier(&self) -> bool {
         self.frontier.is_some() && self.report.solve.is_some()
     }
@@ -223,6 +230,11 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
                 .ignoring_budget(),
         )
         .then(FnStage::new("teach", teach_stage))
+        .then(
+            FnStage::new("author", author_stage)
+                .when(LearnState::authors)
+                .ignoring_budget(),
+        )
         .then(
             FnStage::new("frontier", frontier_stage)
                 .when(LearnState::uses_frontier)
@@ -385,6 +397,52 @@ fn teach_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         st.sets.push(taught.solve.experience_set.clone());
     }
     st.report.teach = Some(taught);
+    Ok(StageEnd::done(summary))
+}
+
+/// The writer's own passages as answers, for the tasks whose reference is one,
+/// each kept if a judge of fit says it is a natural reply to its message. The
+/// messages were written by the generator, so it is not the judge.
+fn author_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+    // The stage adds to what the teacher teaches: without a judge of fit it
+    // does nothing and says why, and the run goes on.
+    let skipped = |why: String| Authored {
+        tasks: 0,
+        kept: 0,
+        refused: 0,
+        undecided: 0,
+        experience_set: None,
+        skipped: Some(why),
+    };
+    let authored = if st.learn.judge == st.learn.generator {
+        skipped(format!(
+            "the judge {} also wrote the messages whose fit it would judge: name another model \
+             for the judge",
+            st.learn.judge
+        ))
+    } else {
+        match author(
+            ctx,
+            &AuthorRequest {
+                task_set: st.task_set()?,
+                judge: st.learn.judge,
+            },
+            &run.cancel_token(),
+        ) {
+            Ok(authored) => authored,
+            Err(OrchestratorError::Refused(why)) => skipped(why),
+            Err(e) => return Err(e),
+        }
+    };
+    if let Some(set) = &authored.experience_set {
+        // Ahead of the teacher's answers: for one message the writer's own
+        // words are kept and a teacher's paraphrase of them is the duplicate.
+        st.sets.insert(0, set.clone());
+        // A fit judge's verdict is the only one these experiences carry.
+        st.min_strength = Strength::Judged;
+    }
+    let summary = to_value(&authored)?;
+    st.report.authored = Some(authored);
     Ok(StageEnd::done(summary))
 }
 

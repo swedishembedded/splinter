@@ -42,6 +42,7 @@
 #![warn(missing_docs)]
 
 pub mod ask;
+pub mod author;
 pub mod budget;
 pub mod critique;
 pub mod curriculum;

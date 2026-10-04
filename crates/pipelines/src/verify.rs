@@ -103,6 +103,17 @@ const MAX_CALIBRATION_TASKS: usize = 24;
 pub struct Judge {
     model: Model,
     calibration: Calibration,
+    judging: Judging,
+}
+
+/// What a judge is asked about an answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Judging {
+    /// Whether it gives what the task's reference says.
+    Reference,
+    /// Whether it is a natural reply to the task's instruction; no
+    /// reference is shown ([`JudgeVerifier::fit`]).
+    Fit,
 }
 
 impl Judge {
@@ -118,7 +129,11 @@ impl Judge {
                  Run `splinter judge calibrate <LABELLED-FILE> --judge {reference}` first"
             ))
         })?;
-        Ok(Self { model, calibration })
+        Ok(Self {
+            model,
+            calibration,
+            judging: Judging::Reference,
+        })
     }
 
     /// The judge `reference` names, with a calibration it can be trusted on:
@@ -134,8 +149,20 @@ impl Judge {
         reference: &ModelRef,
         tasks: &[Task],
     ) -> Result<Self, OrchestratorError> {
+        Self::calibrated_for(ctx, reference, tasks, Judging::Reference)
+    }
+
+    /// [`Judge::calibrated`] for what `judging` asks: a fit judge is
+    /// measured on the same controls - a task's own reference put forward as
+    /// the reply, against another family's - under a calibration of its own.
+    pub fn calibrated_for(
+        ctx: &Context,
+        reference: &ModelRef,
+        tasks: &[Task],
+        judging: Judging,
+    ) -> Result<Self, OrchestratorError> {
         let model = ctx.model(reference)?;
-        let verifier = judge_verifier(ctx, &model);
+        let verifier = judge_verifier_for(ctx, &model, judging);
         let minimum = ctx.config().min_calibration_controls;
         ctx.workspace().refresh()?;
         let stored = latest_calibration(ctx, &verifier.producer())?.filter(|c| c.n >= minimum);
@@ -162,7 +189,11 @@ impl Judge {
                 calibration
             }
         };
-        let judge = Self { model, calibration };
+        let judge = Self {
+            model,
+            calibration,
+            judging,
+        };
         if !judge.trusted() {
             let c = &judge.calibration;
             return Err(OrchestratorError::Refused(format!(
@@ -205,9 +236,9 @@ impl Judge {
         precise(self.calibration.precision_pass) && precise(self.calibration.precision_fail)
     }
 
-    fn verifier(&self, ctx: &Context) -> Result<Box<dyn Verifier>, OrchestratorError> {
+    pub(crate) fn verifier(&self, ctx: &Context) -> Result<Box<dyn Verifier>, OrchestratorError> {
         Ok(Box::new(CalibratedJudge::new(
-            judge_verifier(ctx, &self.model),
+            judge_verifier_for(ctx, &self.model, self.judging),
             self.calibration.clone(),
             DEFAULT_MIN_PRECISION,
         )?))
@@ -225,7 +256,17 @@ pub fn kind_needs_judge(kind: &str) -> bool {
 
 /// The judged verifier on `model`.
 pub(crate) fn judge_verifier(ctx: &Context, model: &Model) -> JudgeVerifier {
-    JudgeVerifier::new(model.clone(), ctx.handle(), DEFAULT_JUDGE_DEADLINE)
+    judge_verifier_for(ctx, model, Judging::Reference)
+}
+
+/// The verifier of `judging` on `model`.
+fn judge_verifier_for(ctx: &Context, model: &Model, judging: Judging) -> JudgeVerifier {
+    match judging {
+        Judging::Reference => {
+            JudgeVerifier::new(model.clone(), ctx.handle(), DEFAULT_JUDGE_DEADLINE)
+        }
+        Judging::Fit => JudgeVerifier::fit(model.clone(), ctx.handle(), DEFAULT_JUDGE_DEADLINE),
+    }
 }
 
 /// The pointer that names the latest calibration of the judge `producer`.

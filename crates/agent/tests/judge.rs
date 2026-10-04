@@ -200,6 +200,47 @@ fn the_rubric_accepts_an_answer_that_quotes_or_restates_the_reference() {
 }
 
 #[test]
+fn a_fit_judge_reads_the_message_and_the_passage_and_never_a_reference() {
+    // The passage is the writer's own words put forward as the reply to a
+    // message: is it a natural reply to it? There is nothing to compare with.
+    let rt = runtime();
+    let model = ScriptedJudge::new(|prompt| {
+        if prompt.contains("PASSAGE-FIVE") {
+            "PASS\nit answers the message"
+        } else {
+            "FAIL\nit is about something else"
+        }
+    });
+    let fit = JudgeVerifier::fit(
+        Model::new(model.clone(), JUDGE),
+        rt.handle().clone(),
+        Duration::from_secs(60),
+    );
+    assert_eq!(fit.strength(), Strength::Judged);
+    assert_ne!(
+        fit.producer().name,
+        judge(model.clone(), &rt).producer().name,
+        "a fit judge is measured on its own"
+    );
+    let task = sum_task(Environment::closed_book(), vec![reference()]);
+    let (verdict, _) = outcome(&fit, &task, &experience(&task, "PASSAGE-FIVE", SOLVER));
+    assert_eq!(verdict, Outcome::Pass);
+    let (verdict, _) = outcome(
+        &fit,
+        &task,
+        &experience(&task, "something unrelated", SOLVER),
+    );
+    assert_eq!(verdict, Outcome::Fail);
+    let prompts = model.prompts.lock().unwrap();
+    assert!(prompts[0].contains("What is 2 + 3?") && prompts[0].contains("PASSAGE-FIVE"));
+    assert!(
+        !prompts[0].contains("REFERENCE-5") && !prompts[0].contains("REFERENCE:"),
+        "the reference is not shown: {}",
+        prompts[0]
+    );
+}
+
+#[test]
 fn the_judge_called_inside_an_async_task_refuses_instead_of_panicking() {
     let rt = runtime();
     let judge = judge(ScriptedJudge::new(grades_five), &rt);

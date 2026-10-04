@@ -386,3 +386,81 @@ fn a_dialogue_whose_reply_talks_about_the_material_teaches_nothing() {
     let text = std::fs::read_to_string(&dataset.path).unwrap();
     assert!(!text.contains("According to the material"));
 }
+
+/// [`judge`], which also says whether a passage is a natural reply to a
+/// message: the study message to the study passage and the thrift one to the
+/// thrift passage.
+fn judge_of_reference_and_fit() -> Scripted {
+    let reference = judge();
+    Scripted::new(move |prompt| {
+        if !prompt.contains("MESSAGE:") {
+            return reference_reply(&reference, prompt);
+        }
+        let message = prompt
+            .split("MESSAGE:\\n")
+            .nth(1)
+            .and_then(|t| t.split("\\n\\nPASSAGE:").next())
+            .unwrap_or_default();
+        let passage = prompt.split("PASSAGE:\\n").nth(1).unwrap_or_default();
+        let fits = (message.contains("study") && passage.contains("study"))
+            || (message.contains("thrift") && passage.contains("expense"));
+        if fits {
+            "PASS\nit answers the message".into()
+        } else {
+            "FAIL\nit does not".into()
+        }
+    })
+}
+
+/// What `reference` says of `prompt`, asked as a model is asked.
+fn reference_reply(reference: &Scripted, prompt: &str) -> String {
+    let reference_text = prompt
+        .split("REFERENCE:\\n")
+        .nth(1)
+        .and_then(|t| t.split("\\n\\nANSWER:").next())
+        .unwrap_or_default();
+    let answer = prompt.split("ANSWER:\\n").nth(1).unwrap_or_default();
+    let _ = reference;
+    let shared = ["study", "expense"]
+        .iter()
+        .any(|key| reference_text.contains(key) && answer.contains(key));
+    if shared {
+        "PASS\nit gives the advice".into()
+    } else {
+        "FAIL\nit does not".into()
+    }
+}
+
+#[test]
+fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
+    let (learned, _scratch, _ctx) = attempt(
+        "converse-learn-authored",
+        "The pen fixes what the memory lets slip, so write down what you have read.",
+        Some(judge_of_reference_and_fit()),
+        None,
+    );
+    let Learned::Ran(ran) = learned.unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let authored = ran.report.authored.as_ref().unwrap();
+    assert_eq!((authored.tasks, authored.kept), (2, 2), "{authored:#?}");
+    let dataset = ran.report.dataset.as_ref().unwrap();
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    let records: Vec<serde_json::Value> = text
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    // One record per message: where the writer's own passage fits it, the
+    // passage is kept and the teacher's paraphrase of it is the duplicate.
+    assert_eq!(records.len(), 2, "{dataset:#?}");
+    let single_turn: Vec<&serde_json::Value> = records
+        .iter()
+        .filter(|r| r["messages"].as_array().unwrap().len() == 3)
+        .collect();
+    assert_eq!(single_turn.len(), 2, "no dialogue: {records:#?}");
+    let answers: Vec<&str> = single_turn
+        .iter()
+        .map(|r| r["messages"][2]["content"].as_str().unwrap())
+        .collect();
+    assert!(answers.contains(&PASSAGE) && answers.contains(&THRIFT_PASSAGE));
+}

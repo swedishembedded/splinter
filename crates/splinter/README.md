@@ -213,6 +213,19 @@ or asks it to confirm it; it brings its own case or objection. One dialogue in
 eight ends by asking for a specific the exchange has not given, so that the
 student also sees the writer decline to invent one.
 
+The `author` stage teaches the writer's own voice. For the kinds whose
+reference is a passage the writer wrote (`advise`, `converse`), the task's
+message was written for that passage, so the passage itself, word for word, is
+the answer to train on - instruction backtranslation: it has the writer's
+diction and reasoning, which a teacher's paraphrase does not. It is recorded as
+the source's answer, not a model's, and a judge of fit (the judge role, another
+model than the generator that wrote the messages, measured like any judge on
+controls from the tasks' own passages) keeps only the pairs where the passage is
+a natural reply to its message. For one message the writer's passage is kept and
+a teacher's dialogue on it is the duplicate; where it does not fit, the
+dialogue stands. With no usable judge of fit the stage says why and the run goes
+on.
+
 Task generation is bounded by the budget and spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,
 parts are visited in a stable order that does not follow their names, and the

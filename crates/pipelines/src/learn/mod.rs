@@ -54,6 +54,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use crate::author::kind_authors;
 use crate::curriculum::frontier::PassAtK;
 use crate::curriculum::quota::Quotas;
 
@@ -69,9 +70,9 @@ use splinter_orchestrator::roles;
 use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 15] = [
-    "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "frontier", "variants",
-    "critique", "select", "dataset", "train", "exam", "release",
+pub const STAGES: [&str; 16] = [
+    "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "author", "frontier",
+    "variants", "critique", "select", "dataset", "train", "exam", "release",
 ];
 
 /// How many passes a `learn` run makes over what it has learned when its
@@ -186,6 +187,9 @@ pub fn learn(
         (None, None) => None,
     };
     let planner = request.plan.then(|| assignments.get(Role::Planner).clone());
+    // Whether the named kinds include one whose reference is the writer's own
+    // words, which the author stage puts forward as the answer.
+    let authors = kinds.iter().any(|name| kind_authors(name));
     let mut roles_used = BTreeMap::new();
     for (role, model) in [
         (Role::Policy, &policy),
@@ -218,6 +222,7 @@ pub fn learn(
                 .filter(|stage| !(request.no_release && *stage == "release"))
                 .filter(|stage| !(!request.plan && *stage == "plan"))
                 .filter(|stage| !(!measures_frontier && *stage == "frontier"))
+                .filter(|stage| !(!request.plan && !authors && *stage == "author"))
                 .filter(|stage| {
                     !(request.distill && ["solve", "verify", "critique"].contains(stage))
                 })

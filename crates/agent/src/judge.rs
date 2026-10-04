@@ -33,6 +33,9 @@ use crate::solve::{solve, Model, SolveOptions};
 /// The producer name of a judge's verdicts, before its model identity.
 pub const PRODUCER: &str = "splinter-agent/judge";
 
+/// The producer name of a fit judge's verdicts, before its model identity.
+pub const FIT_PRODUCER: &str = "splinter-agent/judge-fit";
+
 /// The judge's version: bumped whenever its prompt or reply parsing
 /// changes.
 pub const VERSION: &str = "3";
@@ -55,11 +58,32 @@ the question, or only says that it cannot tell: such an answer gives nothing the
 Reply with one word on the first line - PASS, FAIL, or ABSTAIN when you cannot tell - and give \
 your reason on the next line.";
 
+/// What the judge is told when it judges fit: a message and a passage, and
+/// nothing to compare the passage with.
+const FIT_INSTRUCTIONS: &str = "You see a message someone sent to a writer and a passage the \
+writer wrote. Judge whether the passage is a natural, direct reply the writer could have given \
+to that message: it addresses what the message asks or describes, and needs nothing the message \
+does not give. PASS such a passage. FAIL a passage that is about something else, answers a \
+different question, or only makes sense with context the message lacks. Reply with one word on \
+the first line - PASS, FAIL, or ABSTAIN when you cannot tell - and give your reason on the next \
+line.";
+
+/// What a judge is asked about an answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Judging {
+    /// Whether the answer gives what the task's reference says.
+    Reference,
+    /// Whether the answer is a natural reply to the task: for a passage a
+    /// writer wrote, put forward as the reply to a message written for it.
+    Fit,
+}
+
 /// A model grading answers closed-book. See the module documentation.
 pub struct JudgeVerifier {
     model: Model,
     runtime: Handle,
     deadline: Duration,
+    judging: Judging,
 }
 
 impl JudgeVerifier {
@@ -73,6 +97,19 @@ impl JudgeVerifier {
             model,
             runtime,
             deadline,
+            judging: Judging::Reference,
+        }
+    }
+
+    /// A judge of fit on `model`: it reads the task's instruction and the
+    /// answer as the writer's reply to it, never a reference, and says whether
+    /// the answer is a natural reply. Its verdicts carry a producer of their
+    /// own, so it is measured on its own.
+    #[must_use]
+    pub fn fit(model: Model, runtime: Handle, deadline: Duration) -> Self {
+        Self {
+            judging: Judging::Fit,
+            ..Self::new(model, runtime, deadline)
         }
     }
 
@@ -85,7 +122,13 @@ impl JudgeVerifier {
 
 /// The prompt the judge is asked: the instruction, the task, its reference
 /// and oracle material, and the answer.
-fn prompt(task: &Task, answer: &str) -> String {
+fn prompt(task: &Task, answer: &str, judging: Judging) -> String {
+    if judging == Judging::Fit {
+        return format!(
+            "{FIT_INSTRUCTIONS}\n\nMESSAGE:\n{}\n\nPASSAGE:\n{answer}\n",
+            task.instruction
+        );
+    }
     let references: Vec<&str> = task
         .privileged
         .iter()
@@ -126,8 +169,12 @@ fn parse_reply(reply: &str) -> Option<(Outcome, String)> {
 
 impl Verifier for JudgeVerifier {
     fn producer(&self) -> Producer {
+        let name = match self.judging {
+            Judging::Reference => PRODUCER,
+            Judging::Fit => FIT_PRODUCER,
+        };
         Producer {
-            name: format!("{PRODUCER}:{}", self.model.identity),
+            name: format!("{name}:{}", self.model.identity),
             version: VERSION.into(),
         }
     }
@@ -160,7 +207,7 @@ impl Verifier for JudgeVerifier {
                 json!({ "judge": self.model.identity, "output": null }),
             ));
         };
-        let prompt = prompt(task, answer);
+        let prompt = prompt(task, answer, self.judging);
         let question = Task::new(
             JUDGE_TASK_KIND,
             vec![],
