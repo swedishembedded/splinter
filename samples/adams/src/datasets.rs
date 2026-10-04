@@ -207,11 +207,6 @@ impl TransferTask {
                 .collect(),
         }
     }
-
-    /// Whether `answer` keeps every rule.
-    pub fn is_correct(&self, answer: &str, docs: &[Document]) -> bool {
-        self.verdict(answer, docs).correct
-    }
 }
 
 impl splinter_sdk::model::exam::Question for TransferTask {

@@ -40,7 +40,9 @@ pub trait Question {
 /// checks that verdict is made of, each true when the answer passes it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Verdict {
+    /// Whether the answer is right.
     pub correct: bool,
+    /// Each named check and whether the answer passed it.
     pub checks: Vec<(String, bool)>,
 }
 

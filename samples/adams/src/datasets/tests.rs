@@ -285,28 +285,36 @@ fn a_benchmark_question_is_graded_by_the_rules_not_by_a_judge() {
         .iter()
         .find(|t| t.mode == Mode::Retrieval)
         .unwrap();
-    assert!(retrieval.is_correct(FIT, &d));
+    assert!(retrieval.verdict(FIT, &d).correct);
     assert!(
-        !retrieval.is_correct(NON_FIT, &d),
+        !retrieval.verdict(NON_FIT, &d).correct,
         "wrong verdict for a fit"
     );
-    assert!(!retrieval.is_correct(
-        &FIT.replace(
-            "Let the Committee write to every Town",
-            "Liberty is the first gift of nature to every citizen"
-        ),
-        &d
-    ));
+    assert!(
+        !retrieval
+            .verdict(
+                &FIT.replace(
+                    "Let the Committee write to every Town",
+                    "Liberty is the first gift of nature to every citizen"
+                ),
+                &d
+            )
+            .correct
+    );
     let internalized = built
         .benchmark
         .iter()
         .find(|t| t.mode == Mode::Internalized)
         .unwrap();
     assert!(
-        !internalized.is_correct(FIT, &d),
+        !internalized.verdict(FIT, &d).correct,
         "with no passages shown, quoting him is fabrication"
     );
-    assert!(internalized.is_correct(&internalized_of(&bench, FIT), &d));
+    assert!(
+        internalized
+            .verdict(&internalized_of(&bench, FIT), &d)
+            .correct
+    );
 }
 
 fn internalized_of(p: &Principle, text: &str) -> String {
