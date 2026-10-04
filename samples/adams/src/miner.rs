@@ -270,45 +270,8 @@ pub fn mine_all(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
-
-    use splinter_sdk::agent::solve::Model;
-    use splinter_sdk::agent::sven::model::{
-        CompletionRequest, ModelProvider, ResponseEvent, ResponseStream,
-    };
-
     use super::*;
-    use crate::document::{Authorship, Date, Period};
-
-    fn doc(id: &str, year: u16, recipient: &str, body: &str) -> Document {
-        Document {
-            schema: crate::curate::SCHEMA,
-            id: id.into(),
-            source_id: "cushing-1".into(),
-            heading: format!("TO {}.", recipient.to_uppercase()),
-            recipient: Some(recipient.into()),
-            note: "[MS.]".into(),
-            date: Date {
-                year,
-                month: None,
-                day: None,
-            },
-            period: Period::of(year),
-            authorship: Authorship::DraftInHand,
-            authorship_confidence: 0.8,
-            authorship_basis: "test".into(),
-            temporal_holdout: false,
-            body: body.into(),
-        }
-    }
-
-    fn words(prefix: &str, n: usize) -> String {
-        (0..n)
-            .map(|i| format!("{prefix}{i}"))
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
+    use crate::testkit::{doc, helper, words};
 
     fn corpus(n: usize) -> (Vec<Document>, HashSet<String>) {
         let docs: Vec<Document> = (0..n)
@@ -333,56 +296,11 @@ mod tests {
         (docs, allowed)
     }
 
-    /// A model that answers each request with the next reply of its script,
-    /// the last one repeating, and keeps what it was sent.
-    struct Scripted {
-        replies: Mutex<VecDeque<String>>,
-        seen: Mutex<Vec<String>>,
-    }
-
-    #[async_trait::async_trait]
-    impl ModelProvider for Scripted {
-        fn name(&self) -> &str {
-            "scripted"
-        }
-        fn model_name(&self) -> &str {
-            "scripted-1"
-        }
-        async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
-            self.seen
-                .lock()
-                .unwrap()
-                .push(format!("{:?}", req.messages));
-            let mut replies = self.replies.lock().unwrap();
-            let reply = if replies.len() > 1 {
-                replies.pop_front()
-            } else {
-                replies.front().cloned()
-            }
-            .unwrap_or_default();
-            Ok(Box::pin(futures::stream::iter(vec![
-                Ok(ResponseEvent::TextDelta(reply)),
-                Ok(ResponseEvent::Done),
-            ])))
-        }
-    }
-
     /// The bundle that holds document `id`: bundles are ordered by recipient.
     fn holding<'a>(made: &'a [Bundle], id: &str) -> &'a Bundle {
         made.iter()
             .find(|b| b.documents.iter().any(|d| d.id == id))
             .unwrap()
-    }
-
-    fn helper(replies: &[&str]) -> (Helper, Arc<Scripted>) {
-        let provider = Arc::new(Scripted {
-            replies: Mutex::new(replies.iter().map(|s| s.to_string()).collect()),
-            seen: Mutex::new(Vec::new()),
-        });
-        (
-            Helper::with_model(Model::new(provider.clone(), "scripted")),
-            provider,
-        )
     }
 
     #[test]
@@ -453,7 +371,7 @@ mod tests {
         let proposals = mine(&h, holding(&made, "d00")).unwrap();
         assert_eq!(proposals.len(), 1);
         assert_eq!(proposals[0].support.len(), 2);
-        let sent = provider.seen.lock().unwrap().join(" ");
+        let sent = provider.sent();
         assert!(
             sent.contains("d00") && sent.contains("t0x5"),
             "the helper must see ids and text"

@@ -114,7 +114,7 @@ fn gist(quote: &str) -> String {
 }
 
 /// Whether `needle` occurs in `haystack` as consecutive words.
-fn occurs(haystack: &[String], needle: &[String]) -> bool {
+pub(crate) fn occurs(haystack: &[String], needle: &[String]) -> bool {
     !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
 }
 

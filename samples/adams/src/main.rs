@@ -25,18 +25,25 @@
 //! exam       ask one model (base, or base plus adapter) every exam question
 //! report     the before-and-after table, with the paired sign test
 //! principles ask a helper model for principles; keep what the documents bear out
+//! transfer   design a present-day scenario per principle and have the helper answer it, checked
 //! ```
 
 mod attribution;
 mod corpus;
 mod curate;
 mod document;
+mod grounding;
 mod helper;
 mod miner;
 mod principles;
+mod respond;
 mod run;
+mod scenario;
 mod split;
 mod tasks;
+#[cfg(test)]
+mod testkit;
+mod transfer;
 
 use document::{Date, Identity, Period};
 
@@ -51,8 +58,9 @@ fn main() -> anyhow::Result<()> {
         Some("exam") => exam_command(&args[1..]),
         Some("report") => report_command(&args[1..]),
         Some("principles") => principles_command(&args[1..]),
+        Some("transfer") => transfer_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles> ..."
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer> ..."
         ),
     }
 }
@@ -322,6 +330,29 @@ fn principles_command(args: &[String]) -> anyhow::Result<()> {
     run::principles_command(
         &resources,
         &documents,
+        &run::Mine {
+            served,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        },
+    )
+}
+
+/// Design and answer a scenario for every principle on the helper at `--url`.
+fn transfer_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    let key = std::env::var("BRAIN_API_KEY")
+        .map_err(|_| anyhow::anyhow!("BRAIN_API_KEY is not set: the key `brain serve` printed"))?;
+    let url = flag(args, "--url").unwrap_or_else(|| "http://127.0.0.1:8788/v1".to_string());
+    let model = need(args, "--model")?;
+    let served = helper::Served {
+        base_url: &url,
+        api_key: &key,
+        model: &model,
+    };
+    run::transfer_command(
+        &resources,
+        documents,
         &run::Mine {
             served,
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,

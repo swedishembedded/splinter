@@ -228,3 +228,54 @@ pub fn principles_command(
     );
     Ok(())
 }
+
+/// The principles the principles command kept.
+fn read_principles(resources: &Path) -> anyhow::Result<Vec<crate::principles::Principle>> {
+    let path = resources.join("principles").join("principles.jsonl");
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        anyhow::anyhow!("{}: {e}; run the principles command first", path.display())
+    })?;
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())))
+        .collect()
+}
+
+/// Design a present-day scenario for every principle and have the helper
+/// answer it under the code checks; write what stands.
+pub fn transfer_command(
+    resources: &Path,
+    documents: Vec<Document>,
+    mine: &Mine<'_>,
+) -> anyhow::Result<()> {
+    let principles = read_principles(resources)?;
+    let corpus = std::sync::Arc::new(crate::transfer::corpus_index(&documents));
+    let docs = std::sync::Arc::new(documents);
+    let dir = resources.join("transfer");
+    std::fs::create_dir_all(&dir)?;
+    let results = dir.join("results.jsonl");
+    let helper = crate::helper::Helper::served(&mine.served)?;
+    let asked =
+        crate::transfer::run_all(&helper, &principles, &docs, &corpus, &results, mine.limit)?;
+
+    let all = crate::transfer::read_results(&results)?;
+    let made = all.iter().filter(|r| r.error.is_none()).count();
+    let failed = all.iter().filter(|r| r.error.is_some()).count();
+    println!(
+        "principles: {}  asked this run: {asked}  made: {made}  failures recorded: {failed}",
+        principles.len()
+    );
+    for case in [
+        crate::scenario::Case::Clear,
+        crate::scenario::Case::Weak,
+        crate::scenario::Case::MissingPrecondition,
+        crate::scenario::Case::SurfaceAnalogy,
+    ] {
+        let count = all
+            .iter()
+            .filter(|r| r.error.is_none() && r.case == case)
+            .count();
+        println!("{case:>20?}: {count}");
+    }
+    Ok(())
+}
