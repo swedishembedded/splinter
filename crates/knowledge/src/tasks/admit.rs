@@ -190,6 +190,7 @@ impl Admission {
                     report.reject(name, index, Rejection::OverCount, detail);
                     continue;
                 }
+                let proposed = candidate.instruction.clone();
                 match self.candidate(&context, candidate, &seen, &asked)? {
                     Ok(Accepted { task, question }) => {
                         seen.admit(&task.instruction);
@@ -233,7 +234,12 @@ impl Admission {
                         report.reject(name, index, Rejection::Contradiction, detail);
                     }
                     Err(Refused::Because((reason, detail))) => {
-                        report.reject(name, index, reason, detail);
+                        report.reject(
+                            name,
+                            index,
+                            reason,
+                            format!("{detail} (proposed: {proposed:?})"),
+                        );
                     }
                 }
             }

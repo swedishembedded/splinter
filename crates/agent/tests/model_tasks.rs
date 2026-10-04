@@ -461,6 +461,11 @@ async fn a_question_answered_from_the_source_must_name_a_subject_the_source_name
         .collect();
     assert!(details[0].contains("no subject"), "{details:?}");
     assert!(details[3].contains("Nucleo-64"), "{details:?}");
+    // A refusal shows the instruction it refused.
+    assert!(
+        details[3].contains("(proposed: \"At what baud rate"),
+        "{details:?}"
+    );
 
     // Code shown in the instruction carries what its answer depends on.
     let scratch = Scratch::new("model-tasks-subject-code");
