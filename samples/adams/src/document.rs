@@ -10,6 +10,38 @@
 //! One document of the corpus, and the questions asked of it before any model
 //! sees it: who wrote it, when, and is it the right Samuel Adams.
 
+/// How sure the record is that Adams wrote the words, strongest first.
+///
+/// A committee text he sat on is not his private letter, and a newspaper
+/// piece under a pseudonym is not his signature; a model that learns them as
+/// one voice learns a composite.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Authorship {
+    DirectAutograph,
+    SignedScribal,
+    DraftInHand,
+    CommitteeCoauthored,
+    PseudonymousAttributed,
+    EditorAttributed,
+    SecondaryQuoted,
+    ContextOnly,
+}
+
+impl Authorship {
+    /// May the text be taught as what Adams said, and be quoted as his.
+    pub fn is_voice(self) -> bool {
+        self <= Authorship::CommitteeCoauthored
+    }
+
+    /// May the text support a hypothesis about how he reasoned.
+    pub fn supports_principles(self) -> bool {
+        self <= Authorship::EditorAttributed
+    }
+}
+
 /// The span of a document's date; month and day are often unknown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Date {
@@ -108,6 +140,42 @@ mod tests {
             month: None,
             day: None,
         }
+    }
+
+    #[test]
+    fn only_the_first_four_are_taught_as_his_voice() {
+        use Authorship::*;
+        let voice = [
+            DirectAutograph,
+            SignedScribal,
+            DraftInHand,
+            CommitteeCoauthored,
+        ];
+        let not_voice = [
+            PseudonymousAttributed,
+            EditorAttributed,
+            SecondaryQuoted,
+            ContextOnly,
+        ];
+        assert!(voice.iter().all(|a| a.is_voice()));
+        assert!(not_voice.iter().all(|a| !a.is_voice()));
+    }
+
+    #[test]
+    fn attributed_writing_may_support_a_principle_but_never_be_quoted_as_his() {
+        use Authorship::*;
+        for a in [PseudonymousAttributed, EditorAttributed] {
+            assert!(a.supports_principles() && !a.is_voice(), "{a:?}");
+        }
+        for a in [SecondaryQuoted, ContextOnly] {
+            assert!(!a.supports_principles(), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn authorship_orders_strongest_first() {
+        assert!(Authorship::DirectAutograph < Authorship::CommitteeCoauthored);
+        assert!(Authorship::CommitteeCoauthored < Authorship::ContextOnly);
     }
 
     #[test]
