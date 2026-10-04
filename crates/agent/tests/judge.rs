@@ -174,6 +174,25 @@ fn the_judge_grades_closed_book_from_the_output_and_the_reference() {
 }
 
 #[test]
+fn the_rubric_accepts_an_answer_that_quotes_or_restates_the_reference() {
+    // The reference of a task written from a passage is that passage: an
+    // answer that quotes it, or says it in other words, gives what it says.
+    let rt = runtime();
+    let model = ScriptedJudge::new(grades_five);
+    let judge = judge(model.clone(), &rt);
+    let task = sum_task(Environment::closed_book(), vec![reference()]);
+    let _ = outcome(&judge, &task, &experience(&task, "5", SOLVER));
+    let prompts = model.prompts.lock().unwrap();
+    let rubric = prompts[0].split("TASK:").next().unwrap().to_lowercase();
+    assert!(rubric.contains("quote"), "{rubric}");
+    assert!(rubric.contains("in other words"), "{rubric}");
+    assert!(
+        rubric.contains("repeating the reference is not a fault"),
+        "{rubric}"
+    );
+}
+
+#[test]
 fn the_judge_called_inside_an_async_task_refuses_instead_of_panicking() {
     let rt = runtime();
     let judge = judge(ScriptedJudge::new(grades_five), &rt);
