@@ -42,6 +42,7 @@ pub mod executable;
 pub mod formal;
 pub mod grounding;
 pub mod mutation;
+pub mod names;
 pub mod normalise;
 pub mod quotation;
 

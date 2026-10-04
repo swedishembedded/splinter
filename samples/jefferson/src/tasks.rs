@@ -55,89 +55,6 @@ pub struct Task {
     pub voice: String,
 }
 
-const HONORIFICS: &[&str] = &[
-    "mr",
-    "mrs",
-    "dr",
-    "doctor",
-    "colonel",
-    "col",
-    "general",
-    "gen",
-    "captain",
-    "capt",
-    "major",
-    "maj",
-    "governor",
-    "gov",
-    "honorable",
-    "hon",
-    "his",
-    "her",
-    "excellency",
-    "esq",
-    "judge",
-    "the",
-    "reverend",
-    "rev",
-    "sir",
-    "lord",
-    "monsieur",
-    "m",
-    "madame",
-];
-
-const NOT_A_PERSON: &[&str] = &[
-    "president",
-    "secretary",
-    "committee",
-    "congress",
-    "house",
-    "senate",
-    "messrs",
-    "gentlemen",
-    "of",
-    "and",
-    "council",
-    "assembly",
-    "society",
-    "editor",
-    "inhabitants",
-    "citizens",
-    "united",
-    "states",
-    "treasury",
-    "war",
-    "navy",
-    "state",
-];
-
-/// The surname of a recipient who is one person, or `None` for an office, a
-/// body or a group: `Mr. Gallatin` is `Gallatin`; `the President` is nobody.
-#[must_use]
-pub fn surname_of(recipient: &str) -> Option<String> {
-    let tokens: Vec<String> = recipient
-        .split_whitespace()
-        .map(|t| t.trim_matches(|c: char| !c.is_alphabetic()).to_string())
-        .filter(|t| !t.is_empty())
-        .collect();
-    if tokens
-        .iter()
-        .any(|t| NOT_A_PERSON.contains(&t.to_lowercase().as_str()))
-    {
-        return None;
-    }
-    let names: Vec<&String> = tokens
-        .iter()
-        .filter(|t| !HONORIFICS.contains(&t.to_lowercase().as_str()))
-        .collect();
-    let last = names.last()?;
-    (names.len() <= 4
-        && last.chars().count() >= 3
-        && last.chars().next().is_some_and(char::is_uppercase))
-    .then(|| (*last).clone())
-}
-
 /// The first `count` words of what the letter says, cut at a word boundary.
 #[must_use]
 pub fn excerpt(letter: &Letter, count: usize) -> String {
@@ -156,7 +73,8 @@ fn short_hash(text: &str) -> String {
 /// away, its recipient is not one person or its year is not of the era.
 #[must_use]
 pub fn letter_tasks(letter: &Letter, family_key: &str, seed: u64) -> Vec<Task> {
-    let Some(surname) = surname_of(&letter.recipient) else {
+    let Some(surname) = splinter_sdk::measure::verifiers::names::surname_of(&letter.recipient)
+    else {
         return Vec::new();
     };
     if !(1760..=1826).contains(&letter.year) {
@@ -284,20 +202,6 @@ mod tests {
         nation looks to the states general for a constitution founded on the consent of the \
         governed and I find the temper of the people favourable to a change that will give \
         them security in their persons and their property against the arbitrary will of any one man.";
-
-    #[test]
-    fn a_recipient_is_a_person_or_nobody() {
-        assert_eq!(surname_of("Mr. Gallatin").as_deref(), Some("Gallatin"));
-        assert_eq!(surname_of("James Madison").as_deref(), Some("Madison"));
-        assert_eq!(surname_of("Colonel Monroe").as_deref(), Some("Monroe"));
-        assert_eq!(
-            surname_of("His Excellency General Washington").as_deref(),
-            Some("Washington")
-        );
-        assert_eq!(surname_of("the President of the United States"), None);
-        assert_eq!(surname_of("the Secretary of State"), None);
-        assert_eq!(surname_of("Messrs. Wilt, Delmestre and Co"), None);
-    }
 
     #[test]
     fn a_letter_yields_a_recipient_task_and_a_year_task_with_exact_references() {

@@ -16,7 +16,8 @@ use splinter_sdk::knowledge::advice::advice_cues;
 use splinter_sdk::model::answer::Answerer;
 
 use crate::scenarios::{admit, advice_passages, classifier_prompt, writer_prompt, Scenario};
-use crate::tasks::{surname_of, PERSONA};
+use crate::tasks::PERSONA;
+use splinter_sdk::measure::verifiers::names::surname_of;
 
 /// What the writer produces.
 pub struct Options {
