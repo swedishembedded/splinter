@@ -425,6 +425,10 @@ fn answers(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
             graph.mention(source.as_str(), NodeKind::Source, missing("source"));
             graph.link(answer, Relation::OpenBook, source.as_str());
         }
+        for source in &record.retrieved_from {
+            graph.mention(source.as_str(), NodeKind::Source, missing("source"));
+            graph.link(answer, Relation::Retrieved, source.as_str());
+        }
     }
     Ok(())
 }

@@ -46,7 +46,7 @@ use std::time::{Duration, Instant};
 
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_model::embed::Embeddings;
+use splinter_model::embed::{Embeddings, DEFAULT_MODEL};
 use splinter_model::local::GREEDY_SAMPLING;
 
 use crate::release::meaning;
@@ -271,9 +271,6 @@ fn serve_and_ask(
     Ok(gate::serve(measured))
 }
 
-/// The embedding model that compares what two answers say.
-const MEANING_MODEL: &str = "Qwen/Qwen3-Embedding-0.6B";
-
 /// Per task, whether the served answer is the in-process one: [`alike`] as
 /// text, or - the same verdict, but worded differently - saying the same
 /// thing ([`meaning::says_the_same`]). The embedding model is loaded only
@@ -309,7 +306,7 @@ fn agreements(served: &[Probe], in_process: &[Probe]) -> Result<Vec<bool>, Strin
     };
     let embed = |texts: &[String]| {
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-        Embeddings::load(MEANING_MODEL)
+        Embeddings::load(DEFAULT_MODEL)
             .and_then(|model| model.passages(&refs))
             .map_err(|e| format!("comparing what the answers say: {e}"))
     };

@@ -178,6 +178,8 @@ pub enum Relation {
     AnsweredBy,
     /// An answer was given with a source shown.
     OpenBook,
+    /// An answer was given with passages retrieved from a source.
+    Retrieved,
 }
 
 impl Relation {
@@ -209,6 +211,7 @@ impl Relation {
             Self::AnsweredWith => "answered_with",
             Self::AnsweredBy => "answered_by",
             Self::OpenBook => "open_book",
+            Self::Retrieved => "retrieved",
         }
     }
 }

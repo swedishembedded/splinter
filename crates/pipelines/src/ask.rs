@@ -9,6 +9,11 @@
 //! source is ([`SourceIdentity::label`]): output captured from a command
 //! says nothing of which program printed it.
 //!
+//! With retrieval ([`ask_retrieving`]) the model is shown instead the few
+//! passages of the named sources that bear on the question
+//! ([`splinter_knowledge::retrieve::Library`]), each under the part and
+//! section it is from, and the answer records the sources they came from.
+//!
 //! Every answer is recorded ([`splinter_orchestrator::answers`]) with the model that gave
 //! it and, asked through `policy:<alias>`, the release the alias resolved
 //! to, so an answer traces back to what it was learned from.
@@ -19,6 +24,7 @@ use serde::Serialize;
 use splinter_agent::solve::{open_book_prompt, solve, SolveOptions};
 use splinter_core::experience::{Environment, Task};
 use splinter_core::source::SourceId;
+use splinter_knowledge::retrieve::{passages, Embedder, Library};
 use splinter_knowledge::tasks::SourceIdentity;
 use splinter_sandbox::ResolvedEnvironment;
 
@@ -52,6 +58,9 @@ pub struct Answer {
     pub model: String,
     /// The source shown with the question, if any.
     pub open_book: Option<SourceId>,
+    /// The sources the passages shown with the question were retrieved from;
+    /// empty when none were.
+    pub retrieved_from: Vec<SourceId>,
     /// The release a `policy:` reference resolved to; `None` otherwise,
     /// and for the base before any release.
     pub release: Option<ReleaseId>,
@@ -76,6 +85,58 @@ pub fn ask(
             (open_book_prompt(question, &material), Some(source))
         }
     };
+    answer_with(ctx, question, instruction, open_book, Vec::new(), policy)
+}
+
+/// Asks `question` of `policy` with the (at most) `passages` passages of
+/// `sources` that bear on it, nearest in meaning first, found by `embedder`,
+/// and records the answer. A source with nothing to retrieve is refused.
+pub fn ask_retrieving(
+    ctx: &Context,
+    question: &str,
+    sources: &[String],
+    passages_shown: usize,
+    embedder: &dyn Embedder,
+    policy: &ModelRef,
+) -> Result<Answer, OrchestratorError> {
+    if question.trim().is_empty() {
+        return Err(OrchestratorError::Refused("the question is empty".into()));
+    }
+    let ids = sources
+        .iter()
+        .map(|id| sources::resolve(ctx, id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let found =
+        passages(&ctx.sources(), &ids).map_err(|e| OrchestratorError::Refused(e.to_string()))?;
+    if found.is_empty() {
+        return Err(OrchestratorError::Refused(
+            "the sources hold no passage to retrieve".into(),
+        ));
+    }
+    let embedding = |e: splinter_knowledge::retrieve::EmbedError| {
+        OrchestratorError::Refused(format!("retrieval: {e}"))
+    };
+    let library = Library::new(found, embedder).map_err(embedding)?;
+    let shown = library
+        .find(question, embedder, passages_shown.max(1))
+        .map_err(embedding)?;
+    let material: Vec<String> = shown
+        .iter()
+        .map(|p| format!("--- {}, section {} ---\n{}", p.part, p.section + 1, p.text))
+        .collect();
+    let instruction = open_book_prompt(question, &material);
+    answer_with(ctx, question, instruction, None, ids, policy)
+}
+
+/// Puts `instruction` to `policy` and records the answer to `question`.
+fn answer_with(
+    ctx: &Context,
+    question: &str,
+    instruction: String,
+    open_book: Option<SourceId>,
+    retrieved_from: Vec<SourceId>,
+    policy: &ModelRef,
+) -> Result<Answer, OrchestratorError> {
     // The pin is the context's for its lifetime, so it names the release
     // the model below serves.
     let release = match policy {
@@ -115,6 +176,7 @@ pub fn ask(
         policy: policy.to_string(),
         release,
         open_book,
+        retrieved_from,
         asked_at: ctx.clock().utc_now(),
     };
     let id = ctx.answers().put(&record)?;
@@ -124,6 +186,7 @@ pub fn ask(
         answer: record.answer,
         model: record.model,
         open_book: record.open_book,
+        retrieved_from: record.retrieved_from,
         release: record.release,
     })
 }

@@ -14,7 +14,7 @@ splinter "<sentence>"             the front door: a sentence becomes one of the 
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF]
                          [--steps N] [--rank R] [--lr LR] [--bf16-base]
-splinter ask <QUESTION> [--open-book SOURCE-ID] [--policy REF]
+splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
 splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
@@ -43,6 +43,13 @@ four hex digits that names exactly one stored object.
 `ask` records every answer under `<state>/answers/` with the model that
 gave it and, asked through `policy:<alias>`, the release the alias
 resolved to; its report carries the answer's `id` and that `release`.
+
+`--open-book` shows the model the whole text of one source. `--retrieve`
+shows it instead the `--passages` (default 6) passages of the named sources
+that bear on the question: ranked by meaning (Qwen3-Embedding), with a
+fixed share of the tail given to the passages only the question's exact
+words find (a name, a date), each under its part and section. The answer
+records the sources and `splinter lineage` links it to them.
 
 ## Models
 

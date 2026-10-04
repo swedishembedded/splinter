@@ -18,6 +18,9 @@ use brain::{EmbeddingOptions, EmbeddingPipeline};
 
 use crate::error::PolicyError;
 
+/// The embedding model Splinter uses where none is named.
+pub const DEFAULT_MODEL: &str = "Qwen/Qwen3-Embedding-0.6B";
+
 /// The longest text embedded, in tokens; the rest is not read.
 pub const MAX_TOKENS: u32 = 512;
 

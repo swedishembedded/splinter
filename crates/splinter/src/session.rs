@@ -11,10 +11,11 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_sdk::ask::ask;
+use splinter_sdk::ask::{ask, ask_retrieving};
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest};
+use splinter_sdk::embedder::ModelEmbedder;
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::examine;
 use splinter_sdk::experiences::{self, resolve_set};
@@ -230,10 +231,20 @@ impl Session {
                 return Ok(if finished { Exit::Ok } else { Exit::Failed });
             }
             Command::Ask(args) => {
-                emit(
-                    json,
-                    &ask(ctx, &args.question, args.open_book.as_deref(), &args.policy)?,
-                );
+                let answer = if args.retrieve.is_empty() {
+                    ask(ctx, &args.question, args.open_book.as_deref(), &args.policy)?
+                } else {
+                    let embedder = ModelEmbedder::load_default()?;
+                    ask_retrieving(
+                        ctx,
+                        &args.question,
+                        &args.retrieve,
+                        args.passages,
+                        &embedder,
+                        &args.policy,
+                    )?
+                };
+                emit(json, &answer);
             }
             Command::Status => emit(json, &status(ctx)?),
             Command::Source(SourceCommand::Add { target }) => {

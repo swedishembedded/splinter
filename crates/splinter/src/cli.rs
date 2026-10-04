@@ -259,6 +259,13 @@ pub struct AskArgs {
     /// Show the model this stored source's text with the question.
     #[arg(long, value_name = "SOURCE-ID")]
     pub open_book: Option<String>,
+    /// Show the model the passages of these stored sources that bear on the
+    /// question, found by meaning and by exact words, instead of all of one.
+    #[arg(long, value_name = "SOURCE-ID", num_args = 1.., conflicts_with = "open_book")]
+    pub retrieve: Vec<String>,
+    /// How many passages `--retrieve` shows.
+    #[arg(long, default_value_t = 6, value_name = "N", requires = "retrieve")]
+    pub passages: usize,
     /// The model asked.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub policy: ModelRef,

@@ -66,6 +66,10 @@ pub struct AnswerRecord {
     pub release: Option<ReleaseId>,
     /// The source shown with the question, if any.
     pub open_book: Option<SourceId>,
+    /// The sources whose passages bearing on the question were retrieved and
+    /// shown with it; empty when none were.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retrieved_from: Vec<SourceId>,
     /// When it was asked, from the injected clock.
     pub asked_at: String,
 }
