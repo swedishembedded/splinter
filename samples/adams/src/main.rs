@@ -38,6 +38,7 @@
 //! ```
 
 mod anchor;
+mod apparatus;
 mod attribution;
 mod baseline;
 mod corpus;

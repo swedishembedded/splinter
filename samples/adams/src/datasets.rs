@@ -362,6 +362,7 @@ pub const TARGET_WORDS: usize = 350;
 /// The letter's opening paragraphs, up to [`TARGET_WORDS`] words. A first
 /// paragraph that is itself longer is cut at the last sentence that fits.
 pub fn letter_target(body: &str) -> Option<String> {
+    let body = &crate::apparatus::without_apparatus(body);
     let mut kept: Vec<&str> = Vec::new();
     let mut used = 0usize;
     for paragraph in body.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {

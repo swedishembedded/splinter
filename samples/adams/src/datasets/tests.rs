@@ -702,3 +702,12 @@ fn every_record_of_a_principle_names_the_same_group_so_a_holdout_never_divides_i
         assert_eq!(pair["metadata"]["group"].as_str(), Some(train.id.as_str()));
     }
 }
+
+#[test]
+fn a_letter_target_is_his_words_without_the_editors_footnotes() {
+    let scanned = "My dear Sir,\n\nI have your favor.\n\n1 A copy is in S. A. Wells, Samuel Adams and the American Revolution, vol. i., pp. 363, 364.\n\nYours, S. A.";
+    assert_eq!(
+        letter_target(scanned).as_deref(),
+        Some("My dear Sir,\n\nI have your favor.\n\nYours, S. A.")
+    );
+}
