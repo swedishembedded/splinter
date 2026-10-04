@@ -188,7 +188,10 @@ A run needs no flags. The configuration names what a machine knows:
 `SPLINTER_ASSISTANT_MODEL` is the stronger model that plans, writes tasks and
 teaches when the command names none, `SPLINTER_FRONT_DOOR_MODEL` reads the
 sentence, and `SPLINTER_BUDGET` is how long a `learn` may take when it names no `--budget`
-(a sentence names none), and `SPLINTER_BF16_BASE` holds a large policy's base at bf16 so it
+(a sentence names none), `SPLINTER_THINKING=1` lets local models reason before
+they answer (off, a reasoning model is asked with its reasoning block closed, so
+every reply is the answer and comes at once; training renders its answers the
+same way, so both settings work), and `SPLINTER_BF16_BASE` holds a large policy's base at bf16 so it
 trains on one card. `SPLINTER_REMOTE_CONCURRENCY` is how many requests to a model
 reached over an API may be in flight at once (4 by default); a model on the local
 device is asked one at a time. Unless `--steps` is given a run trains about two passes

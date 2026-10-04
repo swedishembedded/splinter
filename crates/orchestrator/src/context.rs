@@ -41,6 +41,7 @@ use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_core::experience::Environment;
 use splinter_data::DatasetStore;
+use splinter_model::local::AGENT_SAMPLING;
 use splinter_model::{LoadedModel, ModelSelection, Residency, Sampling};
 use splinter_sandbox::{
     Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
@@ -288,7 +289,19 @@ impl Runtime {
                 model: reference.to_string(),
                 detail: format!("{e:#}"),
             })?;
-        let mut model = Model::new(loaded.provider(), loaded.identity());
+        // Local models answer without reasoning unless the configuration lets
+        // them reason (see [`Config::thinking`]).
+        let provider = if local && self.config().thinking {
+            loaded
+                .resampled(Sampling {
+                    thinking: true,
+                    ..AGENT_SAMPLING
+                })
+                .unwrap_or_else(|| loaded.provider())
+        } else {
+            loaded.provider()
+        };
+        let mut model = Model::new(provider, loaded.identity());
         if local {
             model = model.with_stream_idle(LOCAL_STREAM_IDLE);
         }

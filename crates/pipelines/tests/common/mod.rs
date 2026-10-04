@@ -116,6 +116,7 @@ pub fn config(scratch: &Scratch) -> Config {
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 4,
+        thinking: false,
     }
 }
 

@@ -68,6 +68,11 @@ pub struct Config {
     /// How many requests to a model reached over an API may be in flight at
     /// once. A model run on this machine's device is asked one at a time.
     pub remote_concurrency: usize,
+    /// Let local models reason before they answer. Off by default: a model
+    /// whose template opens a reasoning block is asked with it closed, so
+    /// agent work, probes and exams get the answer at once. Models reached
+    /// over an API are not affected.
+    pub thinking: bool,
 }
 
 impl Config {
@@ -127,6 +132,8 @@ impl Config {
             bf16_base: var("SPLINTER_BF16_BASE")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
             default_budget: var("SPLINTER_BUDGET"),
+            thinking: var("SPLINTER_THINKING")
+                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
             remote_concurrency: var("SPLINTER_REMOTE_CONCURRENCY")
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)

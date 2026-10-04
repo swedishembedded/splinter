@@ -49,6 +49,7 @@ use splinter_eval::gate::SuiteSummary;
 use splinter_eval::paired::PairedOutcome;
 use splinter_eval::verifiers::Strongest;
 use splinter_model::local::GREEDY_SAMPLING;
+use splinter_model::Sampling;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 
@@ -255,7 +256,11 @@ fn record_task(ctx: &Context, line: &str) -> Result<Option<Task>, OrchestratorEr
 /// ([`GREEDY_SAMPLING`]); as it samples where its sampling cannot be set
 /// here (a model reached over an API, or handed in rather than loaded).
 pub fn greedy(ctx: &Context, reference: &ModelRef) -> Result<Model, OrchestratorError> {
-    match ctx.resampled(reference, GREEDY_SAMPLING)? {
+    let greedy = Sampling {
+        thinking: ctx.config().thinking,
+        ..GREEDY_SAMPLING
+    };
+    match ctx.resampled(reference, greedy)? {
         Some(model) => Ok(model),
         None => ctx.model(reference),
     }

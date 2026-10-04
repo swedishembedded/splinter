@@ -55,6 +55,9 @@ pub const AGENT_SAMPLING: Sampling = Sampling {
     max_new_tokens: 512,
     temperature: 0.2,
     top_k: 20,
+    // Agent work wants the answer, not a reasoning preamble it cannot use as
+    // tool input; a run that wants the reasoning asks for it.
+    thinking: false,
 };
 
 /// Greedy decoding for measurement: agent sampling at temperature zero,
@@ -234,6 +237,18 @@ pub fn load_source(checkpoint: &Path) -> PathBuf {
     }
 }
 
+/// The most tokens a reply may run when the request names no cap: the
+/// sampling's, raised to `floor` when the model may reason, because a
+/// reasoning model spends its first tokens inside the block it opened. A model
+/// asked not to reason answers at once and needs no more than any other.
+fn reply_cap(sampling: &Sampling, floor: u32) -> u32 {
+    if sampling.thinking {
+        sampling.max_new_tokens.max(floor)
+    } else {
+        sampling.max_new_tokens
+    }
+}
+
 #[async_trait::async_trait]
 impl ModelProvider for LocalQwen {
     fn name(&self) -> &str {
@@ -249,7 +264,7 @@ impl ModelProvider for LocalQwen {
         req: CompletionRequest,
     ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
         let sampling = Sampling {
-            max_new_tokens: self.sampling.max_new_tokens.max(self.reply_floor),
+            max_new_tokens: reply_cap(&self.sampling, self.reply_floor),
             ..self.sampling
         };
         let request = chat_request(&req, &sampling);
@@ -411,5 +426,21 @@ mod tests {
         let brain_file = brain_format.join("model.brain.safetensors");
         assert_eq!(load_source(&brain_file), brain_file);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A model that may reason gets room to; one asked not to is held to the
+    /// ordinary cap, and thinking is off unless a run asks for it.
+    #[test]
+    fn only_a_model_that_may_think_gets_the_reasoning_floor() {
+        let on = Sampling {
+            thinking: true,
+            ..AGENT_SAMPLING
+        };
+        assert_eq!(reply_cap(&on, 4096), 4096);
+        assert_eq!(
+            reply_cap(&AGENT_SAMPLING, 4096),
+            AGENT_SAMPLING.max_new_tokens
+        );
+        assert_eq!(reply_cap(&on, 0), AGENT_SAMPLING.max_new_tokens);
     }
 }

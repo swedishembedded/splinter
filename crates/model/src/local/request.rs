@@ -28,6 +28,12 @@ pub struct Sampling {
     pub temperature: f32,
     /// Only the `top_k` most likely tokens are sampled from.
     pub top_k: u32,
+    /// Whether the model may reason before it answers. Off, a model whose
+    /// template opens a reasoning block is asked with the block closed, so
+    /// the reply is the answer and comes at once; on, it reasons first and
+    /// the reply cap leaves room for that.
+    #[serde(default)]
+    pub thinking: bool,
 }
 
 /// Maps sven's request onto brain's. The output budget is the request's own
@@ -41,9 +47,7 @@ pub(super) fn chat_request(req: &CompletionRequest, sampling: &Sampling) -> Chat
         .max_tokens(output_budget(req, sampling))
         .temperature(sampling.temperature)
         .top_k(sampling.top_k)
-        // Agent work wants the answer, not a reasoning preamble it cannot
-        // use as tool input.
-        .thinking(false)
+        .thinking(sampling.thinking)
 }
 
 /// The most tokens the reply may take: the request's override, else the
