@@ -186,6 +186,10 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     let (base_model, base_answers) = answers(request.base)?;
     let (candidate_model, candidate_answers) = answers(request.candidate)?;
 
+    // The judge is a different model from the arms' and needs the device for
+    // itself: two resident bases at once do not fit a card the size of the
+    // models'.
+    ctx.release_bases();
     let judge_model = ctx.model(request.judge)?;
     let judge = judge_verifier(ctx, &judge_model);
     let calibration = calibrate(&judge, &controls(ctx, request.controls)?)?;

@@ -104,6 +104,9 @@ pub struct Run {
     pub max_tokens: u32,
     /// Stop after this many new answers (for a measured trial).
     pub limit: Option<usize>,
+    /// The system message to ask under, in place of the sample's persona: for
+    /// an adapter Splinter trained under its own system prompt.
+    pub system: Option<String>,
 }
 
 /// Asks every question not yet answered in `run.out` and appends the graded
@@ -126,7 +129,11 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         .append(true)
         .open(&run.out)?;
     for (n, task) in todo.iter().enumerate() {
-        let reply = runtime.block_on(answerer.ask(PERSONA, &task.prompt, run.max_tokens))?;
+        let reply = runtime.block_on(answerer.ask(
+            run.system.as_deref().unwrap_or(PERSONA),
+            &task.prompt,
+            run.max_tokens,
+        ))?;
         let answer = final_answer(&reply.thinking, &reply.text, reply.truncated);
         let graded = Graded {
             id: task.id.clone(),
@@ -142,12 +149,14 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         writeln!(out, "{}", serde_json::to_string(&graded)?)?;
         out.flush()?;
         eprintln!(
-            "[{}/{}] {:?} {} correct={}",
+            "[{}/{}] {:?} {} correct={} thinking={} chars, visible={} chars",
             n + 1,
             todo.len(),
             graded.kind,
             graded.split,
-            graded.correct
+            graded.correct,
+            reply.thinking.chars().count(),
+            reply.text.chars().count()
         );
     }
     Ok(todo.len())

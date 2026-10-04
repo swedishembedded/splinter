@@ -171,6 +171,7 @@ fn exam_command(args: &[String]) -> anyhow::Result<()> {
         adapter: flag(args, "--adapter").map(PathBuf::from),
         max_tokens: u32::try_from(number(args, "--max-tokens", 400)?)?,
         limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        system: flag(args, "--system"),
     };
     let asked = exam::run(&run)?;
     println!("asked {asked} questions; results in {}", run.out.display());

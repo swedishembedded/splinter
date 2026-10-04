@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 use splinter_core::training::{HeldOutScore, PreferenceScore};
 
 use crate::error::PolicyError;
+use crate::local::{closed_think_blocks, opens_think_block};
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
 /// names none: brain's default.
@@ -239,9 +240,33 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     for replayed in request.replay {
         validate_dataset(replayed)?;
     }
+    // A model asked with its think block already open must train on what it
+    // will be asked: each answer after an empty closed block, rendered with
+    // the block kept (see [`closed_think_blocks`]).
+    let reasoning = opens_think_block(request.model_dir);
+    let prepared = |path: &Path, name: &str| -> Result<std::path::PathBuf, PolicyError> {
+        if !reasoning {
+            return Ok(path.to_path_buf());
+        }
+        let io = |source| PolicyError::Io {
+            path: path.to_path_buf(),
+            source,
+        };
+        let text = std::fs::read_to_string(path).map_err(io)?;
+        let rewritten = closed_think_blocks(&text).map_err(|e| PolicyError::Dataset {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+        let dest = request.attempt_dir.join(name);
+        std::fs::write(&dest, rewritten).map_err(io)?;
+        Ok(dest)
+    };
+    let train = prepared(request.train, "train.think.jsonl")?;
+    let held_out = prepared(request.held_out, "held_out.think.jsonl")?;
     let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
-        .dataset(request.train)
-        .held_out(request.held_out)
+        .dataset(&train)
+        .held_out(&held_out)
+        .keep_reasoning(reasoning)
         .out_dir(request.attempt_dir)
         .adapter_id(format!("{base_id}:splinter:candidate"))
         .steps(request.steps)
@@ -251,8 +276,8 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
     }
-    for replayed in request.replay {
-        fine_tune = fine_tune.replay(replayed);
+    for (n, replayed) in request.replay.iter().enumerate() {
+        fine_tune = fine_tune.replay(prepared(replayed, &format!("replay-{n}.think.jsonl"))?);
     }
     if let Some(adapter) = request.continue_from {
         fine_tune = fine_tune.continue_from(adapter);
