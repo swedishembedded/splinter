@@ -670,7 +670,10 @@ fn the_frozen_benchmark_is_written_as_it_always_was_and_a_slice_names_itself_onl
         &docs(),
     );
     let line = serde_json::to_string(&built.benchmark[0]).unwrap();
-    assert!(!line.contains("slice"), "{line}");
+    assert!(
+        !line.contains("\"slice\"") && !line.contains("\"group\""),
+        "{line}"
+    );
     assert_eq!(built.benchmark[0].split(), "exam");
     let ood = TransferTask {
         slice: Slice::Ood,
@@ -710,4 +713,29 @@ fn a_letter_target_is_his_words_without_the_editors_footnotes() {
         letter_target(scanned).as_deref(),
         Some("My dear Sir,\n\nI have your favor.\n\nYours, S. A.")
     );
+}
+
+#[test]
+fn every_training_scenario_is_also_a_question_to_sample_the_student_on_and_names_its_principle() {
+    let (train, bench) = split_principles();
+    let built = build(
+        &[result(&train, Case::Clear, FIT)],
+        &[train.clone(), bench],
+        &docs(),
+    );
+    assert_eq!(built.train_questions.len(), 2, "both modes");
+    assert!(built
+        .train_questions
+        .iter()
+        .all(|t| t.slice == Slice::Train && t.group == train.id));
+    let retrieval = built
+        .train_questions
+        .iter()
+        .find(|t| t.mode == Mode::Retrieval)
+        .unwrap();
+    assert!(
+        !retrieval.evidence_docs.is_empty(),
+        "the passages it may quote"
+    );
+    assert!(built.benchmark.is_empty() && built.extra_benchmark.is_empty());
 }

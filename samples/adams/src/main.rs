@@ -51,6 +51,7 @@ mod grpo;
 mod helper;
 mod judge;
 mod miner;
+mod onpolicy;
 mod persona;
 mod principles;
 mod reconstruct;
@@ -81,6 +82,7 @@ fn main() -> anyhow::Result<()> {
         Some("train-dpo") => train_dpo_command(&args[1..]),
         Some("transfer-exam") => transfer_exam_command(&args[1..]),
         Some("constant-baseline") => constant_baseline_command(&args[1..]),
+        Some("build-onpolicy") => build_onpolicy_command(&args[1..]),
         Some("pin") => run::pin_command(std::path::Path::new(&need(&args[1..], "--file")?)),
         Some("grpo") => grpo_command(&args[1..]),
         Some("anchor-exam") => anchor_exam_command(&args[1..]),
@@ -422,6 +424,23 @@ fn build_data_command(args: &[String]) -> anyhow::Result<()> {
     let extra = flag(args, "--extra-benchmark-file")
         .unwrap_or_else(|| datasets::EXTRA_BENCHMARK_FILE.to_string());
     run::build_data_command(&resources, &documents, &benchmark, &extra)
+}
+
+fn build_onpolicy_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    run::build_onpolicy_command(
+        &resources,
+        &flag(args, "--questions").map_or_else(
+            || {
+                resources
+                    .join("datasets")
+                    .join(datasets::TRAIN_QUESTIONS_FILE)
+            },
+            Into::into,
+        ),
+        std::path::Path::new(&need(args, "--samples")?),
+        number(args, "--per-prompt", 2)?,
+    )
 }
 
 fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {

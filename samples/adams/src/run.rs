@@ -310,6 +310,49 @@ pub fn transfer_command(
     Ok(())
 }
 
+/// Build the student's own training data from samples of it on the training
+/// questions (`transfer-exam --benchmark` the questions file `--samples` K):
+/// its passing answers as supervised records and each prompt's passing and
+/// failing answers as preference pairs.
+pub fn build_onpolicy_command(
+    resources: &Path,
+    questions: &Path,
+    samples: &Path,
+    per_prompt: usize,
+) -> anyhow::Result<()> {
+    let questions = crate::datasets::read_benchmark(questions)?;
+    let results = splinter_sdk::model::exam::read_results(samples)?;
+    let sampled = crate::onpolicy::group(&questions, &results);
+    let (mut all_pass, mut none_pass) = (0usize, 0usize);
+    for s in &sampled {
+        all_pass += usize::from(s.failing.is_empty() && !s.passing.is_empty());
+        none_pass += usize::from(s.passing.is_empty());
+    }
+    let sft = crate::onpolicy::rft_records(&sampled, per_prompt);
+    let pairs = crate::onpolicy::onpolicy_pairs(&sampled, per_prompt);
+    let dir = resources.join("datasets");
+    let lines =
+        |rows: &[serde_json::Value]| -> String { rows.iter().map(|r| format!("{r}\n")).collect() };
+    std::fs::write(dir.join("sft-rft.jsonl"), lines(&sft))?;
+    std::fs::write(dir.join("preference-onpolicy.jsonl"), lines(&pairs))?;
+    let chat = splinter_sdk::model::train::validate_dataset(&dir.join("sft-rft.jsonl"))?;
+    let read = splinter_sdk::model::train::validate_preference_dataset(
+        &dir.join("preference-onpolicy.jsonl"),
+    )?;
+    println!(
+        "prompts sampled: {}  every sample passed: {all_pass}  none passed: {none_pass}",
+        sampled.len()
+    );
+    println!(
+        "supervised records: {} (the trainer reads {})  preference pairs: {} (the trainer reads {})",
+        sft.len(),
+        chat.records,
+        pairs.len(),
+        read.pairs
+    );
+    Ok(())
+}
+
 /// Freeze `file`: pin its content in the ledger beside it, so a later run that
 /// would write or score against other content under its name is refused.
 pub fn pin_command(file: &Path) -> anyhow::Result<()> {

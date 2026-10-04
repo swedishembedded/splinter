@@ -63,6 +63,7 @@ mod tests {
             case,
             observations: Vec::new(),
             slice: Slice::default(),
+            group: String::new(),
             evidence_docs: if mode == Mode::Retrieval {
                 vec!["d1".into()]
             } else {

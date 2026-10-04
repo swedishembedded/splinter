@@ -268,6 +268,9 @@ pub enum Slice {
     New,
     /// A scenario set in a field held out of training.
     Ood,
+    /// A scenario the student trains on, kept as a question to sample the
+    /// student on and grade.
+    Train,
 }
 
 impl Slice {
@@ -291,6 +294,10 @@ pub struct TransferTask {
     /// file is what it always was.
     #[serde(default, skip_serializing_if = "Slice::is_main")]
     pub slice: Slice,
+    /// The principle the scenario was made from, for a training question; a
+    /// holdout never divides a group.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub group: String,
 }
 
 impl TransferTask {
@@ -340,6 +347,7 @@ impl splinter_sdk::model::exam::Question for TransferTask {
             Slice::Main => "exam",
             Slice::New => "new",
             Slice::Ood => "ood",
+            Slice::Train => "train",
         }
     }
     fn reference(&self) -> &str {
@@ -435,6 +443,8 @@ pub fn few_shot_block(records: &[Value], n: usize) -> String {
 pub const BENCHMARK_FILE: &str = "benchmark.jsonl";
 /// The file the extra questions go to unless another is asked for.
 pub const EXTRA_BENCHMARK_FILE: &str = "benchmark-extra.jsonl";
+/// The training scenarios as questions, for sampling the student on them.
+pub const TRAIN_QUESTIONS_FILE: &str = "train-questions.jsonl";
 /// The ledger that pins each benchmark file to its content.
 const FROZEN_LEDGER: &str = "FROZEN.json";
 
@@ -450,10 +460,13 @@ pub struct Built {
     /// set in a field held out of training. A separate file, never mixed into
     /// the frozen benchmark.
     pub extra_benchmark: Vec<TransferTask>,
+    /// The training scenarios as questions in both modes: what the student is
+    /// sampled on to find its own failures.
+    pub train_questions: Vec<TransferTask>,
     pub excluded: Vec<(String, String)>,
 }
 
-fn sft_record(prompt: &str, answer: &str, group: &str) -> Value {
+pub(crate) fn sft_record(prompt: &str, answer: &str, group: &str) -> Value {
     json!({
         "metadata": {"group": group},
         "messages": [
@@ -544,6 +557,7 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
                 observations: scenario.observations.clone(),
                 evidence_docs,
                 slice,
+                group: String::new(),
             };
             let questions = if slice == Slice::Main {
                 &mut built.benchmark
@@ -557,6 +571,26 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
             ));
             questions.push(task(Mode::Internalized, &without, Vec::new()));
             continue;
+        }
+        for (mode, prompt, evidence_docs) in [
+            (
+                Mode::Retrieval,
+                &with_passages,
+                cited.iter().map(|d| (*d).to_string()).collect::<Vec<_>>(),
+            ),
+            (Mode::Internalized, &without, Vec::new()),
+        ] {
+            built.train_questions.push(TransferTask {
+                id: format!("transfer-{mode:?}-{}", scenario.id).to_lowercase(),
+                scenario_id: scenario.id.clone(),
+                mode,
+                prompt: prompt.clone(),
+                case: scenario.case,
+                observations: scenario.observations.clone(),
+                evidence_docs,
+                slice: Slice::Train,
+                group: principle.id.clone(),
+            });
         }
         built
             .sft
@@ -614,6 +648,10 @@ pub fn write_all(
         (
             extra_file,
             lines(built.extra_benchmark.iter().map(|t| json!(t)).collect()),
+        ),
+        (
+            TRAIN_QUESTIONS_FILE,
+            lines(built.train_questions.iter().map(|t| json!(t)).collect()),
         ),
         (
             "excluded.jsonl",
