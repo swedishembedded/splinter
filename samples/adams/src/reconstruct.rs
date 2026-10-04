@@ -29,9 +29,8 @@ use crate::principles::occurs;
 /// The system message the student writes the reply under.
 pub const SYSTEM: &str = "You are Samuel Adams (1722-1803), writing in your own time. Write the reply you would send, in the first person, as a letter. Do not quote your own earlier writing. Say plainly what you do not know.";
 
-/// Words a situation must run to be one, and a request to be one.
+/// Words a situation must run to be one.
 const MIN_SITUATION_WORDS: usize = 60;
-const MIN_REQUEST_WORDS: usize = 5;
 /// How many things the rubric names, and the fewest words of a quotation that
 /// grounds one.
 const KEY_POINTS: std::ops::RangeInclusive<usize> = 3..=6;
@@ -56,8 +55,6 @@ pub struct KeyPoint {
 pub struct Drafted {
     /// The situation he was answering, told in your own words, without his.
     pub situation: String,
-    /// What the correspondent asks of him, or what the moment calls for.
-    pub request: String,
     /// What the real letter does, three to six things, each with its quotation.
     pub key_points: Vec<KeyPoint>,
 }
@@ -68,7 +65,6 @@ pub struct Briefing {
     pub id: String,
     pub doc_id: String,
     pub situation: String,
-    pub request: String,
     pub key_points: Vec<KeyPoint>,
 }
 
@@ -83,9 +79,6 @@ pub fn gate(drafted: &Drafted, letter: &Document) -> Result<(), String> {
     let body = words(&letter.body);
     if words(&drafted.situation).len() < MIN_SITUATION_WORDS {
         return Err(format!("the situation is too short to answer: write at least {MIN_SITUATION_WORDS} words about what he was facing"));
-    }
-    if words(&drafted.request).len() < MIN_REQUEST_WORDS {
-        return Err("the request is too short".to_string());
     }
     if !KEY_POINTS.contains(&drafted.key_points.len()) {
         return Err(format!(
@@ -106,17 +99,17 @@ pub fn gate(drafted: &Drafted, letter: &Document) -> Result<(), String> {
             ));
         }
     }
-    if repeats(&drafted.situation, &body) || repeats(&drafted.request, &body) {
-        return Err("the situation or the request repeats the letter's own words: tell it in your own words, so the answer is not given away".to_string());
+    if repeats(&drafted.situation, &body) {
+        return Err("the situation repeats the letter's own words: tell it in your own words, so the answer is not given away".to_string());
     }
-    match gives_away(&drafted.situation, &drafted.request, &drafted.key_points) {
+    match gives_away(&drafted.situation, &drafted.key_points) {
         Some(why) => Err(why),
         None => Ok(()),
     }
 }
 
 /// A key point is given away when this share of its content words is already
-/// in the situation or the request.
+/// in the situation.
 const GIVEN_AWAY_SHARE: f64 = 0.5;
 /// Words shorter than this carry no content.
 const CONTENT_WORD_LEN: usize = 4;
@@ -162,20 +155,18 @@ fn share_present(of: &str, given: &std::collections::HashSet<String>) -> f64 {
     content.iter().filter(|w| given.contains(*w)).count() as f64 / content.len() as f64
 }
 
-/// Why the situation and the request hand over the answer, if they do: they
-/// say what Adams does, or already state one of the key points.
-fn gives_away(situation: &str, request: &str, points: &[KeyPoint]) -> Option<String> {
-    if says_what_adams_does(situation) || says_what_adams_does(request) {
-        return Some("the situation or the request says what Adams does or asks: put to him only what he was facing and what was asked of him, so the answer is not given away".to_string());
+/// Why the situation hands over the answer, if it does: it says what Adams
+/// does, or already states one of the key points.
+fn gives_away(situation: &str, points: &[KeyPoint]) -> Option<String> {
+    if says_what_adams_does(situation) {
+        return Some("the situation says what Adams does or asks: put to him only what he was facing and what the correspondent wants to know, so the answer is not given away".to_string());
     }
-    let given: std::collections::HashSet<String> = words(&format!("{situation} {request}"))
-        .into_iter()
-        .collect();
+    let given: std::collections::HashSet<String> = words(situation).into_iter().collect();
     points.iter().find_map(|p| {
         let share = share_present(&p.quote, &given).max(share_present(&p.point, &given));
         (share >= GIVEN_AWAY_SHARE).then(|| {
             format!(
-                "the situation or the request already says {:?}: it gives away what the letter does, so leave it for the reply",
+                "the situation already says {:?}: it gives away what the letter does, so leave it for the reply",
                 p.point
             )
         })
@@ -185,22 +176,24 @@ fn gives_away(situation: &str, request: &str, points: &[KeyPoint]) -> Option<Str
 /// Why a finished briefing hands over its answer, if it does.
 #[must_use]
 pub fn leaks(briefing: &Briefing) -> Option<String> {
-    gives_away(&briefing.situation, &briefing.request, &briefing.key_points)
+    gives_away(&briefing.situation, &briefing.key_points)
 }
+
+/// What every briefing asks, said in code so that no helper can put the
+/// answer into it: the situation carries who is asking and what they want to
+/// know, and this only says to answer.
+pub const REQUEST: &str = "Write the reply you would send.";
 
 /// How the student is asked: the situation and the request, nothing else.
 pub fn prompt(briefing: &Briefing) -> String {
-    format!(
-        "Situation: {}\n\n{}\n",
-        briefing.situation, briefing.request
-    )
+    format!("Situation: {}\n\n{REQUEST}\n", briefing.situation)
 }
 
 /// The role the helper is given.
 const ROLE: &str = "a historian who reads a letter closely and says what situation it answered and what it does, without quoting it";
 
 /// The task the helper is given.
-const TASK: &str = "You are given a letter Samuel Adams wrote. Tell, in your own words and without repeating any passage of his, the situation he was answering, as a briefing a person could act on: who is asking, what has happened, what is at stake. Say what is asked of him. Then list three to six things the real letter does: an issue it recognises, an action it recommends, something it asks for, a value it invokes. For each, copy exactly the words of the letter that show it.";
+const TASK: &str = "You are given a letter Samuel Adams wrote. Tell, in your own words and without repeating any passage of his, the situation he was answering, as a briefing a person could act on: who is asking, what has happened, what is at stake, and what the correspondent wants to know. Do not say what he answered, advised or asked for: that is what his reply must supply. Then list three to six things the real letter does: an issue it recognises, an action it recommends, something it asks for, a value it invokes. For each, copy exactly the words of the letter that show it.";
 
 /// What the helper reads of a letter, and who it went to.
 #[derive(serde::Serialize)]
@@ -241,7 +234,6 @@ pub fn brief(helper: &Helper, letter: &Document) -> anyhow::Result<Briefing> {
         id,
         doc_id: letter.id.clone(),
         situation: d.situation,
-        request: d.request,
         key_points: d.key_points,
     })
 }

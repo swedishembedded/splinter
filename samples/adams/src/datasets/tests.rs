@@ -367,7 +367,6 @@ fn briefing_for(doc_id: &str) -> Briefing {
         id: format!("recon-{doc_id}"),
         doc_id: doc_id.into(),
         situation: "A correspondent asks how the towns should proceed.".into(),
-        request: "Advise him.".into(),
         key_points: vec![KeyPoint {
             point: "p".into(),
             quote: "q".into(),

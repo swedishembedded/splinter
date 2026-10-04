@@ -15,7 +15,6 @@ fn letter() -> Document {
 fn good() -> Drafted {
     Drafted {
         situation: format!("In the autumn of 1773 the Province is uneasy over the Governor's salary and the shipments of tea expected at the port. A correspondent in Plymouth reports that his neighbours are divided on whether to petition or to act, and asks how the towns should proceed. {}", distinct("ctx", 20)),
-        request: "Advise your correspondent how the towns should proceed.".into(),
         key_points: vec![
             KeyPoint { point: "he advises not waiting on the ministry".into(), quote: "the Towns ought not to wait upon the Ministry".into() },
             KeyPoint { point: "he proposes committees in each town to write to the rest".into(), quote: "Let each Town choose a Committee to write to the rest".into() },
@@ -62,11 +61,6 @@ fn a_situation_that_repeats_the_letters_words_gives_the_answer_away_and_is_refus
     assert!(gate(&d, &letter())
         .unwrap_err()
         .contains("letter's own words"));
-    let mut request = good();
-    request.request = "Let each Town choose a Committee to write to the rest of them".into();
-    assert!(gate(&request, &letter())
-        .unwrap_err()
-        .contains("letter's own words"));
 }
 
 #[test]
@@ -77,11 +71,10 @@ fn a_situation_too_thin_to_answer_is_refused() {
 }
 
 #[test]
-fn a_key_point_already_stated_in_the_situation_or_the_request_gives_the_answer_away() {
+fn a_key_point_already_stated_in_the_situation_gives_the_answer_away() {
     let mut d = good();
-    d.request =
-        "Advise your correspondent whether the towns ought to wait upon the ministry or act."
-            .into();
+    d.situation
+        .push_str(" Whether the towns ought to wait upon the ministry or act is the question.");
     let why = gate(&d, &letter()).unwrap_err();
     assert!(why.contains("gives away"), "{why}");
 }
@@ -94,14 +87,15 @@ fn what_the_situation_says_he_asks_or_argues_is_the_letters_content_and_is_refus
         "Adams requests that the recipient recognise the loyalty of the colonists.",
     ] {
         let mut d = good();
-        d.request = format!("{line} {}", d.request);
+        d.situation = format!("{line} {}", d.situation);
         assert!(
             gate(&d, &letter()).unwrap_err().contains("what Adams"),
             "{line}"
         );
     }
     let mut d = good();
-    d.request = "A correspondent in Plymouth asks Adams how the towns should proceed.".into();
+    d.situation
+        .push_str(" A correspondent in Plymouth asks Adams how the towns should proceed.");
     assert_eq!(
         gate(&d, &letter()),
         Ok(()),
@@ -115,12 +109,13 @@ fn a_finished_briefing_that_leaks_is_found_and_one_that_does_not_is_not() {
         id: "r".into(),
         doc_id: "l1".into(),
         situation: good().situation,
-        request: good().request,
         key_points: good().key_points,
     };
     assert_eq!(leaks(&clean), None);
     let mut leaky = clean.clone();
-    leaky.request = "Adams advises the towns to choose a committee to write to the rest.".into();
+    leaky
+        .situation
+        .push_str(" Adams advises the towns to choose a committee to write to the rest.");
     assert!(leaks(&leaky).is_some());
 }
 
@@ -132,8 +127,10 @@ fn a_briefing_made_before_the_gate_that_leaks_is_briefed_again_and_a_clean_one_i
     let mut leaky = Briefing {
         id: "recon-old".into(),
         doc_id: "l1".into(),
-        situation: good().situation,
-        request: "Adams advises the towns to choose a committee to write to the rest.".into(),
+        situation: format!(
+            "{} Adams advises the towns to choose a committee to write to the rest.",
+            good().situation
+        ),
         key_points: good().key_points,
     };
     std::fs::write(
@@ -161,7 +158,7 @@ fn a_briefing_made_before_the_gate_that_leaks_is_briefed_again_and_a_clean_one_i
         "it is briefed again"
     );
     assert_eq!(read_briefings(&path).unwrap().len(), 1);
-    leaky.request = good().request;
+    leaky.situation = good().situation;
     assert_eq!(
         brief_all(&h, &refs, &path, None).unwrap(),
         0,
@@ -175,11 +172,10 @@ fn the_student_is_shown_the_situation_and_the_request_and_never_the_rubric() {
         id: "recon-1".into(),
         doc_id: "l1".into(),
         situation: good().situation,
-        request: good().request,
         key_points: good().key_points,
     };
     let p = prompt(&b);
-    assert!(p.contains("autumn of 1773") && p.contains("Advise your correspondent"));
+    assert!(p.contains("autumn of 1773") && p.contains(REQUEST));
     assert!(
         !p.contains("Committee to write to the rest") && !p.contains("ought not to wait"),
         "{p}"
@@ -223,7 +219,6 @@ fn briefing(id: &str) -> Briefing {
         id: id.into(),
         doc_id: "l1".into(),
         situation: good().situation,
-        request: good().request,
         key_points: good().key_points,
     }
 }

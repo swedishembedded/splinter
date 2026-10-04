@@ -147,7 +147,6 @@ mod tests {
             id: "recon-1".into(),
             doc_id: "l1".into(),
             situation: "s".into(),
-            request: "r".into(),
             key_points: vec![
                 point("advises not waiting"),
                 point("proposes committees"),
