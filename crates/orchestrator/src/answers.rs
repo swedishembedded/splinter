@@ -48,6 +48,22 @@ impl std::fmt::Display for AnswerId {
     }
 }
 
+/// A passage shown to the model with a question, as the answer records it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShownPassage {
+    /// The source it is from.
+    pub source: SourceId,
+    /// The part of the source.
+    pub part: String,
+    /// Its section, counting from one.
+    pub section: usize,
+    /// How it begins, cut at [`EXCERPT_CHARS`].
+    pub excerpt: String,
+}
+
+/// The most characters of a passage an answer's record keeps.
+pub const EXCERPT_CHARS: usize = 200;
+
 /// One answer, and what gave it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerRecord {
@@ -70,6 +86,10 @@ pub struct AnswerRecord {
     /// shown with it; empty when none were.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub retrieved_from: Vec<SourceId>,
+    /// The passages shown with the question, nearest in meaning first; empty
+    /// when none were retrieved.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shown: Vec<ShownPassage>,
     /// When it was asked, from the injected clock.
     pub asked_at: String,
 }

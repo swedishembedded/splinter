@@ -33,7 +33,9 @@ use crate::solving::conclusion_name;
 use crate::sources;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
-use splinter_orchestrator::answers::{AnswerId, AnswerRecord, ANSWER_FORMAT};
+use splinter_orchestrator::answers::{
+    AnswerId, AnswerRecord, ShownPassage, ANSWER_FORMAT, EXCERPT_CHARS,
+};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -62,6 +64,9 @@ pub struct Answer {
     /// The sources the passages shown with the question were retrieved from;
     /// empty when none were.
     pub retrieved_from: Vec<SourceId>,
+    /// The passages shown with the question, nearest in meaning first; empty
+    /// when none were retrieved.
+    pub shown: Vec<ShownPassage>,
     /// The release a `policy:` reference resolved to; `None` otherwise,
     /// and for the base before any release.
     pub release: Option<ReleaseId>,
@@ -86,7 +91,16 @@ pub fn ask(
             (open_book_prompt(question, &material), Some(source))
         }
     };
-    answer_with(ctx, question, instruction, open_book, Vec::new(), policy)
+    answer_with(
+        ctx,
+        question,
+        instruction,
+        Grounding {
+            open_book,
+            ..Grounding::default()
+        },
+        policy,
+    )
 }
 
 /// Asks `question` of `policy` with the (at most) `passages` passages of
@@ -123,7 +137,31 @@ pub fn ask_retrieving(
         .map(|p| format!("--- {}, section {} ---\n{}", p.part, p.section + 1, p.text))
         .collect();
     let instruction = open_book_prompt(question, &material);
-    answer_with(ctx, question, instruction, None, ids, policy)
+    let shown = shown
+        .iter()
+        .filter_map(|p| {
+            Some(ShownPassage {
+                source: p.source.clone()?,
+                part: p.part.clone(),
+                section: p.section + 1,
+                excerpt: p.text.chars().take(EXCERPT_CHARS).collect(),
+            })
+        })
+        .collect();
+    let grounding = Grounding {
+        open_book: None,
+        retrieved_from: ids,
+        shown,
+    };
+    answer_with(ctx, question, instruction, grounding, policy)
+}
+
+/// What a question was shown besides itself.
+#[derive(Default)]
+struct Grounding {
+    open_book: Option<SourceId>,
+    retrieved_from: Vec<SourceId>,
+    shown: Vec<ShownPassage>,
 }
 
 /// Puts `instruction` to `policy` and records the answer to `question`.
@@ -131,8 +169,7 @@ fn answer_with(
     ctx: &Context,
     question: &str,
     instruction: String,
-    open_book: Option<SourceId>,
-    retrieved_from: Vec<SourceId>,
+    grounding: Grounding,
     policy: &ModelRef,
 ) -> Result<Answer, OrchestratorError> {
     // The pin is the context's for its lifetime, so it names the release
@@ -173,8 +210,9 @@ fn answer_with(
         model: model.identity,
         policy: policy.to_string(),
         release,
-        open_book,
-        retrieved_from,
+        open_book: grounding.open_book,
+        retrieved_from: grounding.retrieved_from,
+        shown: grounding.shown,
         asked_at: ctx.clock().utc_now(),
     };
     let id = ctx.answers().put(&record)?;
@@ -185,6 +223,7 @@ fn answer_with(
         model: record.model,
         open_book: record.open_book,
         retrieved_from: record.retrieved_from,
+        shown: record.shown,
         release: record.release,
     })
 }

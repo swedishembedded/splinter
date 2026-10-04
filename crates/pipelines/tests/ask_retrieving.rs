@@ -79,6 +79,17 @@ fn the_model_is_shown_the_passage_that_bears_on_the_question_and_not_the_rest() 
     );
     assert!(answer.answer.contains("How should a young person learn?"));
     assert_eq!(answer.retrieved_from, std::slice::from_ref(&source));
+    // What the model was shown is on the answer and in its record, so a bad
+    // answer can be traced to what was retrieved.
+    assert_eq!(answer.shown.len(), 1);
+    assert_eq!(answer.shown[0].source, source);
+    assert!(
+        answer.shown[0].part.contains("letters"),
+        "{:?}",
+        answer.shown
+    );
+    assert!(answer.shown[0].excerpt.contains("Education of the people"));
+    assert_eq!(ctx.answers().get(&answer.id).unwrap().shown, answer.shown);
     assert_eq!(answer.open_book, None);
     // The answer traces back to the source its passages came from.
     let up = lineage(

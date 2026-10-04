@@ -668,6 +668,19 @@ impl Report for Status {
 
 impl Report for Answer {
     fn human(&self) -> String {
-        format!("{}\n", self.answer.trim_end())
+        let mut out = format!("{}\n", self.answer.trim_end());
+        if !self.shown.is_empty() {
+            out.push_str("\npassages shown to the model:\n");
+            for (n, p) in self.shown.iter().enumerate() {
+                let excerpt = p.excerpt.split_whitespace().collect::<Vec<_>>().join(" ");
+                out.push_str(&format!(
+                    "  {}. {}, section {}: {excerpt}\n",
+                    n + 1,
+                    p.part,
+                    p.section
+                ));
+            }
+        }
+        out
     }
 }
