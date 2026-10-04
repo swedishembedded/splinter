@@ -247,8 +247,10 @@ impl Rejection {
                  about ...\", \"What did Jefferson think of ...\").",
             ),
             Self::NoSubject => Some(
-                "Name the subject in the instruction in the words the source uses for it: a \
-                 specific person, place, product or matter, not \"the writer's view\".",
+                "Name the subject in the instruction in the words the source uses for it, \
+                 letter for letter as it is written in `subject`: a specific person, place, \
+                 event, product or matter, never a generic word like \"letter\" or \"the \
+                 writer's view\".",
             ),
             Self::QuoteNotFound => Some(
                 "Copy each quote word for word from the section it cites: do not paraphrase, \

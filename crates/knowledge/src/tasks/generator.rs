@@ -491,19 +491,22 @@ fn brief(kind: &TaskKind, count: usize, refused: &[Rejection]) -> String {
     let mut rules = vec![
         format!("Write at most {count} tasks."),
         "Each instruction is everything the student sees: it must stand on its own. Never \
-         refer to the sections, a passage, a document or text the student is not shown, and do \
-         not copy long runs of the sections into it."
+         refer to the sections, a passage, a document, a letter, \"the author\", \"the writer\" \
+         or any text the student is not shown: name the people, places and matters themselves. \
+         Do not copy long runs of the sections into it."
             .to_string(),
         "Cite the evidence for each task: the position of each section the answer comes from."
             .to_string(),
     ];
     if kind.names_subject() {
         rules.push(
-            "Every instruction names its subject: the specific product, document, tool, \
-             component or version it is about, as the sections or the `source` name it. Put \
-             that name in `subject`, written exactly as the instruction writes it. Someone who \
-             has never seen the source must get exactly one answer: a question whose answer \
-             would differ for another product or version is wrong."
+            "Every instruction names its subject: the specific person, place, event, matter, \
+             product, document, tool, component or version it is about, by a proper name or a \
+             distinctive phrase the sections or the `source` use for it - never a generic word \
+             such as \"letter\", \"text\", \"document\" or \"the writer\". Put that name in \
+             `subject`, written exactly as the instruction writes it. Someone who has never \
+             seen the source must get exactly one answer: a question whose answer would differ \
+             for another person, matter, product or version is wrong."
                 .to_string(),
         );
     }
