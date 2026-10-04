@@ -409,7 +409,10 @@ impl Session {
                     steps: args.steps,
                     rank: args.rank,
                     beta: args.beta,
-                    tuning: Tuning::default(),
+                    tuning: Tuning {
+                        learning_rate: args.lr,
+                        ..Tuning::default()
+                    },
                 };
                 let candidate = record(ctx, "train", &request, |run| {
                     train(ctx, &request, self.splinter.trainer(), &run.cancel_token())

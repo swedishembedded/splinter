@@ -477,6 +477,9 @@ pub struct TrainArgs {
     /// The DPO temperature, for preference datasets only.
     #[arg(long, value_name = "BETA", help = beta_help())]
     pub beta: Option<f32>,
+    /// The peak learning rate (brain's default if not given).
+    #[arg(long, value_name = "LR")]
+    pub lr: Option<f32>,
 }
 
 /// `--beta`'s help, naming the default it falls back to.

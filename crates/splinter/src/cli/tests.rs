@@ -233,6 +233,10 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         panic!("eval file");
     };
     assert_eq!(eval.suite, SuiteChoice::File("tasks.jsonl".into()));
+    let Command::Train(train) = command(&["train", "d1", "--lr", "0.0002"]) else {
+        panic!("train");
+    };
+    assert_eq!(train.lr, Some(0.0002));
     let Command::Exam(exam) = command(&["exam", "c1", "--judge", "local:Qwen/Qwen3-8B"]) else {
         panic!("exam");
     };
