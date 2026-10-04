@@ -47,6 +47,17 @@ pub enum Label {
 }
 
 impl Label {
+    /// The label as the canonical layout spells it.
+    fn name(self) -> &'static str {
+        match self {
+            Label::SourceDirect => "SOURCE_DIRECT",
+            Label::SourceInferred => "SOURCE_INFERRED",
+            Label::ModernObservation => "MODERN_OBSERVATION",
+            Label::PersonaTransfer => "PERSONA_TRANSFER",
+            Label::Speculation => "SPECULATION",
+        }
+    }
+
     fn parse(text: &str) -> Option<Label> {
         match text.trim().to_uppercase().as_str() {
             "SOURCE_DIRECT" => Some(Label::SourceDirect),
@@ -103,16 +114,44 @@ pub fn parse(answer: &str) -> Grounded {
     }
 }
 
-/// One bullet line of the block, if it is one.
+/// One line of the block, if it is an item: a bullet, or a line that starts
+/// with a label. A model writes `- SOURCE_DIRECT: "..."`, `SOURCE_DIRECT "..."`
+/// and `**SOURCE_DIRECT:** "..."` alike, so all are read; a line of prose is not
+/// an item.
 fn item_of(line: &str) -> Option<Item> {
-    let line = line.trim().strip_prefix(['-', '*'])?.trim();
-    let (raw_label, text) = line
-        .split_once(':')
-        .map_or((String::new(), line), |(l, t)| {
-            (l.trim().to_string(), t.trim())
-        });
+    let trimmed = line.trim();
+    let (bulleted, rest) = match ["- ", "* ", "\u{2022} "]
+        .iter()
+        .find_map(|b| trimmed.strip_prefix(b))
+    {
+        Some(rest) => (true, rest.trim()),
+        None => (false, trimmed),
+    };
+    let cleaned = rest.replace("**", "");
+    let cleaned = cleaned.trim();
+    let end = cleaned
+        .find(|c: char| c == ':' || c.is_whitespace())
+        .unwrap_or(cleaned.len());
+    let token = &cleaned[..end];
+    let label = Label::parse(token);
+    let shouty = token.len() >= 4 && token.chars().all(|c| c.is_ascii_uppercase() || c == '_');
+    if label.is_none() && !shouty && !bulleted {
+        return None;
+    }
+    let (raw_label, text) = if label.is_some() || shouty {
+        (
+            token.to_string(),
+            cleaned[end..].trim_start_matches(|c: char| c == ':' || c.is_whitespace()),
+        )
+    } else {
+        cleaned
+            .split_once(':')
+            .map_or((String::new(), cleaned), |(l, t)| {
+                (l.trim().to_string(), t.trim())
+            })
+    };
     Some(Item {
-        label: Label::parse(&raw_label),
+        label,
         raw_label,
         text: text.to_string(),
         quote: quoted(text),
@@ -134,6 +173,35 @@ fn bracketed(text: &str) -> Option<String> {
     let end = text.rfind(']')?;
     let start = text[..end].rfind('[')?;
     Some(text[start + 1..end].trim().to_string())
+}
+
+/// The answer with its grounding block in the one canonical layout, `- LABEL:
+/// text` per line, so a training answer teaches one format and not several.
+pub fn normalise(answer: &str) -> String {
+    let lines: Vec<&str> = answer.lines().collect();
+    let Some(at) = lines.iter().position(|l| {
+        l.trim()
+            .trim_end_matches(':')
+            .trim()
+            .eq_ignore_ascii_case("grounding")
+    }) else {
+        return answer.trim().to_string();
+    };
+    let mut out: Vec<String> = lines[..=at].iter().map(|l| (*l).to_string()).collect();
+    out[at] = "Grounding:".to_string();
+    for line in &lines[at + 1..] {
+        match item_of(line) {
+            Some(item) => {
+                let label = item
+                    .label
+                    .map_or(item.raw_label.clone(), |l| l.name().to_string());
+                out.push(format!("- {label}: {}", item.text));
+            }
+            None if line.trim().is_empty() => {}
+            None => out.push((*line).to_string()),
+        }
+    }
+    out.join("\n")
 }
 
 /// How an answer broke its word.
@@ -316,6 +384,40 @@ mod tests {
     fn an_answer_with_no_block_has_none_and_fails() {
         assert_eq!(parse("Just advice.").items, None);
         assert_eq!(check("Just advice.", &[]), vec![Violation::MissingBlock]);
+    }
+
+    #[test]
+    fn a_line_is_read_with_or_without_its_dash_and_colon_and_inside_bold_marks() {
+        for line in [
+            "- SOURCE_DIRECT: \"write to every Town\" [d1]",
+            "SOURCE_DIRECT \"write to every Town\" [d1]",
+            "* SOURCE_DIRECT: \"write to every Town\" [d1]",
+            "- **SOURCE_DIRECT**: \"write to every Town\" [d1]",
+            "**SOURCE_DIRECT:** \"write to every Town\" [d1]",
+        ] {
+            let g = parse(&format!("Advice.\n\nGrounding:\n{line}\n"));
+            let item = &g.items.unwrap()[0];
+            assert_eq!(item.label, Some(Label::SourceDirect), "{line}");
+            assert_eq!(item.quote.as_deref(), Some("write to every Town"), "{line}");
+            assert_eq!(item.doc.as_deref(), Some("d1"), "{line}");
+        }
+    }
+
+    #[test]
+    fn a_prose_line_inside_the_block_is_not_an_item_but_an_unknown_label_in_capitals_is_named() {
+        let g = parse("A.\n\nGrounding:\nThese are the sources I relied on.\nFACT: it is so\n");
+        let items = g.items.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].raw_label, "FACT");
+    }
+
+    #[test]
+    fn a_draft_is_rewritten_to_the_one_layout_and_rewriting_is_idempotent() {
+        let loose = "Applicability: APPLIES\n\nAdvice.\n\nGrounding:\nSOURCE_DIRECT \"write to every Town\" [d1]\n**PERSONA_TRANSFER:** carry it over\n* modern_observation: five teams exist\n";
+        let canonical = "Applicability: APPLIES\n\nAdvice.\n\nGrounding:\n- SOURCE_DIRECT: \"write to every Town\" [d1]\n- PERSONA_TRANSFER: carry it over\n- MODERN_OBSERVATION: five teams exist";
+        assert_eq!(normalise(loose), canonical);
+        assert_eq!(normalise(canonical), canonical);
+        assert_eq!(normalise("No block here."), "No block here.");
     }
 
     #[test]

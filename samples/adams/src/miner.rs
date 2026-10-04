@@ -115,7 +115,8 @@ const TASK: &str = "You read documents Samuel Adams wrote and state how he worke
 const ROLE: &str = "an historian of the American Revolution who reads primary sources closely and states nothing they do not show";
 
 /// How long the helper may take, and how much it may write, for one bundle.
-const OUTPUT_TOKENS: u64 = 1800;
+/// What the helper may write across every attempt, repairs included.
+const OUTPUT_TOKENS: u64 = 4000;
 const REPAIRS: u32 = 2;
 
 /// The helper's proposals for one bundle.

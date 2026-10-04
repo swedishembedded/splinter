@@ -183,7 +183,8 @@ struct Brief<'a> {
     qualifications: &'a [String],
 }
 
-const OUTPUT_TOKENS: u64 = 1200;
+/// What the designer may write across every attempt, repairs included.
+const OUTPUT_TOKENS: u64 = 3000;
 const REPAIRS: u32 = 2;
 
 /// Draft a scenario of `case` from `principle` and gate it.

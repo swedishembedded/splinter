@@ -46,7 +46,8 @@ struct Question<'a> {
     text: &'a str,
 }
 
-const OUTPUT_TOKENS: u64 = 300;
+/// What the judge may write across every attempt, repairs included.
+const OUTPUT_TOKENS: u64 = 900;
 const REPAIRS: u32 = 2;
 
 /// For each rubric item of `briefing`, whether `text` does it.

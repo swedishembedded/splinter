@@ -134,7 +134,8 @@ struct Reading<'a> {
     letter: &'a str,
 }
 
-const OUTPUT_TOKENS: u64 = 1500;
+/// What the helper may write across every attempt, repairs included.
+const OUTPUT_TOKENS: u64 = 3500;
 const REPAIRS: u32 = 2;
 
 /// Draft a briefing of the situation `letter` answered, and gate it.

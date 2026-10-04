@@ -134,10 +134,10 @@ pub fn check(text: &str, scenario: &Scenario, docs: &[&Document]) -> Result<(), 
         .flatten()
         .any(|i| i.label == Some(grounding::Label::SourceDirect));
     if scenario.case.applies() && !docs.is_empty() && !quotes_him {
-        return Err(
-            "a fit must rest on his words: add a SOURCE_DIRECT line quoting one of the passages"
-                .to_string(),
-        );
+        return Err(format!(
+            "a fit must rest on his words: add a line to the Grounding: block that looks exactly like `- SOURCE_DIRECT: \"words copied from one of the passages\" [{}]`",
+            docs.first().map_or("document-id", |d| d.id.as_str())
+        ));
     }
     Ok(())
 }
@@ -169,7 +169,9 @@ struct Brief<'a> {
     the_question: &'a str,
 }
 
-const OUTPUT_TOKENS: u64 = 1400;
+/// What the drafter may write across every attempt, repairs included: the
+/// budget covers the whole call, not each try.
+const OUTPUT_TOKENS: u64 = 4000;
 const REPAIRS: u32 = 2;
 
 /// Draft an answer to `scenario` as he would give it, citing only `evidence`,
@@ -225,7 +227,7 @@ pub fn draft(
         .answer;
     Ok(Answer {
         scenario_id: scenario.id.clone(),
-        text: text.trim().to_string(),
+        text: grounding::normalise(&text),
     })
 }
 
@@ -444,6 +446,42 @@ mod tests {
         assert!(
             sent.contains("Let the Committee write to every Town") && sent.contains("[d1]"),
             "the helper is shown the evidence it may cite"
+        );
+    }
+
+    #[test]
+    fn a_draft_in_a_looser_layout_is_stored_in_the_one_layout_the_student_is_taught() {
+        let loose = "Applicability: APPLIES\n\nI would have each team put its case in writing.\n\nGrounding:\nSOURCE_DIRECT \"Let the Committee write to every Town\" [d1]\n**MODERN_OBSERVATION:** There are five regional teams\nPERSONA_TRANSFER the committee method carried to the teams\n";
+        let (h, _) = helper(&[&serde_json::json!({"answer": loose}).to_string()]);
+        let a = draft(&h, &scenario(Case::Clear), &principle(), &docs()).unwrap();
+        assert!(
+            a.text
+                .contains("\n- SOURCE_DIRECT: \"Let the Committee write to every Town\" [d1]"),
+            "{}",
+            a.text
+        );
+        assert!(
+            a.text
+                .contains("\n- MODERN_OBSERVATION: There are five regional teams")
+                && a.text
+                    .contains("\n- PERSONA_TRANSFER: the committee method"),
+            "{}",
+            a.text
+        );
+        assert!(!a.text.contains("**"));
+    }
+
+    #[test]
+    fn the_refusal_for_a_missing_quotation_shows_the_layout_a_line_must_have() {
+        let d = docs();
+        let none = FIT.replace(
+            "- SOURCE_DIRECT: \"Let the Committee write to every Town\" [d1]\n",
+            "",
+        );
+        let why = check(&none, &scenario(Case::Clear), &refs(&d)).unwrap_err();
+        assert!(
+            why.contains("- SOURCE_DIRECT: \"") && why.contains("[d1]"),
+            "{why}"
         );
     }
 
