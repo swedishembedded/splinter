@@ -34,6 +34,20 @@ pub struct DecisionRef {
     pub task_instance: ContentId,
 }
 
+/// Which attempt a run records and where in it the run stands.
+pub(super) struct Standing {
+    /// The attempt's record id.
+    pub attempt: RecordId,
+    /// The family it belongs to.
+    pub family: ContentId,
+    /// The task instance it belongs to.
+    pub task_instance: ContentId,
+    /// The world the run starts in.
+    pub state: ContentId,
+    /// The record the next one hangs from.
+    pub head: RecordId,
+}
+
 /// One attempt being recorded. Records are added to the collector's buffer
 /// as they happen; [`Collector::flush`] makes them durable.
 pub struct Run<'a> {
@@ -48,24 +62,19 @@ pub struct Run<'a> {
 }
 
 impl<'a> Run<'a> {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         collector: &'a mut Collector,
-        attempt: RecordId,
-        family: ContentId,
-        task_instance: ContentId,
-        state: ContentId,
-        head: RecordId,
+        at: Standing,
         policy: PolicyRef,
         fork: Option<(RecordId, RecordId)>,
     ) -> Self {
         Self {
             collector,
-            attempt,
-            family,
-            task_instance,
-            state,
-            head,
+            attempt: at.attempt,
+            family: at.family,
+            task_instance: at.task_instance,
+            state: at.state,
+            head: at.head,
             policy,
             fork,
         }

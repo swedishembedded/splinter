@@ -11,7 +11,7 @@
 
 use std::collections::HashSet;
 
-use super::run::{DecisionRef, Run};
+use super::run::{DecisionRef, Run, Standing};
 use super::writer::{Destination, Writer};
 use crate::blob::BlobRef;
 use crate::database::Database;
@@ -190,11 +190,13 @@ impl Collector {
         self.writer.push(attempt)?;
         Ok(Run::new(
             self,
-            attempt_id,
-            family,
-            instance_id,
-            state_id,
-            attempt_id,
+            Standing {
+                attempt: attempt_id,
+                family,
+                task_instance: instance_id,
+                state: state_id,
+                head: attempt_id,
+            },
             policy.clone(),
             None,
         ))
@@ -231,11 +233,13 @@ impl Collector {
         let head = origin.parent.unwrap_or(attempt_id);
         Ok(Run::new(
             self,
-            attempt_id,
-            origin.family,
-            origin.task_instance,
-            origin.state,
-            head,
+            Standing {
+                attempt: attempt_id,
+                family: origin.family,
+                task_instance: origin.task_instance,
+                state: origin.state,
+                head,
+            },
             policy.clone(),
             Some((set_id, origin.id)),
         ))
