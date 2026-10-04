@@ -103,27 +103,38 @@ pub fn ask(
     )
 }
 
-/// Asks `question` of `policy` with the (at most) `passages` passages of
-/// `sources` that bear on it, nearest in meaning first, found by `embedder`,
-/// and records the answer. A source with nothing to retrieve is refused.
+/// A question asked with retrieval.
+pub struct RetrievingQuestion<'a> {
+    /// The question.
+    pub question: &'a str,
+    /// The stored sources whose passages are searched, by id.
+    pub sources: &'a [String],
+    /// How many passages are shown with the question, at most.
+    pub passages: usize,
+    /// A reader of the candidates search found, when there is one.
+    pub rerank: Option<Rerank<'a>>,
+    /// The model asked.
+    pub policy: &'a ModelRef,
+}
+
+/// Asks the question of its policy with the passages of its sources that
+/// bear on it, nearest in meaning first, found by `embedder`, and records
+/// the answer. A source with nothing to retrieve is refused.
 pub fn ask_retrieving(
     ctx: &Context,
-    question: &str,
-    sources: &[String],
-    passages_shown: usize,
+    request: &RetrievingQuestion<'_>,
     embedder: &dyn Embedder,
-    rerank: Option<Rerank<'_>>,
-    policy: &ModelRef,
 ) -> Result<Answer, OrchestratorError> {
+    let question = request.question;
     if question.trim().is_empty() {
         return Err(OrchestratorError::Refused("the question is empty".into()));
     }
-    let (ids, library) = library_of(ctx, sources, embedder)?;
+    let (ids, library) = library_of(ctx, request.sources, embedder)?;
     let retrieval = Retrieval {
         library: &library,
         embedder,
-        passages: passages_shown,
-        rerank,
+        passages: request.passages,
+        rerank: request.rerank,
     };
     let retrieved = retrieval.find(question)?;
     // A reader that was loaded to judge passages gives the device back
@@ -149,7 +160,7 @@ pub fn ask_retrieving(
         retrieved_from: ids,
         shown,
     };
-    answer_with(ctx, question, instruction, grounding, policy)
+    answer_with(ctx, question, instruction, grounding, request.policy)
 }
 
 /// What a question was shown besides itself.

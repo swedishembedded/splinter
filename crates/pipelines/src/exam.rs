@@ -492,53 +492,53 @@ pub enum Exam {
     NotRun(String),
 }
 
-/// The `exam` command: the stored candidate `candidate` examined against the
-/// model it continues (its parent release, else the base), by `judge` (else the judge role's model); see
-/// [`examine_candidate`].
+/// What the `exam` command asks of a stored candidate.
+pub struct ExamineRequest<'a> {
+    /// The candidate to examine, by id or unique prefix.
+    pub candidate: &'a str,
+    /// The model it is measured against; `None` is the model it continues:
+    /// the release it was trained from, else the base alone - not what the
+    /// alias points at now, which is the candidate itself once it is released.
+    pub base: Option<&'a ModelRef>,
+    /// The model that judges; `None` is the judge role's.
+    pub judge: Option<&'a ModelRef>,
+    /// A goal the base is also asked under, for a prompt-only baseline; see
+    /// [`ExamRequest::prompted`].
+    pub prompted: Option<&'a str>,
+    /// Retrieval for a further arm; see [`ExamRequest::retrieval`].
+    pub retrieval: Option<&'a Retrieval<'a>>,
+}
+
+/// Examines the stored candidate `request` names against what it continues,
+/// on its held-out tasks, the judge calibrated on controls made from the
+/// references of its tasks. An exam that has nothing to run on says so
+/// instead of reporting an empty result.
 pub fn examine(
     ctx: &Context,
-    candidate: &str,
-    judge: Option<&ModelRef>,
-    prompted: Option<&str>,
-    retrieval: Option<&Retrieval<'_>>,
+    request: &ExamineRequest<'_>,
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
-    let judge = match judge {
+    let judge = match request.judge {
         Some(named) => named.clone(),
         None => assignments(ctx.config(), &RoleOverrides::default())?
             .get(Role::Judge)
             .clone(),
     };
-    // The candidate is measured against what it continues - the release it
-    // was trained from, or the base alone - not against what the alias
-    // points at now, which is the candidate itself once it is released.
-    let trained = load_candidate(ctx, candidate)?;
-    let continued = trained
-        .parent
-        .as_ref()
-        .map(|id| ctx.releases().get(id))
-        .transpose()?;
-    let base = arm(
-        ctx.config(),
-        continued.as_ref().map(|r| r.adapter.as_path()),
-    );
-    examine_candidate(ctx, candidate, &base, &judge, prompted, retrieval, cancel)
-}
-
-/// Examines the trained candidate `candidate` against `base` on its held-out
-/// tasks, the judge calibrated on controls made from the references of its
-/// tasks. An exam that has nothing to run on says so
-/// instead of reporting an empty result.
-pub fn examine_candidate(
-    ctx: &Context,
-    candidate: &str,
-    base: &ModelRef,
-    judge: &ModelRef,
-    prompted: Option<&str>,
-    retrieval: Option<&Retrieval<'_>>,
-    cancel: &CancelToken,
-) -> Result<Exam, OrchestratorError> {
-    let trained = load_candidate(ctx, candidate)?;
+    let trained = load_candidate(ctx, request.candidate)?;
+    let base = match request.base {
+        Some(named) => named.clone(),
+        None => {
+            let continued = trained
+                .parent
+                .as_ref()
+                .map(|id| ctx.releases().get(id))
+                .transpose()?;
+            arm(
+                ctx.config(),
+                continued.as_ref().map(|r| r.adapter.as_path()),
+            )
+        }
+    };
     // Each model is asked under the prompt it was trained under.
     let candidate_system = ctx.system_prompt_of(&trained.datasets)?;
     let base_system = match trained.parent.as_ref() {
@@ -571,11 +571,11 @@ pub fn examine_candidate(
         &ExamRequest {
             tasks: &tasks,
             controls: &controls,
-            base,
+            base: &base,
             candidate: &candidate,
-            judge,
-            prompted,
-            retrieval,
+            judge: &judge,
+            prompted: request.prompted,
+            retrieval: request.retrieval,
             base_system: base_system.as_deref(),
             candidate_system: candidate_system.as_deref(),
             cancel: cancel.clone(),

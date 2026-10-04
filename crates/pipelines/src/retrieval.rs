@@ -53,6 +53,7 @@ pub fn candidates_for(passages: usize) -> usize {
 }
 
 /// A reader that reorders what search found.
+#[derive(Clone, Copy)]
 pub struct Rerank<'a> {
     /// Judges whether a passage bears on the question.
     pub reranker: &'a dyn Reranker,

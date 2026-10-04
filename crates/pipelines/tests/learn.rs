@@ -41,7 +41,7 @@ use splinter_core::release::ReleaseId;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::{Context, OrchestratorError};
-use splinter_pipelines::exam::{examine, Exam};
+use splinter_pipelines::exam::{examine, Exam, ExamineRequest};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::{anchor, rollback};
 use splinter_pipelines::train::{TrainPlan, Trainer};
@@ -188,9 +188,18 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         Model::new(Arc::new(policy()), common::POLICY),
     );
     let id = &report.candidate.as_ref().unwrap().candidate;
-    let Exam::Ran(examined) =
-        examine(&ctx, id, Some(&judge), None, None, &CancelToken::new()).unwrap()
-    else {
+    let Exam::Ran(examined) = examine(
+        &ctx,
+        &ExamineRequest {
+            candidate: id,
+            base: None,
+            judge: Some(&judge),
+            prompted: None,
+            retrieval: None,
+        },
+        &CancelToken::new(),
+    )
+    .unwrap() else {
         panic!("the exam of a stored candidate runs");
     };
     assert!(examined.judge.controls > 0, "{examined:#?}");

@@ -11,12 +11,12 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_sdk::ask::{ask, ask_retrieving};
+use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest};
 use splinter_sdk::eval::{evaluate, EvalRequest};
-use splinter_sdk::exam::examine;
+use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::calibrate_judge;
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
@@ -256,12 +256,14 @@ impl Session {
                         json,
                         &ask_retrieving(
                             ctx,
-                            &args.question,
-                            &retrieve.sources,
-                            retrieve.passages,
+                            &RetrievingQuestion {
+                                question: &args.question,
+                                sources: &retrieve.sources,
+                                passages: retrieve.passages,
+                                rerank,
+                                policy: &args.policy,
+                            },
                             &*embedder,
-                            rerank,
-                            &args.policy,
                         )?,
                     );
                 }
@@ -535,10 +537,13 @@ impl Session {
                     &record(ctx, "exam", &arguments, |run| {
                         examine(
                             ctx,
-                            &args.candidate,
-                            args.judge.as_ref(),
-                            args.prompt.as_deref(),
-                            retrieval.as_ref(),
+                            &ExamineRequest {
+                                candidate: &args.candidate,
+                                base: None,
+                                judge: args.judge.as_ref(),
+                                prompted: args.prompt.as_deref(),
+                                retrieval: retrieval.as_ref(),
+                            },
                             &run.cancel_token(),
                         )
                     })?,

@@ -20,7 +20,7 @@ use common::{scratch_context, Scripted};
 use splinter_core::model_ref::ModelRef;
 use splinter_knowledge::retrieve::{EmbedError, Embedder, Passage, RerankError, Reranker};
 use splinter_orchestrator::OrchestratorError;
-use splinter_pipelines::ask::ask_retrieving;
+use splinter_pipelines::ask::{ask_retrieving, RetrievingQuestion};
 use splinter_pipelines::lineage::{lineage, Direction, LineageRequest, Relation};
 use splinter_pipelines::retrieval::Rerank;
 use splinter_pipelines::sources::{self, SourceTarget};
@@ -65,12 +65,14 @@ fn the_model_is_shown_the_passage_that_bears_on_the_question_and_not_the_rest() 
     .id;
     let answer = ask_retrieving(
         &ctx,
-        "How should a young person learn?",
-        &[source.to_string()],
-        1,
+        &RetrievingQuestion {
+            question: "How should a young person learn?",
+            sources: &[source.to_string()],
+            passages: 1,
+            rerank: None,
+            policy: &ModelRef::policy_default(),
+        },
         &Concepts,
-        None,
-        &ModelRef::policy_default(),
     )
     .unwrap();
     assert!(answer.answer.contains("surest foundation of liberty"));
@@ -123,12 +125,14 @@ fn a_source_with_no_passage_to_retrieve_is_refused() {
     .id;
     let refused = ask_retrieving(
         &ctx,
-        "anything",
-        &[source.to_string()],
-        3,
+        &RetrievingQuestion {
+            question: "anything",
+            sources: &[source.to_string()],
+            passages: 3,
+            rerank: None,
+            policy: &ModelRef::policy_default(),
+        },
         &Concepts,
-        None,
-        &ModelRef::policy_default(),
     );
     assert!(matches!(refused, Err(OrchestratorError::Refused(_))));
 }
@@ -169,12 +173,14 @@ fn the_passages_of_a_source_are_embedded_once_and_the_index_is_kept() {
     let ask = |question: &str| {
         ask_retrieving(
             &ctx,
-            question,
-            std::slice::from_ref(&source),
-            1,
+            &RetrievingQuestion {
+                question,
+                sources: std::slice::from_ref(&source),
+                passages: 1,
+                rerank: None,
+                policy: &ModelRef::policy_default(),
+            },
             &embedder,
-            None,
-            &ModelRef::policy_default(),
         )
         .unwrap()
         .answer
@@ -193,12 +199,14 @@ fn the_passages_of_a_source_are_embedded_once_and_the_index_is_kept() {
     let other = Counting(0.into());
     ask_retrieving(
         &ctx,
-        "anything",
-        std::slice::from_ref(&source),
-        1,
+        &RetrievingQuestion {
+            question: "anything",
+            sources: std::slice::from_ref(&source),
+            passages: 1,
+            rerank: None,
+            policy: &ModelRef::policy_default(),
+        },
         &Renamed(&other),
-        None,
-        &ModelRef::policy_default(),
     )
     .unwrap();
     assert_eq!(other.0.load(std::sync::atomic::Ordering::SeqCst), 2);
@@ -246,15 +254,17 @@ fn a_reranker_changes_which_passage_the_model_is_shown() {
     let reader = Holding("hogsheads");
     let answer = ask_retrieving(
         &ctx,
-        "How should a young person learn?",
-        &[source],
-        1,
+        &RetrievingQuestion {
+            question: "How should a young person learn?",
+            sources: &[source],
+            passages: 1,
+            rerank: Some(Rerank {
+                reranker: &reader,
+                candidates: 2,
+            }),
+            policy: &ModelRef::policy_default(),
+        },
         &Concepts,
-        Some(Rerank {
-            reranker: &reader,
-            candidates: 2,
-        }),
-        &ModelRef::policy_default(),
     )
     .unwrap();
     // Search alone would show the passage about teaching; the reader found

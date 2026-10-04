@@ -37,7 +37,7 @@ use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{build, BuildRequest, ViewName, DEFAULT_MIN_STRENGTH};
-use crate::exam::{examine_candidate, Exam};
+use crate::exam::{examine, Exam, ExamineRequest};
 use crate::plan::plan as make_plan;
 use crate::release::{release, ReleaseRequest};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
@@ -539,13 +539,15 @@ fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) ->
     let Some(id) = st.candidate.as_ref() else {
         unreachable!("the exam stage follows the train stage")
     };
-    let examined = match examine_candidate(
+    let examined = match examine(
         ctx,
-        id,
-        &st.learn.policy,
-        st.learn.judge,
-        st.learn.goal,
-        None,
+        &ExamineRequest {
+            candidate: id,
+            base: Some(&st.learn.policy),
+            judge: Some(st.learn.judge),
+            prompted: st.learn.goal,
+            retrieval: None,
+        },
         &run.cancel_token(),
     ) {
         Ok(examined) => examined,
