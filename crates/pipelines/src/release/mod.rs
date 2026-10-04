@@ -306,12 +306,19 @@ fn soft<T>(result: Result<T, OrchestratorError>) -> Result<Result<T, String>, Or
 fn grade_arm(
     ctx: &Context,
     reference: &ModelRef,
+    system: Option<&str>,
     suites: &[&Suite],
     cancel: &CancelToken,
 ) -> Result<Vec<Graded>, OrchestratorError> {
     let model = match soft(probe::greedy(ctx, reference))? {
         Ok(model) => model,
         Err(why) => return Ok(suites.iter().map(|_| Err(why.clone())).collect()),
+    };
+    // Each arm is asked as it is deployed: under the prompt it was trained
+    // under, whatever that is.
+    let model = match system {
+        Some(system) => model.with_system(system),
+        None => model,
     };
     let mut graded = Vec::with_capacity(suites.len());
     for suite in suites {
@@ -421,8 +428,21 @@ fn run_gate(
     let all = suites.all();
     let candidate_ref = arm(ctx.config(), Some(&candidate.adapter));
     let champion_ref = arm(ctx.config(), champion.map(|c| c.adapter.as_path()));
-    let mut theirs = grade_arm(ctx, &candidate_ref, &all, cancel)?.into_iter();
-    let mut ours = grade_arm(ctx, &champion_ref, &all, cancel)?.into_iter();
+    let candidate_prompt = ctx.system_prompt_of(&candidate.datasets)?;
+    let champion_prompt = match champion {
+        Some(champion) => ctx.system_prompt_of(&champion.manifest.datasets)?,
+        None => None,
+    };
+    let mut theirs = grade_arm(
+        ctx,
+        &candidate_ref,
+        candidate_prompt.as_deref(),
+        &all,
+        cancel,
+    )?
+    .into_iter();
+    let mut ours =
+        grade_arm(ctx, &champion_ref, champion_prompt.as_deref(), &all, cancel)?.into_iter();
     let mut next = || -> Result<(Outcomes, Outcomes), String> {
         // Both arms graded the same suites, so both iterators hold one
         // entry per suite.
@@ -498,6 +518,7 @@ fn run_gate(
                 base_source,
                 &candidate.adapter,
                 &candidate.adapter_digest,
+                candidate_prompt.as_deref(),
                 &sample,
                 &probes[..take],
                 Duration::from_secs(config.serve_startup_secs),

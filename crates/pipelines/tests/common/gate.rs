@@ -264,6 +264,14 @@ pub fn device_lock(scratch: &Scratch) -> PathBuf {
     scratch.0.join(DEVICE_LOCK)
 }
 
+/// The file the `brain` stand-in appends the system turns of the requests it
+/// answers to, one JSON array a line.
+pub fn request_log(scratch: &Scratch) -> PathBuf {
+    scratch.0.join(REQUEST_LOG)
+}
+
+const REQUEST_LOG: &str = "requests.log";
+
 /// [`device_lock`]'s name in the scratch directory.
 const DEVICE_LOCK: &str = "device.lock";
 
@@ -614,7 +622,8 @@ fn fake_brain(dir: &Path, brain: Brain) -> PathBuf {
         .replace("@WRONG@", python(brain == Brain::WrongDigest))
         .replace("@DIVERGENT@", python(brain == Brain::Divergent))
         .replace("@DIFFERENT@", python(brain == Brain::Different))
-        .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string());
+        .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string())
+        .replace("@LOG@", &dir.join(REQUEST_LOG).display().to_string());
     std::fs::write(&path, script).unwrap();
     #[cfg(unix)]
     {
@@ -666,6 +675,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(401); self.end_headers(); return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         users = [text_of(m.get("content")) for m in body["messages"] if m.get("role") == "user"]
+        systems = [text_of(m.get("content")) for m in body["messages"] if m.get("role") == "system"]
+        with open("@LOG@", "a") as log:
+            log.write(json.dumps(systems) + "\n")
         # Sampled at any temperature but zero, a real model's answer is a
         # draw: the double answers only when asked to decode greedily.
         answer = reply(users[-1] if users else "") if body.get("temperature") == 0 else "sampled"

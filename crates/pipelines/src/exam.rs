@@ -75,6 +75,13 @@ pub struct ExamRequest<'a> {
     /// training is worth what it adds beyond telling the base what the goal
     /// is. `None` adds no such arm.
     pub prompted: Option<&'a str>,
+    /// The system prompt the model the candidate continues is asked under:
+    /// the one it was trained under; `None` is the default.
+    pub base_system: Option<&'a str>,
+    /// The system prompt the candidate was trained under, and so is asked
+    /// under; `None` is the default. The prompted base is asked under it
+    /// too: the one thing that tells it from the base is the prompt.
+    pub candidate_system: Option<&'a str>,
     /// Passages to retrieve for each task and show before it, for a further
     /// arm: the candidate with retrieval, against the candidate alone. `None`
     /// adds no such arm.
@@ -266,13 +273,22 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             .collect()
     });
     let answers = |reference: &ModelRef,
+                   system: Option<&str>,
                    goal: Option<&str>,
                    prompts: Option<&[String]>|
      -> Result<(String, Vec<Experience>), OrchestratorError> {
         let mut model = greedy(ctx, reference)?;
+        if let Some(system) = system {
+            model = model.with_system(system);
+        }
         if let Some(goal) = goal {
-            model.provider =
-                with_system_addendum(model.provider.clone(), &format!("Your purpose: {goal}"));
+            // Where the candidate has a prompt of its own the prompted base
+            // is asked under it and needs no goal beside it; else the goal
+            // is added to the default prompt.
+            if system.is_none() {
+                model.provider =
+                    with_system_addendum(model.provider.clone(), &format!("Your purpose: {goal}"));
+            }
             model.identity = format!("{}+prompted", model.identity);
         }
         if prompts.is_some() {
@@ -291,15 +307,23 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     };
     // Both arms answer before the judge is loaded, so the device swaps models
     // as few times as it can.
-    let (base_model, base_answers) = answers(request.base, None, None)?;
+    let (base_model, base_answers) = answers(request.base, request.base_system, None, None)?;
     let prompted_answers = request
         .prompted
-        .map(|goal| answers(request.base, Some(goal), None))
+        .map(|goal| answers(request.base, request.candidate_system, Some(goal), None))
         .transpose()?;
-    let (candidate_model, candidate_answers) = answers(request.candidate, None, None)?;
+    let (candidate_model, candidate_answers) =
+        answers(request.candidate, request.candidate_system, None, None)?;
     let retrieval_answers = retrieval_prompts
         .as_deref()
-        .map(|prompts| answers(request.candidate, None, Some(prompts)))
+        .map(|prompts| {
+            answers(
+                request.candidate,
+                request.candidate_system,
+                None,
+                Some(prompts),
+            )
+        })
         .transpose()?;
 
     // The judge is a different model from the arms' and needs the device for
@@ -515,6 +539,12 @@ pub fn examine_candidate(
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
     let trained = load_candidate(ctx, candidate)?;
+    // Each model is asked under the prompt it was trained under.
+    let candidate_system = ctx.system_prompt_of(&trained.datasets)?;
+    let base_system = match trained.parent.as_ref() {
+        Some(parent) => ctx.system_prompt_of(&ctx.releases().get(parent)?.manifest.datasets)?,
+        None => None,
+    };
     let suite = held_out(ctx, "exam", &trained.datasets)?;
     if suite.tasks.is_empty() {
         return Ok(Exam::NotRun("no held-out task to put to the models".into()));
@@ -546,6 +576,8 @@ pub fn examine_candidate(
             judge,
             prompted,
             retrieval,
+            base_system: base_system.as_deref(),
+            candidate_system: candidate_system.as_deref(),
             cancel: cancel.clone(),
         },
     )?;

@@ -156,6 +156,8 @@ fn run(
             judge: &model("judge"),
             prompted: None,
             retrieval: None,
+            base_system: None,
+            candidate_system: None,
             cancel: CancelToken::new(),
         },
     )
@@ -258,6 +260,8 @@ fn an_exam_of_a_model_against_itself_is_refused() {
             judge: &model("judge"),
             prompted: None,
             retrieval: None,
+            base_system: None,
+            candidate_system: None,
             cancel: CancelToken::new(),
         },
     );
@@ -280,6 +284,8 @@ fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with
         judge: &judge,
         prompted,
         retrieval: None,
+        base_system: None,
+        candidate_system: None,
         cancel: CancelToken::new(),
     };
     let without = exam(&ctx, &request(None)).unwrap();
@@ -359,6 +365,8 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
             judge: &judge,
             prompted: None,
             retrieval: Some(&retrieval),
+            base_system: None,
+            candidate_system: None,
             cancel: CancelToken::new(),
         },
     )
@@ -377,4 +385,48 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
         .all(|t| t.evidence_found && t.alone == Some(false) && t.with_passages == Some(true)));
     let against = report.paired_retrieval.as_ref().unwrap();
     assert_eq!((against.discordant, against.candidate_wins), (2, 2));
+}
+
+#[test]
+fn each_arm_is_asked_under_the_prompt_it_is_deployed_with() {
+    use splinter_agent::solve::SYSTEM_PROMPT;
+    const PERSONA: &str = "You are a clerk of the old school.";
+    let (_scratch, ctx, tasks, controls) = setup("exam-systems", judge(false));
+    // The arms, recording the system turns they are sent.
+    let base = arm(false, None);
+    let tuned = arm(true, None);
+    for (name, script) in [("base", &base), ("tuned", &tuned)] {
+        ctx.add_model(
+            format!("local:exam/{name}").parse().unwrap(),
+            Model::new(Arc::new(script.clone()), format!("scripted/{name}")),
+        );
+    }
+    let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
+    let (base_ref, tuned_ref, judge_ref) = (model("base"), model("tuned"), model("judge"));
+    exam(
+        &ctx,
+        &ExamRequest {
+            tasks: &tasks,
+            controls: &controls,
+            base: &base_ref,
+            candidate: &tuned_ref,
+            judge: &judge_ref,
+            prompted: Some("be a clerk"),
+            retrieval: None,
+            base_system: None,
+            candidate_system: Some(PERSONA),
+            cancel: CancelToken::new(),
+        },
+    )
+    .unwrap();
+    let seen = |script: &Scripted| -> Vec<Vec<String>> { script.systems.lock().unwrap().clone() };
+    // The base arm answers under the default and the prompted base under the
+    // candidate's: both are the base's, so they are told apart by the prompt.
+    let base_seen = seen(&base);
+    assert_eq!(base_seen.len(), 12, "the base, then the base prompted");
+    assert!(base_seen[..6]
+        .iter()
+        .all(|s| s == &[SYSTEM_PROMPT.to_string()]));
+    assert!(base_seen[6..].iter().all(|s| s == &[PERSONA.to_string()]));
+    assert!(seen(&tuned).iter().all(|s| s == &[PERSONA.to_string()]));
 }

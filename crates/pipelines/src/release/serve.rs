@@ -70,6 +70,7 @@ pub fn check(
     base: &Path,
     adapter: &Path,
     adapter_digest: &str,
+    system: Option<&str>,
     sample: &Suite,
     in_process: &[Probe],
     startup: Duration,
@@ -94,10 +95,11 @@ pub fn check(
             binary,
             base,
             adapter,
+            adapter_digest,
+            system,
             work: &work,
             models: &ctx.config().model_store,
         },
-        adapter_digest,
         sample,
         in_process,
         startup,
@@ -123,6 +125,10 @@ struct Server<'a> {
     binary: &'a Path,
     base: &'a Path,
     adapter: &'a Path,
+    /// The digest the adapter must be served under.
+    adapter_digest: &'a str,
+    /// The system prompt the candidate is asked under; `None` is the default.
+    system: Option<&'a str>,
     work: &'a Path,
     models: &'a Path,
 }
@@ -142,7 +148,6 @@ impl Drop for Running {
 fn serve_and_ask(
     ctx: &Context,
     server: &Server<'_>,
-    adapter_digest: &str,
     sample: &Suite,
     in_process: &[Probe],
     startup: Duration,
@@ -227,7 +232,7 @@ fn serve_and_ask(
         binary: server.binary.to_path_buf(),
         startup_line: startup_line.clone(),
         served_digest,
-        expected_digest: adapter_digest.to_string(),
+        expected_digest: server.adapter_digest.to_string(),
         sampled: 0,
         agreed: 0,
         disagreed: Vec::new(),
@@ -243,7 +248,12 @@ fn serve_and_ask(
         Some(GREEDY_SAMPLING.temperature),
     )
     .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
+    // Asked as the candidate is: under the prompt it was trained under.
     let served = Model::new(loaded.provider(), loaded.identity());
+    let served = match server.system {
+        Some(system) => served.with_system(system),
+        None => served,
+    };
     let answers = grade(ctx, &served, sample, cancel).map_err(|e| match e {
         OrchestratorError::Cancelled => Failure::Cancelled,
         other => Failure::Unmeasured(format!("asking the served candidate: {other}")),
