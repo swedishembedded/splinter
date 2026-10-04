@@ -92,11 +92,28 @@ pub fn student_prompt(scenario: &Scenario, evidence: &[Found]) -> String {
     prompt
 }
 
-/// The numbers in `text`: every word that has a digit in it, lower-cased.
+/// The numbers in `text`: every word that has a digit in it, lower-cased. The
+/// number that starts a list item (`1.`, `2)`) numbers the list, not a fact.
 fn numbers_in(text: &str) -> HashSet<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|t| t.chars().any(|c| c.is_ascii_digit()))
-        .map(str::to_lowercase)
+    text.lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            let digits = trimmed.chars().take_while(char::is_ascii_digit).count();
+            let marker = digits > 0
+                && trimmed[digits..].starts_with(['.', ')'])
+                && trimmed[digits + 1..].starts_with(char::is_whitespace);
+            if marker {
+                &trimmed[digits + 1..]
+            } else {
+                line
+            }
+        })
+        .flat_map(|line| {
+            line.split(|c: char| !c.is_alphanumeric())
+                .filter(|t| t.chars().any(|c| c.is_ascii_digit()))
+                .map(str::to_lowercase)
+                .collect::<Vec<_>>()
+        })
         .collect()
 }
 
@@ -139,7 +156,7 @@ pub fn check(text: &str, scenario: &Scenario, docs: &[&Document]) -> Result<(), 
     let given: String = std::iter::once(scenario.situation.as_str())
         .chain(scenario.observations.iter().map(String::as_str))
         .chain(std::iter::once(scenario.request.as_str()))
-        .chain(docs.iter().map(|d| d.body.as_str()))
+        .chain(docs.iter().flat_map(|d| [d.id.as_str(), d.body.as_str()]))
         .collect::<Vec<_>>()
         .join(" ");
     let allowed = numbers_in(&given);
@@ -487,6 +504,31 @@ mod tests {
         assert_eq!(check(&from_fact, &s, &refs(&d)), Ok(()));
         let from_request = FIT.replace("I would have", "I would, being asked, have");
         assert_eq!(check(&from_request, &s, &refs(&d)), Ok(()));
+    }
+
+    #[test]
+    fn the_numbers_of_a_numbered_list_are_not_facts_the_answer_invented() {
+        let d = docs();
+        let listed = FIT.replace("I would have each team put its own case in writing, then gather them for the platform group.", "1. Have each team put its case in writing.\n2) Gather them for the platform group.\n3. Decide together.");
+        assert_eq!(check(&listed, &scenario(Case::Clear), &refs(&d)), Ok(()));
+        let mid_sentence = FIT.replace("put its own case", "put its own case, all 3 of them,");
+        assert!(
+            check(&mid_sentence, &scenario(Case::Clear), &refs(&d))
+                .unwrap_err()
+                .contains("number"),
+            "a number inside a sentence is still a claim"
+        );
+    }
+
+    #[test]
+    fn the_number_in_the_id_of_a_passage_the_student_was_shown_is_not_an_invention() {
+        let mut documents = docs().to_vec();
+        documents[0].id = "cushing-4-134".into();
+        let refs: Vec<&Document> = documents.iter().collect();
+        let text = FIT
+            .replace("[d1]", "[cushing-4-134]")
+            .replace("I would have", "As in cushing-4-134 I would have");
+        assert_eq!(check(&text, &scenario(Case::Clear), &refs), Ok(()));
     }
 
     #[test]
