@@ -84,7 +84,7 @@ pub fn replies_command(r: &Replies) -> anyhow::Result<()> {
     let answerer = splinter_sdk::model::answer::Answerer::load_with(
         &r.base,
         r.adapter.as_deref(),
-        8192,
+        Some(8192),
         "adams",
         r.decoding,
     )?;

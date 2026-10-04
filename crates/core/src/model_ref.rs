@@ -12,14 +12,16 @@
 //! |---|---|
 //! | `policy:default` | the configured base, plus the champion adapter once releases exist |
 //! | `policy:<alias>` | the configured base, plus the adapter of the release `<alias>` points at |
-//! | `local:<checkpoint>[+<adapter>]` | a local checkpoint, optionally with a LoRA adapter file |
+//! | `local:<checkpoint>[+<adapter>][@<tokens>]` | a local checkpoint, optionally with a LoRA adapter file and a context limit |
 //! | `remote:<provider>/<name>` | a model reached over the network |
 //!
 //! A checkpoint is a path when it is absolute or starts with `./` or
 //! `../`, and otherwise a name in the model store (`Qwen/Qwen3-0.6B`).
 //! The first `+` separates the adapter, so a checkpoint path holding a `+`
-//! cannot be named. A remote reference resolves only with the network
-//! opt-in.
+//! cannot be named. A local model has the largest context its checkpoint
+//! supports unless `@<tokens>` limits it, as fitting a card's memory
+//! requires; a trailing `@` that is not followed by digits belongs to the
+//! name. A remote reference resolves only with the network opt-in.
 
 use std::str::FromStr;
 
@@ -27,21 +29,22 @@ use std::str::FromStr;
 pub const POLICY_DEFAULT: &str = "default";
 
 /// The grammar, as refusals state it.
-const GRAMMAR: &str =
-    "a model reference is policy:default (or policy:<alias>), local:<checkpoint>[+<adapter>] or \
-     remote:<provider>/<name>";
+const GRAMMAR: &str = "a model reference is policy:default (or policy:<alias>), \
+     local:<checkpoint>[+<adapter>][@<tokens>] or remote:<provider>/<name>";
 
 /// A model a command names; see the module documentation.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ModelRef {
     /// `policy:<alias>`: the base, and the release the alias points at.
     Policy(String),
-    /// `local:<checkpoint>[+<adapter>]`.
+    /// `local:<checkpoint>[+<adapter>][@<tokens>]`.
     Local {
         /// The checkpoint, as written.
         checkpoint: String,
         /// The adapter file, as written.
         adapter: Option<String>,
+        /// The context limit in tokens; `None` is the checkpoint's largest.
+        context_tokens: Option<u32>,
     },
     /// `remote:<provider>/<name>`.
     Remote {
@@ -90,6 +93,12 @@ pub enum RefError {
     /// `local:<checkpoint>+` with nothing after the `+`.
     #[error("{found:?} names an empty adapter after `+`: local:<checkpoint>[+<adapter>]")]
     EmptyAdapter {
+        /// The reference.
+        found: String,
+    },
+    /// `local:<checkpoint>@0`: a context of no tokens.
+    #[error("{found:?} limits the context to 0 tokens: local:<checkpoint>[+<adapter>][@<tokens>]")]
+    ZeroContext {
         /// The reference.
         found: String,
     },
@@ -152,6 +161,17 @@ impl FromStr for ModelRef {
                 alias: rest.to_string(),
             }),
             "local" => {
+                let (rest, context_tokens) = match rest.rsplit_once('@') {
+                    Some((before, tokens))
+                        if !tokens.is_empty() && tokens.bytes().all(|b| b.is_ascii_digit()) =>
+                    {
+                        match tokens.parse::<u32>() {
+                            Ok(n) if n > 0 => (before, Some(n)),
+                            _ => return Err(RefError::ZeroContext { found: found() }),
+                        }
+                    }
+                    _ => (rest, None),
+                };
                 let (checkpoint, adapter) = match rest.split_once('+') {
                     Some((checkpoint, adapter)) => (checkpoint, Some(adapter)),
                     None => (rest, None),
@@ -165,6 +185,7 @@ impl FromStr for ModelRef {
                 Ok(Self::Local {
                     checkpoint: checkpoint.to_string(),
                     adapter: adapter.map(str::to_string),
+                    context_tokens,
                 })
             }
             "remote" => match rest.split_once('/') {
@@ -190,12 +211,18 @@ impl std::fmt::Display for ModelRef {
             Self::Policy(alias) => write!(f, "policy:{alias}"),
             Self::Local {
                 checkpoint,
-                adapter: None,
-            } => write!(f, "local:{checkpoint}"),
-            Self::Local {
-                checkpoint,
-                adapter: Some(adapter),
-            } => write!(f, "local:{checkpoint}+{adapter}"),
+                adapter,
+                context_tokens,
+            } => {
+                write!(f, "local:{checkpoint}")?;
+                if let Some(adapter) = adapter {
+                    write!(f, "+{adapter}")?;
+                }
+                if let Some(tokens) = context_tokens {
+                    write!(f, "@{tokens}")?;
+                }
+                Ok(())
+            }
             Self::Remote { provider, name } => write!(f, "remote:{provider}/{name}"),
         }
     }

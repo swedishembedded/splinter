@@ -35,7 +35,7 @@ impl Checkpoint {
         LocalWeights {
             base: self.0.clone(),
             adapter: adapter.map(|a| self.0.join(a)),
-            context_tokens: 4096,
+            context_tokens: Some(4096),
         }
     }
 }

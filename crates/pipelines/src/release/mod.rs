@@ -113,6 +113,7 @@ pub fn arm(config: &Config, adapter: Option<&Path>) -> ModelRef {
     ModelRef::Local {
         checkpoint: base.display().to_string(),
         adapter: adapter.map(|a| a.display().to_string()),
+        context_tokens: None,
     }
 }
 

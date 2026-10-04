@@ -124,7 +124,7 @@ impl Answerer {
     pub fn load(
         base: &Path,
         adapter: Option<&Path>,
-        context_tokens: u32,
+        context_tokens: Option<u32>,
         label: &str,
     ) -> Result<Self, PolicyError> {
         Self::load_with(base, adapter, context_tokens, label, Decoding::Greedy)
@@ -137,7 +137,7 @@ impl Answerer {
     pub fn load_with(
         base: &Path,
         adapter: Option<&Path>,
-        context_tokens: u32,
+        context_tokens: Option<u32>,
         label: &str,
         decoding: Decoding,
     ) -> Result<Self, PolicyError> {

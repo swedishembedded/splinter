@@ -306,7 +306,7 @@ mod tests {
         ModelSelection::Local(LocalWeights {
             base: PathBuf::from("models/Qwen/Qwen3-0.6B"),
             adapter: adapter.map(PathBuf::from),
-            context_tokens: 4096,
+            context_tokens: Some(4096),
         })
     }
 

@@ -322,12 +322,11 @@ impl Trainer for BrainTrainer {
             alpha: DEFAULT_LORA_ALPHA,
             replay: &replayed,
             replay_share: None,
-            grad_accum: 1,
+            grad_accum: plan.tuning.records_per_step.unwrap_or(1),
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
             bf16_base: plan.tuning.bf16_base,
             learning_rate: plan.tuning.learning_rate,
-            records_per_step: plan.tuning.records_per_step,
             // The records hold answers and no reasoning, so the model is
             // trained for no-think mode whatever it is later asked.
             thinking: false,

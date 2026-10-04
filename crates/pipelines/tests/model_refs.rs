@@ -60,6 +60,8 @@ fn every_form_parses_and_prints_back() {
         "local:/ckpt/Qwen3-0.6B",
         "local:Qwen/Qwen3-0.6B",
         "local:./ckpt+./train/adapter.safetensors",
+        "local:Qwen/Qwen3-14B@4096",
+        "local:./ckpt+a.safetensors@512",
         "remote:openrouter/z-ai/glm-5.3-flash",
     ] {
         assert_eq!(parse(text).unwrap().to_string(), text);
@@ -70,6 +72,7 @@ fn every_form_parses_and_prints_back() {
         ModelRef::Local {
             checkpoint: "Qwen/Qwen3-0.6B".into(),
             adapter: Some("a.safetensors".into()),
+            context_tokens: None,
         }
     );
     assert_eq!(
@@ -198,4 +201,29 @@ fn local_references_resolve_to_weights() {
     assert_eq!(pinned.base, PathBuf::from("/models/Qwen/Qwen3-0.6B"));
     assert_eq!(pinned.adapter.as_deref(), Some(champion));
     assert_eq!(resolved("local:/abs/ckpt").adapter, None);
+}
+
+#[test]
+fn a_local_model_has_its_largest_context_unless_a_reference_limits_it() {
+    let context_of =
+        |text: &str| match resolve(&parse(text).unwrap(), &config(), false, None).unwrap() {
+            ModelSelection::Local(weights) => weights.context_tokens,
+            other => panic!("expected a local model, got {other:?}"),
+        };
+    assert_eq!(context_of("local:Qwen/Qwen3-14B"), None);
+    assert_eq!(context_of("local:Qwen/Qwen3-14B@4096"), Some(4096));
+    assert_eq!(context_of("policy:default"), None);
+    assert!(matches!(
+        parse("local:Qwen/Qwen3-14B@0").unwrap_err(),
+        RefError::ZeroContext { .. }
+    ));
+    // An `@` not followed by digits is part of the path.
+    assert_eq!(
+        parse("local:./ckpt@v2").unwrap(),
+        ModelRef::Local {
+            checkpoint: "./ckpt@v2".into(),
+            adapter: None,
+            context_tokens: None,
+        }
+    );
 }

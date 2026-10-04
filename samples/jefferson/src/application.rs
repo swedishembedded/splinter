@@ -160,7 +160,7 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         return Ok(0);
     }
     let index = corpus_index(&run.resources)?;
-    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), 4096, "jefferson")?;
+    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), Some(4096), "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     let mut out = std::fs::OpenOptions::new()
         .create(true)
@@ -255,7 +255,7 @@ pub fn judge_all(
     let by_id: std::collections::HashMap<&str, &Scenario> =
         all.iter().map(|s| (s.id.as_str(), s)).collect();
     let mut rows = read_answers(answers)?;
-    let judge = Answerer::load(judge_base, None, 4096, "jefferson")?;
+    let judge = Answerer::load(judge_base, None, Some(4096), "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     let ask = |question: &str, passage: &str, answer: &str| -> anyhow::Result<Option<bool>> {
         let reply = runtime.block_on(judge.ask(

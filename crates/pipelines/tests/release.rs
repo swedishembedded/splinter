@@ -438,6 +438,7 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
     let base = ModelRef::Local {
         checkpoint: ctx.config().policy_base.display().to_string(),
         adapter: None,
+        context_tokens: None,
     };
     let from_base = train(
         &ctx,

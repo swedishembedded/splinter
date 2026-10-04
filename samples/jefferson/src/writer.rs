@@ -109,7 +109,7 @@ pub struct Generated {
 /// # Errors
 /// The corpus or the writer model cannot be read, or a generation fails.
 pub fn generate(options: &Options, out: &Path) -> anyhow::Result<Generated> {
-    let writer = Answerer::load(&options.writer, None, 4096, "jefferson")?;
+    let writer = Answerer::load(&options.writer, None, Some(4096), "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
     // Each scenario is written as it is kept: a long run that stops early
     // leaves everything it had made.

@@ -20,9 +20,6 @@ use splinter_model::{LocalWeights, ModelSelection, RemoteModel};
 
 use crate::config::Config;
 
-/// Inline context budget of a local model.
-pub const DEFAULT_CONTEXT_TOKENS: u32 = 16_384;
-
 /// The model `reference` names under `config`; a policy reference is the
 /// base with `policy_adapter`, the adapter of the release its alias was
 /// resolved to (`None` before any release). A remote reference is refused
@@ -37,15 +34,16 @@ pub fn resolve(
         ModelRef::Policy(_) => Ok(ModelSelection::Local(LocalWeights {
             base: config.policy_base.clone(),
             adapter: policy_adapter.map(Path::to_path_buf),
-            context_tokens: DEFAULT_CONTEXT_TOKENS,
+            context_tokens: None,
         })),
         ModelRef::Local {
             checkpoint,
             adapter,
+            context_tokens,
         } => Ok(ModelSelection::Local(LocalWeights {
             base: checkpoint_path(config, checkpoint),
             adapter: adapter.as_ref().map(PathBuf::from),
-            context_tokens: DEFAULT_CONTEXT_TOKENS,
+            context_tokens: *context_tokens,
         })),
         ModelRef::Remote { provider, name } => {
             if !(allow_remote || config.allow_remote) {

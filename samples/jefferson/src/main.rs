@@ -206,14 +206,11 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         alpha: flag(args, "--alpha").map_or(Ok(32.0), |v| v.parse())?,
         replay: &[],
         replay_share: None,
-        grad_accum: 1,
+        grad_accum: flag(args, "--records-per-step").map_or(Ok(1), |v| v.parse())?,
         continue_from: None,
         cancel: None,
         bf16_base: args.iter().any(|a| a == "--bf16"),
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
-        records_per_step: flag(args, "--records-per-step")
-            .map(|v| v.parse())
-            .transpose()?,
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };

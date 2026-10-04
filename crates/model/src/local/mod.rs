@@ -108,8 +108,11 @@ pub struct LocalWeights {
     /// Optional LoRA adapter file, attached to the base.
     pub adapter: Option<PathBuf>,
     /// Inline context budget (tokens): the KV cache is built for exactly
-    /// this many, so a prompt plus its generation must fit inside it.
-    pub context_tokens: u32,
+    /// this many, so a prompt plus its generation must fit inside it. `None`
+    /// is the largest context the checkpoint supports
+    /// ([`maximum_context_tokens`]); a limit is how a model is made to fit
+    /// a card.
+    pub context_tokens: Option<u32>,
 }
 
 impl LocalQwen {
@@ -123,8 +126,11 @@ impl LocalQwen {
         model_name: &str,
     ) -> Result<Self, PolicyError> {
         let base = resolve_base(&weights.base)?;
-        let resident =
-            residency.acquire(&base, weights.context_tokens, weights.adapter.as_deref())?;
+        let context_tokens = match weights.context_tokens {
+            Some(tokens) => tokens,
+            None => maximum_context_tokens(&base)?,
+        };
+        let resident = residency.acquire(&base, context_tokens, weights.adapter.as_deref())?;
         Ok(Self {
             resident,
             adapter: weights.adapter.clone(),
@@ -219,6 +225,34 @@ fn is_sharded_hugging_face(dir: &Path) -> bool {
             name.starts_with("model-") && name.ends_with(".safetensors")
         })
     })
+}
+
+/// The largest context `checkpoint` supports: the `max_position_embeddings`
+/// of the `config.json` beside it. A checkpoint with no such config (brain's
+/// own format, a GGUF) states no maximum, so its context has to be named.
+pub fn maximum_context_tokens(checkpoint: &Path) -> Result<u32, PolicyError> {
+    let unknown = |reason: String| PolicyError::Load {
+        path: checkpoint.to_path_buf(),
+        reason: format!("{reason}; name a context with local:<checkpoint>@<tokens>"),
+    };
+    let config = load_source(checkpoint).join("config.json");
+    let text = std::fs::read_to_string(&config).map_err(|e| {
+        unknown(format!(
+            "no context maximum: cannot read {}: {e}",
+            config.display()
+        ))
+    })?;
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|c| c.get("max_position_embeddings")?.as_u64())
+        .and_then(|n| u32::try_from(n).ok())
+        .filter(|n| *n > 0)
+        .ok_or_else(|| {
+            unknown(format!(
+                "{} has no max_position_embeddings",
+                config.display()
+            ))
+        })
 }
 
 /// What brain is asked to open for `checkpoint`: a `model.safetensors`
@@ -405,6 +439,30 @@ mod tests {
         assert_eq!(resolve_base(&sharded).unwrap(), sharded);
         assert_eq!(load_source(&resolve_base(&sharded).unwrap()), sharded);
         assert!(resolve_base(&bare).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_checkpoints_largest_context_is_read_from_its_config() {
+        let root = std::env::temp_dir().join(format!("splinter-max-ctx-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (hf, bare) = (root.join("hf"), root.join("bare"));
+        std::fs::create_dir_all(&hf).unwrap();
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::write(hf.join("model.safetensors"), b"x").unwrap();
+        std::fs::write(
+            hf.join("config.json"),
+            br#"{"max_position_embeddings": 40960}"#,
+        )
+        .unwrap();
+        std::fs::write(bare.join("model.safetensors"), b"x").unwrap();
+        assert_eq!(
+            maximum_context_tokens(&hf.join("model.safetensors")).unwrap(),
+            40960
+        );
+        // No stated maximum: refused with the way to name one, never guessed.
+        let refused = maximum_context_tokens(&bare.join("model.safetensors")).unwrap_err();
+        assert!(refused.to_string().contains("@<tokens>"), "{refused}");
         std::fs::remove_dir_all(&root).unwrap();
     }
 

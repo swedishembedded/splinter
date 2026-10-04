@@ -75,7 +75,7 @@ Every model is named the same way:
 |---|---|
 | `policy:default` | the configured base (`BRAIN_QWEN_WEIGHTS`, else `Qwen/Qwen3-0.6B` in brain's model store) with the champion's adapter, the release `default` points at; the base alone before any release |
 | `policy:<alias>` | the base with the adapter of the release `<alias>` points at (`release --alias`) |
-| `local:<checkpoint>[+<adapter>]` | a checkpoint path (absolute, or starting `./` or `../`) or a name in brain's model store, with an optional LoRA adapter file after the first `+` |
+| `local:<checkpoint>[+<adapter>][@<tokens>]` | a checkpoint path (absolute, or starting `./` or `../`) or a name in brain's model store, with an optional LoRA adapter file after the first `+`. The context is the largest the checkpoint supports (its `max_position_embeddings`); `@<tokens>` limits it, as fitting a large model on a card requires (a 14B judge on a 24 GiB card: `local:Qwen/Qwen3-14B@4096`) |
 | `remote:<provider>/<name>` | a model reached over the network through sven's provider configuration |
 
 A policy alias is resolved once per command, when it is first used: a

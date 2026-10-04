@@ -257,7 +257,7 @@ pub fn run<Q: Question>(
     let answerer = Answerer::load_with(
         model.base,
         model.adapter,
-        CONTEXT_TOKENS,
+        Some(CONTEXT_TOKENS),
         model.label,
         model.decoding,
     )?;
