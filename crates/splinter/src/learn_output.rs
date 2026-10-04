@@ -103,8 +103,9 @@ fn exam_line(summary: &serde_json::Value) -> String {
         )
     });
     format!(
-        "{} task(s), judge {} {trust}: base {}; candidate {}{test}{prompted}{retrieval}",
+        "{} task(s) from {} source family(ies), judge {} {trust}: base {}; candidate {}{test}{prompted}{retrieval}",
         ran["tasks"],
+        ran["families"],
         judge["judge"].as_str().unwrap_or("?"),
         arm(&ran["base"]),
         arm(&ran["candidate"]),

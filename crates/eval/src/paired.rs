@@ -28,6 +28,10 @@ pub struct PairedOutcome {
     pub candidate: Option<bool>,
     /// The baseline's verdict; `None` when it has none.
     pub baseline: Option<bool>,
+    /// The family of sources the item comes from, when it has one: items of
+    /// one family are one unit of evidence ([`by_cluster`]), not several.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cluster: Option<String>,
 }
 
 impl PairedOutcome {
@@ -103,6 +107,39 @@ pub fn compare(outcomes: &[PairedOutcome]) -> Comparison {
     comparison
 }
 
+/// The pairs a significance test may count: one per cluster, and one per
+/// item that has none.
+///
+/// Items drawn from one family of sources (two editions of one letter, a
+/// handful of questions about one document) are not independent: a model
+/// that knows the letter gets them all right, one that does not gets them all
+/// wrong. Testing them as separate items counts one piece of evidence many
+/// times. A cluster counts once, as a candidate win when the candidate won
+/// more of its items than the baseline did, a baseline win when fewer, and a
+/// tie - a pair both got right, which a sign test drops - when equal.
+#[must_use]
+pub fn by_cluster(outcomes: &[PairedOutcome]) -> Vec<(bool, bool)> {
+    let mut net: std::collections::BTreeMap<&str, i64> = std::collections::BTreeMap::new();
+    let mut pairs = Vec::new();
+    for outcome in outcomes {
+        let Some((candidate, baseline)) = outcome.paired() else {
+            continue;
+        };
+        match outcome.cluster.as_deref() {
+            None => pairs.push((candidate, baseline)),
+            Some(cluster) => {
+                *net.entry(cluster).or_default() += i64::from(candidate) - i64::from(baseline);
+            }
+        }
+    }
+    pairs.extend(net.into_values().map(|net| match net.signum() {
+        1 => (true, false),
+        -1 => (false, true),
+        _ => (true, true),
+    }));
+    pairs
+}
+
 /// The fraction of `outcomes` graded right among those graded at all, and
 /// how many were graded; `None` accuracy when none was.
 #[must_use]
@@ -124,7 +161,42 @@ mod tests {
             item: String::new(),
             candidate,
             baseline,
+            cluster: None,
         }
+    }
+
+    fn in_cluster(cluster: &str, candidate: bool, baseline: bool) -> PairedOutcome {
+        PairedOutcome {
+            cluster: Some(cluster.into()),
+            ..outcome(Some(candidate), Some(baseline))
+        }
+    }
+
+    #[test]
+    fn a_cluster_is_one_unit_of_evidence_whatever_its_size() {
+        let outcomes = [
+            // Six questions about one family, all won by the candidate.
+            in_cluster("a", true, false),
+            in_cluster("a", true, false),
+            in_cluster("a", true, false),
+            in_cluster("a", true, false),
+            in_cluster("a", true, false),
+            in_cluster("a", true, false),
+            // One lost, in another family.
+            in_cluster("b", false, true),
+            // A family split evenly is a tie.
+            in_cluster("c", true, false),
+            in_cluster("c", false, true),
+            // Items with no family count one by one.
+            outcome(Some(true), Some(false)),
+            // No verdict for both: not counted.
+            outcome(None, Some(true)),
+        ];
+        let pairs = by_cluster(&outcomes);
+        let wins = pairs.iter().filter(|p| **p == (true, false)).count();
+        let losses = pairs.iter().filter(|p| **p == (false, true)).count();
+        let ties = pairs.iter().filter(|p| p.0 == p.1).count();
+        assert_eq!((wins, losses, ties), (2, 1, 1), "{pairs:?}");
     }
 
     #[test]

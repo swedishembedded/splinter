@@ -34,6 +34,7 @@ use splinter_agent::solve::with_system_addendum;
 use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Experience, PrivilegedKind, Provenance, Task};
+use splinter_eval::paired::{by_cluster, PairedOutcome};
 use splinter_eval::significance::SignTest;
 use splinter_eval::verifiers::calibration::{
     measure, CalibratedJudge, Calibration, Measurement, DEFAULT_MIN_PRECISION,
@@ -41,6 +42,7 @@ use splinter_eval::verifiers::calibration::{
 use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
 
+use crate::grouping::task_clusters;
 use crate::release::arm;
 use crate::release::probe::{answer_prompted, greedy, held_out, trained_tasks};
 use crate::retrieval::Retrieval;
@@ -202,6 +204,9 @@ pub struct RetrievalTask {
 pub struct Examined {
     /// Tasks put to each arm.
     pub tasks: usize,
+    /// The families of source text they come from: the units of evidence the
+    /// comparisons count.
+    pub families: usize,
     /// The judge and what it was measured at.
     pub judge: JudgeTrust,
     /// The base.
@@ -399,28 +404,32 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         checked: grounded.iter().flatten().count(),
         invented: grounded.iter().flatten().filter(|held| !**held).count(),
     };
-    let pairs_against = |other: &[Option<bool>]| -> Vec<(bool, bool)> {
-        candidate_judged
+    // Tasks about one family of sources are one unit of evidence: the sign
+    // test counts a family once ([`by_cluster`]).
+    let clusters = task_clusters(ctx, request.tasks)?;
+    let pairs_of = |better: &[Option<bool>], other: &[Option<bool>]| -> Vec<(bool, bool)> {
+        let outcomes: Vec<PairedOutcome> = better
             .iter()
             .zip(other)
-            .filter_map(|(c, o)| Some(((*c)?, (*o)?)))
-            .collect()
+            .zip(&clusters)
+            .map(|((better, other), cluster)| PairedOutcome {
+                item: String::new(),
+                candidate: *better,
+                baseline: *other,
+                cluster: cluster.clone(),
+            })
+            .collect();
+        by_cluster(&outcomes)
     };
-    let pairs = pairs_against(&base_judged);
+    let pairs = pairs_of(&candidate_judged, &base_judged);
     let pairs_vs_prompted = prompted
         .as_ref()
-        .map(|(_, _, judged, _)| pairs_against(judged))
+        .map(|(_, _, judged, _)| pairs_of(&candidate_judged, judged))
         .unwrap_or_default();
     // With retrieval against without: a win is a task the passages made right.
-    let pairs_retrieval: Vec<(bool, bool)> = with_retrieval
+    let pairs_retrieval = with_retrieval
         .as_ref()
-        .map(|(_, _, judged, _)| {
-            judged
-                .iter()
-                .zip(&candidate_judged)
-                .filter_map(|(w, c)| Some(((*w)?, (*c)?)))
-                .collect()
-        })
+        .map(|(_, _, judged, _)| pairs_of(judged, &candidate_judged))
         .unwrap_or_default();
     let retrieval = with_retrieval
         .as_ref()
@@ -448,8 +457,15 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 })
                 .collect(),
         });
+    let families = clusters
+        .iter()
+        .flatten()
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+        + clusters.iter().filter(|c| c.is_none()).count();
     Ok(Examined {
         tasks: request.tasks.len(),
+        families,
         judge: JudgeTrust {
             judge: judge_model.identity,
             trusted,

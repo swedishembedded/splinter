@@ -50,7 +50,7 @@ use splinter_orchestrator::releases::{ReleaseManifest, StoredRelease, RELEASE_FO
 
 use crate::curriculum::queue::enqueue_retention;
 use crate::train::{load_candidate, Candidate};
-use probe::{pair, Probe, Suite};
+use probe::{clustered, pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
@@ -441,7 +441,7 @@ fn run_gate(
                 let check = gate::improvement(
                     suite.summary(),
                     suites.variants.clone(),
-                    &pair(suite, &c, &b),
+                    &clustered(ctx, suite, pair(suite, &c, &b))?,
                     config.alpha,
                     &BrainSignificance,
                 );

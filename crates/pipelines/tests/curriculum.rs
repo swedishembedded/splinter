@@ -447,6 +447,7 @@ fn learn_keeps_the_frontier_by_default_and_generates_for_queued_concepts() {
         item: baud["task"].as_str().unwrap().to_string(),
         candidate: Some(false),
         baseline: Some(true),
+        cluster: None,
     }];
     let suite = SuiteSummary {
         name: "retention".into(),

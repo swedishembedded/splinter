@@ -166,8 +166,11 @@ fn the_report_compares_the_arms_by_a_calibrated_judge_and_counts_invented_specif
         "{candidate:#?}"
     );
     let paired = report.paired.as_ref().unwrap();
-    assert_eq!((paired.discordant, paired.candidate_wins), (6, 6));
-    assert!(paired.p_value < 0.05, "{paired:?}");
+    // Six questions about one letter are one unit of evidence: the tuned
+    // arm won them all, and that is one win, which proves nothing.
+    assert_eq!(report.families, 1);
+    assert_eq!((paired.discordant, paired.candidate_wins), (1, 1));
+    assert!(paired.p_value > 0.05, "{paired:?}");
     // The vague base states nothing the letter lacks; the tuned arm invented a
     // year once, though the judge still says it gave the advice.
     assert_eq!((base.invented, base.checked), (0, 6));
@@ -278,7 +281,7 @@ fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with
     // The scripted base knows nothing whatever it is told, so the tuned
     // model beats it prompted as it beats it unprompted.
     let against = report.paired_vs_prompted.as_ref().unwrap();
-    assert_eq!((against.discordant, against.candidate_wins), (6, 6));
+    assert_eq!((against.discordant, against.candidate_wins), (1, 1));
 }
 
 /// Every text alike: a library of one passage needs no meaning to find it.
@@ -359,5 +362,5 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
         .iter()
         .all(|t| t.evidence_found && t.alone == Some(false) && t.with_passages == Some(true)));
     let against = report.paired_retrieval.as_ref().unwrap();
-    assert_eq!((against.discordant, against.candidate_wins), (6, 6));
+    assert_eq!((against.discordant, against.candidate_wins), (1, 1));
 }

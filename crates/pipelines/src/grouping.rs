@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_core::digest::Digest;
-use splinter_core::experience::Experience;
+use splinter_core::experience::{Experience, Task};
 use splinter_data::{Corpus, Projection};
 use splinter_eval::overlap::overlap_groups;
 
@@ -35,26 +35,12 @@ pub(crate) fn assign_groups(
     let evidence = |e: &Experience| -> Vec<Digest> {
         e.evidence.iter().map(|span| span.source.clone()).collect()
     };
-    let mut blobs: BTreeSet<Digest> = BTreeSet::new();
-    for entry in corpus.entries() {
-        blobs.extend(evidence(&entry.experience));
-    }
-    let blobs: Vec<Digest> = blobs.into_iter().collect();
-    let sources = ctx.sources();
-    let texts = blobs
+    let blobs: BTreeSet<Digest> = corpus
+        .entries()
         .iter()
-        .map(|digest| {
-            sources
-                .read_blob(digest)
-                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-    let group_of: BTreeMap<&Digest, String> = overlap_groups(&refs)
-        .into_iter()
-        .zip(&blobs)
-        .map(|(first, blob)| (blob, blobs[first].as_str().to_string()))
+        .flat_map(|entry| evidence(&entry.experience))
         .collect();
+    let group_of = groups_of(ctx, blobs)?;
     let by_experience: BTreeMap<_, _> = corpus
         .entries()
         .iter()
@@ -74,4 +60,52 @@ pub(crate) fn assign_groups(
             });
     }
     Ok(())
+}
+
+/// The group of each of `blobs` of source text: texts that overlap share one
+/// ([`overlap_groups`]), named by the first of them.
+fn groups_of(
+    ctx: &Context,
+    blobs: BTreeSet<Digest>,
+) -> Result<BTreeMap<Digest, String>, OrchestratorError> {
+    let blobs: Vec<Digest> = blobs.into_iter().collect();
+    let sources = ctx.sources();
+    let texts = blobs
+        .iter()
+        .map(|digest| {
+            sources
+                .read_blob(digest)
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+    Ok(overlap_groups(&refs)
+        .into_iter()
+        .zip(&blobs)
+        .map(|(first, blob)| (blob.clone(), blobs[first].as_str().to_string()))
+        .collect())
+}
+
+/// The cluster of each of `tasks`: the group of the source text it is
+/// grounded in, the least of them for a task grounded in several; `None`
+/// for a task grounded in none. Tasks of one cluster draw on text that is the
+/// same or overlaps, so they are not independent evidence.
+pub fn task_clusters(
+    ctx: &Context,
+    tasks: &[Task],
+) -> Result<Vec<Option<String>>, OrchestratorError> {
+    let blobs: BTreeSet<Digest> = tasks
+        .iter()
+        .flat_map(|task| task.evidence.iter().map(|span| span.source.clone()))
+        .collect();
+    let group_of = groups_of(ctx, blobs)?;
+    Ok(tasks
+        .iter()
+        .map(|task| {
+            task.evidence
+                .iter()
+                .filter_map(|span| group_of.get(&span.source).cloned())
+                .min()
+        })
+        .collect())
 }

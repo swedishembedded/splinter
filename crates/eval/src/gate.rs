@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 
-use crate::paired::{compare, Comparison, PairedOutcome};
+use crate::paired::{by_cluster, compare, Comparison, PairedOutcome};
 use crate::significance::{SignTest, Significance};
 
 /// What a suite was, as a report states it.
@@ -286,12 +286,12 @@ pub fn improvement(
             suite.excluded.values().sum::<usize>()
         ));
     }
-    let pairs: Vec<(bool, bool)> = outcomes.iter().filter_map(PairedOutcome::paired).collect();
+    let pairs = by_cluster(outcomes);
     let test = significance.sign_test(&pairs);
     let failure = (test.p_value > alpha).then(|| {
         format!(
-            "no significant improvement: the candidate won {} of {} discordant task(s), p = \
-             {:.4} > alpha {alpha}",
+            "no significant improvement: the candidate won {} of {} discordant task(s) (tasks \
+             about one family of sources count once), p = {:.4} > alpha {alpha}",
             test.candidate_wins, test.discordant, test.p_value
         )
     });

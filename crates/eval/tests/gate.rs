@@ -42,6 +42,7 @@ fn outcomes() -> Vec<PairedOutcome> {
             item: format!("t{n}"),
             candidate: Some(true),
             baseline: Some(false),
+            cluster: None,
         })
         .collect()
 }
@@ -64,8 +65,49 @@ fn nothing_graded_for_both_models_is_unmeasured_not_a_pass() {
         item: "t".into(),
         candidate: Some(true),
         baseline: None,
+        cluster: None,
     }];
     let check = improvement(suite(), None, &unpaired, 0.05, &Fixed(0.0));
     assert!(!check.passed);
     assert!(check.measured.is_none());
+}
+
+/// A sign test that needs five discordant units of evidence to be significant.
+struct NeedsFive;
+
+impl Significance for NeedsFive {
+    fn sign_test(&self, pairs: &[(bool, bool)]) -> SignTest {
+        let discordant = pairs.iter().filter(|(c, b)| c != b).count();
+        SignTest {
+            discordant,
+            candidate_wins: pairs.iter().filter(|(c, b)| *c && !*b).count(),
+            p_value: if discordant >= 5 { 0.01 } else { 0.5 },
+        }
+    }
+}
+
+#[test]
+fn many_wins_inside_one_family_of_sources_are_one_unit_of_evidence() {
+    let item = |n: usize, cluster: Option<&str>, candidate: bool, baseline: bool| PairedOutcome {
+        item: format!("t{n}"),
+        candidate: Some(candidate),
+        baseline: Some(baseline),
+        cluster: cluster.map(str::to_string),
+    };
+    // Eight wins, all about one letter: the same evidence eight times.
+    let outcomes: Vec<PairedOutcome> = (0..8)
+        .map(|n| item(n, Some("letter"), true, false))
+        .collect();
+    let alone = improvement(suite(), None, &outcomes, 0.05, &NeedsFive);
+    assert!(!alone.passed, "one family is one unit: {alone:?}");
+    assert!(alone.reason.unwrap().contains("won 1 of 1"));
+
+    // The same eight wins over eight families are eight units.
+    let spread: Vec<PairedOutcome> = (0..8)
+        .map(|n| item(n, Some(&format!("letter-{n}")), true, false))
+        .collect();
+    assert!(improvement(suite(), None, &spread, 0.05, &NeedsFive).passed);
+    // And items with no family count one by one, as before.
+    let unclustered: Vec<PairedOutcome> = (0..8).map(|n| item(n, None, true, false)).collect();
+    assert!(improvement(suite(), None, &unclustered, 0.05, &NeedsFive).passed);
 }

@@ -183,7 +183,11 @@ grades an arm it is calibrated on controls made from the tasks' own references
 model wrote; a judge that cannot tell them apart grades nothing and the report
 says it makes no claim. A task an arm gave no answer to counts as not done and
 is reported as unanswered. The result is a paired sign test of the judged
-results, and it never reaches a training set. Each control the judge did not
+results, in which tasks about one family of source text (two prints of a
+letter, several questions about one document) count once, as the release gate's
+improvement check counts them: a model that knows the letter gets all of its
+questions right, so they are one piece of evidence. It never reaches a
+training set. Each control the judge did not
 judge as labelled is reported with the answer and the judge's reason, so a judge
 that is not trusted can be seen failing.
 
@@ -336,7 +340,7 @@ is printed with its numbers, and a check that could not be measured fails:
 
 | Check | Passes when |
 |---|---|
-| improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05; ties and tasks without a verdict for both are excluded and counted |
+| improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05, tasks about one family of source text counting once (a family is won or lost by which model got more of its tasks right); ties and tasks without a verdict for both are excluded and counted |
 | retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
 | anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
 | serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`), with the base checkpoint the candidate was trained on as its `BRAIN_QWEN_WEIGHTS`, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |

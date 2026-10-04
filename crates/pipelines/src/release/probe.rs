@@ -364,6 +364,22 @@ pub fn pair(suite: &Suite, candidate: &[Probe], baseline: &[Probe]) -> Vec<Paire
             item: task.task.id.to_string(),
             candidate: c.verdict,
             baseline: b.verdict,
+            cluster: None,
         })
         .collect()
+}
+
+/// `outcomes` with the cluster of each task of `suite` set: the family of
+/// source text it is grounded in ([`crate::grouping::task_clusters`]), so a
+/// significance test counts a family once.
+pub fn clustered(
+    ctx: &Context,
+    suite: &Suite,
+    mut outcomes: Vec<PairedOutcome>,
+) -> Result<Vec<PairedOutcome>, OrchestratorError> {
+    let clusters = crate::grouping::task_clusters(ctx, &suite.tasks)?;
+    for (outcome, cluster) in outcomes.iter_mut().zip(clusters) {
+        outcome.cluster = cluster;
+    }
+    Ok(outcomes)
 }
