@@ -96,7 +96,7 @@ pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
 const CALIBRATION: &str = "calibration";
 
 /// The most tasks a fresh calibration's controls are made from.
-const MAX_CALIBRATION_TASKS: usize = 24;
+pub(crate) const MAX_CALIBRATION_TASKS: usize = 24;
 
 /// A judge and the calibration its verdicts are gated by.
 #[derive(Clone)]
@@ -260,7 +260,7 @@ pub(crate) fn judge_verifier(ctx: &Context, model: &Model) -> JudgeVerifier {
 }
 
 /// The verifier of `judging` on `model`.
-fn judge_verifier_for(ctx: &Context, model: &Model, judging: Judging) -> JudgeVerifier {
+pub(crate) fn judge_verifier_for(ctx: &Context, model: &Model, judging: Judging) -> JudgeVerifier {
     match judging {
         Judging::Reference => {
             JudgeVerifier::new(model.clone(), ctx.handle(), DEFAULT_JUDGE_DEADLINE)

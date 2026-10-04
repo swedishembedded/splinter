@@ -137,7 +137,7 @@ fn outcome_word(outcome: Outcome) -> &'static str {
 
 /// The controls `measurements` (one per control, in order) shows the judge
 /// did not judge as labelled.
-fn misjudged(
+pub(crate) fn misjudged(
     labelled: &[(Task, Experience, Outcome)],
     measurements: &[Measurement],
 ) -> Vec<Misjudged> {

@@ -18,7 +18,7 @@ use splinter_sdk::datasets::{build, export, BuildRequest};
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
-use splinter_sdk::judge::calibrate_judge;
+use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::raft::{PassageShare, DEFAULT_EVIDENCE_SHARE};
@@ -34,7 +34,7 @@ use splinter_sdk::status::status;
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_sdk::train::{train, TrainRequest, Tuning};
 use splinter_sdk::variants;
-use splinter_sdk::verify::{verify_set, Judge};
+use splinter_sdk::verify::{verify_set, Judge, Judging};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::role::Role;
 use splinter_sdk::{Config, Context, Error, Splinter};
@@ -402,6 +402,19 @@ impl Session {
                     calibrate_judge(ctx, &labelled, &judge)
                 })?;
                 emit(json, &calibrated);
+            }
+            Command::Judge(JudgeCommand::Measure { tasks, judge, fit }) => {
+                let set = resolve_task_set(ctx, &tasks)?;
+                let judging = if fit {
+                    Judging::Fit
+                } else {
+                    Judging::Reference
+                };
+                let arguments = json!({ "tasks": tasks, "judge": judge, "fit": fit });
+                let measured = record(ctx, "judge measure", &arguments, |_| {
+                    measure_judge(ctx, &set, &judge, judging)
+                })?;
+                emit(json, &measured);
             }
             Command::Experiences(ExperiencesCommand::List) => emit(json, &experiences::list(ctx)?),
             Command::Experiences(ExperiencesCommand::Show { id, graph }) => {

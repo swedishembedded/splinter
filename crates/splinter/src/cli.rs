@@ -446,6 +446,23 @@ pub enum JudgeCommand {
         #[arg(long, required = true, value_parser = model_ref, value_name = "REF")]
         judge: ModelRef,
     },
+    /// Measure a judge on the controls a task set's own references give -
+    /// each task's reference as the right answer, another family's as the
+    /// wrong one - and show its precision, whether it would be trusted and
+    /// the controls it got wrong. A calibration that rests on enough controls
+    /// is kept, and a run reuses it.
+    Measure {
+        /// The task set, by id or unique prefix.
+        #[arg(value_name = "TASK-SET")]
+        tasks: String,
+        /// The judge.
+        #[arg(long, required = true, value_parser = model_ref, value_name = "REF")]
+        judge: ModelRef,
+        /// Measure it as a judge of fit - is a passage a natural reply to its
+        /// message - and not of whether an answer gives the reference.
+        #[arg(long)]
+        fit: bool,
+    },
 }
 
 /// `experiences ...`.

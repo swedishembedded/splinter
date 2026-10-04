@@ -21,11 +21,17 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceId;
 use splinter_eval::verifiers::calibration::{calibrate, Calibration};
 
+use crate::exam::{misjudged, Misjudged};
 use crate::experiences::resolve_experience;
-use crate::verify::{judge_verifier, store_calibration};
+use crate::judging::{controls, reference, spaced};
+use crate::verify::{
+    judge_verifier, judge_verifier_for, store_calibration, Judging, MAX_CALIBRATION_TASKS,
+};
 use splinter_core::model_ref::ModelRef;
+use splinter_eval::verifiers::calibration::{measure, DEFAULT_MIN_PRECISION};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
+use splinter_store::tasks::TaskSetId;
 
 /// One line of a labelled file.
 #[derive(Debug, Deserialize)]
@@ -88,5 +94,81 @@ pub fn calibrate_judge(
         judge: model.identity,
         calibration,
         stored,
+    })
+}
+
+/// What `judge measure` reports.
+#[derive(Clone, Debug, Serialize)]
+pub struct JudgeMeasured {
+    /// The judge's identity.
+    pub judge: String,
+    /// What it was asked: `reference` or `fit`.
+    pub judging: &'static str,
+    /// Controls it was measured on.
+    pub controls: usize,
+    /// Whether its precision, on passes and on fails, reaches the threshold
+    /// and the controls are as many as the configuration asks for: whether
+    /// its verdicts would count.
+    pub trusted: bool,
+    /// The measurement.
+    pub calibration: Calibration,
+    /// Where it was kept, when it rests on enough controls to be reused.
+    pub stored: Option<Digest>,
+    /// The controls it did not judge as labelled.
+    pub misjudged: Vec<Misjudged>,
+}
+
+/// Measures the judge `judge` names on the controls the references of the
+/// tasks of `set` give ([`controls`]): each task's reference as the right
+/// answer to it, and another family's as the wrong one. What
+/// [`crate::verify::Judge::calibrated_for`] would measure and refuse on, shown
+/// whatever it comes to, with the controls the judge got wrong; kept as the
+/// judge's calibration when it rests on enough of them, so a run reuses it.
+pub fn measure_judge(
+    ctx: &Context,
+    set: &TaskSetId,
+    judge: &ModelRef,
+    judging: Judging,
+) -> Result<JudgeMeasured, OrchestratorError> {
+    let store = ctx.tasks();
+    let tasks: Vec<splinter_core::experience::Task> = store
+        .get_set(set)?
+        .members
+        .iter()
+        .map(|entry| store.get(&entry.task))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|task| reference(task).is_some())
+        .collect();
+    let labelled = controls(ctx, &spaced(&tasks, MAX_CALIBRATION_TASKS))?;
+    if labelled.is_empty() {
+        return Err(OrchestratorError::Refused(
+            "the tasks give no control: a judge is measured on tasks with a reference from at \
+             least two families of sources"
+                .into(),
+        ));
+    }
+    let model = ctx.model(judge)?;
+    let verifier = judge_verifier_for(ctx, &model, judging);
+    let (calibration, measurements) = measure(&verifier, &labelled)?;
+    let minimum = ctx.config().min_calibration_controls;
+    let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
+    let enough = labelled.len() >= minimum;
+    let stored = enough
+        .then(|| store_calibration(ctx, &calibration))
+        .transpose()?;
+    Ok(JudgeMeasured {
+        judge: model.identity,
+        judging: match judging {
+            Judging::Reference => "reference",
+            Judging::Fit => "fit",
+        },
+        controls: labelled.len(),
+        trusted: enough
+            && precise(calibration.precision_pass)
+            && precise(calibration.precision_fail),
+        calibration,
+        stored,
+        misjudged: misjudged(&labelled, &measurements),
     })
 }

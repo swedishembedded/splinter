@@ -150,3 +150,115 @@ fn one_family_of_sources_has_no_wrong_answer_to_borrow() {
     );
     assert_eq!(labelled.len(), 2);
 }
+
+/// A task set of `per_family` tasks about each of two families of sources,
+/// each task's reference naming its family by a key word.
+fn two_families(
+    ctx: &splinter_orchestrator::Context,
+    dir: &std::path::Path,
+    per_family: usize,
+) -> splinter_store::tasks::TaskSetId {
+    let a = span_of(ctx, dir, "a.txt", &words("alpha", 100));
+    let b = span_of(ctx, dir, "b.txt", &words("omega", 100));
+    let mut members = Vec::new();
+    let store = ctx.tasks();
+    for i in 0..per_family {
+        for (span, key) in [(&a, "study"), (&b, "expense")] {
+            let t = task(
+                span,
+                &format!("How do I keep a habit of {key} (case {i})?"),
+                &format!("Keep up your {key} {i} every day."),
+            );
+            store.put(&t).unwrap();
+            members.push(splinter_store::tasks::TaskEntry {
+                task: t.task.id.clone(),
+                generator: None,
+                prompt: None,
+                variant_of: None,
+                subject: None,
+            });
+        }
+    }
+    store
+        .put_set(&splinter_store::tasks::TaskSet {
+            name: "two families".into(),
+            members,
+        })
+        .unwrap()
+}
+
+/// A judge that says PASS when the answer and the reference name one key
+/// word, or - when it is asked about a message and a passage - when the
+/// message and the passage do.
+fn keyed_judge() -> Scripted {
+    Scripted::new(|prompt| {
+        let (left, right) = if prompt.contains("MESSAGE:") {
+            (
+                prompt
+                    .split("MESSAGE:\\n")
+                    .nth(1)
+                    .and_then(|t| t.split("\\n\\nPASSAGE:").next())
+                    .unwrap_or_default(),
+                prompt.split("PASSAGE:\\n").nth(1).unwrap_or_default(),
+            )
+        } else {
+            (
+                prompt
+                    .split("REFERENCE:\\n")
+                    .nth(1)
+                    .and_then(|t| t.split("\\n\\nANSWER:").next())
+                    .unwrap_or_default(),
+                prompt.split("ANSWER:\\n").nth(1).unwrap_or_default(),
+            )
+        };
+        let shared = ["study", "expense"]
+            .iter()
+            .any(|key| left.contains(key) && right.contains(key));
+        if shared { "PASS\nyes" } else { "FAIL\nno" }.to_string()
+    })
+}
+
+#[test]
+fn a_judge_is_measured_on_the_controls_of_a_task_set_and_its_mistakes_are_shown() {
+    use splinter_agent::solve::Model;
+    use splinter_pipelines::judge::measure_judge;
+    use splinter_pipelines::verify::Judging;
+    use std::sync::Arc;
+    let (scratch, ctx) =
+        scratch_context("judging-measure", Scripted::new(|_| String::new()), false);
+    let set = two_families(&ctx, &scratch.0, 6);
+    let good: splinter_core::model_ref::ModelRef = "local:test/good".parse().unwrap();
+    let careless: splinter_core::model_ref::ModelRef = "local:test/careless".parse().unwrap();
+    ctx.add_model(
+        good.clone(),
+        Model::new(Arc::new(keyed_judge()), "scripted/good"),
+    );
+    ctx.add_model(
+        careless.clone(),
+        Model::new(
+            Arc::new(Scripted::new(|_| "PASS\nyes".into())),
+            "scripted/careless",
+        ),
+    );
+    for judging in [Judging::Reference, Judging::Fit] {
+        let measured = measure_judge(&ctx, &set, &good, judging).unwrap();
+        assert_eq!(measured.controls, 24, "{judging:?}");
+        assert!(
+            measured.trusted && measured.misjudged.is_empty(),
+            "{measured:#?}"
+        );
+    }
+    // A judge that passes everything is not trusted, and the controls it
+    // passed that are wrong are listed.
+    let measured = measure_judge(&ctx, &set, &careless, Judging::Reference).unwrap();
+    assert!(!measured.trusted);
+    assert_eq!(
+        measured.calibration.precision_fail, None,
+        "it never failed an answer"
+    );
+    assert_eq!(measured.misjudged.len(), 12, "{measured:#?}");
+    assert!(measured
+        .misjudged
+        .iter()
+        .all(|m| m.label == "fail" && m.judged == "pass"));
+}

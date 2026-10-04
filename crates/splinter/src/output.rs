@@ -12,7 +12,7 @@ use splinter_sdk::ask::Answer;
 use splinter_sdk::critique::Critiqued;
 use splinter_sdk::datasets::{Built, Exported};
 use splinter_sdk::experiences::{CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList};
-use splinter_sdk::judge::Calibrated;
+use splinter_sdk::judge::{Calibrated, JudgeMeasured};
 use splinter_sdk::router::Routed;
 use splinter_sdk::runs::{CancelRequested, Recorded, RunList};
 use splinter_sdk::solving::Solved;
@@ -367,6 +367,49 @@ impl Report for Calibrated {
             share(c.abstain_rate),
             c.id, self.stored
         )
+    }
+}
+
+impl Report for JudgeMeasured {
+    fn human(&self) -> String {
+        let c = &self.calibration;
+        let mut out = format!(
+            "judge {} ({} judging) measured on {} control(s): pass precision {}, fail precision {}, abstains {} - {}\n",
+            self.judge,
+            self.judging,
+            self.controls,
+            share(c.precision_pass),
+            share(c.precision_fail),
+            share(c.abstain_rate),
+            if self.trusted {
+                "trusted"
+            } else {
+                "NOT trusted: its verdicts would not count"
+            }
+        );
+        match &self.stored {
+            Some(stored) => out.push_str(&format!("  calibration kept as {stored}\n")),
+            None => out.push_str("  too few controls to keep the calibration\n"),
+        }
+        for m in &self.misjudged {
+            let cut = |text: &str| {
+                text.split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .chars()
+                    .take(120)
+                    .collect::<String>()
+            };
+            out.push_str(&format!(
+                "  should be {}, judged {}: {} -> {} ({})\n",
+                m.label,
+                m.judged,
+                cut(&m.instruction),
+                cut(&m.answer),
+                cut(&m.reason)
+            ));
+        }
+        out
     }
 }
 
