@@ -274,6 +274,10 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
+    // A reader that judged passages gives the device back before any arm.
+    if request.retrieval.is_some_and(|r| r.rerank.is_some()) {
+        ctx.release_bases();
+    }
     let retrieval_prompts: Option<Vec<String>> = retrieved.as_ref().map(|found| {
         found
             .iter()

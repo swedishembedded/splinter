@@ -28,7 +28,7 @@ use splinter_knowledge::retrieve::Embedder;
 use splinter_knowledge::tasks::SourceIdentity;
 use splinter_sandbox::ResolvedEnvironment;
 
-use crate::retrieval::{library_of, Retrieval};
+use crate::retrieval::{library_of, Rerank, Retrieval};
 use crate::solving::conclusion_name;
 use crate::sources;
 use splinter_core::model_ref::ModelRef;
@@ -112,6 +112,7 @@ pub fn ask_retrieving(
     sources: &[String],
     passages_shown: usize,
     embedder: &dyn Embedder,
+    rerank: Option<Rerank<'_>>,
     policy: &ModelRef,
 ) -> Result<Answer, OrchestratorError> {
     if question.trim().is_empty() {
@@ -122,8 +123,14 @@ pub fn ask_retrieving(
         library: &library,
         embedder,
         passages: passages_shown,
+        rerank,
     };
     let retrieved = retrieval.find(question)?;
+    // A reader that was loaded to judge passages gives the device back
+    // before the model that answers needs it.
+    if retrieval.rerank.is_some() {
+        ctx.release_bases();
+    }
     let instruction = retrieved.prompt(question);
     let shown = retrieved.passages;
     let shown = shown

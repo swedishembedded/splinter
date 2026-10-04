@@ -14,7 +14,7 @@
 use splinter_agent::solve::open_book_prompt;
 use splinter_core::experience::Task;
 use splinter_core::source::SourceId;
-use splinter_knowledge::retrieve::{passages, Embedder, Library, Passage};
+use splinter_knowledge::retrieve::{passages, Embedder, Library, Passage, Reranker};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -42,6 +42,24 @@ pub fn library_of(
     Ok((resolved, index::library(ctx, found, embedder)?))
 }
 
+/// How many candidates search finds for a reader, for each passage shown:
+/// enough that a passage meaning ranked low can be moved up.
+const CANDIDATES_PER_PASSAGE: usize = 6;
+
+/// How many candidates a reader of a search that shows `passages` reads.
+#[must_use]
+pub fn candidates_for(passages: usize) -> usize {
+    passages.max(1) * CANDIDATES_PER_PASSAGE
+}
+
+/// A reader that reorders what search found.
+pub struct Rerank<'a> {
+    /// Judges whether a passage bears on the question.
+    pub reranker: &'a dyn Reranker,
+    /// How many passages search finds for it to read.
+    pub candidates: usize,
+}
+
 /// A library to retrieve from, and how.
 pub struct Retrieval<'a> {
     /// The passages of the sources, searched.
@@ -50,6 +68,8 @@ pub struct Retrieval<'a> {
     pub embedder: &'a dyn Embedder,
     /// How many passages to show with a question.
     pub passages: usize,
+    /// A reader of the candidates, when there is one.
+    pub rerank: Option<Rerank<'a>>,
 }
 
 /// What retrieval put in front of a task.
@@ -62,9 +82,22 @@ impl<'a> Retrieval<'a> {
     /// The passages that bear on `question`.
     pub fn find(&self, question: &str) -> Result<Retrieved<'a>, OrchestratorError> {
         let library: &'a Library = self.library;
-        let passages = library
-            .find(question, self.embedder, self.passages.max(1))
-            .map_err(|e| OrchestratorError::Refused(format!("retrieval: {e}")))?;
+        let shown = self.passages.max(1);
+        let found = match &self.rerank {
+            None => library
+                .find(question, self.embedder, shown)
+                .map_err(|e| e.to_string()),
+            Some(rerank) => library
+                .find_reranked(
+                    question,
+                    self.embedder,
+                    rerank.reranker,
+                    shown,
+                    rerank.candidates,
+                )
+                .map_err(|e| e.to_string()),
+        };
+        let passages = found.map_err(|e| OrchestratorError::Refused(format!("retrieval: {e}")))?;
         Ok(Retrieved { passages })
     }
 }

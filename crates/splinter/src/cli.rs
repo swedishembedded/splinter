@@ -251,6 +251,22 @@ impl PassAtKArgs {
     }
 }
 
+/// What retrieval is asked to do, for `ask` and `exam`.
+#[derive(Debug, Args)]
+pub struct RetrieveArgs {
+    /// Show the model the passages of these stored sources that bear on the
+    /// question, found by meaning and by exact words, instead of all of one.
+    #[arg(long = "retrieve", value_name = "SOURCE-ID", num_args = 1..)]
+    pub sources: Vec<String>,
+    /// How many passages `--retrieve` shows.
+    #[arg(long, default_value_t = 6, value_name = "N", requires = "sources")]
+    pub passages: usize,
+    /// A model that reads the candidates search found beside the question
+    /// and moves the ones that bear on it forward.
+    #[arg(long, value_parser = model_ref, value_name = "REF", requires = "sources")]
+    pub reranker: Option<ModelRef>,
+}
+
 /// `ask`.
 #[derive(Debug, Args)]
 pub struct AskArgs {
@@ -259,13 +275,9 @@ pub struct AskArgs {
     /// Show the model this stored source's text with the question.
     #[arg(long, value_name = "SOURCE-ID")]
     pub open_book: Option<String>,
-    /// Show the model the passages of these stored sources that bear on the
-    /// question, found by meaning and by exact words, instead of all of one.
-    #[arg(long, value_name = "SOURCE-ID", num_args = 1.., conflicts_with = "open_book")]
-    pub retrieve: Vec<String>,
-    /// How many passages `--retrieve` shows.
-    #[arg(long, default_value_t = 6, value_name = "N", requires = "retrieve")]
-    pub passages: usize,
+    /// Retrieval in place of the whole text of one source.
+    #[command(flatten)]
+    pub retrieval: RetrieveArgs,
     /// The model asked.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub policy: ModelRef,
@@ -545,14 +557,11 @@ pub struct ExamArgs {
     /// candidate is compared with (`learn` uses its goal).
     #[arg(long, value_name = "GOAL")]
     pub prompt: Option<String>,
-    /// Also ask the candidate with the passages of these stored sources that
-    /// bear on each task shown before it, and report whether retrieval found
-    /// the passage the task was written from.
-    #[arg(long, value_name = "SOURCE-ID", num_args = 1..)]
-    pub retrieve: Vec<String>,
-    /// How many passages `--retrieve` shows with each task.
-    #[arg(long, default_value_t = 6, value_name = "N", requires = "retrieve")]
-    pub passages: usize,
+    /// Also ask the candidate with retrieved passages shown before each
+    /// task, and report whether retrieval found the passage the task was
+    /// written from.
+    #[command(flatten)]
+    pub retrieval: RetrieveArgs,
 }
 
 /// `lineage`.

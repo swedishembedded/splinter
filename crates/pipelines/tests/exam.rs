@@ -328,6 +328,7 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
         library: &library,
         embedder: &Flat,
         passages: 3,
+        rerank: None,
     };
     let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
     let (base, reader, judge) = (model("base"), model("reader"), model("judge"));

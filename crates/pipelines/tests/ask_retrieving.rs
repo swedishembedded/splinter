@@ -18,10 +18,11 @@ mod common;
 
 use common::{scratch_context, Scripted};
 use splinter_core::model_ref::ModelRef;
-use splinter_knowledge::retrieve::{EmbedError, Embedder};
+use splinter_knowledge::retrieve::{EmbedError, Embedder, Passage, RerankError, Reranker};
 use splinter_orchestrator::OrchestratorError;
 use splinter_pipelines::ask::ask_retrieving;
 use splinter_pipelines::lineage::{lineage, Direction, LineageRequest, Relation};
+use splinter_pipelines::retrieval::Rerank;
 use splinter_pipelines::sources::{self, SourceTarget};
 
 const LETTERS: &str = "# Letters\n\n## To Carr\n\nEducation of the people is the surest foundation of liberty, and a nation that wishes to be free must see that its youth are taught to reason.\n\n## To Jay\n\nThe tobacco shipped to Havre by the brig Eliza was sold at a poor price, and the merchants complain of the duties laid upon the hogsheads.\n";
@@ -68,6 +69,7 @@ fn the_model_is_shown_the_passage_that_bears_on_the_question_and_not_the_rest() 
         &[source.to_string()],
         1,
         &Concepts,
+        None,
         &ModelRef::policy_default(),
     )
     .unwrap();
@@ -125,6 +127,7 @@ fn a_source_with_no_passage_to_retrieve_is_refused() {
         &[source.to_string()],
         3,
         &Concepts,
+        None,
         &ModelRef::policy_default(),
     );
     assert!(matches!(refused, Err(OrchestratorError::Refused(_))));
@@ -170,6 +173,7 @@ fn the_passages_of_a_source_are_embedded_once_and_the_index_is_kept() {
             std::slice::from_ref(&source),
             1,
             &embedder,
+            None,
             &ModelRef::policy_default(),
         )
         .unwrap()
@@ -193,6 +197,7 @@ fn the_passages_of_a_source_are_embedded_once_and_the_index_is_kept() {
         std::slice::from_ref(&source),
         1,
         &Renamed(&other),
+        None,
         &ModelRef::policy_default(),
     )
     .unwrap();
@@ -214,4 +219,47 @@ impl Embedder for Renamed<'_> {
     fn embed_query(&self, query: &str) -> Result<Vec<f32>, EmbedError> {
         self.0.embed_query(query)
     }
+}
+
+/// A reranker that finds relevant the passages holding a word.
+struct Holding(&'static str);
+
+impl Reranker for Holding {
+    fn relevant(&self, _question: &str, passage: &Passage) -> Result<bool, RerankError> {
+        Ok(passage.text.contains(self.0))
+    }
+}
+
+#[test]
+fn a_reranker_changes_which_passage_the_model_is_shown() {
+    let (scratch, ctx) = scratch_context("ask-rerank", Scripted::new(str::to_string), false);
+    let path = scratch.0.join("letters.md");
+    std::fs::write(&path, LETTERS).unwrap();
+    let source = sources::add(
+        &ctx,
+        &SourceTarget::from_learn_arg(&path.display().to_string()).unwrap(),
+    )
+    .unwrap()
+    .source
+    .id
+    .to_string();
+    let reader = Holding("hogsheads");
+    let answer = ask_retrieving(
+        &ctx,
+        "How should a young person learn?",
+        &[source],
+        1,
+        &Concepts,
+        Some(Rerank {
+            reranker: &reader,
+            candidates: 2,
+        }),
+        &ModelRef::policy_default(),
+    )
+    .unwrap();
+    // Search alone would show the passage about teaching; the reader found
+    // the one about trade bears on the question, and it is the one shown.
+    assert!(answer.answer.contains("brig Eliza"), "{}", answer.answer);
+    assert!(!answer.answer.contains("surest foundation"));
+    assert_eq!(answer.shown.len(), 1);
 }

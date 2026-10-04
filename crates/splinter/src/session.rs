@@ -23,7 +23,8 @@ use splinter_sdk::judge::calibrate_judge;
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::release::{self, ReleaseRequest};
-use splinter_sdk::retrieval::{library_of, Retrieval};
+use splinter_sdk::rerank::ModelReranker;
+use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
 use splinter_sdk::router::{interpret, Routed};
 use splinter_sdk::runs::{self, record};
 use splinter_sdk::solving::solve_set;
@@ -40,7 +41,7 @@ use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
-    ReleaseCommand, RunsCommand, SourceCommand, StateCommand, TasksCommand,
+    ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
 };
 use crate::learn_output;
 use crate::output::{self, emit, shell_words};
@@ -232,20 +233,39 @@ impl Session {
                 return Ok(if finished { Exit::Ok } else { Exit::Failed });
             }
             Command::Ask(args) => {
-                let answer = if args.retrieve.is_empty() {
-                    ask(ctx, &args.question, args.open_book.as_deref(), &args.policy)?
+                let retrieve = &args.retrieval;
+                if retrieve.sources.is_empty() {
+                    emit(
+                        json,
+                        &ask(ctx, &args.question, args.open_book.as_deref(), &args.policy)?,
+                    );
                 } else {
+                    if args.open_book.is_some() {
+                        return Err(Error::Refused(
+                            "--open-book shows one whole source and --retrieve passages of \
+                             several: name one of them"
+                                .into(),
+                        ));
+                    }
                     let embedder = ModelEmbedder::load_default()?;
-                    ask_retrieving(
-                        ctx,
-                        &args.question,
-                        &args.retrieve,
-                        args.passages,
-                        &embedder,
-                        &args.policy,
-                    )?
-                };
-                emit(json, &answer);
+                    let reader = reader_of(ctx, retrieve)?;
+                    let rerank = reader.as_ref().map(|reader| Rerank {
+                        reranker: reader,
+                        candidates: candidates_for(retrieve.passages),
+                    });
+                    emit(
+                        json,
+                        &ask_retrieving(
+                            ctx,
+                            &args.question,
+                            &retrieve.sources,
+                            retrieve.passages,
+                            &embedder,
+                            rerank,
+                            &args.policy,
+                        )?,
+                    );
+                }
             }
             Command::Status => emit(json, &status(ctx)?),
             Command::Source(SourceCommand::Add { target }) => {
@@ -472,27 +492,35 @@ impl Session {
                 emit(json, &evaluate(ctx, &request)?);
             }
             Command::Exam(args) => {
+                let retrieve = &args.retrieval;
                 let arguments = json!({
                     "candidate": args.candidate,
                     "judge": args.judge,
                     "prompt": args.prompt,
-                    "retrieve": args.retrieve,
-                    "passages": args.passages,
+                    "retrieve": retrieve.sources,
+                    "passages": retrieve.passages,
+                    "reranker": retrieve.reranker,
                 });
                 // The library is made (or read back) before the exam starts:
                 // it needs the embedding model, which the exam's queries use
                 // too.
                 let embedder;
                 let library;
-                let retrieval = if args.retrieve.is_empty() {
+                let reader;
+                let retrieval = if retrieve.sources.is_empty() {
                     None
                 } else {
                     embedder = ModelEmbedder::load_default()?;
-                    library = library_of(ctx, &args.retrieve, &embedder)?.1;
+                    library = library_of(ctx, &retrieve.sources, &embedder)?.1;
+                    reader = reader_of(ctx, retrieve)?;
                     Some(Retrieval {
                         library: &library,
                         embedder: &embedder,
-                        passages: args.passages,
+                        passages: retrieve.passages,
+                        rerank: reader.as_ref().map(|reader| Rerank {
+                            reranker: reader,
+                            candidates: candidates_for(retrieve.passages),
+                        }),
                     })
                 };
                 emit(
@@ -560,6 +588,18 @@ impl Session {
 
 /// The `learn` the command line asked for. With no kinds named, a planner
 /// chooses them: naming the kinds is deciding them.
+/// The model that reads retrieval's candidates, when one was named.
+fn reader_of<'a>(
+    ctx: &'a Context,
+    retrieve: &RetrieveArgs,
+) -> Result<Option<ModelReranker<'a>>, Error> {
+    retrieve
+        .reranker
+        .as_ref()
+        .map(|reference| ModelReranker::new(ctx, reference))
+        .transpose()
+}
+
 fn learn_request(args: LearnArgs) -> LearnRequest {
     LearnRequest {
         pass_at_k: args.pass_at_k.pass_at_k(),

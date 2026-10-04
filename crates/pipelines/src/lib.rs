@@ -58,6 +58,7 @@ pub mod learn;
 pub mod lineage;
 pub mod plan;
 pub mod release;
+pub mod rerank;
 pub mod retrieval;
 pub mod router;
 pub mod solving;

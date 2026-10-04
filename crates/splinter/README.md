@@ -14,7 +14,7 @@ splinter "<sentence>"             the front door: a sentence becomes one of the 
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF]
                          [--steps N] [--rank R] [--lr LR] [--bf16-base]
-splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N]] [--policy REF]
+splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
 splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
@@ -30,7 +30,7 @@ splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [-
 splinter release <CANDIDATE-ID> [--alias NAME] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
-splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N]]
+splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -48,7 +48,11 @@ resolved to; its report carries the answer's `id` and that `release`.
 shows it instead the `--passages` (default 6) passages of the named sources
 that bear on the question: ranked by meaning (Qwen3-Embedding), with a
 fixed share of the tail given to the passages only the question's exact
-words find (a name, a date), each under its part and section. The answer
+words find (a name, a date), each under its part and section. With `--reranker REF` a model
+reads the six candidates found for each passage shown, beside the question,
+and the ones it says bear on it come first: search finds passages about the
+same things as the question, and only a reader of both says whether one
+bears on it. The answer
 records the sources and the passages shown (part, section and how each
 begins; printed under the answer, and in `--json` as `shown`), and
 `splinter lineage` links it to the sources. The passages'
