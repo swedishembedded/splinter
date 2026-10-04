@@ -208,6 +208,12 @@ pub struct LearnArgs {
     /// --kinds are named (default: the generator).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub planner: Option<ModelRef>,
+    /// Who the policy is to become, when it is to think like a person: its
+    /// training records open with a system prompt saying so, and it is asked
+    /// under that prompt afterwards (default: the persona the plan finds in
+    /// the goal, if any).
+    #[arg(long, value_name = "NAME")]
+    pub persona: Option<String>,
     /// Optimizer steps of the training.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("Optimizer steps of the training [default: {DEFAULT_STEPS}]"))]
@@ -463,6 +469,10 @@ pub enum DatasetCommand {
         /// (default) or judged.
         #[arg(long, value_parser = strength, value_name = "STRENGTH")]
         min_strength: Option<Strength>,
+        /// The system prompt every conversation opens with, in place of the
+        /// default assistant's; the dataset records it.
+        #[arg(long, value_name = "TEXT")]
+        system_prompt: Option<String>,
         /// Write an objective brain cannot train in the export format.
         #[arg(long)]
         export_only: bool,

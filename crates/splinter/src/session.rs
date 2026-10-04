@@ -412,6 +412,7 @@ impl Session {
                 view,
                 strip,
                 min_strength,
+                system_prompt,
                 export_only,
             }) => {
                 let request = BuildRequest {
@@ -422,6 +423,7 @@ impl Session {
                     view,
                     strip,
                     min_strength,
+                    system_prompt,
                     export_only,
                 };
                 emit(
@@ -611,6 +613,7 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         plan: args.kinds.is_empty(),
         sources: args.sources,
         goal: args.goal,
+        persona: args.persona,
         kinds: args.kinds,
         budget: args.budget,
         dry_run: args.dry_run,

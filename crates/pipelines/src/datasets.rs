@@ -203,6 +203,10 @@ pub struct BuildRequest {
     pub strip: Option<Strip>,
     /// The weakest decision counted; `None` is [`DEFAULT_MIN_STRENGTH`].
     pub min_strength: Option<Strength>,
+    /// The system prompt every conversation opens with, in place of the
+    /// default: a person's, for a policy to be trained as them. `None` keeps
+    /// the default.
+    pub system_prompt: Option<String>,
     /// Write an objective brain cannot train in the export format.
     pub export_only: bool,
 }
@@ -300,6 +304,9 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, Orchestrato
         ViewName::Denoise => DenoiseView::new().with_strip(strip).project(&corpus),
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
     }?;
+    if let Some(prompt) = &request.system_prompt {
+        projection = projection.with_system_prompt(prompt);
+    }
     assign_groups(ctx, &corpus, &mut projection)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;
     Ok(Built::from(stored))

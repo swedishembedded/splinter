@@ -155,6 +155,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         view,
         strip,
         min_strength,
+        system_prompt,
         export_only,
     }) = command(&[
         "dataset",
@@ -167,6 +168,8 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "mix:0.5",
         "--min-strength",
         "formal",
+        "--system-prompt",
+        "You are a clerk.",
         "--export-only",
     ])
     else {
@@ -176,6 +179,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(Strip::Mix { .. })));
     assert_eq!(min_strength, Some(Strength::Formal));
+    assert_eq!(system_prompt.as_deref(), Some("You are a clerk."));
     assert!(export_only);
     assert!(parse(&["dataset", "build", "ab12", "--view", "sft"]).is_err());
     assert!(

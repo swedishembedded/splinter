@@ -164,7 +164,8 @@ fn attempt(
     test: &str,
     third: &'static str,
     judge: Option<Scripted>,
-) -> (Result<Learned, OrchestratorError>, common::Scratch) {
+    persona: Option<&str>,
+) -> (Result<Learned, OrchestratorError>, common::Scratch, Context) {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
         ModelRef::policy_default(),
@@ -190,6 +191,7 @@ fn attempt(
         &LearnRequest {
             sources: vec![letters.display().to_string()],
             kinds: vec!["converse".into()],
+            persona: persona.map(str::to_string),
             roles,
             no_release: true,
             distill: true,
@@ -197,14 +199,14 @@ fn attempt(
         },
         &student,
     );
-    (learned, scratch)
+    (learned, scratch, ctx)
 }
 
 fn run(
     test: &str,
     third: &'static str,
 ) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
-    let (learned, scratch) = attempt(test, third, Some(judge()));
+    let (learned, scratch, _ctx) = attempt(test, third, Some(judge()), None);
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
     };
@@ -300,7 +302,12 @@ fn one_dialogue_in_four_ends_by_asking_beyond_the_letter_and_the_choice_is_stabl
 fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
     // With no judge named the policy plays it, and the policy is the
     // teacher whose dialogues it would grade.
-    let (learned, _scratch) = attempt("converse-learn-self-judge", "Study each morning.", None);
+    let (learned, _scratch, _ctx) = attempt(
+        "converse-learn-self-judge",
+        "Study each morning.",
+        None,
+        None,
+    );
     let Err(refused) = learned else {
         panic!("a judge that grades itself is refused");
     };
@@ -313,10 +320,11 @@ fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
 #[test]
 fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers() {
     let always_pass = Scripted::new(|_| "PASS\nit does".into());
-    let (learned, _scratch) = attempt(
+    let (learned, _scratch, _ctx) = attempt(
         "converse-learn-weak-judge",
         "Study each morning.",
         Some(always_pass),
+        None,
     );
     let Err(refused) = learned else {
         panic!("an imprecise judge is refused");
@@ -326,4 +334,35 @@ fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers
             if why.contains("not precise enough") && why.contains("on fails")),
         "{refused:?}"
     );
+}
+
+#[test]
+fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
+    let (learned, _scratch, ctx) = attempt(
+        "converse-learn-persona",
+        "The pen fixes what the memory lets slip, so write down what you have read.",
+        Some(judge()),
+        Some("Benjamin Franklin"),
+    );
+    let Learned::Ran(ran) = learned.unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let dataset = ran.report.dataset.as_ref().unwrap();
+    let prompt = splinter_core::prompt::persona_prompt("Benjamin Franklin");
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    assert!(!text.is_empty());
+    for line in text.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(record["messages"][0]["role"], "system");
+        assert_eq!(record["messages"][0]["content"], prompt);
+    }
+    // The dataset names the prompt, and what is trained on it is asked under it.
+    assert_eq!(
+        ctx.system_prompt_of(std::slice::from_ref(&dataset.dataset))
+            .unwrap()
+            .as_deref(),
+        Some(prompt.as_str())
+    );
+    // The teacher that wrote the dialogue was not asked as the person.
+    assert!(!text.contains(STUDENT_ROLE));
 }

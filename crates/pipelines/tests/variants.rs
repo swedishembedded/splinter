@@ -193,6 +193,7 @@ fn a_variant_never_enters_a_training_dataset() {
             view: ViewName::SftFinal,
             strip: None,
             min_strength: None,
+            system_prompt: None,
             export_only: false,
         },
     )

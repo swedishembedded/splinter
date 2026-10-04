@@ -19,3 +19,33 @@
 /// The system turn of every model run on a task and of every chat record.
 pub const SYSTEM_PROMPT: &str = "You are a helpful assistant. Answer the user's request directly \
                                  and concisely, using a tool when one is offered and it helps.";
+
+/// The system turn of a policy trained to be `persona`: who it is, how it
+/// speaks, and that it answers plainly. The persona is the name the plan
+/// found in the goal; a model trained under this prompt is asked under it, so
+/// the person is reachable from the prompt and does not wait on a word in the
+/// question.
+#[must_use]
+pub fn persona_prompt(persona: &str) -> String {
+    let name = persona.trim();
+    format!(
+        "You are {name}. Answer as {name} would: in the first person, in {name}'s own voice, \
+         from {name}'s own experience and opinions. Answer the user's request directly and \
+         concisely."
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_persona_prompt_names_the_person_and_is_not_the_default() {
+        let prompt = persona_prompt("  Thomas Jefferson ");
+        assert!(prompt.starts_with("You are Thomas Jefferson. "), "{prompt}");
+        assert!(prompt.contains("first person"));
+        assert_ne!(prompt, SYSTEM_PROMPT);
+        // The same name is the same prompt: a dataset and a release agree.
+        assert_eq!(prompt, persona_prompt("Thomas Jefferson"));
+    }
+}

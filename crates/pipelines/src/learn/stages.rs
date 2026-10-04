@@ -55,6 +55,8 @@ pub(super) struct Learn<'a> {
     /// The model that plans the kinds; `None` keeps `kinds`.
     pub(super) planner: Option<&'a ModelRef>,
     pub(super) goal: Option<&'a str>,
+    /// Who the policy becomes, as the request names it.
+    pub(super) persona: Option<&'a str>,
     pub(super) deadline: Option<Instant>,
     pub(super) trainer: &'a dyn Trainer,
     pub(super) policy: ModelRef,
@@ -106,6 +108,21 @@ pub(super) struct LearnState<'a> {
 }
 
 impl<'a> LearnState<'a> {
+    /// The system prompt the policy is trained and asked under: the persona
+    /// the request names, else the one the plan found in the goal; `None`
+    /// keeps the default.
+    fn system_prompt(&self) -> Option<String> {
+        let planned = self
+            .report
+            .plan
+            .as_ref()
+            .and_then(|planned| planned.plan.persona.as_deref());
+        self.learn
+            .persona
+            .or(planned)
+            .map(splinter_core::prompt::persona_prompt)
+    }
+
     /// The state of a run that has not begun.
     pub(super) fn new(learn: Learn<'a>, distill: bool, frontier: Option<PassAtK>) -> Self {
         let stage_deadlines = StageDeadlines::of(Instant::now(), learn.deadline);
@@ -462,6 +479,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             view: ViewName::SftFinal,
             strip: None,
             min_strength: Some(st.min_strength),
+            system_prompt: st.system_prompt(),
             export_only: false,
         },
     ) {

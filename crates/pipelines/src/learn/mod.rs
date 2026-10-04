@@ -99,6 +99,11 @@ pub struct LearnRequest {
     pub sources: Vec<String>,
     /// What the learner is after.
     pub goal: Option<String>,
+    /// Who the policy is to become, when it is to think like a person: the
+    /// training records open with a system prompt that says so, and the
+    /// policy is asked under it afterwards. A plan names one from the goal
+    /// when this does not.
+    pub persona: Option<String>,
     /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`] unless `plan` is set.
     pub kinds: Vec<String>,
     /// Let a planner model survey the sources and choose the task kinds,
@@ -225,6 +230,7 @@ pub fn learn(
         kinds: &kinds,
         planner: planner.as_ref(),
         goal: request.goal.as_deref(),
+        persona: request.persona.as_deref(),
         deadline: budget.map(|b| Instant::now() + b),
         trainer,
         policy,
