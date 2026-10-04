@@ -77,7 +77,7 @@ pub enum Command {
     /// critique and retry failures, build an sft-final dataset, train a
     /// candidate on it from the champion, and release it if it passes the
     /// release gate.
-    Learn(LearnArgs),
+    Learn(Box<LearnArgs>),
     /// Answer a question with a model, closed-book unless --open-book.
     Ask(AskArgs),
     /// Show the policy in use, recent runs and what the stores hold.
@@ -225,6 +225,10 @@ pub struct LearnArgs {
     /// The peak learning rate of the training (brain's default if not given).
     #[arg(long, value_name = "LR")]
     pub lr: Option<f32>,
+    /// Records averaged into one optimizer step (default: from the size of the
+    /// dataset, when the steps are not named).
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    pub records_per_step: Option<u32>,
     /// Hold the frozen base at bf16, half the bytes of fp32: what a 7B
     /// base needs to train on one 24 GiB card.
     #[arg(long)]
@@ -515,6 +519,9 @@ pub struct TrainArgs {
     /// The peak learning rate (brain's default if not given).
     #[arg(long, value_name = "LR")]
     pub lr: Option<f32>,
+    /// Records averaged into one optimizer step (one if not given).
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    pub records_per_step: Option<u32>,
 }
 
 /// `--beta`'s help, naming the default it falls back to.

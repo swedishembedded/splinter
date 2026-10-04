@@ -222,7 +222,7 @@ impl Session {
         match command {
             Command::Learn(args) => {
                 let release_asked = !args.no_release;
-                let request = learn_request(args);
+                let request = learn_request(*args);
                 let learned = learn(ctx, &request, self.splinter.trainer())?;
                 emit(json, &learned);
                 let finished = match &learned {
@@ -446,6 +446,7 @@ impl Session {
                     beta: args.beta,
                     tuning: Tuning {
                         learning_rate: args.lr,
+                        records_per_step: args.records_per_step,
                         ..Tuning::default()
                     },
                 };
@@ -630,6 +631,7 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         tuning: Tuning {
             bf16_base: args.bf16_base,
             learning_rate: args.lr,
+            records_per_step: args.records_per_step,
         },
         roles: [
             (Role::Planner, args.planner),
@@ -655,7 +657,7 @@ mod tests {
         let mut argv = vec!["splinter"];
         argv.extend_from_slice(words);
         match Cli::try_parse_from(argv).unwrap().command {
-            Some(Command::Learn(args)) => learn_request(args),
+            Some(Command::Learn(args)) => learn_request(*args),
             other => panic!("not a learn: {other:?}"),
         }
     }

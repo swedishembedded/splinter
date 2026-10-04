@@ -13,7 +13,7 @@ splinter                          REPL on the current policy (a line is handled 
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
-                         [--steps N] [--rank R] [--lr LR] [--bf16-base]
+                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -26,7 +26,7 @@ splinter experiences list | show <ID> [--graph] | replay <ID>
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
 splinter dataset export <DATASET-ID> --out DIR
-splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B]
+splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B] [--lr LR] [--records-per-step N]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE] [--judge REF]
@@ -252,7 +252,9 @@ trains on one card. `SPLINTER_REMOTE_CONCURRENCY` is how many requests to a mode
 reached over an API may be in flight at once (4 by default); a model on the local
 device is asked one at a time. Unless `--steps` is given a run trains about two passes
 over what it learned, within bounds, at a learning rate suited to a short
-LoRA run.
+LoRA run, and a step averages several records - one per sixteen the data holds, up
+to eight, or `--records-per-step N` - because an update on a single long,
+individual answer is noise the next record undoes.
 
 ## The curriculum
 

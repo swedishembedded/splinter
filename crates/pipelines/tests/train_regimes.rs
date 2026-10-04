@@ -169,6 +169,7 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
         tuning: Tuning {
             bf16_base: true,
             learning_rate: Some(2e-4),
+            records_per_step: Some(4),
         },
         ..request(&[&chat], None)
     };

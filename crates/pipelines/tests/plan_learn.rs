@@ -28,7 +28,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
-use splinter_pipelines::learn::auto_steps;
+use splinter_pipelines::learn::{auto_records_per_step, auto_steps, MAX_AUTO_STEPS};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::arm;
 use splinter_pipelines::train::DEFAULT_STEPS;
@@ -220,14 +220,29 @@ fn an_assistant_that_is_no_model_reference_is_refused_by_name() {
 }
 
 /// A run trains for about two passes over what it has learned, never fewer
-/// steps than the default and never more than a day's work.
+/// steps than the default and never more than a day's work, and a step
+/// averages several records once there are enough of them for the update to
+/// be steadier for it: sixteen records to a step's one, up to eight.
 #[test]
-fn the_steps_follow_the_size_of_the_dataset() {
+fn the_steps_and_what_a_step_reads_follow_the_size_of_the_dataset() {
+    assert_eq!(
+        auto_records_per_step(2),
+        1,
+        "a tiny set steps record by record"
+    );
+    assert_eq!(auto_records_per_step(100), 6);
+    assert_eq!(auto_records_per_step(185), 8);
+    assert_eq!(auto_records_per_step(1_000_000), 8, "bounded above");
     assert_eq!(
         auto_steps(2),
         DEFAULT_STEPS,
         "a tiny set trains for the default"
     );
-    assert_eq!(auto_steps(100), 200, "two passes over a hundred records");
-    assert_eq!(auto_steps(1_000_000), auto_steps(5_000), "bounded above");
+    assert_eq!(
+        auto_steps(185),
+        47,
+        "two passes over 185 records, eight to a step"
+    );
+    assert_eq!(auto_steps(1_000), 250);
+    assert_eq!(auto_steps(1_000_000), MAX_AUTO_STEPS, "bounded above");
 }

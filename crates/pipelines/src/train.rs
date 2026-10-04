@@ -104,6 +104,8 @@ pub struct Tuning {
     pub bf16_base: bool,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
+    /// Records averaged into one optimizer step; one when `None`.
+    pub records_per_step: Option<u32>,
 }
 
 /// One training request.
@@ -325,6 +327,7 @@ impl Trainer for BrainTrainer {
             cancel: Some(cancel),
             bf16_base: plan.tuning.bf16_base,
             learning_rate: plan.tuning.learning_rate,
+            records_per_step: plan.tuning.records_per_step,
             // The records hold answers and no reasoning, so the model is
             // trained for no-think mode whatever it is later asked.
             thinking: false,

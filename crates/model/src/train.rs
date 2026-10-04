@@ -79,6 +79,9 @@ pub struct FineTune<'a> {
     pub bf16_base: bool,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
+    /// Records whose gradients are averaged into one optimizer step; one,
+    /// brain's default, when `None`.
+    pub records_per_step: Option<u32>,
     /// Whether the model is trained to reason before it answers. Off, it is
     /// trained for no-think mode - what Splinter asks of it by default - so a
     /// reasoning model trains on the state a no-think prompt leaves it in
@@ -267,6 +270,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     }
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
+    }
+    if let Some(records) = request.records_per_step {
+        fine_tune = fine_tune.grad_accum(records);
     }
     for replayed in request.replay {
         fine_tune = fine_tune.replay(replayed);

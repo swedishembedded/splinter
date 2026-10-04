@@ -28,8 +28,8 @@ use splinter_store::experiences::SetId;
 use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
-use super::auto_steps;
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
+use super::{auto_records_per_step, steps_for};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
@@ -571,16 +571,32 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     let Some(dataset) = st.dataset.clone() else {
         unreachable!("the train stage follows the dataset stage")
     };
+    // What a step averages is the data's to say unless a command did, and
+    // only when the steps are not named: a command that names its steps means
+    // optimizer steps of single records, as it always did.
+    let records_per_step = st.learn.tuning.records_per_step.or_else(|| {
+        st.learn
+            .steps
+            .is_none()
+            .then(|| auto_records_per_step(st.records))
+    });
+    let steps = st
+        .learn
+        .steps
+        .unwrap_or_else(|| steps_for(st.records, records_per_step.unwrap_or(1)));
     let candidate = train(
         ctx,
         &TrainRequest {
             datasets: vec![dataset],
             from: st.learn.policy.clone(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
-            steps: st.learn.steps.unwrap_or_else(|| auto_steps(st.records)),
+            steps,
             rank: st.learn.rank,
             beta: None,
-            tuning: st.learn.tuning,
+            tuning: Tuning {
+                records_per_step,
+                ..st.learn.tuning
+            },
         },
         st.learn.trainer,
         &run.cancel_token(),

@@ -82,14 +82,41 @@ pub const EPOCHS: u32 = 2;
 /// The most steps a `learn` run takes when they are not given.
 pub const MAX_AUTO_STEPS: u32 = 2000;
 
+/// How many records a step of a run over `records` records averages when
+/// none is given: one per [`RECORDS_PER_STEP_UNIT`] records there are, at
+/// least one and at most [`MAX_RECORDS_PER_STEP`]. A set this small is made of
+/// long, individual answers, and an update on one record at a time is noise
+/// that the next record undoes.
+#[must_use]
+pub fn auto_records_per_step(records: usize) -> u32 {
+    u32::try_from(records / RECORDS_PER_STEP_UNIT)
+        .unwrap_or(u32::MAX)
+        .clamp(1, MAX_RECORDS_PER_STEP)
+}
+
+/// The data a step averages one more record for.
+pub const RECORDS_PER_STEP_UNIT: usize = 16;
+
+/// The most records a step averages when none is given.
+pub const MAX_RECORDS_PER_STEP: u32 = 8;
+
 /// The steps of a run over `records` records when none are given: about
-/// [`EPOCHS`] passes, never fewer than [`DEFAULT_STEPS`] and never more than
-/// [`MAX_AUTO_STEPS`].
+/// [`EPOCHS`] passes at [`auto_records_per_step`] records a step, never fewer
+/// than [`DEFAULT_STEPS`] and never more than [`MAX_AUTO_STEPS`].
 #[must_use]
 pub fn auto_steps(records: usize) -> u32 {
-    u32::try_from(records)
+    steps_for(records, auto_records_per_step(records))
+}
+
+/// The steps of about [`EPOCHS`] passes over `records` records at
+/// `records_per_step` a step, within the same bounds.
+#[must_use]
+pub fn steps_for(records: usize, records_per_step: u32) -> u32 {
+    let reads = u32::try_from(records)
         .unwrap_or(u32::MAX)
-        .saturating_mul(EPOCHS)
+        .saturating_mul(EPOCHS);
+    reads
+        .div_ceil(records_per_step.max(1))
         .clamp(DEFAULT_STEPS, MAX_AUTO_STEPS)
 }
 
@@ -249,6 +276,7 @@ pub fn learn(
         tuning: Tuning {
             bf16_base: request.tuning.bf16_base,
             learning_rate: request.tuning.learning_rate.or(Some(DEFAULT_LEARNING_RATE)),
+            records_per_step: request.tuning.records_per_step,
         },
         quotas: request.quotas,
     };
