@@ -45,6 +45,10 @@ pub struct Row {
     pub lost: usize,
     /// The one-sided p-value that the trained model is better.
     pub p_value: f64,
+    /// The share of these questions whose reference is the most common one:
+    /// what a model scores by giving the same answer to every question. A gain
+    /// that does not clear it is not evidence of knowing anything.
+    pub modal_reference: f64,
 }
 
 /// Rows over the questions both arms answered, ordered by split, then by the
@@ -91,7 +95,63 @@ pub fn rows(before: &[Graded], after: &[Graded], kind_order: &[&str]) -> Vec<Row
                     .filter(|(b, a)| b.correct && !a.correct)
                     .count(),
                 p_value: test.p_value,
+                modal_reference: modal_share(pairs.iter().map(|(b, _)| b.reference.as_str())),
             }
+        })
+        .collect()
+}
+
+/// The share of `references` held by the most common one.
+fn modal_share<'a>(references: impl Iterator<Item = &'a str>) -> f64 {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    let mut total = 0usize;
+    for reference in references {
+        *counts.entry(reference).or_default() += 1;
+        total += 1;
+    }
+    counts
+        .values()
+        .copied()
+        .max()
+        .map_or(0.0, |most| most as f64 / total as f64)
+}
+
+/// A closed choice of at most this many references is also reported per
+/// reference: a model that always gives one answer is right on one reference
+/// and wrong on every other.
+const CLOSED_CHOICE_MAX: usize = 5;
+
+/// For each kind whose references are a closed set, the share right per
+/// reference, before and after: `(split, kind, reference, n, before, after)`.
+#[must_use]
+pub fn per_reference(
+    before: &[Graded],
+    after: &[Graded],
+) -> Vec<(String, String, String, usize, usize, usize)> {
+    let after_by_id: HashMap<&str, &Graded> = after.iter().map(|g| (g.id.as_str(), g)).collect();
+    let mut cells: std::collections::BTreeMap<(String, String, String), (usize, usize, usize)> =
+        std::collections::BTreeMap::new();
+    for b in before {
+        if let Some(a) = after_by_id.get(b.id.as_str()) {
+            let cell = cells
+                .entry((b.split.clone(), b.kind.clone(), b.reference.clone()))
+                .or_default();
+            cell.0 += 1;
+            cell.1 += usize::from(b.correct);
+            cell.2 += usize::from(a.correct);
+        }
+    }
+    let mut distinct: HashMap<(&str, &str), usize> = HashMap::new();
+    for (split, kind, _) in cells.keys() {
+        *distinct.entry((split.as_str(), kind.as_str())).or_default() += 1;
+    }
+    cells
+        .iter()
+        .filter(|((split, kind, _), _)| {
+            distinct[&(split.as_str(), kind.as_str())] <= CLOSED_CHOICE_MAX
+        })
+        .map(|((split, kind, reference), (n, b, a))| {
+            (split.clone(), kind.clone(), reference.clone(), *n, *b, *a)
         })
         .collect()
 }
@@ -107,15 +167,15 @@ pub fn render(
     chance: &dyn Fn(&str) -> Option<f64>,
 ) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "| split | question | n | before | after | gained | lost | unanswered (before/after) | p (after better) |");
-    let _ = writeln!(out, "|---|---|---|---|---|---|---|---|---|");
+    let _ = writeln!(out, "| split | question | n | before | after | gained | lost | unanswered (before/after) | p (after better) | one answer for all |");
+    let _ = writeln!(out, "|---|---|---|---|---|---|---|---|---|---|");
     for row in rows(before, after, kind_order) {
         let percent = |k: usize| format!("{k} ({:.0}%)", 100.0 * k as f64 / row.n.max(1) as f64);
         let chance_note =
             chance(&row.kind).map_or(String::new(), |c| format!(" (chance {:.0}%)", 100.0 * c));
         let _ = writeln!(
             out,
-            "| {} | {}{} | {} | {} | {} | {} | {} | {}/{} | {:.4} |",
+            "| {} | {}{} | {} | {} | {} | {} | {} | {}/{} | {:.4} | {:.0}% |",
             row.split,
             row.kind,
             chance_note,
@@ -126,8 +186,18 @@ pub fn render(
             row.lost,
             row.before_unanswered,
             row.after_unanswered,
-            row.p_value
+            row.p_value,
+            100.0 * row.modal_reference
         );
+    }
+    let closed = per_reference(before, after);
+    if !closed.is_empty() {
+        let _ = writeln!(out, "\nA closed choice, right per reference (a model that gives one answer to every question is right on one row only):\n");
+        let _ = writeln!(out, "| split | question | reference | n | before | after |");
+        let _ = writeln!(out, "|---|---|---|---|---|---|");
+        for (split, kind, reference, n, b, a) in closed {
+            let _ = writeln!(out, "| {split} | {kind} | {reference} | {n} | {b} | {a} |");
+        }
     }
     let only = |a: &[Graded], b: &[Graded]| {
         let ids: HashSet<&str> = b.iter().map(|g| g.id.as_str()).collect();
@@ -224,5 +294,70 @@ mod tests {
             table.contains("1 questions were answered only before"),
             "{table}"
         );
+    }
+
+    #[test]
+    fn a_row_says_what_one_answer_for_every_question_would_score() {
+        let refs = ["A", "A", "A", "B"];
+        let before: Vec<Graded> = refs
+            .iter()
+            .enumerate()
+            .map(|(i, r)| Graded {
+                reference: (*r).into(),
+                ..graded(&i.to_string(), "exam", "attribution", false, true)
+            })
+            .collect();
+        let after: Vec<Graded> = refs
+            .iter()
+            .enumerate()
+            .map(|(i, r)| Graded {
+                reference: (*r).into(),
+                ..graded(&i.to_string(), "exam", "attribution", *r == "A", true)
+            })
+            .collect();
+        let row = &rows(&before, &after, &[])[0];
+        assert!((row.modal_reference - 0.75).abs() < 1e-12);
+        assert_eq!(
+            row.after, 3,
+            "always answering A is right three times in four, which is the baseline"
+        );
+    }
+
+    #[test]
+    fn a_closed_choice_is_reported_per_reference_so_collapse_onto_one_answer_shows() {
+        let refs = ["A", "A", "A", "B", "C"];
+        let make = |correct: &dyn Fn(&str) -> bool| -> Vec<Graded> {
+            refs.iter()
+                .enumerate()
+                .map(|(i, r)| Graded {
+                    reference: (*r).into(),
+                    ..graded(&i.to_string(), "exam", "attribution", correct(r), true)
+                })
+                .collect()
+        };
+        let table = render(&make(&|_| false), &make(&|r| r == "A"), &[], &|_| None);
+        assert!(
+            table.contains("| exam | attribution | A | 3 | 0 | 3 |"),
+            "{table}"
+        );
+        assert!(
+            table.contains("| exam | attribution | B | 1 | 0 | 0 |"),
+            "{table}"
+        );
+        assert!(
+            table.contains("| exam | attribution | C | 1 | 0 | 0 |"),
+            "{table}"
+        );
+    }
+
+    #[test]
+    fn an_open_answer_is_not_reported_per_reference() {
+        let before: Vec<Graded> = (0..12)
+            .map(|i| Graded {
+                reference: format!("r{i}"),
+                ..graded(&i.to_string(), "exam", "year", false, true)
+            })
+            .collect();
+        assert!(per_reference(&before, &before).is_empty());
     }
 }
