@@ -45,7 +45,7 @@ what he believed.
 | `--decoding greedy\|thinking\|sample[:T]\|sample-thinking[:T]`, `--few-shot N` | On `transfer-exam` and `reconstruct-replies`: let a reasoning model think or sample, and show it N training examples in its system message, so a base arm is not handicapped into a weak baseline. |
 | `--framing full\|identity\|plain` | On `transfer-exam` and `reconstruct-replies`: the system message the exam asks under. Training mixes all three (mostly the full instructions, some the bare identity, some no persona; the shares are constants in `persona.rs`), so an adapter can be asked without any persona prompt and the habit shown to be its own. |
 | `briefings`, `reconstruct-replies`, `judge`, `reconstruct-report` | The reconstruction benchmark: a held-out letter is briefed as the situation it answered, a model writes the reply, and a judge calibrated on controls scores it against what the real letter does. |
-| `grpo` | Builds a task family for brain's reinforcement-learning loop: present-day situations and the passages he may be shown, rewarded in named parts by the same rules (the layout, the verdict on whether his method applies, every other rule), with no model judging. The pool the loop trains on and the pool its own gate draws from are disjoint. It runs, but a two-step trial over the 1.5B model took 27 minutes, so no result is claimed for the 7B (see `FINDINGS.md`). |
+| `grpo` | Builds a task family for brain's reinforcement-learning loop: present-day situations and the passages he may be shown, rewarded in named parts by the same rules (the layout, the verdict on whether his method applies, every other rule), with no model judging. The pool the loop trains on and the pool its own gate draws from are disjoint. It runs, but a two-step trial over the 1.5B model took 27 minutes, so no result is claimed for the 7B (the knowledge notes on measuring an RL loop's cost say why). |
 | `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. `anchor-skills.jsonl` adds what a persona fine-tune of a reasoning model can erode and trivia cannot show: arithmetic word problems graded by the last number stated, format-following graded by line count, and probes that must not carry any of his persona (`--max-tokens`, `--decoding thinking` for the arithmetic). |
 
 The `exam` split is questions about documents the model never saw. The `seen`
@@ -79,8 +79,8 @@ a verifier model, a judge for anything the rules cannot grade beyond the
 reconstruction benchmark's, and the other primary collections (the manuscript
 papers, committee records, Founders Online, the delegates' letters). The
 temporal holdout is small: few documents of his last years survive in this
-edition. See `FINDINGS.md` for the defects found so far and what each repair
-was verified by.
+edition. The defects found on the way, and what proved each, are kept as generic
+knowledge notes for the whole repository, not for this sample.
 
 ## Running it
 
