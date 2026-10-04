@@ -170,3 +170,61 @@ pub fn report_command(before: &Path, after: &Path) -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+/// Where the helper is, and how much of the corpus to ask it about.
+pub struct Mine<'a> {
+    pub served: crate::helper::Served<'a>,
+    pub limit: Option<usize>,
+}
+
+/// Ask the helper for principles about the documents a model may learn from,
+/// check every proposal against them, and write what stands.
+pub fn principles_command(
+    resources: &Path,
+    documents: &[Document],
+    mine: &Mine<'_>,
+) -> anyhow::Result<()> {
+    let assignments = read_assignments(resources)?;
+    let allowed: std::collections::HashSet<String> = assignments
+        .iter()
+        .filter(|a| a.split == Split::Train)
+        .map(|a| a.doc_id.clone())
+        .collect();
+    let bundles = crate::miner::bundles(
+        documents,
+        &allowed,
+        crate::miner::DOCUMENTS_PER_BUNDLE,
+        crate::miner::WORDS_PER_DOCUMENT,
+    );
+    let dir = resources.join("principles");
+    std::fs::create_dir_all(&dir)?;
+    let results = dir.join("results.jsonl");
+    let helper = crate::helper::Helper::served(&mine.served)?;
+    let asked =
+        crate::miner::mine_all(&helper, &bundles, documents, &allowed, &results, mine.limit)?;
+
+    let all = crate::miner::read_results(&results)?;
+    let principles: Vec<&crate::principles::Principle> =
+        all.iter().flat_map(|r| &r.principles).collect();
+    let mut text = String::new();
+    for p in &principles {
+        text.push_str(&serde_json::to_string(p)?);
+        text.push('\n');
+    }
+    std::fs::write(dir.join("principles.jsonl"), text)?;
+    let recurring = principles
+        .iter()
+        .filter(|p| p.status == crate::principles::Status::Recurring)
+        .count();
+    let rejected: usize = all.iter().map(|r| r.rejected.len()).sum();
+    let failed = all.iter().filter(|r| r.error.is_some()).count();
+    println!(
+        "bundles: {} total, {asked} asked this run, {failed} failures recorded",
+        bundles.len()
+    );
+    println!(
+        "principles standing: {}  (recurring: {recurring})  rejected: {rejected}",
+        principles.len()
+    );
+    Ok(())
+}

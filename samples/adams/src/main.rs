@@ -24,12 +24,16 @@
 //! train      fine-tune a LoRA adapter on the training set
 //! exam       ask one model (base, or base plus adapter) every exam question
 //! report     the before-and-after table, with the paired sign test
+//! principles ask a helper model for principles; keep what the documents bear out
 //! ```
 
 mod attribution;
 mod corpus;
 mod curate;
 mod document;
+mod helper;
+mod miner;
+mod principles;
 mod run;
 mod split;
 mod tasks;
@@ -46,8 +50,9 @@ fn main() -> anyhow::Result<()> {
         Some("train") => train_command(&args[1..]),
         Some("exam") => exam_command(&args[1..]),
         Some("report") => report_command(&args[1..]),
+        Some("principles") => principles_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report> ..."
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles> ..."
         ),
     }
 }
@@ -297,5 +302,29 @@ fn report_command(args: &[String]) -> anyhow::Result<()> {
     run::report_command(
         std::path::Path::new(&need(args, "--before")?),
         std::path::Path::new(&need(args, "--after")?),
+    )
+}
+
+/// Ask the helper served at `--url` for principles; the key comes from the
+/// `BRAIN_API_KEY` variable, never from the command line.
+fn principles_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    let key = std::env::var("BRAIN_API_KEY")
+        .map_err(|_| anyhow::anyhow!("BRAIN_API_KEY is not set: the key `brain serve` printed"))?;
+    let url = flag(args, "--url").unwrap_or_else(|| "http://127.0.0.1:8788/v1".to_string());
+    let model = need(args, "--model")?;
+    let served = helper::Served {
+        base_url: &url,
+        api_key: &key,
+        model: &model,
+    };
+    run::principles_command(
+        &resources,
+        &documents,
+        &run::Mine {
+            served,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        },
     )
 }

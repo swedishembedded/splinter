@@ -16,8 +16,11 @@ blake3 = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
 [dev-dependencies]
+async-trait = { workspace = true }
+futures = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

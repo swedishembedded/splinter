@@ -4015,12 +4015,15 @@ name = "splinter-adams"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "blake3",
+ "futures",
  "regex",
  "serde",
  "serde_json",
  "splinter-sdk",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
