@@ -31,6 +31,11 @@ what he believed.
 | `train` | Fine-tunes a LoRA adapter on the training questions through Splinter's trainer. |
 | `exam` | Asks one model, with or without the adapter, every question not yet answered; grades each answer by code; resumes where it stopped. |
 | `report` | Pairs two result files on the questions both answered, with the paired sign test. |
+| `principles` | A helper model reads a few of his own letters at a time and proposes how he worked, as rules that say when they apply, what he did and what limits them, each with the document and the words, copied exactly. Code looks every quotation up: one not in the cited document is dropped with the reason kept, and a rule none of whose quotations is found is rejected. A rule is `recurring` only when it is found in three documents across periods or audiences. Texts a committee adopted or an editor ascribes to him are never support. |
+| `transfer` | From each rule, a helper designs a present-day situation as one of four cases (a clear fit, a weak fit, a missing precondition, a surface analogy), gated in code: modern, no wording from the source, conditions that match the case. A helper then answers it, and the answer is kept only if its first line says whether his method applies and that agrees with the case, a non-fit that needs information asks for it, and its grounding block keeps its word. |
+| `build-data` | Builds supervised records (with his passages in the prompt, and without), preference pairs and a frozen benchmark from the kept answers. A rule is wholly training or wholly benchmark. A preference pair is an answer and the same answer broken in one named way that the check then refuses, so each pair is right by construction. |
+| `train-dpo` | Preference-optimises an adapter on the pairs, continuing from the supervised adapter, which then is the reference. |
+| `transfer-exam` | Asks a model every benchmark question, graded by the grounding rules with no judge. |
 
 The `exam` split is questions about documents the model never saw. The `seen`
 split is a sample of training questions. A gain on `seen` and none on `exam` is
@@ -38,14 +43,14 @@ memorisation; a gain on both is learning.
 
 ## What is not built
 
-Everything beyond recall and attribution is still to do: historical
-stimulus-and-response reconstruction, a source-grounded task factory with
-helper models, modern-transfer scenarios, preference and reinforcement
-training, a modern-fact researcher separate from the persona, a verifier model,
-and the other primary collections (the manuscript papers, committee records,
-Founders Online, the delegates' letters). The temporal holdout is small: few
-documents of his last years survive in this edition. See `FINDINGS.md` for the
-defects found so far and what each repair was verified by.
+Reinforcement training (GRPO) is not built; brain exposes the loop and Splinter
+does not yet drive it. Also still to do: historical stimulus-and-response
+reconstruction, a modern-fact researcher separate from the persona, a verifier
+model, a judge for anything the rules cannot grade, and the other primary
+collections (the manuscript papers, committee records, Founders Online, the
+delegates' letters). The temporal holdout is small: few documents of his last
+years survive in this edition. See `FINDINGS.md` for the defects found so far
+and what each repair was verified by.
 
 ## Running it
 
@@ -61,6 +66,22 @@ splinter-adams train  --resources RESOURCES --base BASE --attempt RUN/attempt --
 splinter-adams exam   --tasks RESOURCES/tasks/exam.jsonl --out RUN/base-exam.jsonl  --base BASE
 splinter-adams exam   --tasks RESOURCES/tasks/exam.jsonl --out RUN/tuned-exam.jsonl --base BASE --adapter RUN/attempt/adapter.safetensors
 splinter-adams report --before RUN/base-exam.jsonl --after RUN/tuned-exam.jsonl
+```
+
+The helper stages need a model served by `brain serve` and its key in
+`BRAIN_API_KEY`; they resume where they stopped and record, rather than hide, a
+bundle or a principle the helper failed on:
+
+```bash
+splinter-adams principles --resources RESOURCES --model HELPER [--url http://127.0.0.1:8788/v1] [--limit N]
+splinter-adams transfer   --resources RESOURCES --model HELPER [--limit N]
+splinter-adams build-data --resources RESOURCES
+splinter-adams train      --resources RESOURCES --base BASE --attempt RUN/sft2 \
+    --dataset RESOURCES/datasets/sft-transfer.jsonl --replay RESOURCES/tasks/sft.jsonl --steps 500 --rank 16 --bf16
+splinter-adams train-dpo  --resources RESOURCES --base BASE --attempt RUN/dpo \
+    --continue-from RUN/sft2/adapter.safetensors --steps 200
+splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-base.jsonl --base BASE
+splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
 ```
 
 `splinter-adams identify --author LINE --year YEAR` shows what the namesake
