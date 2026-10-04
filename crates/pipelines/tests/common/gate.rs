@@ -162,6 +162,7 @@ pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
         min_strength: Some(Strength::Formal),
         records,
         excluded: BTreeMap::new(),
+        system_prompt: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }
@@ -207,6 +208,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         min_strength: Some(Strength::Formal),
         records,
         excluded: BTreeMap::new(),
+        system_prompt: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }

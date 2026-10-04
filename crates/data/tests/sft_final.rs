@@ -288,3 +288,40 @@ fn a_dialogue_is_one_record_supervising_every_reply_and_none_of_the_teachers_con
     let text = serde_json::to_string(record).unwrap();
     assert!(!text.contains("TEACHER-ONLY"), "{text}");
 }
+
+#[test]
+fn a_projection_opens_its_records_with_a_persons_prompt_and_the_manifest_says_so() {
+    let exp = experience();
+    let mut corpus = Corpus::new();
+    corpus
+        .insert(
+            exp.clone(),
+            vec![verdict(&exp, Outcome::Pass, Strength::Formal)],
+        )
+        .unwrap();
+    let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
+    let dir = scratch("persona");
+    let manifest_of = |path: &std::path::Path| -> serde_json::Value {
+        let manifest = splinter_data::manifest_path(path);
+        serde_json::from_str(&std::fs::read_to_string(manifest).unwrap()).unwrap()
+    };
+
+    // The default prompt is the default: the manifest names none.
+    let plain = write_dataset(&dir.join("plain.jsonl"), &projection, &Unchecked).unwrap();
+    assert!(manifest_of(&plain.path).get("system_prompt").is_none());
+
+    // A person's prompt replaces the first turn of every record, and the
+    // manifest records it, so what the dataset trains is what it names.
+    const PERSONA: &str = "You are a surveyor. Answer as one would.";
+    let persona = projection.clone().with_system_prompt(PERSONA);
+    let written = write_dataset(&dir.join("persona.jsonl"), &persona, &Unchecked).unwrap();
+    let text = std::fs::read_to_string(&written.path).unwrap();
+    let line: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
+    assert_eq!(
+        line["messages"][0],
+        json!({"role": "system", "content": PERSONA, "train": false})
+    );
+    assert_eq!(line["messages"][1]["content"], INSTRUCTION);
+    assert_eq!(manifest_of(&written.path)["system_prompt"], PERSONA);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

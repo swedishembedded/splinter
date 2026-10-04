@@ -228,6 +228,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
                 metadata: metadata(objective),
             }],
             excluded: BTreeMap::new(),
+            system_prompt: None,
         };
         assert_eq!(objective.line_format(), Format::SplinterExportV1);
         let path = scratch.0.join(format!("{objective:?}.jsonl"));

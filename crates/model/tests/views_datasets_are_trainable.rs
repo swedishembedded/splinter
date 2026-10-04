@@ -66,6 +66,7 @@ fn projection(objective: Objective, body: RecordBody) -> Projection {
             metadata: metadata(objective),
         }],
         excluded: BTreeMap::new(),
+        system_prompt: None,
     }
 }
 

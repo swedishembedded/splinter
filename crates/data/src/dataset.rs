@@ -140,6 +140,10 @@ pub struct Manifest {
     pub sources: Vec<Digest>,
     /// Records and exclusions.
     pub counts: Counts,
+    /// The system prompt the records open with when it is not the default;
+    /// `None` when it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_prompt: Option<String>,
 }
 
 /// How many records a projection yielded and how many candidates it left
@@ -351,6 +355,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
             records: projection.records.len(),
             excluded: projection.excluded.clone(),
         },
+        system_prompt: projection.system_prompt.clone(),
     }
 }
 

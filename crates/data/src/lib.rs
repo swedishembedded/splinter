@@ -298,6 +298,12 @@ pub struct Projection {
     pub records: Vec<Record>,
     /// Candidates left out, by reason.
     pub excluded: BTreeMap<Exclusion, usize>,
+    /// The system prompt every conversation opens with when it is not the
+    /// default ([`SYSTEM_PROMPT`]): a person's, for a policy trained to be
+    /// them. A dataset records it, so what a model was trained under is
+    /// what it is asked under.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_prompt: Option<String>,
 }
 
 impl Projection {
@@ -315,7 +321,32 @@ impl Projection {
             min_strength,
             records: Vec::new(),
             excluded: BTreeMap::new(),
+            system_prompt: None,
         }
+    }
+
+    /// The same projection with `prompt` as the first turn of every
+    /// conversation in place of the default, and recorded as the prompt the
+    /// projection trains under.
+    #[must_use]
+    pub fn with_system_prompt(mut self, prompt: &str) -> Self {
+        for record in &mut self.records {
+            let messages = match &mut record.body {
+                RecordBody::Chat { messages } | RecordBody::Rewarded { messages, .. } => {
+                    Some(messages)
+                }
+                RecordBody::Preference { prompt, .. } => Some(prompt),
+                _ => None,
+            };
+            if let Some(first) = messages
+                .and_then(|m| m.first_mut())
+                .filter(|m| m.role == "system")
+            {
+                first.content = prompt.to_string();
+            }
+        }
+        self.system_prompt = Some(prompt.to_string());
+        self
     }
 
     /// Candidates excluded for `reason`.
