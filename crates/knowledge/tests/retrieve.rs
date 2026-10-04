@@ -26,7 +26,7 @@
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::retrieve::{
-    fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Library, Passage,
+    fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Library, Passage, RerankError, Reranker,
 };
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
@@ -261,4 +261,55 @@ fn a_library_rebuilt_from_its_vectors_answers_alike_without_embedding_a_passage(
         Library::from_vectors(vec![passage(TOBACCO)], built.vectors().to_vec()).is_err(),
         "a vector for every passage, no more and no fewer"
     );
+}
+
+/// A reranker that finds relevant the passages holding a word.
+struct Holding(&'static str);
+
+impl Reranker for Holding {
+    fn relevant(&self, _question: &str, passage: &Passage) -> Result<bool, RerankError> {
+        Ok(passage.text.contains(self.0))
+    }
+}
+
+#[test]
+fn reranking_puts_what_reads_as_relevant_first_among_the_candidates_only() {
+    let found = vec![
+        passage(TOBACCO),
+        passage(EDUCATION),
+        passage(VIRGINIA),
+        passage(ELIZA),
+    ];
+    let library = Library::new(found, &Concepts).unwrap();
+    let question = "how should a young person learn";
+    let texts =
+        |hits: Vec<&Passage>| -> Vec<String> { hits.iter().map(|p| p.text.clone()).collect() };
+    let plain = texts(library.find(question, &Concepts, 3).unwrap());
+    assert_eq!(&plain[..2], [EDUCATION, VIRGINIA]);
+
+    // Of three candidates the reranker finds only the tobacco passage
+    // relevant: it leads, and the rest keep the order retrieval gave them.
+    let reranked = texts(
+        library
+            .find_reranked(question, &Concepts, &Holding("tobacco"), 3, 4)
+            .unwrap(),
+    );
+    assert_eq!(reranked[0], TOBACCO);
+    assert_eq!(&reranked[1..], &plain[..2]);
+
+    // A passage outside the candidates is never considered.
+    let narrow = texts(
+        library
+            .find_reranked(question, &Concepts, &Holding("tobacco"), 1, 1)
+            .unwrap(),
+    );
+    assert_eq!(narrow, plain[..1]);
+
+    // A reranker that finds nothing relevant leaves retrieval's order.
+    let none = texts(
+        library
+            .find_reranked(question, &Concepts, &Holding("zzzz"), 3, 4)
+            .unwrap(),
+    );
+    assert_eq!(none, plain);
 }

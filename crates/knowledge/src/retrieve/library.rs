@@ -18,7 +18,18 @@
 //! that are in a passage and nowhere near it in meaning fill the tail of the
 //! answer, a fixed share of it, and never its head.
 
-use super::{Bm25, Dense, EmbedError, Embedder, Passage};
+use super::{Bm25, Dense, EmbedError, Embedder, Passage, RerankError, Reranker};
+
+/// Why a reranked search failed.
+#[derive(Debug, thiserror::Error)]
+pub enum FindError {
+    /// The query could not be embedded.
+    #[error(transparent)]
+    Embed(#[from] EmbedError),
+    /// The reranker could not judge a passage.
+    #[error(transparent)]
+    Rerank(#[from] RerankError),
+}
 
 /// How a library's answer is shared between the two searches: one slot in
 /// this many, past the first, is for what only the words find.
@@ -113,5 +124,32 @@ impl Library {
             .take(k - words.len())
             .chain(&words);
         Ok(found.map(|&p| &self.passages[p]).collect())
+    }
+
+    /// [`Library::find`] widened to `candidates` passages, which `reranker`
+    /// reads beside `query`: the ones it finds relevant come first, each
+    /// group in the order search gave, and the first `k` are the answer. A
+    /// reranker that finds nothing relevant leaves search's order.
+    pub fn find_reranked(
+        &self,
+        query: &str,
+        embedder: &dyn Embedder,
+        reranker: &dyn Reranker,
+        k: usize,
+        candidates: usize,
+    ) -> Result<Vec<&Passage>, FindError> {
+        let found = self.find(query, embedder, candidates.max(k))?;
+        let mut relevant = Vec::new();
+        let mut rest = Vec::new();
+        for passage in found {
+            if reranker.relevant(query, passage)? {
+                relevant.push(passage);
+            } else {
+                rest.push(passage);
+            }
+        }
+        relevant.extend(rest);
+        relevant.truncate(k);
+        Ok(relevant)
     }
 }
