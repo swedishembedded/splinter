@@ -16,6 +16,7 @@ use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest};
 use splinter_sdk::eval::{evaluate, EvalRequest};
+use splinter_sdk::exam::examine;
 use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::calibrate_judge;
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
@@ -454,6 +455,20 @@ impl Session {
                     freeze: args.freeze,
                 };
                 emit(json, &evaluate(ctx, &request)?);
+            }
+            Command::Exam(args) => {
+                let arguments = json!({ "candidate": args.candidate, "judge": args.judge });
+                emit(
+                    json,
+                    &record(ctx, "exam", &arguments, |run| {
+                        examine(
+                            ctx,
+                            &args.candidate,
+                            args.judge.as_ref(),
+                            &run.cancel_token(),
+                        )
+                    })?,
+                );
             }
             Command::State(StateCommand::Status) => emit(json, &state::storage(ctx)?),
             Command::State(StateCommand::Maintain { collect }) => {

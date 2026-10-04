@@ -196,6 +196,12 @@ impl Report for LearnPlan {
     }
 }
 
+impl Report for splinter_sdk::exam::Exam {
+    fn human(&self) -> String {
+        exam_line(&serde_json::to_value(self).unwrap_or(serde_json::Value::Null)) + "\n"
+    }
+}
+
 impl Report for LearnReport {
     fn human(&self) -> String {
         let mut out = String::new();

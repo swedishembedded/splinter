@@ -117,6 +117,9 @@ pub enum Command {
     /// Grade a candidate or a model closed-book on a suite; or freeze and
     /// show the anchor suite.
     Eval(EvalArgs),
+    /// Put a candidate and the policy it continues to its held-out tasks and
+    /// have a calibrated judge compare them.
+    Exam(ExamArgs),
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
@@ -517,6 +520,17 @@ pub struct EvalArgs {
     /// version first. JSON Lines: {"instruction", "reference", "kind"?}.
     #[arg(long, value_name = "FILE")]
     pub freeze: Option<PathBuf>,
+}
+
+/// `exam`.
+#[derive(Debug, Args)]
+pub struct ExamArgs {
+    /// The candidate to examine: its id, or a unique prefix of it.
+    #[arg(value_name = "CANDIDATE")]
+    pub candidate: String,
+    /// The model that judges (default: the judge role's model).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub judge: Option<ModelRef>,
 }
 
 /// `lineage`.

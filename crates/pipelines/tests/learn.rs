@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use common::gate::{anchor_file, gate_context, put_base, released, Brain, FakeTrainer, ANCHOR};
 use common::manual::{manual_policy as policy, MANUAL};
-use common::scratch_context;
+use common::{scratch_context, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
@@ -41,6 +41,7 @@ use splinter_core::release::ReleaseId;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_pipelines::exam::{examine, Exam};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::{anchor, rollback};
 use splinter_pipelines::train::{TrainPlan, Trainer};
@@ -168,6 +169,25 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         panic!("the exam could not run: {:?}", report.exam);
     };
     assert!(why.contains("refuses to grade"), "{why}");
+
+    // The exam is also a command on a stored candidate, with the judge named.
+    // This judge says PASS to everything, so it cannot be trusted: the exam
+    // runs, calibrates it on controls made from the references of the tasks
+    // the candidate was trained on, and makes no claim from it.
+    let judge: ModelRef = "local:judge/pass".parse().unwrap();
+    ctx.add_model(
+        judge.clone(),
+        Model::new(
+            Arc::new(Scripted::new(|_| "PASS\nit does".into())),
+            "scripted/judge",
+        ),
+    );
+    let id = &report.candidate.as_ref().unwrap().candidate;
+    let Exam::Ran(examined) = examine(&ctx, id, Some(&judge), &CancelToken::new()).unwrap() else {
+        panic!("the exam of a stored candidate runs");
+    };
+    assert!(examined.judge.controls > 0, "{examined:#?}");
+    assert!(!examined.judge.trusted && examined.paired.is_none());
 
     let recorded = read_run(ctx.workspace(), &run.run).unwrap();
     assert_eq!(recorded.status, RunStatus::Completed);

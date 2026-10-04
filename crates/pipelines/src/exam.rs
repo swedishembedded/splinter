@@ -39,15 +39,16 @@ use splinter_eval::verifiers::calibration::{
 };
 use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
-use splinter_store::experiences::SetId;
 
 use crate::release::arm;
-use crate::release::probe::{answer, greedy, held_out};
+use crate::release::probe::{answer, greedy, held_out, trained_tasks};
 use crate::train::load_candidate;
 use crate::verify::{grounding_verifier, judge_verifier};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::roles::assignments;
 
 /// One arm's verdicts, a task each: `None` where nothing decided.
 type Decided = Vec<Option<bool>>;
@@ -282,15 +283,32 @@ fn spaced<T: Clone>(items: &[T], most: usize) -> Vec<T> {
         .collect()
 }
 
+/// The `exam` command: the stored candidate `candidate` examined against the
+/// policy it continues, by `judge` (else the judge role's model); see
+/// [`examine_candidate`].
+pub fn examine(
+    ctx: &Context,
+    candidate: &str,
+    judge: Option<&ModelRef>,
+    cancel: &CancelToken,
+) -> Result<Exam, OrchestratorError> {
+    let judge = match judge {
+        Some(named) => named.clone(),
+        None => assignments(ctx.config(), &RoleOverrides::default())?
+            .get(Role::Judge)
+            .clone(),
+    };
+    examine_candidate(ctx, candidate, &ModelRef::policy_default(), &judge, cancel)
+}
+
 /// Examines the trained candidate `candidate` against `base` on its held-out
-/// tasks, the judge calibrated on controls made from the references of the
-/// tasks of the verified experiences of `verified`. An exam that has nothing to run on says so
+/// tasks, the judge calibrated on controls made from the references of its
+/// tasks. An exam that has nothing to run on says so
 /// instead of reporting an empty result.
 pub fn examine_candidate(
     ctx: &Context,
     candidate: &str,
     base: &ModelRef,
-    verified: &SetId,
     judge: &ModelRef,
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
@@ -299,14 +317,14 @@ pub fn examine_candidate(
     if suite.tasks.is_empty() {
         return Ok(Exam::NotRun("no held-out task to put to the models".into()));
     }
-    let store = ctx.experiences();
-    let mut controls: Vec<Task> = Vec::new();
-    for id in store.get_set(verified)?.members {
-        let task = store.get(&id)?.to_task();
-        if reference(&task).is_some() {
-            controls.push(task);
-        }
-    }
+    // Controls use references only, never an arm's answer, so the held-out
+    // tasks serve as well as the trained-on ones.
+    let mut controls: Vec<Task> = trained_tasks(ctx, &trained.datasets)?
+        .into_iter()
+        .chain(suite.tasks.iter().cloned())
+        .filter(|task| reference(task).is_some())
+        .collect();
+    controls.dedup_by(|a, b| a.task.id == b.task.id);
     controls.sort_by(|a, b| a.task.kind.cmp(&b.task.kind));
     let controls = spaced(&controls, MAX_CONTROLS);
     if controls.len() < 2 {

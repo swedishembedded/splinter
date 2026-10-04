@@ -189,6 +189,23 @@ pub fn trained_variants(
     Ok(suite)
 }
 
+/// The tasks of the records `datasets` were trained on, each once.
+pub fn trained_tasks(
+    ctx: &Context,
+    datasets: &[DatasetId],
+) -> Result<Vec<Task>, OrchestratorError> {
+    let (trained_on, _) = split_records(ctx, datasets)?;
+    let mut tasks: Vec<Task> = Vec::new();
+    for line in &trained_on {
+        if let Some(task) = record_task(ctx, line)? {
+            if !tasks.iter().any(|t| t.task.id == task.task.id) {
+                tasks.push(task);
+            }
+        }
+    }
+    Ok(tasks)
+}
+
 /// The address of the task the record `line` was trained from: its task
 /// as generated when that can be found, else the one its metadata names.
 fn trained_task(ctx: &Context, line: &str) -> Result<Option<Digest>, OrchestratorError> {

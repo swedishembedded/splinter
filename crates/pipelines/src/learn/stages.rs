@@ -467,14 +467,13 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
 /// The candidate is trained and stored whatever the exam finds; an exam that
 /// cannot run says why in the report and the release gate still decides.
 fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
-    let (Some(id), Some(selected)) = (st.candidate.as_ref(), st.report.select.as_ref()) else {
-        unreachable!("the exam stage follows the train and select stages")
+    let Some(id) = st.candidate.as_ref() else {
+        unreachable!("the exam stage follows the train stage")
     };
     let examined = match examine_candidate(
         ctx,
         id,
         &st.learn.policy,
-        &selected.experience_set,
         st.learn.judge,
         &run.cancel_token(),
     ) {

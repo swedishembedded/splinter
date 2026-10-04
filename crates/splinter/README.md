@@ -30,6 +30,7 @@ splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [-
 splinter release <CANDIDATE-ID> [--alias NAME] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
+splinter exam CANDIDATE [--judge REF]
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -143,6 +144,19 @@ for word, so a paraphrase the model wrote is refused. An answer is graded by
 the quotation verifier, with no model involved: every passage the answer puts
 in quotation marks must be in the task's source text, the advice must be
 reproduced, and an answer that quotes nothing or invents a quotation fails.
+
+The exam (`splinter exam CANDIDATE`, and the `exam` stage of `learn`) measures
+what the release gate's code-only grading cannot: whether a candidate gives, in
+its own words, what a held-out task's reference says. It puts the same held-out
+tasks to the policy and the candidate closed-book. A judge compares each answer
+with the reference, and code separately checks whether the answer states a
+number, name or quotation the task's source does not hold. Before the judge
+grades an arm it is calibrated on controls made from the tasks' own references
+- each task's reference answering it, and another's answering it - which no
+model wrote; a judge that cannot tell them apart grades nothing and the report
+says it makes no claim. A task an arm gave no answer to counts as not done and
+is reported as unanswered. The result is a paired sign test of the judged
+results, and it never reaches a training set.
 
 The `converse` kind teaches how the writer talks and reasons. Its task is the
 opening message of someone speaking to the writer, with a passage of the
