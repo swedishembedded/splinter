@@ -63,6 +63,7 @@ fn result(p: &Principle, case: Case, answer: &str) -> transfer::Result {
     let s = scenario(p, case);
     transfer::Result {
         principle_id: p.id.clone(),
+        variant: 0,
         case,
         answer: Some(respond::Answer {
             scenario_id: s.id.clone(),
@@ -256,6 +257,7 @@ fn an_answer_that_fails_its_check_or_a_failed_result_is_left_out_with_the_reason
     );
     let failed = transfer::Result {
         principle_id: train.id.clone(),
+        variant: 0,
         case: Case::Clear,
         scenario: None,
         answer: None,
@@ -337,7 +339,7 @@ fn the_files_round_trip_and_the_benchmark_is_readable_as_questions() {
         &docs(),
     );
     let dir = tempfile::tempdir().unwrap();
-    write_all(&built, dir.path(), BENCHMARK_FILE).unwrap();
+    write_all(&built, dir.path(), BENCHMARK_FILE, EXTRA_BENCHMARK_FILE).unwrap();
     assert_eq!(
         read_benchmark(&dir.path().join("benchmark.jsonl")).unwrap(),
         built.benchmark
@@ -526,8 +528,8 @@ fn a_benchmark_that_has_been_written_is_frozen_and_a_changed_one_goes_under_a_ne
         &docs(),
     );
     let dir = tempfile::tempdir().unwrap();
-    write_all(&first, dir.path(), BENCHMARK_FILE).unwrap();
-    write_all(&first, dir.path(), BENCHMARK_FILE).unwrap();
+    write_all(&first, dir.path(), BENCHMARK_FILE, EXTRA_BENCHMARK_FILE).unwrap();
+    write_all(&first, dir.path(), BENCHMARK_FILE, EXTRA_BENCHMARK_FILE).unwrap();
 
     let mut changed = build(
         &[result(&bench, Case::SurfaceAnalogy, NON_FIT)],
@@ -536,7 +538,7 @@ fn a_benchmark_that_has_been_written_is_frozen_and_a_changed_one_goes_under_a_ne
     );
     changed.sft.clear();
     let before = std::fs::read_to_string(dir.path().join("benchmark.jsonl")).unwrap();
-    let err = write_all(&changed, dir.path(), BENCHMARK_FILE)
+    let err = write_all(&changed, dir.path(), BENCHMARK_FILE, EXTRA_BENCHMARK_FILE)
         .unwrap_err()
         .to_string();
     assert!(err.contains("frozen") && err.contains("new name"), "{err}");
@@ -545,7 +547,13 @@ fn a_benchmark_that_has_been_written_is_frozen_and_a_changed_one_goes_under_a_ne
         before,
         "the frozen benchmark is untouched"
     );
-    write_all(&changed, dir.path(), "benchmark-v2.jsonl").unwrap();
+    write_all(
+        &changed,
+        dir.path(),
+        "benchmark-v2.jsonl",
+        EXTRA_BENCHMARK_FILE,
+    )
+    .unwrap();
     assert!(dir.path().join("benchmark-v2.jsonl").exists());
     assert_eq!(
         std::fs::read_to_string(dir.path().join("benchmark.jsonl")).unwrap(),
@@ -604,4 +612,72 @@ fn the_invented_material_is_drawn_from_a_pool_so_a_pair_does_not_teach_one_strin
         }
     }
     assert!(facts.len() >= 3, "{facts:?}");
+}
+
+/// A result for another scenario of `p`, set in `domain`.
+fn later_result(p: &Principle, case: Case, domain: &str, variant: u8) -> transfer::Result {
+    let mut r = result(p, case, FIT);
+    r.variant = variant;
+    let s = r.scenario.as_mut().unwrap();
+    s.domain = domain.to_string();
+    s.id = format!("{}-v{variant}", s.id);
+    r.answer.as_mut().unwrap().scenario_id = s.id.clone();
+    r
+}
+
+#[test]
+fn more_scenarios_of_a_training_principle_train_unless_set_in_a_field_held_out_of_training() {
+    let (train, bench) = split_principles();
+    let results = [
+        later_result(&train, Case::Clear, "a city council", 1),
+        later_result(&train, Case::Clear, "a symphony orchestra", 2),
+    ];
+    let built = build(&results, &[train, bench], &docs());
+    assert_eq!(
+        built.sft.len(),
+        2,
+        "the council scenario trains, in both modes"
+    );
+    assert!(
+        built.benchmark.is_empty(),
+        "the frozen benchmark never grows"
+    );
+    assert_eq!(
+        built.extra_benchmark.len(),
+        2,
+        "the orchestra scenario is asked in both modes"
+    );
+    assert!(built.extra_benchmark.iter().all(|t| t.slice == Slice::Ood));
+}
+
+#[test]
+fn more_scenarios_of_a_benchmark_principle_never_train_and_extend_the_benchmark() {
+    let (train, bench) = split_principles();
+    let results = [later_result(&bench, Case::Clear, "a city council", 1)];
+    let built = build(&results, &[train, bench], &docs());
+    assert!(built.sft.is_empty() && built.preference.is_empty());
+    assert_eq!(built.extra_benchmark.len(), 2);
+    assert!(built.extra_benchmark.iter().all(|t| t.slice == Slice::New));
+}
+
+#[test]
+fn the_frozen_benchmark_is_written_as_it_always_was_and_a_slice_names_itself_only_when_not_main() {
+    use splinter_sdk::model::exam::Question;
+    let (_, bench) = split_principles();
+    let built = build(
+        &[result(&bench, Case::Clear, FIT)],
+        std::slice::from_ref(&bench),
+        &docs(),
+    );
+    let line = serde_json::to_string(&built.benchmark[0]).unwrap();
+    assert!(!line.contains("slice"), "{line}");
+    assert_eq!(built.benchmark[0].split(), "exam");
+    let ood = TransferTask {
+        slice: Slice::Ood,
+        ..built.benchmark[0].clone()
+    };
+    assert!(serde_json::to_string(&ood)
+        .unwrap()
+        .contains("\"slice\":\"ood\""));
+    assert_eq!(ood.split(), "ood");
 }

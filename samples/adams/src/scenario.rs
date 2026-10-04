@@ -23,6 +23,7 @@ use splinter_sdk::agent::schemars::JsonSchema;
 use splinter_sdk::agent::typed::TypedCall;
 use splinter_sdk::measure::verifiers::quotation::{words, TextIndex};
 
+use crate::domains::Domain;
 use crate::helper::Helper;
 use crate::principles::Principle;
 
@@ -166,17 +167,39 @@ pub fn gate(drafted: &Drafted, case: Case, corpus: &TextIndex) -> Result<(), Str
     }
 }
 
+/// Refuse a draft that is not set in the field it was assigned: some word of
+/// the field must be in what the asker says, so the situation is in its
+/// setting and not one the helper prefers.
+pub fn in_domain(drafted: &Drafted, domain: &Domain) -> Result<(), String> {
+    let said: Vec<String> = std::iter::once(&drafted.situation)
+        .chain(&drafted.observations)
+        .chain(std::iter::once(&drafted.request))
+        .flat_map(|text| words(text))
+        .collect();
+    if domain.keywords.iter().any(|k| said.iter().any(|w| w == k)) {
+        Ok(())
+    } else {
+        Err(format!(
+            "the situation must be set in {}: use its own people, words and constraints (for instance {})",
+            domain.name,
+            domain.keywords.join(", ")
+        ))
+    }
+}
+
 /// The role the designer is given.
 const ROLE: &str = "a designer of realistic present-day situations for testing whether a method from the past applies";
 
 /// The task the designer is given.
-const TASK: &str = "You are given a principle that describes how a historical figure worked: when it applies, what he did, and what limits it. Design one present-day situation, in a field far from his, that tests the principle as the case below directs. Make it concrete: people, numbers, constraints. Do not name the figure or his period, and do not use any wording from the principle's own statement. State which of the principle's conditions hold in your situation and which are missing or unknown, and the facts the person asking would know and say.";
+const TASK: &str = "You are given a principle that describes how a historical figure worked: when it applies, what he did, and what limits it. Design one present-day situation, in a field far from his, that tests the principle as the case below directs. Make it concrete: people, numbers, constraints. Do not name the figure or his period, and do not use any wording from the principle's own statement. If the brief names a field, set the situation in that field. State which of the principle's conditions hold in your situation and which are missing or unknown, and the facts the person asking would know and say.";
 
 /// What the designer is shown of a principle: the rule and its limits, never
 /// the quotations that support it.
 #[derive(serde::Serialize)]
 struct Brief<'a> {
     case: &'static str,
+    /// The field to set the situation in, when one is assigned.
+    field: Option<&'a str>,
     description: &'a str,
     trigger_conditions: &'a [String],
     expected_behavior: &'a [String],
@@ -196,6 +219,8 @@ pub fn design(
     helper: &Helper,
     principle: &Principle,
     case: Case,
+    domain: Option<&'static Domain>,
+    variant: u8,
     corpus: &Arc<TextIndex>,
 ) -> anyhow::Result<Scenario> {
     let checked = Arc::clone(corpus);
@@ -203,9 +228,13 @@ pub fn design(
         TypedCall::<Drafted>::new("design_scenario", TASK, ROLE, crate::helper::CALL_DEADLINE)
             .max_output_tokens(OUTPUT_TOKENS)
             .repairs(REPAIRS)
-            .postcondition(move |drafted| gate(drafted, case, &checked));
+            .postcondition(move |drafted| {
+                gate(drafted, case, &checked)?;
+                domain.map_or(Ok(()), |d| in_domain(drafted, d))
+            });
     let brief = Brief {
         case: case.brief(),
+        field: domain.map(|d| d.name),
         description: &principle.description,
         trigger_conditions: &principle.trigger_conditions,
         expected_behavior: &principle.expected_behavior,
@@ -214,14 +243,14 @@ pub fn design(
     let d = helper.call(call, &brief)?;
     let id = format!(
         "scenario-{}",
-        &blake3::hash(format!("{}\n{case:?}\n{}", principle.id, d.situation).as_bytes()).to_hex()
-            [..12]
+        &blake3::hash(format!("{}\n{case:?}\n{variant}\n{}", principle.id, d.situation).as_bytes())
+            .to_hex()[..12]
     );
     Ok(Scenario {
         id,
         principle_id: principle.id.clone(),
         case,
-        domain: d.domain,
+        domain: domain.map_or(d.domain, |d| d.name.to_string()),
         situation: d.situation,
         observations: d.observations,
         request: d.request,
@@ -294,6 +323,27 @@ mod tests {
 
     fn drafted_json(d: &Drafted) -> String {
         serde_json::to_string(d).unwrap()
+    }
+
+    #[test]
+    fn a_draft_must_be_set_in_the_field_it_was_assigned() {
+        use crate::domains::DOMAINS;
+        let council = &DOMAINS[0];
+        let mut d = good();
+        assert!(in_domain(&d, council)
+            .unwrap_err()
+            .contains("a city council"));
+        d.observations.push("The council meets on Tuesdays.".into());
+        assert_eq!(in_domain(&d, council), Ok(()));
+        let mut elsewhere = good();
+        elsewhere
+            .situation
+            .push_str(" The mayor has called a vote.");
+        assert_eq!(
+            in_domain(&elsewhere, council),
+            Ok(()),
+            "any of the field's words will do"
+        );
     }
 
     #[test]
@@ -380,7 +430,7 @@ mod tests {
     #[test]
     fn a_scenario_is_designed_from_the_principles_rule_not_its_quotations() {
         let (h, provider) = helper(&[&drafted_json(&good())]);
-        let s = design(&h, &principle(), Case::Clear, &corpus()).unwrap();
+        let s = design(&h, &principle(), Case::Clear, None, 0, &corpus()).unwrap();
         assert_eq!((s.principle_id.as_str(), s.case), ("P-abc", Case::Clear));
         assert!(s.id.starts_with("scenario-"));
         let sent = provider.sent();
@@ -401,7 +451,7 @@ mod tests {
             "Let the Committee write to every Town, that the Sense of the People may be known."
                 .into();
         let (h, provider) = helper(&[&drafted_json(&leaky), &drafted_json(&good())]);
-        let s = design(&h, &principle(), Case::Clear, &corpus()).unwrap();
+        let s = design(&h, &principle(), Case::Clear, None, 0, &corpus()).unwrap();
         assert_eq!(s.request, good().request);
         assert!(provider.requests() >= 2);
     }
@@ -413,7 +463,7 @@ mod tests {
             "Let the Committee write to every Town, that the Sense of the People may be known."
                 .into();
         let (h, _) = helper(&[&drafted_json(&leaky)]);
-        assert!(design(&h, &principle(), Case::Clear, &corpus()).is_err());
+        assert!(design(&h, &principle(), Case::Clear, None, 0, &corpus()).is_err());
     }
 
     #[test]

@@ -269,6 +269,7 @@ pub fn transfer_command(
     resources: &Path,
     documents: Vec<Document>,
     mine: &Mine<'_>,
+    variants: u8,
 ) -> anyhow::Result<()> {
     let principles = read_principles(resources)?;
     let corpus = std::sync::Arc::new(crate::transfer::corpus_index(&documents));
@@ -277,8 +278,15 @@ pub fn transfer_command(
     std::fs::create_dir_all(&dir)?;
     let results = dir.join("results.jsonl");
     let helper = crate::helper::Helper::served(&mine.served)?;
-    let asked =
-        crate::transfer::run_all(&helper, &principles, &docs, &corpus, &results, mine.limit)?;
+    let asked = crate::transfer::run_all(
+        &helper,
+        &principles,
+        &docs,
+        &corpus,
+        variants,
+        &results,
+        mine.limit,
+    )?;
 
     let all = crate::transfer::read_results(&results)?;
     let made = all.iter().filter(|r| r.error.is_none()).count();
@@ -340,12 +348,13 @@ pub fn build_data_command(
     resources: &Path,
     documents: &[Document],
     benchmark_file: &str,
+    extra_file: &str,
 ) -> anyhow::Result<()> {
     let results = crate::transfer::read_results(&resources.join("transfer").join("results.jsonl"))?;
     let principles = read_principles(resources)?;
     let built = crate::datasets::build(&results, &principles, documents);
     let dir = resources.join("datasets");
-    crate::datasets::write_all(&built, &dir, benchmark_file)?;
+    crate::datasets::write_all(&built, &dir, benchmark_file, extra_file)?;
     let chat = splinter_sdk::model::train::validate_dataset(&dir.join("sft-transfer.jsonl"))?;
     let pairs = splinter_sdk::model::train::validate_preference_dataset(
         &dir.join("preference-transfer.jsonl"),
@@ -372,7 +381,11 @@ pub fn build_data_command(
             .or_default() += 1;
     }
     println!("pairs by break: {by_break:?}");
-    println!("benchmark questions: {}", built.benchmark.len());
+    println!(
+        "benchmark questions: {} (frozen)  extra: {}",
+        built.benchmark.len(),
+        built.extra_benchmark.len()
+    );
 
     let train_briefings = crate::reconstruct::read_briefings(
         &resources

@@ -50,6 +50,7 @@ pub fn constant_answer(task: &TransferTask, docs: &[Document]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::datasets::Slice;
     use crate::scenario::Case;
     use crate::testkit::doc;
 
@@ -61,6 +62,7 @@ mod tests {
             prompt: "Situation: five teams disagree.".into(),
             case,
             observations: Vec::new(),
+            slice: Slice::default(),
             evidence_docs: if mode == Mode::Retrieval {
                 vec!["d1".into()]
             } else {

@@ -22,6 +22,7 @@ use std::sync::Arc;
 use splinter_sdk::measure::verifiers::quotation::TextIndex;
 
 use crate::curate::Document;
+use crate::domains::{self, Job};
 use crate::helper::Helper;
 use crate::principles::Principle;
 use crate::respond::{self, Answer};
@@ -34,6 +35,9 @@ pub const MAX_ATTEMPTS: usize = 2;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Result {
     pub principle_id: String,
+    /// Which scenario of the principle this is; 0 is the first.
+    #[serde(default)]
+    pub variant: u8,
     pub case: Case,
     pub scenario: Option<Scenario>,
     pub answer: Option<Answer>,
@@ -55,15 +59,19 @@ pub fn read_results(path: &Path) -> anyhow::Result<Vec<Result>> {
         .collect()
 }
 
-/// The planned (principle, case) pairs not yet done, and not failed too often.
+/// The planned (principle, scenario) pairs not yet done, and not failed too
+/// often. A scenario is done or given up on by itself: finishing a principle's
+/// first does not finish its others.
 pub fn pending<'a>(
-    planned: &[(&'a Principle, Case)],
+    planned: &[(&'a Principle, Job)],
     results: &[Result],
-) -> Vec<(&'a Principle, Case)> {
+) -> Vec<(&'a Principle, Job)> {
     planned
         .iter()
-        .filter(|(p, _)| {
-            let mine = results.iter().filter(|r| r.principle_id == p.id);
+        .filter(|(p, job)| {
+            let mine = results
+                .iter()
+                .filter(|r| r.principle_id == p.id && r.variant == job.variant);
             let done = mine.clone().any(|r| r.error.is_none());
             let failures = mine.filter(|r| r.error.is_some()).count();
             !done && failures < MAX_ATTEMPTS
@@ -77,24 +85,27 @@ pub fn pending<'a>(
 fn make(
     helper: &Helper,
     principle: &Principle,
-    case: Case,
+    job: Job,
     docs: &Arc<Vec<Document>>,
     corpus: &Arc<TextIndex>,
 ) -> Result {
+    let (case, variant) = (job.case, job.variant);
     let failed = |scenario: Option<Scenario>, e: anyhow::Error| Result {
         principle_id: principle.id.clone(),
+        variant,
         case,
         scenario,
         answer: None,
         error: Some(format!("{e:#}")),
     };
-    let scenario = match scenario::design(helper, principle, case, corpus) {
+    let scenario = match scenario::design(helper, principle, case, job.domain, variant, corpus) {
         Ok(s) => s,
         Err(e) => return failed(None, e),
     };
     match respond::draft(helper, &scenario, principle, docs) {
         Ok(answer) => Result {
             principle_id: principle.id.clone(),
+            variant,
             case,
             scenario: Some(scenario),
             answer: Some(answer),
@@ -114,15 +125,20 @@ pub fn run_all(
     principles: &[Principle],
     docs: &Arc<Vec<Document>>,
     corpus: &Arc<TextIndex>,
+    variants: u8,
     out: &Path,
     limit: Option<usize>,
 ) -> anyhow::Result<usize> {
     let ids: Vec<String> = principles.iter().map(|p| p.id.clone()).collect();
     let cases = scenario::plan(&ids);
-    let planned: Vec<(&Principle, Case)> = principles
+    let planned: Vec<(&Principle, Job)> = principles
         .iter()
         .zip(&cases)
-        .map(|(p, (_, case))| (p, *case))
+        .flat_map(|(p, (_, case))| {
+            domains::jobs(&p.id, *case, variants)
+                .into_iter()
+                .map(move |job| (p, job))
+        })
         .collect();
     let todo = pending(&planned, &read_results(out)?);
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];
@@ -130,15 +146,17 @@ pub fn run_all(
         .create(true)
         .append(true)
         .open(out)?;
-    for (n, (principle, case)) in todo.iter().enumerate() {
-        let result = make(helper, principle, *case, docs, corpus);
+    for (n, (principle, job)) in todo.iter().enumerate() {
+        let result = make(helper, principle, *job, docs, corpus);
         writeln!(file, "{}", serde_json::to_string(&result)?)?;
         file.flush()?;
         eprintln!(
-            "[{}/{}] {} ({case:?}){}",
+            "[{}/{}] {}#{} ({:?}){}",
             n + 1,
             todo.len(),
             principle.id,
+            job.variant,
+            job.case,
             result
                 .error
                 .as_deref()
@@ -245,7 +263,7 @@ mod tests {
         let (h, _) = working("");
         let path = out();
         assert_eq!(
-            run_all(&h, &ps[..1], &docs(), &corpus, &path, None).unwrap(),
+            run_all(&h, &ps[..1], &docs(), &corpus, 1, &path, None).unwrap(),
             1
         );
         let r = &read_results(&path).unwrap()[0];
@@ -274,7 +292,7 @@ mod tests {
             &fit_answer(),
         ]);
         let path = out();
-        run_all(&h, &ps[..2], &docs(), &corpus, &path, None).unwrap();
+        run_all(&h, &ps[..2], &docs(), &corpus, 1, &path, None).unwrap();
         let results = read_results(&path).unwrap();
         assert_eq!(results.len(), 2);
         assert!(
@@ -287,9 +305,13 @@ mod tests {
     #[test]
     fn a_finished_principle_is_not_asked_again_and_a_given_up_one_is_not_retried() {
         let ps = clear_only();
-        let planned: Vec<(&Principle, Case)> = ps.iter().map(|p| (p, Case::Clear)).collect();
+        let planned: Vec<(&Principle, Job)> = ps
+            .iter()
+            .map(|p| (p, domains::jobs(&p.id, Case::Clear, 1)[0]))
+            .collect();
         let done = |id: &str, failed: bool| Result {
             principle_id: id.into(),
+            variant: 0,
             case: Case::Clear,
             scenario: None,
             answer: None,
@@ -309,13 +331,46 @@ mod tests {
     }
 
     #[test]
+    fn a_principles_first_scenario_being_done_does_not_finish_its_others() {
+        let ps = clear_only();
+        let planned: Vec<(&Principle, Job)> = domains::jobs(&ps[0].id, Case::Clear, 3)
+            .into_iter()
+            .map(|job| (&ps[0], job))
+            .collect();
+        let finished = |variant: u8, failed: bool| Result {
+            principle_id: ps[0].id.clone(),
+            variant,
+            case: Case::Clear,
+            scenario: None,
+            answer: None,
+            error: failed.then(|| "x".into()),
+        };
+        let left = |results: &[Result]| -> Vec<u8> {
+            pending(&planned, results)
+                .iter()
+                .map(|(_, j)| j.variant)
+                .collect()
+        };
+        assert_eq!(left(&[]), [0, 1, 2]);
+        assert_eq!(left(&[finished(0, false)]), [1, 2]);
+        assert_eq!(
+            left(&[finished(0, false), finished(1, true), finished(1, true)]),
+            [2],
+            "a scenario given up on is not retried"
+        );
+    }
+
+    #[test]
     fn nothing_is_asked_twice_across_runs() {
         let corpus = Arc::new(corpus_index(&docs()));
         let ps = clear_only();
         let (h, _) = working("");
         let path = out();
-        run_all(&h, &ps, &docs(), &corpus, &path, None).unwrap();
-        assert_eq!(run_all(&h, &ps, &docs(), &corpus, &path, None).unwrap(), 0);
+        run_all(&h, &ps, &docs(), &corpus, 1, &path, None).unwrap();
+        assert_eq!(
+            run_all(&h, &ps, &docs(), &corpus, 1, &path, None).unwrap(),
+            0
+        );
         assert_eq!(read_results(&path).unwrap().len(), ps.len());
     }
 
@@ -326,7 +381,7 @@ mod tests {
         let (h, _) = working("");
         let path = out();
         assert_eq!(
-            run_all(&h, &ps, &docs(), &corpus, &path, Some(1)).unwrap(),
+            run_all(&h, &ps, &docs(), &corpus, 1, &path, Some(1)).unwrap(),
             1
         );
     }

@@ -257,6 +257,25 @@ pub enum Mode {
     Internalized,
 }
 
+/// Which part of the benchmark a question belongs to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Slice {
+    /// The first scenario of a benchmark principle: the frozen benchmark.
+    #[default]
+    Main,
+    /// Another scenario of a benchmark principle.
+    New,
+    /// A scenario set in a field held out of training.
+    Ood,
+}
+
+impl Slice {
+    fn is_main(&self) -> bool {
+        *self == Slice::Main
+    }
+}
+
 /// One benchmark question: the prompt and what its answer is graded against.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransferTask {
@@ -268,6 +287,10 @@ pub struct TransferTask {
     pub observations: Vec<String>,
     /// The documents a retrieval-mode answer may quote.
     pub evidence_docs: Vec<String>,
+    /// Which part of the benchmark; the frozen one writes nothing here, so its
+    /// file is what it always was.
+    #[serde(default, skip_serializing_if = "Slice::is_main")]
+    pub slice: Slice,
 }
 
 impl TransferTask {
@@ -313,7 +336,11 @@ impl splinter_sdk::model::exam::Question for TransferTask {
         }
     }
     fn split(&self) -> &str {
-        "exam"
+        match self.slice {
+            Slice::Main => "exam",
+            Slice::New => "new",
+            Slice::Ood => "ood",
+        }
     }
     fn reference(&self) -> &str {
         match self.case {
@@ -404,6 +431,8 @@ pub fn few_shot_block(records: &[Value], n: usize) -> String {
 /// The benchmark's file name unless a new one is asked for: a written
 /// benchmark is frozen under its name, so a changed one needs another.
 pub const BENCHMARK_FILE: &str = "benchmark.jsonl";
+/// The file the extra questions go to unless another is asked for.
+pub const EXTRA_BENCHMARK_FILE: &str = "benchmark-extra.jsonl";
 /// The ledger that pins each benchmark file to its content.
 const FROZEN_LEDGER: &str = "FROZEN.json";
 
@@ -412,7 +441,13 @@ const FROZEN_LEDGER: &str = "FROZEN.json";
 pub struct Built {
     pub sft: Vec<Value>,
     pub preference: Vec<Value>,
+    /// The benchmark of the first scenario of each benchmark principle: the
+    /// frozen one.
     pub benchmark: Vec<TransferTask>,
+    /// More scenarios to ask: later ones of the benchmark principles, and any
+    /// set in a field held out of training. A separate file, never mixed into
+    /// the frozen benchmark.
+    pub extra_benchmark: Vec<TransferTask>,
     pub excluded: Vec<(String, String)>,
 }
 
@@ -486,7 +521,16 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
         let own_words =
             internalized(&taught, principle).filter(|t| respond::check(t, scenario, &[]).is_ok());
 
-        if is_benchmark(&principle.id) {
+        let held_out_field = crate::domains::DOMAINS
+            .iter()
+            .any(|d| d.held_out && d.name == scenario.domain);
+        let slice = match (result.variant, is_benchmark(&principle.id), held_out_field) {
+            (0, true, _) => Some(Slice::Main),
+            (_, true, _) => Some(Slice::New),
+            (_, false, true) => Some(Slice::Ood),
+            (_, false, false) => None,
+        };
+        if let Some(slice) = slice {
             let task = |mode: Mode, prompt: &String, evidence_docs: Vec<String>| TransferTask {
                 id: format!("transfer-{mode:?}-{}", scenario.id).to_lowercase(),
                 scenario_id: scenario.id.clone(),
@@ -495,15 +539,19 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
                 case: scenario.case,
                 observations: scenario.observations.clone(),
                 evidence_docs,
+                slice,
             };
-            built.benchmark.push(task(
+            let questions = if slice == Slice::Main {
+                &mut built.benchmark
+            } else {
+                &mut built.extra_benchmark
+            };
+            questions.push(task(
                 Mode::Retrieval,
                 &with_passages,
                 cited.iter().map(|d| (*d).to_string()).collect(),
             ));
-            built
-                .benchmark
-                .push(task(Mode::Internalized, &without, Vec::new()));
+            questions.push(task(Mode::Internalized, &without, Vec::new()));
             continue;
         }
         built.sft.push(sft_record(&with_passages, &taught));
@@ -539,7 +587,12 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
 ///
 /// # Errors
 /// A file cannot be written, or `benchmark_file` is frozen at other content.
-pub fn write_all(built: &Built, dir: &std::path::Path, benchmark_file: &str) -> anyhow::Result<()> {
+pub fn write_all(
+    built: &Built,
+    dir: &std::path::Path,
+    benchmark_file: &str,
+    extra_file: &str,
+) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir)?;
     let lines =
         |rows: Vec<Value>| -> String { rows.into_iter().map(|r| format!("{r}\n")).collect() };
@@ -549,6 +602,10 @@ pub fn write_all(built: &Built, dir: &std::path::Path, benchmark_file: &str) -> 
         (
             benchmark_file,
             lines(built.benchmark.iter().map(|t| json!(t)).collect()),
+        ),
+        (
+            extra_file,
+            lines(built.extra_benchmark.iter().map(|t| json!(t)).collect()),
         ),
         (
             "excluded.jsonl",
@@ -566,6 +623,9 @@ pub fn write_all(built: &Built, dir: &std::path::Path, benchmark_file: &str) -> 
     let ledger = splinter_sdk::data::frozen::Ledger::at(dir.join(FROZEN_LEDGER));
     let benchmark_text = &files[2].1;
     ledger.check(benchmark_file, benchmark_text.as_bytes())?;
+    // The extra questions are still growing as scenarios are made: only a
+    // file someone has pinned is protected.
+    ledger.check(extra_file, files[3].1.as_bytes())?;
     for (name, text) in &files {
         let path = dir.join(name);
         let tmp = path.with_extension("part");

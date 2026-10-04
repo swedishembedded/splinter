@@ -44,6 +44,7 @@ mod corpus;
 mod curate;
 mod datasets;
 mod document;
+mod domains;
 mod grounding;
 mod grpo;
 mod helper;
@@ -400,6 +401,7 @@ fn transfer_command(args: &[String]) -> anyhow::Result<()> {
             served,
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
         },
+        number(args, "--scenarios-per-principle", 1)?,
     )
 }
 
@@ -416,7 +418,9 @@ fn build_data_command(args: &[String]) -> anyhow::Result<()> {
     let documents = read_documents(&resources)?;
     let benchmark =
         flag(args, "--benchmark-file").unwrap_or_else(|| datasets::BENCHMARK_FILE.to_string());
-    run::build_data_command(&resources, &documents, &benchmark)
+    let extra = flag(args, "--extra-benchmark-file")
+        .unwrap_or_else(|| datasets::EXTRA_BENCHMARK_FILE.to_string());
+    run::build_data_command(&resources, &documents, &benchmark, &extra)
 }
 
 fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {
