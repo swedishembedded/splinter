@@ -12,7 +12,8 @@
 //!
 //! The model is asked through the same closed-book solve every task runs
 //! through, and its reply's first word is the verdict (`YES`; anything else,
-//! an empty reply included, leaves the passage where search put it).
+//! an empty reply included, leaves the passage where search put it). The
+//! reply is bounded to a few tokens: the verdict is all that is read.
 
 use std::time::Duration;
 
@@ -30,10 +31,16 @@ const RERANK_TASK_KIND: &str = "rerank";
 /// How long one judgment may take.
 const DEADLINE: Duration = Duration::from_secs(120);
 
+/// The most tokens a judgment may spend: the verdict is one word, and a
+/// reader that goes on has no verdict to give, which leaves the passage where
+/// search put it. Hundreds of passages are read for one question, so what a
+/// reason would cost is paid hundreds of times for nothing that is used.
+const MAX_JUDGMENT_TOKENS: u64 = 16;
+
 const INSTRUCTIONS: &str = "You are helping someone answer a question from a body of writing. \
 You see the question and one passage. Say whether the passage bears on the question: whether \
 someone answering it would draw on what the passage says, not merely whether it mentions the \
-same words. Reply with one word on the first line - YES or NO - and your reason on the next.";
+same words. Reply with one word: YES or NO.";
 
 /// A model judging passages, on `ctx`.
 pub struct ModelReranker<'a> {
@@ -70,6 +77,7 @@ impl Reranker for ModelReranker<'_> {
         )
         .map_err(|e| failed(&e))?;
         let mut options = SolveOptions::new(DEADLINE);
+        options.max_output_tokens = Some(MAX_JUDGMENT_TOKENS);
         options.stream_idle = self.model.stream_idle;
         let solution = self
             .ctx
