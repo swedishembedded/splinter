@@ -30,7 +30,7 @@ use futures::StreamExt;
 
 use splinter_agent::replay::{replay, CallReplay, ReplayError};
 use splinter_agent::solve::{
-    solve, solve_prompted, SolveError, SolveOptions, RUN_CODE, SYSTEM_PROMPT,
+    solve, solve_prompted, with_system_addendum, SolveError, SolveOptions, RUN_CODE, SYSTEM_PROMPT,
 };
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Provenance, Task};
@@ -379,6 +379,29 @@ async fn every_request_runs_under_splinters_system_prompt() {
         assert_eq!(request.messages[0].role, Role::System);
         assert_eq!(request.system_dynamic_suffix, None);
     }
+}
+
+#[tokio::test]
+async fn a_model_prompted_with_a_goal_has_it_appended_to_the_one_system_turn() {
+    let model = Scripted::new(|_| text("42"));
+    let prompted = with_system_addendum(model.clone(), "Your goal: think like a surveyor.");
+    let task = task(Environment::closed_book(), "What is six times seven?");
+    solve(&task, &ResolvedEnvironment::ClosedBook, prompted, options())
+        .await
+        .unwrap();
+    let seen = model.seen.lock().unwrap();
+    let system: Vec<&str> = seen[0]
+        .messages
+        .iter()
+        .filter(|m| m.role == Role::System)
+        .map(|m| m.as_text().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        system,
+        [format!(
+            "{SYSTEM_PROMPT}\n\nYour goal: think like a surveyor."
+        )]
+    );
 }
 
 #[tokio::test]

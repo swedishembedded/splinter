@@ -88,3 +88,78 @@ impl ModelProvider for UnderSystemPrompt {
         self.0.supports_audio()
     }
 }
+
+/// `inner` with `addendum` appended to the system turn of every request, a
+/// blank line after what is there: the model asked under its system prompt
+/// and one more thing it is told, as when a model is prompted with a goal.
+/// Put inside a solve's own wrapping ([`UnderSystemPrompt`]), which sets the
+/// system turn the addendum is appended to.
+pub fn with_system_addendum(
+    inner: Arc<dyn ModelProvider>,
+    addendum: &str,
+) -> Arc<dyn ModelProvider> {
+    Arc::new(Addended {
+        inner,
+        addendum: addendum.to_string(),
+    })
+}
+
+struct Addended {
+    inner: Arc<dyn ModelProvider>,
+    addendum: String,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Addended {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn model_name(&self) -> &str {
+        self.inner.model_name()
+    }
+
+    async fn complete(&self, mut request: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        if let Some(system) = request.messages.iter_mut().find(|m| m.role == Role::System) {
+            let text = format!(
+                "{}\n\n{}",
+                system.as_text().unwrap_or_default(),
+                self.addendum
+            );
+            *system = Message::system(text);
+        } else {
+            request
+                .messages
+                .insert(0, Message::system(self.addendum.clone()));
+        }
+        self.inner.complete(request).await
+    }
+
+    fn catalog_max_output_tokens(&self) -> Option<u32> {
+        self.inner.catalog_max_output_tokens()
+    }
+
+    fn catalog_context_window(&self) -> Option<u32> {
+        self.inner.catalog_context_window()
+    }
+
+    fn config_context_window(&self) -> Option<u32> {
+        self.inner.config_context_window()
+    }
+
+    fn config_max_output_tokens(&self) -> Option<u32> {
+        self.inner.config_max_output_tokens()
+    }
+
+    async fn probe_context_window(&self) -> Option<u32> {
+        self.inner.probe_context_window().await
+    }
+
+    fn supports_images(&self) -> bool {
+        self.inner.supports_images()
+    }
+
+    fn supports_audio(&self) -> bool {
+        self.inner.supports_audio()
+    }
+}

@@ -45,6 +45,7 @@ use sven_sdk::model::ModelProvider;
 use sven_sdk::{atif, CallError, CancelToken, Engine, RunConclusion, RunOptions, Toolset, Usage};
 
 use crate::run_code::RunCode;
+pub use crate::system_prompt::with_system_addendum;
 use crate::system_prompt::UnderSystemPrompt;
 
 /// The sven mode a solve runs: the conversational agent loop.
