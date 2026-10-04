@@ -234,7 +234,8 @@ fn check_source(item: &Item, docs: &[&Document]) -> Option<Violation> {
     (!found).then(|| Violation::FabricatedQuote(quote.clone()))
 }
 
-fn anachronism(text: &str) -> Option<String> {
+/// The first word in `text` from after his death, if there is one.
+pub(crate) fn anachronism(text: &str) -> Option<String> {
     words(text)
         .into_iter()
         .find(|w| ANACHRONISMS.contains(&w.as_str()))

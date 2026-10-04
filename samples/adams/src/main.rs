@@ -29,6 +29,10 @@
 //! build-data build the supervised records, preference pairs and frozen benchmark from the checked answers
 //! train-dpo  preference-optimise an adapter on the pairs
 //! transfer-exam  ask a model every benchmark question, graded by the rules
+//! briefings  brief each held-out letter of his: the situation it answered, and what the real letter does
+//! reconstruct-replies  have one model write the reply to every briefing
+//! judge      calibrate a judge on controls, then score every reply against the real letters
+//! reconstruct-report  two arms compared on what the real letters do
 //! ```
 
 mod attribution;
@@ -38,8 +42,10 @@ mod datasets;
 mod document;
 mod grounding;
 mod helper;
+mod judge;
 mod miner;
 mod principles;
+mod reconstruct;
 mod respond;
 mod run;
 mod scenario;
@@ -66,8 +72,12 @@ fn main() -> anyhow::Result<()> {
         Some("build-data") => build_data_command(&args[1..]),
         Some("train-dpo") => train_dpo_command(&args[1..]),
         Some("transfer-exam") => transfer_exam_command(&args[1..]),
+        Some("briefings") => briefings_command(&args[1..]),
+        Some("reconstruct-replies") => reconstruct_replies_command(&args[1..]),
+        Some("judge") => judge_command(&args[1..]),
+        Some("reconstruct-report") => reconstruct_report_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam> ..."
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
         ),
     }
 }
@@ -420,5 +430,75 @@ fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
         },
         &documents,
+    )
+}
+
+/// Where the helper is served, from `--url`, `--model` and `BRAIN_API_KEY`.
+fn served_helper(args: &[String]) -> anyhow::Result<(String, String, String)> {
+    let key = std::env::var("BRAIN_API_KEY")
+        .map_err(|_| anyhow::anyhow!("BRAIN_API_KEY is not set: the key `brain serve` printed"))?;
+    let url = flag(args, "--url").unwrap_or_else(|| "http://127.0.0.1:8788/v1".to_string());
+    Ok((url, key, need(args, "--model")?))
+}
+
+fn briefings_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    let (url, key, model) = served_helper(args)?;
+    let served = helper::Served {
+        base_url: &url,
+        api_key: &key,
+        model: &model,
+    };
+    run::briefings_command(
+        &resources,
+        &documents,
+        &run::Mine {
+            served,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        },
+    )
+}
+
+fn reconstruct_replies_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    run::replies_command(&run::Replies {
+        briefings: resources.join("reconstruction").join("briefings.jsonl"),
+        out: need(args, "--out")?.into(),
+        arm: need(args, "--arm")?,
+        base: need(args, "--base")?.into(),
+        adapter: flag(args, "--adapter").map(Into::into),
+        max_tokens: number(args, "--max-tokens", 500)?,
+        limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+    })
+}
+
+fn judge_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    let (url, key, model) = served_helper(args)?;
+    let served = helper::Served {
+        base_url: &url,
+        api_key: &key,
+        model: &model,
+    };
+    run::judge_command(
+        &resources,
+        &documents,
+        &run::Mine {
+            served,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        },
+        std::path::Path::new(&need(args, "--replies")?),
+        std::path::Path::new(&need(args, "--out")?),
+    )
+}
+
+fn reconstruct_report_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    run::reconstruct_report_command(
+        &resources,
+        std::path::Path::new(&need(args, "--before")?),
+        std::path::Path::new(&need(args, "--after")?),
     )
 }
