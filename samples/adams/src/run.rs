@@ -77,6 +77,10 @@ pub fn tasks_command(
 pub struct Train {
     pub base: PathBuf,
     pub dataset: PathBuf,
+    /// Datasets mixed into training whole, never held out.
+    pub replay: Vec<PathBuf>,
+    /// An adapter to continue instead of starting a fresh one.
+    pub continue_from: Option<PathBuf>,
     pub attempt: PathBuf,
     pub steps: u32,
     pub rank: u32,
@@ -108,8 +112,8 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         steps: t.steps,
         rank: t.rank,
         alpha: t.alpha,
-        replay: &[],
-        continue_from: None,
+        replay: &t.replay,
+        continue_from: t.continue_from.as_deref(),
         cancel: None,
         bf16_base: t.bf16,
         learning_rate: t.learning_rate,
@@ -283,5 +287,121 @@ pub fn transfer_command(
             .count();
         println!("{case:>20?}: {count}");
     }
+    Ok(())
+}
+
+/// Build the transfer datasets from the checked results, and prove with the
+/// trainer's own parsers that it would read what was written.
+pub fn build_data_command(resources: &Path, documents: &[Document]) -> anyhow::Result<()> {
+    let results = crate::transfer::read_results(&resources.join("transfer").join("results.jsonl"))?;
+    let principles = read_principles(resources)?;
+    let built = crate::datasets::build(&results, &principles, documents);
+    let dir = resources.join("datasets");
+    crate::datasets::write_all(&built, &dir)?;
+    let chat = splinter_sdk::model::train::validate_dataset(&dir.join("sft-transfer.jsonl"))?;
+    let pairs = splinter_sdk::model::train::validate_preference_dataset(
+        &dir.join("preference-transfer.jsonl"),
+    )?;
+    println!(
+        "results: {}  excluded: {}",
+        results.len(),
+        built.excluded.len()
+    );
+    println!(
+        "supervised records: {} (the trainer reads {})",
+        built.sft.len(),
+        chat.records
+    );
+    println!(
+        "preference pairs: {} (the trainer reads {})",
+        built.preference.len(),
+        pairs.pairs
+    );
+    let mut by_break: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for pair in &built.preference {
+        *by_break
+            .entry(pair["metadata"]["break"].to_string())
+            .or_default() += 1;
+    }
+    println!("pairs by break: {by_break:?}");
+    println!("benchmark questions: {}", built.benchmark.len());
+    Ok(())
+}
+
+/// What one preference run needs.
+pub struct Dpo {
+    pub base: PathBuf,
+    pub pairs: PathBuf,
+    pub attempt: PathBuf,
+    /// The supervised adapter this run continues; base plus it is the frozen
+    /// reference the pairs are scored against.
+    pub continue_from: Option<PathBuf>,
+    pub steps: u32,
+    pub rank: u32,
+    pub alpha: f32,
+    pub beta: f32,
+}
+
+/// Direct preference optimisation on the pairs, through Splinter's trainer.
+pub fn dpo_command(d: &Dpo) -> anyhow::Result<()> {
+    std::fs::create_dir_all(&d.attempt)?;
+    let started = std::time::Instant::now();
+    let split = splinter_sdk::data::holdout::split_dataset_file(&d.pairs, &d.attempt)?;
+    let request = splinter_sdk::model::train::PreferenceTune {
+        model_dir: &d.base,
+        train: &split.train,
+        held_out: &split.held_out,
+        attempt_dir: &d.attempt,
+        steps: d.steps,
+        rank: d.rank,
+        alpha: d.alpha,
+        beta: d.beta,
+        continue_from: d.continue_from.as_deref(),
+        cancel: None,
+    };
+    let trained = splinter_sdk::model::train::train_preference(&request)?;
+    let summary = serde_json::json!({
+        "adapter": trained.adapter,
+        "adapter_digest": trained.adapter_digest,
+        "base_digest": trained.base_digest,
+        "reference_adapter": trained.reference_adapter,
+        "records": trained.records,
+        "steps": d.steps,
+        "beta": trained.beta,
+        "seconds": started.elapsed().as_secs_f64(),
+        "train_score": trained.train_score.as_ref().map(|s| format!("{s:?}")),
+        "held_out_score": trained.held_out_score.as_ref().map(|s| format!("{s:?}")),
+    });
+    let text = serde_json::to_string_pretty(&summary)?;
+    std::fs::write(d.attempt.join("summary.json"), &text)?;
+    println!("{text}");
+    Ok(())
+}
+
+/// What one transfer exam needs.
+pub struct TransferExam {
+    pub benchmark: PathBuf,
+    pub out: PathBuf,
+    pub base: PathBuf,
+    pub adapter: Option<PathBuf>,
+    pub max_tokens: u32,
+    pub limit: Option<usize>,
+}
+
+/// Ask one model every benchmark question, in both modes, graded by the rules.
+pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow::Result<()> {
+    let questions = crate::datasets::read_benchmark(&e.benchmark)?;
+    let model = splinter_sdk::model::exam::Model {
+        base: &e.base,
+        adapter: e.adapter.as_deref(),
+        system: crate::respond::SYSTEM,
+        max_tokens: e.max_tokens,
+        label: "adams",
+    };
+    let asked =
+        splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &|task, answer| {
+            task.is_correct(answer, documents)
+        })?;
+    println!("asked {asked} questions; results in {}", e.out.display());
     Ok(())
 }

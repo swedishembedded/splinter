@@ -26,11 +26,15 @@
 //! report     the before-and-after table, with the paired sign test
 //! principles ask a helper model for principles; keep what the documents bear out
 //! transfer   design a present-day scenario per principle and have the helper answer it, checked
+//! build-data build the supervised records, preference pairs and frozen benchmark from the checked answers
+//! train-dpo  preference-optimise an adapter on the pairs
+//! transfer-exam  ask a model every benchmark question, graded by the rules
 //! ```
 
 mod attribution;
 mod corpus;
 mod curate;
+mod datasets;
 mod document;
 mod grounding;
 mod helper;
@@ -59,8 +63,11 @@ fn main() -> anyhow::Result<()> {
         Some("report") => report_command(&args[1..]),
         Some("principles") => principles_command(&args[1..]),
         Some("transfer") => transfer_command(&args[1..]),
+        Some("build-data") => build_data_command(&args[1..]),
+        Some("train-dpo") => train_dpo_command(&args[1..]),
+        Some("transfer-exam") => transfer_exam_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer> ..."
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam> ..."
         ),
     }
 }
@@ -285,7 +292,13 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     run::train_command(&run::Train {
         base: need(args, "--base")?.into(),
-        dataset: resources.join("tasks").join("sft.jsonl"),
+        dataset: flag(args, "--dataset")
+            .map_or_else(|| resources.join("tasks").join("sft.jsonl"), Into::into),
+        replay: flags(args, "--replay")
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+        continue_from: flag(args, "--continue-from").map(Into::into),
         attempt: need(args, "--attempt")?.into(),
         steps: number(args, "--steps", 500)?,
         rank: number(args, "--rank", 16)?,
@@ -357,5 +370,55 @@ fn transfer_command(args: &[String]) -> anyhow::Result<()> {
             served,
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
         },
+    )
+}
+
+/// Every value given for a flag that may repeat.
+fn flags(args: &[String], name: &str) -> Vec<String> {
+    args.windows(2)
+        .filter(|w| w[0] == name)
+        .map(|w| w[1].clone())
+        .collect()
+}
+
+fn build_data_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    run::build_data_command(&resources, &documents)
+}
+
+fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    run::dpo_command(&run::Dpo {
+        base: need(args, "--base")?.into(),
+        pairs: flag(args, "--pairs").map_or_else(
+            || resources.join("datasets").join("preference-transfer.jsonl"),
+            Into::into,
+        ),
+        attempt: need(args, "--attempt")?.into(),
+        continue_from: flag(args, "--continue-from").map(Into::into),
+        steps: number(args, "--steps", 200)?,
+        rank: number(args, "--rank", 16)?,
+        alpha: number(args, "--alpha", 32.0)?,
+        beta: number(args, "--beta", 0.1)?,
+    })
+}
+
+fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let documents = read_documents(&resources)?;
+    run::transfer_exam_command(
+        &run::TransferExam {
+            benchmark: flag(args, "--benchmark").map_or_else(
+                || resources.join("datasets").join("benchmark.jsonl"),
+                Into::into,
+            ),
+            out: need(args, "--out")?.into(),
+            base: need(args, "--base")?.into(),
+            adapter: flag(args, "--adapter").map(Into::into),
+            max_tokens: number(args, "--max-tokens", 700)?,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        },
+        &documents,
     )
 }
