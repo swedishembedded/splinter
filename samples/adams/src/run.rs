@@ -185,9 +185,15 @@ pub fn principles_command(
     mine: &Mine<'_>,
 ) -> anyhow::Result<()> {
     let assignments = read_assignments(resources)?;
+    // Principles about how he worked rest on his own letters in the training split.
+    let own_letters: std::collections::HashSet<&str> = documents
+        .iter()
+        .filter(|d| d.authorship.is_his_own_letter())
+        .map(|d| d.id.as_str())
+        .collect();
     let allowed: std::collections::HashSet<String> = assignments
         .iter()
-        .filter(|a| a.split == Split::Train)
+        .filter(|a| a.split == Split::Train && own_letters.contains(a.doc_id.as_str()))
         .map(|a| a.doc_id.clone())
         .collect();
     let bundles = crate::miner::bundles(

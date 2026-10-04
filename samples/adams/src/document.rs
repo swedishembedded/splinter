@@ -43,6 +43,12 @@ impl Authorship {
         self <= Authorship::PseudonymousAttributed
     }
 
+    /// Is it a letter of his own, in his hand, signed by him or in a copy of
+    /// one: the evidence of how he, and not a body he sat on, worked.
+    pub fn is_his_own_letter(self) -> bool {
+        self <= Authorship::DraftInHand
+    }
+
     /// May the text support a hypothesis about how he reasoned.
     pub fn supports_principles(self) -> bool {
         self <= Authorship::EditorAttributed
@@ -193,6 +199,23 @@ mod tests {
         }
         for a in [EditorAttributed, SecondaryQuoted, ContextOnly] {
             assert!(!a.has_a_settled_kind(), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn only_his_own_letters_show_how_he_himself_worked() {
+        use Authorship::*;
+        for a in [DirectAutograph, SignedScribal, DraftInHand] {
+            assert!(a.is_his_own_letter(), "{a:?}");
+        }
+        for a in [
+            CommitteeCoauthored,
+            PseudonymousAttributed,
+            EditorAttributed,
+            SecondaryQuoted,
+            ContextOnly,
+        ] {
+            assert!(!a.is_his_own_letter(), "{a:?}");
         }
     }
 

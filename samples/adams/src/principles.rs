@@ -119,7 +119,9 @@ pub(crate) fn occurs(haystack: &[String], needle: &[String]) -> bool {
 }
 
 /// Check a proposal against the documents it cites. `allowed` is the set of
-/// document ids a principle may draw on: those the model may learn from.
+/// document ids a principle may draw on: those the model may learn from. Only
+/// his own letters count: what a committee adopted or an editor ascribes to him
+/// shows how a body worked, not how he did.
 pub fn verify(
     proposal: &Proposal,
     docs: &[Document],
@@ -167,8 +169,8 @@ pub fn verify(
             dropped.push(format!("document {id} is held out of training"));
             continue;
         }
-        if !doc.authorship.supports_principles() {
-            dropped.push(format!("document {id} is not one he is answerable for"));
+        if !doc.authorship.is_his_own_letter() {
+            dropped.push(format!("document {id} is not his own letter: a text a body adopted or an editor ascribes to him does not show how he worked"));
             continue;
         }
         if !occurs(&words(&doc.body), &quote) {
@@ -383,6 +385,47 @@ mod tests {
         )
         .unwrap_err();
         assert!(r.dropped[0].contains("no document"), "{:?}", r.dropped);
+    }
+
+    #[test]
+    fn a_text_a_body_adopted_or_an_editor_ascribes_does_not_show_how_he_worked() {
+        let mut documents = docs();
+        documents.push(doc(
+            "town",
+            1768,
+            "Town",
+            Authorship::CommitteeCoauthored,
+            "The Town resolved that the Freeholders should instruct their Representatives plainly.",
+        ));
+        documents.push(doc(
+            "paper",
+            1768,
+            "Gazette",
+            Authorship::PseudonymousAttributed,
+            "Messieurs Printers, the people of this province have no share in framing those acts.",
+        ));
+        let mut ids = allowed();
+        ids.insert("town".into());
+        ids.insert("paper".into());
+        for (id, quote, why) in [
+            (
+                "town",
+                "that the Freeholders should instruct their Representatives plainly",
+                "committee",
+            ),
+            (
+                "paper",
+                "the people of this province have no share in framing",
+                "newspaper",
+            ),
+        ] {
+            let r = verify(&proposal(vec![(id, quote)]), &documents, &ids).unwrap_err();
+            assert!(
+                r.dropped[0].contains("his own letter"),
+                "{why}: {:?}",
+                r.dropped
+            );
+        }
     }
 
     #[test]
