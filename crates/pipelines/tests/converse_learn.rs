@@ -31,6 +31,7 @@ use serde_json::json;
 use splinter_agent::solve::{Model, MATERIAL_HEADING};
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::dialogue::{probes_beyond_the_source, STUDENT_ROLE};
@@ -49,16 +50,34 @@ const PASSAGE: &str = "I advise you to fix a habit of study every morning before
 
 const OPENING: &str = "My mornings vanish in idleness; how do you keep a habit of study?";
 
+/// A second letter, of another family of sources: a judge is measured on
+/// what one letter's reference is and another's is not.
+const THRIFT: &str = "# To a young householder
+
+## Thrift
+
+I advise you to keep a strict account of every expense each week, and never spend a shilling you cannot name, for thrift is the first of the household virtues and a debt is a chain upon the neck.
+";
+
+const THRIFT_PASSAGE: &str = "I advise you to keep a strict account of every expense each week, and never spend a shilling you cannot name, for thrift is the first of the household virtues and a debt is a chain upon the neck.";
+
+const THRIFT_OPENING: &str = "My money slips away unnoticed; how do you keep thrift in your house?";
+
 /// A policy that writes one opening from the letter, plays the other speaker
 /// with fixed follow-ups, and, as the teacher shown the letter, replies with
 /// `third` as its last reply.
 fn policy(third: &'static str) -> Scripted {
     Scripted::new(move |prompt| {
         if prompt.contains("You write training tasks") {
+            let (opening, passage) = if prompt.contains("strict account") {
+                (THRIFT_OPENING, THRIFT_PASSAGE)
+            } else {
+                (OPENING, PASSAGE)
+            };
             json!({ "tasks": [{
-                "instruction": OPENING,
-                "reference": PASSAGE,
-                "evidence": [{ "section": 0, "quote": PASSAGE }]
+                "instruction": opening,
+                "reference": passage,
+                "evidence": [{ "section": 0, "quote": passage }]
             }]})
             .to_string()
         } else if prompt.contains(STUDENT_ROLE) {
@@ -68,6 +87,8 @@ fn policy(third: &'static str) -> Scripted {
                 "And then?"
             };
             json!({ "message": message }).to_string()
+        } else if prompt.contains(MATERIAL_HEADING) && prompt.contains("strict account") {
+            "Keep an account of every expense, and never spend what you cannot name.".to_string()
         } else if prompt.contains(MATERIAL_HEADING) {
             if prompt.contains("Why does the pen matter so much?") {
                 third.to_string()
@@ -78,6 +99,27 @@ fn policy(third: &'static str) -> Scripted {
             }
         } else {
             "I do not know.".to_string()
+        }
+    })
+}
+
+/// A judge that passes an answer sharing a key word with the reference: what
+/// a reference about study and one about expense have not in common.
+fn judge() -> Scripted {
+    Scripted::new(|prompt| {
+        let reference = prompt
+            .split("REFERENCE:\\n")
+            .nth(1)
+            .and_then(|t| t.split("\\n\\nANSWER:").next())
+            .unwrap_or_default();
+        let answer = prompt.split("ANSWER:\\n").nth(1).unwrap_or_default();
+        let shared = ["study", "expense"]
+            .iter()
+            .any(|key| reference.contains(key) && answer.contains(key));
+        if shared {
+            "PASS\nit gives the advice".into()
+        } else {
+            "FAIL\nit does not".into()
         }
     })
 }
@@ -116,32 +158,54 @@ impl Trainer for Student {
     }
 }
 
-fn run(
+/// The learn over two letters with `converse`, the judge role played by
+/// `judge` (the policy, which is also the teacher, when `None`).
+fn attempt(
     test: &str,
     third: &'static str,
-) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
+    judge: Option<Scripted>,
+) -> (Result<Learned, OrchestratorError>, common::Scratch) {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
         ModelRef::policy_default(),
         Model::new(Arc::new(policy(third)), common::POLICY),
     );
-    let letter = scratch.0.join("letter.md");
-    std::fs::write(&letter, LETTER).unwrap();
+    let judge_ref: ModelRef = "local:test/judge".parse().unwrap();
+    let roles = judge.map_or_else(Default::default, |judge| {
+        ctx.add_model(
+            judge_ref.clone(),
+            Model::new(Arc::new(judge), "scripted/judge"),
+        );
+        [(Role::Judge, judge_ref)].into()
+    });
+    let letters = scratch.0.join("letters");
+    std::fs::create_dir_all(&letters).unwrap();
+    std::fs::write(letters.join("study.md"), LETTER).unwrap();
+    std::fs::write(letters.join("thrift.md"), THRIFT).unwrap();
     let student = Student {
         plans: Mutex::new(Vec::new()),
     };
-    let Learned::Ran(ran) = learn(
+    let learned = learn(
         &ctx,
         &LearnRequest {
-            sources: vec![letter.display().to_string()],
+            sources: vec![letters.display().to_string()],
             kinds: vec!["converse".into()],
+            roles,
             no_release: true,
             distill: true,
             ..LearnRequest::default()
         },
         &student,
-    )
-    .unwrap() else {
+    );
+    (learned, scratch)
+}
+
+fn run(
+    test: &str,
+    third: &'static str,
+) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
+    let (learned, scratch) = attempt(test, third, Some(judge()));
+    let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
     };
     (ran.report, scratch)
@@ -156,13 +220,17 @@ fn a_grounded_dialogue_becomes_one_record_of_the_whole_conversation() {
     let taught = report.teach.as_ref().unwrap();
     assert_eq!(
         (taught.verify.passed, taught.verify.failed),
-        (1, 0),
+        (2, 0),
         "{taught:#?}"
     );
     let dataset = report.dataset.as_ref().unwrap();
-    assert_eq!(dataset.records, 1, "{dataset:#?}");
+    assert_eq!(dataset.records, 2, "one dialogue per letter: {dataset:#?}");
     let text = std::fs::read_to_string(&dataset.path).unwrap();
-    let record: serde_json::Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
+    let record: serde_json::Value = text
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .find(|record| record["messages"][1]["content"] == OPENING)
+        .unwrap();
     let turns: Vec<(&str, bool)> = record["messages"]
         .as_array()
         .unwrap()
@@ -200,12 +268,17 @@ fn a_dialogue_that_states_a_year_the_letter_does_not_hold_teaches_nothing() {
         "I took up this habit in 1762 and kept it all my life.",
     );
     let taught = report.teach.as_ref().unwrap();
+    // The dialogue about study states a year its letter lacks: grounding
+    // refutes it, whatever a judge says. The one about thrift stands.
     assert_eq!(
         (taught.verify.passed, taught.verify.failed),
-        (0, 1),
+        (1, 1),
         "{taught:#?}"
     );
-    assert!(report.dataset.is_none(), "{report:#?}");
+    let dataset = report.dataset.as_ref().unwrap();
+    assert_eq!(dataset.records, 1, "{dataset:#?}");
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    assert!(text.contains(THRIFT_OPENING) && !text.contains(OPENING) && !text.contains("1762"));
 }
 
 #[test]
@@ -221,4 +294,36 @@ fn one_dialogue_in_four_ends_by_asking_beyond_the_letter_and_the_choice_is_stabl
     assert!(digests
         .iter()
         .all(|d| probes_beyond_the_source(d) == probes_beyond_the_source(d)));
+}
+
+#[test]
+fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
+    // With no judge named the policy plays it, and the policy is the
+    // teacher whose dialogues it would grade.
+    let (learned, _scratch) = attempt("converse-learn-self-judge", "Study each morning.", None);
+    let Err(refused) = learned else {
+        panic!("a judge that grades itself is refused");
+    };
+    assert!(
+        matches!(&refused, OrchestratorError::Refused(why) if why.contains("also the teacher")),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers() {
+    let always_pass = Scripted::new(|_| "PASS\nit does".into());
+    let (learned, _scratch) = attempt(
+        "converse-learn-weak-judge",
+        "Study each morning.",
+        Some(always_pass),
+    );
+    let Err(refused) = learned else {
+        panic!("an imprecise judge is refused");
+    };
+    assert!(
+        matches!(&refused, OrchestratorError::Refused(why)
+            if why.contains("not precise enough") && why.contains("on fails")),
+        "{refused:?}"
+    );
 }

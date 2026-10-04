@@ -108,6 +108,16 @@ pub enum VerifierKind {
     Grounding,
 }
 
+impl VerifierKind {
+    /// Whether a pass of this verifier establishes that an answer is right.
+    /// Grounding only refutes: an answer that invents nothing may still be
+    /// vague, wrong or beside the point.
+    #[must_use]
+    pub fn establishes(self) -> bool {
+        !matches!(self, Self::Grounding)
+    }
+}
+
 /// Which sections of a source a kind is asked about: a kind that is only
 /// about some of what a source says is shown only those sections.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,6 +199,17 @@ pub struct KindError {
 }
 
 impl TaskKind {
+    /// Whether only a judge can pass an answer to a task of this kind: no
+    /// verifier of it besides the judged one establishes that an answer is
+    /// right ([`VerifierKind::establishes`]).
+    #[must_use]
+    pub fn needs_judge(&self) -> bool {
+        !self
+            .verifiers
+            .iter()
+            .any(|v| *v != VerifierKind::Judged && v.establishes())
+    }
+
     /// Checks what the fields cannot say alone: a name and a brief, at
     /// least one section and one verifier, a runtime wherever code runs, a
     /// computed answer with something to run, and verifiers that have the
@@ -514,6 +535,21 @@ fn builtin_kinds() -> Vec<TaskKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_kind_nothing_but_a_judge_can_pass_needs_one() {
+        let catalogue = Catalogue::builtin();
+        let needs = |name: &str| catalogue.get(name).unwrap().needs_judge();
+        // Grounding only refutes: a vague answer breaks no rule, so a judge
+        // is what says a conversation is right. A judged-only kind likewise.
+        assert!(needs("converse"));
+        assert!(needs("explain"));
+        // A stated reference, a quotation, an exact match or an executed
+        // check establishes a pass without any judge.
+        for name in ["recall", "advise", "predict", "construct", "debug"] {
+            assert!(!needs(name), "{name}");
+        }
+    }
 
     #[test]
     fn a_kind_round_trips_through_json() {

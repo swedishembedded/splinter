@@ -604,3 +604,56 @@ fn decisions_in_bulk_are_what_each_experiences_annotations_decide() {
         Err(StoreError::UnknownExperience(_))
     ));
 }
+
+/// A constraint (a check that an answer invents nothing) refutes and never
+/// establishes: its pass decides nothing, so a vague answer that breaks no
+/// rule is not thereby right; its fail refutes whatever else says, an
+/// executed check included; and the store's bulk decisions are what `decide`
+/// says of each experience.
+#[test]
+fn a_constraint_vetoes_but_never_establishes() {
+    use splinter_store::decision::decide;
+    let scratch = Scratch::new("constraint");
+    let store = scratch.store();
+    let ids: Vec<_> = ["a", "b", "c", "d", "e"]
+        .iter()
+        .map(|o| store.put(&experience(o)).unwrap())
+        .collect();
+    let notes = [
+        // Only a constraint, and it passes: nothing is established.
+        (0, Outcome::Pass, Strength::Constraint),
+        // It passes and a judge passes: the judge's opinion decides.
+        (1, Outcome::Pass, Strength::Constraint),
+        (1, Outcome::Pass, Strength::Judged),
+        // It passes and a judge fails: failed.
+        (2, Outcome::Pass, Strength::Constraint),
+        (2, Outcome::Fail, Strength::Judged),
+        // It fails and an executed check passes: refuted all the same.
+        (3, Outcome::Fail, Strength::Constraint),
+        (3, Outcome::Pass, Strength::Executable),
+        // It fails, and a judge passes.
+        (4, Outcome::Fail, Strength::Constraint),
+        (4, Outcome::Pass, Strength::Judged),
+    ];
+    for (which, outcome, strength) in notes {
+        store
+            .annotate(&verdict(&ids[which], outcome, strength))
+            .unwrap();
+    }
+    let decided = store.decisions(&ids).unwrap();
+    for id in &ids {
+        let expected = decide(&store.annotations(id).unwrap().annotations);
+        assert_eq!(decided.get(id).copied(), expected, "{id}");
+    }
+    assert!(
+        !decided.contains_key(&ids[0]),
+        "a pass of a constraint alone decides nothing"
+    );
+    assert!(decided[&ids[1]].passed);
+    assert_eq!(decided[&ids[1]].strength, Strength::Judged);
+    assert!(!decided[&ids[2]].passed);
+    for refuted in [3, 4] {
+        assert!(!decided[&ids[refuted]].passed, "{refuted}");
+        assert_eq!(decided[&ids[refuted]].strength, Strength::Constraint);
+    }
+}

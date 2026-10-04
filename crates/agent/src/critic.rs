@@ -237,6 +237,7 @@ fn strength_name(strength: Strength) -> &'static str {
         Strength::Consistency => "consistency",
         Strength::Formal => "formal",
         Strength::Executable => "executable",
+        Strength::Constraint => "constraint",
     }
 }
 

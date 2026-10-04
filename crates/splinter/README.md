@@ -12,7 +12,7 @@ every command. `splinter <command> --help` is the authoritative reference.
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
-                         [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF]
+                         [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--lr LR] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
@@ -27,9 +27,9 @@ splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mi
                        [--min-strength executable|formal|consistency|judged] [--export-only]
 splinter dataset export <DATASET-ID> --out DIR
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B]
-splinter release <CANDIDATE-ID> [--alias NAME] | list
+splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
-splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
+splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE] [--judge REF]
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
@@ -107,8 +107,9 @@ question answered from the source must name its subject, which that
 identity or a cited section must name; two tasks of the set that ask one
 question of one subject with different answers are both left out);
 each task is solved k times (`--k`) in the environment it records and
-every attempt is graded by its task kind's verifiers (a judge only
-through `verify --judge`); each task no graded attempt solved is solved
+every attempt is graded by its task kind's verifiers (the judged one
+by the judge the command names: `verify --judge`, or, in a `learn`, its judge
+role); each task no graded attempt solved is solved
 once more by the teacher (`teach`: the policy, or the model `--teacher`
 names) open-book - shown its grounding material - and graded the same
 way; only the tasks worth training on go on: those the policy fails at
@@ -219,7 +220,7 @@ and teach nothing. A plan can choose it too.
 
 A run needs no flags. The configuration names what a machine knows:
 `SPLINTER_ASSISTANT_MODEL` is the stronger model that plans, writes tasks and
-teaches when the command names none, `SPLINTER_FRONT_DOOR_MODEL` reads the
+teaches when the command names none, `SPLINTER_JUDGE_MODEL` judges what only a judge can decide, `SPLINTER_FRONT_DOOR_MODEL` reads the
 sentence, and `SPLINTER_BUDGET` is how long a `learn` may take when it names no `--budget`
 (a sentence names none), `SPLINTER_THINKING=1` lets local models reason before
 they answer (off, a reasoning model is asked with its reasoning block closed, so
@@ -292,8 +293,21 @@ answer depends on and names none.
 
 `verify` appends verdicts from each task kind's own verifiers: formal
 (exact match, lenient), executable checks, mutation-validated tests,
-agreement among answers, and - only with `--judge REF` - a judge gated by
-the calibration `judge calibrate` stored for it. A labelled file is JSON
+agreement among answers, and - with `--judge REF` - a judge gated by
+the calibration `judge calibrate` stored for it. A verifier either
+establishes that an answer is right or only refutes it: grounding (every
+number, name and quotation is in the source) is a constraint, whose fail
+refutes whatever else says and whose pass decides nothing, so an answer that
+invents nothing but says nothing right passes no check. A kind no other
+verifier can pass - a conversation - is decided by a judge, and a `learn` on it
+names one (`--judge`, else `SPLINTER_JUDGE_MODEL`, else the assistant). The
+judge is another model than the teacher, the generator and the policy; it is
+measured before any verdict counts, on controls made from the tasks' own
+references (each task's reference is the right answer to it, and a task of
+another family of sources lends the wrong one) unless a stored calibration
+rests on at least `SPLINTER_MIN_CALIBRATION_CONTROLS` of them (16); a judge not
+precise enough on passes and on fails (0.9) is refused with its numbers, and
+its judged verdicts then count towards the training set. A labelled file is JSON
 Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 
 `dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
@@ -334,8 +348,8 @@ records its regime; the release gate grades either the same way.
 `release <CANDIDATE-ID>` decides a candidate against the release its alias
 (`--alias`, default `default`) points at - the champion, or the base before
 any release - and refuses a candidate that was not trained from it. Both
-are graded closed-book by each task's own verifiers (no judge) on the same
-suites, and the candidate is released only if all four checks pass; each
+are graded closed-book by each task's own verifiers (the judged kinds by
+`--judge REF`, a calibrated judge) on the same suites, and the candidate is released only if all four checks pass; each
 is printed with its numbers, and a check that could not be measured fails:
 
 | Check | Passes when |

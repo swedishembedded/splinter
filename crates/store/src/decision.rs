@@ -48,7 +48,7 @@ pub fn decide(notes: &[Annotation]) -> Option<Decision> {
             AnnotationBody::Verdict {
                 outcome, strength, ..
             } => Some(Verdict::new(
-                match outcome {
+                match strength.counted(*outcome) {
                     Outcome::Pass => Ruling::Pass,
                     Outcome::Fail => Ruling::Fail,
                     Outcome::Abstain => Ruling::Abstain,

@@ -18,6 +18,7 @@
 
 use std::time::Duration;
 
+use crate::judging::{controls, reference as reference_of, spaced};
 use serde::Serialize;
 use splinter_agent::judge::JudgeVerifier;
 use splinter_agent::solve::Model;
@@ -27,7 +28,9 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, ExperienceId, Task};
 use splinter_core::kinds::DENOISE;
 use splinter_eval::denoise::FormalVerifier;
-use splinter_eval::verifiers::calibration::{CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION};
+use splinter_eval::verifiers::calibration::{
+    calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
+};
 use splinter_eval::verifiers::consistency::AgreementVerifier;
 use splinter_eval::verifiers::executable::ExecutableVerifier;
 use splinter_eval::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifier};
@@ -85,7 +88,11 @@ pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
 
 const CALIBRATION: &str = "calibration";
 
+/// The most tasks a fresh calibration's controls are made from.
+const MAX_CALIBRATION_TASKS: usize = 24;
+
 /// A judge and the calibration its verdicts are gated by.
+#[derive(Clone)]
 pub struct Judge {
     model: Model,
     calibration: Calibration,
@@ -107,6 +114,90 @@ impl Judge {
         Ok(Self { model, calibration })
     }
 
+    /// The judge `reference` names, with a calibration it can be trusted on:
+    /// the stored one when it was measured on at least
+    /// [`splinter_orchestrator::config::Config::min_calibration_controls`] controls, else one measured now on
+    /// controls made from the references of `tasks` ([`controls`]) and
+    /// stored. Refused when the tasks give too few controls to measure on,
+    /// or when the judge is not precise enough on them
+    /// ([`DEFAULT_MIN_PRECISION`], on passes and on fails): its verdicts
+    /// would all abstain, and a kind graded by a judge would grade nothing.
+    pub fn calibrated(
+        ctx: &Context,
+        reference: &ModelRef,
+        tasks: &[Task],
+    ) -> Result<Self, OrchestratorError> {
+        let model = ctx.model(reference)?;
+        let verifier = judge_verifier(ctx, &model);
+        let minimum = ctx.config().min_calibration_controls;
+        ctx.workspace().refresh()?;
+        let stored = latest_calibration(ctx, &verifier.producer())?.filter(|c| c.n >= minimum);
+        let calibration = match stored {
+            Some(calibration) => calibration,
+            None => {
+                let with_reference: Vec<Task> = tasks
+                    .iter()
+                    .filter(|task| reference_of(task).is_some())
+                    .cloned()
+                    .collect();
+                let labelled = controls(ctx, &spaced(&with_reference, MAX_CALIBRATION_TASKS))?;
+                if labelled.len() < minimum {
+                    return Err(OrchestratorError::Refused(format!(
+                        "judge {reference} has no calibration and the tasks give {} controls to \
+                         measure one on, fewer than {minimum}: a judge needs \
+                         tasks with a reference from several families of sources, or `splinter \
+                         judge calibrate <LABELLED-FILE> --judge {reference}`",
+                        labelled.len()
+                    )));
+                }
+                let calibration = calibrate(&verifier, &labelled)?;
+                store_calibration(ctx, &calibration)?;
+                calibration
+            }
+        };
+        let judge = Self { model, calibration };
+        if !judge.trusted() {
+            let c = &judge.calibration;
+            return Err(OrchestratorError::Refused(format!(
+                "judge {reference} is not precise enough to grade with: precision {:?} on passes \
+                 and {:?} on fails over {} controls, below {DEFAULT_MIN_PRECISION}; a kind \
+                 graded by a judge would be graded by nothing",
+                c.precision_pass, c.precision_fail, c.n
+            )));
+        }
+        Ok(judge)
+    }
+
+    /// The judge this command grades with: the model its context names
+    /// ([`Context::set_judge`]), loaded with its stored calibration; `None`
+    /// when it names none. Refused when the judge was never calibrated or is
+    /// not precise enough ([`Judge::trusted`]): grading by a judge whose
+    /// verdicts would all abstain is not grading.
+    pub fn active(ctx: &Context) -> Result<Option<Self>, OrchestratorError> {
+        let Some(reference) = ctx.judge() else {
+            return Ok(None);
+        };
+        let judge = Self::load(ctx, &reference)?;
+        if !judge.trusted() {
+            return Err(OrchestratorError::Refused(format!(
+                "judge {reference} is not precise enough to grade with: precision {:?} on \
+                 passes and {:?} on fails over {} controls, below {DEFAULT_MIN_PRECISION}",
+                judge.calibration.precision_pass,
+                judge.calibration.precision_fail,
+                judge.calibration.n
+            )));
+        }
+        Ok(Some(judge))
+    }
+
+    /// Whether its measured precision, on passes and on fails, reaches
+    /// [`DEFAULT_MIN_PRECISION`], so that its verdicts stand.
+    #[must_use]
+    pub fn trusted(&self) -> bool {
+        let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
+        precise(self.calibration.precision_pass) && precise(self.calibration.precision_fail)
+    }
+
     fn verifier(&self, ctx: &Context) -> Result<Box<dyn Verifier>, OrchestratorError> {
         Ok(Box::new(CalibratedJudge::new(
             judge_verifier(ctx, &self.model),
@@ -114,6 +205,15 @@ impl Judge {
             DEFAULT_MIN_PRECISION,
         )?))
     }
+}
+
+/// Whether only a judge can pass an answer to a task of `kind`
+/// ([`splinter_knowledge::tasks::TaskKind::needs_judge`]).
+#[must_use]
+pub fn kind_needs_judge(kind: &str) -> bool {
+    Catalogue::builtin()
+        .get(kind)
+        .is_some_and(|spec| spec.needs_judge())
 }
 
 /// The judged verifier on `model`.
@@ -307,6 +407,11 @@ pub fn verify_set(
     judge: Option<&Judge>,
     cancel: &CancelToken,
 ) -> Result<Verified, OrchestratorError> {
+    let active = match judge {
+        Some(_) => None,
+        None => Judge::active(ctx)?,
+    };
+    let judge = judge.or(active.as_ref());
     let store = ctx.experiences();
     let batch = ctx.workspace().batch();
     let members = store.get_set(set)?.members;

@@ -43,7 +43,7 @@ use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
 
 use crate::grouping::task_clusters;
-use crate::judging::{controls, reference};
+use crate::judging::{controls, reference, spaced};
 use crate::release::arm;
 use crate::release::probe::{answer_prompted, greedy, held_out, trained_tasks};
 use crate::retrieval::Retrieval;
@@ -466,16 +466,6 @@ pub enum Exam {
     Ran(Box<Examined>),
     /// It could not run, and why.
     NotRun(String),
-}
-
-/// `items` thinned to at most `most`, evenly from first to last.
-fn spaced<T: Clone>(items: &[T], most: usize) -> Vec<T> {
-    if items.len() <= most || most < 2 {
-        return items.iter().take(most).cloned().collect();
-    }
-    (0..most)
-        .map(|i| items[i * (items.len() - 1) / (most - 1)].clone())
-        .collect()
 }
 
 /// The `exam` command: the stored candidate `candidate` examined against the

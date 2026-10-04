@@ -25,7 +25,7 @@ use splinter_agent::CancelToken;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
 use crate::tasks::remaining;
-use crate::verify::{verifiers_for, Unverified};
+use crate::verify::{verifiers_for, Judge, Unverified};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -103,6 +103,7 @@ pub fn critique_set(
         stopped: None,
     };
     let decisions = store.decisions(&members)?;
+    let judge = Judge::active(ctx)?;
     for (id, experience) in members.iter().zip(&pool) {
         if request.cancel.is_cancelled() {
             return Err(OrchestratorError::Cancelled);
@@ -123,7 +124,7 @@ pub fn critique_set(
         let prepared = ctx
             .environments()
             .for_record(&task.environment)
-            .and_then(|env| Ok((env, verifiers_for(ctx, &task, &pool, None)?)));
+            .and_then(|env| Ok((env, verifiers_for(ctx, &task, &pool, judge.as_ref())?)));
         let (environment, verifiers) = match prepared {
             Ok(prepared) => prepared,
             Err(e) => {

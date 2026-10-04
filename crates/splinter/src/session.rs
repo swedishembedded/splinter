@@ -460,6 +460,9 @@ impl Session {
                         "name a candidate to release, or `release list`".into(),
                     ));
                 };
+                if let Some(judge) = args.judge {
+                    ctx.set_judge(judge);
+                }
                 let request = ReleaseRequest {
                     alias: args.alias,
                     ..ReleaseRequest::new(candidate)
@@ -483,6 +486,9 @@ impl Session {
                 );
             }
             Command::Eval(args) => {
+                if let Some(judge) = args.judge {
+                    ctx.set_judge(judge);
+                }
                 let request = EvalRequest {
                     model: args.model,
                     suite: args.suite,
@@ -621,6 +627,7 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
             (Role::Planner, args.planner),
             (Role::Teacher, args.teacher),
             (Role::Generator, args.generator),
+            (Role::Judge, args.judge),
         ]
         .into_iter()
         .filter_map(|(role, model)| model.map(|m| (role, m)))

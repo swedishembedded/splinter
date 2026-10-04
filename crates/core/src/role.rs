@@ -91,6 +91,9 @@ pub struct Fallbacks {
     pub assistant: Option<ModelRef>,
     /// The model the configuration names for reading sentences.
     pub front_door: Option<ModelRef>,
+    /// The model the configuration names for judging: another model than the
+    /// assistant that writes what it grades.
+    pub judge: Option<ModelRef>,
 }
 
 /// Which model plays each role.
@@ -115,7 +118,7 @@ impl ModelAssignments {
         let teacher = pick(Role::Teacher, assistant, &policy);
         let generator = pick(Role::Generator, assistant, &policy);
         let planner = pick(Role::Planner, assistant, &generator);
-        let judge = pick(Role::Judge, assistant, &policy);
+        let judge = pick(Role::Judge, fallbacks.judge.as_ref().or(assistant), &policy);
         let critic = pick(Role::Critic, None, &policy);
         let router = pick(Role::Router, fallbacks.front_door.as_ref(), &policy);
         Self(BTreeMap::from([

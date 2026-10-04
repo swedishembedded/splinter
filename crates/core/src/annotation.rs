@@ -96,6 +96,13 @@ pub enum Strength {
     Formal,
     /// The work was executed and checked.
     Executable,
+    /// A rule the work must not break, such as inventing nothing the source
+    /// lacks. It refutes and never establishes: a pass says only that nothing
+    /// was found wrong, which does not make an answer right, so it counts as
+    /// an abstention ([`Strength::counted`]); a fail refutes whatever else
+    /// says, so it outranks every other strength. It is therefore the
+    /// strongest in the ordering, and no verdict of it says "right".
+    Constraint = 255,
 }
 
 impl Strength {
@@ -113,9 +120,20 @@ impl Strength {
             Strength::Consistency,
             Strength::Formal,
             Strength::Executable,
+            Strength::Constraint,
         ]
         .into_iter()
         .find(|s| s.rank() == rank)
+    }
+
+    /// The outcome a verdict of this strength counts as in a decision: its
+    /// own, except that a constraint that passed counts as an abstention.
+    #[must_use]
+    pub fn counted(self, outcome: Outcome) -> Outcome {
+        match (self, outcome) {
+            (Strength::Constraint, Outcome::Pass) => Outcome::Abstain,
+            _ => outcome,
+        }
     }
 }
 

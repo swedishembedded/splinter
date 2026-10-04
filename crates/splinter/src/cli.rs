@@ -198,6 +198,12 @@ pub struct LearnArgs {
     /// The model that writes the tasks (default: the policy).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub generator: Option<ModelRef>,
+    /// The model that judges answers to tasks only a judge can pass (a
+    /// conversation: a check that nothing was invented does not make an
+    /// answer right). It is another model than the teacher, the generator and
+    /// the policy, and is measured before its verdicts count.
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub judge: Option<ModelRef>,
     /// The model that surveys the sources and plans the learning when no
     /// --kinds are named (default: the generator).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
@@ -516,6 +522,9 @@ pub struct ReleaseArgs {
     /// The alias it replaces the champion of.
     #[arg(long, default_value = POLICY_DEFAULT, value_name = "NAME")]
     pub alias: String,
+    /// The calibrated model that judges the tasks a judge decides.
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub judge: Option<ModelRef>,
     /// `list`.
     #[command(subcommand)]
     pub command: Option<ReleaseCommand>,
@@ -542,6 +551,9 @@ pub struct EvalArgs {
     /// version first. JSON Lines: {"instruction", "reference", "kind"?}.
     #[arg(long, value_name = "FILE")]
     pub freeze: Option<PathBuf>,
+    /// The calibrated model that judges the tasks a judge decides.
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub judge: Option<ModelRef>,
 }
 
 /// `exam`.

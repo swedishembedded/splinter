@@ -39,9 +39,11 @@ fn config() -> Config {
         brain_binary: None,
         front_door_model: None,
         assistant_model: None,
+        judge_model: None,
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 4,
+        min_calibration_controls: 2,
         thinking: false,
     }
 }

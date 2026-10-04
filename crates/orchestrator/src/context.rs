@@ -405,6 +405,7 @@ impl Runtime {
 pub struct Context {
     runtime: Arc<Runtime>,
     pins: Mutex<BTreeMap<String, Option<PolicyPin>>>,
+    judge: Mutex<Option<ModelRef>>,
     progress: Option<Progress>,
 }
 
@@ -423,8 +424,28 @@ impl Context {
         Self {
             runtime,
             pins: Mutex::new(BTreeMap::new()),
+            judge: Mutex::new(None),
             progress: None,
         }
+    }
+
+    /// Names the model that judges what this command grades: every verdict a
+    /// judged verifier gives from here on is this model's, gated by its
+    /// calibration. A command that names none grades without a judge.
+    pub fn set_judge(&self, reference: ModelRef) {
+        *self
+            .judge
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(reference);
+    }
+
+    /// The model that judges what this command grades, if one was named.
+    #[must_use]
+    pub fn judge(&self) -> Option<ModelRef> {
+        self.judge
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// A context over its own runtime on `config`, with `allow_remote` as

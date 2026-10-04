@@ -14,8 +14,9 @@
 //! tolerance. A passage it presents in quotation marks must be in the source
 //! word for word (quoting nothing is fine). Words that open a sentence, the pronoun "I" and forms of
 //! address are not names. It abstains when the source text is not available
-//! and fails when there is no answer. Its verdicts are formal and name
-//! counts and digests, never the specifics.
+//! and fails when there is no answer. Its verdicts are a constraint's - a fail
+//! refutes, a pass establishes nothing - and name counts and digests, never
+//! the specifics.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -111,7 +112,7 @@ fn an_answer_that_states_only_what_the_source_holds_passes() {
         0,
     );
     assert_eq!(outcome, Outcome::Pass, "{evidence}");
-    assert_eq!(strength, Strength::Formal);
+    assert_eq!(strength, Strength::Constraint);
 }
 
 #[test]

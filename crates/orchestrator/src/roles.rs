@@ -35,6 +35,7 @@ pub fn fallbacks(config: &Config) -> Result<Fallbacks, OrchestratorError> {
     Ok(Fallbacks {
         assistant: parse("assistant", &config.assistant_model)?,
         front_door: parse("front door", &config.front_door_model)?,
+        judge: parse("judge", &config.judge_model)?,
     })
 }
 

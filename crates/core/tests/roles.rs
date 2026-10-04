@@ -48,6 +48,7 @@ fn the_assistant_plays_the_roles_that_ask_for_one() {
     let fallbacks = Fallbacks {
         assistant: Some(model("local:/models/assistant")),
         front_door: None,
+        judge: None,
     };
     let assignments = assigned(&[], &fallbacks);
     let assistant = model("local:/models/assistant");
@@ -64,6 +65,7 @@ fn a_role_a_command_names_wins_over_the_assistant() {
     let fallbacks = Fallbacks {
         assistant: Some(model("local:/models/assistant")),
         front_door: None,
+        judge: None,
     };
     let assignments = assigned(&[(Role::Teacher, "remote:openrouter/big")], &fallbacks);
     assert_eq!(
@@ -91,6 +93,7 @@ fn the_router_is_the_model_configured_for_the_front_door() {
     let fallbacks = Fallbacks {
         assistant: Some(model("local:/models/assistant")),
         front_door: Some(model("local:/models/router")),
+        judge: None,
     };
     let assignments = assigned(&[], &fallbacks);
     assert_eq!(
@@ -115,4 +118,22 @@ fn assignments_record_as_role_to_reference() {
     assert_eq!(json["teacher"], "local:/models/t");
     assert_eq!(json["policy"], "policy:default");
     assert_eq!(json.as_object().unwrap().len(), Role::ALL.len());
+}
+
+#[test]
+fn the_configured_judge_is_another_model_than_the_assistant_that_writes_what_it_grades() {
+    let fallbacks = Fallbacks {
+        assistant: Some(model("local:/models/assistant")),
+        front_door: None,
+        judge: Some(model("local:/models/judge")),
+    };
+    let assignments = assigned(&[], &fallbacks);
+    assert_eq!(
+        assignments.get(Role::Teacher),
+        &model("local:/models/assistant")
+    );
+    assert_eq!(assignments.get(Role::Judge), &model("local:/models/judge"));
+    // A command's own choice still wins.
+    let named = assigned(&[(Role::Judge, "local:/models/other")], &fallbacks);
+    assert_eq!(named.get(Role::Judge), &model("local:/models/other"));
 }

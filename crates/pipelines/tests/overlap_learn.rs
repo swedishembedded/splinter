@@ -24,6 +24,7 @@ use serde_json::json;
 use splinter_agent::solve::{Model, MATERIAL_HEADING};
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::dialogue::STUDENT_ROLE;
@@ -117,7 +118,11 @@ fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_
         } else if prompt.contains(STUDENT_ROLE) {
             json!({ "message": "and then?" }).to_string()
         } else if prompt.contains(MATERIAL_HEADING) {
-            "axa axb axc axd".to_string()
+            if prompt.contains(&words("c", 5)) {
+                "cxa cxb cxc cxd".to_string()
+            } else {
+                "axa axb axc axd".to_string()
+            }
         } else {
             "I do not know.".to_string()
         }
@@ -134,6 +139,28 @@ fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_
         ModelRef::policy_default(),
         Model::new(Arc::new(policy), common::POLICY),
     );
+    // A judge that passes an answer in the words of the reference's letter.
+    let judge_ref: ModelRef = "local:test/judge".parse().unwrap();
+    let judge = Scripted::new(|prompt| {
+        let reference = prompt
+            .split("REFERENCE:\\n")
+            .nth(1)
+            .and_then(|t| t.split("\\n\\nANSWER:").next())
+            .unwrap_or_default();
+        let answer = prompt.split("ANSWER:\\n").nth(1).unwrap_or_default();
+        if ["axa", "cxa"]
+            .iter()
+            .any(|key| reference.contains(key) && answer.contains(key))
+        {
+            "PASS\nit does".into()
+        } else {
+            "FAIL\nit does not".into()
+        }
+    });
+    ctx.add_model(
+        judge_ref.clone(),
+        Model::new(Arc::new(judge), "scripted/judge"),
+    );
     let dir = scratch.0.join("letters");
     std::fs::create_dir_all(&dir).unwrap();
     for (name, text) in &letters {
@@ -144,6 +171,7 @@ fn records_of_two_prints_of_one_letter_share_a_group_and_another_letter_has_its_
         &LearnRequest {
             sources: vec![dir.display().to_string()],
             kinds: vec!["converse".into()],
+            roles: [(Role::Judge, judge_ref)].into(),
             no_release: true,
             distill: true,
             ..LearnRequest::default()

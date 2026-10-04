@@ -392,7 +392,7 @@ fn describe(body: &AnnotationBody) -> (String, f64, f64, Option<splinter_expdb::
         AnnotationBody::Verdict {
             outcome, strength, ..
         } => {
-            let (ruling, score, confidence) = match outcome {
+            let (ruling, score, confidence) = match strength.counted(*outcome) {
                 Outcome::Pass => (Ruling::Pass, 1.0, 1.0),
                 Outcome::Fail => (Ruling::Fail, 0.0, 1.0),
                 Outcome::Abstain => (Ruling::Abstain, 0.0, 0.0),

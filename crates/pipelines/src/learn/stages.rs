@@ -45,7 +45,8 @@ use crate::sources::{self, SourceTarget};
 use crate::tasks::{generate, Generation};
 use crate::train::{train, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
-use crate::verify::verify_set;
+use crate::verify::{kind_needs_judge, verify_set, Judge};
+use splinter_core::annotation::Strength;
 
 /// What one learn run was asked, resolved.
 pub(super) struct Learn<'a> {
@@ -97,6 +98,11 @@ pub(super) struct LearnState<'a> {
     dataset: Option<String>,
     records: usize,
     candidate: Option<String>,
+    /// The judge is named and measured, or no task needs one.
+    judge_prepared: bool,
+    /// The weakest decision the training set counts: judged verdicts too
+    /// when a measured judge decides the kinds nothing else can.
+    min_strength: Strength,
 }
 
 impl<'a> LearnState<'a> {
@@ -120,6 +126,8 @@ impl<'a> LearnState<'a> {
             dataset: None,
             records: 0,
             candidate: None,
+            judge_prepared: false,
+            min_strength: DEFAULT_MIN_STRENGTH,
         }
     }
 
@@ -137,6 +145,47 @@ impl<'a> LearnState<'a> {
             .as_ref()
             .ok_or_else(|| OrchestratorError::Refused("a stage ran before the tasks stage".into()))
     }
+}
+
+/// Names the judge and measures it before the first stage that grades,
+/// when some task is of a kind a judge grades: only a judge's verdict
+/// establishes that an answer to such a task is right, so without one
+/// nothing of that kind could be decided. The judge is another model than
+/// the teacher, the generator and the policy, whose work it grades, and is
+/// measured on controls made from the tasks' references
+/// ([`Judge::calibrated`]).
+fn prepare_judge(ctx: &Context, st: &mut LearnState<'_>) -> Result<(), OrchestratorError> {
+    if st.judge_prepared {
+        return Ok(());
+    }
+    let store = ctx.tasks();
+    let tasks = store
+        .get_set(st.task_set()?)?
+        .members
+        .iter()
+        .map(|entry| store.get(&entry.task))
+        .collect::<Result<Vec<_>, _>>()?;
+    if tasks.iter().any(|task| kind_needs_judge(&task.task.kind)) {
+        let judge = st.learn.judge;
+        let roles = [
+            ("teacher", st.learn.teacher),
+            ("generator", st.learn.generator),
+            ("policy", &st.learn.policy),
+        ];
+        if let Some((role, _)) = roles.iter().find(|(_, model)| *model == judge) {
+            return Err(OrchestratorError::Refused(format!(
+                "the judge {judge} is also the {role}: a model does not grade its own work, and \
+                 these tasks are decided by a judge. Name another model for the judge"
+            )));
+        }
+        Judge::calibrated(ctx, judge, &tasks)?;
+        ctx.set_judge(judge.clone());
+        // Its verdicts stand only above its measured precision, and for
+        // these kinds nothing else can pass an answer: they are evidence.
+        st.min_strength = Strength::Judged;
+    }
+    st.judge_prepared = true;
+    Ok(())
 }
 
 /// The stages of `learn`, in order.
@@ -268,6 +317,7 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
 
 /// The student's own attempts: skipped when distilling.
 fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+    prepare_judge(ctx, st)?;
     let attempted = solve_tasks(
         ctx,
         &SolveRequest {
@@ -300,6 +350,7 @@ fn verify_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) 
 }
 
 fn teach_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+    prepare_judge(ctx, st)?;
     let taught = teach(
         ctx,
         &TeachRequest {
@@ -394,7 +445,7 @@ fn critique_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>
 }
 
 fn select_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
-    let selected = select_training_set(ctx, &st.sets, DEFAULT_MIN_STRENGTH, &st.learn.quotas)?;
+    let selected = select_training_set(ctx, &st.sets, st.min_strength, &st.learn.quotas)?;
     let summary = to_value(&selected)?;
     st.report.select = Some(selected);
     Ok(StageEnd::done(summary))
@@ -410,7 +461,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             sets: vec![selected.experience_set.clone()],
             view: ViewName::SftFinal,
             strip: None,
-            min_strength: None,
+            min_strength: Some(st.min_strength),
             export_only: false,
         },
     ) {

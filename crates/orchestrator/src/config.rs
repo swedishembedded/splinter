@@ -57,6 +57,9 @@ pub struct Config {
     /// learning run, writes its tasks and teaches what the policy cannot
     /// answer, when the command names none of them. Parsed where it is used.
     pub assistant_model: Option<String>,
+    /// A model reference that judges answers in place of the assistant: the
+    /// judge is another model than the one that wrote what it grades.
+    pub judge_model: Option<String>,
     /// Hold a base the policy trains at bf16: for a base too large for the
     /// card at fp32, which is a fact about the machine, not the run.
     pub bf16_base: bool,
@@ -73,7 +76,16 @@ pub struct Config {
     /// agent work, probes and exams get the answer at once. Models reached
     /// over an API are not affected.
     pub thinking: bool,
+    /// The fewest controls a judge is measured on before its verdicts count:
+    /// a judge measured on fewer is not trusted, and one measured on more is
+    /// known better. A small corpus gives few controls (a task has one only
+    /// where another family of sources lends a wrong answer); a user who
+    /// knows that may accept a thinner measurement.
+    pub min_calibration_controls: usize,
 }
+
+/// [`Config::min_calibration_controls`] when nothing names one.
+pub const DEFAULT_MIN_CALIBRATION_CONTROLS: usize = 16;
 
 impl Config {
     /// The configuration this process runs with:
@@ -94,8 +106,12 @@ impl Config {
     ///   sentences instead of the policy;
     /// * `SPLINTER_ASSISTANT_MODEL`, a model reference that plans, writes
     ///   tasks and teaches in place of the policy;
+    /// * `SPLINTER_JUDGE_MODEL`, a model reference that judges in place of the
+    ///   assistant;
     /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
     ///   held at bf16;
+    /// * `SPLINTER_MIN_CALIBRATION_CONTROLS`, the fewest controls a judge is
+    ///   measured on before its verdicts count;
     /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
     ///   names no `--budget`;
     /// * `SPLINTER_REMOTE_CONCURRENCY`, how many requests to a model reached
@@ -129,11 +145,16 @@ impl Config {
                 .or_else(|| var("PATH").and_then(|path| find_executable(&path, "brain"))),
             front_door_model: var("SPLINTER_FRONT_DOOR_MODEL"),
             assistant_model: var("SPLINTER_ASSISTANT_MODEL"),
+            judge_model: var("SPLINTER_JUDGE_MODEL"),
             bf16_base: var("SPLINTER_BF16_BASE")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
             default_budget: var("SPLINTER_BUDGET"),
             thinking: var("SPLINTER_THINKING")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+            min_calibration_controls: var("SPLINTER_MIN_CALIBRATION_CONTROLS")
+                .and_then(|v| v.parse().ok())
+                .filter(|n| *n > 0)
+                .unwrap_or(DEFAULT_MIN_CALIBRATION_CONTROLS),
             remote_concurrency: var("SPLINTER_REMOTE_CONCURRENCY")
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)

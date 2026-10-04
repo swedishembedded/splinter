@@ -75,3 +75,13 @@ pub fn controls(
     }
     Ok(labelled)
 }
+
+/// `items` thinned to at most `most`, evenly from first to last.
+pub(crate) fn spaced<T: Clone>(items: &[T], most: usize) -> Vec<T> {
+    if items.len() <= most || most < 2 {
+        return items.iter().take(most).cloned().collect();
+    }
+    (0..most)
+        .map(|i| items[i * (items.len() - 1) / (most - 1)].clone())
+        .collect()
+}

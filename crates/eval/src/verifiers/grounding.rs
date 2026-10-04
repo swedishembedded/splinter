@@ -19,6 +19,11 @@
 //! [`GroundingPolicy::max_ungrounded_names`], because a name is sometimes a
 //! form of address or a common name the heuristic cannot tell from a person.
 //!
+//! Its verdicts are a [`Strength::Constraint`]: a fail refutes the answer
+//! outright, and a pass says only that nothing invented was found, which does
+//! not make an answer right (a vague or evasive one passes), so a decision
+//! that needs the answer to be right needs a verifier that can say so.
+//!
 //! The texts come from an [`EvidenceText`] (the source), the task's
 //! instruction, and the user turns after the first of the experience's
 //! trajectory (the other speaker's words in a dialogue; the first user step
@@ -145,7 +150,7 @@ impl Verifier for GroundingVerifier {
     }
 
     fn strength(&self) -> Strength {
-        Strength::Formal
+        Strength::Constraint
     }
 
     /// The evidence names counts and the digest of the answer, never a
