@@ -29,12 +29,14 @@
 //! build-data build the supervised records, preference pairs and frozen benchmark from the checked answers
 //! train-dpo  preference-optimise an adapter on the pairs
 //! transfer-exam  ask a model every benchmark question, graded by the rules
+//! anchor-exam  ask a model general questions under no persona: a retention check
 //! briefings  brief each held-out letter of his: the situation it answered, and what the real letter does
 //! reconstruct-replies  have one model write the reply to every briefing
 //! judge      calibrate a judge on controls, then score every reply against the real letters
 //! reconstruct-report  two arms compared on what the real letters do
 //! ```
 
+mod anchor;
 mod attribution;
 mod corpus;
 mod curate;
@@ -72,12 +74,13 @@ fn main() -> anyhow::Result<()> {
         Some("build-data") => build_data_command(&args[1..]),
         Some("train-dpo") => train_dpo_command(&args[1..]),
         Some("transfer-exam") => transfer_exam_command(&args[1..]),
+        Some("anchor-exam") => anchor_exam_command(&args[1..]),
         Some("briefings") => briefings_command(&args[1..]),
         Some("reconstruct-replies") => reconstruct_replies_command(&args[1..]),
         Some("judge") => judge_command(&args[1..]),
         Some("reconstruct-report") => reconstruct_report_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
+            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
         ),
     }
 }
@@ -506,5 +509,15 @@ fn reconstruct_report_command(args: &[String]) -> anyhow::Result<()> {
         &resources,
         std::path::Path::new(&need(args, "--before")?),
         std::path::Path::new(&need(args, "--after")?),
+    )
+}
+
+fn anchor_exam_command(args: &[String]) -> anyhow::Result<()> {
+    run::anchor_exam_command(
+        std::path::Path::new(&need(args, "--anchor")?),
+        std::path::Path::new(&need(args, "--out")?),
+        std::path::Path::new(&need(args, "--base")?),
+        flag(args, "--adapter").as_deref().map(std::path::Path::new),
+        flag(args, "--limit").map(|v| v.parse()).transpose()?,
     )
 }

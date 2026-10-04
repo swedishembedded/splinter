@@ -36,6 +36,8 @@ what he believed.
 | `build-data` | Builds supervised records (with his passages in the prompt, and without), preference pairs and a frozen benchmark from the kept answers. A rule is wholly training or wholly benchmark. A preference pair is an answer and the same answer broken in one named way that the check then refuses, so each pair is right by construction. |
 | `train-dpo` | Preference-optimises an adapter on the pairs, continuing from the supervised adapter, which then is the reference. |
 | `transfer-exam` | Asks a model every benchmark question, graded by the grounding rules with no judge. |
+| `briefings`, `reconstruct-replies`, `judge`, `reconstruct-report` | The reconstruction benchmark: a held-out letter is briefed as the situation it answered, a model writes the reply, and a judge calibrated on controls scores it against what the real letter does. |
+| `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. |
 
 The `exam` split is questions about documents the model never saw. The `seen`
 split is a sample of training questions. A gain on `seen` and none on `exam` is
@@ -82,6 +84,9 @@ splinter-adams train-dpo  --resources RESOURCES --base BASE --attempt RUN/dpo \
     --continue-from RUN/sft2/adapter.safetensors --steps 200
 splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-base.jsonl --base BASE
 splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
+splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anchor-base.jsonl --base BASE
+splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anchor-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
+splinter-adams report --before RUN/anchor-base.jsonl --after RUN/anchor-tuned.jsonl
 ```
 
 `splinter-adams identify --author LINE --year YEAR` shows what the namesake

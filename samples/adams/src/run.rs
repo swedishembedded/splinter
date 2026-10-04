@@ -621,3 +621,27 @@ pub fn reconstruct_report_command(
     );
     Ok(())
 }
+
+/// Ask one model, with or without its adapter, the frozen general questions
+/// under no persona: what a retention check compares before and after.
+pub fn anchor_exam_command(
+    anchor: &Path,
+    out: &Path,
+    base: &Path,
+    adapter: Option<&Path>,
+    limit: Option<usize>,
+) -> anyhow::Result<()> {
+    let questions = crate::anchor::read(anchor)?;
+    let model = splinter_sdk::model::exam::Model {
+        base,
+        adapter,
+        system: crate::anchor::SYSTEM,
+        max_tokens: 100,
+        label: "adams",
+    };
+    let asked = splinter_sdk::model::exam::run(&questions, out, limit, &model, &|q, a| {
+        crate::anchor::is_correct(q, a)
+    })?;
+    println!("asked {asked} questions; results in {}", out.display());
+    Ok(())
+}
