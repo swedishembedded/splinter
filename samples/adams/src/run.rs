@@ -325,6 +325,31 @@ pub fn build_data_command(resources: &Path, documents: &[Document]) -> anyhow::R
     }
     println!("pairs by break: {by_break:?}");
     println!("benchmark questions: {}", built.benchmark.len());
+
+    let train_briefings = crate::reconstruct::read_briefings(
+        &resources
+            .join("reconstruction")
+            .join("briefings-train.jsonl"),
+    )?;
+    if !train_briefings.is_empty() {
+        let own_train: std::collections::HashSet<String> =
+            letters_of(resources, documents, Split::Train)?
+                .into_iter()
+                .map(|d| d.id.clone())
+                .collect();
+        let records = crate::datasets::reconstruction_sft(&train_briefings, documents, &own_train);
+        let path = dir.join("sft-reconstruction.jsonl");
+        std::fs::write(
+            &path,
+            records.iter().map(|r| format!("{r}\n")).collect::<String>(),
+        )?;
+        let read = splinter_sdk::model::train::validate_dataset(&path)?;
+        println!(
+            "reconstruction records: {} (the trainer reads {})",
+            records.len(),
+            read.records
+        );
+    }
     Ok(())
 }
 
@@ -406,20 +431,22 @@ pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow
     Ok(())
 }
 
-/// His own letters on the exam side of the split: what the reconstruction
-/// benchmark is made from.
-fn exam_letters<'a>(
+/// His own letters on one side of the split: the exam side is what the
+/// reconstruction benchmark is made from, the training side what he is shown
+/// doing.
+fn letters_of<'a>(
     resources: &Path,
     documents: &'a [Document],
+    side: Split,
 ) -> anyhow::Result<Vec<&'a Document>> {
-    let held_out: std::collections::HashSet<String> = read_assignments(resources)?
+    let ids: std::collections::HashSet<String> = read_assignments(resources)?
         .into_iter()
-        .filter(|a| a.split == Split::Exam)
+        .filter(|a| a.split == side)
         .map(|a| a.doc_id)
         .collect();
     let mut letters: Vec<&Document> = documents
         .iter()
-        .filter(|d| held_out.contains(&d.id) && d.authorship.is_his_own_letter())
+        .filter(|d| ids.contains(&d.id) && d.authorship.is_his_own_letter())
         .collect();
     letters.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(letters)

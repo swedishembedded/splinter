@@ -225,6 +225,62 @@ impl splinter_sdk::model::exam::Question for TransferTask {
     }
 }
 
+/// The most words of a letter a training target runs to: a long letter is cut
+/// at a paragraph, never mid-sentence, so every target is his own words whole.
+pub const TARGET_WORDS: usize = 350;
+
+/// The letter's opening paragraphs, up to [`TARGET_WORDS`] words. A first
+/// paragraph that is itself longer is cut at the last sentence that fits.
+pub fn letter_target(body: &str) -> Option<String> {
+    let mut kept: Vec<&str> = Vec::new();
+    let mut used = 0usize;
+    for paragraph in body.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
+        let n = paragraph.split_whitespace().count();
+        if used + n > TARGET_WORDS {
+            break;
+        }
+        kept.push(paragraph);
+        used += n;
+    }
+    if kept.is_empty() {
+        let first = body.split("\n\n").map(str::trim).find(|p| !p.is_empty())?;
+        let cut: String = first
+            .split_whitespace()
+            .take(TARGET_WORDS)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let end = cut.rfind(['.', '?', '!'])?;
+        return Some(cut[..=end].to_string());
+    }
+    Some(kept.join("\n\n"))
+}
+
+/// Supervised records of what he actually did: the situation a letter answered
+/// as the prompt and the letter itself as the answer. Only letters in `allowed`
+/// are used, so a held-out letter is never a target.
+pub fn reconstruction_sft(
+    briefings: &[crate::reconstruct::Briefing],
+    docs: &[Document],
+    allowed: &std::collections::HashSet<String>,
+) -> Vec<Value> {
+    briefings
+        .iter()
+        .filter(|b| allowed.contains(&b.doc_id))
+        .filter_map(|b| {
+            let letter = docs.iter().find(|d| d.id == b.doc_id)?;
+            let target = letter_target(&letter.body)?;
+            Some(json!({
+                "messages": [
+                    {"role": "system", "content": crate::reconstruct::SYSTEM, "train": false},
+                    {"role": "user", "content": crate::reconstruct::prompt(b), "train": false},
+                    {"role": "assistant", "content": target, "train": true},
+                ],
+                "tools": [],
+            }))
+        })
+        .collect()
+}
+
 /// The datasets, and what was left out and why.
 #[derive(Debug, Default)]
 pub struct Built {
@@ -747,5 +803,112 @@ mod tests {
             .benchmark
             .iter()
             .all(|t| t.reference() == "surface_analogy" && t.split() == "exam"));
+    }
+
+    // ---- reconstruction records ----
+
+    use crate::reconstruct::{Briefing, KeyPoint};
+
+    fn briefing_for(doc_id: &str) -> Briefing {
+        Briefing {
+            id: format!("recon-{doc_id}"),
+            doc_id: doc_id.into(),
+            situation: "A correspondent asks how the towns should proceed.".into(),
+            request: "Advise him.".into(),
+            key_points: vec![KeyPoint {
+                point: "p".into(),
+                quote: "q".into(),
+            }],
+        }
+    }
+
+    #[test]
+    fn a_short_letter_is_its_own_target_and_a_long_one_is_cut_at_a_paragraph() {
+        let short = "My dear Sir,\n\nI have your favor.\n\nYours, S. A.";
+        assert_eq!(letter_target(short).as_deref(), Some(short));
+        let para = |p: &str| {
+            (0..120)
+                .map(|i| format!("{p}{i}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        let long = format!(
+            "{}\n\n{}\n\n{}\n\n{}",
+            para("a"),
+            para("b"),
+            para("c"),
+            para("d")
+        );
+        let target = letter_target(&long).unwrap();
+        assert_eq!(
+            target.matches("\n\n").count(),
+            1,
+            "two paragraphs of 120 words fit, the third does not"
+        );
+        assert!(
+            target.ends_with("b119"),
+            "cut between paragraphs, not inside one"
+        );
+    }
+
+    #[test]
+    fn a_first_paragraph_longer_than_the_limit_is_cut_at_the_last_sentence_that_fits() {
+        let sentence = |n: usize| {
+            (0..30)
+                .map(|i| format!("s{n}w{i}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+                + "."
+        };
+        let body = (0..20).map(sentence).collect::<Vec<_>>().join(" ");
+        let target = letter_target(&body).unwrap();
+        assert!(
+            target.ends_with('.') && target.split_whitespace().count() <= TARGET_WORDS,
+            "{}",
+            target.split_whitespace().count()
+        );
+        assert!(
+            letter_target("no sentence end here ".repeat(200).as_str()).is_none(),
+            "nothing whole to keep"
+        );
+    }
+
+    #[test]
+    fn a_reconstruction_record_trains_on_his_letter_and_never_on_the_situation() {
+        let docs = vec![doc(
+            "l1",
+            1773,
+            "James Warren",
+            "My dear Sir,\n\nLet each Town choose a Committee to write to the rest.\n\nYours.",
+        )];
+        let allowed: std::collections::HashSet<String> = ["l1".to_string()].into();
+        let records = reconstruction_sft(&[briefing_for("l1")], &docs, &allowed);
+        assert_eq!(records.len(), 1);
+        let m = records[0]["messages"].as_array().unwrap();
+        assert_eq!(
+            (m[1]["train"].as_bool(), m[2]["train"].as_bool()),
+            (Some(false), Some(true))
+        );
+        assert_eq!(m[0]["content"].as_str(), Some(crate::reconstruct::SYSTEM));
+        assert!(m[1]["content"]
+            .as_str()
+            .unwrap()
+            .contains("how the towns should proceed"));
+        assert!(m[2]["content"]
+            .as_str()
+            .unwrap()
+            .contains("Let each Town choose a Committee"));
+    }
+
+    #[test]
+    fn a_letter_outside_the_allowed_set_is_never_a_target() {
+        let docs = vec![doc(
+            "held",
+            1773,
+            "James Warren",
+            "My dear Sir,\n\nA held-out letter.\n\nYours.",
+        )];
+        let none: std::collections::HashSet<String> = std::collections::HashSet::new();
+        assert!(reconstruction_sft(&[briefing_for("held")], &docs, &none).is_empty());
     }
 }
