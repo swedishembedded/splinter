@@ -362,7 +362,7 @@ async fn attempt_once(
     }
     let mut options = SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
     options.cancel = Some(request.cancel.clone());
-    options.stream_idle = model.stream_idle;
+    let options = model.solving(options);
     let Planned {
         entry,
         task,

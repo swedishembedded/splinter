@@ -67,6 +67,10 @@ pub struct SolveOptions {
     /// [`Model::stream_idle`]. `None` keeps sven's default. A limit past
     /// the deadline is the deadline: no silence outlasts the run.
     pub stream_idle: Option<Duration>,
+    /// The system prompt the run is under, in place of [`SYSTEM_PROMPT`]: the
+    /// one a policy was trained under, when that is a person's. `None` keeps
+    /// the default.
+    pub system: Option<String>,
 }
 
 impl SolveOptions {
@@ -78,7 +82,14 @@ impl SolveOptions {
             max_output_tokens: None,
             cancel: None,
             stream_idle: None,
+            system: None,
         }
+    }
+
+    /// The system prompt the run is under.
+    #[must_use]
+    pub fn system_prompt(&self) -> &str {
+        self.system.as_deref().unwrap_or(SYSTEM_PROMPT)
     }
 
     /// The run bounds sven enforces for one run.
@@ -189,6 +200,9 @@ pub struct Model {
     /// gone stale. A local model is silent through its prefill for as long
     /// as the prompt takes, so it carries a longer limit.
     pub stream_idle: Option<Duration>,
+    /// The system prompt this model answers under, when that is not the
+    /// default: a policy trained to be a person has that person's.
+    pub system: Option<String>,
 }
 
 impl Model {
@@ -199,7 +213,24 @@ impl Model {
             provider,
             identity: identity.into(),
             stream_idle: None,
+            system: None,
         }
+    }
+
+    /// This model, answering under `system` in place of the default prompt.
+    #[must_use]
+    pub fn with_system(mut self, system: impl Into<String>) -> Self {
+        self.system = Some(system.into());
+        self
+    }
+
+    /// The bounds of a solve by this model: `options`, under this model's
+    /// stream idle limit and system prompt.
+    #[must_use]
+    pub fn solving(&self, mut options: SolveOptions) -> SolveOptions {
+        options.stream_idle = self.stream_idle;
+        options.system.clone_from(&self.system);
+        options
     }
 
     /// This model, allowed `limit` of silence between two stream chunks.
@@ -276,7 +307,12 @@ pub async fn solve_prompted(
             offered_snapshot: offered.snapshot,
         });
     }
-    let engine = engine(environment, model, options.engine_config())?;
+    let engine = engine(
+        environment,
+        model,
+        options.engine_config(),
+        options.system_prompt(),
+    )?;
     let mut agent = engine.agent(SOLVER_MODE);
     let outcome = match agent.send_with(prompt, options.run_options()).await {
         Ok(outcome) => outcome,
@@ -316,10 +352,11 @@ pub(crate) fn engine(
     environment: &ResolvedEnvironment,
     model: Arc<dyn ModelProvider>,
     config: Config,
+    system: &str,
 ) -> Result<Engine, CallError> {
     let builder = Engine::builder()
         .config(config)
-        .model_provider(UnderSystemPrompt::wrap(model))
+        .model_provider(UnderSystemPrompt::wrap(model, system))
         .toolset(Toolset::none());
     match environment {
         ResolvedEnvironment::ClosedBook => builder.build(),

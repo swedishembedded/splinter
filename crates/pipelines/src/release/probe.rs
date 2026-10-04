@@ -320,7 +320,7 @@ pub(crate) fn answer_prompted(
     }
     let mut options = SolveOptions::new(DEFAULT_SOLVE_DEADLINE);
     options.cancel = Some(cancel.clone());
-    options.stream_idle = model.stream_idle;
+    let options = model.solving(options);
     let environment = ResolvedEnvironment::ClosedBook;
     let solution = match prompt {
         None => ctx.block_on(solve(task, &environment, model.provider.clone(), options))?,

@@ -14,31 +14,37 @@
 //! SDK applies an agent's role in place of that prompt to typed method
 //! calls only, not to a plain `send`. A solve is a plain `send`, and what the
 //! policy answers under must be what its training records show
-//! ([`SYSTEM_PROMPT`]). So the solving model is wrapped: every request it
-//! receives carries [`SYSTEM_PROMPT`] as its one system turn, first, with
+//! ([`SYSTEM_PROMPT`], or the person's it was trained to be). So the solving
+//! model is wrapped: every request it receives carries that prompt as its one
+//! system turn, first, with
 //! whatever system turns sven put in the conversation replaced and no
 //! dynamic suffix appended.
 
 use std::sync::Arc;
 
-use splinter_core::prompt::SYSTEM_PROMPT;
 use sven_sdk::model::{CompletionRequest, Message, ModelProvider, ResponseStream, Role};
 
 /// `inner`, sent every request under [`SYSTEM_PROMPT`].
-pub(crate) struct UnderSystemPrompt(Arc<dyn ModelProvider>);
+pub(crate) struct UnderSystemPrompt {
+    inner: Arc<dyn ModelProvider>,
+    system: String,
+}
 
 impl UnderSystemPrompt {
-    /// `inner`, wrapped.
-    pub(crate) fn wrap(inner: Arc<dyn ModelProvider>) -> Arc<dyn ModelProvider> {
-        Arc::new(Self(inner))
+    /// `inner`, wrapped to send every request under `system`.
+    pub(crate) fn wrap(inner: Arc<dyn ModelProvider>, system: &str) -> Arc<dyn ModelProvider> {
+        Arc::new(Self {
+            inner,
+            system: system.to_string(),
+        })
     }
 }
 
-/// `request` with [`SYSTEM_PROMPT`] as its one system turn, first, and no
-/// dynamic suffix.
-fn under_system_prompt(mut request: CompletionRequest) -> CompletionRequest {
+/// `request` with `system` as its one system turn, first, and no dynamic
+/// suffix.
+fn under_system_prompt(system: &str, mut request: CompletionRequest) -> CompletionRequest {
     request.messages.retain(|m| m.role != Role::System);
-    request.messages.insert(0, Message::system(SYSTEM_PROMPT));
+    request.messages.insert(0, Message::system(system));
     request.system_dynamic_suffix = None;
     request
 }
@@ -49,43 +55,45 @@ fn under_system_prompt(mut request: CompletionRequest) -> CompletionRequest {
 #[async_trait::async_trait]
 impl ModelProvider for UnderSystemPrompt {
     fn name(&self) -> &str {
-        self.0.name()
+        self.inner.name()
     }
 
     fn model_name(&self) -> &str {
-        self.0.model_name()
+        self.inner.model_name()
     }
 
     async fn complete(&self, request: CompletionRequest) -> anyhow::Result<ResponseStream> {
-        self.0.complete(under_system_prompt(request)).await
+        self.inner
+            .complete(under_system_prompt(&self.system, request))
+            .await
     }
 
     fn catalog_max_output_tokens(&self) -> Option<u32> {
-        self.0.catalog_max_output_tokens()
+        self.inner.catalog_max_output_tokens()
     }
 
     fn catalog_context_window(&self) -> Option<u32> {
-        self.0.catalog_context_window()
+        self.inner.catalog_context_window()
     }
 
     fn config_context_window(&self) -> Option<u32> {
-        self.0.config_context_window()
+        self.inner.config_context_window()
     }
 
     fn config_max_output_tokens(&self) -> Option<u32> {
-        self.0.config_max_output_tokens()
+        self.inner.config_max_output_tokens()
     }
 
     async fn probe_context_window(&self) -> Option<u32> {
-        self.0.probe_context_window().await
+        self.inner.probe_context_window().await
     }
 
     fn supports_images(&self) -> bool {
-        self.0.supports_images()
+        self.inner.supports_images()
     }
 
     fn supports_audio(&self) -> bool {
-        self.0.supports_audio()
+        self.inner.supports_audio()
     }
 }
 

@@ -71,7 +71,12 @@ pub async fn converse_prompted(
             offered_snapshot: offered.snapshot,
         });
     }
-    let engine = engine(environment, model, options.engine_config())?;
+    let engine = engine(
+        environment,
+        model,
+        options.engine_config(),
+        options.system_prompt(),
+    )?;
     let mut agent = engine.agent(SOLVER_MODE);
     let mut exchanges: Vec<Exchange> = Vec::new();
     let mut said = opening.to_string();

@@ -382,6 +382,32 @@ async fn every_request_runs_under_splinters_system_prompt() {
 }
 
 #[tokio::test]
+async fn a_solve_runs_under_the_system_prompt_it_is_given_in_place_of_the_default() {
+    // A policy trained to be a person answers under the prompt it was trained
+    // under, which is that person's, not the generic assistant's.
+    let model = Scripted::new(|_| text("42"));
+    let task = task(Environment::closed_book(), "What is six times seven?");
+    let mut given = options();
+    given.system = Some("You are a surveyor. Answer as one.".into());
+    solve(
+        &task,
+        &ResolvedEnvironment::ClosedBook,
+        model.clone(),
+        given,
+    )
+    .await
+    .unwrap();
+    let seen = model.seen.lock().unwrap();
+    let system: Vec<&str> = seen[0]
+        .messages
+        .iter()
+        .filter(|m| m.role == Role::System)
+        .map(|m| m.as_text().unwrap_or_default())
+        .collect();
+    assert_eq!(system, ["You are a surveyor. Answer as one."]);
+}
+
+#[tokio::test]
 async fn a_model_prompted_with_a_goal_has_it_appended_to_the_one_system_turn() {
     let model = Scripted::new(|_| text("42"));
     let prompted = with_system_addendum(model.clone(), "Your goal: think like a surveyor.");

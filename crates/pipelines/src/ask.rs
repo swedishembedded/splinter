@@ -182,8 +182,7 @@ fn answer_with(
         instruction,
         vec![],
     )?;
-    let mut options = SolveOptions::new(DEFAULT_ASK_DEADLINE);
-    options.stream_idle = model.stream_idle;
+    let options = model.solving(SolveOptions::new(DEFAULT_ASK_DEADLINE));
     let solution = ctx.block_on(solve(
         &task,
         &ResolvedEnvironment::ClosedBook,
