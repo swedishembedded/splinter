@@ -109,7 +109,83 @@ pub fn gate(drafted: &Drafted, letter: &Document) -> Result<(), String> {
     if repeats(&drafted.situation, &body) || repeats(&drafted.request, &body) {
         return Err("the situation or the request repeats the letter's own words: tell it in your own words, so the answer is not given away".to_string());
     }
-    Ok(())
+    match gives_away(&drafted.situation, &drafted.request, &drafted.key_points) {
+        Some(why) => Err(why),
+        None => Ok(()),
+    }
+}
+
+/// A key point is given away when this share of its content words is already
+/// in the situation or the request.
+const GIVEN_AWAY_SHARE: f64 = 0.5;
+/// Words shorter than this carry no content.
+const CONTENT_WORD_LEN: usize = 4;
+
+/// Verbs that say what Adams does, which is the letter's content.
+const ADAMS_ACTS: &[&str] = &[
+    "asks",
+    "requests",
+    "urges",
+    "writes",
+    "advises",
+    "recommends",
+    "proposes",
+    "argues",
+    "states",
+    "answers",
+    "replies",
+    "insists",
+    "suggests",
+    "warns",
+    "calls",
+    "encourages",
+    "declares",
+];
+
+/// Whether `text` says what Adams does: "Adams" followed by one of [`ADAMS_ACTS`].
+fn says_what_adams_does(text: &str) -> bool {
+    let words = words(text);
+    words
+        .windows(2)
+        .any(|pair| pair[0] == "adams" && ADAMS_ACTS.contains(&pair[1].as_str()))
+}
+
+/// The share of `of`'s content words found among `given`.
+fn share_present(of: &str, given: &std::collections::HashSet<String>) -> f64 {
+    let content: Vec<String> = words(of)
+        .into_iter()
+        .filter(|w| w.chars().count() >= CONTENT_WORD_LEN)
+        .collect();
+    if content.is_empty() {
+        return 0.0;
+    }
+    content.iter().filter(|w| given.contains(*w)).count() as f64 / content.len() as f64
+}
+
+/// Why the situation and the request hand over the answer, if they do: they
+/// say what Adams does, or already state one of the key points.
+fn gives_away(situation: &str, request: &str, points: &[KeyPoint]) -> Option<String> {
+    if says_what_adams_does(situation) || says_what_adams_does(request) {
+        return Some("the situation or the request says what Adams does or asks: put to him only what he was facing and what was asked of him, so the answer is not given away".to_string());
+    }
+    let given: std::collections::HashSet<String> = words(&format!("{situation} {request}"))
+        .into_iter()
+        .collect();
+    points.iter().find_map(|p| {
+        let share = share_present(&p.quote, &given).max(share_present(&p.point, &given));
+        (share >= GIVEN_AWAY_SHARE).then(|| {
+            format!(
+                "the situation or the request already says {:?}: it gives away what the letter does, so leave it for the reply",
+                p.point
+            )
+        })
+    })
+}
+
+/// Why a finished briefing hands over its answer, if it does.
+#[must_use]
+pub fn leaks(briefing: &Briefing) -> Option<String> {
+    gives_away(&briefing.situation, &briefing.request, &briefing.key_points)
 }
 
 /// How the student is asked: the situation and the request, nothing else.
@@ -191,6 +267,7 @@ pub fn read_briefings(path: &std::path::Path) -> anyhow::Result<Vec<Briefing>> {
     Ok(read_lines::<BriefingResult>(path)?
         .into_iter()
         .filter_map(|r| r.briefing)
+        .filter(|b| leaks(b).is_none())
         .collect())
 }
 
@@ -212,8 +289,9 @@ pub fn brief_all(
         .iter()
         .filter(|l| {
             let mine = existing.iter().filter(|r| r.doc_id == l.id);
-            !mine.clone().any(|r| r.error.is_none())
-                && mine.filter(|r| r.error.is_some()).count() < MAX_BRIEF_ATTEMPTS
+            !mine.clone().any(|r| {
+                r.error.is_none() && r.briefing.as_ref().is_some_and(|b| leaks(b).is_none())
+            }) && mine.filter(|r| r.error.is_some()).count() < MAX_BRIEF_ATTEMPTS
         })
         .collect();
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];

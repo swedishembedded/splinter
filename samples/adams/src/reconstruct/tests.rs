@@ -77,6 +77,99 @@ fn a_situation_too_thin_to_answer_is_refused() {
 }
 
 #[test]
+fn a_key_point_already_stated_in_the_situation_or_the_request_gives_the_answer_away() {
+    let mut d = good();
+    d.request =
+        "Advise your correspondent whether the towns ought to wait upon the ministry or act."
+            .into();
+    let why = gate(&d, &letter()).unwrap_err();
+    assert!(why.contains("gives away"), "{why}");
+}
+
+#[test]
+fn what_the_situation_says_he_asks_or_argues_is_the_letters_content_and_is_refused() {
+    for line in [
+        "Adams asks the recipient to use his access to the ministers.",
+        "Adams urges the towns to act together.",
+        "Adams requests that the recipient recognise the loyalty of the colonists.",
+    ] {
+        let mut d = good();
+        d.request = format!("{line} {}", d.request);
+        assert!(
+            gate(&d, &letter()).unwrap_err().contains("what Adams"),
+            "{line}"
+        );
+    }
+    let mut d = good();
+    d.request = "A correspondent in Plymouth asks Adams how the towns should proceed.".into();
+    assert_eq!(
+        gate(&d, &letter()),
+        Ok(()),
+        "what is put to him is the stimulus, and allowed"
+    );
+}
+
+#[test]
+fn a_finished_briefing_that_leaks_is_found_and_one_that_does_not_is_not() {
+    let clean = Briefing {
+        id: "r".into(),
+        doc_id: "l1".into(),
+        situation: good().situation,
+        request: good().request,
+        key_points: good().key_points,
+    };
+    assert_eq!(leaks(&clean), None);
+    let mut leaky = clean.clone();
+    leaky.request = "Adams advises the towns to choose a committee to write to the rest.".into();
+    assert!(leaks(&leaky).is_some());
+}
+
+#[test]
+fn a_briefing_made_before_the_gate_that_leaks_is_briefed_again_and_a_clean_one_is_kept() {
+    let letters = [letter()];
+    let refs: Vec<&Document> = letters.iter().collect();
+    let path = out();
+    let mut leaky = Briefing {
+        id: "recon-old".into(),
+        doc_id: "l1".into(),
+        situation: good().situation,
+        request: "Adams advises the towns to choose a committee to write to the rest.".into(),
+        key_points: good().key_points,
+    };
+    std::fs::write(
+        &path,
+        format!(
+            "{}\n",
+            serde_json::to_string(&BriefingResult {
+                doc_id: "l1".into(),
+                briefing: Some(leaky.clone()),
+                error: None
+            })
+            .unwrap()
+        ),
+    )
+    .unwrap();
+    assert!(
+        read_briefings(&path).unwrap().is_empty(),
+        "a leaky briefing is not read as a briefing"
+    );
+    let good_json = serde_json::to_string(&good()).unwrap();
+    let (h, _) = helper(&[&good_json]);
+    assert_eq!(
+        brief_all(&h, &refs, &path, None).unwrap(),
+        1,
+        "it is briefed again"
+    );
+    assert_eq!(read_briefings(&path).unwrap().len(), 1);
+    leaky.request = good().request;
+    assert_eq!(
+        brief_all(&h, &refs, &path, None).unwrap(),
+        0,
+        "a clean briefing is not briefed again"
+    );
+}
+
+#[test]
 fn the_student_is_shown_the_situation_and_the_request_and_never_the_rubric() {
     let b = Briefing {
         id: "recon-1".into(),
