@@ -62,11 +62,19 @@ The system message is the mode, and it is part of what the adapter is trained an
 | Source-grounded application | `respond::SYSTEM` | A present-day situation, the facts, and passages from his papers with their document ids; it must quote only those. |
 | Internalized transfer | `respond::SYSTEM` | The same situation and facts with no passages: what it has learned. A quotation here is a fabrication by definition. |
 
+## Decisions
+
+- The student is asked with its reasoning off: the prompt ends in an empty, closed think block, and every training answer starts with the same block, so what is trained is what is asked (a mismatch here made runs a1 and a2t uninterpretable). A reasoning-on base is one of the baselines.
+- Retrieval mode is how the model is meant to be used; internalized mode is a stress test of what a small adapter can hold. Teaching it his letters word for word is not attempted.
+- Frozen files are never rewritten: a changed benchmark goes under a new name.
+- A gain counts only above the fixed template, the base with thinking on and with worked examples, and with an interval over the questions that excludes zero.
+
 ## What is not built
 
-Reinforcement training has no result: the task family and reward are built and
-the loop runs, but too slowly here to teach the student anything within a
-session. Also still to do: a modern-fact researcher separate from the persona,
+Reinforcement training (GRPO) has no result and is replaced by rejection-sampling
+fine-tuning and on-policy preference pairs from the same verifier: the task family
+and reward are built and the loop runs, but too slowly here to teach the student
+anything within a session. Also still to do: a modern-fact researcher separate from the persona,
 a verifier model, a judge for anything the rules cannot grade beyond the
 reconstruction benchmark's, and the other primary collections (the manuscript
 papers, committee records, Founders Online, the delegates' letters). The
@@ -92,22 +100,49 @@ splinter-adams report --before RUN/base-exam.jsonl --after RUN/tuned-exam.jsonl
 
 The helper stages need a model served by `brain serve` and its key in
 `BRAIN_API_KEY`; they resume where they stopped and record, rather than hide, a
-bundle or a principle the helper failed on:
+bundle or a principle the helper failed on. The order that has the fewest
+surprises:
 
 ```bash
 splinter-adams principles --resources RESOURCES --model HELPER [--url http://127.0.0.1:8788/v1] [--limit N]
-splinter-adams transfer   --resources RESOURCES --model HELPER [--limit N]
+splinter-adams transfer   --resources RESOURCES --model HELPER --scenarios-per-principle 3 [--limit N]
+splinter-adams briefings  --resources RESOURCES --model HELPER --of exam      # then --of train
 splinter-adams build-data --resources RESOURCES
-splinter-adams train      --resources RESOURCES --base BASE --attempt RUN/sft2 \
-    --dataset RESOURCES/datasets/sft-transfer.jsonl --replay RESOURCES/tasks/sft.jsonl --steps 500 --rank 16 --bf16
-splinter-adams train-dpo  --resources RESOURCES --base BASE --attempt RUN/dpo \
-    --continue-from RUN/sft2/adapter.safetensors --steps 200
-splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-base.jsonl --base BASE
-splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
-splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-tuned-plain.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors --framing plain
+splinter-adams pin --file RESOURCES/datasets/benchmark.jsonl                   # once, before any arm is scored
+splinter-adams constant-baseline --resources RESOURCES --out RUN/constant.jsonl
+```
+
+Train on the transfer records and, when there are briefings of his training
+letters, on his real letters as a replay at a fixed share; do not replay the
+recall questions, which taught run a1 to answer every question the same way:
+
+```bash
+splinter-adams train --resources RESOURCES --base BASE --attempt RUN/sft \
+    --dataset RESOURCES/datasets/sft-transfer.jsonl \
+    --replay RESOURCES/datasets/sft-reconstruction.jsonl --replay-share 0.25 \
+    --steps 100 --rank 16 --bf16 --grad-accum 8
+splinter-adams transfer-exam --resources RESOURCES --base BASE --out RUN/base.jsonl
+splinter-adams transfer-exam --resources RESOURCES --base BASE --out RUN/base-thinking.jsonl --decoding thinking --max-tokens 3072
+splinter-adams transfer-exam --resources RESOURCES --base BASE --out RUN/base-fewshot.jsonl --few-shot 2
+splinter-adams transfer-exam --resources RESOURCES --base BASE --out RUN/tuned.jsonl --adapter RUN/sft/adapter.safetensors
+splinter-adams transfer-exam --resources RESOURCES --base BASE --out RUN/tuned-plain.jsonl --adapter RUN/sft/adapter.safetensors --framing plain
+splinter-adams report --before RUN/base.jsonl --after RUN/tuned.jsonl
+```
+
+Then the student's own answers, which are the data that matches what it says:
+
+```bash
+splinter-adams transfer-exam --resources RESOURCES --base BASE --adapter RUN/sft/adapter.safetensors \
+    --benchmark RESOURCES/datasets/train-questions.jsonl --samples 4 --decoding sample:0.7 --out RUN/samples.jsonl
+splinter-adams build-onpolicy --resources RESOURCES --samples RUN/samples.jsonl
+splinter-adams train --resources RESOURCES --base BASE --attempt RUN/rft \
+    --dataset RESOURCES/datasets/sft-rft.jsonl --continue-from RUN/sft/adapter.safetensors --steps 50 --bf16 --grad-accum 8
+splinter-adams train-dpo --resources RESOURCES --base BASE --attempt RUN/dpo \
+    --pairs RESOURCES/datasets/preference-onpolicy.jsonl --continue-from RUN/rft/adapter.safetensors --steps 100
 splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anchor-base.jsonl --base BASE
-splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anchor-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
-splinter-adams report --before RUN/anchor-base.jsonl --after RUN/anchor-tuned.jsonl
+splinter-adams anchor-exam --anchor samples/adams/anchor-skills.jsonl --out RUN/skills-base.jsonl --base BASE --decoding thinking --max-tokens 1500
+splinter-adams anchor-exam --anchor samples/adams/anchor-skills.jsonl --out RUN/skills-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors --decoding thinking --max-tokens 1500
+splinter-adams report --before RUN/skills-base.jsonl --after RUN/skills-tuned.jsonl
 ```
 
 `splinter-adams identify --author LINE --year YEAR` shows what the namesake
