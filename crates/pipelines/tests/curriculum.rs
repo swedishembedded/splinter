@@ -600,6 +600,26 @@ fn candidate_of(
         }],
         kind: kind.into(),
         strength,
+        authored: false,
+    }
+}
+
+#[test]
+fn for_one_message_the_writers_own_words_are_kept_whatever_the_strength_or_id() {
+    use Strength::{Formal, Judged};
+    let message = "How do I keep a habit of study when my mornings vanish?";
+    let teachers = candidate_of(1, message, "study", "advise", Formal);
+    let writers = Candidate {
+        authored: true,
+        ..candidate_of(2, message, "study", "advise", Judged)
+    };
+    for pool in [
+        vec![teachers.clone(), writers.clone()],
+        vec![writers.clone(), teachers.clone()],
+    ] {
+        let kept = select(pool, &Quotas::default());
+        assert_eq!(kept.selected, std::slice::from_ref(&writers.id));
+        assert_eq!(kept.duplicates, 1);
     }
 }
 

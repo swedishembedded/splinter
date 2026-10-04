@@ -100,6 +100,9 @@ pub struct Candidate {
     pub kind: String,
     /// The strength of the verdicts that decided it pass.
     pub strength: Strength,
+    /// Whether its answer is the writer's own words, put forward by the
+    /// author stage: it outranks any other answer to the same message.
+    pub authored: bool,
 }
 
 /// What a quota did to the pool.
@@ -162,7 +165,14 @@ pub fn select(mut candidates: Vec<Candidate>, quotas: &Quotas) -> Selection {
         candidates: candidates.len(),
         ..Selection::default()
     };
-    candidates.sort_by(|a, b| b.strength.cmp(&a.strength).then_with(|| a.id.cmp(&b.id)));
+    // The writer's own words first, then the stronger verdicts, then a stable
+    // order: for one message the first of them is kept and the rest repeat it.
+    candidates.sort_by(|a, b| {
+        b.authored
+            .cmp(&a.authored)
+            .then_with(|| b.strength.cmp(&a.strength))
+            .then_with(|| a.id.cmp(&b.id))
+    });
     let mut seen = Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP);
     let mut pool = Vec::with_capacity(candidates.len());
     for candidate in candidates {
@@ -263,6 +273,7 @@ pub fn select_training_set(
             kind: experience.task.kind.clone(),
             instruction: experience.instruction,
             strength: decision.strength,
+            authored: experience.provenance.solver == crate::author::AUTHOR_SOURCE,
             id,
         });
     }

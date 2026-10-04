@@ -435,9 +435,9 @@ fn author_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) 
         }
     };
     if let Some(set) = &authored.experience_set {
-        // Ahead of the teacher's answers: for one message the writer's own
-        // words are kept and a teacher's paraphrase of them is the duplicate.
-        st.sets.insert(0, set.clone());
+        // Selection keeps the writer's own words for a message a teacher's
+        // paraphrase of them also answers.
+        st.sets.push(set.clone());
         // A fit judge's verdict is the only one these experiences carry.
         st.min_strength = Strength::Judged;
     }
