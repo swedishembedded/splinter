@@ -106,15 +106,18 @@ pub enum VerifierKind {
     /// Every number, name and quotation the answer states is in the task's
     /// source text, its instruction or what the other speaker said.
     Grounding,
+    /// The reply speaks in the person's own voice, and not about the
+    /// material the teacher was shown, which the student never sees.
+    Speech,
 }
 
 impl VerifierKind {
     /// Whether a pass of this verifier establishes that an answer is right.
-    /// Grounding only refutes: an answer that invents nothing may still be
-    /// vague, wrong or beside the point.
+    /// Grounding and speech only refute: an answer that invents nothing and
+    /// names no document may still be vague, wrong or beside the point.
     #[must_use]
     pub fn establishes(self) -> bool {
-        !matches!(self, Self::Grounding)
+        !matches!(self, Self::Grounding | Self::Speech)
     }
 }
 
@@ -359,7 +362,8 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
 
 fn builtin_kinds() -> Vec<TaskKind> {
     use VerifierKind::{
-        Consistency, Executable, Formal, Grounding, Judged, MutationValidated, Quotation, Stated,
+        Consistency, Executable, Formal, Grounding, Judged, MutationValidated, Quotation, Speech,
+        Stated,
     };
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
@@ -408,7 +412,7 @@ fn builtin_kinds() -> Vec<TaskKind> {
             environment: SolverEnvironment::ClosedBook,
             runtime: None,
             requires: Vec::new(),
-            verifiers: vec![Grounding, Judged],
+            verifiers: vec![Grounding, Speech, Judged],
             min_sections: 1,
             focus: Some(Focus::Judgment),
             reference_verbatim: true,

@@ -11,7 +11,7 @@
 //! The teacher is shown the task's grounding material and answers as the
 //! writer; the other speaker, played by a model that is never shown the
 //! material, follows up on what the writer said. Most dialogues stay on what
-//! the exchange has given. One in four ends by asking, on its last turn, for
+//! the exchange has given. One in eight ends by asking, on its last turn, for
 //! a specific the exchange has not given - a name, a date, a figure or an
 //! event - so that the student also sees what declining to invent looks
 //! like. Which dialogues is a stable function of the task's address.
@@ -34,8 +34,10 @@ use splinter_core::digest::Digest;
 pub const DIALOGUE_TURNS: usize = 3;
 
 /// One dialogue in this many ends asking for a specific the exchange has
-/// not given.
-const PROBE_ONE_IN: u64 = 4;
+/// not given. Each is a lesson in declining to invent, and a student shown
+/// many learns to decline: it is one in eight, so the rest teach what the
+/// writer does say.
+const PROBE_ONE_IN: u64 = 8;
 
 /// The longest message the other speaker may write, in characters.
 const MAX_MESSAGE_CHARS: usize = 600;
@@ -46,7 +48,9 @@ const MESSAGE_MAX_OUTPUT_TOKENS: u64 = 512;
 /// What the other speaker is, in its prompts; a dialogue's training data
 /// never holds it.
 pub const STUDENT_ROLE: &str = "You play someone talking with a writer whose words you have never \
-read: curious, concrete and brief. You write only your next message to them.";
+read: curious, concrete and brief. You never restate what the writer said or ask them to confirm \
+it; you bring something new - your own circumstance, a difficulty with what they said, a case it \
+does not seem to cover. You write only your next message to them.";
 
 /// The rules the teacher answers under, ahead of the opening message.
 const TEACHER_RULES: &str = "Answer as the writer, in the first person, in the writer's own \
@@ -95,7 +99,7 @@ struct Turn<'a> {
 
 const TASK: &str = "Write your next message to the writer. When the brief has an `ask`, do \
 what it says; otherwise write a natural follow-up to what the writer just said: one concrete \
-question or reaction, in your own words.";
+question, objection or case of your own, never a restatement of what they said.";
 
 const PROBE: &str = "Ask the writer for one specific the conversation has not given - a name, a \
 date, a figure or an event that bears on what they said - as someone curious would.";

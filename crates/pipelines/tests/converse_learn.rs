@@ -284,7 +284,7 @@ fn a_dialogue_that_states_a_year_the_letter_does_not_hold_teaches_nothing() {
 }
 
 #[test]
-fn one_dialogue_in_four_ends_by_asking_beyond_the_letter_and_the_choice_is_stable() {
+fn one_dialogue_in_eight_ends_by_asking_beyond_the_letter_and_the_choice_is_stable() {
     let digests: Vec<_> = (0..400u32)
         .map(|n| splinter_core::digest::Digest::of(&n.to_le_bytes()))
         .collect();
@@ -292,7 +292,7 @@ fn one_dialogue_in_four_ends_by_asking_beyond_the_letter_and_the_choice_is_stabl
         .iter()
         .filter(|d| probes_beyond_the_source(d))
         .count();
-    assert!((60..=140).contains(&probing), "{probing} of 400");
+    assert!((25..=80).contains(&probing), "{probing} of 400");
     assert!(digests
         .iter()
         .all(|d| probes_beyond_the_source(d) == probes_beyond_the_source(d)));
@@ -365,4 +365,24 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
     );
     // The teacher that wrote the dialogue was not asked as the person.
     assert!(!text.contains(STUDENT_ROLE));
+}
+
+#[test]
+fn a_dialogue_whose_reply_talks_about_the_material_teaches_nothing() {
+    // Grounded, and a judge passes it, but the student is never shown the
+    // material: a reply that speaks of it teaches the student to pretend to
+    // a document.
+    let (report, _scratch) = run(
+        "converse-learn-document-talk",
+        "According to the material, the pen fixes what the memory lets slip.",
+    );
+    let taught = report.teach.as_ref().unwrap();
+    assert_eq!(
+        (taught.verify.passed, taught.verify.failed),
+        (1, 1),
+        "{taught:#?}"
+    );
+    let dataset = report.dataset.as_ref().unwrap();
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    assert!(!text.contains("According to the material"));
 }

@@ -45,6 +45,7 @@ pub mod mutation;
 pub mod names;
 pub mod normalise;
 pub mod quotation;
+pub mod speech;
 
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};

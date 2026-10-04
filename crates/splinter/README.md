@@ -197,12 +197,16 @@ opening message of someone speaking to the writer, with a passage of the
 writer's text as its reference. A teacher shown the passage answers as the
 writer, and a model that is never shown it plays the other speaker, following
 up for up to three exchanges; the training record is the whole conversation
-with every reply of the writer supervised and no passage in it. A dialogue
-is graded by what it states, with no model involved: every number, name and
+with every reply of the writer supervised and no passage in it. Two code
+checks refute a dialogue, whatever else is said of it: every number, name and
 quotation in the replies must be in the writer's text or in what the other
-speaker said, and a dialogue with one that is not teaches nothing. One
-dialogue in four ends by asking for a specific the exchange has not given, so
-that the student also sees the writer decline to invent one.
+speaker said, and no reply may talk about "the material", "the passage" or "the
+speaker", which the student is never shown. Neither establishes that a
+dialogue is good: a judge other than the teacher does, and a dialogue it does
+not pass teaches nothing. The other speaker never restates what the writer said
+or asks it to confirm it; it brings its own case or objection. One dialogue in
+eight ends by asking for a specific the exchange has not given, so that the
+student also sees the writer decline to invent one.
 
 Task generation is bounded by the budget and spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,

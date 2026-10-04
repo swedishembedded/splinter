@@ -38,6 +38,7 @@ use splinter_eval::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
 use splinter_eval::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_eval::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
+use splinter_eval::verifiers::speech::SpeechVerifier;
 use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_store::experiences::SetId;
@@ -82,6 +83,12 @@ pub const GROUNDING_VERSION: &str = "1";
 /// the check cannot tell a form of address or a common name from a person,
 /// and one stray name is not the invented specifics it exists to refuse.
 pub const GROUNDING_MAX_NAMES: usize = 1;
+
+/// Who the speech verdicts name as their producer.
+pub const SPEECH_PRODUCER: &str = "splinter-lab/speech";
+
+/// The version of the speech check; a changed check carries a new one.
+pub const SPEECH_VERSION: &str = "1";
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -351,6 +358,10 @@ pub(crate) fn verifiers_for(
                 },
             ))),
             VerifierKind::Grounding => verifiers.push(Box::new(grounding_verifier(ctx))),
+            VerifierKind::Speech => verifiers.push(Box::new(SpeechVerifier::new(Producer {
+                name: SPEECH_PRODUCER.into(),
+                version: SPEECH_VERSION.into(),
+            }))),
             VerifierKind::Judged => {
                 if let Some(judge) = judge {
                     verifiers.push(judge.verifier(ctx)?);
