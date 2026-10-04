@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use splinter_agent::converse::converse_prompted;
+use splinter_agent::converse::{converse_prompted, Dialogue};
 use splinter_agent::solve::{
     open_book_prompt, solve_prompted, Model, Solution, SolveError, SolveOptions,
 };
@@ -380,12 +380,14 @@ async fn attempt_once(
         ) {
             Ok(student) => {
                 converse_prompted(
-                    task,
-                    prompt,
-                    environment,
+                    &Dialogue {
+                        task,
+                        opening: prompt,
+                        environment,
+                        interlocutor: &student,
+                        turns: DIALOGUE_TURNS,
+                    },
                     model.provider.clone(),
-                    &student,
-                    DIALOGUE_TURNS,
                     options,
                 )
                 .await

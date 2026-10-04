@@ -21,7 +21,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use splinter_agent::converse::{converse_prompted, Exchange, Interlocutor};
+use splinter_agent::converse::{converse_prompted, Dialogue, Exchange, Interlocutor};
 use splinter_agent::solve::{open_book_prompt, SolveOptions};
 use splinter_core::experience::{Environment, Task};
 use splinter_sandbox::ResolvedEnvironment;
@@ -101,12 +101,14 @@ async fn run(
     turns: usize,
 ) -> splinter_agent::solve::Solution {
     converse_prompted(
-        &task(),
-        &open_book_prompt(OPENING, &[MATERIAL.to_string()]),
-        &ResolvedEnvironment::ClosedBook,
+        &Dialogue {
+            task: &task(),
+            opening: &open_book_prompt(OPENING, &[MATERIAL.to_string()]),
+            environment: &ResolvedEnvironment::ClosedBook,
+            interlocutor: student,
+            turns,
+        },
         teacher,
-        student,
-        turns,
         SolveOptions::new(Duration::from_secs(60)),
     )
     .await

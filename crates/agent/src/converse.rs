@@ -50,18 +50,36 @@ pub trait Interlocutor: Send + Sync {
 /// Separates the replies in a dialogue's final output.
 pub const REPLY_SEPARATOR: &str = "\n\n";
 
-/// Solves `task` as a dialogue of at most `turns` exchanges: `opening` is
-/// the teacher's first prompt, and `interlocutor` supplies the rest; see the
+/// The dialogue to hold: the task it solves, how it opens, who the other
+/// speaker is and how long it may run.
+#[derive(Clone, Copy)]
+pub struct Dialogue<'a> {
+    /// The task solved.
+    pub task: &'a Task,
+    /// The teacher's first prompt.
+    pub opening: &'a str,
+    /// Where the teacher works.
+    pub environment: &'a ResolvedEnvironment,
+    /// The other speaker, who supplies every message after the first.
+    pub interlocutor: &'a dyn Interlocutor,
+    /// The most exchanges.
+    pub turns: usize,
+}
+
+/// Solves `dialogue.task` as a dialogue with the teacher `model`; see the
 /// module documentation.
 pub async fn converse_prompted(
-    task: &Task,
-    opening: &str,
-    environment: &ResolvedEnvironment,
+    dialogue: &Dialogue<'_>,
     model: Arc<dyn ModelProvider>,
-    interlocutor: &dyn Interlocutor,
-    turns: usize,
     options: SolveOptions,
 ) -> Result<Solution, SolveError> {
+    let Dialogue {
+        task,
+        opening,
+        environment,
+        interlocutor,
+        turns,
+    } = *dialogue;
     let offered = environment.record()?;
     if offered != task.environment {
         return Err(SolveError::EnvironmentMismatch {
