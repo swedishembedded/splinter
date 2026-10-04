@@ -168,6 +168,11 @@ pub fn served_model(
 /// (`chat_template_kwargs.enable_thinking: false`), as an in-process
 /// generation does ([`crate::local`]), so a served answer and an
 /// in-process one are produced from the same prompt.
+///
+/// A typed call is not sent as a constrained `response_format`: the server
+/// refuses a request field it cannot honor, and treats an explicit null as
+/// absent. The schema stays in the prompt and the reply is parsed and, when it
+/// is not the shape, sent back for correction.
 fn served_config(
     spec: &str,
     base_url: &str,
@@ -185,7 +190,8 @@ fn served_config(
         config.model.temperature = temperature;
     }
     config.model.driver_options = serde_json::json!({
-        "chat_template_kwargs": { "enable_thinking": false }
+        "chat_template_kwargs": { "enable_thinking": false },
+        "response_format": null
     });
     Ok(config)
 }
@@ -280,6 +286,17 @@ mod tests {
             serde_json::json!(false)
         );
         assert_eq!(config.model.temperature, Some(0.0));
+    }
+
+    #[test]
+    fn a_served_model_is_never_sent_a_structured_output_request_its_server_would_refuse() {
+        // brain's server refuses `response_format` rather than ignore it; an explicit
+        // null is "absent" to it, and keeps a typed call on its prompt-described schema.
+        let config = served_config("openai/m", "http://127.0.0.1:1/v1", "k", None).unwrap();
+        let options = config.model.driver_options.as_object().unwrap();
+        assert!(options
+            .get("response_format")
+            .is_some_and(serde_json::Value::is_null));
     }
 
     use super::*;
