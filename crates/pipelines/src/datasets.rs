@@ -29,6 +29,8 @@ use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
 use crate::grouping::assign_groups;
+use crate::raft::{with_passages, PassageShare};
+use crate::retrieval::Retrieval as PassageSearch;
 use crate::variants::refuse_variants;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
@@ -244,8 +246,27 @@ impl From<StoredDataset> for Built {
     }
 }
 
+/// Passages to put in the prompt of a share of the records: what is retrieved
+/// from, and how much of the dataset gets them ([`crate::raft`]).
+pub struct Passages<'a> {
+    /// The passages of the sources, searched.
+    pub retrieval: &'a PassageSearch<'a>,
+    /// Which records get them, and how many hold the evidence.
+    pub share: PassageShare,
+}
+
 /// Projects `request.sets` through `request.view` and stores the dataset.
 pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, OrchestratorError> {
+    build_with(ctx, request, None)
+}
+
+/// [`build`], a share of the records given retrieved passages in their
+/// prompt when `passages` says so.
+pub fn build_with(
+    ctx: &Context,
+    request: &BuildRequest,
+    passages: Option<&Passages<'_>>,
+) -> Result<Built, OrchestratorError> {
     let view = request.view;
     if request.strip.is_some() && !view.takes_strip() {
         return Err(OrchestratorError::Refused(format!(
@@ -306,6 +327,9 @@ pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, Orchestrato
     }?;
     if let Some(prompt) = &request.system_prompt {
         projection = projection.with_system_prompt(prompt);
+    }
+    if let Some(passages) = passages {
+        projection = with_passages(ctx, projection, &passages.share, passages.retrieval)?;
     }
     assign_groups(ctx, &corpus, &mut projection)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;

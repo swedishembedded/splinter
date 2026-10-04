@@ -65,8 +65,8 @@ pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Run
 // The commands.
 pub use splinter_pipelines::{
     ask, budget, critique, curriculum, datasets, dialogue, eval, exam, experiences, judge, learn,
-    lineage, plan, release, rerank, retrieval, router, solving, sources, state, status, tasks,
-    train, variants, verify,
+    lineage, plan, raft, release, rerank, retrieval, router, solving, sources, state, status,
+    tasks, train, variants, verify,
 };
 
 // The layers, each under one name.

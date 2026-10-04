@@ -21,6 +21,7 @@ use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::calibrate_judge;
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
+use splinter_sdk::raft::{PassageShare, DEFAULT_EVIDENCE_SHARE};
 use splinter_sdk::release::{self, ReleaseRequest};
 use splinter_sdk::rerank::ModelReranker;
 use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
@@ -620,6 +621,10 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         sources: args.sources,
         goal: args.goal,
         persona: args.persona,
+        passages: args.with_passages.map(|records| PassageShare {
+            records,
+            with_evidence: DEFAULT_EVIDENCE_SHARE,
+        }),
         kinds: args.kinds,
         budget: args.budget,
         dry_run: args.dry_run,

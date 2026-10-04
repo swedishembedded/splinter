@@ -103,6 +103,19 @@ impl<'a> Retrieval<'a> {
     }
 }
 
+/// Whether `passage` overlaps a span `task` is grounded in: it holds, or is
+/// part of, what the task was written from.
+#[must_use]
+pub fn overlaps_evidence(passage: &Passage, task: &Task) -> bool {
+    passage.content.as_ref().is_some_and(|content| {
+        task.evidence.iter().any(|span| {
+            &span.source == content
+                && (passage.range.start as u64) < span.end
+                && span.start < passage.range.end as u64
+        })
+    })
+}
+
 impl Retrieved<'_> {
     /// `question` with the passages shown before it, each under its part and
     /// section.
@@ -120,14 +133,6 @@ impl Retrieved<'_> {
     /// the retriever found where the task was written from.
     #[must_use]
     pub fn finds_the_evidence_of(&self, task: &Task) -> bool {
-        self.passages.iter().any(|p| {
-            p.content.as_ref().is_some_and(|content| {
-                task.evidence.iter().any(|span| {
-                    &span.source == content
-                        && (p.range.start as u64) < span.end
-                        && span.start < p.range.end as u64
-                })
-            })
-        })
+        self.passages.iter().any(|p| overlaps_evidence(p, task))
     }
 }

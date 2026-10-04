@@ -510,3 +510,14 @@ fn learn_names_the_model_that_plans() {
     };
     assert_eq!(named.planner, Some("local:./big".parse().unwrap()));
 }
+
+#[test]
+fn passages_are_a_share_in_zero_to_one_not_zero() {
+    let Command::Learn(learn) = command(&["learn", "docs", "--with-passages", "0.4"]) else {
+        panic!("learn");
+    };
+    assert_eq!(learn.with_passages, Some(0.4));
+    assert!(parse(&["learn", "docs", "--with-passages", "0"]).is_err());
+    assert!(parse(&["learn", "docs", "--with-passages", "1.5"]).is_err());
+    assert!(parse(&["learn", "docs", "--with-passages", "most"]).is_err());
+}

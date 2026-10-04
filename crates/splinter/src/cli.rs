@@ -150,6 +150,17 @@ fn strip(text: &str) -> Result<Strip, String> {
     parse_strip(text).map_err(|e| e.to_string())
 }
 
+fn share(text: &str) -> Result<f64, String> {
+    let value: f64 = text
+        .parse()
+        .map_err(|_| format!("{text:?} is not a number"))?;
+    if value > 0.0 && value <= 1.0 {
+        Ok(value)
+    } else {
+        Err(format!("{value} is not a share in (0, 1]"))
+    }
+}
+
 fn strength(text: &str) -> Result<Strength, String> {
     parse_strength(text).map_err(|e| e.to_string())
 }
@@ -208,6 +219,13 @@ pub struct LearnArgs {
     /// --kinds are named (default: the generator).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub planner: Option<ModelRef>,
+    /// Give this share of the training records retrieved passages of the
+    /// sources in their prompt, four to a record and the passage the task was
+    /// written from among them for four in five, so the policy learns to use
+    /// context where it holds the answer and to answer without it where it
+    /// does not. Needs the embedding model.
+    #[arg(long, value_name = "SHARE", value_parser = share)]
+    pub with_passages: Option<f64>,
     /// Who the policy is to become, when it is to think like a person: its
     /// training records open with a system prompt saying so, and it is asked
     /// under that prompt afterwards (default: the persona the plan finds in

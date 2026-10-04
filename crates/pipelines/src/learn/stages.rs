@@ -37,10 +37,12 @@ use crate::curriculum::frontier::{select_frontier, PassAtK};
 use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
-use crate::datasets::{build, BuildRequest, ViewName, DEFAULT_MIN_STRENGTH};
+use crate::datasets::{build_with, BuildRequest, Passages, ViewName, DEFAULT_MIN_STRENGTH};
 use crate::exam::{examine, Exam, ExamineRequest};
 use crate::plan::plan as make_plan;
+use crate::raft::PassageShare;
 use crate::release::{release, ReleaseRequest};
+use crate::retrieval::{library_of, Retrieval};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
 use crate::tasks::{generate, Generation};
@@ -58,6 +60,8 @@ pub(super) struct Learn<'a> {
     pub(super) goal: Option<&'a str>,
     /// Who the policy becomes, as the request names it.
     pub(super) persona: Option<&'a str>,
+    /// The share of training records given retrieved passages, when any.
+    pub(super) passages: Option<PassageShare>,
     pub(super) deadline: Option<Instant>,
     pub(super) trainer: &'a dyn Trainer,
     pub(super) policy: ModelRef,
@@ -530,17 +534,38 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     let Some(selected) = &st.report.select else {
         unreachable!("the dataset stage follows the select stage")
     };
-    let built = match build(
-        ctx,
-        &BuildRequest {
-            sets: vec![selected.experience_set.clone()],
-            view: ViewName::SftFinal,
-            strip: None,
-            min_strength: Some(st.min_strength),
-            system_prompt: st.system_prompt(),
-            export_only: false,
-        },
-    ) {
+    let request = BuildRequest {
+        sets: vec![selected.experience_set.clone()],
+        view: ViewName::SftFinal,
+        strip: None,
+        min_strength: Some(st.min_strength),
+        system_prompt: st.system_prompt(),
+        export_only: false,
+    };
+    // Passages of the run's own sources, when a share of the records is to
+    // carry them: the embedding model is loaded for it and the index kept.
+    let embedder;
+    let library;
+    let retrieval;
+    let passages = match st.learn.passages {
+        Some(share) => {
+            embedder = ctx.embedder()?;
+            let ids: Vec<String> = st.source_ids.iter().map(ToString::to_string).collect();
+            library = library_of(ctx, &ids, &*embedder)?.1;
+            retrieval = Retrieval {
+                library: &library,
+                embedder: &*embedder,
+                passages: PASSAGES_SHOWN,
+                rerank: None,
+            };
+            Some(Passages {
+                retrieval: &retrieval,
+                share,
+            })
+        }
+        None => None,
+    };
+    let built = match build_with(ctx, &request, passages.as_ref()) {
         Ok(built) => built,
         Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
             return Ok(StageEnd::halt(
@@ -606,6 +631,9 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     st.report.candidate = Some(candidate);
     Ok(StageEnd::done(summary))
 }
+
+/// How many passages a training record carries when it is given any.
+const PASSAGES_SHOWN: usize = 4;
 
 /// The candidate is trained and stored whatever the exam finds; an exam that
 /// cannot run says why in the report and the release gate still decides.

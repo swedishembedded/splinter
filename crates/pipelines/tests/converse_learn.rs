@@ -36,6 +36,7 @@ use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::dialogue::{probes_beyond_the_source, STUDENT_ROLE};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::raft::PassageShare;
 use splinter_pipelines::release::arm;
 use splinter_pipelines::train::{TrainPlan, Trainer};
 
@@ -165,6 +166,7 @@ fn attempt(
     third: &'static str,
     judge: Option<Scripted>,
     persona: Option<&str>,
+    passages: Option<PassageShare>,
 ) -> (Result<Learned, OrchestratorError>, common::Scratch, Context) {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
     ctx.add_model(
@@ -192,6 +194,7 @@ fn attempt(
             sources: vec![letters.display().to_string()],
             kinds: vec!["converse".into()],
             persona: persona.map(str::to_string),
+            passages,
             roles,
             no_release: true,
             distill: true,
@@ -206,7 +209,7 @@ fn run(
     test: &str,
     third: &'static str,
 ) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
-    let (learned, scratch, _ctx) = attempt(test, third, Some(judge()), None);
+    let (learned, scratch, _ctx) = attempt(test, third, Some(judge()), None, None);
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
     };
@@ -307,6 +310,7 @@ fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
         "Study each morning.",
         None,
         None,
+        None,
     );
     let Err(refused) = learned else {
         panic!("a judge that grades itself is refused");
@@ -324,6 +328,7 @@ fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers
         "converse-learn-weak-judge",
         "Study each morning.",
         Some(always_pass),
+        None,
         None,
     );
     let Err(refused) = learned else {
@@ -343,6 +348,7 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
         "The pen fixes what the memory lets slip, so write down what you have read.",
         Some(judge()),
         Some("Benjamin Franklin"),
+        None,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -438,6 +444,7 @@ fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
         "The pen fixes what the memory lets slip, so write down what you have read.",
         Some(judge_of_reference_and_fit()),
         None,
+        None,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -463,4 +470,33 @@ fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
         .map(|r| r["messages"][2]["content"].as_str().unwrap())
         .collect();
     assert!(answers.contains(&PASSAGE) && answers.contains(&THRIFT_PASSAGE));
+}
+
+#[test]
+fn a_share_of_the_training_records_carries_passages_in_the_prompt() {
+    let (learned, _scratch, _ctx) = attempt(
+        "converse-learn-passages",
+        "The pen fixes what the memory lets slip, so write down what you have read.",
+        Some(judge()),
+        None,
+        Some(PassageShare {
+            records: 1.0,
+            with_evidence: 1.0,
+        }),
+    );
+    let Learned::Ran(ran) = learned.unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let dataset = ran.report.dataset.as_ref().unwrap();
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    assert!(!text.is_empty());
+    for line in text.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        let prompt = record["messages"][1]["content"].as_str().unwrap();
+        // The passages of the letters are shown beside the question, in the
+        // form an ask gives them, and the answers are the dialogue's own.
+        assert!(prompt.contains(MATERIAL_HEADING), "{prompt}");
+        assert!(prompt.contains("habit of study") || prompt.contains("strict account"));
+        assert_eq!(record["messages"][2]["role"], "assistant");
+    }
 }

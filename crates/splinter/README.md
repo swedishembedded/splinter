@@ -13,7 +13,7 @@ splinter                          REPL on the current policy (a line is handled 
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
-                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--bf16-base]
+                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--with-passages SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -212,6 +212,13 @@ not pass teaches nothing. The other speaker never restates what the writer said
 or asks it to confirm it; it brings its own case or objection. One dialogue in
 eight ends by asking for a specific the exchange has not given, so that the
 student also sees the writer decline to invent one.
+
+`--with-passages SHARE` trains a share of the records with retrieved passages of
+the sources in the prompt, as `ask --retrieve` gives them, four to a record and
+the passage the task was written from among them for four in five, the answer
+unchanged. A policy trained only closed-book cannot tell the passage that holds
+the answer from one that merely resembles the question: measured, passages helped
+where retrieval found the evidence and hurt exactly as much where it did not.
 
 The `author` stage teaches the writer's own voice. For the kinds whose
 reference is a passage the writer wrote (`advise`, `converse`), the task's

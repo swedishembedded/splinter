@@ -58,6 +58,7 @@ pub mod judging;
 pub mod learn;
 pub mod lineage;
 pub mod plan;
+pub mod raft;
 pub mod release;
 pub mod rerank;
 pub mod retrieval;

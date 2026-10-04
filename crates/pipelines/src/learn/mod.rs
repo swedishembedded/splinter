@@ -57,6 +57,7 @@ use serde::Serialize;
 use crate::author::kind_authors;
 use crate::curriculum::frontier::PassAtK;
 use crate::curriculum::quota::Quotas;
+use crate::raft::PassageShare;
 
 use crate::sources::SourceTarget;
 use crate::tasks::{check_kinds, DEFAULT_LEARN_KINDS};
@@ -132,6 +133,11 @@ pub struct LearnRequest {
     /// policy is asked under it afterwards. A plan names one from the goal
     /// when this does not.
     pub persona: Option<String>,
+    /// Give a share of the training records retrieved passages of the sources
+    /// in their prompt ([`crate::raft`]), so that the policy learns to use
+    /// context where it holds the answer and to answer without it where it
+    /// does not. Needs the embedding model.
+    pub passages: Option<PassageShare>,
     /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`] unless `plan` is set.
     pub kinds: Vec<String>,
     /// Let a planner model survey the sources and choose the task kinds,
@@ -263,6 +269,7 @@ pub fn learn(
         planner: planner.as_ref(),
         goal: request.goal.as_deref(),
         persona: request.persona.as_deref(),
+        passages: request.passages,
         deadline: budget.map(|b| Instant::now() + b),
         trainer,
         policy,
