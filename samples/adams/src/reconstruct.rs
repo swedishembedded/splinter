@@ -256,11 +256,20 @@ pub const MAX_BRIEF_ATTEMPTS: usize = 2;
 /// # Errors
 /// The file exists and a line is not a result.
 pub fn read_briefings(path: &std::path::Path) -> anyhow::Result<Vec<Briefing>> {
-    Ok(read_lines::<BriefingResult>(path)?
+    // A letter briefed more than once (an earlier briefing found leaky, or a
+    // run repeated) counts once, as its latest briefing.
+    let mut latest: Vec<Briefing> = Vec::new();
+    for briefing in read_lines::<BriefingResult>(path)?
         .into_iter()
         .filter_map(|r| r.briefing)
         .filter(|b| leaks(b).is_none())
-        .collect())
+    {
+        match latest.iter_mut().find(|b| b.doc_id == briefing.doc_id) {
+            Some(slot) => *slot = briefing,
+            None => latest.push(briefing),
+        }
+    }
+    Ok(latest)
 }
 
 /// Brief every letter not yet briefed, at most `limit`, appending each result

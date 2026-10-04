@@ -486,3 +486,29 @@ fn letters_are_briefed_once_a_failure_is_recorded_and_retried_a_bounded_number_o
     );
     assert_eq!(read_briefings(&other).unwrap().len(), 1);
 }
+
+#[test]
+fn a_letter_briefed_twice_is_one_briefing_the_later_one() {
+    let path = out();
+    let result = |situation: &str| BriefingResult {
+        doc_id: "l1".into(),
+        briefing: Some(Briefing {
+            id: "recon-1".into(),
+            doc_id: "l1".into(),
+            situation: situation.into(),
+            key_points: good().key_points,
+        }),
+        error: None,
+    };
+    let lines: String = [
+        result(&good().situation),
+        result(&format!("{} Later.", good().situation)),
+    ]
+    .iter()
+    .map(|r| format!("{}\n", serde_json::to_string(r).unwrap()))
+    .collect();
+    std::fs::write(&path, lines).unwrap();
+    let read = read_briefings(&path).unwrap();
+    assert_eq!(read.len(), 1, "a letter is scored once");
+    assert!(read[0].situation.ends_with("Later."));
+}

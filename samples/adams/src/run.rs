@@ -545,15 +545,17 @@ pub fn anchor_exam_command(
     base: &Path,
     adapter: Option<&Path>,
     limit: Option<usize>,
+    max_tokens: u32,
+    decoding: Decoding,
 ) -> anyhow::Result<()> {
     let questions = crate::anchor::read(anchor)?;
     let model = splinter_sdk::model::exam::Model {
         base,
         adapter,
         system: crate::anchor::SYSTEM,
-        max_tokens: 100,
+        max_tokens,
         label: "adams",
-        decoding: Decoding::Greedy,
+        decoding,
     };
     let asked = splinter_sdk::model::exam::run(&questions, out, limit, &model, &|q, a| {
         crate::anchor::is_correct(q, a).into()

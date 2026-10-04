@@ -596,6 +596,8 @@ fn anchor_exam_command(args: &[String]) -> anyhow::Result<()> {
         std::path::Path::new(&need(args, "--base")?),
         flag(args, "--adapter").as_deref().map(std::path::Path::new),
         flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        number(args, "--max-tokens", 400)?,
+        decoding_flag(args)?,
     )
 }
 
