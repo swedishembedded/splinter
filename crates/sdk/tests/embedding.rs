@@ -26,6 +26,7 @@ fn config(dir: &std::path::Path) -> Config {
         state_root: StateRoot::new(dir.join("state")),
         model_store: dir.join("models"),
         policy_base: dir.join("models/base"),
+        policy_context_tokens: None,
         openrouter_api_key: None,
         brain_api_key: None,
         allow_remote: false,

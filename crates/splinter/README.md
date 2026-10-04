@@ -34,7 +34,7 @@ splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
-global: --state DIR  --json  -v  --allow-remote
+global: --state DIR  --json  -v  --allow-remote  --policy-context-tokens N
 ```
 
 An id is the full `blake3:<hex>`, the hex alone, or a prefix of at least
@@ -81,6 +81,10 @@ Every model is named the same way:
 A policy alias is resolved once per command, when it is first used: a
 run keeps the release it started with however the alias moves meanwhile,
 and records it (`learn`'s first stage, a candidate's `parent`).
+
+The policy's context is limited with the global `--policy-context-tokens N`
+(a policy too large for the card at its maximum), any other local model's by
+its reference.
 
 A remote reference is refused unless `--allow-remote` is given or
 `SPLINTER_ALLOW_REMOTE=1` is set; that is the only way Splinter uses the

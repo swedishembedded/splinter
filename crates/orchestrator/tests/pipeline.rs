@@ -52,6 +52,7 @@ fn context(scratch: &Scratch) -> Context {
         state_root: StateRoot::new(scratch.0.join("state")),
         model_store: scratch.0.join("models"),
         policy_base: scratch.0.join("models/base"),
+        policy_context_tokens: None,
         openrouter_api_key: None,
         brain_api_key: None,
         allow_remote: false,

@@ -31,6 +31,10 @@ pub struct Config {
     pub model_store: PathBuf,
     /// The checkpoint `policy:default` serves.
     pub policy_base: PathBuf,
+    /// The policy's context limit in tokens; `None` is the largest the
+    /// checkpoint supports. Set by `--policy-context-tokens` when that does
+    /// not fit the card.
+    pub policy_context_tokens: Option<u32>,
     /// Key for models reached through OpenRouter.
     pub openrouter_api_key: Option<String>,
     /// Key for any other OpenAI-compatible endpoint (a served brain, say).
@@ -130,6 +134,7 @@ impl Config {
             policy_base: var("BRAIN_QWEN_WEIGHTS")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| model_store.join(DEFAULT_POLICY_MODEL)),
+            policy_context_tokens: None,
             model_store,
             openrouter_api_key: var("AGENT_OPENROUTER_KEY"),
             brain_api_key: var("BRAIN_API_KEY"),

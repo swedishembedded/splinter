@@ -50,6 +50,7 @@ fn main() -> ExitCode {
     if let Some(state) = &cli.global.state {
         config.state_root = StateRoot::new(state);
     }
+    config.policy_context_tokens = cli.global.policy_context_tokens;
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,
         Err(e) => {

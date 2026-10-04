@@ -34,7 +34,7 @@ pub fn resolve(
         ModelRef::Policy(_) => Ok(ModelSelection::Local(LocalWeights {
             base: config.policy_base.clone(),
             adapter: policy_adapter.map(Path::to_path_buf),
-            context_tokens: None,
+            context_tokens: config.policy_context_tokens,
         })),
         ModelRef::Local {
             checkpoint,

@@ -31,6 +31,7 @@ fn config() -> Config {
         state_root: StateRoot::new("state"),
         model_store: PathBuf::from("/models"),
         policy_base: PathBuf::from("/models/Qwen/Qwen3-0.6B"),
+        policy_context_tokens: None,
         openrouter_api_key: Some("or-key".into()),
         brain_api_key: Some("brain-key".into()),
         allow_remote: false,
@@ -213,6 +214,12 @@ fn a_local_model_has_its_largest_context_unless_a_reference_limits_it() {
     assert_eq!(context_of("local:Qwen/Qwen3-14B"), None);
     assert_eq!(context_of("local:Qwen/Qwen3-14B@4096"), Some(4096));
     assert_eq!(context_of("policy:default"), None);
+    let mut limited = config();
+    limited.policy_context_tokens = Some(8192);
+    assert!(matches!(
+        resolve(&parse("policy:default").unwrap(), &limited, false, None).unwrap(),
+        ModelSelection::Local(w) if w.context_tokens == Some(8192)
+    ));
     assert!(matches!(
         parse("local:Qwen/Qwen3-14B@0").unwrap_err(),
         RefError::ZeroContext { .. }

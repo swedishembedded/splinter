@@ -68,6 +68,12 @@ pub struct Global {
     /// without SPLINTER_ALLOW_REMOTE=1, every model runs locally.
     #[arg(long, global = true)]
     pub allow_remote: bool,
+    /// Limit the policy model's context to this many tokens (default: the
+    /// largest its checkpoint supports); for a policy too large for the
+    /// card at that size. Another model is limited by its reference,
+    /// `local:<checkpoint>@<tokens>`.
+    #[arg(long, global = true, value_name = "TOKENS", value_parser = clap::value_parser!(u32).range(1..))]
+    pub policy_context_tokens: Option<u32>,
 }
 
 /// The commands.

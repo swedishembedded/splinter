@@ -105,6 +105,7 @@ pub fn config(scratch: &Scratch) -> Config {
         state_root: scratch.state(),
         model_store: scratch.0.join("models"),
         policy_base: scratch.0.join("models/Qwen/Qwen3-0.6B"),
+        policy_context_tokens: None,
         openrouter_api_key: None,
         brain_api_key: None,
         allow_remote: false,
