@@ -24,6 +24,7 @@
 //! which product or document they belong to, and "what baud rate does the
 //! console run at?" has a different answer for every board.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -39,7 +40,7 @@ use super::admit::{Admission, Proposal, Refusal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
 use super::propose::{ProposalRequest, ProposeError, Proposed, TaskProposer};
 use super::reply::{Reply, REPLY_EXAMPLE};
-use super::{GenerationPolicy, GenerationReport, GENERATOR};
+use super::{GenerationPolicy, GenerationReport, Rejection, GENERATOR};
 use crate::sections::{sections, title, Section};
 
 /// The name of the typed call a generator model is sent.
@@ -351,6 +352,20 @@ impl ModelTaskGenerator {
         source: &SourceText,
         kinds: &[&TaskKind],
     ) -> Result<GenerationReport, GenerateError> {
+        self.generate_avoiding(source, kinds, &BTreeMap::new())
+            .await
+    }
+
+    /// [`ModelTaskGenerator::generate`], each kind's brief carrying the
+    /// correction ([`Rejection::advice`]) for the reasons `avoid` names for it:
+    /// what its earlier proposals were refused for. A kind that keeps getting
+    /// one thing wrong is told, and not asked the same way again.
+    pub async fn generate_avoiding(
+        &self,
+        source: &SourceText,
+        kinds: &[&TaskKind],
+        avoid: &BTreeMap<String, Vec<Rejection>>,
+    ) -> Result<GenerationReport, GenerateError> {
         self.policy.validate()?;
         if self.model.identity().trim().is_empty() {
             return Err(GenerateError::Parameter {
@@ -365,7 +380,8 @@ impl ModelTaskGenerator {
         for kind in kinds {
             kind.validate()?;
             let runtime = self.runtime_for(kind)?;
-            let brief = brief(kind, self.policy.tasks_per_request);
+            let refused = avoid.get(&kind.name).map_or(&[][..], Vec::as_slice);
+            let brief = brief(kind, self.policy.tasks_per_request, refused);
             let shown = shown(source);
             let reply = self.request(GENERATION_METHOD, &brief, &shown).await?;
             proposals.push(Proposal {
@@ -466,7 +482,7 @@ pub(super) fn prompt_digest<I: Serialize + ?Sized>(brief: &str, shown: &I) -> Di
 /// The brief for tasks of `kind`: the kind's own brief and the rules every
 /// task is held to. The sections are the call's input; the reply's shape
 /// is its return type.
-fn brief(kind: &TaskKind, count: usize) -> String {
+fn brief(kind: &TaskKind, count: usize, refused: &[Rejection]) -> String {
     let runtime = kind.runtime.as_deref().unwrap_or("-");
     let brief = kind
         .brief
@@ -531,6 +547,15 @@ fn brief(kind: &TaskKind, count: usize) -> String {
         out.push_str("- ");
         out.push_str(&rule);
         out.push('\n');
+    }
+    let corrections: Vec<&str> = refused.iter().filter_map(|r| r.advice()).collect();
+    if !corrections.is_empty() {
+        out.push_str("\nEarlier tasks of this kind were refused. Correct for it:\n");
+        for correction in corrections {
+            out.push_str("- ");
+            out.push_str(correction);
+            out.push('\n');
+        }
     }
     out.push_str("\nA reply looks like this:\n");
     out.push_str(REPLY_EXAMPLE);

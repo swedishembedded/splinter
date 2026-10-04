@@ -222,6 +222,45 @@ pub enum Rejection {
     Invalid,
 }
 
+impl Rejection {
+    /// What to tell a generator whose proposals were refused for this
+    /// reason, so that the next ones are not; `None` for a refusal that is
+    /// no fault of the proposal (a deadline, an empty reply) or that nothing
+    /// said could correct.
+    #[must_use]
+    pub fn advice(self) -> Option<&'static str> {
+        match self {
+            Self::NotSelfContained => Some(
+                "An instruction must stand on its own: name the person, place or thing it is \
+                 about, and never say \"the letter\", \"the writer\", \"the author\", \"the \
+                 passage\" or \"the document\" - someone who has never seen the source must \
+                 understand it.",
+            ),
+            Self::NoSubject => Some(
+                "Name the subject in the instruction in the words the source uses for it: a \
+                 specific person, place, product or matter, not \"the writer's view\".",
+            ),
+            Self::QuoteNotFound => Some(
+                "Copy each quote word for word from the section it cites: do not paraphrase, \
+                 correct or shorten it.",
+            ),
+            Self::NotQuoted => Some(
+                "The reference must be a passage of the cited sections copied word for word, \
+                 not a summary of one.",
+            ),
+            Self::Ungrounded => Some(
+                "The reference must be stated by the cited evidence itself, not inferred from \
+                 it or added to it.",
+            ),
+            Self::Duplicate | Self::NearDuplicate => Some(
+                "Ask about something the tasks already written do not: another matter, \
+                 another passage.",
+            ),
+            _ => None,
+        }
+    }
+}
+
 /// A task a generator admitted.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeneratedTask {
