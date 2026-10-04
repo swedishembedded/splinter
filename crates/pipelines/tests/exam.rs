@@ -27,14 +27,10 @@ use std::sync::Arc;
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_core::clock::FixedClock;
-use splinter_core::experience::{
-    Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
-};
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_pipelines::exam::{exam, ExamRequest};
 use splinter_pipelines::sources::{self, SourceTarget};
-use sven_sdk::atif::{AgentProfile, Trajectory};
 
 const LETTER: &str = "# To a young man\n\n## Habits\n\nKeep habit1 and habit2 and habit3 and habit4 and habit5 and habit6 each morning, for a settled mind needs them.\n";
 
@@ -51,33 +47,6 @@ fn task(n: usize, span: &Span) -> Task {
         }],
     )
     .unwrap()
-}
-
-fn verified(task: &Task) -> Experience {
-    let answer = format!("Keep {} each morning.", reference_word(task));
-    Experience::new(
-        task.clone(),
-        Trajectory::new("ATIF-v1.7", AgentProfile::new("teacher", "1")),
-        Some(answer),
-        Provenance::new(
-            "scripted/teacher",
-            &FixedClock::new("2026-10-01T00:00:00.000Z"),
-        ),
-    )
-    .unwrap()
-}
-
-/// `habitN` of the task's reference.
-fn reference_word(task: &Task) -> String {
-    task.privileged
-        .iter()
-        .find(|p| p.kind == PrivilegedKind::Reference)
-        .unwrap()
-        .content
-        .split_whitespace()
-        .nth(1)
-        .unwrap()
-        .to_string()
 }
 
 /// A judge that passes an answer containing the reference's `habitN`, or
@@ -128,7 +97,7 @@ fn setup(
     Scratch,
     splinter_orchestrator::Context,
     Vec<Task>,
-    Vec<Experience>,
+    Vec<Task>,
 ) {
     let (scratch, ctx) = scratch_context(test, Scripted::new(|_| String::new()), false);
     let path = scratch.0.join("letter.md");
@@ -144,7 +113,7 @@ fn setup(
     let content = source.parts[0].content.clone();
     let span = Span::new(content, 0, LETTER.len() as u64).unwrap();
     let tasks: Vec<Task> = (1..=6).map(|n| task(n, &span)).collect();
-    let controls = tasks.iter().map(verified).collect();
+    let controls = tasks.clone();
     for (name, script) in [
         ("base", arm(false, None)),
         ("tuned", arm(true, Some(3))),
@@ -161,7 +130,7 @@ fn setup(
 fn run(
     ctx: &splinter_orchestrator::Context,
     tasks: &[Task],
-    controls: &[Experience],
+    controls: &[Task],
 ) -> splinter_pipelines::exam::Examined {
     let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
     exam(

@@ -19,8 +19,11 @@
 //! The judged results are compared with a paired sign test.
 //!
 //! The judge is trusted only as far as it can be measured. Before it grades an
-//! arm it is calibrated on controls made from the run's own verified answers:
-//! each against its own task (right) and against another task's (wrong). A
+//! arm it is calibrated on controls made from the tasks' own references, which
+//! no model wrote: each task's reference answering that task (right) and the
+//! next task's reference answering it (wrong). No control is a model's answer,
+//! so the judge is never asked to grade its own model's work, whichever model
+//! it is. A
 //! judge whose precision on either falls below
 //! [`DEFAULT_MIN_PRECISION`] abstains on every answer, and the report makes no
 //! claim from it. Answers are never stored as experiences: nothing an exam
@@ -29,7 +32,7 @@
 use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
-use splinter_core::experience::{Experience, Task};
+use splinter_core::experience::{Experience, PrivilegedKind, Provenance, Task};
 use splinter_eval::significance::SignTest;
 use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
@@ -53,9 +56,9 @@ type Decided = Vec<Option<bool>>;
 pub struct ExamRequest<'a> {
     /// The held-out tasks, put closed-book to both arms.
     pub tasks: &'a [Task],
-    /// Verified answers to tasks (the run's teacher's), from which the judge's
-    /// controls are made; at least two.
-    pub controls: &'a [Experience],
+    /// Tasks with a reference, from which the judge's controls are made: at
+    /// least two.
+    pub controls: &'a [Task],
     /// The model the candidate is measured against.
     pub base: &'a ModelRef,
     /// The model under examination.
@@ -118,27 +121,45 @@ pub struct Examined {
     pub paired: Option<SignTest>,
 }
 
-/// An experience of `task` giving the answer of `other`: the control that
-/// should fail.
-fn mismatched(task: &Experience, other: &Experience) -> Result<Experience, OrchestratorError> {
-    Ok(Experience::new(
-        task.to_task(),
-        task.trajectory.clone(),
-        other.final_output.clone(),
-        task.provenance.clone(),
+/// An experience of `task` answered with `answer`, as the exam's controls
+/// are: by no model.
+fn answered(ctx: &Context, task: &Task, answer: &str) -> Result<Experience, OrchestratorError> {
+    Ok(Experience::answered_without_a_run(
+        task.clone(),
+        answer,
+        Provenance::new(CONTROLS_SOURCE, ctx.clock()),
     )?)
 }
 
-/// The judge's controls: each verified answer right for its task, and the
-/// next one's answer wrong for it.
+/// What a control's provenance names as its solver: not a model.
+const CONTROLS_SOURCE: &str = "splinter/exam-controls";
+
+/// The reference of `task`, the answer it is controlled with.
+fn reference(task: &Task) -> Option<&str> {
+    task.privileged
+        .iter()
+        .find(|p| p.kind == PrivilegedKind::Reference)
+        .map(|p| p.content.as_str())
+}
+
+/// The judge's controls: each task's reference right for it, and the next
+/// task's reference wrong for it. A task with no reference, or the same one
+/// as its neighbour's, makes no control.
 fn controls(
-    verified: &[Experience],
+    ctx: &Context,
+    tasks: &[Task],
 ) -> Result<Vec<(Task, Experience, Outcome)>, OrchestratorError> {
-    let mut labelled = Vec::with_capacity(verified.len() * 2);
-    for (n, exp) in verified.iter().enumerate() {
-        let other = &verified[(n + 1) % verified.len()];
-        labelled.push((exp.to_task(), exp.clone(), Outcome::Pass));
-        labelled.push((exp.to_task(), mismatched(exp, other)?, Outcome::Fail));
+    let mut labelled = Vec::with_capacity(tasks.len() * 2);
+    for (n, task) in tasks.iter().enumerate() {
+        let other = &tasks[(n + 1) % tasks.len()];
+        let (Some(right), Some(wrong)) = (reference(task), reference(other)) else {
+            continue;
+        };
+        if right == wrong {
+            continue;
+        }
+        labelled.push((task.clone(), answered(ctx, task, right)?, Outcome::Pass));
+        labelled.push((task.clone(), answered(ctx, task, wrong)?, Outcome::Fail));
     }
     Ok(labelled)
 }
@@ -147,7 +168,7 @@ fn controls(
 pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, OrchestratorError> {
     if request.controls.len() < 2 {
         return Err(OrchestratorError::Refused(
-            "an exam calibrates its judge on at least two verified answers".into(),
+            "an exam calibrates its judge on at least two tasks with a reference".into(),
         ));
     }
     let answers = |reference: &ModelRef| -> Result<(String, Vec<Experience>), OrchestratorError> {
@@ -166,7 +187,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
 
     let judge_model = ctx.model(request.judge)?;
     let judge = judge_verifier(ctx, &judge_model);
-    let calibration = calibrate(&judge, &controls(request.controls)?)?;
+    let calibration = calibrate(&judge, &controls(ctx, request.controls)?)?;
     let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
     let trusted = precise(calibration.precision_pass) && precise(calibration.precision_fail);
     let judge = CalibratedJudge::new(judge, calibration.clone(), DEFAULT_MIN_PRECISION)?;
@@ -238,7 +259,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
 /// evenly over the held-out set, so a long set is sampled and not truncated.
 pub const MAX_EXAM_TASKS: usize = 48;
 
-/// The most verified answers the judge's controls are made from.
+/// The most tasks the judge's controls are made from.
 const MAX_CONTROLS: usize = 24;
 
 /// What the exam of a candidate came to.
@@ -262,8 +283,8 @@ fn spaced<T: Clone>(items: &[T], most: usize) -> Vec<T> {
 }
 
 /// Examines the trained candidate `candidate` against `base` on its held-out
-/// tasks, the judge calibrated on controls made from the verified
-/// experiences of `verified`. An exam that has nothing to run on says so
+/// tasks, the judge calibrated on controls made from the references of the
+/// tasks of the verified experiences of `verified`. An exam that has nothing to run on says so
 /// instead of reporting an empty result.
 pub fn examine_candidate(
     ctx: &Context,
@@ -279,18 +300,18 @@ pub fn examine_candidate(
         return Ok(Exam::NotRun("no held-out task to put to the models".into()));
     }
     let store = ctx.experiences();
-    let mut controls = Vec::new();
+    let mut controls: Vec<Task> = Vec::new();
     for id in store.get_set(verified)?.members {
-        let experience = store.get(&id)?;
-        if experience.final_output.is_some() {
-            controls.push(experience);
+        let task = store.get(&id)?.to_task();
+        if reference(&task).is_some() {
+            controls.push(task);
         }
     }
     controls.sort_by(|a, b| a.task.kind.cmp(&b.task.kind));
     let controls = spaced(&controls, MAX_CONTROLS);
     if controls.len() < 2 {
         return Ok(Exam::NotRun(
-            "fewer than two verified answers to calibrate the judge on".into(),
+            "fewer than two tasks with a reference to calibrate the judge on".into(),
         ));
     }
     let tasks = spaced(&suite.tasks, MAX_EXAM_TASKS);

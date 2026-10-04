@@ -529,6 +529,18 @@ impl Experience {
         Ok(experience)
     }
 
+    /// An experience of `task` answered with `answer` and no run behind it:
+    /// text put forward as an answer, as a measurement's control is, which
+    /// neither a model nor an agent gave. Its trajectory holds no step.
+    pub fn answered_without_a_run(
+        task: Task,
+        answer: &str,
+        provenance: Provenance,
+    ) -> Result<Self, ExperienceError> {
+        let trajectory = atif::Trajectory::new("ATIF-v1.7", atif::AgentProfile::new("none", "1"));
+        Self::new(task, trajectory, Some(answer.to_string()), provenance)
+    }
+
     /// The task this experience attempted, as its generator emitted it.
     #[must_use]
     pub fn to_task(&self) -> Task {
