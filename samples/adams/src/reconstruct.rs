@@ -565,7 +565,7 @@ pub fn render(
         "Replies to {} briefings of held-out letters, {before} against {after}.",
         summary.n
     );
-    let _ = writeln!(out, "Judge controls on {} briefings: the real letter is credited with {:.0}% of the items, another letter with {:.0}%.", calibration.briefings, 100.0 * calibration.real_letter, 100.0 * calibration.other_letter);
+    let _ = writeln!(out, "Judge controls on {} briefings: the real letter is credited with {:.0}% of the items, another letter with {:.0}%, a fluent generic reply with {}.", calibration.briefings, 100.0 * calibration.real_letter, 100.0 * calibration.other_letter, calibration.generic_reply.map_or("no control run".to_string(), |g| format!("{:.0}%", 100.0 * g)));
     if calibration.passes() {
         let _ = writeln!(out, "Coverage of what the real letter does: {:.0}% against {:.0}% (gained {}, lost {}, p {:.4} that {after} covers more).", 100.0 * summary.coverage_before, 100.0 * summary.coverage_after, summary.gained, summary.lost, summary.p_value);
     } else {

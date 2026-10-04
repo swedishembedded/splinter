@@ -105,15 +105,6 @@ pub fn replies_command(r: &Replies) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The first words of a text: what the judge is shown of a letter or a reply.
-fn judged_words(text: &str) -> String {
-    const WORDS: usize = 900;
-    text.split_whitespace()
-        .take(WORDS)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 /// Calibrate the judge once, on controls, and keep the result so every arm is
 /// judged by the same standard; then score every reply of `replies`.
 pub fn judge_command(
@@ -128,43 +119,50 @@ pub fn judge_command(
     let helper = crate::helper::Helper::served(&mine.served)?;
 
     let calibration_path = dir.join("calibration.json");
-    let calibration: crate::judge::Calibration =
-        if let Ok(text) = std::fs::read_to_string(&calibration_path) {
-            serde_json::from_str(&text)?
-        } else {
+    let calibration: crate::judge::Calibration = match std::fs::read_to_string(&calibration_path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<crate::judge::Calibration>(&text).ok())
+        .filter(|c| c.generic_reply.is_some())
+    {
+        Some(kept) => kept,
+        None => {
             const CONTROLS: usize = 20;
             let body = |id: &str| {
                 documents
                     .iter()
                     .find(|d| d.id == id)
-                    .map(|d| judged_words(&d.body))
+                    .map(|d| d.body.clone())
                     .unwrap_or_default()
             };
-            let controls: Vec<(usize, String, String)> = briefings
+            let mut texts: Vec<(usize, String, String, String)> = Vec::new();
+            for (i, b) in briefings.iter().take(CONTROLS).enumerate() {
+                texts.push((
+                    i,
+                    body(&b.doc_id),
+                    body(&briefings[(i + 1) % briefings.len()].doc_id),
+                    crate::judge::generic_reply(&helper, b)?,
+                ));
+            }
+            let controls: Vec<crate::judge::Control<'_>> = texts
                 .iter()
-                .take(CONTROLS)
-                .enumerate()
-                .map(|(i, b)| {
-                    (
-                        i,
-                        body(&b.doc_id),
-                        body(&briefings[(i + 1) % briefings.len()].doc_id),
-                    )
+                .map(|(i, real, other, generic)| crate::judge::Control {
+                    briefing: &briefings[*i],
+                    real,
+                    other,
+                    generic,
                 })
                 .collect();
-            let borrowed: Vec<(&crate::reconstruct::Briefing, &str, &str)> = controls
-                .iter()
-                .map(|(i, real, other)| (&briefings[*i], real.as_str(), other.as_str()))
-                .collect();
-            let found = crate::judge::calibrate(&helper, &borrowed)?;
+            let found = crate::judge::calibrate(&helper, &controls)?;
             std::fs::write(&calibration_path, serde_json::to_string_pretty(&found)?)?;
             found
-        };
+        }
+    };
     println!(
-        "judge controls on {} briefings: real letter {:.0}%, another letter {:.0}%: {}",
+        "judge controls on {} briefings: real letter {:.0}%, another letter {:.0}%, a generic reply {:.0}%: {}",
         calibration.briefings,
         100.0 * calibration.real_letter,
         100.0 * calibration.other_letter,
+        100.0 * calibration.generic_reply.unwrap_or(f64::NAN),
         if calibration.passes() {
             "passes"
         } else {

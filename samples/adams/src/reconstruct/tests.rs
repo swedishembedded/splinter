@@ -440,6 +440,7 @@ fn a_judge_that_failed_its_controls_leaves_no_claim_about_coverage_but_the_code_
     let failed = crate::judge::Calibration {
         real_letter: 0.4,
         other_letter: 0.6,
+        generic_reply: Some(0.2),
         briefings: 10,
     };
     let text = render(&s, &failed, "base", "tuned");
@@ -452,6 +453,7 @@ fn a_judge_that_failed_its_controls_leaves_no_claim_about_coverage_but_the_code_
     let passed = crate::judge::Calibration {
         real_letter: 0.9,
         other_letter: 0.1,
+        generic_reply: Some(0.2),
         briefings: 10,
     };
     let text = render(&s, &passed, "base", "tuned");

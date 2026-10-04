@@ -681,3 +681,24 @@ fn the_frozen_benchmark_is_written_as_it_always_was_and_a_slice_names_itself_onl
         .contains("\"slice\":\"ood\""));
     assert_eq!(ood.split(), "ood");
 }
+
+#[test]
+fn every_record_of_a_principle_names_the_same_group_so_a_holdout_never_divides_it() {
+    let (train, bench) = split_principles();
+    let results = [
+        result(&train, Case::Clear, FIT),
+        later_result(&train, Case::Clear, "a city council", 1),
+    ];
+    let built = build(&results, &[train.clone(), bench], &docs());
+    assert!(built.sft.len() >= 3);
+    for record in &built.sft {
+        assert_eq!(
+            record["metadata"]["group"].as_str(),
+            Some(train.id.as_str()),
+            "{record}"
+        );
+    }
+    for pair in &built.preference {
+        assert_eq!(pair["metadata"]["group"].as_str(), Some(train.id.as_str()));
+    }
+}

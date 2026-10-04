@@ -400,6 +400,7 @@ pub fn reconstruction_sft(
             let letter = docs.iter().find(|d| d.id == b.doc_id)?;
             let target = letter_target(&letter.body)?;
             Some(json!({
+                "metadata": {"group": b.doc_id},
                 "messages": [
                     {"role": "system", "content": Framing::of_record(&crate::reconstruct::prompt(b)).system(crate::reconstruct::SYSTEM), "train": false},
                     {"role": "user", "content": crate::reconstruct::prompt(b), "train": false},
@@ -451,8 +452,9 @@ pub struct Built {
     pub excluded: Vec<(String, String)>,
 }
 
-fn sft_record(prompt: &str, answer: &str) -> Value {
+fn sft_record(prompt: &str, answer: &str, group: &str) -> Value {
     json!({
+        "metadata": {"group": group},
         "messages": [
             {"role": "system", "content": Framing::of_record(prompt).system(respond::SYSTEM), "train": false},
             {"role": "user", "content": prompt, "train": false},
@@ -469,6 +471,7 @@ fn pair(
     kind: Break,
     mode: Mode,
     scenario: &Scenario,
+    group: &str,
 ) -> Value {
     json!({
         "prompt": [
@@ -478,7 +481,7 @@ fn pair(
         "chosen": {"role": "assistant", "content": chosen},
         "rejected": {"role": "assistant", "content": rejected},
         "tools": [],
-        "metadata": {"break": kind, "mode": mode, "scenario_id": scenario.id, "principle_id": scenario.principle_id},
+        "metadata": {"group": group, "break": kind, "mode": mode, "scenario_id": scenario.id, "principle_id": scenario.principle_id},
     })
 }
 
@@ -554,7 +557,9 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
             questions.push(task(Mode::Internalized, &without, Vec::new()));
             continue;
         }
-        built.sft.push(sft_record(&with_passages, &taught));
+        built
+            .sft
+            .push(sft_record(&with_passages, &taught, &principle.id));
         for (kind, text) in breaks(&taught, scenario, &evidence) {
             built.preference.push(pair(
                 &with_passages,
@@ -563,10 +568,11 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
                 kind,
                 Mode::Retrieval,
                 scenario,
+                &principle.id,
             ));
         }
         if let Some(own) = own_words {
-            built.sft.push(sft_record(&without, &own));
+            built.sft.push(sft_record(&without, &own, &principle.id));
             for (kind, text) in breaks(&own, scenario, &[]) {
                 built.preference.push(pair(
                     &without,
@@ -575,6 +581,7 @@ pub fn build(results: &[transfer::Result], principles: &[Principle], docs: &[Doc
                     kind,
                     Mode::Internalized,
                     scenario,
+                    &principle.id,
                 ));
             }
         }

@@ -39,6 +39,11 @@ pub struct Row {
     pub before_unanswered: usize,
     /// Questions the trained model gave no answer to.
     pub after_unanswered: usize,
+    /// Questions the base ran out of its token budget on: an answer that is
+    /// cut off is mostly wrong because of the budget, not the model.
+    pub before_truncated: usize,
+    /// Questions the trained model ran out of its token budget on.
+    pub after_truncated: usize,
     /// Pairs where only the trained model was right.
     pub gained: usize,
     /// Pairs where only the base was right.
@@ -86,6 +91,8 @@ pub fn rows(before: &[Graded], after: &[Graded], kind_order: &[&str]) -> Vec<Row
                 after: pairs.iter().filter(|(_, a)| a.correct).count(),
                 before_unanswered: pairs.iter().filter(|(b, _)| b.answer.is_none()).count(),
                 after_unanswered: pairs.iter().filter(|(_, a)| a.answer.is_none()).count(),
+                before_truncated: pairs.iter().filter(|(b, _)| b.truncated).count(),
+                after_truncated: pairs.iter().filter(|(_, a)| a.truncated).count(),
                 gained: pairs
                     .iter()
                     .filter(|(b, a)| a.correct && !b.correct)
@@ -199,15 +206,15 @@ pub fn render(
     chance: &dyn Fn(&str) -> Option<f64>,
 ) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "| split | question | n | before | after | gained | lost | unanswered (before/after) | p (after better) | one answer for all |");
-    let _ = writeln!(out, "|---|---|---|---|---|---|---|---|---|---|");
+    let _ = writeln!(out, "| split | question | n | before | after | gained | lost | unanswered (before/after) | cut off at the budget (before/after) | p (after better) | one answer for all |");
+    let _ = writeln!(out, "|---|---|---|---|---|---|---|---|---|---|---|");
     for row in rows(before, after, kind_order) {
         let percent = |k: usize| format!("{k} ({:.0}%)", 100.0 * k as f64 / row.n.max(1) as f64);
         let chance_note =
             chance(&row.kind).map_or(String::new(), |c| format!(" (chance {:.0}%)", 100.0 * c));
         let _ = writeln!(
             out,
-            "| {} | {}{} | {} | {} | {} | {} | {} | {}/{} | {:.4} | {:.0}% |",
+            "| {} | {}{} | {} | {} | {} | {} | {} | {}/{} | {}/{} | {:.4} | {:.0}% |",
             row.split,
             row.kind,
             chance_note,
@@ -218,6 +225,8 @@ pub fn render(
             row.lost,
             row.before_unanswered,
             row.after_unanswered,
+            row.before_truncated,
+            row.after_truncated,
             row.p_value,
             100.0 * row.modal_reference
         );
@@ -328,6 +337,15 @@ mod tests {
         assert_eq!((row.n, row.before, row.after), (3, 1, 2));
         assert_eq!((row.gained, row.lost), (2, 1));
         assert_eq!((row.before_unanswered, row.after_unanswered), (1, 0));
+        // The helper marks an unanswered reply as cut off, so the one answered
+        // reply that ran out of budget is counted separately from it.
+        let mut cut = after.clone();
+        cut[1].truncated = true;
+        let found = rows(&before, &cut, &[]);
+        assert_eq!(
+            (found[0].before_truncated, found[0].after_truncated),
+            (1, 1)
+        );
         assert!(row.p_value > 0.0 && row.p_value < 1.0);
     }
 
