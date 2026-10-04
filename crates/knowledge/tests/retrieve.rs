@@ -14,7 +14,10 @@
 //! passage does not win by length. Dense search ranks by cosine over the
 //! vectors a caller-supplied embedder makes. Fusion merges rankings by
 //! reciprocal rank, so a passage both find beats one only either finds, and
-//! the merge is deterministic. Nothing here knows a model: the embedder is
+//! the merge is deterministic. A library of passages answers a query in
+//! semantic order, with the passages only an exact word finds (a name, a
+//! date) filling the tail, because fusing equal-weight rankings pulls the
+//! better one down at the top. Nothing here knows a model: the embedder is
 //! a trait.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
@@ -23,7 +26,7 @@
 use splinter_core::clock::FixedClock;
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_knowledge::retrieve::{
-    fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Passage,
+    fuse, passages, Bm25, Dense, EmbedError, Embedder, Hit, Library, Passage,
 };
 use splinter_store::sources::SourceStore;
 use splinter_store::StateRoot;
@@ -171,4 +174,46 @@ fn fusion_prefers_what_both_rankings_find_and_is_deterministic() {
     assert_eq!(fused, fuse(&[lexical, dense], 10));
     assert_eq!(fuse(&[], 5), []);
     assert_eq!(fuse(&[vec![hit(7), hit(8)]], 1).len(), 1);
+}
+
+const ELIZA: &str = "The brig Eliza under captain Harding sailed from Norfolk with a cargo of flour, and nothing more is known of her since the storm.";
+
+#[test]
+fn a_library_answers_in_semantic_order_with_exact_word_matches_filling_the_tail() {
+    let found = vec![
+        passage(TOBACCO),
+        passage(EDUCATION),
+        passage(VIRGINIA),
+        passage(ELIZA),
+    ];
+    let library = Library::new(found, &Concepts).unwrap();
+    assert_eq!(library.passages().len(), 4);
+    // Semantically it is about teaching; "Eliza" is a name the embedder
+    // knows nothing of, found only by the words themselves.
+    let hits = library
+        .find(
+            "how should a young person learn, as on the brig Eliza",
+            &Concepts,
+            3,
+        )
+        .unwrap();
+    let order: Vec<&str> = hits.iter().map(|p| p.text.as_str()).collect();
+    assert_eq!(order.len(), 3, "no more than asked for");
+    assert_eq!(&order[..2], [EDUCATION, VIRGINIA], "meaning leads");
+    assert_eq!(order[2], ELIZA, "the exact name takes the tail");
+    let none = library.find("anything", &Concepts, 0).unwrap();
+    assert!(none.is_empty());
+}
+
+#[test]
+fn a_library_never_repeats_a_passage_the_two_searches_both_find() {
+    let library = Library::new(vec![passage(EDUCATION), passage(TOBACCO)], &Concepts).unwrap();
+    let hits = library
+        .find("education of the people", &Concepts, 5)
+        .unwrap();
+    let mut texts: Vec<&str> = hits.iter().map(|p| p.text.as_str()).collect();
+    texts.sort_unstable();
+    texts.dedup();
+    assert_eq!(texts.len(), hits.len());
+    assert_eq!(hits[0].text, EDUCATION);
 }

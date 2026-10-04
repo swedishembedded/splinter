@@ -21,16 +21,21 @@
 //! * [`fuse`], reciprocal-rank fusion of any number of rankings, so a passage
 //!   both kinds of search find beats one only either finds.
 //!
+//! A [`Library`] puts the two to work: meaning first, the words an embedding
+//! blurs filling the tail.
+//!
 //! A ranking is a list of [`Hit`]s by passage index, best first, and is
 //! deterministic: ties break by the passage's position.
 
 mod dense;
 mod fuse;
 mod lexical;
+mod library;
 
 pub use dense::{Dense, EmbedError, Embedder};
 pub use fuse::fuse;
 pub use lexical::Bm25;
+pub use library::Library;
 
 use splinter_core::digest::Digest;
 use splinter_core::source::SourceId;
