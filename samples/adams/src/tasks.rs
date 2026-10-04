@@ -80,6 +80,8 @@ const CONTINUATION_WORDS: usize = 40;
 /// Share of a reference's four-word runs an answer must carry.
 const CONTINUATION_SHARE: f64 = 0.5;
 const RUN: usize = 4;
+/// Where in the text a minority class's training openings start, in words.
+const MINORITY_OPENINGS: [usize; 3] = [0, 150, 300];
 
 const MONTHS: [&str; 12] = [
     "January",
@@ -176,15 +178,28 @@ pub fn document_tasks(doc: &Document, family: &str, split: &str) -> Vec<Task> {
         ));
     }
     if let Some((option, why)) = attribution_option(doc) {
-        let prompt = format!(
-            "{shown}\nWhich is it? (A) a letter or draft of your own, or a copy of it; (B) a text adopted by a committee or town you sat on; (C) a newspaper piece printed under a pseudonym. Answer with the letter and one sentence of why."
-        );
-        tasks.push(make(
-            Kind::Attribution,
-            prompt,
-            option.to_string(),
-            format!("{option}. {why}"),
-        ));
+        // A class that is rare in the corpus is shown through several openings in
+        // training, so the model sees more of it without a record repeated.
+        let starts: &[usize] = if split == "train" && option != 'A' {
+            &MINORITY_OPENINGS
+        } else {
+            &[0]
+        };
+        for &start in starts
+            .iter()
+            .filter(|&&start| words.len() >= start + MIN_OPENING_WORDS)
+        {
+            let window = words[start..(start + OPENING_WORDS).min(words.len())].join(" ");
+            let prompt = format!(
+                "Here is the opening of a document from your papers:\n\n\"{window}\"\n\nWhich is it? (A) a letter or draft of your own, or a copy of it; (B) a text adopted by a committee or town you sat on; (C) a newspaper piece printed under a pseudonym. Answer with the letter and one sentence of why."
+            );
+            tasks.push(make(
+                Kind::Attribution,
+                prompt,
+                option.to_string(),
+                format!("{option}. {why}"),
+            ));
+        }
     }
     if split == "train" && doc.authorship.is_voice() && words.len() >= 2 * CONTINUATION_WORDS {
         let shown_words = words[..CONTINUATION_WORDS].join(" ");
@@ -353,6 +368,11 @@ pub fn write_all(built: &Built, dir: &std::path::Path) -> anyhow::Result<()> {
     ];
     for (name, text) in files {
         let path = dir.join(name);
+        if name == "exam.jsonl" {
+            if let Ok(existing) = std::fs::read_to_string(&path) {
+                anyhow::ensure!(existing == text, "{} is the frozen exam and these tasks would change it; the exam is never rewritten", path.display());
+            }
+        }
         let tmp = path.with_extension("part");
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, &path)?;
@@ -564,6 +584,91 @@ mod tests {
             format!("Sir,\n\n{}", words("s", 30)),
         );
         assert!(document_tasks(&d, "f", "train").is_empty());
+    }
+
+    #[test]
+    fn a_minority_class_is_shown_through_several_openings_in_training_and_the_exam_keeps_one() {
+        let committee = doc(
+            "c",
+            Authorship::CommitteeCoauthored,
+            Some("James Otis"),
+            1770,
+            format!("Sir,\n\n{}", words("c", 400)),
+        );
+        let attribution =
+            |split: &str| by_kind(&document_tasks(&committee, "f", split), Kind::Attribution).len();
+        assert_eq!(
+            attribution("train"),
+            3,
+            "windows at the start, 150 and 300 words in"
+        );
+        assert_eq!(
+            attribution("exam"),
+            1,
+            "the frozen exam asks one question per document"
+        );
+        let letter = doc(
+            "l",
+            Authorship::DraftInHand,
+            Some("James Otis"),
+            1770,
+            format!("Sir,\n\n{}", words("l", 400)),
+        );
+        assert_eq!(
+            by_kind(&document_tasks(&letter, "f", "train"), Kind::Attribution).len(),
+            1,
+            "the majority class is not multiplied"
+        );
+    }
+
+    #[test]
+    fn the_extra_openings_are_different_text_and_a_short_document_gets_only_those_that_fit() {
+        let committee = doc(
+            "c",
+            Authorship::CommitteeCoauthored,
+            Some("James Otis"),
+            1770,
+            format!("Sir,\n\n{}", words("c", 400)),
+        );
+        let prompts: Vec<String> =
+            by_kind(&document_tasks(&committee, "f", "train"), Kind::Attribution)
+                .iter()
+                .map(|t| t.prompt.clone())
+                .collect();
+        assert!(
+            prompts[0].contains("c0 c1 ")
+                && prompts[1].contains("c150 c151 ")
+                && prompts[2].contains("c300 c301 ")
+        );
+        let short = doc(
+            "s",
+            Authorship::CommitteeCoauthored,
+            Some("James Otis"),
+            1770,
+            format!("Sir,\n\n{}", words("s", 200)),
+        );
+        assert_eq!(
+            by_kind(&document_tasks(&short, "f", "train"), Kind::Attribution).len(),
+            2,
+            "windows at 0 and 150 fit in 200 words; 300 does not"
+        );
+    }
+
+    #[test]
+    fn writing_the_tasks_again_never_changes_a_frozen_exam() {
+        let (docs, assignments) = corpus();
+        let built = build(&docs, &assignments, 3);
+        let dir = tempfile::tempdir().unwrap();
+        write_all(&built, dir.path()).unwrap();
+        write_all(&built, dir.path()).unwrap();
+        let mut changed = build(&docs, &assignments, 3);
+        changed.exam[0].prompt.push_str(" altered");
+        let err = write_all(&changed, dir.path()).unwrap_err().to_string();
+        assert!(err.contains("frozen exam"), "{err}");
+        assert_eq!(
+            read_tasks(&dir.path().join("exam.jsonl")).unwrap(),
+            built.exam
+        );
     }
 
     #[test]
