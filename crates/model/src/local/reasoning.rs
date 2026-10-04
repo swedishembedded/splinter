@@ -96,6 +96,28 @@ pub fn closed_think_blocks(dataset: &str) -> Result<String, serde_json::Error> {
     Ok(out)
 }
 
+/// `dataset` (JSON Lines of preference pairs) with each candidate that has no
+/// closed think block of its own made to start with [`CLOSED_THINK`]: the
+/// state the model is asked from, as for [`closed_think_blocks`].
+pub fn closed_think_pairs(dataset: &str) -> Result<String, serde_json::Error> {
+    let mut out = String::with_capacity(dataset.len() + 64);
+    for line in dataset.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let mut pair: serde_json::Value = serde_json::from_str(line)?;
+        for side in ["chosen", "rejected"] {
+            let text = pair
+                .get(side)
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_str());
+            if let Some(text) = text.filter(|t| !t.contains("</think>")) {
+                pair[side]["content"] = format!("{CLOSED_THINK}{text}").into();
+            }
+        }
+        out.push_str(&serde_json::to_string(&pair)?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
 /// The reply budget floor for the model at `base`: the reasoning budget when
 /// its template opens a think block, else none.
 #[must_use]
@@ -207,6 +229,37 @@ mod tests {
         assert_eq!((content(0), content(1)), ("s".into(), "q".into()));
         assert_eq!(lines[0]["metadata"]["view"], "sft-final");
         assert_eq!(lines[1]["messages"][0]["content"], "call");
+    }
+
+    /// A preference pair's two candidates are the answers a model is asked
+    /// for, so each follows an empty closed block as a supervised answer does;
+    /// the prompt is untouched and a candidate that closes a block is kept.
+    #[test]
+    fn each_preference_candidate_follows_an_empty_closed_think_block() {
+        let pair = |chosen: &str, rejected: &str| {
+            serde_json::json!({
+                "prompt": [{"role": "user", "content": "q"}],
+                "chosen": {"role": "assistant", "content": chosen},
+                "rejected": {"role": "assistant", "content": rejected},
+                "tools": [],
+            })
+            .to_string()
+        };
+        let text = format!(
+            "{}\n\n{}\n",
+            pair("yes", "no"),
+            pair("<think>x</think>kept", "no")
+        );
+        let rewritten = closed_think_pairs(&text).unwrap();
+        let lines: Vec<serde_json::Value> = rewritten
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0]["chosen"]["content"], format!("{CLOSED_THINK}yes"));
+        assert_eq!(lines[0]["rejected"]["content"], format!("{CLOSED_THINK}no"));
+        assert_eq!(lines[0]["prompt"][0]["content"], "q");
+        assert_eq!(lines[1]["chosen"]["content"], "<think>x</think>kept");
     }
 
     /// A record that lists no tools is a plain chat record: writers that

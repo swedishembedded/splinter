@@ -87,6 +87,10 @@ pub struct Train {
     pub alpha: f32,
     pub learning_rate: Option<f32>,
     pub bf16: bool,
+    /// The share of draws that are replay when any is given.
+    pub replay_share: Option<f32>,
+    /// Examples per optimizer step.
+    pub grad_accum: u32,
 }
 
 /// Fine-tune a LoRA adapter on the training set through Splinter's trainer,
@@ -113,6 +117,8 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         rank: t.rank,
         alpha: t.alpha,
         replay: &t.replay,
+        replay_share: t.replay_share,
+        grad_accum: t.grad_accum,
         continue_from: t.continue_from.as_deref(),
         cancel: None,
         bf16_base: t.bf16,
@@ -365,6 +371,11 @@ pub struct Dpo {
     pub rank: u32,
     pub alpha: f32,
     pub beta: f32,
+    /// Weight of the anchor on the chosen answer.
+    pub nll_weight: f32,
+    /// Pairs per optimizer step.
+    pub grad_accum: u32,
+    pub learning_rate: Option<f32>,
 }
 
 /// Direct preference optimisation on the pairs, through Splinter's trainer.
@@ -381,6 +392,9 @@ pub fn dpo_command(d: &Dpo) -> anyhow::Result<()> {
         rank: d.rank,
         alpha: d.alpha,
         beta: d.beta,
+        nll_weight: d.nll_weight,
+        grad_accum: d.grad_accum,
+        learning_rate: d.learning_rate,
         continue_from: d.continue_from.as_deref(),
         cancel: None,
     };

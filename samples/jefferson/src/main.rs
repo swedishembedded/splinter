@@ -205,6 +205,8 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         rank: u32::try_from(number(args, "--rank", 16)?)?,
         alpha: flag(args, "--alpha").map_or(Ok(32.0), |v| v.parse())?,
         replay: &[],
+        replay_share: None,
+        grad_accum: 1,
         continue_from: None,
         cancel: None,
         bf16_base: args.iter().any(|a| a == "--bf16"),

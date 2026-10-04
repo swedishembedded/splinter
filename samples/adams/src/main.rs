@@ -305,6 +305,14 @@ fn tasks_command(args: &[String]) -> anyhow::Result<()> {
     run::tasks_command(&resources, &documents, number(args, "--seen-per-kind", 40)?)
 }
 
+/// Effective batch size. A single example per update, which is what one row is,
+/// is a noisy gradient when records of very different kinds alternate.
+const DEFAULT_GRAD_ACCUM: u32 = 8;
+/// A conventional LoRA-DPO rate, far below the supervised one; not tuned here.
+const DEFAULT_DPO_LEARNING_RATE: f32 = 1e-5;
+/// Anchor on the chosen answer's likelihood; not tuned here.
+const DEFAULT_NLL_WEIGHT: f32 = 0.2;
+
 fn train_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     run::train_command(&run::Train {
@@ -322,6 +330,8 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         alpha: number(args, "--alpha", 32.0)?,
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
         bf16: args.iter().any(|a| a == "--bf16"),
+        replay_share: flag(args, "--replay-share").map_or(Ok(None), |v| v.parse().map(Some))?,
+        grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
     })
 }
 
@@ -418,6 +428,9 @@ fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {
         rank: number(args, "--rank", 16)?,
         alpha: number(args, "--alpha", 32.0)?,
         beta: number(args, "--beta", 0.1)?,
+        nll_weight: number(args, "--nll-weight", DEFAULT_NLL_WEIGHT)?,
+        grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
+        learning_rate: Some(number(args, "--lr", DEFAULT_DPO_LEARNING_RATE)?),
     })
 }
 

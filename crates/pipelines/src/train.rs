@@ -319,6 +319,8 @@ impl Trainer for BrainTrainer {
             rank: plan.rank,
             alpha: DEFAULT_LORA_ALPHA,
             replay: &replayed,
+            replay_share: None,
+            grad_accum: 1,
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
             bf16_base: plan.tuning.bf16_base,
@@ -344,6 +346,9 @@ impl Trainer for BrainTrainer {
             rank: plan.rank,
             alpha: DEFAULT_LORA_ALPHA,
             beta: plan.beta,
+            nll_weight: 0.0,
+            grad_accum: 1,
+            learning_rate: plan.tuning.learning_rate,
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
         })

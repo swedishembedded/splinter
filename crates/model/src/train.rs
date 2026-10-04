@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use splinter_core::training::{HeldOutScore, PreferenceScore};
 
 use crate::error::PolicyError;
-use crate::local::{closed_think_blocks, opens_think_block};
+use crate::local::{closed_think_blocks, closed_think_pairs, opens_think_block};
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
 /// names none: brain's default.
@@ -62,6 +62,11 @@ pub struct FineTune<'a> {
     /// Chat datasets whose every record is mixed into training (never held
     /// out), so earlier experience is replayed beside the new.
     pub replay: &'a [PathBuf],
+    /// The share of training draws that come from `replay` in all; `None`
+    /// mixes the plain union, in which a large replay set takes most steps.
+    pub replay_share: Option<f32>,
+    /// Examples summed into each optimizer step: the effective batch size.
+    pub grad_accum: u32,
     /// An adapter to continue training instead of starting a fresh one; its
     /// own rank and alpha then apply.
     pub continue_from: Option<&'a Path>,
@@ -272,7 +277,11 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
-        .bf16_base(request.bf16_base);
+        .bf16_base(request.bf16_base)
+        .grad_accum(request.grad_accum);
+    if let Some(share) = request.replay_share {
+        fine_tune = fine_tune.replay_share(share);
+    }
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
     }
@@ -346,6 +355,13 @@ pub struct PreferenceTune<'a> {
     /// The DPO temperature scaling the reference-normalised margin
     /// ([`DEFAULT_DPO_BETA`] unless the caller chooses otherwise).
     pub beta: f32,
+    /// Weight of an anchor on the chosen answer's own likelihood, added to
+    /// the DPO loss; 0 is plain DPO.
+    pub nll_weight: f32,
+    /// Pairs summed into each optimizer step: the effective batch size.
+    pub grad_accum: u32,
+    /// The peak learning rate; brain's default when `None`.
+    pub learning_rate: Option<f32>,
     /// An adapter to continue instead of starting a fresh one; base plus
     /// this adapter is then the frozen reference, and its own rank and
     /// alpha apply.
@@ -394,15 +410,44 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
     let trained_on = validate_preference_dataset(request.train)?;
     let held_out_summary = validate_preference_dataset(request.held_out)?;
     let (weights, base_id) = base_weights(request.model_dir)?;
+    // As in [`fine_tune`]: a model asked from an open think block trains on
+    // candidates that follow an empty closed one, rendered with it kept.
+    let reasoning = opens_think_block(request.model_dir);
+    let prepared = |path: &Path, name: &str| -> Result<std::path::PathBuf, PolicyError> {
+        if !reasoning {
+            return Ok(path.to_path_buf());
+        }
+        let io = |source| PolicyError::Io {
+            path: path.to_path_buf(),
+            source,
+        };
+        let text = std::fs::read_to_string(path).map_err(io)?;
+        let rewritten = closed_think_pairs(&text).map_err(|e| PolicyError::Dataset {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+        let dest = request.attempt_dir.join(name);
+        std::fs::create_dir_all(request.attempt_dir).map_err(io)?;
+        std::fs::write(&dest, rewritten).map_err(io)?;
+        Ok(dest)
+    };
+    let train = prepared(request.train, "pairs.think.jsonl")?;
+    let held_out = prepared(request.held_out, "held_out_pairs.think.jsonl")?;
     let mut fine_tune = brain::PreferenceFineTune::from_pretrained(weights.as_str())
-        .dataset(request.train)
-        .held_out(request.held_out)
+        .dataset(&train)
+        .held_out(&held_out)
+        .keep_reasoning(reasoning)
+        .nll_weight(request.nll_weight)
+        .grad_accum(request.grad_accum)
         .out_dir(request.attempt_dir)
         .adapter_id(format!("{base_id}:splinter:candidate"))
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
         .beta(request.beta);
+    if let Some(lr) = request.learning_rate {
+        fine_tune = fine_tune.lr(lr);
+    }
     if let Some(adapter) = request.continue_from {
         fine_tune = fine_tune.continue_from(adapter);
     }
