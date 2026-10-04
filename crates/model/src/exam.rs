@@ -11,7 +11,7 @@
 //! Results are appended one line per question and the run resumes where it
 //! stopped, so an interrupted run costs nothing already measured.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::path::Path;
 
@@ -36,6 +36,24 @@ pub trait Question {
     fn prompt(&self) -> &str;
 }
 
+/// How an answer was graded: whether it is right, and the separate named
+/// checks that verdict is made of, each true when the answer passes it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Verdict {
+    pub correct: bool,
+    pub checks: Vec<(String, bool)>,
+}
+
+impl From<bool> for Verdict {
+    /// A grade with no checks beyond the verdict.
+    fn from(correct: bool) -> Self {
+        Self {
+            correct,
+            checks: Vec::new(),
+        }
+    }
+}
+
 /// One graded answer.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Graded {
@@ -47,7 +65,8 @@ pub struct Graded {
     pub split: String,
     /// The reference the answer was compared with.
     pub reference: String,
-    /// The answer, cut for the record; `None` when the model gave none.
+    /// The answer in full, so a result can be graded again by a stricter
+    /// check without asking the model again; `None` when it gave none.
     pub answer: Option<String>,
     /// Whether the answer is right.
     pub correct: bool,
@@ -57,10 +76,12 @@ pub struct Graded {
     pub truncated: bool,
     /// Seconds the answer took.
     pub seconds: f64,
+    /// What the question's own named checks said of the answer, so a result
+    /// can be read by more than pass or fail. Empty for a question that names
+    /// none.
+    #[serde(default)]
+    pub checks: BTreeMap<String, bool>,
 }
-
-/// The most of an answer a record keeps.
-const RECORDED_ANSWER_CHARS: usize = 400;
 
 /// The graded answers already in `path`; none when there is no file yet.
 ///
@@ -104,7 +125,7 @@ pub fn run_with<Q: Question>(
     out: &Path,
     limit: Option<usize>,
     ask: &mut dyn FnMut(&Q) -> anyhow::Result<Reply>,
-    is_correct: &dyn Fn(&Q, &str) -> bool,
+    grade: &dyn Fn(&Q, &str) -> Verdict,
 ) -> anyhow::Result<usize> {
     let todo = pending(questions, out, limit)?;
     let mut file = std::fs::OpenOptions::new()
@@ -114,13 +135,18 @@ pub fn run_with<Q: Question>(
     for (n, question) in todo.iter().enumerate() {
         let reply = ask(question)?;
         let answer = final_answer(&reply.thinking, &reply.text, reply.truncated);
+        let verdict = answer.as_deref().map(|a| grade(question, a));
         let graded = Graded {
             id: question.id().to_string(),
             kind: question.kind().to_string(),
             split: question.split().to_string(),
             reference: question.reference().to_string(),
-            correct: answer.as_deref().is_some_and(|a| is_correct(question, a)),
-            answer: answer.map(|a| a.chars().take(RECORDED_ANSWER_CHARS).collect()),
+            checks: verdict
+                .as_ref()
+                .map(|v| v.checks.iter().cloned().collect())
+                .unwrap_or_default(),
+            correct: verdict.is_some_and(|v| v.correct),
+            answer,
             tokens: reply.tokens,
             truncated: reply.truncated,
             seconds: reply.seconds,
@@ -166,7 +192,7 @@ pub fn run<Q: Question>(
     out: &Path,
     limit: Option<usize>,
     model: &Model<'_>,
-    is_correct: &dyn Fn(&Q, &str) -> bool,
+    grade: &dyn Fn(&Q, &str) -> Verdict,
 ) -> anyhow::Result<usize> {
     if pending(questions, out, limit)?.is_empty() {
         return Ok(0);
@@ -175,7 +201,7 @@ pub fn run<Q: Question>(
     let runtime = tokio::runtime::Runtime::new()?;
     let mut ask =
         |q: &Q| runtime.block_on(answerer.ask(model.system, q.prompt(), model.max_tokens));
-    run_with(questions, out, limit, &mut ask, is_correct)
+    run_with(questions, out, limit, &mut ask, grade)
 }
 
 #[cfg(test)]
@@ -234,7 +260,7 @@ mod tests {
         let d = dir();
         let out = d.path().join("r.jsonl");
         let n = run_with(&questions(3), &out, None, &mut replying("1770"), &|q, a| {
-            a.contains(&q.reference)
+            a.contains(&q.reference).into()
         })
         .unwrap();
         assert_eq!(n, 3);
@@ -246,11 +272,50 @@ mod tests {
     }
 
     #[test]
+    fn a_question_that_names_checks_has_each_recorded_with_its_answer() {
+        let d = dir();
+        let out = d.path().join("r.jsonl");
+        run_with(
+            &questions(1),
+            &out,
+            None,
+            &mut replying("1770, I think, in Boston"),
+            &|_, a| Verdict {
+                correct: true,
+                checks: vec![
+                    ("names_the_year".into(), a.contains("1770")),
+                    ("brief".into(), a.len() < 10),
+                ],
+            },
+        )
+        .unwrap();
+        let graded = &read_results(&out).unwrap()[0];
+        assert_eq!(graded.checks.get("names_the_year"), Some(&true));
+        assert_eq!(graded.checks.get("brief"), Some(&false));
+        let none = d.path().join("none.jsonl");
+        run_with(
+            &questions(1),
+            &none,
+            None,
+            &mut |_: &Q| Ok(Reply::default()),
+            &|_, _| false.into(),
+        )
+        .unwrap();
+        assert!(
+            read_results(&none).unwrap()[0].checks.is_empty(),
+            "no answer, nothing to check"
+        );
+    }
+
+    #[test]
     fn a_run_resumes_where_it_stopped_and_asks_nothing_twice() {
         let d = dir();
         let out = d.path().join("r.jsonl");
         let qs = questions(5);
-        run_with(&qs, &out, Some(2), &mut replying("1770"), &|_, _| true).unwrap();
+        run_with(&qs, &out, Some(2), &mut replying("1770"), &|_, _| {
+            true.into()
+        })
+        .unwrap();
         assert_eq!(read_results(&out).unwrap().len(), 2);
         let mut asked = Vec::new();
         let mut recording = |q: &Q| {
@@ -260,7 +325,7 @@ mod tests {
                 ..Reply::default()
             })
         };
-        let n = run_with(&qs, &out, None, &mut recording, &|_, _| true).unwrap();
+        let n = run_with(&qs, &out, None, &mut recording, &|_, _| true.into()).unwrap();
         assert_eq!(n, 3);
         assert_eq!(asked, ["q2", "q3", "q4"]);
         assert_eq!(read_results(&out).unwrap().len(), 5);
@@ -277,13 +342,13 @@ mod tests {
                 ..Reply::default()
             })
         };
-        run_with(&questions(1), &out, None, &mut silent, &|_, _| true).unwrap();
+        run_with(&questions(1), &out, None, &mut silent, &|_, _| true.into()).unwrap();
         let g = &read_results(&out).unwrap()[0];
         assert!(g.answer.is_none() && !g.correct && g.truncated);
     }
 
     #[test]
-    fn a_long_answer_is_cut_for_the_record() {
+    fn a_long_answer_is_recorded_in_full_so_it_can_be_graded_again() {
         let d = dir();
         let out = d.path().join("r.jsonl");
         let mut long = |_: &Q| {
@@ -292,7 +357,7 @@ mod tests {
                 ..Reply::default()
             })
         };
-        run_with(&questions(1), &out, None, &mut long, &|_, _| false).unwrap();
+        run_with(&questions(1), &out, None, &mut long, &|_, _| false.into()).unwrap();
         assert_eq!(
             read_results(&out).unwrap()[0]
                 .answer
@@ -300,7 +365,7 @@ mod tests {
                 .unwrap()
                 .chars()
                 .count(),
-            RECORDED_ANSWER_CHARS
+            2000
         );
     }
 
@@ -319,7 +384,7 @@ mod tests {
                 ..Reply::default()
             })
         };
-        assert!(run_with(&questions(5), &out, None, &mut flaky, &|_, _| true).is_err());
+        assert!(run_with(&questions(5), &out, None, &mut flaky, &|_, _| true.into()).is_err());
         assert_eq!(read_results(&out).unwrap().len(), 2);
     }
 

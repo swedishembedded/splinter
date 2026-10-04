@@ -156,6 +156,38 @@ pub fn per_reference(
         .collect()
 }
 
+/// For each named check, over the pairs both arms answered with a check
+/// result: `(split, kind, check, n, before, after)`, the passes of each arm.
+#[must_use]
+pub fn check_rows(
+    before: &[Graded],
+    after: &[Graded],
+) -> Vec<(String, String, String, usize, usize, usize)> {
+    let after_by_id: HashMap<&str, &Graded> = after.iter().map(|g| (g.id.as_str(), g)).collect();
+    let mut cells: std::collections::BTreeMap<(String, String, String), (usize, usize, usize)> =
+        std::collections::BTreeMap::new();
+    for b in before {
+        let Some(a) = after_by_id.get(b.id.as_str()) else {
+            continue;
+        };
+        for (name, passed_before) in &b.checks {
+            let Some(passed_after) = a.checks.get(name) else {
+                continue;
+            };
+            let cell = cells
+                .entry((b.split.clone(), b.kind.clone(), name.clone()))
+                .or_default();
+            cell.0 += 1;
+            cell.1 += usize::from(*passed_before);
+            cell.2 += usize::from(*passed_after);
+        }
+    }
+    cells
+        .into_iter()
+        .map(|((split, kind, name), (n, b, a))| (split, kind, name, n, b, a))
+        .collect()
+}
+
 /// The report as a Markdown table, with the evidence a reader needs to judge
 /// it: how many questions, how many went unanswered, and who gained and lost.
 /// `chance` gives the chance level of a kind where one exists.
@@ -189,6 +221,18 @@ pub fn render(
             row.p_value,
             100.0 * row.modal_reference
         );
+    }
+    let named = check_rows(before, after);
+    if !named.is_empty() {
+        let _ = writeln!(
+            out,
+            "\nThe separate checks an answer is made to pass, over the questions that name them:\n"
+        );
+        let _ = writeln!(out, "| split | question | check | n | before | after |");
+        let _ = writeln!(out, "|---|---|---|---|---|---|");
+        for (split, kind, check, n, b, a) in named {
+            let _ = writeln!(out, "| {split} | {kind} | {check} | {n} | {b} | {a} |");
+        }
     }
     let closed = per_reference(before, after);
     if !closed.is_empty() {
@@ -225,7 +269,44 @@ mod tests {
             tokens: 10,
             truncated: !answered,
             seconds: 1.0,
+            checks: Default::default(),
         }
+    }
+
+    #[test]
+    fn named_checks_are_counted_per_arm_over_the_pairs_that_have_them() {
+        let with = |id: &str, grounded: bool, quotes: bool| Graded {
+            checks: [
+                ("grounded".to_string(), grounded),
+                ("quotes".to_string(), quotes),
+            ]
+            .into(),
+            ..graded(id, "exam", "transfer", grounded && quotes, true)
+        };
+        let before = vec![
+            with("a", true, false),
+            with("b", false, false),
+            graded("c", "exam", "transfer", true, true),
+        ];
+        let after = vec![
+            with("a", true, true),
+            with("b", true, false),
+            with("c", true, true),
+        ];
+        let rows = check_rows(&before, &after);
+        assert_eq!(
+            rows,
+            vec![
+                ("exam".into(), "transfer".into(), "grounded".into(), 2, 1, 2),
+                ("exam".into(), "transfer".into(), "quotes".into(), 2, 0, 1),
+            ],
+            "the question with no checks is left out"
+        );
+        let text = render(&before, &after, &[], &|_| None);
+        assert!(
+            text.contains("| exam | transfer | grounded | 2 | 1 | 2 |"),
+            "{text}"
+        );
     }
 
     #[test]

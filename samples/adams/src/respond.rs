@@ -122,6 +122,7 @@ fn numbers_in(text: &str) -> HashSet<String> {
 fn describe(violation: &Violation) -> String {
     match violation {
         Violation::MissingBlock => "end the answer with a `Grounding:` block".to_string(),
+        Violation::EmptyBlock => "the Grounding: block has no line: ground each claim in one".to_string(),
         Violation::UnknownLabel(label) => format!("{label:?} is not a label: use SOURCE_DIRECT, SOURCE_INFERRED, MODERN_OBSERVATION, PERSONA_TRANSFER or SPECULATION"),
         Violation::UncitedSource(line) => format!("a SOURCE_DIRECT line needs a quotation of at least six words and a document id in square brackets: {line}"),
         Violation::FabricatedQuote(quote) => format!("this quotation is not in the document it cites or in the passages you were shown, so it must go: {quote}"),
@@ -130,29 +131,75 @@ fn describe(violation: &Violation) -> String {
     }
 }
 
-/// What a draft answer must be, or why not: the applicability agrees with the
-/// case, a non-fit that needs information asks for it, a fit quotes him when
-/// there are passages to quote, and the grounding keeps its word against the
-/// documents it may cite and the facts it was given.
-pub fn check(text: &str, scenario: &Scenario, docs: &[&Document]) -> Result<(), String> {
-    let Some(stated) = Applicability::of(text) else {
-        return Err("the first line must be `Applicability:` followed by APPLIES, PARTLY, DOES_NOT_APPLY or NEEDS_INFORMATION".to_string());
-    };
-    if !stated.fits(scenario.case) {
-        return Err(format!("the applicability {stated:?} does not suit this situation: decide it from whether the principle's conditions hold here"));
-    }
+/// Each rule an answer must keep, in the order they are checked, with why it
+/// was broken if it was: the applicability is stated, it agrees with the case,
+/// a non-fit that needs information asks for it, the grounding block is there
+/// and holds against the documents it may cite and the facts it was given, no
+/// number is stated that the situation never gave, and a fit with passages to
+/// quote rests on his words.
+///
+/// Every rule is always assessed, so the same names come back for every answer
+/// and a result can be read rule by rule.
+pub fn assess(
+    text: &str,
+    scenario: &Scenario,
+    docs: &[&Document],
+) -> Vec<(&'static str, Option<String>)> {
+    let broken = |rule: &'static str, why: String| (rule, Some(why));
+    let kept = |rule: &'static str| (rule, None);
+    let stated = Applicability::of(text);
     let grounded = grounding::parse(text);
-    if stated == Applicability::NeedsInformation && !grounded.body.contains('?') {
-        return Err("an answer that needs information must ask for it: put the question in the answer, ending in a question mark".to_string());
-    }
+    let mut rules = Vec::new();
+
+    rules.push(match stated {
+        Some(_) => kept("applicability_stated"),
+        None => broken("applicability_stated", "the first line must be `Applicability:` followed by APPLIES, PARTLY, DOES_NOT_APPLY or NEEDS_INFORMATION".to_string()),
+    });
+    rules.push(match stated {
+        Some(s) if s.fits(scenario.case) => kept("applicability_fits"),
+        Some(s) => broken("applicability_fits", format!("the applicability {s:?} does not suit this situation: decide it from whether the principle's conditions hold here")),
+        None => broken("applicability_fits", "no applicability is stated".to_string()),
+    });
+    rules.push(
+        if stated == Some(Applicability::NeedsInformation) && !grounded.body.contains('?') {
+            broken("asks_when_needed", "an answer that needs information must ask for it: put the question in the answer, ending in a question mark".to_string())
+        } else {
+            kept("asks_when_needed")
+        },
+    );
     let violations = grounding::verify(&grounded, docs, &scenario.observations);
-    if !violations.is_empty() {
-        return Err(violations
-            .iter()
-            .map(describe)
-            .collect::<Vec<_>>()
-            .join("; "));
-    }
+    let no_block = violations
+        .iter()
+        .any(|v| matches!(v, Violation::MissingBlock | Violation::EmptyBlock));
+    rules.push(match (no_block, violations.first()) {
+        (true, Some(Violation::EmptyBlock)) => broken(
+            "grounding_present",
+            "the Grounding: block has no line: ground each claim in one".to_string(),
+        ),
+        (true, _) => broken(
+            "grounding_present",
+            "end the answer with a `Grounding:` block".to_string(),
+        ),
+        _ => kept("grounding_present"),
+    });
+    rules.push(if no_block {
+        broken(
+            "grounding_holds",
+            "there is no grounding to hold".to_string(),
+        )
+    } else if violations.is_empty() {
+        kept("grounding_holds")
+    } else {
+        broken(
+            "grounding_holds",
+            violations
+                .iter()
+                .map(describe)
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
+    });
+
     let given: String = std::iter::once(scenario.situation.as_str())
         .chain(scenario.observations.iter().map(String::as_str))
         .chain(std::iter::once(scenario.request.as_str()))
@@ -160,28 +207,44 @@ pub fn check(text: &str, scenario: &Scenario, docs: &[&Document]) -> Result<(), 
         .collect::<Vec<_>>()
         .join(" ");
     let allowed = numbers_in(&given);
-    if let Some(invented) = {
-        let mut stated: Vec<String> = numbers_in(&grounded.body)
-            .into_iter()
-            .filter(|n| !allowed.contains(n))
-            .collect();
-        stated.sort();
-        stated.into_iter().next()
-    } {
-        return Err(format!("the answer states a number the situation never gave: {invented}; use only numbers that are in the situation, the facts or the passages"));
-    }
+    let mut invented: Vec<String> = numbers_in(&grounded.body)
+        .into_iter()
+        .filter(|n| !allowed.contains(n))
+        .collect();
+    invented.sort();
+    rules.push(match invented.first() {
+        Some(n) => broken("numbers_given", format!("the answer states a number the situation never gave: {n}; use only numbers that are in the situation, the facts or the passages")),
+        None => kept("numbers_given"),
+    });
+
     let quotes_him = grounded
         .items
         .iter()
         .flatten()
         .any(|i| i.label == Some(grounding::Label::SourceDirect));
-    if scenario.case.applies() && !docs.is_empty() && !quotes_him {
-        return Err(format!(
-            "a fit must rest on his words: add a line to the Grounding: block that looks exactly like `- SOURCE_DIRECT: \"words copied from one of the passages\" [{}]`",
-            docs.first().map_or("document-id", |d| d.id.as_str())
-        ));
+    rules.push(
+        if scenario.case.applies() && !docs.is_empty() && !quotes_him {
+            broken("quotes_him", format!(
+                "a fit must rest on his words: add a line to the Grounding: block that looks exactly like `- SOURCE_DIRECT: \"words copied from one of the passages\" [{}]`",
+                docs.first().map_or("document-id", |d| d.id.as_str())
+            ))
+        } else {
+            kept("quotes_him")
+        },
+    );
+    rules
+}
+
+/// What a draft answer must be, or why not: the first of [`assess`]'s rules it
+/// breaks.
+pub fn check(text: &str, scenario: &Scenario, docs: &[&Document]) -> Result<(), String> {
+    match assess(text, scenario, docs)
+        .into_iter()
+        .find_map(|(_, broken)| broken)
+    {
+        Some(why) => Err(why),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// What the helper drafts.
@@ -331,6 +394,47 @@ mod tests {
 
     fn refs(d: &Arc<Vec<Document>>) -> Vec<&Document> {
         d.iter().collect()
+    }
+
+    #[test]
+    fn a_grounding_block_with_nothing_in_it_grounds_nothing_and_is_refused() {
+        let empty = "Applicability: APPLIES\n\nI would write to the towns.\n\nGrounding:\n";
+        let why = check(empty, &scenario(Case::Clear), &refs(&docs())).unwrap_err();
+        assert!(why.contains("no line"), "{why}");
+    }
+
+    #[test]
+    fn each_rule_is_named_so_a_result_shows_which_one_an_answer_broke() {
+        let case = scenario(Case::Clear);
+        let documents = docs();
+        let passes = |text: &str| -> std::collections::BTreeMap<&'static str, bool> {
+            assess(text, &case, &refs(&documents))
+                .into_iter()
+                .map(|(rule, failure)| (rule, failure.is_none()))
+                .collect()
+        };
+        let good = passes(FIT);
+        assert!(good.values().all(|&ok| ok), "{good:?}");
+        let names: Vec<&str> = good.keys().copied().collect();
+        for rule in [
+            "applicability_stated",
+            "applicability_fits",
+            "grounding_present",
+            "grounding_holds",
+            "numbers_given",
+            "quotes_him",
+        ] {
+            assert!(names.contains(&rule), "{rule} is not named: {names:?}");
+        }
+        let wrong_verdict = passes(&FIT.replace("APPLIES", "DOES_NOT_APPLY"));
+        assert!(!wrong_verdict["applicability_fits"] && wrong_verdict["grounding_holds"]);
+        let no_quote = passes(&FIT.replace(
+            "SOURCE_DIRECT: \"Let the Committee write to every Town\" [d1]",
+            "SOURCE_INFERRED: my papers show it",
+        ));
+        assert!(!no_quote["quotes_him"] && no_quote["applicability_fits"]);
+        let nothing = passes("Just advice.");
+        assert!(!nothing["applicability_stated"] && !nothing["grounding_present"]);
     }
 
     #[test]

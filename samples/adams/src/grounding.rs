@@ -209,6 +209,8 @@ pub fn normalise(answer: &str) -> String {
 pub enum Violation {
     /// There is no grounding block.
     MissingBlock,
+    /// The block has no line: it grounds nothing.
+    EmptyBlock,
     /// A line names a label that is not one of the five.
     UnknownLabel(String),
     /// A line labelled as his own words has no quotation, no document, or a
@@ -259,6 +261,9 @@ pub fn verify(grounded: &Grounded, docs: &[&Document], observations: &[String]) 
     let Some(items) = &grounded.items else {
         return vec![Violation::MissingBlock];
     };
+    if items.is_empty() {
+        return vec![Violation::EmptyBlock];
+    }
     let mut found = Vec::new();
 
     for quote in quotations(&grounded.body, MIN_BODY_QUOTE_WORDS) {

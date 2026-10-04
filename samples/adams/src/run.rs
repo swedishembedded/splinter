@@ -164,8 +164,9 @@ pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
         max_tokens: e.max_tokens,
         label: "adams",
     };
-    let asked =
-        splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &tasks::is_correct)?;
+    let asked = splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &|q, a| {
+        tasks::is_correct(q, a).into()
+    })?;
     println!("asked {asked} questions; results in {}", e.out.display());
     Ok(())
 }
@@ -440,7 +441,7 @@ pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow
     };
     let asked =
         splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &|task, answer| {
-            task.is_correct(answer, documents)
+            task.verdict(answer, documents)
         })?;
     println!("asked {asked} questions; results in {}", e.out.display());
     Ok(())
@@ -656,7 +657,7 @@ pub fn anchor_exam_command(
         label: "adams",
     };
     let asked = splinter_sdk::model::exam::run(&questions, out, limit, &model, &|q, a| {
-        crate::anchor::is_correct(q, a)
+        crate::anchor::is_correct(q, a).into()
     })?;
     println!("asked {asked} questions; results in {}", out.display());
     Ok(())

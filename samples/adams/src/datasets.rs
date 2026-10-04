@@ -178,9 +178,9 @@ pub struct TransferTask {
 }
 
 impl TransferTask {
-    /// Whether `answer` keeps every rule: right applicability for the case,
-    /// grounding that holds against the evidence and the facts given.
-    pub fn is_correct(&self, answer: &str, docs: &[Document]) -> bool {
+    /// How `answer` was graded against the evidence and the facts it was given:
+    /// right when it keeps every rule, with each rule's own result alongside.
+    pub fn verdict(&self, answer: &str, docs: &[Document]) -> splinter_sdk::model::exam::Verdict {
         let scenario = Scenario {
             id: self.scenario_id.clone(),
             principle_id: String::new(),
@@ -198,7 +198,19 @@ impl TransferTask {
             .iter()
             .filter(|d| self.evidence_docs.contains(&d.id))
             .collect();
-        respond::check(answer, &scenario, &evidence).is_ok()
+        let rules = respond::assess(answer, &scenario, &evidence);
+        splinter_sdk::model::exam::Verdict {
+            correct: rules.iter().all(|(_, broken)| broken.is_none()),
+            checks: rules
+                .into_iter()
+                .map(|(rule, broken)| (rule.to_string(), broken.is_none()))
+                .collect(),
+        }
+    }
+
+    /// Whether `answer` keeps every rule.
+    pub fn is_correct(&self, answer: &str, docs: &[Document]) -> bool {
+        self.verdict(answer, docs).correct
     }
 }
 

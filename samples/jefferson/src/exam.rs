@@ -103,7 +103,9 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         max_tokens: run.max_tokens,
         label: "jefferson",
     };
-    splinter_sdk::model::exam::run(&tasks, &run.out, run.limit, &model, &is_correct)
+    splinter_sdk::model::exam::run(&tasks, &run.out, run.limit, &model, &|task, answer| {
+        is_correct(task, answer).into()
+    })
 }
 
 #[cfg(test)]
