@@ -59,24 +59,35 @@ const STARTUP_PREFIX: &str = "brain serve: ";
 /// The most output lines kept to explain a server that did not start.
 const KEPT_LINES: usize = 20;
 
-/// Starts `binary` serving `adapter` on `base`, and re-answers `sample`
-/// (whose in-process answers are `in_process`, one per task) through it.
-/// An error is returned only for a cancelled check; every other failure is
-/// the check's result.
-#[allow(clippy::too_many_arguments)]
+/// What the serve check is asked to prove.
+pub struct ServeCheck<'a> {
+    /// The `brain` that serves; `None` when there is none to be found.
+    pub binary: Option<&'a Path>,
+    /// The base checkpoint the adapter sits on.
+    pub base: &'a Path,
+    /// The candidate's adapter file.
+    pub adapter: &'a Path,
+    /// The digest the adapter must be served under.
+    pub adapter_digest: &'a str,
+    /// The system prompt the candidate is asked under; `None` is the default.
+    pub system: Option<&'a str>,
+    /// The held-out tasks re-answered through the server.
+    pub sample: &'a Suite,
+    /// The candidate's in-process answers to them, one per task.
+    pub in_process: &'a [Probe],
+    /// How long the server may take to bind.
+    pub startup: Duration,
+}
+
+/// Starts the `brain` of `request` serving its adapter on its base, and
+/// re-answers its sample through it. An error is returned only for a
+/// cancelled check; every other failure is the check's result.
 pub fn check(
     ctx: &Context,
-    binary: Option<&Path>,
-    base: &Path,
-    adapter: &Path,
-    adapter_digest: &str,
-    system: Option<&str>,
-    sample: &Suite,
-    in_process: &[Probe],
-    startup: Duration,
+    request: &ServeCheck<'_>,
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, OrchestratorError> {
-    let Some(binary) = binary else {
+    let Some(binary) = request.binary else {
         return Ok(Check::unmeasured(
             "no brain binary: none on PATH and SPLINTER_BRAIN_BIN is not set",
         ));
@@ -91,18 +102,12 @@ pub fn check(
     std::fs::create_dir_all(&work).map_err(splinter_orchestrator::error::io(&work))?;
     let result = serve_and_ask(
         ctx,
-        &Server {
+        request,
+        &Spawn {
             binary,
-            base,
-            adapter,
-            adapter_digest,
-            system,
             work: &work,
             models: &ctx.config().model_store,
         },
-        sample,
-        in_process,
-        startup,
         cancel,
     );
     // The directory only held the keys and the ready marker.
@@ -120,15 +125,9 @@ enum Failure {
     Unmeasured(String),
 }
 
-/// What to start.
-struct Server<'a> {
+/// How the server is started.
+struct Spawn<'a> {
     binary: &'a Path,
-    base: &'a Path,
-    adapter: &'a Path,
-    /// The digest the adapter must be served under.
-    adapter_digest: &'a str,
-    /// The system prompt the candidate is asked under; `None` is the default.
-    system: Option<&'a str>,
     work: &'a Path,
     models: &'a Path,
 }
@@ -147,12 +146,11 @@ impl Drop for Running {
 
 fn serve_and_ask(
     ctx: &Context,
-    server: &Server<'_>,
-    sample: &Suite,
-    in_process: &[Probe],
-    startup: Duration,
+    request: &ServeCheck<'_>,
+    server: &Spawn<'_>,
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, Failure> {
+    let (sample, in_process, startup) = (request.sample, request.in_process, request.startup);
     let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
     let address = format!("127.0.0.1:{port}");
     let keys = server.work.join("keys.json");
@@ -162,7 +160,7 @@ fn serve_and_ask(
         .arg("serve")
         .args(["--openai", &address])
         .arg("--adapter")
-        .arg(server.adapter)
+        .arg(request.adapter)
         .arg("--api-keys-out")
         .arg(&keys)
         .arg("--ready-file")
@@ -173,7 +171,7 @@ fn serve_and_ask(
         command.arg("--models-dir").arg(server.models);
     }
     let mut child = command
-        .env("BRAIN_QWEN_WEIGHTS", server.base)
+        .env("BRAIN_QWEN_WEIGHTS", request.base)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -232,7 +230,7 @@ fn serve_and_ask(
         binary: server.binary.to_path_buf(),
         startup_line: startup_line.clone(),
         served_digest,
-        expected_digest: server.adapter_digest.to_string(),
+        expected_digest: request.adapter_digest.to_string(),
         sampled: 0,
         agreed: 0,
         disagreed: Vec::new(),
@@ -250,7 +248,7 @@ fn serve_and_ask(
     .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
     // Asked as the candidate is: under the prompt it was trained under.
     let served = Model::new(loaded.provider(), loaded.identity());
-    let served = match server.system {
+    let served = match request.system {
         Some(system) => served.with_system(system),
         None => served,
     };

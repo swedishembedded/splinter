@@ -514,14 +514,16 @@ fn run_gate(
             );
             serve::check(
                 ctx,
-                ctx.config().brain_binary.as_deref(),
-                base_source,
-                &candidate.adapter,
-                &candidate.adapter_digest,
-                candidate_prompt.as_deref(),
-                &sample,
-                &probes[..take],
-                Duration::from_secs(config.serve_startup_secs),
+                &serve::ServeCheck {
+                    binary: ctx.config().brain_binary.as_deref(),
+                    base: base_source,
+                    adapter: &candidate.adapter,
+                    adapter_digest: &candidate.adapter_digest,
+                    system: candidate_prompt.as_deref(),
+                    sample: &sample,
+                    in_process: &probes[..take],
+                    startup: Duration::from_secs(config.serve_startup_secs),
+                },
                 cancel,
             )?
         }
