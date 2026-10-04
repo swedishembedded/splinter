@@ -22,7 +22,7 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
 };
-use splinter_eval::verifiers::calibration::{calibrate, CalibratedJudge};
+use splinter_eval::verifiers::calibration::{calibrate, measure, CalibratedJudge};
 use splinter_eval::verifiers::executable::{ExecutableCheck, ExecutableVerifier, Expectation};
 use splinter_eval::verifiers::{annotation, verify_and_annotate, Strongest, Verifier, VerifyError};
 use splinter_sandbox::{
@@ -231,6 +231,36 @@ fn calibration_measures_the_judge_and_the_calibrated_judge_abstains_below_thresh
     let lenient = CalibratedJudge::new(judge, calibration, 0.5).unwrap();
     let (verdict, _) = outcome(&lenient, &task, &experience(&task, "5", SOLVER));
     assert_eq!(verdict, Outcome::Pass);
+}
+
+#[test]
+fn measuring_a_judge_keeps_each_verdict_beside_its_label_in_order() {
+    let rt = runtime();
+    let judge = judge(ScriptedJudge::new(grades_five), &rt);
+    let task = sum_task(Environment::closed_book(), vec![reference()]);
+    let labelled: Vec<(Task, Experience, Outcome)> = [
+        ("5", Outcome::Pass),
+        ("7", Outcome::Pass),
+        ("4", Outcome::Fail),
+    ]
+    .into_iter()
+    .map(|(answer, label)| (task.clone(), experience(&task, answer, SOLVER), label))
+    .collect();
+    let (calibration, measurements) = measure(&judge, &labelled).unwrap();
+    assert_eq!(calibration, calibrate(&judge, &labelled).unwrap());
+    let seen: Vec<(Outcome, Outcome)> = measurements.iter().map(|m| (m.label, m.judged)).collect();
+    assert_eq!(
+        seen,
+        [
+            (Outcome::Pass, Outcome::Pass),
+            (Outcome::Pass, Outcome::Fail),
+            (Outcome::Fail, Outcome::Fail)
+        ]
+    );
+    assert!(
+        measurements[1].evidence.get("judge").is_some(),
+        "the judge's own evidence travels with the verdict"
+    );
 }
 
 struct Scratch(PathBuf);

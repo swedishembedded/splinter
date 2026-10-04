@@ -177,6 +177,17 @@ fn a_judge_that_cannot_tell_right_from_wrong_grades_nothing() {
     assert!(!report.judge.trusted, "{report:#?}");
     assert!(report.paired.is_none(), "no claim from an untrusted judge");
     assert_eq!(report.candidate.judged, 0);
+    // Each control it got wrong is kept with the answer and its reason, so a
+    // judge that is not trusted can be seen failing.
+    let wrong = &report.judge.misjudged;
+    assert!(!wrong.is_empty(), "{report:#?}");
+    assert!(wrong
+        .iter()
+        .all(|m| m.label == "fail" && m.judged == "pass"));
+    assert!(wrong.iter().all(|m| m.reason == "it gives the advice"));
+    assert!(wrong
+        .iter()
+        .all(|m| !m.instruction.is_empty() && !m.answer.is_empty()));
     // What code measures does not depend on the judge.
     assert_eq!(report.candidate.invented, 1);
 }

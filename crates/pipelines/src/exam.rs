@@ -35,7 +35,7 @@ use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Experience, PrivilegedKind, Provenance, Task};
 use splinter_eval::significance::SignTest;
 use splinter_eval::verifiers::calibration::{
-    calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
+    measure, CalibratedJudge, Calibration, Measurement, DEFAULT_MIN_PRECISION,
 };
 use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
@@ -84,6 +84,56 @@ pub struct JudgeTrust {
     pub min_precision: f64,
     /// The measurement.
     pub calibration: Calibration,
+    /// The controls it did not judge as labelled: what shows where it goes
+    /// wrong when it is not trusted.
+    pub misjudged: Vec<Misjudged>,
+}
+
+/// A control the judge did not judge as labelled.
+#[derive(Clone, Debug, Serialize)]
+pub struct Misjudged {
+    /// What the control should have got: `pass` or `fail`.
+    pub label: String,
+    /// What the judge gave it: `pass`, `fail` or `abstain`.
+    pub judged: String,
+    /// The task's instruction, cut at [`SHOWN_CHARS`].
+    pub instruction: String,
+    /// The answer it was judged on, cut at [`SHOWN_CHARS`].
+    pub answer: String,
+    /// The judge's reason, when it gave one.
+    pub reason: String,
+}
+
+/// The most characters of an instruction or an answer a [`Misjudged`] shows.
+const SHOWN_CHARS: usize = 400;
+
+fn outcome_word(outcome: Outcome) -> &'static str {
+    match outcome {
+        Outcome::Pass => "pass",
+        Outcome::Fail => "fail",
+        Outcome::Abstain => "abstain",
+    }
+}
+
+/// The controls `measurements` (one per control, in order) shows the judge
+/// did not judge as labelled.
+fn misjudged(
+    labelled: &[(Task, Experience, Outcome)],
+    measurements: &[Measurement],
+) -> Vec<Misjudged> {
+    let cut = |text: &str| text.chars().take(SHOWN_CHARS).collect::<String>();
+    labelled
+        .iter()
+        .zip(measurements)
+        .filter(|(_, m)| m.judged != m.label)
+        .map(|((task, exp, _), m)| Misjudged {
+            label: outcome_word(m.label).into(),
+            judged: outcome_word(m.judged).into(),
+            instruction: cut(&task.instruction),
+            answer: cut(exp.final_output.as_deref().unwrap_or_default()),
+            reason: m.evidence["reason"].as_str().unwrap_or_default().into(),
+        })
+        .collect()
 }
 
 /// One arm's results.
@@ -192,7 +242,8 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     ctx.release_bases();
     let judge_model = ctx.model(request.judge)?;
     let judge = judge_verifier(ctx, &judge_model);
-    let calibration = calibrate(&judge, &controls(ctx, request.controls)?)?;
+    let labelled = controls(ctx, request.controls)?;
+    let (calibration, measurements) = measure(&judge, &labelled)?;
     let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
     let trusted = precise(calibration.precision_pass) && precise(calibration.precision_fail);
     let judge = CalibratedJudge::new(judge, calibration.clone(), DEFAULT_MIN_PRECISION)?;
@@ -248,6 +299,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             controls: request.controls.len() * 2,
             min_precision: DEFAULT_MIN_PRECISION,
             calibration,
+            misjudged: misjudged(&labelled, &measurements),
         },
         base: arm(base_model, &base_answers, &base_judged, &base_grounded),
         candidate: arm(

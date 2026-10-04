@@ -61,25 +61,54 @@ fn share(numerator: usize, denominator: usize) -> Option<f64> {
     (denominator > 0).then(|| numerator as f64 / denominator as f64)
 }
 
+/// One labelled experience and what the judge made of it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Measurement {
+    /// The outcome it should get.
+    pub label: Outcome,
+    /// The outcome the judge gave it.
+    pub judged: Outcome,
+    /// The evidence the judge's verdict carried (its reason, among it).
+    pub evidence: serde_json::Value,
+}
+
 /// Measures `judge` on `labelled`: each experience of its task with the
 /// outcome it should get, pass or fail.
 pub fn calibrate(
     judge: &dyn Verifier,
     labelled: &[(Task, Experience, Outcome)],
 ) -> Result<Calibration, VerifyError> {
+    measure(judge, labelled).map(|(calibration, _)| calibration)
+}
+
+/// [`calibrate`], with every verdict kept beside its label, in order: what
+/// shows where a judge that is not precise enough goes wrong.
+pub fn measure(
+    judge: &dyn Verifier,
+    labelled: &[(Task, Experience, Outcome)],
+) -> Result<(Calibration, Vec<Measurement>), VerifyError> {
     let mut measured = Vec::with_capacity(labelled.len());
+    let mut measurements = Vec::with_capacity(labelled.len());
     for (index, (task, exp, label)) in labelled.iter().enumerate() {
         if *label == Outcome::Abstain {
             return Err(VerifyError::Label { index });
         }
         let note = annotation(judge, task, exp)?;
-        let AnnotationBody::Verdict { outcome, .. } = note.body else {
+        let AnnotationBody::Verdict {
+            outcome, evidence, ..
+        } = note.body
+        else {
             unreachable!("annotation() builds a verdict");
         };
         measured.push(Measured {
             experience: note.experience,
             label: *label,
             judged: outcome,
+        });
+        measurements.push(Measurement {
+            label: *label,
+            judged: outcome,
+            evidence,
         });
     }
     let count = |judged: Outcome, label: Option<Outcome>| {
@@ -93,7 +122,7 @@ pub fn calibrate(
         &canonical_json(&json!({ "producer": producer, "measured": measured }))
             .map_err(ExperienceError::from)?,
     );
-    Ok(Calibration {
+    let calibration = Calibration {
         id,
         producer,
         n: measured.len(),
@@ -106,7 +135,8 @@ pub fn calibrate(
             count(Outcome::Fail, None),
         ),
         abstain_rate: share(count(Outcome::Abstain, None), measured.len()),
-    })
+    };
+    Ok((calibration, measurements))
 }
 
 /// A judged verifier gated by its calibration: a verdict whose measured
