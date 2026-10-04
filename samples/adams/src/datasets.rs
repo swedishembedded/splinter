@@ -21,6 +21,7 @@
 use serde_json::{json, Value};
 
 use crate::curate::Document;
+use crate::persona::Framing;
 use crate::principles::Principle;
 use crate::respond::{self, Applicability};
 use crate::scenario::{Case, Scenario};
@@ -273,7 +274,7 @@ pub fn reconstruction_sft(
             let target = letter_target(&letter.body)?;
             Some(json!({
                 "messages": [
-                    {"role": "system", "content": crate::reconstruct::SYSTEM, "train": false},
+                    {"role": "system", "content": Framing::of_record(&crate::reconstruct::prompt(b)).system(crate::reconstruct::SYSTEM), "train": false},
                     {"role": "user", "content": crate::reconstruct::prompt(b), "train": false},
                     {"role": "assistant", "content": target, "train": true},
                 ],
@@ -295,7 +296,7 @@ pub struct Built {
 fn sft_record(prompt: &str, answer: &str) -> Value {
     json!({
         "messages": [
-            {"role": "system", "content": respond::SYSTEM, "train": false},
+            {"role": "system", "content": Framing::of_record(prompt).system(respond::SYSTEM), "train": false},
             {"role": "user", "content": prompt, "train": false},
             {"role": "assistant", "content": answer, "train": true},
         ],
@@ -313,7 +314,7 @@ fn pair(
 ) -> Value {
     json!({
         "prompt": [
-            {"role": "system", "content": respond::SYSTEM},
+            {"role": "system", "content": Framing::of_record(prompt).system(respond::SYSTEM)},
             {"role": "user", "content": prompt},
         ],
         "chosen": {"role": "assistant", "content": chosen},

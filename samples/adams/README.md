@@ -36,6 +36,7 @@ what he believed.
 | `build-data` | Builds supervised records (with his passages in the prompt, and without), preference pairs and a frozen benchmark from the kept answers. A rule is wholly training or wholly benchmark. A preference pair is an answer and the same answer broken in one named way that the check then refuses, so each pair is right by construction. |
 | `train-dpo` | Preference-optimises an adapter on the pairs, continuing from the supervised adapter, which then is the reference. |
 | `transfer-exam` | Asks a model every benchmark question, graded by the grounding rules with no judge. |
+| `--framing full\|identity\|plain` | On `transfer-exam` and `reconstruct-replies`: the system message the exam asks under. Training mixes all three (mostly the full instructions, some the bare identity, some no persona; the shares are constants in `persona.rs`), so an adapter can be asked without any persona prompt and the habit shown to be its own. |
 | `briefings`, `reconstruct-replies`, `judge`, `reconstruct-report` | The reconstruction benchmark: a held-out letter is briefed as the situation it answered, a model writes the reply, and a judge calibrated on controls scores it against what the real letter does. |
 | `grpo` | Builds a task family for brain's reinforcement-learning loop: present-day situations and the passages he may be shown, rewarded in named parts by the same rules (the layout, the verdict on whether his method applies, every other rule), with no model judging. The pool the loop trains on and the pool its own gate draws from are disjoint. It runs, but a two-step trial over the 1.5B model took 27 minutes, so no result is claimed for the 7B (see `FINDINGS.md`). |
 | `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. |
@@ -96,6 +97,7 @@ splinter-adams train-dpo  --resources RESOURCES --base BASE --attempt RUN/dpo \
     --continue-from RUN/sft2/adapter.safetensors --steps 200
 splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-base.jsonl --base BASE
 splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
+splinter-adams transfer-exam --resources RESOURCES --out RUN/transfer-tuned-plain.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors --framing plain
 splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anchor-base.jsonl --base BASE
 splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anchor-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
 splinter-adams report --before RUN/anchor-base.jsonl --after RUN/anchor-tuned.jsonl

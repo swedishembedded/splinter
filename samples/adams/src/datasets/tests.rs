@@ -185,7 +185,10 @@ fn a_training_principle_gives_two_supervised_records_and_preference_pairs_and_no
         ),
         (Some(false), Some(false), Some(true))
     );
-    assert_eq!(m[0]["content"].as_str(), Some(respond::SYSTEM));
+    assert_eq!(
+        m[0]["content"].as_str(),
+        Some(Framing::of_record(m[1]["content"].as_str().unwrap()).system(respond::SYSTEM))
+    );
     let retrieval_prompt = m[1]["content"].as_str().unwrap();
     let internal_prompt = built.sft[1]["messages"][1]["content"].as_str().unwrap();
     assert!(retrieval_prompt.contains("[d1]") && !internal_prompt.contains("[d1]"));
@@ -460,4 +463,26 @@ fn a_letter_outside_the_allowed_set_is_never_a_target() {
     )];
     let none: std::collections::HashSet<String> = std::collections::HashSet::new();
     assert!(reconstruction_sft(&[briefing_for("held")], &docs, &none).is_empty());
+}
+
+#[test]
+fn a_preference_pair_is_framed_as_the_supervised_record_of_the_same_prompt() {
+    let (train, bench) = split_principles();
+    let built = build(
+        &[result(&train, Case::Clear, FIT)],
+        &[train, bench],
+        &docs(),
+    );
+    for pair in &built.preference {
+        let user = pair["prompt"][1]["content"].as_str().unwrap();
+        let record = built
+            .sft
+            .iter()
+            .find(|r| r["messages"][1]["content"].as_str() == Some(user))
+            .expect("every pair's prompt is a supervised prompt");
+        assert_eq!(
+            pair["prompt"][0]["content"],
+            record["messages"][0]["content"]
+        );
+    }
 }

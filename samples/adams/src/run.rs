@@ -411,6 +411,7 @@ pub struct TransferExam {
     pub adapter: Option<PathBuf>,
     pub max_tokens: u32,
     pub limit: Option<usize>,
+    pub framing: crate::persona::Framing,
 }
 
 /// Ask one model every benchmark question, in both modes, graded by the rules.
@@ -419,7 +420,7 @@ pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow
     let model = splinter_sdk::model::exam::Model {
         base: &e.base,
         adapter: e.adapter.as_deref(),
-        system: crate::respond::SYSTEM,
+        system: e.framing.system(crate::respond::SYSTEM),
         max_tokens: e.max_tokens,
         label: "adams",
     };
@@ -492,6 +493,7 @@ pub struct Replies {
     pub adapter: Option<PathBuf>,
     pub max_tokens: u32,
     pub limit: Option<usize>,
+    pub framing: crate::persona::Framing,
 }
 
 /// Have one model write the reply to every briefing, in full.
@@ -502,7 +504,7 @@ pub fn replies_command(r: &Replies) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
     let mut ask = |b: &crate::reconstruct::Briefing| {
         runtime.block_on(answerer.ask(
-            crate::reconstruct::SYSTEM,
+            r.framing.system(crate::reconstruct::SYSTEM),
             &crate::reconstruct::prompt(b),
             r.max_tokens,
         ))

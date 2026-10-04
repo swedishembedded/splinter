@@ -48,6 +48,7 @@ mod grpo;
 mod helper;
 mod judge;
 mod miner;
+mod persona;
 mod principles;
 mod reconstruct;
 mod respond;
@@ -434,6 +435,7 @@ fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
             adapter: flag(args, "--adapter").map(Into::into),
             max_tokens: number(args, "--max-tokens", 700)?,
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+            framing: framing_flag(args)?,
         },
         &documents,
     )
@@ -482,7 +484,15 @@ fn reconstruct_replies_command(args: &[String]) -> anyhow::Result<()> {
         adapter: flag(args, "--adapter").map(Into::into),
         max_tokens: number(args, "--max-tokens", 500)?,
         limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        framing: framing_flag(args)?,
     })
+}
+
+/// How the exam frames the persona: `--framing full|identity|plain`, default full.
+fn framing_flag(args: &[String]) -> anyhow::Result<persona::Framing> {
+    flag(args, "--framing")
+        .map_or(Ok(persona::Framing::Full), |v| v.parse())
+        .map_err(|e: String| anyhow::anyhow!(e))
 }
 
 fn judge_command(args: &[String]) -> anyhow::Result<()> {
