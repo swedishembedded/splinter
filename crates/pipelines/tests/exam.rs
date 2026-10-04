@@ -29,7 +29,9 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
 use splinter_core::model_ref::ModelRef;
+use splinter_knowledge::retrieve::{EmbedError, Embedder, Library, Passage};
 use splinter_pipelines::exam::{exam, ExamRequest};
+use splinter_pipelines::retrieval::Retrieval;
 use splinter_pipelines::sources::{self, SourceTarget};
 
 const LETTER: &str = "# To a young man\n\n## Habits\n\nKeep habit1 and habit2 and habit3 and habit4 and habit5 and habit6 each morning, for a settled mind needs them.\n";
@@ -142,6 +144,7 @@ fn run(
             candidate: &model("tuned"),
             judge: &model("judge"),
             prompted: None,
+            retrieval: None,
             cancel: CancelToken::new(),
         },
     )
@@ -240,6 +243,7 @@ fn an_exam_of_a_model_against_itself_is_refused() {
             candidate: &model("tuned"),
             judge: &model("judge"),
             prompted: None,
+            retrieval: None,
             cancel: CancelToken::new(),
         },
     );
@@ -261,6 +265,7 @@ fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with
         candidate: &tuned,
         judge: &judge,
         prompted,
+        retrieval: None,
         cancel: CancelToken::new(),
     };
     let without = exam(&ctx, &request(None)).unwrap();
@@ -273,5 +278,78 @@ fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with
     // The scripted base knows nothing whatever it is told, so the tuned
     // model beats it prompted as it beats it unprompted.
     let against = report.paired_vs_prompted.as_ref().unwrap();
+    assert_eq!((against.discordant, against.candidate_wins), (6, 6));
+}
+
+/// Every text alike: a library of one passage needs no meaning to find it.
+struct Flat;
+
+impl Embedder for Flat {
+    fn name(&self) -> String {
+        "flat".into()
+    }
+
+    fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Ok(texts.iter().map(|_| vec![1.0, 0.0]).collect())
+    }
+}
+
+#[test]
+fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_the_evidence() {
+    let (_scratch, ctx, tasks, controls) = setup("exam-retrieval", judge(false));
+    // A candidate that knows nothing closed-book and answers when the passage
+    // is put in front of it.
+    ctx.add_model(
+        "local:exam/reader".parse().unwrap(),
+        Model::new(
+            Arc::new(Scripted::new(|prompt| {
+                if !prompt.contains("settled mind needs them") {
+                    return "I do not know.".into();
+                }
+                let n = (1..=6)
+                    .find(|n| prompt.contains(&format!("question {n})")))
+                    .unwrap_or(1);
+                format!("Keep habit{n} each morning.")
+            })),
+            "scripted/reader",
+        ),
+    );
+    let evidence = &tasks[0].evidence[0];
+    let passage = Passage {
+        source: None,
+        part: "letter.md".into(),
+        section: 0,
+        content: Some(evidence.source.clone()),
+        range: 0..LETTER.len(),
+        text: LETTER.into(),
+    };
+    let library = Library::new(vec![passage], &Flat).unwrap();
+    let retrieval = Retrieval {
+        library: &library,
+        embedder: &Flat,
+        passages: 3,
+    };
+    let model = |name: &str| -> ModelRef { format!("local:exam/{name}").parse().unwrap() };
+    let (base, reader, judge) = (model("base"), model("reader"), model("judge"));
+    let report = exam(
+        &ctx,
+        &ExamRequest {
+            tasks: &tasks,
+            controls: &controls,
+            base: &base,
+            candidate: &reader,
+            judge: &judge,
+            prompted: None,
+            retrieval: Some(&retrieval),
+            cancel: CancelToken::new(),
+        },
+    )
+    .unwrap();
+    assert_eq!(report.candidate.judged_right, 0, "{report:#?}");
+    let with = report.retrieval.as_ref().unwrap();
+    assert_eq!(with.arm.model, "scripted/reader+retrieval");
+    assert_eq!(with.arm.judged_right, 6, "{with:#?}");
+    assert_eq!((with.hits, with.tasks, with.passages), (6, 6, 3));
+    let against = report.paired_retrieval.as_ref().unwrap();
     assert_eq!((against.discordant, against.candidate_wins), (6, 6));
 }

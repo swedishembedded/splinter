@@ -23,6 +23,7 @@ use splinter_sdk::judge::calibrate_judge;
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::release::{self, ReleaseRequest};
+use splinter_sdk::retrieval::{library_of, Retrieval};
 use splinter_sdk::router::{interpret, Routed};
 use splinter_sdk::runs::{self, record};
 use splinter_sdk::solving::solve_set;
@@ -475,7 +476,25 @@ impl Session {
                     "candidate": args.candidate,
                     "judge": args.judge,
                     "prompt": args.prompt,
+                    "retrieve": args.retrieve,
+                    "passages": args.passages,
                 });
+                // The library is made (or read back) before the exam starts:
+                // it needs the embedding model, which the exam's queries use
+                // too.
+                let embedder;
+                let library;
+                let retrieval = if args.retrieve.is_empty() {
+                    None
+                } else {
+                    embedder = ModelEmbedder::load_default()?;
+                    library = library_of(ctx, &args.retrieve, &embedder)?.1;
+                    Some(Retrieval {
+                        library: &library,
+                        embedder: &embedder,
+                        passages: args.passages,
+                    })
+                };
                 emit(
                     json,
                     &record(ctx, "exam", &arguments, |run| {
@@ -484,6 +503,7 @@ impl Session {
                             &args.candidate,
                             args.judge.as_ref(),
                             args.prompt.as_deref(),
+                            retrieval.as_ref(),
                             &run.cancel_token(),
                         )
                     })?,

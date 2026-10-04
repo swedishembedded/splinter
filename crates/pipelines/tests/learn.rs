@@ -188,7 +188,8 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         Model::new(Arc::new(policy()), common::POLICY),
     );
     let id = &report.candidate.as_ref().unwrap().candidate;
-    let Exam::Ran(examined) = examine(&ctx, id, Some(&judge), None, &CancelToken::new()).unwrap()
+    let Exam::Ran(examined) =
+        examine(&ctx, id, Some(&judge), None, None, &CancelToken::new()).unwrap()
     else {
         panic!("the exam of a stored candidate runs");
     };

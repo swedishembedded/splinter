@@ -73,8 +73,25 @@ fn exam_line(summary: &serde_json::Value) -> String {
             won(&ran["paired_vs_prompted"], "it")
         )
     });
+    let retrieval = ran["retrieval"].as_object().map_or(String::new(), |r| {
+        let wins = ran["paired_retrieval"].as_object().map_or(String::new(), |t| {
+            format!(
+                "; retrieval won {} of {} discordant task(s), p = {:.4}",
+                t["candidate_wins"],
+                t["discordant"],
+                t["p_value"].as_f64().unwrap_or(1.0)
+            )
+        });
+        format!(
+            "; candidate with {} retrieved passage(s) {} (retrieval found the task's evidence for {}/{}){wins}",
+            r["passages"],
+            arm(&ran["retrieval"]["arm"]),
+            r["hits"],
+            r["tasks"]
+        )
+    });
     format!(
-        "{} task(s), judge {} {trust}: base {}; candidate {}{test}{prompted}",
+        "{} task(s), judge {} {trust}: base {}; candidate {}{test}{prompted}{retrieval}",
         ran["tasks"],
         judge["judge"].as_str().unwrap_or("?"),
         arm(&ran["base"]),

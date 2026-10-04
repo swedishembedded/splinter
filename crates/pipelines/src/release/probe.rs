@@ -39,7 +39,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
-use splinter_agent::solve::{solve, Model, SolveOptions};
+use splinter_agent::solve::{solve, solve_prompted, Model, SolveOptions};
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
@@ -299,18 +299,36 @@ pub(crate) fn answer(
     task: &Task,
     cancel: &CancelToken,
 ) -> Result<Experience, OrchestratorError> {
+    answer_prompted(ctx, model, task, None, cancel)
+}
+
+/// [`answer`], asked `prompt` in place of the task's instruction (the
+/// instruction with material shown before it, say); the experience records
+/// the task as it is.
+pub(crate) fn answer_prompted(
+    ctx: &Context,
+    model: &Model,
+    task: &Task,
+    prompt: Option<&str>,
+    cancel: &CancelToken,
+) -> Result<Experience, OrchestratorError> {
     if cancel.is_cancelled() {
         return Err(OrchestratorError::Cancelled);
     }
     let mut options = SolveOptions::new(DEFAULT_SOLVE_DEADLINE);
     options.cancel = Some(cancel.clone());
     options.stream_idle = model.stream_idle;
-    let solution = ctx.block_on(solve(
-        task,
-        &ResolvedEnvironment::ClosedBook,
-        model.provider.clone(),
-        options,
-    ))?;
+    let environment = ResolvedEnvironment::ClosedBook;
+    let solution = match prompt {
+        None => ctx.block_on(solve(task, &environment, model.provider.clone(), options))?,
+        Some(prompt) => ctx.block_on(solve_prompted(
+            task,
+            prompt,
+            &environment,
+            model.provider.clone(),
+            options,
+        ))?,
+    };
     if cancel.is_cancelled() {
         return Err(OrchestratorError::Cancelled);
     }

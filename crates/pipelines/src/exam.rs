@@ -42,7 +42,8 @@ use splinter_eval::verifiers::Verifier;
 use splinter_model::stats::sign_test;
 
 use crate::release::arm;
-use crate::release::probe::{answer, greedy, held_out, trained_tasks};
+use crate::release::probe::{answer_prompted, greedy, held_out, trained_tasks};
+use crate::retrieval::Retrieval;
 use crate::train::load_candidate;
 use crate::verify::{grounding_verifier, judge_verifier};
 use splinter_core::model_ref::ModelRef;
@@ -71,6 +72,10 @@ pub struct ExamRequest<'a> {
     /// training is worth what it adds beyond telling the base what the goal
     /// is. `None` adds no such arm.
     pub prompted: Option<&'a str>,
+    /// Passages to retrieve for each task and show before it, for a further
+    /// arm: the candidate with retrieval, against the candidate alone. `None`
+    /// adds no such arm.
+    pub retrieval: Option<&'a Retrieval<'a>>,
     /// Stops the exam.
     pub cancel: CancelToken,
 }
@@ -161,6 +166,20 @@ pub struct ArmResult {
     pub invented: usize,
 }
 
+/// The candidate asked with retrieved passages shown before each task.
+#[derive(Clone, Debug, Serialize)]
+pub struct RetrievalResult {
+    /// How the candidate did with them.
+    pub arm: ArmResult,
+    /// Tasks for which a retrieved passage overlaps the evidence the task was
+    /// written from.
+    pub hits: usize,
+    /// Tasks asked.
+    pub tasks: usize,
+    /// Passages shown with each.
+    pub passages: usize,
+}
+
 /// What the exam reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct Examined {
@@ -180,6 +199,11 @@ pub struct Examined {
     /// The candidate against the prompted base, by the same rule; `None`
     /// when there is no prompted arm.
     pub paired_vs_prompted: Option<SignTest>,
+    /// The candidate with retrieval; `None` when none was asked for.
+    pub retrieval: Option<RetrievalResult>,
+    /// The candidate with retrieval against the candidate alone, by the same
+    /// rule; `None` when there is no retrieval arm.
+    pub paired_retrieval: Option<SignTest>,
 }
 
 /// An experience of `task` answered with `answer`, as the exam's controls
@@ -238,8 +262,28 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 .into(),
         ));
     }
+    // What retrieval finds is found before any model answers: it needs the
+    // embedder, and the arms need the device.
+    let retrieved = request
+        .retrieval
+        .map(|retrieval| {
+            request
+                .tasks
+                .iter()
+                .map(|task| retrieval.find(&task.instruction))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
+    let retrieval_prompts: Option<Vec<String>> = retrieved.as_ref().map(|found| {
+        found
+            .iter()
+            .zip(request.tasks)
+            .map(|(found, task)| found.prompt(&task.instruction))
+            .collect()
+    });
     let answers = |reference: &ModelRef,
-                   goal: Option<&str>|
+                   goal: Option<&str>,
+                   prompts: Option<&[String]>|
      -> Result<(String, Vec<Experience>), OrchestratorError> {
         let mut model = greedy(ctx, reference)?;
         if let Some(goal) = goal {
@@ -247,21 +291,32 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
                 with_system_addendum(model.provider.clone(), &format!("Your purpose: {goal}"));
             model.identity = format!("{}+prompted", model.identity);
         }
+        if prompts.is_some() {
+            model.identity = format!("{}+retrieval", model.identity);
+        }
         let given = request
             .tasks
             .iter()
-            .map(|task| answer(ctx, &model, task, &request.cancel))
+            .enumerate()
+            .map(|(n, task)| {
+                let prompt = prompts.map(|p| p[n].as_str());
+                answer_prompted(ctx, &model, task, prompt, &request.cancel)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok((model.identity, given))
     };
     // Both arms answer before the judge is loaded, so the device swaps models
     // as few times as it can.
-    let (base_model, base_answers) = answers(request.base, None)?;
+    let (base_model, base_answers) = answers(request.base, None, None)?;
     let prompted_answers = request
         .prompted
-        .map(|goal| answers(request.base, Some(goal)))
+        .map(|goal| answers(request.base, Some(goal), None))
         .transpose()?;
-    let (candidate_model, candidate_answers) = answers(request.candidate, None)?;
+    let (candidate_model, candidate_answers) = answers(request.candidate, None, None)?;
+    let retrieval_answers = retrieval_prompts
+        .as_deref()
+        .map(|prompts| answers(request.candidate, None, Some(prompts)))
+        .transpose()?;
 
     // The judge is a different model from the arms' and needs the device for
     // itself: two resident bases at once do not fit a card the size of the
@@ -306,6 +361,11 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             grade(&given).map(|(judged, grounded)| (model, given, judged, grounded))
         })
         .transpose()?;
+    let with_retrieval = retrieval_answers
+        .map(|(model, given)| {
+            grade(&given).map(|(judged, grounded)| (model, given, judged, grounded))
+        })
+        .transpose()?;
 
     let arm = |model: String,
                given: &[Experience],
@@ -330,6 +390,31 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         .as_ref()
         .map(|(_, _, judged, _)| pairs_against(judged))
         .unwrap_or_default();
+    // With retrieval against without: a win is a task the passages made right.
+    let pairs_retrieval: Vec<(bool, bool)> = with_retrieval
+        .as_ref()
+        .map(|(_, _, judged, _)| {
+            judged
+                .iter()
+                .zip(&candidate_judged)
+                .filter_map(|(w, c)| Some(((*w)?, (*c)?)))
+                .collect()
+        })
+        .unwrap_or_default();
+    let retrieval = with_retrieval
+        .as_ref()
+        .zip(retrieved.as_ref())
+        .zip(request.retrieval)
+        .map(|((arm_of, found), retrieval)| RetrievalResult {
+            arm: arm(arm_of.0.clone(), &arm_of.1, &arm_of.2, &arm_of.3),
+            hits: found
+                .iter()
+                .zip(request.tasks)
+                .filter(|(found, task)| found.finds_the_evidence_of(task))
+                .count(),
+            tasks: request.tasks.len(),
+            passages: retrieval.passages,
+        });
     Ok(Examined {
         tasks: request.tasks.len(),
         judge: JudgeTrust {
@@ -353,6 +438,9 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         paired: (trusted && !pairs.is_empty()).then(|| sign_test(&pairs)),
         paired_vs_prompted: (trusted && !pairs_vs_prompted.is_empty())
             .then(|| sign_test(&pairs_vs_prompted)),
+        retrieval,
+        paired_retrieval: (trusted && !pairs_retrieval.is_empty())
+            .then(|| sign_test(&pairs_retrieval)),
     })
 }
 
@@ -391,6 +479,7 @@ pub fn examine(
     candidate: &str,
     judge: Option<&ModelRef>,
     prompted: Option<&str>,
+    retrieval: Option<&Retrieval<'_>>,
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
     let judge = match judge {
@@ -412,7 +501,7 @@ pub fn examine(
         ctx.config(),
         continued.as_ref().map(|r| r.adapter.as_path()),
     );
-    examine_candidate(ctx, candidate, &base, &judge, prompted, cancel)
+    examine_candidate(ctx, candidate, &base, &judge, prompted, retrieval, cancel)
 }
 
 /// Examines the trained candidate `candidate` against `base` on its held-out
@@ -425,6 +514,7 @@ pub fn examine_candidate(
     base: &ModelRef,
     judge: &ModelRef,
     prompted: Option<&str>,
+    retrieval: Option<&Retrieval<'_>>,
     cancel: &CancelToken,
 ) -> Result<Exam, OrchestratorError> {
     let trained = load_candidate(ctx, candidate)?;
@@ -458,6 +548,7 @@ pub fn examine_candidate(
             candidate: &candidate,
             judge,
             prompted,
+            retrieval,
             cancel: cancel.clone(),
         },
     )?;

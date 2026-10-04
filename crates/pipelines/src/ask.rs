@@ -24,11 +24,11 @@ use serde::Serialize;
 use splinter_agent::solve::{open_book_prompt, solve, SolveOptions};
 use splinter_core::experience::{Environment, Task};
 use splinter_core::source::SourceId;
-use splinter_knowledge::retrieve::{passages, Embedder};
+use splinter_knowledge::retrieve::Embedder;
 use splinter_knowledge::tasks::SourceIdentity;
 use splinter_sandbox::ResolvedEnvironment;
 
-use crate::index;
+use crate::retrieval::{library_of, Retrieval};
 use crate::solving::conclusion_name;
 use crate::sources;
 use splinter_core::model_ref::ModelRef;
@@ -117,26 +117,15 @@ pub fn ask_retrieving(
     if question.trim().is_empty() {
         return Err(OrchestratorError::Refused("the question is empty".into()));
     }
-    let ids = sources
-        .iter()
-        .map(|id| sources::resolve(ctx, id))
-        .collect::<Result<Vec<_>, _>>()?;
-    let found =
-        passages(&ctx.sources(), &ids).map_err(|e| OrchestratorError::Refused(e.to_string()))?;
-    if found.is_empty() {
-        return Err(OrchestratorError::Refused(
-            "the sources hold no passage to retrieve".into(),
-        ));
-    }
-    let library = index::library(ctx, found, embedder)?;
-    let shown = library
-        .find(question, embedder, passages_shown.max(1))
-        .map_err(|e| OrchestratorError::Refused(format!("retrieval: {e}")))?;
-    let material: Vec<String> = shown
-        .iter()
-        .map(|p| format!("--- {}, section {} ---\n{}", p.part, p.section + 1, p.text))
-        .collect();
-    let instruction = open_book_prompt(question, &material);
+    let (ids, library) = library_of(ctx, sources, embedder)?;
+    let retrieval = Retrieval {
+        library: &library,
+        embedder,
+        passages: passages_shown,
+    };
+    let retrieved = retrieval.find(question)?;
+    let instruction = retrieved.prompt(question);
+    let shown = retrieved.passages;
     let shown = shown
         .iter()
         .filter_map(|p| {

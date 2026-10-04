@@ -371,10 +371,6 @@ pub struct VerifyArgs {
     /// A calibrated judge for the kinds a judge grades.
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,
-    /// Also ask the base under this goal, as a prompt-only baseline the
-    /// candidate is compared with (`learn` uses its goal).
-    #[arg(long, value_name = "GOAL")]
-    pub prompt: Option<String>,
 }
 
 /// `critique`.
@@ -549,6 +545,14 @@ pub struct ExamArgs {
     /// candidate is compared with (`learn` uses its goal).
     #[arg(long, value_name = "GOAL")]
     pub prompt: Option<String>,
+    /// Also ask the candidate with the passages of these stored sources that
+    /// bear on each task shown before it, and report whether retrieval found
+    /// the passage the task was written from.
+    #[arg(long, value_name = "SOURCE-ID", num_args = 1..)]
+    pub retrieve: Vec<String>,
+    /// How many passages `--retrieve` shows with each task.
+    #[arg(long, default_value_t = 6, value_name = "N", requires = "retrieve")]
+    pub passages: usize,
 }
 
 /// `lineage`.

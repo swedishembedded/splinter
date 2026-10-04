@@ -30,7 +30,7 @@ splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [-
 splinter release <CANDIDATE-ID> [--alias NAME] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]
-splinter exam CANDIDATE [--judge REF] [--prompt GOAL]
+splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N]]
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -165,7 +165,13 @@ tasks to what the candidate continues (its parent release, else the base) and
 to the candidate, closed-book. With `--prompt GOAL` (the `exam` stage of `learn`
 passes its goal) the base is asked once more under the goal as one added system
 line, and the candidate is also compared with that: training is worth what it
-adds beyond telling the base what the goal is. A judge compares each answer
+adds beyond telling the base what the goal is. With `--retrieve SOURCE-ID...` the candidate is
+also asked with the passages of those sources that bear on each task shown
+before it (as `ask --retrieve` does), compared with the candidate alone, and the
+report says for how many tasks a retrieved passage overlaps the evidence the
+task was written from: what retrieval found, apart from what the model made
+of it. The sources hold the held-out letters too, so this measures access to
+what the weights never saw, not recall of it. A judge compares each answer
 with the reference, and code separately checks whether the answer states a
 number, name or quotation the task's source does not hold. Before the judge
 grades an arm it is calibrated on controls made from the tasks' own references
