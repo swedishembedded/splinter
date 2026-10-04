@@ -63,42 +63,9 @@ pub fn opens_think_block(base: &Path) -> bool {
 /// from (the prompt supplies the opening `<think>` and its newline).
 pub const CLOSED_THINK: &str = "<think>\n\n</think>\n\n";
 
-/// `dataset` (JSON Lines of chat records) with each supervised assistant turn
-/// that has no closed think block of its own made to start with
-/// [`CLOSED_THINK`]. A record that lists tools is left alone: its turns call
-/// tools, which are not answers. An empty list is no tools.
-pub fn closed_think_blocks(dataset: &str) -> Result<String, serde_json::Error> {
-    let mut out = String::with_capacity(dataset.len() + 64);
-    for line in dataset.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let mut record: serde_json::Value = serde_json::from_str(line)?;
-        let has_tools = record
-            .get("tools")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|tools| !tools.is_empty());
-        if !has_tools {
-            let messages = record
-                .get_mut("messages")
-                .and_then(serde_json::Value::as_array_mut);
-            for message in messages.into_iter().flatten() {
-                let supervised = message.get("train") == Some(&serde_json::Value::Bool(true))
-                    && message.get("role").and_then(|r| r.as_str()) == Some("assistant");
-                let text = message.get("content").and_then(|c| c.as_str());
-                if let (true, Some(text)) = (supervised, text) {
-                    if !text.contains("</think>") {
-                        message["content"] = format!("{CLOSED_THINK}{text}").into();
-                    }
-                }
-            }
-        }
-        out.push_str(&serde_json::to_string(&record)?);
-        out.push('\n');
-    }
-    Ok(out)
-}
-
 /// `dataset` (JSON Lines of preference pairs) with each candidate that has no
 /// closed think block of its own made to start with [`CLOSED_THINK`]: the
-/// state the model is asked from, as for [`closed_think_blocks`].
+/// state the model is asked from.
 pub fn closed_think_pairs(dataset: &str) -> Result<String, serde_json::Error> {
     let mut out = String::with_capacity(dataset.len() + 64);
     for line in dataset.lines().map(str::trim).filter(|l| !l.is_empty()) {
@@ -179,58 +146,6 @@ mod tests {
         }
     }
 
-    fn record(messages: serde_json::Value, tools: bool) -> String {
-        let mut value =
-            serde_json::json!({ "messages": messages, "metadata": { "view": "sft-final" } });
-        if tools {
-            value["tools"] = serde_json::json!([{ "type": "function" }]);
-        }
-        value.to_string()
-    }
-
-    /// A model that is asked with its think block open must train on what it
-    /// will be asked: each supervised answer follows an empty, closed block.
-    /// Turns not supervised, turns that already close a block, and records
-    /// that carry tools are left as they are.
-    #[test]
-    fn a_supervised_answer_follows_an_empty_closed_think_block() {
-        let plain = record(
-            serde_json::json!([
-                {"role": "system", "content": "s", "train": false},
-                {"role": "user", "content": "q", "train": false},
-                {"role": "assistant", "content": "first", "train": true},
-                {"role": "user", "content": "and?", "train": false},
-                {"role": "assistant", "content": "kept", "train": false},
-                {"role": "assistant", "content": "<think>x</think>done", "train": true},
-                {"role": "assistant", "content": "second", "train": true},
-            ]),
-            false,
-        );
-        let with_tools = record(
-            serde_json::json!([{"role": "assistant", "content": "call", "train": true}]),
-            true,
-        );
-        let rewritten = closed_think_blocks(&format!("{plain}\n\n{with_tools}\n")).unwrap();
-        let lines: Vec<serde_json::Value> = rewritten
-            .lines()
-            .map(|l| serde_json::from_str(l).unwrap())
-            .collect();
-        assert_eq!(lines.len(), 2, "blank lines are not records");
-        let content = |n: usize| {
-            lines[0]["messages"][n]["content"]
-                .as_str()
-                .unwrap()
-                .to_string()
-        };
-        assert_eq!(content(2), format!("{CLOSED_THINK}first"));
-        assert_eq!(content(4), "kept");
-        assert_eq!(content(5), "<think>x</think>done");
-        assert_eq!(content(6), format!("{CLOSED_THINK}second"));
-        assert_eq!((content(0), content(1)), ("s".into(), "q".into()));
-        assert_eq!(lines[0]["metadata"]["view"], "sft-final");
-        assert_eq!(lines[1]["messages"][0]["content"], "call");
-    }
-
     /// A preference pair's two candidates are the answers a model is asked
     /// for, so each follows an empty closed block as a supervised answer does;
     /// the prompt is untouched and a candidate that closes a block is kept.
@@ -260,21 +175,5 @@ mod tests {
         assert_eq!(lines[0]["rejected"]["content"], format!("{CLOSED_THINK}no"));
         assert_eq!(lines[0]["prompt"][0]["content"], "q");
         assert_eq!(lines[1]["chosen"]["content"], "<think>x</think>kept");
-    }
-
-    /// A record that lists no tools is a plain chat record: writers that
-    /// always emit the field must get the same rendering as those that omit it.
-    #[test]
-    fn an_empty_tools_list_is_no_tools() {
-        let mut value = serde_json::json!({"messages": [
-            {"role": "assistant", "content": "answer", "train": true}
-        ]});
-        value["tools"] = serde_json::json!([]);
-        let rewritten = closed_think_blocks(&value.to_string()).unwrap();
-        let line: serde_json::Value = serde_json::from_str(rewritten.trim()).unwrap();
-        assert_eq!(
-            line["messages"][0]["content"],
-            format!("{CLOSED_THINK}answer")
-        );
     }
 }

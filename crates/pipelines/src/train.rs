@@ -325,6 +325,9 @@ impl Trainer for BrainTrainer {
             cancel: Some(cancel),
             bf16_base: plan.tuning.bf16_base,
             learning_rate: plan.tuning.learning_rate,
+            // The records hold answers and no reasoning, so the model is
+            // trained for no-think mode whatever it is later asked.
+            thinking: false,
             on_step: None,
         })
         .map_err(trainer_error)

@@ -127,6 +127,8 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         cancel: None,
         bf16_base: t.bf16,
         learning_rate: t.learning_rate,
+        // The records hold answers and no reasoning: trained for no-think mode.
+        thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
     let trained = splinter_sdk::model::train::fine_tune(&request)?;

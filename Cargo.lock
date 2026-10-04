@@ -4068,6 +4068,7 @@ dependencies = [
  "splinter-core",
  "splinter-eval",
  "splinter-store",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
