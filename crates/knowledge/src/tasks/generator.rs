@@ -400,7 +400,12 @@ impl ModelTaskGenerator {
             kind.validate()?;
             let runtime = self.runtime_for(kind)?;
             let refused = avoid.get(&kind.name).map_or(&[][..], Vec::as_slice);
-            let brief = brief(kind, self.policy.tasks_per_request, refused);
+            let brief = brief(
+                kind,
+                self.policy.tasks_per_request,
+                refused,
+                source.identity.author.as_deref(),
+            );
             let shown = shown(source);
             let reply = self.request(GENERATION_METHOD, &brief, &shown).await?;
             proposals.push(Proposal {
@@ -499,9 +504,11 @@ pub(super) fn prompt_digest<I: Serialize + ?Sized>(brief: &str, shown: &I) -> Di
 }
 
 /// The brief for tasks of `kind`: the kind's own brief and the rules every
-/// task is held to. The sections are the call's input; the reply's shape
-/// is its return type.
-fn brief(kind: &TaskKind, count: usize, refused: &[Rejection]) -> String {
+/// task is held to, with the name of the sections' `author` when it is
+/// known, since a generator that has no name for the writer calls them "the
+/// writer", which no instruction may. The sections are the call's input; the
+/// reply's shape is its return type.
+fn brief(kind: &TaskKind, count: usize, refused: &[Rejection], author: Option<&str>) -> String {
     let runtime = kind.runtime.as_deref().unwrap_or("-");
     let brief = kind
         .brief
@@ -517,6 +524,12 @@ fn brief(kind: &TaskKind, count: usize, refused: &[Rejection]) -> String {
         "Cite the evidence for each task: the position of each section the answer comes from."
             .to_string(),
     ];
+    if let Some(author) = author {
+        rules.push(format!(
+            "The sections were written by {author}: say that name wherever the writer is \
+             meant, never \"the writer\", \"the author\" or \"he\"."
+        ));
+    }
     if kind.names_subject() {
         rules.push(
             "Every instruction names its subject: the specific person, place, event, matter, \
@@ -584,4 +597,24 @@ fn brief(kind: &TaskKind, count: usize, refused: &[Rejection]) -> String {
     out.push_str(REPLY_EXAMPLE);
     out.push('\n');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasks::Catalogue;
+
+    /// A generator told who wrote the sections is told to name them, so it
+    /// has a name where it would otherwise write "the writer".
+    #[test]
+    fn the_brief_names_the_author_where_the_writer_is_meant() {
+        let kind = Catalogue::builtin().get("explain").unwrap().clone();
+        let named = brief(&kind, 4, &[], Some("Thomas Jefferson"));
+        assert!(
+            named.contains("written by Thomas Jefferson: say that name"),
+            "{named}"
+        );
+        let unnamed = brief(&kind, 4, &[], None);
+        assert!(!unnamed.contains("written by"), "{unnamed}");
+    }
 }
