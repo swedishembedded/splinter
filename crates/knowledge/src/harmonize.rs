@@ -112,6 +112,18 @@ fn not_a_measurement(meaning: &str) -> bool {
     .any(|w| m.contains(w))
 }
 
+/// The numeric codes `variable`'s codebook marks as refused, unknown,
+/// missing or not applicable: what [`admit`] accepts as missing codes.
+#[must_use]
+pub fn non_measurement_codes(variable: &VariableDoc) -> Vec<f64> {
+    variable
+        .codes
+        .iter()
+        .filter(|c| not_a_measurement(&c.meaning))
+        .filter_map(|c| c.value.trim().parse().ok())
+        .collect()
+}
+
 fn quantile(sorted: &[f64], q: f64) -> f64 {
     sorted[((sorted.len() - 1) as f64 * q).round() as usize]
 }
@@ -120,6 +132,11 @@ fn quantile(sorted: &[f64], q: f64) -> f64 {
 pub const MIN_VALUES: usize = 10;
 /// How far the converted spread may differ from the reference's, as a ratio.
 pub const SPREAD_RATIO: f64 = 5.0;
+/// The largest share of recorded values, missing codes aside, a mapping may
+/// put outside its own valid range. A valid range describes the real
+/// measurements; when many fall outside it, the range or the factor is
+/// wrong - and the values that remain inside can look entirely plausible.
+pub const MAX_OUT_OF_RANGE: f64 = 0.1;
 
 /// Check `p` for `variable` against its codebook entry, its recorded
 /// `values` and the `concepts`.
@@ -169,28 +186,32 @@ pub fn admit(
             reasons.push(format!("missing code {code} lies inside the valid range"));
         }
     }
-    for c in variable
-        .codes
-        .iter()
-        .filter(|c| not_a_measurement(&c.meaning))
-    {
-        if let Ok(code) = c.value.trim().parse::<f64>() {
-            if !p.missing_codes.contains(&code) && in_range(code) {
-                reasons.push(format!(
-                    "code {code} ({}) would be read as a measurement",
-                    c.meaning
-                ));
-            }
+    for code in non_measurement_codes(variable) {
+        if !p.missing_codes.contains(&code) && in_range(code) {
+            reasons.push(format!(
+                "documented non-measurement code {code} would be read as a measurement"
+            ));
         }
     }
-    let mut converted: Vec<f64> = values
+    let recorded: Vec<f64> = values
         .iter()
         .flatten()
         .filter(|x| !p.missing_codes.contains(x))
         .map(|x| x * p.factor)
+        .collect();
+    let mut converted: Vec<f64> = recorded
+        .iter()
+        .copied()
         .filter(|x| (p.valid_min..=p.valid_max).contains(x))
         .collect();
     converted.sort_by(f64::total_cmp);
+    let outside = recorded.len() - converted.len();
+    if !recorded.is_empty() && outside as f64 > MAX_OUT_OF_RANGE * recorded.len() as f64 {
+        reasons.push(format!(
+            "{outside} of {} recorded values fall outside the valid range",
+            recorded.len()
+        ));
+    }
     let summary = (converted.len() >= MIN_VALUES).then(|| {
         (
             quantile(&converted, 0.05),
@@ -296,6 +317,50 @@ mod tests {
             .reasons
             .iter()
             .any(|r| r.contains("quotation")));
+    }
+
+    #[test]
+    fn a_unit_error_hidden_by_the_valid_range_is_rejected() {
+        // A ratio capped at 5: read ten times too large, nine in ten values
+        // fall past the cap, and the tenth that remains looks plausible.
+        let doc = VariableDoc {
+            name: "INDFMPIR".into(),
+            label: "Ratio of family income to poverty".into(),
+            text: "A ratio of family income to poverty guidelines.".into(),
+            target: "all".into(),
+            codes: vec![Code {
+                value: "0 to 5".into(),
+                meaning: "Range of Values".into(),
+                count: None,
+            }],
+        };
+        let concept = vec![ConceptSpec {
+            name: "income_poverty_ratio".into(),
+            unit: "ratio".into(),
+            description: "income to poverty".into(),
+            reference: Some(Reference {
+                q05: 0.5,
+                median: 2.5,
+                q95: 5.0,
+            }),
+        }];
+        let values: Vec<Option<f64>> = (0..500).map(|i| Some(f64::from(i) / 100.0)).collect();
+        let tenfold = MappingProposal {
+            concept: "income_poverty_ratio".into(),
+            factor: 10.0,
+            valid_min: 0.0,
+            valid_max: 5.0,
+            missing_codes: vec![],
+            quote: "Ratio of family income to poverty".into(),
+        };
+        let a = admit(&tenfold, &doc, &values, &concept);
+        assert!(
+            a.reasons
+                .iter()
+                .any(|r| r.contains("outside the valid range")),
+            "{:?}",
+            a.reasons
+        );
     }
 
     #[test]
