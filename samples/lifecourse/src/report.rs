@@ -16,8 +16,10 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use splinter_sdk::measure::metric_gate::{decide, Evidence, Requirement};
+use splinter_sdk::model::timeline::survival::brier::brier;
 use splinter_sdk::model::timeline::survival::calibration::at_horizon;
 use splinter_sdk::model::timeline::survival::compare::{cluster_bootstrap, cluster_bootstrap_by};
+use splinter_sdk::model::timeline::survival::concordance::uno;
 use splinter_sdk::model::timeline::survival::estimate::censoring;
 use splinter_sdk::model::timeline::survival::Obs;
 use splinter_sdk::model::timeline::{observed, Subject, Value};
@@ -295,6 +297,42 @@ pub fn report(data: &Path) -> Result<()> {
         let c = at_horizon(&r, &o, 0, 10.0, &g, 10);
         c.intercept.is_finite().then_some(c.intercept)
     });
+    // Ten-year accuracy and discrimination with design-based intervals, for
+    // the candidate and the baseline (reported; the primary decides).
+    // perf-number: a confidence level of an interval, not a measurement
+    writeln!(out, "## Ten-year Brier score and concordance, locked test (95% design-based intervals)\n\n| arm | Brier 10 | Uno C 10 |\n|---|---|---|")?;
+    for (name, det) in [("horizon", &cdet), ("standard", &bdet)] {
+        let by_id: HashMap<&str, f64> = det
+            .risk_10
+            .iter()
+            .map(|(id, r)| (id.as_str(), *r))
+            .collect();
+        let r: Vec<f64> = subjects10
+            .iter()
+            .map(|s| {
+                by_id
+                    .get(s.subject_id.as_str())
+                    .copied()
+                    .unwrap_or(f64::NAN)
+            })
+            .collect();
+        let stat = |which: fn(&[f64], &[Obs]) -> Option<f64>| {
+            let point = which(&r, &obs10);
+            let iv = cluster_bootstrap_by(&cl10, BOOTSTRAP_REPS, 0.95, BOOTSTRAP_SEED, |ix| {
+                let o: Vec<Obs> = ix.iter().map(|&i| obs10[i]).collect();
+                let rr: Vec<f64> = ix.iter().map(|&i| r[i]).collect();
+                which(&rr, &o)
+            });
+            match (point, iv) {
+                (Some(p), Some(i)) => format!("{p:.4} [{:.4}, {:.4}]", i.lo, i.hi),
+                _ => "not measured".into(),
+            }
+        };
+        let brier10 = |r: &[f64], o: &[Obs]| brier(r, o, 0, 10.0, &censoring(o));
+        let uno10 = |r: &[f64], o: &[Obs]| uno(r, o, 0, 10.0, &censoring(o));
+        writeln!(out, "| {name} | {} | {} |", stat(brier10), stat(uno10))?;
+    }
+    writeln!(out)?;
     let crit = preregistered();
     writeln!(out, "## Calibration of the candidate at 10 years\n")?;
     if let Some(c) = &cand.metrics.calibration_10 {
