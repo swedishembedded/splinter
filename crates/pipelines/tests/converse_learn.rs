@@ -167,11 +167,17 @@ fn attempt(
     judge: Option<Scripted>,
     persona: Option<&str>,
     passages: Option<PassageShare>,
-) -> (Result<Learned, OrchestratorError>, common::Scratch, Context) {
+) -> (
+    Result<Learned, OrchestratorError>,
+    common::Scratch,
+    Context,
+    Scripted,
+) {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
+    let policy = policy(third);
     ctx.add_model(
         ModelRef::policy_default(),
-        Model::new(Arc::new(policy(third)), common::POLICY),
+        Model::new(Arc::new(policy.clone()), common::POLICY),
     );
     let judge_ref: ModelRef = "local:test/judge".parse().unwrap();
     let roles = judge.map_or_else(Default::default, |judge| {
@@ -202,14 +208,14 @@ fn attempt(
         },
         &student,
     );
-    (learned, scratch, ctx)
+    (learned, scratch, ctx, policy)
 }
 
 fn run(
     test: &str,
     third: &'static str,
 ) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
-    let (learned, scratch, _ctx) = attempt(test, third, Some(judge()), None, None);
+    let (learned, scratch, _ctx, _) = attempt(test, third, Some(judge()), None, None);
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
     };
@@ -305,7 +311,7 @@ fn one_dialogue_in_eight_ends_by_asking_beyond_the_letter_and_the_choice_is_stab
 fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
     // With no judge named the policy plays it, and the policy is the
     // teacher whose dialogues it would grade.
-    let (learned, _scratch, _ctx) = attempt(
+    let (learned, _scratch, _ctx, _) = attempt(
         "converse-learn-self-judge",
         "Study each morning.",
         None,
@@ -324,7 +330,7 @@ fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
 #[test]
 fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers() {
     let always_pass = Scripted::new(|_| "PASS\nit does".into());
-    let (learned, _scratch, _ctx) = attempt(
+    let (learned, _scratch, _ctx, _) = attempt(
         "converse-learn-weak-judge",
         "Study each morning.",
         Some(always_pass),
@@ -345,7 +351,7 @@ fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers
 
 #[test]
 fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
-    let (learned, _scratch, ctx) = attempt(
+    let (learned, _scratch, ctx, policy) = attempt(
         "converse-learn-persona",
         "The pen fixes what the memory lets slip, so write down what you have read.",
         Some(judge()),
@@ -371,8 +377,27 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
             .as_deref(),
         Some(prompt.as_str())
     );
-    // The teacher that wrote the dialogue was not asked as the person.
+    // The other speaker's role never reaches the record.
     assert!(!text.contains(STUDENT_ROLE));
+    // The teacher answered under the prompt the student is trained under:
+    // every one of its solves was sent the persona as its system turn, so the
+    // records' answers were written as the person they open with.
+    let prompts = policy.prompts.lock().unwrap();
+    let systems = policy.systems.lock().unwrap();
+    let teaching: Vec<&Vec<String>> = prompts
+        .iter()
+        .zip(systems.iter())
+        .filter(|(prompt, _)| prompt.contains(MATERIAL_HEADING))
+        .map(|(_, system)| system)
+        .collect();
+    assert!(!teaching.is_empty());
+    for system in teaching {
+        assert_eq!(
+            system.as_slice(),
+            std::slice::from_ref(&prompt),
+            "{system:?}"
+        );
+    }
 }
 
 #[test]
@@ -441,7 +466,7 @@ fn reference_reply(reference: &Scripted, prompt: &str) -> String {
 
 #[test]
 fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
-    let (learned, _scratch, _ctx) = attempt(
+    let (learned, _scratch, _ctx, _) = attempt(
         "converse-learn-authored",
         "The pen fixes what the memory lets slip, so write down what you have read.",
         Some(judge_of_reference_and_fit()),
@@ -476,7 +501,7 @@ fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
 
 #[test]
 fn a_share_of_the_training_records_carries_passages_in_the_prompt() {
-    let (learned, _scratch, _ctx) = attempt(
+    let (learned, _scratch, _ctx, _) = attempt(
         "converse-learn-passages",
         "The pen fixes what the memory lets slip, so write down what you have read.",
         Some(judge()),

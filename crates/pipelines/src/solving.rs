@@ -24,7 +24,9 @@
 //! the task as it is - its own instruction, its own environment - so its
 //! verdicts are the task's verifiers' and a view of it shows the student
 //! the instruction alone. A task grounded in nothing a teacher could be
-//! shown is skipped.
+//! shown is skipped. A solve runs under the system prompt the request names
+//! ([`SolveRequest::system`]) - the one the student is trained under - so
+//! what is learned from was written under the prompt it is learned under.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -120,6 +122,11 @@ pub struct SolveRequest<'a> {
     /// grounding material before its instruction, open-book; see the module
     /// documentation.
     pub teacher: bool,
+    /// The system prompt the solver answers under, in place of its own: the
+    /// one the student is trained under, so that a teacher's answers and a
+    /// student's attempts are written as the person the records open with.
+    /// `None` keeps the solver's.
+    pub system: Option<&'a str>,
     /// No solve starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops the stage.
@@ -143,6 +150,7 @@ pub fn solve_set(
             attempts: 1,
             sampling: SamplingChoice::Own,
             teacher: false,
+            system: None,
             deadline,
             cancel: cancel.clone(),
         },
@@ -178,7 +186,10 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         ));
     }
     let set = ctx.tasks().get_set(request.task_set)?;
-    let (model, sampling) = sampled_solver(ctx, request)?;
+    let (mut model, sampling) = sampled_solver(ctx, request)?;
+    if let Some(system) = request.system {
+        model = model.with_system(system);
+    }
     let policy = match request.solver {
         ModelRef::Policy(alias) => Some(PolicyUsed {
             alias: alias.clone(),

@@ -356,6 +356,8 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
 /// The student's own attempts: skipped when distilling.
 fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
     prepare_judge(ctx, st)?;
+    // The student attempts under the prompt it is trained under.
+    let system = st.system_prompt();
     let attempted = solve_tasks(
         ctx,
         &SolveRequest {
@@ -366,6 +368,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
                 .frontier
                 .map_or(SamplingChoice::Own, |p| p.sampling_choice()),
             teacher: false,
+            system: system.as_deref(),
             deadline: st.stage_deadlines.attempts,
             cancel: run.cancel_token(),
         },
@@ -389,12 +392,16 @@ fn verify_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) 
 
 fn teach_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
     prepare_judge(ctx, st)?;
+    // The teacher answers as the person the records open with: its answers
+    // are what the student learns under that prompt.
+    let system = st.system_prompt();
     let taught = teach(
         ctx,
         &TeachRequest {
             task_set: st.task_set()?,
             attempts: st.attempts.as_ref(),
             teacher: st.learn.teacher,
+            system: system.as_deref(),
             deadline: st.stage_deadlines.teach,
             cancel: run.cancel_token(),
         },

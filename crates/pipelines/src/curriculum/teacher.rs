@@ -48,6 +48,9 @@ pub struct TeachRequest<'a> {
     pub attempts: Option<&'a SetId>,
     /// The model that teaches.
     pub teacher: &'a ModelRef,
+    /// The system prompt it teaches under: the student's, when the student
+    /// is trained under one of its own ([`SolveRequest::system`]).
+    pub system: Option<&'a str>,
     /// No solve starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops the stage.
@@ -98,6 +101,7 @@ pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, Orches
             attempts: 1,
             sampling: SamplingChoice::Own,
             teacher: true,
+            system: request.system,
             deadline: request.deadline,
             cancel: request.cancel.clone(),
         },

@@ -96,6 +96,7 @@ fn solve_with(test: &str, reference: ModelRef, width: usize) -> (usize, Vec<Stri
             attempts: 2,
             sampling: SamplingChoice::Own,
             teacher: false,
+            system: None,
             deadline: None,
             cancel: CancelToken::new(),
         },
