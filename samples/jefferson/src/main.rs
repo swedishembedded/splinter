@@ -170,11 +170,20 @@ fn exam_command(args: &[String]) -> anyhow::Result<()> {
         adapter: flag(args, "--adapter").map(PathBuf::from),
         max_tokens: u32::try_from(number(args, "--max-tokens", 400)?)?,
         limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
-        system: flag(args, "--system"),
+        system: system_flag(args),
     };
     let asked = exam::run(&run)?;
     println!("asked {asked} questions; results in {}", run.out.display());
     Ok(())
+}
+
+/// The system message an exam asks under, when not the sample's own persona:
+/// `--persona NAME` is the prompt Splinter trains a policy to be NAME under,
+/// for an adapter a `learn` produced; `--system TEXT` is any other.
+fn system_flag(args: &[String]) -> Option<String> {
+    flag(args, "--persona")
+        .map(|name| splinter_sdk::vocabulary::prompt::persona_prompt(&name))
+        .or_else(|| flag(args, "--system"))
 }
 
 fn train_command(args: &[String]) -> anyhow::Result<()> {

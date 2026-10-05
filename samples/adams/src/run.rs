@@ -20,7 +20,7 @@ mod reconstruction;
 pub use reconstruction::*;
 
 /// The assignments the freeze command wrote.
-fn read_assignments(resources: &Path) -> anyhow::Result<Vec<Assignment>> {
+pub fn read_assignments(resources: &Path) -> anyhow::Result<Vec<Assignment>> {
     let path = resources.join("frozen").join("assignments.jsonl");
     let text = std::fs::read_to_string(&path)
         .map_err(|e| anyhow::anyhow!("{}: {e}; run the freeze command first", path.display()))?;
@@ -157,6 +157,9 @@ pub struct Exam {
     pub adapter: Option<PathBuf>,
     pub max_tokens: u32,
     pub limit: Option<usize>,
+    /// The system message to ask under in place of the sample's persona: for
+    /// an adapter Splinter trained under its own prompt.
+    pub system: Option<String>,
 }
 
 /// Ask one model, with or without its adapter, every question not yet
@@ -166,7 +169,7 @@ pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
     let model = splinter_sdk::model::exam::Model {
         base: &e.base,
         adapter: e.adapter.as_deref(),
-        system: PERSONA,
+        system: e.system.as_deref().unwrap_or(PERSONA),
         max_tokens: e.max_tokens,
         label: "adams",
         decoding: Decoding::Greedy,

@@ -56,7 +56,9 @@ overlapping text, so its exam and the independent one are different letters.
 The commands below are a second measurement that Splinter's own stages do not
 share code with, so the two can disagree. They ask the base and the adapter
 Splinter produced a set of questions fixed before training and read the answers
-without Splinter's judge.
+without Splinter's judge. `exam --persona "Thomas Jefferson"` asks under the
+prompt Splinter trained the adapter to be him under, so the adapter is asked as
+it is deployed (`--system TEXT` is any other prompt).
 
 ## The question
 

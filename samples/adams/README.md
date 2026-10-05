@@ -20,6 +20,50 @@ inventing them.
 The corpus is primary documents. Biographies are context, never evidence of
 what he believed.
 
+## Splinter alone, from one sentence
+
+The same corpus is what Splinter learns from on its own, the way it learns
+Jefferson: this sample supplies the materials, an anchor suite and an
+independent check, and no logic Splinter lacks.
+
+```bash
+# 1. The texts (checksummed), the curated documents, the leak-proof split, and
+#    the directory Splinter learns from: his own documents of the training
+#    split, cleaned, with every held-out family left out whole.
+python3 samples/adams/fetch.py --resources RESOURCES
+splinter-adams corpus    --resources RESOURCES
+splinter-adams freeze    --resources RESOURCES
+splinter-adams tasks     --resources RESOURCES                  # the independent check's frozen questions
+splinter-adams materials --resources RESOURCES --out ./materials
+
+# 2. Freeze the suite the release gate holds the adapter to: general knowledge,
+#    and the arithmetic and format-following a persona fine-tune erodes first.
+splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
+
+# 3. Splinter does the rest, under the roles the configuration names.
+SPLINTER_ASSISTANT_MODEL=local:Qwen/Qwen3-8B SPLINTER_BF16_BASE=1 SPLINTER_BUDGET=8h \
+  splinter "Learn to think like Samuel Adams based on the materials he has written in directory ./materials"
+
+# 4. The independent check: the frozen questions, asked of the base and of the
+#    adapter Splinter released, under the prompt Splinter trained it under.
+splinter-adams exam --tasks RESOURCES/tasks/exam.jsonl --out RUN/base.jsonl  --base BASE --persona "Samuel Adams"
+splinter-adams exam --tasks RESOURCES/tasks/exam.jsonl --out RUN/tuned.jsonl --base BASE --adapter ADAPTER --persona "Samuel Adams"
+splinter-adams report --before RUN/base.jsonl --after RUN/tuned.jsonl
+```
+
+`materials` writes one file per document that may be taught as his voice
+(`own/` for a text in his hand or signed by him, `committee/` for a text a town
+or committee he sat on adopted), each opening like a letter Splinter already
+learns from - who it was written to, when - with the editors' footnotes, source
+notes and running heads taken out. A text an editor ascribes to him or a
+newspaper piece under a pseudonym is not written, however likely the
+ascription: taught as his voice it is a composite. Every document of an exam or
+temporal family is left out whole, so the independent check asks about letters
+Splinter never saw; Splinter makes its own held-out split from what it is
+given, by group of overlapping text, so its exam and the independent one are
+different documents. The OCR's split words (`Gover nor`) are the scan's and are
+left as they are: the stored text is what the split and its digests rest on.
+
 ## What is built
 
 | Stage | What it does |
@@ -27,6 +71,7 @@ what he believed.
 | `fetch.py` | Fetches the raw texts politely (robots.txt, spacing, an allowlist of hosts, a size cap) and records the url, licence, time and hash of every one in `MANIFEST.tsv`. |
 | `corpus` | Parses Cushing's four volumes into documents: heading, the editor's source note, date, text. States how sure the edition's own note leaves us that Adams wrote each one (`DRAFT_IN_HAND`, `SIGNED_SCRIBAL`, `COMMITTEE_COAUTHORED`, `PSEUDONYMOUS_ATTRIBUTED`, `EDITOR_ATTRIBUTED`, ...). Excludes later writers and namesakes by author line and date. Lists every source note it could not turn into a document, with the reason. |
 | `freeze` | Splits the documents once, before any training, by family: two documents that share a passage are one text and are held out or trained on together. Every document dated 1790 or later is kept for a temporal test. Writes what was held out with a hash of each text and refuses to replace a freeze that says something else. |
+| `materials` | Writes the directory Splinter is pointed at: his own documents of the training split, one file each, cleaned (see above). Refuses a split that leaks. |
 | `tasks` | Builds questions by code from the documents' own fields: who a letter was written to, what year, what kind of document it is, how a passage goes on. A question is not asked when its opening already contains its answer. |
 | `train` | Fine-tunes a LoRA adapter on the training questions through Splinter's trainer. |
 | `exam` | Asks one model, with or without the adapter, every question not yet answered; grades each answer by code; resumes where it stopped. |
@@ -97,6 +142,10 @@ splinter-adams exam   --tasks RESOURCES/tasks/exam.jsonl --out RUN/base-exam.jso
 splinter-adams exam   --tasks RESOURCES/tasks/exam.jsonl --out RUN/tuned-exam.jsonl --base BASE --adapter RUN/attempt/adapter.safetensors
 splinter-adams report --before RUN/base-exam.jsonl --after RUN/tuned-exam.jsonl
 ```
+
+`exam` asks under the sample's own persona unless `--persona NAME` (the prompt
+Splinter trains a policy to be NAME under, for an adapter a `learn` produced)
+or `--system TEXT` says otherwise.
 
 The helper stages need a model served by `brain serve` and its key in
 `BRAIN_API_KEY`; they resume where they stopped and record, rather than hide, a

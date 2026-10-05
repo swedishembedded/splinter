@@ -20,6 +20,7 @@
 //! identify   is this author line and year the Samuel Adams being modelled
 //! corpus     parse the fetched volumes of Cushing's edition into curated documents
 //! freeze     split the documents once, before any training: train, exam, temporal
+//! materials  write his own training documents as the directory Splinter learns from
 //! tasks      build the training set, the frozen exam and the seen sample
 //! train      fine-tune a LoRA adapter on the training set
 //! exam       ask one model (base, or base plus adapter) every exam question
@@ -50,6 +51,7 @@ mod grounding;
 mod grpo;
 mod helper;
 mod judge;
+mod materials;
 mod miner;
 mod onpolicy;
 mod persona;
@@ -72,6 +74,7 @@ fn main() -> anyhow::Result<()> {
         Some("identify") => identify_command(&args[1..]),
         Some("corpus") => corpus_command(&args[1..]),
         Some("freeze") => freeze_command(&args[1..]),
+        Some("materials") => materials_command(&args[1..]),
         Some("tasks") => tasks_command(&args[1..]),
         Some("train") => train_command(&args[1..]),
         Some("exam") => exam_command(&args[1..]),
@@ -91,7 +94,7 @@ fn main() -> anyhow::Result<()> {
         Some("judge") => judge_command(&args[1..]),
         Some("reconstruct-report") => reconstruct_report_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|grpo|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
+            "usage: splinter-adams <identify|corpus|freeze|materials|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|grpo|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
         ),
     }
 }
@@ -312,6 +315,38 @@ fn tasks_command(args: &[String]) -> anyhow::Result<()> {
     run::tasks_command(&resources, &documents, number(args, "--seen-per-kind", 40)?)
 }
 
+/// Write the directory Splinter is pointed at: his own documents of the
+/// frozen training split, cleaned, one file each.
+fn materials_command(args: &[String]) -> anyhow::Result<()> {
+    let resources = std::path::PathBuf::from(need(args, "--resources")?);
+    let out = std::path::PathBuf::from(need(args, "--out")?);
+    let documents = read_documents(&resources)?;
+    let assignments = run::read_assignments(&resources)?;
+    let leaks = split::leaks(&documents, &assignments);
+    anyhow::ensure!(
+        leaks.is_empty(),
+        "{} training documents share text with held-out ones",
+        leaks.len()
+    );
+    let files = materials::materials(&documents, &assignments);
+    for dir in [materials::OWN_DIR, materials::COMMITTEE_DIR] {
+        std::fs::create_dir_all(out.join(dir))?;
+    }
+    for file in &files {
+        std::fs::write(out.join(&file.path), &file.text)?;
+    }
+    let own = files
+        .iter()
+        .filter(|f| f.path.starts_with(materials::OWN_DIR))
+        .count();
+    println!(
+        "{own} documents of his own and {} a committee adopted written under {}",
+        files.len() - own,
+        out.display()
+    );
+    Ok(())
+}
+
 /// Effective batch size. A single example per update, which is what one row is,
 /// is a noisy gradient when records of very different kinds alternate.
 const DEFAULT_GRAD_ACCUM: u32 = 8;
@@ -350,7 +385,17 @@ fn exam_command(args: &[String]) -> anyhow::Result<()> {
         adapter: flag(args, "--adapter").map(Into::into),
         max_tokens: number(args, "--max-tokens", 400)?,
         limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+        system: system_flag(args),
     })
+}
+
+/// The system message an exam asks under, when not the sample's own persona:
+/// `--persona NAME` is the prompt Splinter trains a policy to be NAME under,
+/// for an adapter a `learn` produced; `--system TEXT` is any other.
+fn system_flag(args: &[String]) -> Option<String> {
+    flag(args, "--persona")
+        .map(|name| splinter_sdk::vocabulary::prompt::persona_prompt(&name))
+        .or_else(|| flag(args, "--system"))
 }
 
 fn report_command(args: &[String]) -> anyhow::Result<()> {
