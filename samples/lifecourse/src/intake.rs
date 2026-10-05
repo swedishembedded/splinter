@@ -270,17 +270,42 @@ struct Scored {
     reasons: Vec<String>,
 }
 
+/// Every case's proposal, the model asked once per distinct codebook entry
+/// (most variables are documented identically in every cycle). The model is
+/// shown the concepts' names, units and descriptions but not their reference
+/// distributions: it maps from the codebook alone, and the references stay
+/// with the admission rules, which run per case on that case's own values.
 fn propose_all(all: &[Case], model: Model) -> Result<Vec<Scored>> {
     let mapper = SvenMapper::new(model, CALL_DEADLINE);
     let runtime = tokio::runtime::Runtime::new().context("starting the async runtime")?;
+    let offered: Vec<ConceptSpec> = concepts_for(all, &all[0])
+        .into_iter()
+        .map(|c| ConceptSpec {
+            reference: None,
+            ..c
+        })
+        .collect();
+    let mut asked: HashMap<String, Result<MappingProposal, String>> = HashMap::new();
     let mut out = Vec::new();
     for case in all {
-        let concepts = concepts_for(all, case);
-        let got = runtime.block_on(mapper.propose(&case.doc, &concepts));
+        let key = case.doc.full_text();
+        let got = match asked.get(&key) {
+            Some(g) => g.clone(),
+            None => {
+                let g = runtime.block_on(mapper.propose(&case.doc, &offered));
+                eprintln!(
+                    "asked about {} ({} distinct so far)",
+                    case.doc.name,
+                    asked.len() + 1
+                );
+                asked.insert(key, g.clone());
+                g
+            }
+        };
         let t = &case.truth;
         let scored = match got {
             Ok(p) => {
-                let a = admit(&p, &case.doc, &case.values, &concepts);
+                let a = admit(&p, &case.doc, &case.values, &concepts_for(all, case));
                 Scored {
                     cycle: case.cycle,
                     variable: case.doc.name.clone(),
