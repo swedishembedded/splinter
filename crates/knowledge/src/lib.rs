@@ -20,6 +20,8 @@
 //!   evidence.
 //! * [`denoise`] - a passage of a source part, corrupted, as a task to
 //!   restore it: the first task generator feeding the experience store.
+//! * [`tabular`] - record files as columns: the SAS transport format
+//!   public survey and cohort data are distributed in.
 //! * [`tasks`] - tasks of many kinds proposed by a generator model and
 //!   admitted by code: grounded in the source, self-contained, checked by
 //!   running them where the answer is computed, and new to their batch.
@@ -35,4 +37,5 @@ pub mod material;
 pub mod retrieve;
 pub mod sections;
 pub mod survey;
+pub mod tabular;
 pub mod tasks;
