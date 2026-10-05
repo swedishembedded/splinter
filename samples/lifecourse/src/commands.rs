@@ -659,6 +659,11 @@ pub fn cv_runs(data: &Path, arm: Arm) -> Result<BTreeMap<(usize, usize), Run>> {
             continue;
         }
         let run: Run = serde_json::from_slice(&std::fs::read(e.path())?)?;
+        // The name prefix also matches longer arm names (horizon-state):
+        // the run's own record decides.
+        if run.arm != arm {
+            continue;
+        }
         if let (Some(fold), false) = (run.fold, run.permuted) {
             out.insert(fold, run);
         }

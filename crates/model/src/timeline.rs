@@ -12,6 +12,6 @@
 
 pub use brain::survival;
 pub use brain::timeline::{
-    observed, read_jsonl, synthetic, AtRisk, Event, Observation, Prediction, Subject,
+    observed, read_jsonl, synthetic, AtRisk, Backbone, Event, Observation, Prediction, Subject,
     TimelineConfig, TimelineModel, TimelineReport, TimelineSpec, Value,
 };

@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use splinter_sdk::model::timeline::{Subject, TimelineModel, TimelineSpec};
+use splinter_sdk::model::timeline::{Backbone, Subject, TimelineModel, TimelineSpec};
 
 use crate::build::CODES;
 use crate::concepts::{AGE_SEX, STANDARD_RISK_FACTORS};
@@ -50,7 +50,17 @@ pub enum Arm {
     Additive,
     /// The set encoder on every input.
     Horizon,
+    /// Every input, the history read visit by visit and carried to the
+    /// examination by the continuous-time state (a secondary arm).
+    HorizonState,
+    /// Every input, the visits read by attention from the examination with
+    /// rotary angles from real time (a secondary arm).
+    HorizonAttention,
 }
+
+/// Visit times the two visit arms keep (the most recent; a subject's
+/// history here is its recalled weights and onset ages).
+pub const VISITS: u32 = 8;
 
 impl Arm {
     /// Its name in results.
@@ -60,6 +70,8 @@ impl Arm {
             Arm::Standard => "standard",
             Arm::Additive => "additive",
             Arm::Horizon => "horizon",
+            Arm::HorizonState => "horizon-state",
+            Arm::HorizonAttention => "horizon-attention",
         }
     }
 
@@ -69,7 +81,7 @@ impl Arm {
         let keep: Option<BTreeSet<&str>> = match self {
             Arm::AgeSex => Some(AGE_SEX.iter().copied().collect()),
             Arm::Standard => Some(STANDARD_RISK_FACTORS.iter().copied().collect()),
-            Arm::Additive | Arm::Horizon => None,
+            Arm::Additive | Arm::Horizon | Arm::HorizonState | Arm::HorizonAttention => None,
         };
         let Some(keep) = keep else { return s.clone() };
         let mut v = s.clone();
@@ -129,12 +141,17 @@ pub fn fit(
         ));
     }
     let spec = TimelineSpec::new(CODES, CODES)
-        .additive(arm != Arm::Horizon)
+        .additive(matches!(arm, Arm::AgeSex | Arm::Standard | Arm::Additive))
         .knots(KNOTS.to_vec())
         .max_tokens(MAX_TOKENS)
         .batch(BATCH)
         .steps(training.steps)
         .seed(training.seed);
+    let spec = match arm {
+        Arm::HorizonState => spec.visits(VISITS).backbone(Backbone::State),
+        Arm::HorizonAttention => spec.visits(VISITS).backbone(Backbone::Attention),
+        _ => spec,
+    };
     let (model, report) = TimelineModel::train(&train, &held, &spec)?;
     let info = RunInfo {
         steps: report.steps,

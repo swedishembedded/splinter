@@ -386,12 +386,18 @@ pub fn report(data: &Path) -> Result<()> {
     }
 
     // 5. Cross-validated comparisons, reported (they inform, the locked test decides).
-    writeln!(out, "\n## Cross-validation (mean over folds)\n\n| metric | horizon | additive | standard | age-sex |\n|---|---|---|---|---|")?;
-    let runs: Vec<BTreeMap<(usize, usize), Run>> =
-        [Arm::Horizon, Arm::Additive, Arm::Standard, Arm::AgeSex]
-            .iter()
-            .map(|a| cv_runs(data, *a))
-            .collect::<Result<_>>()?;
+    writeln!(out, "\n## Cross-validation (mean over folds)\n\nThe two visit arms are secondary: the history read visit by visit through the continuous-time state or attention.\n\n| metric | horizon | additive | standard | age-sex | horizon-state | horizon-attention |\n|---|---|---|---|---|---|---|")?;
+    let runs: Vec<BTreeMap<(usize, usize), Run>> = [
+        Arm::Horizon,
+        Arm::Additive,
+        Arm::Standard,
+        Arm::AgeSex,
+        Arm::HorizonState,
+        Arm::HorizonAttention,
+    ]
+    .iter()
+    .map(|a| cv_runs(data, *a))
+    .collect::<Result<_>>()?;
     for Compared { name, get } in compared_metrics() {
         let cells: Vec<String> = runs
             .iter()
