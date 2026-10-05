@@ -22,6 +22,8 @@
 //! * [`repair`] - a retry with the critique, graded by the task's
 //!   verifiers, the critique verified by its outcome, the chain recorded as
 //!   relations; and the bounded loop of critique and retry.
+//! * [`mapper`] - a model asked how a documented variable maps onto a
+//!   shared concept, its proposal left to the knowledge crate to admit.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
 
@@ -31,6 +33,7 @@ mod budget;
 pub mod converse;
 pub mod critic;
 pub mod judge;
+pub mod mapper;
 pub mod proposer;
 pub mod repair;
 pub mod replay;
