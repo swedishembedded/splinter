@@ -30,7 +30,7 @@ use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
-use super::{auto_records_per_step, steps_for};
+use super::{auto_records_per_step, steps_for, voice_limit, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
@@ -39,7 +39,7 @@ use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{
-    build_with, examples_in, BuildRequest, Passages, ViewName, DEFAULT_MIN_STRENGTH,
+    build_with, examples_in, BuildRequest, Built, Passages, ViewName, DEFAULT_MIN_STRENGTH,
 };
 use crate::exam::{examine, Exam, ExamineRequest};
 use crate::plan::plan as make_plan;
@@ -63,6 +63,9 @@ pub(super) struct Learn<'a> {
     pub(super) goal: Option<&'a str>,
     /// Who the policy becomes, as the request names it.
     pub(super) persona: Option<&'a str>,
+    /// The share of the training examples that is the writer's own text, as
+    /// the request names it; `None` is the default for a run with a persona.
+    pub(super) voice: Option<f64>,
     /// The share of training records given retrieved passages, when any.
     pub(super) passages: Option<PassageShare>,
     pub(super) deadline: Option<Instant>,
@@ -89,6 +92,8 @@ pub(super) struct Learn<'a> {
 pub(super) struct LearnState<'a> {
     learn: Learn<'a>,
     pub(super) report: LearnReport,
+    /// When the run began: what the stage deadlines are counted from.
+    started: Instant,
     stage_deadlines: StageDeadlines,
     /// The teacher answers every task and the student makes no attempt.
     distill: bool,
@@ -105,9 +110,11 @@ pub(super) struct LearnState<'a> {
     sets: Vec<SetId>,
     /// The tasks kept, whose variants are written.
     kept_tasks: Option<TaskSetId>,
-    dataset: Option<String>,
+    /// The datasets trained on: the dialogues, then the writer's own text
+    /// when the run has it.
+    datasets: Vec<String>,
     records: usize,
-    /// What the training reads: [`examples_in`] the dataset.
+    /// What the training reads: [`examples_in`] the datasets.
     examples: usize,
     candidate: Option<String>,
     /// The judge is named and measured, or no task needs one.
@@ -137,14 +144,33 @@ impl<'a> LearnState<'a> {
         self.learn.persona.or(planned)
     }
 
+    /// The share of the training examples that is the writer's own text:
+    /// what the request names, else [`DEFAULT_VOICE_SHARE`] when the policy
+    /// learns to think like a person and none otherwise.
+    fn voice_share(&self) -> f64 {
+        self.learn.voice.unwrap_or(if self.persona().is_some() {
+            DEFAULT_VOICE_SHARE
+        } else {
+            0.0
+        })
+    }
+
+    /// Shares the budget between the stages as the voice share says: the
+    /// plan may have named the persona, and with it the writer's text.
+    fn share_budget(&mut self) {
+        self.stage_deadlines =
+            StageDeadlines::sharing(self.started, self.learn.deadline, self.voice_share());
+    }
+
     /// The state of a run that has not begun.
     pub(super) fn new(learn: Learn<'a>, distill: bool, frontier: Option<PassAtK>) -> Self {
-        let stage_deadlines = StageDeadlines::of(Instant::now(), learn.deadline);
+        let started = Instant::now();
         let kinds = learn.kinds.to_vec();
-        Self {
+        let mut state = Self {
             learn,
             report: LearnReport::default(),
-            stage_deadlines,
+            started,
+            stage_deadlines: StageDeadlines::of(started, None),
             distill,
             frontier: if distill { None } else { frontier },
             kinds,
@@ -154,13 +180,15 @@ impl<'a> LearnState<'a> {
             failed: 0,
             sets: Vec::new(),
             kept_tasks: None,
-            dataset: None,
+            datasets: Vec::new(),
             records: 0,
             examples: 0,
             candidate: None,
             judge_prepared: false,
             min_strength: DEFAULT_MIN_STRENGTH,
-        }
+        };
+        state.share_budget();
+        state
     }
 
     /// The run's end: the budget, or nothing to stop for.
@@ -320,6 +348,7 @@ fn plan_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) ->
     st.kinds = planned.plan.kinds.clone();
     let summary = to_value(&planned)?;
     st.report.plan = Some(planned);
+    st.share_budget();
     Ok(StageEnd::done(summary))
 }
 
@@ -559,6 +588,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         min_strength: Some(st.min_strength),
         system_prompt: st.system_prompt(),
         export_only: false,
+        limit: None,
     };
     // Passages of the run's own sources, when a share of the records is to
     // carry them: the embedding model is loaded for it and the index kept.
@@ -592,11 +622,36 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         }
         Err(e) => return Err(e),
     };
-    let summary = to_value(&built)?;
-    st.dataset = Some(built.dataset.to_string());
+    st.datasets = vec![built.dataset.to_string()];
     st.records = built.records;
     st.examples = examples_in(&built.path).map_err(io(&built.path))?;
+    // The writer's own text beside the dialogues, as many records as make
+    // it the share asked of the examples; the split holds it out with the
+    // families it prints.
+    let limit = voice_limit(st.examples, st.voice_share());
+    let voice = if limit > 0 {
+        let voice = build_with(
+            ctx,
+            &BuildRequest {
+                view: ViewName::Voice,
+                min_strength: None,
+                limit: Some(limit),
+                ..request
+            },
+            None,
+        )?;
+        st.datasets.push(voice.dataset.to_string());
+        st.examples += examples_in(&voice.path).map_err(io(&voice.path))?;
+        Some(voice)
+    } else {
+        None
+    };
+    let summary = to_value(&DatasetStage {
+        built: &built,
+        voice: voice.as_ref(),
+    })?;
     st.report.dataset = Some(built);
+    st.report.voice = voice;
     Ok(if st.records < MIN_SAMPLES {
         StageEnd::stop(
             summary,
@@ -611,10 +666,19 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     })
 }
 
+/// What the dataset stage records: the dialogue dataset, and the writer's
+/// own text beside it when the run has it.
+#[derive(serde::Serialize)]
+struct DatasetStage<'a> {
+    #[serde(flatten)]
+    built: &'a Built,
+    voice: Option<&'a Built>,
+}
+
 fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
-    let Some(dataset) = st.dataset.clone() else {
+    if st.datasets.is_empty() {
         unreachable!("the train stage follows the dataset stage")
-    };
+    }
     // What a step averages is the data's to say unless a command did, and
     // only when the steps are not named: a command that names its steps means
     // optimizer steps of single records, as it always did.
@@ -631,7 +695,7 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     let candidate = train(
         ctx,
         &TrainRequest {
-            datasets: vec![dataset],
+            datasets: st.datasets.clone(),
             from: st.learn.policy.clone(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps,

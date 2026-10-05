@@ -196,7 +196,20 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
                 field("experience_set")
             )
         }
-        "dataset" => format!("{} record(s) in {}", field("records"), field("dataset")),
+        "dataset" => {
+            let voice = summary["voice"].as_object().map_or(String::new(), |voice| {
+                format!(
+                    ", and {} record(s) of the writer's own text in {}",
+                    voice["records"],
+                    voice["dataset"].as_str().unwrap_or("?")
+                )
+            });
+            format!(
+                "{} record(s) in {}{voice}",
+                field("records"),
+                field("dataset")
+            )
+        }
         "train" => format!("candidate {}", field("candidate")),
         "policy" => match &summary["release"] {
             serde_json::Value::Null => {
@@ -308,6 +321,9 @@ impl Report for LearnReport {
         if let Some(r) = &self.dataset {
             stage(&mut out, "dataset", r.human());
         }
+        if let Some(r) = &self.voice {
+            stage(&mut out, "voice", r.human());
+        }
         if let Some(r) = &self.candidate {
             stage(&mut out, "train", r.human());
         }
@@ -337,6 +353,25 @@ impl Report for Learned {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The dataset line names the writer's own text beside the dialogues.
+    #[test]
+    fn the_dataset_stage_line_names_the_writers_text_beside_the_dialogues() {
+        let line = stage_line(
+            "dataset",
+            &serde_json::json!({"records": 140, "dataset": "blake3:aa", "voice": {"records": 214, "dataset": "blake3:bb"}}),
+        );
+        assert!(
+            line.contains("140 record(s) in blake3:aa")
+                && line.contains("214 record(s) of the writer's own text in blake3:bb"),
+            "{line}"
+        );
+        let alone = stage_line(
+            "dataset",
+            &serde_json::json!({"records": 140, "dataset": "blake3:aa", "voice": null}),
+        );
+        assert!(!alone.contains("writer"), "{alone}");
+    }
 
     #[test]
     fn the_plan_stage_says_what_was_chosen_and_why() {

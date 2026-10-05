@@ -22,9 +22,10 @@ pub use splinter_data::Strip;
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Fraction,
     Objective, OutcomeView, Preference, Projection, Retrieval, SftFinal, SftStep, StoredDataset,
-    VerifierView, View,
+    VerifierView, View, Voice,
 };
-use splinter_model::{BrainDatasetCheck, TrainingCapabilities};
+use splinter_knowledge::sections::sections;
+use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
@@ -70,11 +71,14 @@ pub enum ViewName {
     Denoise,
     /// The raw text of source parts.
     Cpt,
+    /// The writer's own text as the answer, in the shape the policy is
+    /// asked in.
+    Voice,
 }
 
 impl ViewName {
     /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::SftFinal,
         Self::SftStep,
         Self::Critic,
@@ -85,6 +89,7 @@ impl ViewName {
         Self::Outcome,
         Self::Denoise,
         Self::Cpt,
+        Self::Voice,
     ];
 
     /// The name a command line uses.
@@ -101,15 +106,16 @@ impl ViewName {
             Self::Outcome => "outcome",
             Self::Denoise => "denoise",
             Self::Cpt => "cpt",
+            Self::Voice => "voice",
         }
     }
 
     fn takes_strip(self) -> bool {
-        self != Self::Cpt
+        !matches!(self, Self::Cpt | Self::Voice)
     }
 
     fn takes_min_strength(self) -> bool {
-        !matches!(self, Self::Cpt | Self::Denoise)
+        !matches!(self, Self::Cpt | Self::Denoise | Self::Voice)
     }
 }
 
@@ -211,6 +217,9 @@ pub struct BuildRequest {
     pub system_prompt: Option<String>,
     /// Write an objective brain cannot train in the export format.
     pub export_only: bool,
+    /// The most records, kept evenly spread over the projection
+    /// ([`Projection::thinned_to`]); `None` keeps every one.
+    pub limit: Option<usize>,
 }
 
 /// What `dataset build` reports.
@@ -324,7 +333,31 @@ pub fn build_with(
             .project(&corpus),
         ViewName::Denoise => DenoiseView::new().with_strip(strip).project(&corpus),
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
+        ViewName::Voice => {
+            // The stretches are measured in the policy's own tokens, the
+            // unit its training row is sized in; without its tokenizer, in
+            // characters at a ratio that holds for text that tokenizes badly.
+            let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
+            let tokens = |text: &str| {
+                counter
+                    .as_ref()
+                    .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
+            };
+            let sectioner = |text: &str, media_type: &str| {
+                sections(text, media_type)
+                    .into_iter()
+                    .map(|section| section.range)
+                    .collect()
+            };
+            Voice::new(&source_store)
+                .measured_by(&tokens)
+                .sectioned_by(&sectioner)
+                .project(&corpus)
+        }
     }?;
+    if let Some(limit) = request.limit {
+        projection = projection.thinned_to(limit);
+    }
     if let Some(prompt) = &request.system_prompt {
         projection = projection.with_system_prompt(prompt);
     }

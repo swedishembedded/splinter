@@ -28,6 +28,7 @@
 //! | [`OutcomeView`] | reward | a whole trajectory and its derived reward |
 //! | [`DenoiseView`] | SFT | a denoise task's corrupted passage and its original |
 //! | [`Cpt`] | continued pretraining | the raw text of source parts |
+//! | [`Voice`] | SFT | the writer's own text, a stretch of whole sections at a time, as the answer |
 //!
 //! Every conversation a view projects starts with [`SYSTEM_PROMPT`], the
 //! system turn every model run on a task is sent: the policy is trained
@@ -88,8 +89,8 @@ pub use replay::replay_sample;
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use views::{
-    Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Retrieval, SftFinal, SftStep,
-    VerifierView,
+    chars_as_tokens, Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Retrieval,
+    Sectioner, SftFinal, SftStep, VerifierView, Voice,
 };
 
 /// The training objective a view's records serve.
@@ -286,6 +287,8 @@ pub enum Exclusion {
     Duplicate,
     /// A task with no single reference answer.
     NoReference,
+    /// A record past the limit a projection was thinned to.
+    OverLimit,
 }
 
 /// A view's output: its records and what it left out.
@@ -353,6 +356,30 @@ impl Projection {
             }
         }
         self.system_prompt = Some(prompt.to_string());
+        self
+    }
+
+    /// The same projection thinned to at most `limit` records, kept evenly
+    /// spread over it - the first and the last among them - and the rest
+    /// counted as [`Exclusion::OverLimit`].
+    #[must_use]
+    pub fn thinned_to(mut self, limit: usize) -> Self {
+        let total = self.records.len();
+        if limit >= total {
+            return self;
+        }
+        let kept: std::collections::BTreeSet<usize> = match limit {
+            0 => std::collections::BTreeSet::new(),
+            1 => std::iter::once(0).collect(),
+            _ => (0..limit).map(|i| i * (total - 1) / (limit - 1)).collect(),
+        };
+        let records = std::mem::take(&mut self.records);
+        self.records = records
+            .into_iter()
+            .enumerate()
+            .filter_map(|(n, record)| kept.contains(&n).then_some(record))
+            .collect();
+        *self.excluded.entry(Exclusion::OverLimit).or_insert(0) += total - self.records.len();
         self
     }
 
@@ -541,4 +568,43 @@ pub enum ViewError {
         /// The underlying error.
         source: std::io::Error,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A projection thinned to a limit keeps an even spread of its records,
+    /// first and last included, and counts the rest.
+    #[test]
+    fn a_thinned_projection_keeps_an_even_spread_and_counts_the_rest() {
+        let mut projection = Projection::new("voice", Objective::Sft, None, None);
+        for n in 0..10 {
+            projection.push(
+                RecordBody::Text {
+                    text: n.to_string(),
+                },
+                Provenance::default(),
+            );
+        }
+        let thinned = projection.clone().thinned_to(4);
+        let kept: Vec<&str> = thinned
+            .records
+            .iter()
+            .map(|r| match &r.body {
+                RecordBody::Text { text } => text.as_str(),
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(kept, ["0", "3", "6", "9"]);
+        assert_eq!(thinned.count(Exclusion::OverLimit), 6);
+        assert_eq!(
+            projection
+                .clone()
+                .thinned_to(10)
+                .count(Exclusion::OverLimit),
+            0
+        );
+        assert_eq!(projection.thinned_to(1).records.len(), 1);
+    }
 }

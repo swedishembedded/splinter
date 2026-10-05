@@ -121,8 +121,11 @@ pub struct LearnReport {
     pub critique: Option<Critiqued>,
     /// The select stage: the training set under the quotas.
     pub select: Option<Selected>,
-    /// The dataset stage.
+    /// The dataset stage: the dialogue dataset.
     pub dataset: Option<Built>,
+    /// The writer's own text trained beside it (the `voice` view); `None`
+    /// when the run has no persona or asked for none.
+    pub voice: Option<Built>,
     /// The candidate trained.
     pub candidate: Option<Candidate>,
     /// The release gate on it, and the release when it passed.

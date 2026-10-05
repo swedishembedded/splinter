@@ -161,6 +161,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         min_strength,
         system_prompt,
         export_only,
+        limit,
     }) = command(&[
         "dataset",
         "build",
@@ -175,6 +176,8 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--system-prompt",
         "You are a clerk.",
         "--export-only",
+        "--limit",
+        "5",
     ])
     else {
         panic!("dataset build");
@@ -185,6 +188,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert_eq!(min_strength, Some(Strength::Formal));
     assert_eq!(system_prompt.as_deref(), Some("You are a clerk."));
     assert!(export_only);
+    assert_eq!(limit, Some(5));
     assert!(parse(&["dataset", "build", "ab12", "--view", "sft"]).is_err());
     assert!(
         parse(&["dataset", "export", "ab12"]).is_err(),

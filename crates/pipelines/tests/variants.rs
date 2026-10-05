@@ -196,6 +196,7 @@ fn a_variant_never_enters_a_training_dataset() {
             min_strength: None,
             system_prompt: None,
             export_only: false,
+            limit: None,
         },
     )
     .unwrap_err();

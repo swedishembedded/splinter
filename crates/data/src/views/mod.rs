@@ -14,6 +14,7 @@ mod retrieval;
 mod sft_final;
 mod sft_step;
 mod verifier;
+mod voice;
 
 pub use cpt::Cpt;
 pub use critic::Critic;
@@ -25,6 +26,7 @@ pub use retrieval::Retrieval;
 pub use sft_final::SftFinal;
 pub use sft_step::SftStep;
 pub use verifier::VerifierView;
+pub use voice::{chars_as_tokens, Sectioner, Voice};
 
 use splinter_store::experiences::StoreError;
 

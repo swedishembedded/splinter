@@ -13,7 +13,9 @@ Everything else is Splinter's own work: it captures the directory, surveys it,
 plans what to teach (the planner is a model, held to the survey by code),
 generates tasks and conversations grounded in the letters, has a teacher answer
 them open-book, verifies every answer by code, trains a LoRA adapter on the
-verified answers, examines the adapter against its base on letters it never
+verified answers and on his own text word for word (as many records of it as
+there are answers, cut from the letters and works by code alone, held out with
+the letters the exam asks about), examines the adapter against its base on letters it never
 saw under a calibrated judge, and releases it only if the gate passes. This
 sample supplies the materials and an independent check; it supplies no logic
 Splinter lacks.

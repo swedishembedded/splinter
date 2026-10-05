@@ -13,7 +13,7 @@ splinter                          REPL on the current policy (a line is handled 
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
-                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--with-passages SHARE] [--bf16-base]
+                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--with-passages SHARE] [--voice SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -25,6 +25,7 @@ splinter judge calibrate <LABELLED-FILE> --judge REF | measure <TASKSET-ID> --ju
 splinter experiences list | show <ID> [--graph] | replay <ID>
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
+                       [--system-prompt TEXT] [--limit N]
 splinter dataset export <DATASET-ID> --out DIR
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B] [--lr LR] [--records-per-step N]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
@@ -141,7 +142,15 @@ decides whether it is released (`--no-release` stops at the candidate).
 `--no-frontier` solves each task once, has the teacher solve each one
 that failed, and keeps every task. `--budget` bounds the run's wall-clock time: task generation stops at
 three tenths of it, the student's attempts at half and the teacher's answers at
-four fifths, and training and the exam then run to the end; `--goal` steers what tasks are asked for; `--dry-run`
+four fifths, and training and the exam then run to the end. When a share of the
+examples is the writer's own text (`--voice`), training has that much more to do
+and nothing model-made to wait for, so the tail grows by it - half the examples
+doubles it, to two fifths - and the open-ended stages give up their share in
+proportion, never below a fifth of the budget between them. The tasks stage
+reports how many of the sources' text parts it generated from, how long it ran,
+and, when it stopped before every part, what covering them all would take at that
+pace, so a run over a few per cent of a corpus is never read as a run over the
+corpus; `--goal` steers what tasks are asked for; `--dry-run`
 prints the plan and writes nothing. A `learn` that stops before training
 (nothing admitted, no task worth training on, nothing passed, the budget
 spent) or whose candidate the gate blocks says why and exits 1.
@@ -248,6 +257,35 @@ dialogue stands. The judge of fit admits, so its passes are what is measured: a
 passage it fails is withheld. With no usable judge of fit the stage says why and
 the run goes on.
 
+The `voice` view is the writer's own text as training data, with no model in
+the loop. A conversation costs a teacher's time for every answer, and a run over
+a large body of writing reaches a few per cent of it before its budget is spent;
+the writer's text costs nothing to turn into records and has the diction and
+reasoning no paraphrase has. Every text part of the sources is cut into
+stretches of whole paragraphs of at most 768 tokens - counted by the policy's
+own tokenizer, the unit its training row is sized in, so a record never
+outgrows the row the conversations need - and each
+becomes one record in the shape the policy is trained and asked in: the persona
+system prompt, one user turn asking for a piece of the writer's writing, and the
+stretch, whole, as the supervised answer. Opening the user turn with the part's
+heading or with the stretch's own first sentence was measured to change nothing
+in what the policy learned for the dialogues it is asked as, and left that much
+of the writer's text unsupervised, so every word is the answer. A record names
+the part it prints and no experience, so a dataset shows what is the writer's
+and what a model wrote. A run with a persona trains on the writer's text by default:
+`--voice SHARE` is the share of the training examples it makes (half, so as
+many records as there are dialogue answers; `--voice 0` turns it off), the
+records chosen as an even spread over the parts in a stable order that does not
+follow their names (`dataset build --view voice --limit N` does the same by
+hand), and the training is sized by all its examples. Such a record is held out
+with the family of the letter it prints: the families held out are decided by
+the records that can be examined - those projected from a task or an
+experience - and a record of the writer's text goes where its family goes,
+however many there are and wherever they sit, so the exam never asks about a
+letter the policy was trained on under another print's name. The held-out score
+is measured on the examinable held-out records, what the policy is asked as; the
+writer's text held out beside them is trained on by nobody and scored by nobody.
+
 Task generation is bounded by the budget and spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,
 parts are visited in a stable order that does not follow their names, and the
@@ -261,6 +299,9 @@ whole. Records about one group are one unit of evidence to the
 gate's and the exam's paired tests, and a tenth of a set generated letter by
 letter is two or three of them, so whole groups are held out, newest first,
 until there are eight, as long as that stays within a quarter of the records.
+A group is named by the least content digest of the texts in it, found over
+every text part of the sources, so two datasets built from the same sources
+name a family the same and are split together as one.
 
 `--distill` skips the policy's own attempts: the teacher answers every task
 open-book and the policy is trained on its verified answers, with no
@@ -369,7 +410,10 @@ judge measure` says which uses a judge is fit for. A labelled file is JSON
 Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 
 `dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
-`verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`. The
+`verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`, `voice`
+(the writer's own text as answers, from every text part of the sources the
+experience sets cite; see above). `--limit N` keeps at most N records of any
+view, evenly spread over the projection, the rest counted as `over_limit`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
 (the student sees only the instruction - also for a teacher's solve,
 whatever it was shown). Every conversation starts with the system turn
@@ -386,7 +430,9 @@ Objectives brain cannot train (contrastive, reward, raw text) need
 by supervised fine-tuning, preference datasets by DPO against the model
 the run starts from (`--beta`, the DPO temperature, defaults to brain's);
 one run's datasets are all one or all the other. It concatenates them in
-order and holds the newest records out for scoring: a supervised candidate
+order and holds the newest records out for scoring (a record of the writer's
+own text, which has no question to examine, is held out with its family and
+scored by nobody): a supervised candidate
 reports the held-out loss of base and candidate, a preference candidate
 brain's preference score on the held-out pairs (how often, and by how
 many nats, it prefers the chosen answer more than its reference does).

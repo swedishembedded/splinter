@@ -437,6 +437,7 @@ impl Session {
                 min_strength,
                 system_prompt,
                 export_only,
+                limit,
             }) => {
                 let request = BuildRequest {
                     sets: sets
@@ -448,6 +449,7 @@ impl Session {
                     min_strength,
                     system_prompt,
                     export_only,
+                    limit,
                 };
                 emit(
                     json,
@@ -641,6 +643,7 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         sources: args.sources,
         goal: args.goal,
         persona: args.persona,
+        voice: args.voice,
         passages: args.with_passages.map(|records| PassageShare {
             records,
             with_evidence: DEFAULT_EVIDENCE_SHARE,
@@ -714,5 +717,11 @@ mod tests {
         assert_eq!((r.steps, r.rank), (Some(300), Some(16)));
         assert!(r.tuning.bf16_base);
         assert_eq!(r.tuning.learning_rate, Some(0.0002));
+        assert_eq!(r.voice, None, "the run decides from its persona");
+        assert_eq!(
+            request(&["learn", "docs", "--voice", "0.25"]).voice,
+            Some(0.25)
+        );
+        assert_eq!(request(&["learn", "docs", "--voice", "0"]).voice, Some(0.0));
     }
 }

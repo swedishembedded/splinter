@@ -34,7 +34,11 @@
 //! deduplicated and capped per concept, kind and strength
 //! ([`crate::curriculum::quota`]), and the `sft-final` view over what is
 //! selected is the dataset - the student's records: the instruction alone,
-//! whatever the solver was shown. The candidate trained on it continues
+//! whatever the solver was shown. A run that learns to think like a person
+//! trains beside it on the writer's own text (the `voice` view): a share of
+//! the examples ([`LearnRequest::voice`]) built by code from the sources,
+//! each the writer's words word for word as the answer, held out with the
+//! family of the letter it prints. The candidate trained on it continues
 //! that release, and goes through the release gate, which grades it
 //! closed-book and releases it only if every check passes (`--no-release`
 //! stops at the candidate).
@@ -79,6 +83,23 @@ pub const STAGES: [&str; 16] = [
 /// How many passes a `learn` run makes over what it has learned when its
 /// steps are not given.
 pub const EPOCHS: u32 = 2;
+
+/// The share of the training examples that is the writer's own text when a
+/// run learns to think like a person and names no share: as many records
+/// of the writer's words as there are dialogue answers, so neither drowns
+/// the other.
+pub const DEFAULT_VOICE_SHARE: f64 = 0.5;
+
+/// How many records of the writer's own text go beside `examples` dialogue
+/// answers so that they are `share` of all the examples: `examples * share
+/// / (1 - share)`, rounded up; none for a share of zero.
+#[must_use]
+pub fn voice_limit(examples: usize, share: f64) -> usize {
+    if share <= 0.0 {
+        return 0;
+    }
+    (examples as f64 * share / (1.0 - share)).ceil() as usize
+}
 
 /// The most steps a `learn` run takes when they are not given.
 pub const MAX_AUTO_STEPS: u32 = 2000;
@@ -138,6 +159,11 @@ pub struct LearnRequest {
     /// context where it holds the answer and to answer without it where it
     /// does not. Needs the embedding model.
     pub passages: Option<PassageShare>,
+    /// The share of the training examples that is the writer's own text
+    /// (the `voice` view) when the policy learns to think like a person, in
+    /// `[0, 1)`: `None` is [`DEFAULT_VOICE_SHARE`] for a run with a persona
+    /// and none without, `Some(0.0)` none at all.
+    pub voice: Option<f64>,
     /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`] unless `plan` is set.
     pub kinds: Vec<String>,
     /// Let a planner model survey the sources and choose the task kinds,
@@ -200,6 +226,14 @@ pub fn learn(
         request.pass_at_k.validate()?;
     }
     request.quotas.validate()?;
+    if let Some(share) = request.voice {
+        if !(0.0..1.0).contains(&share) {
+            return Err(OrchestratorError::Refused(format!(
+                "the voice share {share} is not in [0, 1): the writer's own text cannot be every \
+                 example, since the dialogues are what the policy is asked as"
+            )));
+        }
+    }
     let targets = request
         .sources
         .iter()
@@ -269,6 +303,7 @@ pub fn learn(
         planner: planner.as_ref(),
         goal: request.goal.as_deref(),
         persona: request.persona.as_deref(),
+        voice: request.voice,
         passages: request.passages,
         deadline: budget.map(|b| Instant::now() + b),
         trainer,
@@ -362,6 +397,15 @@ mod tests {
     #[test]
     fn the_stage_list_is_the_pipeline() {
         assert_eq!(stages::pipeline().names(), STAGES);
+    }
+
+    /// The writer's text is as many records as makes it the share asked.
+    #[test]
+    fn the_voice_limit_makes_the_writers_text_the_share_asked() {
+        assert_eq!(voice_limit(214, 0.5), 214);
+        assert_eq!(voice_limit(100, 0.25), 34);
+        assert_eq!(voice_limit(100, 0.0), 0);
+        assert_eq!(voice_limit(0, 0.5), 0);
     }
 
     #[test]

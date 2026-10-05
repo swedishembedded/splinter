@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The `voice` view: the writer's own text as training data, with no model in
+  the loop - every text part of the sources cut into stretches of whole
+  paragraphs, each a record in the shape the policy is asked in (the persona
+  prompt, one user turn, the writer's words word for word as the answer), naming the part it prints
+  and no experience. A `learn` with a persona trains on it beside the dialogues
+  by default, `--voice SHARE` of the examples (half; `0` turns it off), chosen
+  as an even spread over the parts; `dataset build --view voice [--limit N]`
+  builds it by hand, and `--limit N` thins any view to an even spread.
+- The tasks stage reports how many of the sources' text parts it generated
+  from, how long it ran and, when the budget stopped it, what covering every
+  part would take at that pace.
 - The anchor suite freezes several files as one version (`eval --suite anchor
   --freeze A --freeze B`), and takes two more kinds graded by code alone:
   `arithmetic` (the last number the answer states is the reference) and
@@ -39,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- A held-out split chooses its families among the records that can be
+  examined (those projected from a task or an experience); a record of the
+  writer's own text follows its family, held out with it or trained on, and the
+  held-out score is measured on the examinable records. A family is named by
+  the least content digest of its texts over every text part of the sources,
+  the same in every dataset built from them.
+- The budget's stage shares adapt to the share of the examples the writer's
+  own text carries: the tail (training, the exam, the gate) grows by it and the
+  open-ended stages give up theirs in proportion.
 - A supervised candidate's replayed records take a fixed quarter of the
   training draws instead of joining a plain union, so a large replay set no
   longer starves the new records.

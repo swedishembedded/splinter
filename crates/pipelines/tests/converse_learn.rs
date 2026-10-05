@@ -167,6 +167,7 @@ fn attempt(
     judge: Option<Scripted>,
     persona: Option<&str>,
     passages: Option<PassageShare>,
+    voice: Option<f64>,
 ) -> (
     Result<Learned, OrchestratorError>,
     common::Scratch,
@@ -201,6 +202,7 @@ fn attempt(
             kinds: vec!["converse".into()],
             persona: persona.map(str::to_string),
             passages,
+            voice,
             roles,
             no_release: true,
             distill: true,
@@ -215,7 +217,7 @@ fn run(
     test: &str,
     third: &'static str,
 ) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
-    let (learned, scratch, _ctx, _) = attempt(test, third, Some(judge()), None, None);
+    let (learned, scratch, _ctx, _) = attempt(test, third, Some(judge()), None, None, None);
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
     };
@@ -317,6 +319,7 @@ fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
         None,
         None,
         None,
+        None,
     );
     let Err(refused) = learned else {
         panic!("a judge that grades itself is refused");
@@ -334,6 +337,7 @@ fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers
         "converse-learn-weak-judge",
         "Study each morning.",
         Some(always_pass),
+        None,
         None,
         None,
     );
@@ -357,6 +361,7 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
         Some(judge()),
         Some("Benjamin Franklin"),
         None,
+        None,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -379,6 +384,32 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
     );
     // The other speaker's role never reaches the record.
     assert!(!text.contains(STUDENT_ROLE));
+    // A run that learns to be a person trains on the writer's own text
+    // beside the dialogues by default: records of the letters word for word
+    // under the same prompt, as many as make them half the examples, in a
+    // dataset of their own that the training takes with the dialogues.
+    let voice = ran.report.voice.as_ref().expect("the writer's own text");
+    assert!(voice.records >= 1, "{voice:?}");
+    let voice_text = std::fs::read_to_string(&voice.path).unwrap();
+    let mut answers = 0;
+    for line in voice_text.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(record["messages"][0]["content"], prompt);
+        let answer = record["messages"][2]["content"].as_str().unwrap();
+        assert!(
+            LETTER.contains(answer) || THRIFT.contains(answer),
+            "{answer}"
+        );
+        answers += 1;
+    }
+    assert_eq!(answers, voice.records);
+    let candidate = ran.report.candidate.as_ref().unwrap();
+    assert_eq!(
+        candidate.datasets.len(),
+        2,
+        "the dialogues and the writer's text"
+    );
+    assert_eq!(candidate.datasets[1], voice.dataset);
     // The teacher answered under the prompt the student is trained under:
     // every one of its solves was sent the persona as its system turn, so the
     // records' answers were written as the person they open with.
@@ -472,6 +503,7 @@ fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
         Some(judge_of_reference_and_fit()),
         None,
         None,
+        None,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -510,6 +542,7 @@ fn a_share_of_the_training_records_carries_passages_in_the_prompt() {
             records: 1.0,
             with_evidence: 1.0,
         }),
+        None,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");

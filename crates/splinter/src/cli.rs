@@ -13,7 +13,7 @@ use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_sdk::eval::SuiteChoice;
-use splinter_sdk::learn::parse_budget;
+use splinter_sdk::learn::{parse_budget, DEFAULT_VOICE_SHARE};
 use splinter_sdk::lineage::Direction;
 use splinter_sdk::train::{
     DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
@@ -171,6 +171,15 @@ fn strength(text: &str) -> Result<Strength, String> {
     parse_strength(text).map_err(|e| e.to_string())
 }
 
+fn voice_share(text: &str) -> Result<f64, String> {
+    let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
+    if (0.0..1.0).contains(&share) {
+        Ok(share)
+    } else {
+        Err(format!("{text:?} is not a share in [0, 1)"))
+    }
+}
+
 fn suite(text: &str) -> Result<SuiteChoice, String> {
     text.parse().map_err(|e: splinter_sdk::Error| e.to_string())
 }
@@ -238,6 +247,17 @@ pub struct LearnArgs {
     /// the goal, if any).
     #[arg(long, value_name = "NAME")]
     pub persona: Option<String>,
+    /// The share of the training examples that is the writer's own text,
+    /// in [0, 1): records built by code from the sources, a stretch of the
+    /// writer's words word for word as the answer, trained beside the
+    /// dialogues and held out with the families they print. 0 turns it off.
+    #[arg(long, value_name = "SHARE", value_parser = voice_share, help = format!(
+        "The share of the training examples that is the writer's own text, in [0, 1): records \
+         built by code from the sources, no model involved, trained beside the dialogues and held \
+         out with the families they print; 0 turns it off [default for a run with a persona: \
+         {DEFAULT_VOICE_SHARE}]"
+    ))]
+    pub voice: Option<f64>,
     /// Optimizer steps of the training.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("Optimizer steps of the training [default: {DEFAULT_STEPS}]"))]
@@ -507,7 +527,7 @@ pub enum DatasetCommand {
         #[arg(required = true, value_name = "EXPERIENCE-SET")]
         sets: Vec<String>,
         /// sft-final, sft-step, critic, preference, verifier, decision,
-        /// retrieval, outcome, denoise or cpt.
+        /// retrieval, outcome, denoise, cpt or voice.
         #[arg(long, required = true, value_parser = view, value_name = "VIEW")]
         view: ViewName,
         /// What the student sees: all (only the instruction), keep:K,..
@@ -525,6 +545,10 @@ pub enum DatasetCommand {
         /// Write an objective brain cannot train in the export format.
         #[arg(long)]
         export_only: bool,
+        /// Keep at most this many records, evenly spread over the
+        /// projection (for voice, over the parts of the sources).
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
     },
     /// Copy a dataset and its manifest into a directory.
     Export {
