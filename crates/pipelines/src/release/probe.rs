@@ -55,7 +55,7 @@ use splinter_store::decision::decide;
 
 use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::variants::stored_variants;
-use crate::verify::{verifiers_for, Judge};
+use crate::verify::{verifiers_for, Judge, Use};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
@@ -285,8 +285,9 @@ pub fn grade(
     cancel: &CancelToken,
 ) -> Result<Vec<Probe>, OrchestratorError> {
     // The judge the command names grades the kinds a judge grades; the
-    // judged verdict is the one a task of such a kind is decided by.
-    let judge = Judge::active(ctx)?;
+    // judged verdict is the one a task of such a kind is decided by, and two
+    // models are compared on it.
+    let judge = Judge::active(ctx, Use::Comparison)?;
     suite
         .tasks
         .iter()

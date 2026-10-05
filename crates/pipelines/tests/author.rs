@@ -11,7 +11,10 @@
 //! written for it (instruction backtranslation). The answer is the writer's,
 //! not a model's, so it is recorded as the source's; a calibrated judge of fit
 //! keeps only the pairs where the passage is a natural reply to its message.
-//! Tasks of any other kind are left alone.
+//! Tasks of any other kind are left alone. The judge admits: only its passes
+//! reach the training set, so it is trusted on the precision of its passes,
+//! and a strict judge that fails some genuine passages withholds them and
+//! refuses none wrongly.
 
 // Helpers outside a test function unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -192,4 +195,91 @@ fn the_writers_own_passage_is_the_answer_to_the_message_written_for_it() {
             Some(reference.content.as_str())
         );
     }
+}
+
+/// The advise tasks of two families, `per_family` each, in one set.
+fn two_families(
+    ctx: &splinter_orchestrator::Context,
+    dir: &std::path::Path,
+    per_family: usize,
+) -> splinter_store::tasks::TaskSetId {
+    let a = span_of(ctx, dir, "a.txt", &words("alpha", 100));
+    let b = span_of(ctx, dir, "b.txt", &words("omega", 100));
+    let store = ctx.tasks();
+    let mut members = Vec::new();
+    for i in 0..per_family {
+        for (span, key) in [(&a, "study"), (&b, "expense")] {
+            let t = task(
+                "advise",
+                span,
+                &format!("How do I keep a habit of {key} (case {i})?"),
+                &format!("Keep up your {key} {i} every day of your life."),
+            );
+            store.put(&t).unwrap();
+            members.push(TaskEntry {
+                task: t.task.id.clone(),
+                generator: None,
+                prompt: None,
+                variant_of: None,
+                subject: None,
+            });
+        }
+    }
+    store
+        .put_set(&TaskSet {
+            name: "two families".into(),
+            members,
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_strict_judge_of_fit_admits_the_passages_it_passes_and_withholds_the_rest() {
+    // Right about every passage of another family (it fails them all), and
+    // about every passage it passes; but it also fails the genuine passages
+    // of the odd cases: precise on its passes, not on its fails.
+    let strict = Scripted::new(|prompt| {
+        let message = prompt
+            .split("MESSAGE:\\n")
+            .nth(1)
+            .and_then(|t| t.split("\\n\\nPASSAGE:").next())
+            .unwrap_or_default();
+        let passage = prompt.split("PASSAGE:\\n").nth(1).unwrap_or_default();
+        let fits = ["study", "expense"]
+            .iter()
+            .any(|key| message.contains(key) && passage.contains(key));
+        let odd = (1..12)
+            .step_by(2)
+            .any(|i| passage.contains(&format!(" {i} every")));
+        if fits && !odd {
+            "PASS\nit answers the message".into()
+        } else {
+            "FAIL\nit does not".into()
+        }
+    });
+    let (scratch, ctx) = scratch_context("author-strict", Scripted::new(|_| String::new()), false);
+    let judge_ref: ModelRef = "local:test/strict".parse().unwrap();
+    ctx.add_model(
+        judge_ref.clone(),
+        Model::new(Arc::new(strict), "scripted/strict"),
+    );
+    let set = two_families(&ctx, &scratch.0, 6);
+    let authored = author(
+        &ctx,
+        &AuthorRequest {
+            task_set: &set,
+            judge: &judge_ref,
+        },
+        &CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(authored.tasks, 12);
+    // The even cases of both families are kept; the odd ones the judge failed
+    // are withheld, not refused: its fails were measured too imprecise to
+    // stand, and a passage it did not pass is simply not trained on.
+    assert_eq!(
+        (authored.kept, authored.refused, authored.undecided),
+        (6, 0, 6),
+        "{authored:#?}"
+    );
 }

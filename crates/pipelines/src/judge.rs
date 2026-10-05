@@ -25,10 +25,11 @@ use crate::exam::{misjudged, Misjudged};
 use crate::experiences::resolve_experience;
 use crate::judging::{controls, reference, spaced};
 use crate::verify::{
-    judge_verifier, judge_verifier_for, store_calibration, Judging, MAX_CALIBRATION_TASKS,
+    judge_verifier, judge_verifier_for, store_calibration, trusted_for, Judging, Use,
+    MAX_CALIBRATION_TASKS,
 };
 use splinter_core::model_ref::ModelRef;
-use splinter_eval::verifiers::calibration::{measure, DEFAULT_MIN_PRECISION};
+use splinter_eval::verifiers::calibration::measure;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 use splinter_store::tasks::TaskSetId;
@@ -107,9 +108,13 @@ pub struct JudgeMeasured {
     /// Controls it was measured on.
     pub controls: usize,
     /// Whether its precision, on passes and on fails, reaches the threshold
-    /// and the controls are as many as the configuration asks for: whether
-    /// its verdicts would count.
+    /// and the controls are as many as the configuration asks for: whether a
+    /// comparison of two models could rest on it ([`Use::Comparison`]).
     pub trusted: bool,
+    /// Whether its passes alone reach the threshold on enough controls:
+    /// whether what it passes could be admitted to a training set
+    /// ([`Use::Admission`]), its fails withholding rather than refusing.
+    pub admits: bool,
     /// The measurement.
     pub calibration: Calibration,
     /// Where it was kept, when it rests on enough controls to be reused.
@@ -152,7 +157,6 @@ pub fn measure_judge(
     let verifier = judge_verifier_for(ctx, &model, judging);
     let (calibration, measurements) = measure(&verifier, &labelled)?;
     let minimum = ctx.config().min_calibration_controls;
-    let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
     let enough = labelled.len() >= minimum;
     let stored = enough
         .then(|| store_calibration(ctx, &calibration))
@@ -164,9 +168,8 @@ pub fn measure_judge(
             Judging::Fit => "fit",
         },
         controls: labelled.len(),
-        trusted: enough
-            && precise(calibration.precision_pass)
-            && precise(calibration.precision_fail),
+        trusted: enough && trusted_for(&calibration, Use::Comparison),
+        admits: enough && trusted_for(&calibration, Use::Admission),
         calibration,
         stored,
         misjudged: misjudged(&labelled, &measurements),

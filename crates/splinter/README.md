@@ -21,7 +21,7 @@ splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] [--author 
 splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N] [--teacher REF]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
-splinter judge calibrate <LABELLED-FILE> --judge REF
+splinter judge calibrate <LABELLED-FILE> --judge REF | measure <TASKSET-ID> --judge REF [--fit]
 splinter experiences list | show <ID> [--graph] | replay <ID>
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
@@ -240,8 +240,9 @@ model than the generator that wrote the messages, measured like any judge on
 controls from the tasks' own passages) keeps only the pairs where the passage is
 a natural reply to its message. For one message the writer's passage is kept and
 a teacher's dialogue on it is the duplicate; where it does not fit, the
-dialogue stands. With no usable judge of fit the stage says why and the run goes
-on.
+dialogue stands. The judge of fit admits, so its passes are what is measured: a
+passage it fails is withheld. With no usable judge of fit the stage says why and
+the run goes on.
 
 Task generation is bounded by the budget and spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,
@@ -346,9 +347,15 @@ judge is another model than the teacher, the generator and the policy; it is
 measured before any verdict counts, on controls made from the tasks' own
 references (each task's reference is the right answer to it, and a task of
 another family of sources lends the wrong one) unless a stored calibration
-rests on at least `SPLINTER_MIN_CALIBRATION_CONTROLS` of them (16); a judge not
-precise enough on passes and on fails (0.9) is refused with its numbers, and
-its judged verdicts then count towards the training set. A labelled file is JSON
+rests on at least `SPLINTER_MIN_CALIBRATION_CONTROLS` of them (16). A judge is
+trusted for what its verdicts do. Where they admit answers to a training set
+(`verify`, the `teach`, `critique` and `author` stages) its passes must be
+precise (0.9): a fail only withholds an answer, so a strict judge whose fails
+were measured less precise has them abstain and admits nothing wrong. Where two
+models are compared on its verdicts (the release gate, the exam) its passes and
+its fails must both be precise, or the comparison would be left with the ties.
+A judge not precise enough for its use is refused with its numbers; `splinter
+judge measure` says which uses a judge is fit for. A labelled file is JSON
 Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 
 `dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,

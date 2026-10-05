@@ -106,6 +106,21 @@ pub struct Judge {
     judging: Judging,
 }
 
+/// What a judge's verdicts are used for, which decides how precise it has to
+/// be. Each verdict stands only where the judge was measured precise on that
+/// verdict ([`CalibratedJudge`]); a use decides which verdicts have to stand
+/// at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Use {
+    /// Its passes admit answers to a training set, and a fail only withholds
+    /// one: the passes have to be precise, and a judge whose fails are not
+    /// withholds more than it must and admits nothing wrong.
+    Admission,
+    /// Two models are compared on what it passes and what it fails: both
+    /// have to be precise, or the comparison is left with the ties.
+    Comparison,
+}
+
 /// What a judge is asked about an answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Judging {
@@ -155,6 +170,8 @@ impl Judge {
     /// [`Judge::calibrated`] for what `judging` asks: a fit judge is
     /// measured on the same controls - a task's own reference put forward as
     /// the reply, against another family's - under a calibration of its own.
+    /// The judge admits answers to a training set, so it is held to
+    /// [`Use::Admission`]: its passes have to be precise.
     pub fn calibrated_for(
         ctx: &Context,
         reference: &ModelRef,
@@ -194,46 +211,55 @@ impl Judge {
             calibration,
             judging,
         };
-        if !judge.trusted() {
-            let c = &judge.calibration;
-            return Err(OrchestratorError::Refused(format!(
-                "judge {reference} is not precise enough to grade with: precision {:?} on passes \
-                 and {:?} on fails over {} controls, below {DEFAULT_MIN_PRECISION}; a kind \
-                 graded by a judge would be graded by nothing",
-                c.precision_pass, c.precision_fail, c.n
-            )));
-        }
+        judge.require(reference, Use::Admission)?;
         Ok(judge)
     }
 
-    /// The judge this command grades with: the model its context names
-    /// ([`Context::set_judge`]), loaded with its stored calibration; `None`
-    /// when it names none. Refused when the judge was never calibrated or is
-    /// not precise enough ([`Judge::trusted`]): grading by a judge whose
-    /// verdicts would all abstain is not grading.
-    pub fn active(ctx: &Context) -> Result<Option<Self>, OrchestratorError> {
+    /// The judge this command grades with for `purpose`: the model its
+    /// context names ([`Context::set_judge`]), loaded with its stored
+    /// calibration; `None` when it names none. Refused when the judge was
+    /// never calibrated or is not precise enough for the use
+    /// ([`Judge::trusted_for`]): grading by a judge whose verdicts would all
+    /// abstain is not grading.
+    pub fn active(ctx: &Context, purpose: Use) -> Result<Option<Self>, OrchestratorError> {
         let Some(reference) = ctx.judge() else {
             return Ok(None);
         };
         let judge = Self::load(ctx, &reference)?;
-        if !judge.trusted() {
-            return Err(OrchestratorError::Refused(format!(
-                "judge {reference} is not precise enough to grade with: precision {:?} on \
-                 passes and {:?} on fails over {} controls, below {DEFAULT_MIN_PRECISION}",
-                judge.calibration.precision_pass,
-                judge.calibration.precision_fail,
-                judge.calibration.n
-            )));
-        }
+        judge.require(&reference, purpose)?;
         Ok(Some(judge))
     }
 
+    /// Refuses this judge for `purpose` unless it is trusted for it, with its
+    /// numbers.
+    fn require(&self, reference: &ModelRef, purpose: Use) -> Result<(), OrchestratorError> {
+        if self.trusted_for(purpose) {
+            return Ok(());
+        }
+        let c = &self.calibration;
+        let wanted = match purpose {
+            Use::Admission => "on passes, which admit answers to the training set",
+            Use::Comparison => "on passes and on fails, which a comparison of two models counts",
+        };
+        Err(OrchestratorError::Refused(format!(
+            "judge {reference} is not precise enough to grade with: precision {:?} on passes and \
+             {:?} on fails over {} controls, where {DEFAULT_MIN_PRECISION} is needed {wanted}",
+            c.precision_pass, c.precision_fail, c.n
+        )))
+    }
+
+    /// Whether its measured precision reaches [`DEFAULT_MIN_PRECISION`] on
+    /// the verdicts `purpose` acts on, so that they stand ([`Use`]).
+    #[must_use]
+    pub fn trusted_for(&self, purpose: Use) -> bool {
+        trusted_for(&self.calibration, purpose)
+    }
+
     /// Whether its measured precision, on passes and on fails, reaches
-    /// [`DEFAULT_MIN_PRECISION`], so that its verdicts stand.
+    /// [`DEFAULT_MIN_PRECISION`]: [`Judge::trusted_for`] a comparison.
     #[must_use]
     pub fn trusted(&self) -> bool {
-        let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
-        precise(self.calibration.precision_pass) && precise(self.calibration.precision_fail)
+        self.trusted_for(Use::Comparison)
     }
 
     pub(crate) fn verifier(&self, ctx: &Context) -> Result<Box<dyn Verifier>, OrchestratorError> {
@@ -242,6 +268,19 @@ impl Judge {
             self.calibration.clone(),
             DEFAULT_MIN_PRECISION,
         )?))
+    }
+}
+
+/// Whether `calibration` reaches [`DEFAULT_MIN_PRECISION`] on the verdicts
+/// `purpose` acts on.
+#[must_use]
+pub fn trusted_for(calibration: &Calibration, purpose: Use) -> bool {
+    let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
+    match purpose {
+        Use::Admission => precise(calibration.precision_pass),
+        Use::Comparison => {
+            precise(calibration.precision_pass) && precise(calibration.precision_fail)
+        }
     }
 }
 
@@ -459,9 +498,10 @@ pub fn verify_set(
     judge: Option<&Judge>,
     cancel: &CancelToken,
 ) -> Result<Verified, OrchestratorError> {
+    // Verdicts appended here admit answers to a training set.
     let active = match judge {
         Some(_) => None,
-        None => Judge::active(ctx)?,
+        None => Judge::active(ctx, Use::Admission)?,
     };
     let judge = judge.or(active.as_ref());
     let store = ctx.experiences();

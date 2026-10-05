@@ -334,9 +334,11 @@ fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers
     let Err(refused) = learned else {
         panic!("an imprecise judge is refused");
     };
+    // Its passes admit answers to the training set, and half of them are
+    // wrong: what it passes cannot be trusted, whatever it fails.
     assert!(
         matches!(&refused, OrchestratorError::Refused(why)
-            if why.contains("not precise enough") && why.contains("on fails")),
+            if why.contains("not precise enough") && why.contains("on passes")),
         "{refused:?}"
     );
 }

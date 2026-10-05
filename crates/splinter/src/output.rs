@@ -381,10 +381,13 @@ impl Report for JudgeMeasured {
             share(c.precision_pass),
             share(c.precision_fail),
             share(c.abstain_rate),
-            if self.trusted {
-                "trusted"
-            } else {
-                "NOT trusted: its verdicts would not count"
+            match (self.trusted, self.admits) {
+                (true, _) => "trusted",
+                (false, true) => {
+                    "its passes admit answers to a training set; its fails withhold, and two \
+                     models could not be compared on it"
+                }
+                (false, false) => "NOT trusted: its verdicts would not count",
             }
         );
         match &self.stored {

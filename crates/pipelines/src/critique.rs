@@ -25,7 +25,7 @@ use splinter_agent::CancelToken;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
 use crate::tasks::remaining;
-use crate::verify::{verifiers_for, Judge, Unverified};
+use crate::verify::{verifiers_for, Judge, Unverified, Use};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -103,7 +103,8 @@ pub fn critique_set(
         stopped: None,
     };
     let decisions = store.decisions(&members)?;
-    let judge = Judge::active(ctx)?;
+    // A retry a judge passes is admitted to the training set.
+    let judge = Judge::active(ctx, Use::Admission)?;
     for (id, experience) in members.iter().zip(&pool) {
         if request.cancel.is_cancelled() {
             return Err(OrchestratorError::Cancelled);
