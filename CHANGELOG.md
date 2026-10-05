@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A supervised candidate's replayed records take a fixed quarter of the
   training draws instead of joining a plain union, so a large replay set no
   longer starves the new records.
+- The exam reports, beside its paired sign test, a bootstrap interval of the
+  candidate's gain per family of sources.
 - Texts are grouped as one print by passages shared anywhere in either, not
   only in their first seven hundred words: a letter one edition prints inside
   its neighbour, or a passage reused deep inside a longer text, now keeps the

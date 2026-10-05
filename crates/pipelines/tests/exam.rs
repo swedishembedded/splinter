@@ -184,6 +184,13 @@ fn the_report_compares_the_arms_by_a_calibrated_judge_and_counts_invented_specif
     assert_eq!(report.families, 2);
     assert_eq!((paired.discordant, paired.candidate_wins), (2, 2));
     assert!(paired.p_value > 0.05, "{paired:?}");
+    // The interval of the per-family change is what a result on a few
+    // families is read by: two families, both won, is a gain of one each.
+    let interval = report.paired_interval.unwrap();
+    assert_eq!(
+        (interval.mean, interval.low, interval.high),
+        (1.0, 1.0, 1.0)
+    );
     // The vague base states nothing the letter lacks; the tuned arm invented a
     // year once, though the judge still says it gave the advice.
     assert_eq!((base.invented, base.checked), (0, 6));
@@ -196,6 +203,7 @@ fn a_judge_that_cannot_tell_right_from_wrong_grades_nothing() {
     let report = run(&ctx, &tasks, &controls);
     assert!(!report.judge.trusted, "{report:#?}");
     assert!(report.paired.is_none(), "no claim from an untrusted judge");
+    assert!(report.paired_interval.is_none());
     assert_eq!(report.candidate.judged, 0);
     // Each control it got wrong is kept with the answer and its reason, so a
     // judge that is not trusted can be seen failing.

@@ -45,7 +45,7 @@ pub fn sign_test(pairs: &[(bool, bool)]) -> SignTest {
 }
 
 /// A mean and the interval a bootstrap puts around it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub struct Interval {
     /// The mean of the observations.
     pub mean: f64,

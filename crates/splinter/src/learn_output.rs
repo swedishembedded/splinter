@@ -65,7 +65,17 @@ fn exam_line(summary: &serde_json::Value) -> String {
             )
         })
     };
-    let test = won(&ran["paired"], "the base");
+    let interval = ran["paired_interval"]
+        .as_object()
+        .map_or(String::new(), |i| {
+            format!(
+                " (gain per family {:.2}, interval {:.2} to {:.2})",
+                i["mean"].as_f64().unwrap_or(0.0),
+                i["low"].as_f64().unwrap_or(0.0),
+                i["high"].as_f64().unwrap_or(0.0)
+            )
+        });
+    let test = format!("{}{interval}", won(&ran["paired"], "the base"));
     let prompted = ran["prompted"].as_object().map_or(String::new(), |_| {
         format!(
             "; base asked under the goal {}{}",

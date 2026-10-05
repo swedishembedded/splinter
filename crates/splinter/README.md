@@ -202,7 +202,9 @@ is reported as unanswered. The result is a paired sign test of the judged
 results, in which tasks about one family of source text (two prints of a
 letter, several questions about one document) count once, as the release gate's
 improvement check counts them: a model that knows the letter gets all of its
-questions right, so they are one piece of evidence. It never reaches a
+questions right, so they are one piece of evidence; beside it, a bootstrap
+interval of the candidate's gain per family (won 1, lost -1, tied 0), which is
+what a result on a few families has to be read by. It never reaches a
 training set. Each control the judge did not
 judge as labelled is reported with the answer and the judge's reason, so a judge
 that is not trusted can be seen failing.

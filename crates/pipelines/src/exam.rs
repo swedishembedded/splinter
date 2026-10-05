@@ -40,7 +40,7 @@ use splinter_eval::verifiers::calibration::{
     measure, CalibratedJudge, Calibration, Measurement, DEFAULT_MIN_PRECISION,
 };
 use splinter_eval::verifiers::Verifier;
-use splinter_model::stats::sign_test;
+use splinter_model::stats::{bootstrap_interval, sign_test, Interval};
 
 use crate::grouping::task_clusters;
 use crate::judging::{controls, reference, spaced};
@@ -226,6 +226,11 @@ pub struct Examined {
     /// The judged results compared over the tasks both were judged on; `None`
     /// when the judge is not trusted or no task was judged for both.
     pub paired: Option<SignTest>,
+    /// A bootstrap interval of the candidate's gain over the base per family
+    /// (a family won is 1, lost -1, tied 0), over the families both were
+    /// judged on: what a result on a few families has to be read by. `None`
+    /// when `paired` is, or there are too few families to resample.
+    pub paired_interval: Option<Interval>,
     /// The candidate against the prompted base, by the same rule; `None`
     /// when there is no prompted arm.
     pub paired_vs_prompted: Option<SignTest>,
@@ -467,12 +472,32 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
             &candidate_grounded,
         ),
         paired: (trusted && !pairs.is_empty()).then(|| sign_test(&pairs)),
+        paired_interval: (trusted && !pairs.is_empty())
+            .then(|| gain_interval(&pairs))
+            .flatten(),
         paired_vs_prompted: (trusted && !pairs_vs_prompted.is_empty())
             .then(|| sign_test(&pairs_vs_prompted)),
         retrieval,
         paired_retrieval: (trusted && !pairs_retrieval.is_empty())
             .then(|| sign_test(&pairs_retrieval)),
     })
+}
+
+/// Resamples of the per-family gains the interval is made from.
+const INTERVAL_RESAMPLES: usize = 2000;
+/// The share of resampled means the interval holds.
+const INTERVAL_LEVEL: f64 = 0.95;
+/// The seed of the resampling: the same interval for the same gains.
+const INTERVAL_SEED: u64 = 0;
+
+/// The bootstrap interval of the candidate's gain per family over `pairs`
+/// of `(candidate right, base right)`, one per family.
+fn gain_interval(pairs: &[(bool, bool)]) -> Option<Interval> {
+    let gains: Vec<f64> = pairs
+        .iter()
+        .map(|(candidate, base)| f64::from(*candidate) - f64::from(*base))
+        .collect();
+    bootstrap_interval(&gains, INTERVAL_RESAMPLES, INTERVAL_LEVEL, INTERVAL_SEED)
 }
 
 /// The most held-out tasks an exam of a candidate puts to each arm: chosen
