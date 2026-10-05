@@ -252,7 +252,10 @@ parts are visited in a stable order that does not follow their names, and the
 budget stops generation inside a part. A held-out split never divides texts
 that print the same passage (two editions of a letter): records name the
 group of overlapping source text they came from, and a group is held out or
-trained on whole.
+trained on whole. Records about one group are one unit of evidence to the
+gate's and the exam's paired tests, and a tenth of a set generated letter by
+letter is two or three of them, so whole groups are held out, newest first,
+until there are eight, as long as that stays within a quarter of the records.
 
 `--distill` skips the policy's own attempts: the teacher answers every task
 open-book and the policy is trained on its verified answers, with no
@@ -410,10 +413,11 @@ is printed with its numbers, and a check that could not be measured fails:
 | serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`), with the base checkpoint the candidate was trained on as its `BRAIN_QWEN_WEIGHTS`, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |
 
 The improvement check measures whether the candidate learned the facts it
-was trained on, on questions it was not trained on: the held-out records
-(a tenth of the new data, the newest) alone are too few for a sign test to
-reach significance, and questions about other facts cannot improve for a
-campaign that teaches facts. So the suite is completed with the stored
+was trained on, on questions it was not trained on: the held-out records (the
+newest tenth of the new data, grown to eight families of source text where
+the data has them, within a quarter of it, so that a sign test over families
+can reach significance) are few, and questions about other facts cannot
+improve for a campaign that teaches facts. So the suite is completed with the stored
 variants of the tasks the candidate's trained-on records were projected
 from (`learn` writes them; `tasks variants` writes them for any task
 set). A variant of a task that was held out measures nothing the

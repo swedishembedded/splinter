@@ -76,10 +76,13 @@ fn a_candidate_that_passes_every_check_is_released() {
     );
 
     let improvement = gate.improvement.measured.as_ref().unwrap();
-    assert_eq!(improvement.suite.tasks, 6, "a tenth of {FACTS} held out");
-    assert_eq!(improvement.comparison.candidate_wins, 6);
-    assert_eq!(improvement.sign_test.discordant, 6);
-    assert!((improvement.sign_test.p_value - 1.0 / 64.0).abs() < 1e-12);
+    assert_eq!(
+        improvement.suite.tasks, 8,
+        "a tenth of {FACTS}, grown to the units a paired test needs, held out"
+    );
+    assert_eq!(improvement.comparison.candidate_wins, 8);
+    assert_eq!(improvement.sign_test.discordant, 8);
+    assert!((improvement.sign_test.p_value - 1.0 / 256.0).abs() < 1e-12);
     assert_eq!(improvement.alpha, 0.05);
     let retention = gate.retention.measured.as_ref().unwrap();
     assert!(
@@ -95,7 +98,7 @@ fn a_candidate_that_passes_every_check_is_released() {
         "{}",
         serve.startup_line
     );
-    assert_eq!((serve.sampled, serve.agreed), (6, 6));
+    assert_eq!((serve.sampled, serve.agreed), (8, 8));
 
     // The release: its id is its manifest's digest, and the manifest says
     // what it is and why it was released.
@@ -212,7 +215,7 @@ fn each_failing_check_blocks_the_release_and_says_why() {
     assert!(!gate.improvement.passed);
     let improvement = gate.improvement.measured.as_ref().unwrap();
     assert_eq!(improvement.sign_test.discordant, 0);
-    assert_eq!(improvement.comparison.both_wrong, 6, "ties are counted");
+    assert_eq!(improvement.comparison.both_wrong, 8, "ties are counted");
     let why = gate.improvement.reason.as_deref().unwrap();
     assert!(why.contains("no significant improvement"), "{why}");
     assert!(
@@ -285,7 +288,7 @@ fn a_served_candidate_that_says_the_same_in_other_words_is_released() {
     assert!(gate.passed && decided.release.is_some(), "{gate:#?}");
     let serve = gate.serve.measured.as_ref().unwrap();
     assert_eq!(serve.served_digest, good.adapter_digest);
-    assert_eq!((serve.sampled, serve.agreed), (6, 6), "{serve:#?}");
+    assert_eq!((serve.sampled, serve.agreed), (8, 8), "{serve:#?}");
 }
 
 #[test]
@@ -302,11 +305,11 @@ fn a_served_candidate_that_answers_something_else_is_not_released() {
     );
     assert!(!gate.serve.passed && decided.release.is_none(), "{gate:#?}");
     let serve = gate.serve.measured.as_ref().unwrap();
-    assert_eq!((serve.sampled, serve.agreed), (6, 0));
+    assert_eq!((serve.sampled, serve.agreed), (8, 0));
     let first = &serve.disagreed[0];
     assert_eq!(
         (first.in_process.as_deref(), first.served.as_deref()),
-        (Some("alpha-54"), Some("The weather is mild in spring."))
+        (Some("alpha-52"), Some("The weather is mild in spring."))
     );
     let why = gate.serve.reason.as_deref().unwrap();
     assert!(why.contains("answered differently"), "{why}");
@@ -344,10 +347,10 @@ fn a_held_out_task_trained_on_is_left_out_of_the_gate() {
         "{improvement:#?}"
     );
     assert_eq!(
-        improvement.suite.tasks, 5,
-        "six held out, one of them leaked"
+        improvement.suite.tasks, 7,
+        "eight held out, one of them leaked"
     );
-    assert_eq!(improvement.comparison.candidate_wins, 5);
+    assert_eq!(improvement.comparison.candidate_wins, 7);
     assert!(gate.passed, "the rest still decides: {gate:#?}");
 }
 
@@ -393,15 +396,14 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
         Some(champion.adapter.as_path()),
         "the champion's adapter is continued, not the base"
     );
-    // A quarter of alpha's 54 trained-on records, rounded up; never one it
-    // held out.
+    // A quarter of alpha's 52 trained-on records; never one it held out.
     let replay = next.replay.as_ref().unwrap();
     assert_eq!(replay.fraction, DEFAULT_REPLAY_FRACTION);
-    assert_eq!(replay.records, 14);
+    assert_eq!(replay.records, 13);
     assert_eq!(replay.sources[0].release, first);
     assert_eq!(
         (replay.sources[0].available, replay.sources[0].sampled),
-        (54, 14)
+        (52, 13)
     );
     let file = std::fs::read_to_string(
         ctx.artifacts()
@@ -410,9 +412,9 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
     )
     .unwrap();
     assert_eq!(replay.digest, Some(Digest::of(file.as_bytes())));
-    assert_eq!(file.lines().count(), 14);
+    assert_eq!(file.lines().count(), 13);
     assert!(file.lines().all(|l| l.contains("alpha-")), "{file}");
-    for held_out in 54..FACTS {
+    for held_out in 52..FACTS {
         assert!(
             !file.contains(&question("alpha", held_out)),
             "{held_out} was held out"
@@ -555,7 +557,7 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
         .scores
     };
     let held_out = score(SuiteChoice::HeldOut);
-    assert_eq!((held_out[0].graded, held_out[0].accuracy), (6, Some(1.0)));
+    assert_eq!((held_out[0].graded, held_out[0].accuracy), (8, Some(1.0)));
     let anchor = score(SuiteChoice::Anchor);
     assert_eq!((anchor[0].graded, anchor[0].accuracy), (5, Some(0.0)));
     let refused = eval(
@@ -578,20 +580,21 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
 fn variants_of_the_trained_facts_give_the_sign_test_enough_tasks() {
     let (scratch, ctx) = gate_context("release-variants", Brain::Honest);
     freeze_anchor(&scratch, &ctx);
-    // Twenty facts: two held out, so a sign test over the records alone
-    // can never reach significance (two wins is p = 0.25).
-    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 20), &[ANCHOR, "alpha"]);
+    // Twelve facts: three held out (a quarter is the most), so a sign test
+    // over the records alone can never reach significance (three wins is
+    // p = 0.125).
+    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 12), &[ANCHOR, "alpha"]);
     let alone = blocked(&ctx, &candidate).gate;
     assert!(!alone.improvement.passed, "{alone:#?}");
     let measured = alone.improvement.measured.as_ref().unwrap();
-    assert_eq!(measured.suite.tasks, 2);
+    assert_eq!(measured.suite.tasks, 3);
     assert_eq!(measured.variants, None, "no variant was written");
 
-    // Nine variants of three trained facts; a variant of the held-out
-    // fact (not learned from); and a variant whose wording is a question
-    // the candidate trained on.
+    // Nine variants of three trained facts; a variant of a held-out fact
+    // (not learned from); and a variant whose wording is a question the
+    // candidate trained on.
     variant_set(&ctx, "alpha", &[0, 1, 2], 3);
-    variant_set(&ctx, "alpha", &[19], 3);
+    variant_set(&ctx, "alpha", &[11], 3);
     variant_set_of(
         &ctx,
         "alpha",
@@ -604,10 +607,10 @@ fn variants_of_the_trained_facts_give_the_sign_test_enough_tasks() {
     let improvement = gate.improvement.measured.as_ref().unwrap();
     assert_eq!(
         improvement.suite.tasks,
-        2 + 9,
+        3 + 9,
         "held-out records and variants"
     );
-    assert_eq!(improvement.comparison.candidate_wins, 11);
+    assert_eq!(improvement.comparison.candidate_wins, 12);
     assert!(improvement.sign_test.p_value < improvement.alpha);
     let variants = improvement.variants.as_ref().unwrap();
     assert_eq!(variants.tasks, 9, "{variants:#?}");
@@ -625,7 +628,7 @@ fn variants_of_what_the_candidate_did_not_learn_do_not_count_as_evidence() {
     freeze_anchor(&scratch, &ctx);
     // It learned nothing of "alpha": its variants stay wrong, like its
     // held-out records, so the extra tasks add ties, not wins.
-    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 20), &[ANCHOR]);
+    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 12), &[ANCHOR]);
     variant_set(&ctx, "alpha", &[0, 1, 2], 3);
 
     let gate = blocked(&ctx, &candidate).gate;

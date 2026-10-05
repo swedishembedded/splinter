@@ -35,6 +35,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::training::HeldOutScore;
 use splinter_core::training::Regime;
+use splinter_data::holdout::holdout_split_grouped;
 use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use splinter_eval::gate::GateConfig;
 use splinter_model::train::Trained;
@@ -121,7 +122,7 @@ pub fn dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
 
 /// Stores an sft-final dataset of the answers to the facts about `topic`
 /// numbered `facts`, in that order; as with [`dataset`], only the tasks of
-/// the newest tenth are put in the task store.
+/// the records the holdout rule holds out are put in the task store.
 pub fn dataset_of(ctx: &Context, topic: &str, facts: &[usize]) -> DatasetId {
     dataset_under(ctx, topic, facts, None)
 }
@@ -134,12 +135,14 @@ pub fn dataset_under(
     facts: &[usize],
     prompt: Option<&str>,
 ) -> DatasetId {
-    let n = facts.len();
-    let held_out_from = n - (n / 10).max(1);
+    let positions: Vec<usize> = (0..facts.len()).collect();
+    let held_out: Vec<usize> = holdout_split_grouped(&positions, |_| None)
+        .map(|(_, held)| held.into_iter().copied().collect())
+        .unwrap_or_default();
     let mut records = Vec::new();
     for (position, &i) in facts.iter().enumerate() {
         let task = fact(topic, i);
-        if position >= held_out_from {
+        if held_out.contains(&position) {
             ctx.tasks().put(&task).unwrap();
         }
         let message = |role: &str, content: String, train: bool| WireMessage {
