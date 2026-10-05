@@ -15,6 +15,9 @@
 //!
 //! * [`gate`] - the release gate's four checks, the numbers each records and
 //!   how each is decided.
+//! * [`metric_gate`] - the release decision over continuous metrics and
+//!   their intervals, for a model judged by a metric rather than item by
+//!   item: requirements as data, unmeasured as failure.
 //! * [`significance`] - the paired sign test the gate rests on, handed in by
 //!   the model backend.
 //! * [`paired`] - two models graded on the same items, compared only where
@@ -40,6 +43,7 @@
 pub mod denoise;
 pub mod frontier;
 pub mod gate;
+pub mod metric_gate;
 pub mod overlap;
 pub mod paired;
 pub mod significance;
