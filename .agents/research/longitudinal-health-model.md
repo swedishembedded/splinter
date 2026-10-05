@@ -312,3 +312,39 @@ changed only by a new benchmark version, never edited):
   signal noisier; both weighted and unweighted fits are evaluated with the
   weighted metrics.
 - Small trials will not move a deep model; they correct it (section 5).
+
+## 10. First results (2026-10-05)
+
+The protocol of section 7 ran as frozen, with one amendment pinned before
+the locked test was scored (D-calibration reported, not deciding: its null
+fails under this much censoring). Numbers and tables are in the sample's
+README and `report.md`; what they mean for this plan:
+
+- **The pre-registered claim failed.** On the locked test the deep model's
+  integrated Brier score was lower than the conventional risk factors' but
+  the design-based interval included zero (345 deaths in the 15-year set:
+  too few for a difference this size), its calibration slope was too
+  extreme for the frozen range, and one subgroup of 96 exceeded the bound.
+- **The additive model on all inputs matched or beat the deep set encoder**
+  in cross-validation and on the locked test. A single examination is
+  mostly additive signal; the encoder's attention over it buys nothing
+  measurable here. The architecture's case therefore rests on what the
+  additive model cannot do: histories over time (the visit backbones, now
+  run on the recalled weights and onset ages as secondary arms), and
+  outcomes and inputs beyond one exam.
+- **What held:** no leakage (shuffled outcomes far worse than age and sex),
+  calibration-in-the-large, discrimination clearly above the conventional
+  factors, robustness to calendar shift, and that averaging seeds and
+  recalibrating on held-out subjects fix most of the slope.
+- **Defects the review found before the locked test**, each fixed and
+  rerun: masking had corrupted the additive baselines' inputs (age-and-sex
+  never saw age while training), and early stopping returned the last
+  rather than the best parameters.
+
+Next, in this order: the visit arms' cross-validation (running); a second
+pre-registration with a primary the data can resolve (cross-validated, or a
+shorter horizon with many more deaths) and the ensemble as the candidate,
+since the locked test is spent; richer inputs as a new frozen data version
+(accelerometry, diet sequences, detection limits); and restricted cohorts
+with repeated examinations, where a longitudinal model has signal an
+additive one does not.
