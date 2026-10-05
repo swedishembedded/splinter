@@ -110,7 +110,7 @@ pub struct Calibration {
     pub n: usize,
 }
 
-fn all_cause(obs: Vec<Obs>) -> Vec<Obs> {
+pub(crate) fn all_cause(obs: Vec<Obs>) -> Vec<Obs> {
     obs.into_iter()
         .map(|o| Obs {
             cause: o.cause.map(|_| 0),
@@ -119,7 +119,7 @@ fn all_cause(obs: Vec<Obs>) -> Vec<Obs> {
         .collect()
 }
 
-fn subset<'a>(
+pub(crate) fn subset<'a>(
     subjects: &'a [Subject],
     preds: &'a [Prediction],
     h: &Horizons,

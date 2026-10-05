@@ -67,6 +67,11 @@ the standard risk factors' with an interval below zero, calibration slope
 and intercept, D-calibration, no subgroup worse beyond a stated bound, and a
 model trained on shuffled outcomes doing no better than age and sex.
 
+Secondary, and not one of the criteria: each run also turns its ten-year
+risk into a Venn-Abers interval, calibrated on the subjects it held out for
+early stopping (`src/intervals.rs`), and the report shows that interval's
+calibration and Brier score beside the raw prediction's.
+
 ## Commands
 
 ```bash

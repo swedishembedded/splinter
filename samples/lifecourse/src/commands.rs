@@ -24,6 +24,7 @@ use splinter_sdk::vocabulary::terms::{Terms, Use};
 
 use crate::build::{subject, CycleCounts, Design, CODES};
 use crate::experiment::{fit, Arm, RunInfo, Training, STEPS};
+use crate::intervals::{ten_year, Intervals};
 use crate::metrics::{evaluate, ibs_terms, Horizons, Metrics};
 use crate::nhanes::{mortality, mortality_file, Cycle, CYCLES};
 
@@ -276,6 +277,11 @@ pub struct Run {
     pub seconds: f64,
     /// The metrics.
     pub metrics: Metrics,
+    /// Venn-Abers intervals for the ten-year risk, calibrated on the
+    /// early-stopping subjects: secondary, not pre-registered; absent from
+    /// runs made before it was measured.
+    #[serde(default)]
+    pub intervals_10: Option<Intervals>,
     /// Why the locked test was scored again, if it was.
     pub reason: Option<String>,
 }
@@ -349,13 +355,14 @@ fn run_one(
         train
     };
     let refs: Vec<&Subject> = train.iter().collect();
-    let (model, info) = fit(arm, &refs, &Training { seed, steps: STEPS })?;
+    let (model, info, held) = fit(arm, &refs, &Training { seed, steps: STEPS })?;
     let test: Vec<Subject> = test_ids
         .iter()
         .map(|id| arm.view(&f.subjects[*id]))
         .collect();
     let preds = model.predict(&test)?;
     let metrics = evaluate(&test, &preds, &f.horizons);
+    let intervals_10 = ten_year(&held, &model.predict(&held)?, &test, &preds, &f.horizons);
     let run = Run {
         arm,
         seed,
@@ -367,6 +374,7 @@ fn run_one(
         n_test: test.len(),
         seconds: t0.elapsed().as_secs_f64(),
         metrics,
+        intervals_10,
         reason: None,
     };
     Ok((run, test, preds))
@@ -459,12 +467,11 @@ pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Res
             .map(|(s, p)| (s.subject_id.clone(), 1.0 - p.survival(10.0)))
             .collect(),
     };
-    std::fs::write(
-        data.join("runs")
-            .join(format!("{}-s{seed}-locked-detail.json", arm.name())),
-        serde_json::to_vec(&detail)?,
-    )
-    .ok();
+    let detail_path = data
+        .join("runs")
+        .join(format!("{}-s{seed}-locked-detail.json", arm.name()));
+    std::fs::write(&detail_path, serde_json::to_vec(&detail)?)
+        .with_context(|| format!("writing {}", detail_path.display()))?;
     write_run(data, &name, &run)?;
     println!("{name}: {}", serde_json::to_string_pretty(&run.metrics)?);
     Ok(())

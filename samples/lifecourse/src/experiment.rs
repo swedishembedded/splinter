@@ -110,12 +110,13 @@ pub struct RunInfo {
     pub subjects: (usize, usize),
 }
 
-/// Train `arm` on `subjects`.
+/// Train `arm` on `subjects`; the subjects held out for early stopping
+/// (as `arm` sees them) come back with the model, never trained on.
 pub fn fit(
     arm: Arm,
     subjects: &[&Subject],
     training: &Training,
-) -> Result<(TimelineModel, RunInfo)> {
+) -> Result<(TimelineModel, RunInfo, Vec<Subject>)> {
     let views: Vec<Subject> = subjects.iter().map(|s| arm.view(s)).collect();
     let (held, train): (Vec<Subject>, Vec<Subject>) = views
         .into_iter()
@@ -142,5 +143,5 @@ pub fn fit(
         truncated_tokens: report.truncated_tokens,
         subjects: (train.len(), held.len()),
     };
-    Ok((model, info))
+    Ok((model, info, held))
 }

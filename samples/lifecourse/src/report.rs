@@ -417,6 +417,26 @@ pub fn report(data: &Path) -> Result<()> {
             "Not every pre-registered criterion is met; the claim is not made."
         }
     )?;
+    writeln!(out, "\n## Secondary, not pre-registered: ten-year risk as an interval\n\nVenn-Abers intervals calibrated on each run's early-stopping subjects.\n\n| arm | calibration subjects | slope raw / merged | O/E raw / merged | Brier raw / merged | width p10 / p50 / p90 |\n|---|---|---|---|---|---|")?;
+    for arm in [Arm::Horizon, Arm::Additive, Arm::Standard, Arm::AgeSex] {
+        if let Some(iv) = locked(data, arm).and_then(|(r, _)| r.intervals_10) {
+            writeln!(
+                out,
+                "| {} | {} | {:.3} / {:.3} | {:.3} / {:.3} | {:.5} / {:.5} | {:.4} / {:.4} / {:.4} |",
+                arm.name(),
+                iv.n_calibration,
+                iv.raw.calibration.slope,
+                iv.merged.calibration.slope,
+                iv.raw.calibration.oe_ratio,
+                iv.merged.calibration.oe_ratio,
+                iv.raw.brier,
+                iv.merged.brier,
+                iv.width.0,
+                iv.width.1,
+                iv.width.2
+            )?;
+        }
+    }
     std::fs::write(data.join("report.md"), &out)?;
     print!("{out}");
     Ok(())

@@ -30,6 +30,7 @@ mod concepts;
 mod diet;
 mod experiment;
 mod intake;
+mod intervals;
 mod metrics;
 mod nhanes;
 mod report;
