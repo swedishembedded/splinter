@@ -228,6 +228,44 @@ pub struct Frozen {
     pub horizons: Horizons,
 }
 
+/// The file an amendment is pinned as.
+fn amendment_file(number: u32) -> String {
+    format!("criteria-amendment-{number}.json")
+}
+
+/// Write every amendment the report knows (`report::amendments`) as its own
+/// file and pin it in the ledger beside the frozen criteria, which stay as
+/// they were. Pinning again with the same text is a no-op; with a changed
+/// text it is refused.
+pub fn amend(data: &Path) -> Result<()> {
+    frozen(data)?;
+    let ledger = Ledger::at(data.join(LEDGER));
+    for a in crate::report::amendments() {
+        let name = amendment_file(a.number);
+        let bytes = serde_json::to_vec_pretty(&a)?;
+        ledger.pin(&name, &bytes)?;
+        std::fs::write(data.join(&name), &bytes)?;
+        println!("amendment {} pinned as {name}", a.number);
+    }
+    Ok(())
+}
+
+/// The numbers of the amendments pinned in the ledger, each checked
+/// against its file.
+pub fn pinned_amendments(data: &Path) -> Result<Vec<u32>> {
+    let ledger = Ledger::at(data.join(LEDGER));
+    let mut out = Vec::new();
+    for a in crate::report::amendments() {
+        let name = amendment_file(a.number);
+        let Ok(bytes) = std::fs::read(data.join(&name)) else {
+            continue;
+        };
+        ledger.check(&name, &bytes)?;
+        out.push(a.number);
+    }
+    Ok(out)
+}
+
 /// Load and verify the frozen inputs.
 pub fn frozen(data: &Path) -> Result<Frozen> {
     let ledger = Ledger::at(data.join(LEDGER));
@@ -672,8 +710,9 @@ pub fn compare(data: &Path, a: Arm, b: Arm) -> Result<()> {
             folds.len()
         );
     }
-    // Each fold tests on about 1/(K-1) of what it trains on.
-    let k = folds.iter().map(|f| f.1).max().unwrap_or(1) + 1;
+    // Each fold tests on about 1/(K-1) of what it trains on: K from the
+    // partition, never from which folds happen to have run.
+    let k = frozen(data)?.partition.spec.folds as usize;
     let test_over_train = 1.0 / (k as f64 - 1.0);
     println!(
         "{} vs {} on {} folds (test/train {:.3})",

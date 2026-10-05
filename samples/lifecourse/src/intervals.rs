@@ -81,11 +81,10 @@ pub fn intervals_at(
     if va.is_empty() || test_risk.is_empty() {
         return None;
     }
-    let pairs: Vec<(f64, f64)> = test_risk
-        .iter()
-        .zip(test_obs)
-        .map(|(&r, o)| va.interval(r, o.weight))
-        .collect();
+    // A new subject enters as an average calibration subject: its own survey
+    // weight would let one heavily weighted subject swing its interval.
+    let weight = va.mean_weight()?;
+    let pairs: Vec<(f64, f64)> = test_risk.iter().map(|&r| va.interval(r, weight)).collect();
     let mut widths: Vec<f64> = pairs.iter().map(|(p0, p1)| p1 - p0).collect();
     widths.sort_by(f64::total_cmp);
     let q = |p: f64| widths[((widths.len() - 1) as f64 * p).round() as usize];

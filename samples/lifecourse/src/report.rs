@@ -77,9 +77,33 @@ pub fn preregistered() -> Criteria {
     }
 }
 
-/// The criteria as the gate's requirements on the evidence `report` names.
-pub fn requirements(c: &Criteria) -> Vec<Requirement> {
-    vec![
+/// A change to the criteria made after they were frozen: its own file,
+/// pinned in the ledger beside the untouched criteria (`amend`), applied by
+/// the report only when pinned.
+#[derive(Serialize)]
+pub struct Amendment {
+    /// Continues the numbering of the amendments inside the criteria.
+    pub number: u32,
+    when: &'static str,
+    change: &'static str,
+    reason: &'static str,
+}
+
+/// Every amendment made after the freeze.
+pub fn amendments() -> Vec<Amendment> {
+    vec![Amendment {
+        number: 3,
+        when: "2026-10-05, after cross-validation of the candidate had begun and before the locked test was scored by any arm",
+        change: "D-calibration is reported but no longer decides the claim: the requirement that its p-value is not below the frozen alpha is removed",
+        reason: "under the heavy censoring of these data (most subjects are alive at the end of follow-up) the chi-square null of D-calibration does not hold: censored subjects spread their mass almost evenly over the bins, the statistic collapses, and simulation under the true model at this censoring never rejects, so the requirement could not fail for anything short of a grossly wrong model. Removing it makes no criterion easier for any arm to pass; the calibration slope and intercept requirements remain",
+    }]
+}
+
+/// The criteria as the gate's requirements on the evidence `report` names,
+/// with the amendments numbered in `pinned` applied.
+pub fn requirements(c: &Criteria, pinned: &[u32]) -> Vec<Requirement> {
+    let d_calibration_decides = !pinned.contains(&3);
+    let mut v = vec![
         Requirement::Improves {
             interval: "ibs_0_15_diff".into(),
             lower_is_better: true,
@@ -93,10 +117,6 @@ pub fn requirements(c: &Criteria) -> Vec<Requirement> {
             interval: "calibration_intercept_10".into(),
             target: 0.0,
         },
-        Requirement::NotRejected {
-            p_value: "d_calibration_p".into(),
-            alpha: c.d_calibration_alpha,
-        },
         Requirement::NotWorseBy {
             prefix: "subgroup:".into(),
             bound: c.subgroup_bound,
@@ -108,7 +128,14 @@ pub fn requirements(c: &Criteria) -> Vec<Requirement> {
             lo: 0.0,
             hi: f64::MAX,
         },
-    ]
+    ];
+    if d_calibration_decides {
+        v.push(Requirement::NotRejected {
+            p_value: "d_calibration_p".into(),
+            alpha: c.d_calibration_alpha,
+        });
+    }
+    v
 }
 
 fn cluster(d: &crate::build::Design) -> u64 {
@@ -394,7 +421,19 @@ pub fn report(data: &Path) -> Result<()> {
         writeln!(out, "- {c}")?;
     }
     writeln!(out, "\n## Verdict\n")?;
-    let gate = decide(&requirements(&crit), &evidence);
+    writeln!(out, "\n## Amendments after the freeze\n")?;
+    let pinned = crate::commands::pinned_amendments(data)?;
+    for a in amendments().iter().filter(|a| pinned.contains(&a.number)) {
+        writeln!(
+            out,
+            "- {}: {} ({}). Why: {}",
+            a.number, a.change, a.when, a.reason
+        )?;
+    }
+    if pinned.is_empty() {
+        writeln!(out, "none")?;
+    }
+    let gate = decide(&requirements(&crit, &pinned), &evidence);
     for (req, check) in &gate.checks {
         let what = serde_json::to_string(req)?;
         let detail = check

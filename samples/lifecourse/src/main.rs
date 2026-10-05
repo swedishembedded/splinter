@@ -21,6 +21,7 @@
 //! final    train one arm on everything but the locked test, and score it there once
 //! compare  two arms on the same folds: the corrected resampled t-test per metric
 //! report   the pre-registered criteria against the locked-test results
+//! amend    pin an amendment to the criteria beside them (never an edit)
 //! ensemble the locked test scored by several seeds' models together (secondary)
 //! temporal train on the earlier cycles, score the later ones (secondary; never the locked test)
 //! intake   the harmonisation admission rules, and a model's proposals, against the hand mapping
@@ -128,6 +129,13 @@ enum Command {
         #[arg(long)]
         data: PathBuf,
     },
+    /// Pin the amendments to the criteria made after the freeze, each as its
+    /// own file beside the untouched criteria.
+    Amend {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+    },
     /// Secondary analysis: the locked test scored by an ensemble of the arm's
     /// models trained with seeds 1..=members on the same subjects as `final`.
     Ensemble {
@@ -206,6 +214,7 @@ fn main() -> Result<()> {
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
         Command::Compare { data, a, b } => commands::compare(&data, a, b),
         Command::Report { data } => report::report(&data),
+        Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
         Command::Temporal {
             data,

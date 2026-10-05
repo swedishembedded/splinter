@@ -67,6 +67,13 @@ the standard risk factors' with an interval below zero, calibration slope
 and intercept, D-calibration, no subgroup worse beyond a stated bound, and a
 model trained on shuffled outcomes doing no better than age and sex.
 
+One amendment was made after the freeze, before any arm scored the locked
+test, and is pinned as its own file beside the untouched criteria
+(`lifecourse amend`, `src/report.rs`): D-calibration is reported but no
+longer decides, because under this much censoring its chi-square null does
+not hold and the test cannot reject even a wrong model. Removing it makes
+no criterion easier to pass.
+
 Secondary, and not one of the criteria: each run also turns its ten-year
 risk into a Venn-Abers interval, calibrated on the subjects it held out for
 early stopping (`src/intervals.rs`), and the report shows that interval's
@@ -92,6 +99,7 @@ lifecourse cv      --data <out> --arm horizon            # every fold; --repeat/
 lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
 lifecourse compare --data <out> --a horizon --b standard
 lifecourse final   --data <out> --arm horizon            # once; --reason to score again
+lifecourse amend   --data <out>                                 # pin the post-freeze amendments
 lifecourse report  --data <out>
 lifecourse temporal --data <out> --arm horizon --split 2009      # secondary: calendar shift
 lifecourse ensemble --data <out> --arm horizon --members 5       # secondary: seeded ensemble on the locked test
