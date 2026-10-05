@@ -51,4 +51,5 @@ out = {
 }
 with open(os.path.join(here, "mixed.json"), "w") as f:
     json.dump(out, f)
+    f.write("\n")
 print("wrote mixed.xpt and mixed.json:", back.shape)
