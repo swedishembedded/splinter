@@ -52,11 +52,14 @@ pub const REFERRING_PHRASES: &[&str] = &[
     "this letter",
 ];
 
-/// The shortest run of characters of a dropped privileged item that, found
-/// verbatim in the instruction, marks the instruction as quoting it: long
-/// enough that ordinary shared wording does not count, short enough to
-/// catch a quoted clause.
-pub const MIN_QUOTED_CHARS: usize = 24;
+/// The shortest run of words of a dropped privileged item that, found in the
+/// instruction (case and punctuation aside), marks the instruction as
+/// quoting it: the length at which a run of words is a claim to a passage
+/// rather than the name of a matter. A question is told to name what it is
+/// about in the source's own words - a title, a law, a place as the writer
+/// calls it - and such a name is a noun phrase of a few words; a clause of
+/// this many is lifted from the text.
+pub const MIN_QUOTED_WORDS: usize = 8;
 
 /// Why an instruction does not stand on its own without the privileged
 /// context dropped from it.
@@ -94,8 +97,8 @@ fn never_context(item: &Privileged) -> bool {
 /// grade the answer (the reference, executable checks, generated tests)
 /// and critiques do not count: they are never context. With any other
 /// item dropped, the instruction must neither contain one of
-/// [`REFERRING_PHRASES`] nor quote [`MIN_QUOTED_CHARS`] or more characters
-/// of a dropped item verbatim.
+/// [`REFERRING_PHRASES`] nor repeat a run of [`MIN_QUOTED_WORDS`] or more
+/// words of a dropped item.
 pub fn check_self_contained(
     instruction: &str,
     dropped: &[&Privileged],
@@ -119,12 +122,17 @@ pub fn check_self_contained(
     {
         return Err(NotSelfContained::Refers { phrase });
     }
-    let quoted: std::collections::HashSet<&str> = windows(instruction, MIN_QUOTED_CHARS).collect();
+    let asked = words(instruction);
+    let quoted: std::collections::HashSet<&[String]> = asked.windows(MIN_QUOTED_WORDS).collect();
     if quoted.is_empty() {
         return Ok(());
     }
     for item in context {
-        if windows(&item.content, MIN_QUOTED_CHARS).any(|w| quoted.contains(w)) {
+        let content = words(&item.content);
+        if content
+            .windows(MIN_QUOTED_WORDS)
+            .any(|run| quoted.contains(run))
+        {
             return Err(NotSelfContained::Quotes {
                 kind: item.kind.clone(),
             });
@@ -133,13 +141,11 @@ pub fn check_self_contained(
     Ok(())
 }
 
-/// Every run of `n` characters of `text`.
-fn windows(text: &str, n: usize) -> impl Iterator<Item = &str> {
-    let bounds: Vec<usize> = text
-        .char_indices()
-        .map(|(i, _)| i)
-        .chain(std::iter::once(text.len()))
-        .collect();
-    let count = bounds.len().saturating_sub(n);
-    (0..count).filter_map(move |i| text.get(*bounds.get(i)?..*bounds.get(i + n)?))
+/// The words of `text`, lower-cased, punctuation and whitespace aside: the
+/// units a quoted run is counted in.
+fn words(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect()
 }

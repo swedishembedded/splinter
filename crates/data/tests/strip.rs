@@ -17,7 +17,7 @@ mod common;
 use common::*;
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::experience::{Experience, Privileged, PrivilegedKind};
-use splinter_core::selfcontained::{check_self_contained, NotSelfContained, MIN_QUOTED_CHARS};
+use splinter_core::selfcontained::{check_self_contained, NotSelfContained, MIN_QUOTED_WORDS};
 use splinter_data::{Corpus, Exclusion, Fraction, RecordBody, SftFinal, Strip, View, ViewError};
 
 const PASSAGE: &str = "TEACHER-ONLY passage: the store keeps every experience under its digest.";
@@ -134,13 +134,34 @@ fn an_instruction_that_needs_the_dropped_context_is_excluded_and_counted() {
         check_self_contained("Summarise the passage   ABOVE in one line.", &dropped),
         Err(NotSelfContained::Refers { .. })
     ));
-    let quoted = format!("Explain: \"{}\"", &PASSAGE[22..22 + MIN_QUOTED_CHARS]);
+    // A run of the passage's words long enough to be a quoted clause marks
+    // the instruction as quoting it, however it is punctuated or cased.
+    let words: Vec<&str> = PASSAGE.split_whitespace().collect();
+    let quoted = format!(
+        "Explain: {}",
+        words[1..1 + MIN_QUOTED_WORDS].join(" ").to_uppercase()
+    );
     assert!(matches!(
         check_self_contained(&quoted, &dropped),
         Err(NotSelfContained::Quotes { .. })
     ));
-    let short = format!("Explain: \"{}\"", &PASSAGE[22..22 + MIN_QUOTED_CHARS - 1]);
-    assert_eq!(check_self_contained(&short, &dropped), Ok(()));
+    // A shorter run - the name of the matter in the source's own words - is
+    // what naming the subject asks for, and stands on its own.
+    let named = format!("Explain: {}", words[1..MIN_QUOTED_WORDS].join(" "));
+    assert_eq!(check_self_contained(&named, &dropped), Ok(()));
+    assert_eq!(
+        check_self_contained(
+            "What did Jefferson think about the alien and sedition laws?",
+            &[&privileged(
+                PrivilegedKind::Passage,
+                "I consider the alien and sedition laws as merely an experiment on the \
+                 American mind to see how far it will bear an avowed violation of the \
+                 constitution."
+            )]
+        ),
+        Ok(()),
+        "a noun phrase of the source is a name, not a quotation"
+    );
     assert_eq!(
         check_self_contained("Summarise the passage above.", &[]),
         Ok(()),
