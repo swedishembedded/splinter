@@ -38,6 +38,7 @@ mod intervals;
 mod metrics;
 mod nhanes;
 mod report;
+mod temporal;
 
 use std::path::PathBuf;
 
@@ -221,7 +222,7 @@ fn main() -> Result<()> {
             arm,
             seed,
             split,
-        } => commands::temporal(&data, arm, seed, split),
+        } => temporal::temporal(&data, arm, seed, split),
         Command::Intake {
             nhanes,
             mortality,
