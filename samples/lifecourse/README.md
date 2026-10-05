@@ -92,6 +92,10 @@ lifecourse temporal --data <out> --arm horizon --split 2009      # secondary: ca
 lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```
 
+`final` also saves the model it scored in `runs/<arm>-s<seed>-locked-model/`
+with a manifest of its data, partition and file digests: the directory
+`brain horizon predict --weights` and `BRAIN_HORIZON_DIR` serve.
+
 `--nhanes` is a directory of `<cycle start year>/*.xpt` as CDC distributes
 them, `--mortality` the `NHANES_<y>_<y+1>_MORT_2019_PUBLIC.dat` files. Set
 `BRAIN_BACKEND`/`BRAIN_DEVICE` to choose brain's device.

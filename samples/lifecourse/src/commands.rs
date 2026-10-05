@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::data::frozen::Ledger;
 use splinter_sdk::data::partition::{partition, units_from_json_lines, Partition, PartitionSpec};
 use splinter_sdk::model::timeline::survival::compare::corrected_resampled_t;
-use splinter_sdk::model::timeline::{read_jsonl, Subject};
+use splinter_sdk::model::timeline::{read_jsonl, Subject, TimelineModel};
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::terms::{Terms, Use};
 
@@ -335,6 +335,15 @@ fn permute(subjects: &[Subject], seed: u64) -> Vec<Subject> {
         .collect()
 }
 
+/// One trained and scored arm: the record, the test subjects as the arm
+/// sees them, their predictions, and the model.
+struct Scored {
+    run: Run,
+    test: Vec<Subject>,
+    preds: Vec<splinter_sdk::model::timeline::Prediction>,
+    model: TimelineModel,
+}
+
 fn run_one(
     f: &Frozen,
     arm: Arm,
@@ -342,11 +351,7 @@ fn run_one(
     train_ids: &[&str],
     test_ids: &[&str],
     permuted: bool,
-) -> Result<(
-    Run,
-    Vec<Subject>,
-    Vec<splinter_sdk::model::timeline::Prediction>,
-)> {
+) -> Result<Scored> {
     let t0 = Instant::now();
     let train: Vec<Subject> = train_ids.iter().map(|id| f.subjects[*id].clone()).collect();
     let train = if permuted {
@@ -377,7 +382,12 @@ fn run_one(
         intervals_10,
         reason: None,
     };
-    Ok((run, test, preds))
+    Ok(Scored {
+        run,
+        test,
+        preds,
+        model,
+    })
 }
 
 /// Train and score `arm` on the folds asked for (all by default).
@@ -412,7 +422,7 @@ pub fn cv(
                 continue;
             }
             let (train, test) = f.partition.fold(r, k);
-            let (mut run, _, _) = run_one(&f, arm, seed, &train, &test, permuted)?;
+            let mut run = run_one(&f, arm, seed, &train, &test, permuted)?.run;
             run.fold = Some((r, k));
             let m = &run.metrics;
             println!(
@@ -457,7 +467,12 @@ pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Res
         .collect();
     train.sort_unstable();
     let test: Vec<&str> = f.partition.locked.iter().map(String::as_str).collect();
-    let (mut run, test_subjects, preds) = run_one(&f, arm, seed, &train, &test, false)?;
+    let Scored {
+        mut run,
+        test: test_subjects,
+        preds,
+        model,
+    } = run_one(&f, arm, seed, &train, &test, false)?;
     run.reason = reason.map(str::to_string);
     let detail = LockedDetail {
         ibs_terms: ibs_terms(&test_subjects, &preds, &f.horizons),
@@ -472,8 +487,59 @@ pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Res
         .join(format!("{}-s{seed}-locked-detail.json", arm.name()));
     std::fs::write(&detail_path, serde_json::to_vec(&detail)?)
         .with_context(|| format!("writing {}", detail_path.display()))?;
+    save_model(data, &name, &model, &run)?;
     write_run(data, &name, &run)?;
     println!("{name}: {}", serde_json::to_string_pretty(&run.metrics)?);
+    Ok(())
+}
+
+/// What a saved final model is, beside its files: what it was trained on
+/// and what its files hash to.
+#[derive(Serialize)]
+struct ModelManifest<'a> {
+    arm: Arm,
+    seed: u64,
+    dataset: &'a str,
+    partition: &'a str,
+    trained_on: (usize, usize),
+    scored_in: &'a str,
+    files: Vec<(String, String)>,
+}
+
+/// Save the final model of `run` (recorded as `run_name`) where a server
+/// reads it (`BRAIN_HORIZON_DIR`, `brain horizon predict --weights`), with
+/// a manifest of its provenance and file digests. A model saved for the same
+/// run name is replaced only together with that run's record.
+fn save_model(data: &Path, run_name: &str, model: &TimelineModel, run: &Run) -> Result<()> {
+    let dir = data.join("runs").join(run_name.replace(".json", "-model"));
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).with_context(|| format!("replacing {}", dir.display()))?;
+    }
+    model.save(&dir)?;
+    let mut files = Vec::new();
+    let mut entries: Vec<_> = std::fs::read_dir(&dir)?.collect::<std::io::Result<_>>()?;
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for e in entries {
+        let bytes = std::fs::read(e.path())?;
+        files.push((
+            e.file_name().to_string_lossy().into_owned(),
+            Digest::of(&bytes).to_string(),
+        ));
+    }
+    let manifest = ModelManifest {
+        arm: run.arm,
+        seed: run.seed,
+        dataset: &run.dataset,
+        partition: &run.partition,
+        trained_on: run.info.subjects,
+        scored_in: run_name,
+        files,
+    };
+    std::fs::write(
+        dir.join("manifest.json"),
+        serde_json::to_vec_pretty(&manifest)?,
+    )?;
+    println!("saved the model to {}", dir.display());
     Ok(())
 }
 
@@ -521,7 +587,7 @@ pub fn temporal(data: &Path, arm: Arm, seed: u64, split: u16) -> Result<()> {
         );
     }
     let name = format!("{}-s{seed}-temporal-{split}.json", arm.name());
-    let (run, _, _) = run_one(&f, arm, seed, &train, &test, false)?;
+    let run = run_one(&f, arm, seed, &train, &test, false)?.run;
     write_run(data, &name, &run)?;
     println!(
         "{name}: trained on {} subjects before {split}, scored {}: {}",
