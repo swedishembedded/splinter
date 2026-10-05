@@ -202,3 +202,25 @@ async fn a_released_base_is_reloaded_by_the_next_generation() {
     assert_eq!(loads(&loader), 2);
     assert_eq!(residency.resident(), 1);
 }
+
+/// A device holds one base at a time: loading another base frees the one
+/// resident, and the model whose base was freed loads it again - and frees
+/// the other - on its next generation.
+#[tokio::test(flavor = "multi_thread")]
+async fn loading_another_base_frees_the_resident_one_and_each_reloads_on_use() {
+    let (first, second) = (Checkpoint::new("evict-a"), Checkpoint::new("evict-b"));
+    let loader = naming_loader();
+    let residency = Residency::new(Arc::new(loader.clone()));
+    let a = LocalQwen::load(&residency, &first.weights(None), "a").unwrap();
+    assert_eq!(residency.resident(), 1);
+    let b = LocalQwen::load(&residency, &second.weights(None), "b").unwrap();
+    assert_eq!(residency.resident(), 1, "{:?}", loader.events());
+    assert_eq!(loads(&loader), 2);
+
+    assert_eq!(answer(&a).await, "base");
+    assert_eq!(residency.resident(), 1, "{:?}", loader.events());
+    assert_eq!(loads(&loader), 3);
+    assert_eq!(answer(&b).await, "base");
+    assert_eq!(loads(&loader), 4);
+    assert_eq!(residency.resident(), 1);
+}

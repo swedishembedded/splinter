@@ -24,6 +24,11 @@
 //! linears from the checkpoint, while an attached adapter runs beside the
 //! resident base and switching costs reading the adapter alone.
 //!
+//! A device holds one base at a time: a base that loads first frees the other
+//! resident bases that are not generating, and each of them loads again on
+//! its next generation. Bases of different sizes do not fit one card
+//! together, and the work is staged so that models swap as seldom as it can.
+//!
 //! The residency holds its bases weakly: a base is freed when the last
 //! model using it drops. [`Residency::release_all`] frees every resident
 //! base at once, for work that needs the device for itself (a fine-tune
@@ -139,10 +144,13 @@ fn utf8(path: &Path) -> Result<&str, PolicyError> {
 /// budgets are two engines).
 type BaseKey = (PathBuf, u32);
 
+/// Every base the residency has handed out, weakly.
+type Bases = Arc<Mutex<HashMap<BaseKey, Weak<Resident>>>>;
+
 /// See the module documentation.
 pub struct Residency {
     loader: Arc<dyn BaseLoader>,
-    bases: Mutex<HashMap<BaseKey, Weak<Resident>>>,
+    bases: Bases,
 }
 
 impl Default for Residency {
@@ -165,7 +173,7 @@ impl Residency {
     pub fn new(loader: Arc<dyn BaseLoader>) -> Self {
         Self {
             loader,
-            bases: Mutex::new(HashMap::new()),
+            bases: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -196,6 +204,7 @@ impl Residency {
                         checkpoint,
                         context_tokens,
                         loader: Arc::clone(&self.loader),
+                        peers: Arc::clone(&self.bases),
                         slot: Mutex::new(Slot::default()),
                     });
                     bases.insert(key, Arc::downgrade(&resident));
@@ -225,9 +234,14 @@ impl Residency {
     /// How many bases are loaded right now.
     #[must_use]
     pub fn resident(&self) -> usize {
-        lock(&self.bases)
+        // The map's lock is not held while a slot's is taken: a load holds
+        // a slot and takes the map's.
+        let residents: Vec<Arc<Resident>> = lock(&self.bases)
             .values()
             .filter_map(Weak::upgrade)
+            .collect();
+        residents
+            .iter()
             .filter(|resident| resident.lock().engine.is_some())
             .count()
     }
@@ -240,6 +254,9 @@ pub struct Resident {
     checkpoint: PathBuf,
     context_tokens: u32,
     loader: Arc<dyn BaseLoader>,
+    /// The residency's bases, this one among them: the others are freed
+    /// before this one loads.
+    peers: Bases,
     slot: Mutex<Slot>,
 }
 
@@ -294,6 +311,7 @@ impl Resident {
             Some(engine) => engine,
             empty @ None => {
                 slot.attached = None;
+                self.free_peers();
                 empty.insert(self.loader.load(&self.checkpoint, self.context_tokens)?)
             }
         };
@@ -314,6 +332,25 @@ impl Resident {
             slot.attached = adapter.map(Path::to_path_buf);
         }
         Ok(&**engine)
+    }
+
+    /// Frees every other resident base, before this one loads. A base that
+    /// is generating keeps its engine (a device is asked one model at a time,
+    /// so none is, and waiting for it from inside a load could deadlock two
+    /// loads that wait on each other).
+    fn free_peers(&self) {
+        let own = (self.checkpoint.clone(), self.context_tokens);
+        let peers: Vec<Arc<Resident>> = lock(&self.peers)
+            .iter()
+            .filter(|(key, _)| **key != own)
+            .filter_map(|(_, peer)| peer.upgrade())
+            .collect();
+        for peer in peers {
+            if let Ok(mut slot) = peer.slot.try_lock() {
+                slot.engine = None;
+                slot.attached = None;
+            }
+        }
     }
 
     /// Frees the engine, after any generation holding it has ended.
