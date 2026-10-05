@@ -161,16 +161,12 @@ pub fn parse_cushing(edition: &str, text: &str) -> Parsed {
             .get(n + 1)
             .map_or(lines.len(), |next| next.heading_start);
         let (dateline, body_from) = dateline_after(&lines, f.note_end, boundary);
+        // A heading that ends in a date often loses its year to the next
+        // line, which the OCR prints as noise; the page's year completes it.
         let date = dateline
             .as_deref()
             .and_then(date_of)
-            .or_else(|| {
-                year_in(&f.heading).map(|year| Date {
-                    year,
-                    month: None,
-                    day: None,
-                })
-            })
+            .or_else(|| date_in(&f.heading, f.page_year))
             .or_else(|| printed_date(&f.note))
             .or_else(|| {
                 f.page_year.map(|year| Date {
@@ -271,8 +267,27 @@ fn year_in(text: &str) -> Option<u16> {
     YEAR.captures(text).and_then(|c| parse_year(&c[1]))
 }
 
+/// The most characters a running head runs to, OCR noise included.
+const MAX_FURNITURE_CHARS: usize = 40;
+
+/// Page furniture, as the OCR prints it or mangles it: a short line that,
+/// once every character but a capital letter is dropped, reads only the
+/// book's running title or his name (`n8 THE WRITINGS OF [1774`,
+/// `lyyi] SAMUEL ADAMS. 125`, `i ;66] SAMUEL ADAMS, 71`).
 fn is_furniture(line: &str) -> bool {
-    RUNNING_HEAD.is_match(line)
+    if RUNNING_HEAD.is_match(line) {
+        return true;
+    }
+    // Its words in capitals, their punctuation trimmed; a word with a digit,
+    // a lowercase letter or nothing left is the mangled page number or year.
+    let capitals = line
+        .split_whitespace()
+        .map(|word| word.trim_matches(|c: char| c.is_ascii_punctuation()))
+        .filter(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_uppercase()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    line.len() <= MAX_FURNITURE_CHARS
+        && matches!(capitals.as_str(), "THE WRITINGS OF" | "SAMUEL ADAMS")
 }
 
 /// Lowercase letters a heading may carry for every ten letters, plus one: the
@@ -343,8 +358,14 @@ fn dateline_after(lines: &[String], note_end: usize, boundary: usize) -> (Option
 }
 
 fn date_of(dateline: &str) -> Option<Date> {
-    let year = year_in(dateline)?;
-    let tokens: Vec<String> = dateline
+    date_in(dateline, None)
+}
+
+/// The date `text` states, its year taken from `fallback_year` when the text
+/// names a month but no year; `None` when there is no year at all.
+fn date_in(text: &str, fallback_year: Option<u16>) -> Option<Date> {
+    let year = year_in(text).or(fallback_year)?;
+    let tokens: Vec<String> = text
         .split_whitespace()
         .map(|t| {
             t.trim_matches(|c: char| !c.is_alphanumeric())
@@ -551,11 +572,43 @@ Dear  Sir,  the  second  letter.
     }
 
     #[test]
-    fn a_year_in_a_wrapped_heading_dates_the_entry_and_the_heading_is_joined() {
+    fn a_date_in_a_wrapped_heading_dates_the_entry_and_the_heading_is_joined() {
         let text = "INSTRUCTIONS    OF  THE    TOWN    OF  BOSTON    TO  ITS    REPRE\nSENTATIVES  IN  THE  GENERAL  COURT.     MAY,  1764.\n\n[MS.,  Boston  Public  Library.]\n\nGentlemen,  you  are  chosen.\n";
         let e = &parse(text).entries[0];
         assert_eq!(e.heading, "INSTRUCTIONS OF THE TOWN OF BOSTON TO ITS REPRE SENTATIVES IN THE GENERAL COURT. MAY, 1764.");
-        assert_eq!(e.date.year, 1764);
+        assert_eq!(
+            e.date,
+            Date {
+                year: 1764,
+                month: Some(5),
+                day: None
+            }
+        );
+        // The year wrapped to a line of its own, which the OCR leaves as
+        // noise; the page's running head supplies it.
+        let dated = "1766]  SAMUEL  ADAMS.  45\n\nTHE  TOWN  OF  BOSTON  TO  THE  TOWN  OF  PLYMOUTH.  MARCH  24,\n1766\n\n[MS.,  Boston  Public  Library.]\n\nGentlemen,  text.\n";
+        assert_eq!(
+            parse(dated).entries[0].date,
+            Date {
+                year: 1766,
+                month: Some(3),
+                day: Some(24)
+            }
+        );
+    }
+
+    /// The OCR mangles a running head's digits and brackets in every way;
+    /// what is left of it is still not the text.
+    #[test]
+    fn a_running_head_the_ocr_mangled_is_still_furniture() {
+        let text = "TO  JOHN  SMITH.\n\n[MS.,  Samuel  Adams  Papers.]\n\nBOSTON,  April  2,  1766.\n\nThey  have  always\n\ni  ;66]  SAMUEL  ADAMS.  71\n\nprided  themselves.\n\nn8  THE  WRITINGS  OF  [1774\n\nlyyi]  SAMUEL  ADAMS.  125\n\nr774]  SAMUEL  ADAMS,  149\n\nyo  THE  WRITINGS  OF  [17  79\n\nI7yi]  SAMUEL  ADAMS.  279\n\nAnd  so  on.\n";
+        let body = &parse(text).entries[0].body;
+        for stray in ["WRITINGS", "ADAMS", "71", "125", "279", "n8"] {
+            assert!(!body.contains(stray), "{stray} in {body}");
+        }
+        assert!(body.contains("They have always"), "{body}");
+        let own = "I, SAMUEL ADAMS, do declare that the Town of Boston met.";
+        assert!(!is_furniture(own));
     }
 
     #[test]
