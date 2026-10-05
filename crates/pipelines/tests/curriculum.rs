@@ -506,7 +506,7 @@ fn facts(ctx: &Context, topics: &[&str], n: usize) -> TaskSetId {
 #[test]
 fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     let (scratch, ctx) = gate_context("curriculum-mastery", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let policy = ModelRef::policy_default();
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "gamma"]));
     let set = facts(&ctx, &["alpha", "gamma"], 3);
@@ -563,7 +563,7 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
 #[test]
 fn a_retention_drop_queues_the_forgotten_concept() {
     let (scratch, ctx) = gate_context("curriculum-retention", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     released(&ctx, "alpha", &[ANCHOR, "alpha"]);
 
     // Beta learned, alpha forgotten.

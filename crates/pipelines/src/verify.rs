@@ -33,6 +33,7 @@ use splinter_eval::verifiers::calibration::{
 };
 use splinter_eval::verifiers::consistency::AgreementVerifier;
 use splinter_eval::verifiers::executable::ExecutableVerifier;
+use splinter_eval::verifiers::form::{FinalNumberVerifier, LineCountVerifier};
 use splinter_eval::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifier};
 use splinter_eval::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
 use splinter_eval::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
@@ -89,6 +90,16 @@ pub const SPEECH_PRODUCER: &str = "splinter-lab/speech";
 
 /// The version of the speech check; a changed check carries a new one.
 pub const SPEECH_VERSION: &str = "1";
+
+/// The producer of the final-number verifier's verdicts.
+pub const FINAL_NUMBER_PRODUCER: &str = "splinter-lab/final-number";
+/// Its version.
+pub const FINAL_NUMBER_VERSION: &str = "1";
+
+/// The producer of the line-count verifier's verdicts.
+pub const LINE_COUNT_PRODUCER: &str = "splinter-lab/line-count";
+/// Its version.
+pub const LINE_COUNT_VERSION: &str = "1";
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -447,6 +458,16 @@ pub(crate) fn verifiers_for(
                     verifiers.push(judge.verifier(ctx)?);
                 }
             }
+            VerifierKind::FinalNumber => {
+                verifiers.push(Box::new(FinalNumberVerifier::new(Producer {
+                    name: FINAL_NUMBER_PRODUCER.into(),
+                    version: FINAL_NUMBER_VERSION.into(),
+                })));
+            }
+            VerifierKind::LineCount => verifiers.push(Box::new(LineCountVerifier::new(Producer {
+                name: LINE_COUNT_PRODUCER.into(),
+                version: LINE_COUNT_VERSION.into(),
+            }))),
         }
     }
     Ok(Strongest::new(verifiers))

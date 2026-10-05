@@ -18,7 +18,7 @@
 //! | Strength | Verifier |
 //! |---|---|
 //! | [`Strength::Executable`] | [`executable::ExecutableVerifier`] (authored checks), [`mutation::MutationValidatedVerifier`] (generated tests admitted by mutation) |
-//! | [`Strength::Formal`] | [`formal::ExactMatchVerifier`] against the task's reference, [`quotation::QuotationVerifier`] (quotations are in the source), [`grounding::GroundingVerifier`] (numbers and names are in the source) |
+//! | [`Strength::Formal`] | [`formal::ExactMatchVerifier`] against the task's reference, [`form::FinalNumberVerifier`] and [`form::LineCountVerifier`] (the answer's last number, its line count), [`quotation::QuotationVerifier`] (quotations are in the source), [`grounding::GroundingVerifier`] (numbers and names are in the source) |
 //! | [`Strength::Consistency`] | [`consistency::AgreementVerifier`] over independent answers |
 //! | [`Strength::Judged`] | a judge model, gated by [`calibration::CalibratedJudge`] |
 //!
@@ -39,6 +39,7 @@ pub mod calibration;
 pub mod consistency;
 pub mod critique;
 pub mod executable;
+pub mod form;
 pub mod formal;
 pub mod grounding;
 pub mod mutation;

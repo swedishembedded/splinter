@@ -310,7 +310,7 @@ impl Trainer for AliasMover {
 #[test]
 fn the_policy_is_resolved_once_when_a_run_starts_and_recorded() {
     let (scratch, ctx) = gate_context("learn-pin", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let first = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
     let second = released(&ctx, "beta", &[ANCHOR, "alpha", "beta"]);
     rollback(&ctx, "default").unwrap();

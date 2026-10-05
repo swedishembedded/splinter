@@ -23,7 +23,7 @@
 //! | `environment` | where the student works: `closed_book` or `runtime` |
 //! | `runtime` | the runtime code of the kind runs in (`python3`) |
 //! | `requires` | privileged material every task must carry beyond the reference: `hints`, `checks`, `tests`, `checks_or_tests` |
-//! | `verifiers` | which verifiers grade an answer: `formal`, `executable`, `mutation_validated`, `consistency`, `judged` |
+//! | `verifiers` | which verifiers grade an answer: `formal`, `stated`, `final_number`, `line_count`, `executable`, `mutation_validated`, `consistency`, `judged`, `quotation`, `grounding`, `speech` |
 //! | `min_sections` | distinct sections the evidence must span |
 //!
 //! Whether a task of the kind must name its subject follows from these
@@ -109,9 +109,27 @@ pub enum VerifierKind {
     /// The reply speaks in the person's own voice, and not about the
     /// material the teacher was shown, which the student never sees.
     Speech,
+    /// The last number the answer states is the reference: a worked sum is
+    /// graded by where it ends.
+    FinalNumber,
+    /// The answer has exactly as many non-empty lines as the reference
+    /// counts: a format is graded by whether it was followed.
+    LineCount,
 }
 
 impl VerifierKind {
+    /// Whether this verifier compares the answer with the task's reference
+    /// in code alone, so a task that carries a reference is graded without
+    /// a model, a sandbox or other answers: what an anchor suite's tasks
+    /// are held to.
+    #[must_use]
+    pub fn compares_with_reference(self) -> bool {
+        matches!(
+            self,
+            Self::Formal | Self::Stated | Self::FinalNumber | Self::LineCount
+        )
+    }
+
     /// Whether a pass of this verifier establishes that an answer is right.
     /// Grounding and speech only refute: an answer that invents nothing and
     /// names no document may still be vague, wrong or beside the point.
@@ -278,18 +296,15 @@ impl TaskKind {
     }
 
     /// Whether the kind's answer is one exact fact taken from the source -
-    /// a text graded by matching the reference ([`VerifierKind::Formal`],
-    /// [`VerifierKind::Stated`]) - so two tasks asking the same question
-    /// with different references contradict each other. Answers a judge
-    /// grades (an explanation, a dialogue reply) may be worded differently
-    /// and still agree; a computed answer is established by running code.
+    /// a text graded by comparing it with the reference in code
+    /// ([`VerifierKind::compares_with_reference`]) - so two tasks asking the
+    /// same question with different references contradict each other.
+    /// Answers a judge grades (an explanation, a dialogue reply) may be
+    /// worded differently and still agree; a computed answer is established
+    /// by running code.
     #[must_use]
     pub fn exact_answer(&self) -> bool {
-        !self.answer.is_computed()
-            && self
-                .verifiers
-                .iter()
-                .any(|v| matches!(v, VerifierKind::Formal | VerifierKind::Stated))
+        !self.answer.is_computed() && self.verifiers.iter().any(|v| v.compares_with_reference())
     }
 }
 
@@ -306,9 +321,9 @@ impl Catalogue {
         Self::default()
     }
 
-    /// The kinds Splinter ships: recall, advise, converse, explain, predict, construct,
-    /// debug, counterexample, transform, classify, retrieve, multi-turn and
-    /// combine.
+    /// The kinds Splinter ships: recall, arithmetic, format, advise, converse,
+    /// explain, predict, construct, debug, counterexample, transform, classify,
+    /// retrieve, multi-turn and combine.
     #[must_use]
     pub fn builtin() -> Self {
         let kinds = builtin_kinds()
@@ -362,8 +377,8 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
 
 fn builtin_kinds() -> Vec<TaskKind> {
     use VerifierKind::{
-        Consistency, Executable, Formal, Grounding, Judged, MutationValidated, Quotation, Speech,
-        Stated,
+        Consistency, Executable, FinalNumber, Formal, Grounding, Judged, LineCount,
+        MutationValidated, Quotation, Speech, Stated,
     };
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
@@ -372,6 +387,23 @@ fn builtin_kinds() -> Vec<TaskKind> {
             "Write up to {count} questions, each asking for one fact the sections state. The \
              reference is the fact, as short as it can be while complete.",
             &[Stated, Judged],
+        ),
+        // The two form kinds are what an anchor suite holds a release to;
+        // generated from sources, a task of either is admitted only where its
+        // number is one the sections state.
+        text(
+            "arithmetic",
+            "Write up to {count} questions, each asking for one number the sections state and \
+             each ending with: work it out, then end your reply with 'The answer is' and the \
+             number. The reference is the number alone.",
+            &[FinalNumber],
+        ),
+        text(
+            "format",
+            "Write up to {count} requests, each for exactly N items the sections name, one per \
+             line and no other text, where N is a number the sections state. The reference is \
+             N alone.",
+            &[LineCount],
         ),
         TaskKind {
             name: "advise".into(),
@@ -552,6 +584,34 @@ mod tests {
         // check establishes a pass without any judge.
         for name in ["recall", "advise", "predict", "construct", "debug"] {
             assert!(!needs(name), "{name}");
+        }
+    }
+
+    /// Arithmetic and format tasks are what a persona fine-tune erodes and
+    /// trivia recall cannot show: closed-book, with one exact answer, graded
+    /// by comparing the answer with the reference in code and by nothing
+    /// else, so an anchor suite can hold a release to them.
+    #[test]
+    fn the_form_kinds_are_closed_book_and_graded_against_the_reference_by_code_alone() {
+        let catalogue = Catalogue::builtin();
+        for name in ["arithmetic", "format"] {
+            let kind = catalogue
+                .get(name)
+                .unwrap_or_else(|| panic!("{name} is a kind"));
+            assert_eq!(kind.environment, SolverEnvironment::ClosedBook, "{name}");
+            assert!(
+                kind.verifiers.iter().all(|v| v.compares_with_reference()),
+                "{name}: {:?}",
+                kind.verifiers
+            );
+            assert!(!kind.needs_judge() && kind.exact_answer(), "{name}");
+        }
+        for v in [
+            VerifierKind::Judged,
+            VerifierKind::Grounding,
+            VerifierKind::Quotation,
+        ] {
+            assert!(!v.compares_with_reference(), "{v:?}");
         }
     }
 

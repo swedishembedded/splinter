@@ -59,7 +59,7 @@ fn a_model_is_asked_under_its_own_system_prompt_and_another_under_the_default() 
 #[test]
 fn a_release_answers_under_the_prompt_its_datasets_were_trained_under() {
     let (scratch, ctx) = gate_context("system-prompt-release", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let facts: Vec<usize> = (0..FACTS).collect();
     let data = dataset_under(&ctx, "alpha", &facts, Some(PERSONA));
     let (candidate, _) = candidate_on(&ctx, data, &[ANCHOR, "alpha"]);
@@ -93,7 +93,7 @@ fn a_release_answers_under_the_prompt_its_datasets_were_trained_under() {
 #[test]
 fn the_served_candidate_is_asked_under_the_prompt_it_was_trained_under() {
     let (scratch, ctx) = gate_context("system-prompt-serve", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let facts: Vec<usize> = (0..FACTS).collect();
     let data = dataset_under(&ctx, "alpha", &facts, Some(PERSONA));
     let (candidate, _) = candidate_on(&ctx, data, &[ANCHOR, "alpha"]);

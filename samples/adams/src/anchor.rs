@@ -13,31 +13,52 @@
 //! A fine-tune on one man's papers can cost the model what it knew about the
 //! rest of the world. These questions are frozen and have nothing to do with
 //! him; the same questions asked of the base and of the adapter say whether
-//! anything was lost.
+//! anything was lost. The files are in the format Splinter's own anchor suite
+//! freezes (`{"instruction", "reference", "kind"}`), so the same file serves
+//! both; the kind says how an answer is checked, and the `leak` kind is this
+//! sample's alone, since Splinter asks its anchor under the prompt a release
+//! is deployed with, where the persona is meant to be present.
 
 use splinter_sdk::measure::verifiers::answer::mentions;
+use splinter_sdk::measure::verifiers::form::{final_number_is, line_count_is};
 use splinter_sdk::model::exam::Question;
 
 /// The system message the anchor questions are asked under: no persona.
 pub const SYSTEM: &str = "Answer briefly.";
 
-/// How an answer to an anchor question is checked, by code.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
+/// How an answer to an anchor question is checked, by code, as its kind says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Check {
-    /// The answer names the reference as whole words.
-    #[default]
+    /// `recall`: the answer names the reference as whole words.
     Mentions,
-    /// The last number the answer states is the reference.
+    /// `arithmetic`: the last number the answer states is the reference.
     FinalNumber,
-    /// The answer has exactly as many non-empty lines as the reference says.
+    /// `format`: the answer has exactly as many non-empty lines as the
+    /// reference says.
     Lines,
-    /// The answer carries none of his persona: the reference is not used.
+    /// `leak`: the answer carries none of his persona; the reference is not
+    /// used.
     Absent,
+}
+
+impl Check {
+    /// The check a kind of question is graded by; `None` for a kind this
+    /// suite does not know.
+    #[must_use]
+    pub fn of_kind(kind: &str) -> Option<Self> {
+        match kind {
+            "recall" => Some(Self::Mentions),
+            "arithmetic" => Some(Self::FinalNumber),
+            "format" => Some(Self::Lines),
+            "leak" => Some(Self::Absent),
+            _ => None,
+        }
+    }
 }
 
 /// One general question and how its answer is checked.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Anchor {
     /// A stable identifier, made from the question.
     #[serde(default)]
@@ -46,15 +67,26 @@ pub struct Anchor {
     /// The word, number or line count the check compares with.
     #[serde(default)]
     pub reference: String,
-    /// What the question tests: `recall`, `arithmetic`, `format`, `leak`.
+    /// What the question tests, and so how it is checked: `recall`,
+    /// `arithmetic`, `format`, `leak`.
     #[serde(default = "default_kind")]
     pub kind: String,
-    #[serde(default)]
-    pub check: Check,
 }
 
 fn default_kind() -> String {
     "recall".to_string()
+}
+
+impl Anchor {
+    /// How this question's answers are checked.
+    ///
+    /// # Panics
+    /// Never: [`read`] admits only kinds the suite knows.
+    #[must_use]
+    pub fn check(&self) -> Check {
+        #[allow(clippy::expect_used)]
+        Check::of_kind(&self.kind).expect("a read question has a known kind")
+    }
 }
 
 impl Question for Anchor {
@@ -85,48 +117,12 @@ const PERSONA_MARKERS: [&str; 5] = [
     "my correspondent",
 ];
 
-/// The numbers in `text`, in order, with thousands separators read.
-fn numbers(text: &str) -> Vec<f64> {
-    let mut found = Vec::new();
-    let mut current = String::new();
-    let chars: Vec<char> = text.chars().collect();
-    for (i, &c) in chars.iter().enumerate() {
-        let negative_start =
-            c == '-' && current.is_empty() && chars.get(i + 1).is_some_and(char::is_ascii_digit);
-        let inside = c.is_ascii_digit()
-            || (c == '.'
-                && !current.is_empty()
-                && chars.get(i + 1).is_some_and(char::is_ascii_digit))
-            || (c == ','
-                && !current.is_empty()
-                && chars.get(i + 1).is_some_and(char::is_ascii_digit));
-        if negative_start || inside {
-            if c != ',' {
-                current.push(c);
-            }
-        } else if !current.is_empty() {
-            found.extend(current.parse::<f64>());
-            current.clear();
-        }
-    }
-    if !current.is_empty() {
-        found.extend(current.parse::<f64>());
-    }
-    found
-}
-
 /// Whether `answer` passes the question's check.
 pub fn is_correct(question: &Anchor, answer: &str) -> bool {
-    match question.check {
+    match question.check() {
         Check::Mentions => mentions(answer, &question.reference),
-        Check::FinalNumber => match (numbers(answer).last(), question.reference.parse::<f64>()) {
-            (Some(stated), Ok(wanted)) => (stated - wanted).abs() < 1e-9,
-            _ => false,
-        },
-        Check::Lines => question
-            .reference
-            .parse::<usize>()
-            .is_ok_and(|wanted| answer.lines().filter(|l| !l.trim().is_empty()).count() == wanted),
+        Check::FinalNumber => final_number_is(answer, &question.reference).unwrap_or(false),
+        Check::Lines => line_count_is(answer, &question.reference).unwrap_or(false),
         Check::Absent => {
             let lower = answer.to_lowercase();
             !PERSONA_MARKERS.iter().any(|m| lower.contains(m))
@@ -146,6 +142,12 @@ pub fn read(path: &std::path::Path) -> anyhow::Result<Vec<Anchor>> {
         .map(|line| {
             let mut question: Anchor = serde_json::from_str(line)
                 .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+            anyhow::ensure!(
+                Check::of_kind(&question.kind).is_some(),
+                "{}: kind {:?} is not one this suite checks",
+                path.display(),
+                question.kind
+            );
             question.id = format!(
                 "anchor-{}",
                 &blake3::hash(question.instruction.as_bytes()).to_hex()[..12]
@@ -190,7 +192,7 @@ mod tests {
     fn an_answer_is_right_when_it_names_the_reference_as_a_whole_word() {
         let q = Anchor {
             instruction: "Capital of France?".into(),
-            ..question("recall", Check::Mentions, "Paris")
+            ..question("recall", "Paris")
         };
         assert!(is_correct(&q, "The capital is Paris."));
         assert!(is_correct(&q, "paris"));
@@ -198,45 +200,46 @@ mod tests {
         assert!(!is_correct(&q, "Lyon"));
     }
 
-    fn question(kind: &str, check: Check, reference: &str) -> Anchor {
+    fn question(kind: &str, reference: &str) -> Anchor {
         Anchor {
             id: "a".into(),
             instruction: "q".into(),
             reference: reference.into(),
             kind: kind.into(),
-            check,
         }
     }
 
+    /// The check is the kind's: arithmetic by the last number stated, format
+    /// by the line count (both as Splinter's own verifiers grade them), and
+    /// an unknown kind is refused at reading.
     #[test]
-    fn an_arithmetic_answer_is_right_when_the_last_number_it_states_is_the_reference() {
-        let q = question("arithmetic", Check::FinalNumber, "320");
+    fn the_kind_says_how_an_answer_is_checked() {
+        let sum = question("arithmetic", "320");
         assert!(is_correct(
-            &q,
-            "5 dollars is 500 cents, minus 180 leaves 320.\nThe answer is 320"
+            &sum,
+            "500 minus 180 leaves 320.\nThe answer is 320"
         ));
-        assert!(is_correct(&q, "So the change is 320.0 cents."));
-        assert!(is_correct(
-            &question("arithmetic", Check::FinalNumber, "1250"),
-            "The total is 1,250."
-        ));
+        assert!(!is_correct(&sum, "The answer is 320, not 180"));
+        assert!(!is_correct(&question("arithmetic", "three"), "3"));
+        let lines = question("format", "3");
+        assert!(is_correct(&lines, "apple\nbanana\n\ncherry\n"));
+        assert!(!is_correct(&lines, "Here you go:\napple\nbanana\ncherry"));
+        assert!(read(&file(
+            "{\"instruction\": \"q\", \"reference\": \"r\", \"kind\": \"riddle\"}\n"
+        ))
+        .is_err());
         assert!(
-            !is_correct(&q, "The answer is 320, not 180"),
-            "the last number is what counts"
+            read(&file(
+                "{\"instruction\": \"q\", \"reference\": \"3\", \"check\": \"lines\"}\n"
+            ))
+            .is_err(),
+            "the check is not a field: the kind says it"
         );
-        assert!(!is_correct(&q, "I cannot tell."));
-        assert!(is_correct(
-            &question("arithmetic", Check::FinalNumber, "-4"),
-            "That gives -4."
-        ));
     }
 
     #[test]
-    fn a_format_answer_has_exactly_the_lines_asked_for_and_a_leak_probe_has_no_persona_in_it() {
-        let lines = question("format", Check::Lines, "3");
-        assert!(is_correct(&lines, "apple\nbanana\n\ncherry\n"));
-        assert!(!is_correct(&lines, "Here you go:\napple\nbanana\ncherry"));
-        let leak = question("leak", Check::Absent, "");
+    fn a_leak_probe_has_no_persona_in_it() {
+        let leak = question("leak", "");
         assert!(is_correct(
             &leak,
             "Hold a vote, then write the decision down."
@@ -251,25 +254,28 @@ mod tests {
         }
     }
 
+    /// The skills file holds the kinds Splinter's anchor suite also freezes;
+    /// the leak probes, which only this sample asks, are a file of their own.
     #[test]
-    fn the_frozen_skills_suite_is_readable_and_every_question_has_a_usable_check() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("anchor-skills.jsonl");
-        let questions = read(&path).unwrap();
-        assert!(questions.len() >= 50, "{}", questions.len());
+    fn the_frozen_skills_and_leak_suites_are_readable_and_every_question_has_a_usable_check() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let skills = read(&dir.join("anchor-skills.jsonl")).unwrap();
+        assert!(skills.len() >= 40, "{}", skills.len());
         let kinds: std::collections::BTreeSet<&str> =
-            questions.iter().map(|q| q.kind.as_str()).collect();
-        assert_eq!(kinds, ["arithmetic", "format", "leak"].into());
-        for q in &questions {
-            match q.check {
-                Check::FinalNumber | Check::Lines => {
-                    assert!(q.reference.parse::<f64>().is_ok(), "{q:?}")
-                }
-                Check::Absent | Check::Mentions => {}
-            }
+            skills.iter().map(|q| q.kind.as_str()).collect();
+        assert_eq!(kinds, ["arithmetic", "format"].into());
+        for q in &skills {
+            assert!(q.reference.parse::<f64>().is_ok(), "{q:?}");
         }
+        let leak = read(&dir.join("anchor-leak.jsonl")).unwrap();
+        assert!(leak.len() >= 10 && leak.iter().all(|q| q.check() == Check::Absent));
         let ids: std::collections::HashSet<&str> =
-            questions.iter().map(|q| q.id.as_str()).collect();
-        assert_eq!(ids.len(), questions.len(), "no question is asked twice");
+            skills.iter().chain(&leak).map(|q| q.id.as_str()).collect();
+        assert_eq!(
+            ids.len(),
+            skills.len() + leak.len(),
+            "no question is asked twice"
+        );
     }
 
     #[test]

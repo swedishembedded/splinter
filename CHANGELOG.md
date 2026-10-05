@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The anchor suite freezes several files as one version (`eval --suite anchor
+  --freeze A --freeze B`), and takes two more kinds graded by code alone:
+  `arithmetic` (the last number the answer states is the reference) and
+  `format` (the answer has exactly the lines the reference counts), what a
+  persona fine-tune erodes before it forgets facts. Both are task kinds in the
+  catalogue, graded by `splinter-eval`'s new form verifiers.
 - **`splinter-core`.** Splinter's vocabulary - digests, the clock, sources,
   tasks, experiences, annotations, the chat wire shapes, the system prompt and
   the self-containment rule - in a crate that performs no I/O and names no

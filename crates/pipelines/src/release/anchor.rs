@@ -17,17 +17,19 @@
 //! tasks already in force changes nothing. A release records the version and digest it was
 //! held to.
 //!
-//! The file is JSON Lines, one task per line: `{"instruction": ...,
+//! A file is JSON Lines, one task per line: `{"instruction": ...,
 //! "reference": ..., "kind": ...}`, where `kind` (default `recall`) is a
-//! task kind solved closed-book whose verifiers include the formal one, so
-//! every anchor task can be graded without a judge.
+//! task kind solved closed-book and graded against its reference by code
+//! (`recall`, `arithmetic`, `format`), so every anchor task can be graded
+//! without a judge. Several files freeze as one version: their tasks in the
+//! order the files are given.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
-use splinter_knowledge::tasks::{Catalogue, VerifierKind};
+use splinter_knowledge::tasks::Catalogue;
 
 use crate::release::probe::Suite;
 use splinter_orchestrator::context::Context;
@@ -129,12 +131,11 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, OrchestratorError> {
         let kind = parsed.kind.unwrap_or_else(|| DEFAULT_ANCHOR_KIND.into());
         let gradable = catalogue.get(&kind).is_some_and(|spec| {
             spec.environment == splinter_knowledge::tasks::SolverEnvironment::ClosedBook
-                && (spec.verifiers.contains(&VerifierKind::Formal)
-                    || spec.verifiers.contains(&VerifierKind::Stated))
+                && spec.verifiers.iter().any(|v| v.compares_with_reference())
         });
         if !gradable {
             return Err(refuse(format!(
-                "kind {kind:?} is not a closed-book kind a formal verifier grades"
+                "kind {kind:?} is not a closed-book kind graded against its reference by code"
             )));
         }
         if tasks.len() == MAX_ANCHOR_TASKS {
@@ -162,11 +163,25 @@ pub fn read_tasks(file: &Path) -> Result<Vec<Task>, OrchestratorError> {
     Ok(tasks)
 }
 
-/// Freezes the tasks in `file` as the anchor suite's next version and puts
-/// it in force; the version in force is kept when it holds the same tasks.
-/// Refused if another process froze one in the meantime.
-pub fn freeze(ctx: &Context, file: &Path) -> Result<FrozenAnchor, OrchestratorError> {
-    let tasks = read_tasks(file)?;
+/// Freezes the tasks in `files`, in order, as the anchor suite's next
+/// version and puts it in force; the version in force is kept when it holds
+/// the same tasks. Refused with no file, and if another process froze one
+/// in the meantime.
+pub fn freeze(ctx: &Context, files: &[PathBuf]) -> Result<FrozenAnchor, OrchestratorError> {
+    if files.is_empty() {
+        return Err(OrchestratorError::Refused(
+            "name at least one anchor file to freeze".into(),
+        ));
+    }
+    let mut tasks = Vec::new();
+    for file in files {
+        tasks.extend(read_tasks(file)?);
+        if tasks.len() > MAX_ANCHOR_TASKS {
+            return Err(OrchestratorError::Refused(format!(
+                "the anchor files hold more than {MAX_ANCHOR_TASKS} tasks together"
+            )));
+        }
+    }
     let previous = current(ctx)?;
     if let Some(previous) = previous.as_ref().filter(|p| p.suite.tasks == tasks) {
         return Ok(previous.clone());

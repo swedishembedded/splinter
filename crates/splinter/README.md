@@ -29,7 +29,7 @@ splinter dataset export <DATASET-ID> --out DIR
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B] [--lr LR] [--records-per-step N]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
-splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE] [--judge REF]
+splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
@@ -457,11 +457,15 @@ the adapter records.
 closed-book on `--suite held-out` (the default: a candidate's new data, or
 the release a policy alias points at), `retention` (every earlier release,
 each reported), `anchor`, or a FILE of tasks. The anchor suite is frozen
-from a file with `eval --suite anchor --freeze FILE` (each different file
-is the next version; the same tasks are the same version) and shown with
-`eval --suite anchor`. An anchor file is JSON Lines, `{"instruction",
-"reference", "kind"?}`, `kind` (default `recall`) a closed-book kind a
-formal verifier grades.
+from one or more files with `eval --suite anchor --freeze FILE...` (the
+files' tasks in order are one version; different tasks are the next version;
+the same tasks are the same version) and shown with `eval --suite anchor`. An
+anchor file is JSON Lines, `{"instruction", "reference", "kind"?}`, `kind`
+(default `recall`) a closed-book kind graded against its reference by code:
+`recall` (the answer states the reference), `arithmetic` (the last number the
+answer states is the reference) or `format` (the answer has exactly the
+non-empty lines the reference counts). The last two are what a persona
+fine-tune of a reasoning model erodes and trivia cannot show.
 
 ## The front door
 

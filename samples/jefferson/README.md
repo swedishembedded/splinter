@@ -25,9 +25,10 @@ Splinter lacks.
 python3 resources/founding-america/fetch.py
 splinter-jefferson materials --resources RESOURCES --out ./materials
 
-# 2. Freeze the general-knowledge suite the release gate holds the adapter to, so
-#    that learning Jefferson is checked against forgetting everything else.
-splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl
+# 2. Freeze the suite the release gate holds the adapter to, so that learning
+#    Jefferson is checked against forgetting everything else: general knowledge,
+#    and the arithmetic and format-following a persona fine-tune erodes first.
+splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
 
 # 3. Splinter does the rest. The roles are named by the configuration:
 #    the policy to train, the assistant that plans, writes, teaches and judges,

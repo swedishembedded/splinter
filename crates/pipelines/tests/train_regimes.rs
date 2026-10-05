@@ -59,7 +59,7 @@ fn refusal(ctx: &Context, request: &TrainRequest, trainer: &FakeTrainer) -> Stri
 #[test]
 fn a_preference_dataset_trains_by_dpo_from_the_champion_and_is_gated_like_any_other() {
     let (scratch, ctx) = gate_context("train-dpo", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let champion = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
     let champion_adapter = ctx.releases().get(&champion).unwrap().adapter;
 

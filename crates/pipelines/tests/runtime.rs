@@ -25,7 +25,7 @@ use splinter_pipelines::release::{anchor, arm};
 #[test]
 fn a_new_command_sees_the_alias_where_the_last_one_left_it() {
     let (scratch, ctx) = gate_context("runtime-pins", Brain::Honest);
-    anchor::freeze(&ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let runtime = ctx.runtime().clone();
 
     let first = released(&ctx, "alpha", &[ANCHOR, "alpha"]);

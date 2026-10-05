@@ -609,10 +609,11 @@ pub struct EvalArgs {
     /// held-out, retention, anchor, or an anchor-format file of tasks.
     #[arg(long, default_value = "held-out", value_parser = suite, value_name = "SUITE")]
     pub suite: SuiteChoice,
-    /// With --suite anchor: make this file's tasks the anchor suite's next
-    /// version first. JSON Lines: {"instruction", "reference", "kind"?}.
+    /// With --suite anchor: make these files' tasks (repeat the flag for
+    /// several) the anchor suite's next version first. JSON Lines:
+    /// {"instruction", "reference", "kind"?}.
     #[arg(long, value_name = "FILE")]
-    pub freeze: Option<PathBuf>,
+    pub freeze: Vec<PathBuf>,
     /// The calibrated model that judges the tasks a judge decides.
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,

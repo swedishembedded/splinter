@@ -20,9 +20,9 @@
 //! | a file | the anchor-format tasks in it | the same |
 //!
 //! A `local:` or `remote:` model has no release, so only `anchor` and a
-//! file apply to it. `--freeze FILE` (with `--suite anchor`) makes the
-//! tasks in FILE the anchor suite's next version first; with no model,
-//! the anchor suite in force is shown.
+//! file apply to it. `--freeze FILE` (with `--suite anchor`, repeatable)
+//! makes the tasks in the files, in order, the anchor suite's next version
+//! first; with no model, the anchor suite in force is shown.
 
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -84,8 +84,9 @@ pub struct EvalRequest {
     pub model: Option<String>,
     /// The suite.
     pub suite: SuiteChoice,
-    /// Freeze this file as the anchor suite's next version first.
-    pub freeze: Option<PathBuf>,
+    /// Freeze these files' tasks, in order, as the anchor suite's next
+    /// version first; none freezes nothing.
+    pub freeze: Vec<PathBuf>,
 }
 
 /// The anchor suite in force, as `eval` shows it.
@@ -170,15 +171,15 @@ pub fn eval(
     request: &EvalRequest,
     cancel: &CancelToken,
 ) -> Result<Evaluated, OrchestratorError> {
-    if request.freeze.is_some() && request.suite != SuiteChoice::Anchor {
+    if !request.freeze.is_empty() && request.suite != SuiteChoice::Anchor {
         return Err(OrchestratorError::Refused(
             "--freeze makes an anchor suite; give it with --suite anchor".into(),
         ));
     }
-    let frozen = match &request.freeze {
-        Some(file) => Some(anchor::freeze(ctx, file)?),
-        None if request.suite == SuiteChoice::Anchor => anchor::current(ctx)?,
-        None => None,
+    let frozen = match &request.freeze[..] {
+        [] if request.suite == SuiteChoice::Anchor => anchor::current(ctx)?,
+        [] => None,
+        files => Some(anchor::freeze(ctx, files)?),
     };
     let anchor_shown = frozen.as_ref().map(|f| AnchorShown {
         version: f.suite.version,
@@ -273,7 +274,7 @@ pub enum EvalReport {
 /// The `eval` command: showing the anchor suite is a read; freezing one
 /// or grading a model is a recorded run.
 pub fn evaluate(ctx: &Context, request: &EvalRequest) -> Result<EvalReport, OrchestratorError> {
-    if request.model.is_none() && request.freeze.is_none() {
+    if request.model.is_none() && request.freeze.is_empty() {
         return Ok(EvalReport::Shown(eval(ctx, request, &CancelToken::new())?));
     }
     let recorded = record(ctx, "eval", request, |run| {

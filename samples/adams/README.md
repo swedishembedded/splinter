@@ -46,7 +46,7 @@ what he believed.
 | `--framing full\|identity\|plain` | On `transfer-exam` and `reconstruct-replies`: the system message the exam asks under. Training mixes all three (mostly the full instructions, some the bare identity, some no persona; the shares are constants in `persona.rs`), so an adapter can be asked without any persona prompt and the habit shown to be its own. |
 | `briefings`, `reconstruct-replies`, `judge`, `reconstruct-report` | The reconstruction benchmark: a held-out letter is briefed as the situation it answered, a model writes the reply, and a judge calibrated on controls scores it against what the real letter does. |
 | `grpo` | Builds a task family for brain's reinforcement-learning loop: present-day situations and the passages he may be shown, rewarded in named parts by the same rules (the layout, the verdict on whether his method applies, every other rule), with no model judging. The pool the loop trains on and the pool its own gate draws from are disjoint. It runs, but a two-step trial over the 1.5B model took 27 minutes, so no result is claimed for the 7B (the knowledge notes on measuring an RL loop's cost say why). |
-| `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. `anchor-skills.jsonl` adds what a persona fine-tune of a reasoning model can erode and trivia cannot show: arithmetic word problems graded by the last number stated, format-following graded by line count, and probes that must not carry any of his persona (`--max-tokens`, `--decoding thinking` for the arithmetic). |
+| `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. `anchor-skills.jsonl` adds what a persona fine-tune of a reasoning model can erode and trivia cannot show: arithmetic word problems graded by the last number stated and format-following graded by line count; it is in the format Splinter's own anchor suite freezes, so `splinter eval --suite anchor --freeze` takes it too. `anchor-leak.jsonl` holds the probes that must not carry any of his persona; only this sample asks them, under no persona (`--max-tokens`, `--decoding thinking` for the arithmetic). |
 
 The `exam` split is questions about documents the model never saw. The `seen`
 split is a sample of training questions. A gain on `seen` and none on `exam` is
@@ -143,6 +143,7 @@ splinter-adams anchor-exam --anchor samples/jefferson/anchor.jsonl --out RUN/anc
 splinter-adams anchor-exam --anchor samples/adams/anchor-skills.jsonl --out RUN/skills-base.jsonl --base BASE --decoding thinking --max-tokens 1500
 splinter-adams anchor-exam --anchor samples/adams/anchor-skills.jsonl --out RUN/skills-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors --decoding thinking --max-tokens 1500
 splinter-adams report --before RUN/skills-base.jsonl --after RUN/skills-tuned.jsonl
+splinter-adams anchor-exam --anchor samples/adams/anchor-leak.jsonl --out RUN/leak-tuned.jsonl --base BASE --adapter RUN/dpo/adapter.safetensors
 ```
 
 `splinter-adams identify --author LINE --year YEAR` shows what the namesake

@@ -58,7 +58,7 @@ use splinter_pipelines::release::{anchor, list, release, rollback, ReleaseReques
 use splinter_pipelines::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
-    anchor::freeze(ctx, &anchor_file(&scratch.0, 4)).unwrap();
+    anchor::freeze(ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
 }
 
 #[test]
@@ -522,7 +522,7 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
             &EvalRequest {
                 model: None,
                 suite: SuiteChoice::Anchor,
-                freeze: Some(file.to_path_buf()),
+                freeze: vec![file.to_path_buf()],
             },
             &CancelToken::new(),
         )
@@ -549,7 +549,7 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
             &EvalRequest {
                 model: Some(candidate.candidate.clone()),
                 suite,
-                freeze: None,
+                freeze: Vec::new(),
             },
             &CancelToken::new(),
         )
@@ -565,7 +565,7 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
         &EvalRequest {
             model: Some("policy:default".into()),
             suite: SuiteChoice::HeldOut,
-            freeze: None,
+            freeze: Vec::new(),
         },
         &CancelToken::new(),
     )
