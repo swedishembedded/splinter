@@ -234,3 +234,26 @@ fn a_local_model_has_its_largest_context_unless_a_reference_limits_it() {
         }
     );
 }
+
+#[test]
+fn the_arms_of_an_exam_have_the_policys_context() {
+    let mut limited = config();
+    limited.policy_context_tokens = Some(8192);
+    let context_of = |config: &Config, adapter: Option<&std::path::Path>| match resolve(
+        &splinter_pipelines::release::arm(config, adapter),
+        config,
+        false,
+        None,
+    )
+    .unwrap()
+    {
+        ModelSelection::Local(weights) => weights.context_tokens,
+        other => panic!("expected a local model, got {other:?}"),
+    };
+    assert_eq!(context_of(&limited, None), Some(8192));
+    assert_eq!(
+        context_of(&limited, Some(std::path::Path::new("a.safetensors"))),
+        Some(8192)
+    );
+    assert_eq!(context_of(&config(), None), None);
+}

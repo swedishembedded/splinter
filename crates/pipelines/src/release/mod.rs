@@ -113,7 +113,8 @@ pub fn arm(config: &Config, adapter: Option<&Path>) -> ModelRef {
     ModelRef::Local {
         checkpoint: base.display().to_string(),
         adapter: adapter.map(|a| a.display().to_string()),
-        context_tokens: None,
+        // An arm is the policy's base, so it is asked at the policy's context.
+        context_tokens: config.policy_context_tokens,
     }
 }
 
