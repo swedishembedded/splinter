@@ -124,6 +124,50 @@ impl Ledger {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// The ledger kept beside `file`, as [`LEDGER_FILE`] in its directory:
+    /// where a frozen file's pin is looked for.
+    #[must_use]
+    pub fn beside(file: &Path) -> Self {
+        Self::at(file.with_file_name(LEDGER_FILE))
+    }
+
+    /// Pins `file`'s content under its file name ([`Self::pin`]).
+    ///
+    /// # Errors
+    /// The file has no name or cannot be read, is pinned to other content,
+    /// or the ledger cannot be written.
+    pub fn pin_file(&self, file: &Path) -> Result<Status, FrozenError> {
+        let (name, content) = named(file)?;
+        self.pin(name, &content)
+    }
+
+    /// Whether `file` may be read as what was frozen under its name
+    /// ([`Self::check`]): [`Status::New`] for a file not pinned yet.
+    ///
+    /// # Errors
+    /// The file has no name or cannot be read, or is pinned to other content.
+    pub fn check_file(&self, file: &Path) -> Result<Status, FrozenError> {
+        let (name, content) = named(file)?;
+        self.check(name, &content)
+    }
+}
+
+/// The name a ledger is kept under beside the files it pins.
+pub const LEDGER_FILE: &str = "FROZEN.json";
+
+/// `file`'s name and content.
+fn named(file: &Path) -> Result<(&str, Vec<u8>), FrozenError> {
+    let ledger_error = |reason: String| FrozenError::Ledger {
+        path: file.to_path_buf(),
+        reason,
+    };
+    let name = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| ledger_error("not a file name".into()))?;
+    let content = std::fs::read(file).map_err(|e| ledger_error(e.to_string()))?;
+    Ok((name, content))
 }
 
 #[cfg(test)]
@@ -166,6 +210,30 @@ mod tests {
             ledger.check("benchmark.jsonl", b"one").unwrap(),
             Status::Unchanged
         );
+    }
+
+    /// A file is pinned under its own name in the ledger beside it, and a
+    /// later check refuses it once its content has changed.
+    #[test]
+    fn a_file_is_pinned_beside_itself_and_refused_once_it_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let exam = dir.path().join("exam.jsonl");
+        std::fs::write(&exam, "one\n").unwrap();
+        let ledger = Ledger::beside(&exam);
+        assert_eq!(ledger.path(), dir.path().join(LEDGER_FILE));
+        assert_eq!(ledger.check_file(&exam).unwrap(), Status::New);
+        assert_eq!(ledger.pin_file(&exam).unwrap(), Status::New);
+        assert_eq!(ledger.check_file(&exam).unwrap(), Status::Unchanged);
+        std::fs::write(&exam, "two\n").unwrap();
+        assert!(matches!(
+            ledger.check_file(&exam),
+            Err(FrozenError::Changed { .. })
+        ));
+        assert!(matches!(
+            ledger.pin_file(&exam),
+            Err(FrozenError::Changed { .. })
+        ));
+        assert!(ledger.pin_file(&dir.path().join("missing")).is_err());
     }
 
     #[test]

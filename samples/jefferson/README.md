@@ -118,8 +118,10 @@ Fixed before any training run:
 
 A gain on `seen` and none on `exam` is memorisation. A gain on both is learning.
 `exam` and `seen` are separate files; the exam is written before training and
-never edited. A spec asserts that no exam item shares a family, a passage or a
-question with the training set.
+never edited: `tasks` pins it in a `FROZEN.json` beside it the first time it is
+written and refuses to write a different exam under that name, and `exam` says
+when it is asked about a file nothing pinned. A spec asserts that no exam item
+shares a family, a passage or a question with the training set.
 
 Students: `DeepSeek-R1-Distill-Qwen-7B` (the main arm) and
 `DeepSeek-R1-Distill-Qwen-1.5B` (a faster rehearsal that gets more steps).

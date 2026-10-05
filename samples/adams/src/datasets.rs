@@ -446,7 +446,7 @@ pub const EXTRA_BENCHMARK_FILE: &str = "benchmark-extra.jsonl";
 /// The training scenarios as questions, for sampling the student on them.
 pub const TRAIN_QUESTIONS_FILE: &str = "train-questions.jsonl";
 /// The ledger that pins each benchmark file to its content.
-const FROZEN_LEDGER: &str = "FROZEN.json";
+const FROZEN_LEDGER: &str = splinter_sdk::data::frozen::LEDGER_FILE;
 
 /// The datasets, and what was left out and why.
 #[derive(Debug, Default)]

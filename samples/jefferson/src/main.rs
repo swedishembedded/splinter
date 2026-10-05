@@ -142,7 +142,13 @@ fn tasks_command(args: &[String]) -> anyhow::Result<()> {
         exam.push_str(&serde_json::to_string(item)?);
         exam.push('\n');
     }
-    std::fs::write(out.join("exam.jsonl"), exam)?;
+    // The exam is frozen under its name the first time it is written and a
+    // different one is refused: a changed exam goes under another directory.
+    let exam_file = out.join("exam.jsonl");
+    let ledger = splinter_sdk::data::frozen::Ledger::beside(&exam_file);
+    ledger.check("exam.jsonl", exam.as_bytes())?;
+    std::fs::write(&exam_file, exam)?;
+    ledger.pin_file(&exam_file)?;
     let count = |tasks: &[tasks::Task], split: &str, kind: tasks::Kind| {
         tasks
             .iter()
@@ -172,6 +178,15 @@ fn exam_command(args: &[String]) -> anyhow::Result<()> {
         limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
         system: system_flag(args),
     };
+    // Scored only against the questions as they were frozen.
+    if splinter_sdk::data::frozen::Ledger::beside(&run.exam).check_file(&run.exam)?
+        == splinter_sdk::data::frozen::Status::New
+    {
+        eprintln!(
+            "note: {} is not frozen; the tasks command freezes what it writes",
+            run.exam.display()
+        );
+    }
     let asked = exam::run(&run)?;
     println!("asked {asked} questions; results in {}", run.out.display());
     Ok(())

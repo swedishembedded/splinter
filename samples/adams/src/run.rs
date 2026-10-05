@@ -361,13 +361,13 @@ pub fn build_onpolicy_command(
 /// Freeze `file`: pin its content in the ledger beside it, so a later run that
 /// would write or score against other content under its name is refused.
 pub fn pin_command(file: &Path) -> anyhow::Result<()> {
-    let name = file
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| anyhow::anyhow!("{}: not a file name", file.display()))?;
-    let ledger = splinter_sdk::data::frozen::Ledger::at(file.with_file_name("FROZEN.json"));
-    let status = ledger.pin(name, &std::fs::read(file)?)?;
-    println!("{name}: {status:?}, frozen in {}", ledger.path().display());
+    let ledger = splinter_sdk::data::frozen::Ledger::beside(file);
+    let status = ledger.pin_file(file)?;
+    println!(
+        "{}: {status:?}, frozen in {}",
+        file.display(),
+        ledger.path().display()
+    );
     Ok(())
 }
 
@@ -376,12 +376,7 @@ pub fn pin_command(file: &Path) -> anyhow::Result<()> {
 /// is not frozen yet is allowed, with a note.
 pub fn ensure_unchanged(file: &Path) -> anyhow::Result<()> {
     use splinter_sdk::data::frozen::{Ledger, Status};
-    let name = file
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| anyhow::anyhow!("{}: not a file name", file.display()))?;
-    let ledger = Ledger::at(file.with_file_name("FROZEN.json"));
-    if ledger.check(name, &std::fs::read(file)?)? == Status::New {
+    if Ledger::beside(file).check_file(file)? == Status::New {
         eprintln!(
             "note: {} is not frozen; `pin` it before any arm is scored against it",
             file.display()
