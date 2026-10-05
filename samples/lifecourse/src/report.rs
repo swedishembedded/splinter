@@ -522,7 +522,6 @@ pub fn report(data: &Path) -> Result<()> {
     for c in &terms.conditions {
         writeln!(out, "- {c}")?;
     }
-    writeln!(out, "\n## Verdict\n")?;
     writeln!(out, "\n## Amendments after the freeze\n")?;
     let pinned = crate::commands::pinned_amendments(data)?;
     for a in amendments().iter().filter(|a| pinned.contains(&a.number)) {
@@ -535,6 +534,7 @@ pub fn report(data: &Path) -> Result<()> {
     if pinned.is_empty() {
         writeln!(out, "none")?;
     }
+    writeln!(out, "\n## Verdict\n")?;
     let gate = decide(&requirements(&crit, &pinned), &evidence);
     for (req, check) in &gate.checks {
         let what = serde_json::to_string(req)?;
