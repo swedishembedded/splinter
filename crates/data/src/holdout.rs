@@ -18,10 +18,30 @@
 //! units - groups, or ungrouped samples - where the data has them, taking
 //! whole groups from the newest end as long as it stays within
 //! [`MAX_HELD_OUT_SHARE`] of the samples.
+//!
+//! The samples the split chooses from are the records that can be examined:
+//! those projected from a task or an experience, whose question a gate or an
+//! exam can put to a model. A record of the writer's own text alone (the
+//! `voice` and `cpt` views) has no question to ask and is not a unit; it
+//! follows its family, held out with it and trained on otherwise, so
+//! nothing trained on is a print of a held-out letter and the families held
+//! out are the same however much of the writer's text is beside them. A set
+//! with nothing to examine holds out its records as units, as before.
 
 use std::path::{Path, PathBuf};
 
 use crate::ViewError;
+
+/// How one sample stands to the split: the group it is held out or trained
+/// on with, and whether it is a unit the split chooses from.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Membership {
+    /// The group of overlapping source text; `None` is its own.
+    pub group: Option<String>,
+    /// Whether the sample has a question a model can be examined on. One
+    /// that has not follows its group.
+    pub examinable: bool,
+}
 
 /// The fewest samples [`holdout_split_grouped`] splits: one to train on, one to
 /// hold out.
@@ -52,44 +72,81 @@ pub fn holdout_split_grouped<T>(
     samples: &[T],
     group: impl Fn(&T) -> Option<String>,
 ) -> Option<(Vec<&T>, Vec<&T>)> {
+    holdout_split_by(samples, |sample| Membership {
+        group: group(sample),
+        examinable: true,
+    })
+}
+
+/// [`holdout_split_grouped`] over the samples `membership` says can be
+/// examined, the rest following their group: held out with it, else trained
+/// on (see the module documentation). When fewer than [`MIN_SAMPLES`]
+/// samples can be examined, every sample is a unit.
+pub fn holdout_split_by<T>(
+    samples: &[T],
+    membership: impl Fn(&T) -> Membership,
+) -> Option<(Vec<&T>, Vec<&T>)> {
     if samples.len() < MIN_SAMPLES {
         return None;
     }
-    let keys: Vec<String> = samples
+    let mut memberships: Vec<Membership> = samples.iter().map(membership).collect();
+    if memberships.iter().filter(|m| m.examinable).count() < MIN_SAMPLES {
+        for m in &mut memberships {
+            m.examinable = true;
+        }
+    }
+    let keys: Vec<String> = memberships
         .iter()
         .enumerate()
-        .map(|(n, s)| group(s).unwrap_or_else(|| format!("\u{0}sample-{n}")))
+        .map(|(n, m)| {
+            m.group
+                .clone()
+                .unwrap_or_else(|| format!("\u{0}sample-{n}"))
+        })
+        .collect();
+    // The units and the counts are the examinable samples'.
+    let units: Vec<usize> = (0..samples.len())
+        .filter(|&n| memberships[n].examinable)
         .collect();
     let mut sizes: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    for key in &keys {
-        *sizes.entry(key.as_str()).or_default() += 1;
+    for &n in &units {
+        *sizes.entry(keys[n].as_str()).or_default() += 1;
     }
-    let wanted = (samples.len() / 10).max(1);
-    let half = samples.len() / 2;
-    let most = samples.len() / MAX_HELD_OUT_SHARE;
+    let wanted = (units.len() / 10).max(1);
+    let half = units.len() / 2;
+    let most = units.len() / MAX_HELD_OUT_SHARE;
     let mut held: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let mut count = 0;
-    for key in keys.iter().rev() {
+    for &n in units.iter().rev() {
         if count >= wanted && held.len() >= MIN_HELD_OUT_UNITS {
             break;
         }
-        if held.contains(key.as_str()) {
+        let key = keys[n].as_str();
+        if held.contains(key) {
             continue;
         }
-        let size = sizes[key.as_str()];
+        let size = sizes[key];
         let for_the_tenth = count < wanted && count + size <= half;
         let for_the_units = held.len() < MIN_HELD_OUT_UNITS && count + size <= most;
         if for_the_tenth || for_the_units {
-            held.insert(key.as_str());
+            held.insert(key);
             count += size;
         }
     }
     if held.is_empty() {
         // Every group is too large to hold out whole - the samples are all
-        // from one text - so the newest tenth is held out, as it is when
-        // there are no groups.
-        let (train, out) = samples.split_at(samples.len() - wanted);
-        return Some((train.iter().collect(), out.iter().collect()));
+        // from one text - so the newest tenth of the units is held out, as
+        // it is when there are no groups.
+        let newest: std::collections::HashSet<usize> =
+            units[units.len() - wanted..].iter().copied().collect();
+        let (out, kept): (Vec<_>, Vec<_>) = samples
+            .iter()
+            .enumerate()
+            .partition(|(n, _)| newest.contains(n));
+        return Some((
+            kept.into_iter().map(|(_, s)| s).collect(),
+            out.into_iter().map(|(_, s)| s).collect(),
+        ));
     }
     let (out, kept): (Vec<_>, Vec<_>) = samples
         .iter()
@@ -101,23 +158,35 @@ pub fn holdout_split_grouped<T>(
     ))
 }
 
-/// The group a dataset record names in its `metadata.group`; `None` for a
-/// record that names none or is not JSON.
-fn record_group<S: AsRef<str>>(record: &S) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(record.as_ref()).ok()?;
-    value
-        .get("metadata")?
-        .get("group")?
-        .as_str()
-        .map(str::to_string)
+/// How a dataset record stands to the split, from its metadata: the group
+/// it names in `metadata.group`, and whether it was projected from a task
+/// or an experience (`metadata.task`, `metadata.experiences`), which is
+/// what makes it examinable. A record that is not JSON is its own group and
+/// examinable.
+fn record_membership<S: AsRef<str>>(record: &S) -> Membership {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(record.as_ref()) else {
+        return Membership {
+            group: None,
+            examinable: true,
+        };
+    };
+    let metadata = &value["metadata"];
+    Membership {
+        group: metadata["group"].as_str().map(str::to_string),
+        examinable: metadata["task"].is_string()
+            || metadata["experiences"]
+                .as_array()
+                .is_some_and(|experiences| !experiences.is_empty()),
+    }
 }
 
 /// Dataset `records` (one JSON object per line) split as
-/// [`holdout_split_grouped`] splits them, by the group each names in its
-/// `metadata.group`. The one rule training and the release gate share, so
-/// the gate scores what training held out.
+/// [`holdout_split_by`] splits them, by the group each names in its
+/// `metadata.group` and whether it came from a task or an experience. The
+/// one rule training and the release gate share, so the gate scores what
+/// training held out.
 pub fn holdout_split_records<S: AsRef<str>>(records: &[S]) -> Option<(Vec<&S>, Vec<&S>)> {
-    holdout_split_grouped(records, record_group)
+    holdout_split_by(records, record_membership)
 }
 
 /// The two halves of a split dataset file.
@@ -125,7 +194,8 @@ pub fn holdout_split_records<S: AsRef<str>>(records: &[S]) -> Option<(Vec<&S>, V
 pub struct Split {
     /// The records to train on.
     pub train: PathBuf,
-    /// The newest records, held out for scoring.
+    /// The held-out records a score is measured on: the examinable ones.
+    /// The writer's text held out with their families is in neither file.
     pub held_out: PathBuf,
 }
 
@@ -135,9 +205,10 @@ const TRAIN_FILE: &str = "train.jsonl";
 const HELD_OUT_FILE: &str = "held_out.jsonl";
 
 /// Writes `dataset`'s records into `dir` as two files - the records to train
-/// on and the ones held out - split by [`holdout_split_records`]. A record is
-/// a non-blank line, as the trainers' parsers read it. Refused when the
-/// dataset has fewer than [`MIN_SAMPLES`] records.
+/// on and the ones held out that can be scored - split by
+/// [`holdout_split_records`]. A record is a non-blank line, as the trainers'
+/// parsers read it. Refused when the dataset has fewer than [`MIN_SAMPLES`]
+/// records.
 pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError> {
     let io = |path: &Path| {
         let path = path.to_path_buf();
@@ -154,6 +225,19 @@ pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError
             path: dataset.to_path_buf(),
             records: records.len(),
         })?;
+    // A score over the examinable records is a score of what the policy is
+    // asked as, comparable whatever the writer's text beside them; when
+    // none is, every record is (see [`holdout_split_by`]).
+    let examinable: Vec<&&str> = held_out
+        .iter()
+        .filter(|record| record_membership(record).examinable)
+        .copied()
+        .collect();
+    let scored = if examinable.is_empty() {
+        held_out
+    } else {
+        examinable
+    };
     let write = |name: &str, lines: &[&&str]| -> Result<PathBuf, ViewError> {
         let path = dir.join(name);
         let mut body = lines.iter().map(|l| **l).collect::<Vec<_>>().join("\n");
@@ -163,13 +247,92 @@ pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError
     };
     Ok(Split {
         train: write(TRAIN_FILE, &train)?,
-        held_out: write(HELD_OUT_FILE, &held_out)?,
+        held_out: write(HELD_OUT_FILE, &scored)?,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A record of the writer's own text (from source text alone, no task or
+    /// experience behind it) is not a unit the split chooses from: it is
+    /// held out when its family is, so nothing trained on is a print of a
+    /// held-out letter, and trained on otherwise. The families held out are
+    /// decided by the records that can be examined, however many records of
+    /// the writer's text there are and wherever they sit.
+    #[test]
+    fn records_from_source_text_alone_follow_the_family_the_examined_records_decide() {
+        let examined = |group: &str, n: u32| {
+            format!(
+                r#"{{"messages":[],"metadata":{{"experiences":["blake3:{n:064x}"],"group":"{group}"}}}}"#
+            )
+        };
+        let voice = |group: &str, n: u32| {
+            format!(
+                r#"{{"messages":[],"metadata":{{"sources":["blake3:{n:064x}"],"group":"{group}","view":"voice"}}}}"#
+            )
+        };
+        // Twenty examined records over ten families, and six times as many
+        // records of the writer's text: two per family, and forty of
+        // families no examined record is about (letters nothing was asked
+        // of). The writer's text comes last, where the newest tenth would
+        // be if it counted.
+        let mut records: Vec<String> = Vec::new();
+        for n in 0..20u32 {
+            records.push(examined(&format!("family-{}", n / 2), n));
+        }
+        for n in 0..20u32 {
+            records.push(voice(&format!("family-{}", n / 2), 100 + n));
+        }
+        for n in 0..40u32 {
+            records.push(voice(&format!("alone-{n}"), 200 + n));
+        }
+        let (train, held) = holdout_split_records(&records).unwrap();
+        let examined_held: Vec<&&String> =
+            held.iter().filter(|r| r.contains("experiences")).collect();
+        // The split of the examined records is what it would be without the
+        // writer's text: the newest families, to the units a paired test
+        // needs, within a quarter of the twenty.
+        assert_eq!(examined_held.len(), 4, "{examined_held:?}");
+        assert!(examined_held
+            .iter()
+            .all(|r| r.contains("family-9") || r.contains("family-8")));
+        // Every record of the writer's text of a held-out family is held out
+        // with it, and no other.
+        let voice_held: Vec<&&String> = held.iter().filter(|r| r.contains("voice")).collect();
+        assert_eq!(voice_held.len(), 4, "{voice_held:?}");
+        assert!(voice_held
+            .iter()
+            .all(|r| r.contains("family-9") || r.contains("family-8")));
+        assert!(train
+            .iter()
+            .all(|r| !r.contains("family-9") && !r.contains("family-8")));
+        assert_eq!(train.len() + held.len(), records.len());
+
+        // A set of the writer's text alone has nothing to examine: every
+        // record is then a unit, as before.
+        let alone: Vec<String> = (0..30u32).map(|n| voice(&format!("g{n}"), n)).collect();
+        let (train, held) = holdout_split_records(&alone).unwrap();
+        assert_eq!((train.len(), held.len()), (23, 7));
+
+        // Split into files, the held-out file holds what a score is measured
+        // on: the examined records. The writer's text held out with them is
+        // in neither file - trained on by nobody, and not what the policy is
+        // asked as.
+        let dir = std::env::temp_dir().join(format!("views-voice-split-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dataset = dir.join("mixed.jsonl");
+        std::fs::write(&dataset, format!("{}\n", records.join("\n"))).unwrap();
+        let split = split_dataset_file(&dataset, &dir).unwrap();
+        let held_file = std::fs::read_to_string(&split.held_out).unwrap();
+        assert_eq!(held_file.lines().count(), 4);
+        assert!(held_file.lines().all(|l| l.contains("experiences")));
+        let train_file = std::fs::read_to_string(&split.train).unwrap();
+        assert_eq!(train_file.lines().count(), records.len() - 8);
+        assert!(!train_file.contains("family-9"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// Records name their group in their metadata; one without is its own.
     #[test]
