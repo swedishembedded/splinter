@@ -19,9 +19,8 @@ use std::path::Path;
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use splinter_sdk::model::timeline::{Prediction, Subject, TimelineModel};
-use splinter_sdk::vocabulary::terms::Use;
 
-use crate::commands::{frozen, locked_split, nhanes_terms};
+use crate::commands::{frozen, locked_split, nhanes_terms, require_training};
 use crate::experiment::{fit, Arm, Training, STEPS};
 use crate::metrics::{evaluate, Metrics};
 
@@ -48,9 +47,7 @@ pub fn ensemble(data: &Path, arm: Arm, members: u64) -> Result<()> {
         bail!("an ensemble needs at least two members, not {members}");
     }
     let f = frozen(data)?;
-    nhanes_terms()
-        .permits(Use::Training)
-        .map_err(anyhow::Error::msg)?;
+    require_training(&nhanes_terms())?;
     let name = format!("{}-ens{members}-locked.json", arm.name());
     let path = data.join("runs").join(&name);
     if path.exists() {

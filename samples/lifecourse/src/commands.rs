@@ -59,6 +59,22 @@ pub fn nhanes_terms() -> Terms {
     t
 }
 
+/// Refuse to train unless `terms` allow it: every command that trains calls
+/// this before touching a model.
+pub fn require_training(terms: &Terms) -> Result<()> {
+    terms.permits(Use::Training).map_err(anyhow::Error::msg)
+}
+
+/// Whether anything after the examination is an input: an observation, or an
+/// event that is not one of the outcomes. The model's encoder admits only the
+/// known past anyway; the builder refuses such a subject outright.
+pub fn input_after_entry(s: &Subject) -> bool {
+    s.observations.iter().any(|o| o.t > s.entry)
+        || s.events
+            .iter()
+            .any(|e| e.t > s.entry && !CODES.contains(&e.code.as_str()))
+}
+
 /// NHANES files and the linkage as timeline-v1 subjects.
 pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
     std::fs::create_dir_all(out)?;
@@ -107,11 +123,7 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
                 Ok((s, d)) => {
                     // The invariant the model's encoder enforces, checked
                     // here too: nothing after the examination is input.
-                    if s.observations.iter().any(|o| o.t > s.entry)
-                        || s.events
-                            .iter()
-                            .any(|e| e.t > s.entry && !CODES.contains(&e.code.as_str()))
-                    {
+                    if input_after_entry(&s) {
                         bail!("{}: an input lies after the examination", s.subject_id);
                     }
                     s.validate().map_err(anyhow::Error::msg)?;
@@ -437,6 +449,7 @@ pub fn cv(
     folds: &[usize],
     permuted: bool,
 ) -> Result<()> {
+    require_training(&nhanes_terms())?;
     let f = frozen(data)?;
     let rs: Vec<usize> = if repeats.is_empty() {
         (0..f.partition.repeats.len()).collect()
@@ -505,9 +518,7 @@ pub fn locked_split(f: &Frozen) -> (Vec<&str>, Vec<&str>) {
 /// Train on everything but the locked test and score the locked test.
 pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Result<()> {
     let f = frozen(data)?;
-    nhanes_terms()
-        .permits(Use::Training)
-        .map_err(anyhow::Error::msg)?;
+    require_training(&nhanes_terms())?;
     let name = format!("{}-s{seed}-locked.json", arm.name());
     if data.join("runs").join(&name).exists() && reason.is_none() {
         bail!("{name}: the locked test was already scored for this arm and seed; pass --reason to score it again, and the reason is recorded");
@@ -601,6 +612,7 @@ fn cycle_year(s: &Subject) -> Option<u16> {
 /// only the shorter horizons are scored; every metric is restricted to the
 /// cycles that support it, as everywhere else.
 pub fn temporal(data: &Path, arm: Arm, seed: u64, split: u16) -> Result<()> {
+    require_training(&nhanes_terms())?;
     let f = frozen(data)?;
     let locked: std::collections::HashSet<&str> =
         f.partition.locked.iter().map(String::as_str).collect();
@@ -780,4 +792,52 @@ pub fn designs(data: &Path) -> Result<HashMap<String, Design>> {
             Ok((d.subject_id.clone(), d))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use splinter_sdk::model::timeline::{Event, Observation, Value};
+    use splinter_sdk::vocabulary::terms::Permission;
+
+    #[test]
+    fn training_is_refused_unless_the_terms_allow_it() {
+        assert!(require_training(&nhanes_terms()).is_ok());
+        let mut forbidden = nhanes_terms();
+        forbidden.training = Permission::Forbidden;
+        assert!(require_training(&forbidden).is_err());
+        forbidden.training = Permission::Unknown;
+        assert!(
+            require_training(&forbidden).is_err(),
+            "unknown never permits"
+        );
+    }
+
+    #[test]
+    fn an_input_after_the_examination_is_caught() {
+        let line = r#"{"subject_id":"a","source":"nhanes-1999","entry":50.5,"calendar_at_entry":2000,
+            "observations":[{"t":50.5,"var":"bmi","value":25}],
+            "events":[{"t":40,"code":"dx:diabetes"},{"t":55,"code":"death:cvd"}],
+            "at_risk":[{"code":"*","from":50.5,"to":55}]}"#;
+        let mut s = Subject::from_json_line(line).unwrap();
+        assert!(
+            !input_after_entry(&s),
+            "history before and an outcome after are fine"
+        );
+        s.observations.push(Observation {
+            t: 51.0,
+            var: "bmi".into(),
+            value: Value::Number(30.0),
+        });
+        assert!(input_after_entry(&s), "a measurement after the examination");
+        s.observations.pop();
+        s.events.push(Event {
+            t: 52.0,
+            code: "dx:diabetes".into(),
+        });
+        assert!(
+            input_after_entry(&s),
+            "a non-outcome event after the examination"
+        );
+    }
 }
