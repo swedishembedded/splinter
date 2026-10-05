@@ -277,6 +277,11 @@ fn writing_the_tasks_again_never_changes_a_frozen_exam() {
         read_tasks(&dir.path().join("exam.jsonl")).unwrap(),
         built.exam
     );
+    // The pin outlives the file: a changed exam is refused even after the
+    // frozen one was deleted.
+    std::fs::remove_file(dir.path().join("exam.jsonl")).unwrap();
+    assert!(write_all(&changed, dir.path()).is_err());
+    write_all(&built, dir.path()).unwrap();
 }
 
 #[test]

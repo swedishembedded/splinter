@@ -165,6 +165,7 @@ pub struct Exam {
 /// Ask one model, with or without its adapter, every question not yet
 /// answered in `out`.
 pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
+    ensure_unchanged(&e.tasks)?;
     let questions = tasks::read_tasks(&e.tasks)?;
     let model = splinter_sdk::model::exam::Model {
         base: &e.base,

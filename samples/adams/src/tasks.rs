@@ -14,6 +14,7 @@
 //! contain its answer, and an exam question comes only from a document the
 //! split holds out.
 
+use splinter_sdk::data::frozen::Ledger;
 use splinter_sdk::measure::verifiers::answer::{mentions, year_ok};
 use splinter_sdk::measure::verifiers::names::surname_of;
 
@@ -368,14 +369,24 @@ pub fn write_all(built: &Built, dir: &std::path::Path) -> anyhow::Result<()> {
     ];
     for (name, text) in files {
         let path = dir.join(name);
-        if name == "exam.jsonl" {
-            if let Ok(existing) = std::fs::read_to_string(&path) {
-                anyhow::ensure!(existing == text, "{} is the frozen exam and these tasks would change it; the exam is never rewritten", path.display());
-            }
+        // The exam is pinned beside itself the first time it is written and
+        // a different one is refused after, even once the file is gone: the
+        // frozen exam is never rewritten.
+        let ledger = (name == "exam.jsonl").then(|| Ledger::beside(&path));
+        if let Some(ledger) = &ledger {
+            ledger.check(name, text.as_bytes()).map_err(|e| {
+                anyhow::anyhow!(
+                    "{} is the frozen exam and these tasks would change it: {e}",
+                    path.display()
+                )
+            })?;
         }
         let tmp = path.with_extension("part");
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, &path)?;
+        if let Some(ledger) = &ledger {
+            ledger.pin_file(&path)?;
+        }
     }
     Ok(())
 }
