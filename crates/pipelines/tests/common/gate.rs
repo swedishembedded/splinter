@@ -287,6 +287,12 @@ pub fn put_base(ctx: &Context) {
     let base = &ctx.config().policy_base;
     std::fs::create_dir_all(base).unwrap();
     std::fs::write(base.join("model.safetensors"), BASE_BYTES).unwrap();
+    // A checkpoint states the largest context it supports.
+    std::fs::write(
+        base.join("config.json"),
+        br#"{"max_position_embeddings": 4096}"#,
+    )
+    .unwrap();
 }
 
 /// A context over a fresh scratch root whose policy base exists (holding
