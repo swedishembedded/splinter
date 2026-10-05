@@ -29,6 +29,8 @@
 //!   release, and the record of how a candidate was trained.
 //! * [`kinds`] and [`selfcontained`] - the names tasks travel under, and the
 //!   rule that an instruction must stand on its own.
+//! * [`terms`] - the terms data came under, combined most-restrictively
+//!   over sources and carried to datasets and releases.
 //!
 //! This crate performs no I/O. It knows no store, no model and no agent
 //! runtime: it is the language they share, and the invariants every record
@@ -50,4 +52,5 @@ pub mod release;
 pub mod role;
 pub mod selfcontained;
 pub mod source;
+pub mod terms;
 pub mod training;
