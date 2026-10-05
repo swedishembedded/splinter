@@ -40,9 +40,7 @@ use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 use crate::error::PolicyError;
 use crate::residency::{Residency, Resident};
 use events::events_from;
-pub use reasoning::{
-    closed_think_pairs, opens_think_block, CLOSED_THINK, REASONING_REPLY_TOKENS,
-};
+pub use reasoning::{closed_think_pairs, opens_think_block, CLOSED_THINK, REASONING_REPLY_TOKENS};
 use request::chat_request;
 pub use request::Sampling;
 
