@@ -21,6 +21,7 @@
 //! final    train one arm on everything but the locked test, and score it there once
 //! compare  two arms on the same folds: the corrected resampled t-test per metric
 //! report   the pre-registered criteria against the locked-test results
+//! temporal train on the earlier cycles, score the later ones (secondary; never the locked test)
 //! intake   the harmonisation admission rules, and a model's proposals, against the hand mapping
 //! ```
 
@@ -125,6 +126,22 @@ enum Command {
         #[arg(long)]
         data: PathBuf,
     },
+    /// Secondary analysis of calendar shift: train on the non-locked subjects
+    /// of the cycles before `split`, score those of `split` and later.
+    Temporal {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Which arm.
+        #[arg(long, value_enum)]
+        arm: Arm,
+        /// Seed of the run.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// The first cycle (start year) scored rather than trained on.
+        #[arg(long, default_value_t = 2009)]
+        split: u16,
+    },
     /// Measure the harmonisation admission rules, and a served model's
     /// mapping proposals, against the hand-written exam concepts.
     Intake {
@@ -174,6 +191,12 @@ fn main() -> Result<()> {
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
         Command::Compare { data, a, b } => commands::compare(&data, a, b),
         Command::Report { data } => report::report(&data),
+        Command::Temporal {
+            data,
+            arm,
+            seed,
+            split,
+        } => commands::temporal(&data, arm, seed, split),
         Command::Intake {
             nhanes,
             mortality,

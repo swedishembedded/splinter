@@ -72,6 +72,12 @@ risk into a Venn-Abers interval, calibrated on the subjects it held out for
 early stopping (`src/intervals.rs`), and the report shows that interval's
 calibration and Brier score beside the raw prediction's.
 
+Also secondary: `temporal` trains on the non-locked subjects of the cycles
+before 2009 and scores those of 2009 and later, which tests whether a model
+holds up across calendar time rather than only across random splits. The
+later cycles are followed for less time, so five years is the longest
+horizon it scores.
+
 ## Commands
 
 ```bash
@@ -82,6 +88,7 @@ lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
 lifecourse compare --data <out> --a horizon --b standard
 lifecourse final   --data <out> --arm horizon            # once; --reason to score again
 lifecourse report  --data <out>
+lifecourse temporal --data <out> --arm horizon --split 2009      # secondary: calendar shift
 lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```
 

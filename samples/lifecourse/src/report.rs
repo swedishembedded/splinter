@@ -437,6 +437,28 @@ pub fn report(data: &Path) -> Result<()> {
             )?;
         }
     }
+    writeln!(out, "\n## Secondary, not pre-registered: calendar shift\n\nTrained on the non-locked subjects of the cycles before 2009, scored on those of 2009 and later (the locked test is not read). Later cycles are followed for less time: five years is the longest horizon scored.\n\n| arm | test subjects | Brier 5 | Uno C 5 | D-calibration p |\n|---|---|---|---|---|")?;
+    for arm in [Arm::Horizon, Arm::Additive, Arm::Standard, Arm::AgeSex] {
+        let path = data
+            .join("runs")
+            .join(format!("{}-s1-temporal-2009.json", arm.name()));
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let r: Run = serde_json::from_slice(&bytes)
+            .with_context(|| format!("reading {}", path.display()))?;
+        let m = &r.metrics;
+        let show = |x: Option<f64>| x.map_or("not measured".to_string(), |v| format!("{v:.4}"));
+        writeln!(
+            out,
+            "| {} | {} | {} | {} | {} |",
+            arm.name(),
+            r.n_test,
+            show(m.brier.get(&5).map(|x| x.value)),
+            show(m.uno_c.get(&5).map(|x| x.value)),
+            show(m.d_calibration_p)
+        )?;
+    }
     std::fs::write(data.join("report.md"), &out)?;
     print!("{out}");
     Ok(())
