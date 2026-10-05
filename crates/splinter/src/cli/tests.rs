@@ -93,6 +93,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         sources,
         kinds,
         generator,
+        author,
     }) = command(&[
         "tasks",
         "generate",
@@ -100,12 +101,15 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "cd34",
         "--kinds",
         "recall,construct",
+        "--author",
+        "Thomas Jefferson",
     ])
     else {
         panic!("tasks generate");
     };
     assert_eq!((sources.len(), kinds.len()), (2, 2));
     assert_eq!(generator, ModelRef::policy_default());
+    assert_eq!(author.as_deref(), Some("Thomas Jefferson"));
     assert!(
         parse(&["tasks", "generate", "ab12"]).is_err(),
         "--kinds is required"

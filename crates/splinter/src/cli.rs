@@ -362,6 +362,10 @@ pub enum TasksCommand {
         /// The model that writes the tasks.
         #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
         generator: ModelRef,
+        /// Who wrote the sources, when they are one person's: the generator is
+        /// told, and a question may name the author as its subject.
+        #[arg(long, value_name = "NAME")]
+        author: Option<String>,
     },
     /// Write differently worded questions about each task of a task set,
     /// into a task set of their own: the same facts, to be measured and

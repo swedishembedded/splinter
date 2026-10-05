@@ -116,6 +116,10 @@ pub struct Generation<'a> {
     pub generator: &'a ModelRef,
     /// What the learner is after, added to every model kind's brief.
     pub goal: Option<&'a str>,
+    /// Who wrote the sources, when they are one person's: shown to the
+    /// generator as the source's author, and a subject a question may name
+    /// ([`SourceText::by`]).
+    pub author: Option<&'a str>,
     /// No request starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops generation.
@@ -234,7 +238,7 @@ pub fn generate(
                 }
             }
             if let Some(generator) = &generator {
-                let text = SourceText::load(&ctx.sources(), source_id, &part.name)?;
+                let text = load_text(ctx, request, source_id, &part.name)?;
                 generate_part(ctx, generator, &text, &model_kinds, &mut batch)?;
                 if batch.expired {
                     stopped = Some("the budget was spent inside a part".into());
@@ -260,7 +264,7 @@ pub fn generate(
                     stopped = Some("the budget was spent before every section was covered".into());
                     break;
                 }
-                let text = SourceText::load(&ctx.sources(), &section.source, &section.part)?;
+                let text = load_text(ctx, request, &section.source, &section.part)?;
                 match text.select(&[section.section]) {
                     Ok(shown) => {
                         sections += 1;
@@ -287,6 +291,20 @@ pub fn generate(
         sections,
         stopped,
         dropped: batch.dropped,
+    })
+}
+
+/// The text of `part` of `source`, by the author `request` names, if any.
+fn load_text(
+    ctx: &Context,
+    request: &Generation<'_>,
+    source: &SourceId,
+    part: &str,
+) -> Result<SourceText, OrchestratorError> {
+    let text = SourceText::load(&ctx.sources(), source, part)?;
+    Ok(match request.author {
+        Some(author) => text.by(author),
+        None => text,
     })
 }
 
@@ -482,6 +500,9 @@ fn set_name(request: &Generation<'_>) -> String {
         request.sources.len(),
         request.generator
     );
+    if let Some(author) = request.author {
+        name.push_str(&format!(" by {author}"));
+    }
     if let Some(goal) = request.goal {
         name.push_str(&format!(" for: {goal}"));
     }

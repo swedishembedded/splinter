@@ -283,13 +283,19 @@ impl Session {
                 sources: ids,
                 kinds,
                 generator,
+                author,
             }) => {
                 let kinds = check_kinds(&kinds)?;
                 let ids = ids
                     .iter()
                     .map(|id| sources::resolve(ctx, id))
                     .collect::<Result<Vec<_>, _>>()?;
-                let arguments = json!({ "sources": ids, "kinds": kinds, "generator": generator });
+                let arguments = json!({
+                    "sources": ids,
+                    "kinds": kinds,
+                    "generator": generator,
+                    "author": author,
+                });
                 let generated = record(ctx, "tasks generate", &arguments, |run| {
                     tasks::generate(
                         ctx,
@@ -299,6 +305,7 @@ impl Session {
                             kinds: &kinds,
                             generator: &generator,
                             goal: None,
+                            author: author.as_deref(),
                             deadline: None,
                             cancel: run.cancel_token(),
                         },

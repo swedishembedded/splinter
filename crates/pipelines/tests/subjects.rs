@@ -92,6 +92,7 @@ fn contradictory_answers_to_one_question_of_one_subject_are_left_out_of_the_set(
             kinds: &["recall".to_string()],
             generator: &ModelRef::policy_default(),
             goal: None,
+            author: None,
             deadline: None,
             cancel: CancelToken::new(),
         },
@@ -179,4 +180,64 @@ fn an_open_book_question_is_shown_which_command_printed_its_material() {
     .unwrap();
     let prompt = prompts.lock().unwrap().join("\n");
     assert!(prompt.contains("--- `frob --help` stdout ---"), "{prompt}");
+}
+
+/// A letter that never names its writer: a question about them can name no
+/// subject the source gives, unless the generation is told who wrote it.
+const LETTER: &str = "To Mr. Page\nMay 25, 1766\n\nDear Page,--I think the alien and sedition laws a mere experiment on the public mind, to see how far it will bear an avowed breach of the constitution; and I am persuaded they will be resisted.\n";
+
+/// A generator that asks what the writer thought, naming the writer.
+fn about_the_writer() -> Scripted {
+    Scripted::new(|prompt| {
+        if !prompt.contains("You write training tasks") {
+            return String::new();
+        }
+        json!({ "tasks": [{
+            "instruction": "What did Thomas Jefferson think the alien and sedition laws were an experiment on?",
+            "subject": "Thomas Jefferson",
+            "reference": "the public mind",
+            "evidence": [{ "section": 1 }]
+        }]})
+        .to_string()
+    })
+}
+
+#[test]
+fn the_sources_author_is_a_subject_a_question_may_name() {
+    let (scratch, ctx) = scratch_context("task-set-author", about_the_writer(), false);
+    let path = scratch.0.join("page.txt");
+    std::fs::write(&path, LETTER).unwrap();
+    let target = SourceTarget::from_learn_arg(&path.display().to_string()).unwrap();
+    let ids = vec![sources::add(&ctx, &target).unwrap().source.id];
+    let generate_by = |author: Option<&str>| {
+        generate(
+            &ctx,
+            &Generation {
+                sources: &ids,
+                sections: &[],
+                kinds: &["recall".to_string()],
+                generator: &ModelRef::policy_default(),
+                goal: None,
+                author,
+                deadline: None,
+                cancel: CancelToken::new(),
+            },
+        )
+        .unwrap()
+    };
+    // Nothing in the letter or its file name says who wrote it.
+    let anonymous = generate_by(None);
+    assert_eq!(anonymous.tasks, 0, "{anonymous:#?}");
+    assert_eq!(
+        anonymous.rejected.get("no_subject"),
+        Some(&1),
+        "{:#?}",
+        anonymous.rejections
+    );
+    // Told who did, the generation admits a question about them, and the set
+    // records the writer as what it is about.
+    let signed = generate_by(Some("Thomas Jefferson"));
+    assert_eq!(signed.tasks, 1, "{signed:#?}");
+    let set = ctx.tasks().get_set(&signed.task_set).unwrap();
+    assert_eq!(set.members[0].subject.as_deref(), Some("Thomas Jefferson"));
 }

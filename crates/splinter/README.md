@@ -17,7 +17,7 @@ splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budge
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
-splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
+splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] [--author NAME] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
 splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N] [--teacher REF]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]

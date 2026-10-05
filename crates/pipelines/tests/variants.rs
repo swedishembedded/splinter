@@ -71,6 +71,7 @@ fn manual_tasks(test: &str) -> (Scratch, Context, splinter_pipelines::tasks::Tas
             kinds: &kinds,
             generator: &ModelRef::policy_default(),
             goal: None,
+            author: None,
             deadline: None,
             cancel: CancelToken::new(),
         },

@@ -58,6 +58,7 @@ fn run(
             kinds: &["recall".to_string()],
             generator: &ModelRef::policy_default(),
             goal: None,
+            author: None,
             deadline,
             cancel: CancelToken::new(),
         },

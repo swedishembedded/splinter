@@ -117,15 +117,19 @@ impl<'a> LearnState<'a> {
     /// the request names, else the one the plan found in the goal; `None`
     /// keeps the default.
     fn system_prompt(&self) -> Option<String> {
+        self.persona().map(splinter_core::prompt::persona_prompt)
+    }
+
+    /// Who the policy becomes: the persona the request names, else the one
+    /// the plan found in the goal. The sources are what that person wrote,
+    /// so the generator is told they are the author.
+    fn persona(&self) -> Option<&str> {
         let planned = self
             .report
             .plan
             .as_ref()
             .and_then(|planned| planned.plan.persona.as_deref());
-        self.learn
-            .persona
-            .or(planned)
-            .map(splinter_core::prompt::persona_prompt)
+        self.learn.persona.or(planned)
     }
 
     /// The state of a run that has not begun.
@@ -327,6 +331,7 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             kinds: &st.kinds,
             generator: st.learn.generator,
             goal: st.learn.goal,
+            author: st.persona(),
             deadline: st.stage_deadlines.tasks,
             cancel: run.cancel_token(),
         },

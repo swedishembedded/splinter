@@ -75,6 +75,11 @@ pub struct SourceIdentity {
     /// The version the source records: a repository's commit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Who wrote the source, when the generation is told: a person whose
+    /// letters never say who signed them. A question about the author names
+    /// a subject the source gives.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
 }
 
 impl SourceIdentity {
@@ -101,6 +106,7 @@ impl SourceIdentity {
             part: part.to_string(),
             title: title(text, media_type),
             version,
+            author: None,
         }
     }
 
@@ -124,11 +130,15 @@ impl SourceIdentity {
         label
     }
 
-    /// Every name the identity holds.
+    /// Every name the identity holds: the author's among them.
     pub(crate) fn names(&self) -> impl Iterator<Item = &str> {
         [Some(self.name.as_str()), Some(self.part.as_str())]
             .into_iter()
-            .chain([self.title.as_deref(), self.version.as_deref()])
+            .chain([
+                self.title.as_deref(),
+                self.version.as_deref(),
+                self.author.as_deref(),
+            ])
             .flatten()
     }
 }
@@ -177,6 +187,15 @@ impl SourceText {
             text,
             sections: split,
         })
+    }
+
+    /// The same text, known to be written by `author`: the generator is told,
+    /// and a task may name the author as its subject.
+    #[must_use]
+    pub fn by(mut self, author: &str) -> Self {
+        let author = author.trim();
+        self.identity.author = (!author.is_empty()).then(|| author.to_string());
+        self
     }
 
     /// Only the sections at `positions` (in the order given), so a batch
@@ -502,7 +521,8 @@ fn brief(kind: &TaskKind, count: usize, refused: &[Rejection]) -> String {
         rules.push(
             "Every instruction names its subject: the specific person, place, event, matter, \
              product, document, tool, component or version it is about, by a proper name or a \
-             distinctive phrase the sections or the `source` use for it - never a generic word \
+             distinctive phrase the sections or the `source` use for it (its author's name \
+             included) - never a generic word \
              such as \"letter\", \"text\", \"document\" or \"the writer\". Put that name in \
              `subject`, written exactly as the instruction writes it. Someone who has never \
              seen the source must get exactly one answer: a question whose answer would differ \

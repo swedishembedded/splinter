@@ -88,6 +88,7 @@ fn a_kind_refused_again_and_again_for_one_reason_is_told_how_to_correct_it() {
             kinds: &["recall".to_string()],
             generator: &ModelRef::policy_default(),
             goal: None,
+            author: None,
             deadline: None,
             cancel: CancelToken::new(),
         },
