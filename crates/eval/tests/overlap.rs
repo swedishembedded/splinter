@@ -61,6 +61,43 @@ fn grouping_is_transitive_and_stable_under_reordering() {
     assert_eq!(overlap_groups(&reversed), [0, 0, 2, 0]);
 }
 
+/// A resolution reused inside an article, a letter copied into another: the
+/// shared passage may sit anywhere in either text, far past its opening.
+#[test]
+fn a_passage_reused_deep_inside_two_longer_texts_makes_them_one_group() {
+    let reused = passage("reused", 40);
+    let texts = [
+        format!("{} {reused} {}", passage("own1", 900), passage("own2", 300)),
+        passage("other", 500),
+        format!("{} {reused}", passage("own3", 1200)),
+    ];
+    let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+    assert_eq!(overlap_groups(&refs), [0, 1, 0]);
+}
+
+/// A formula of the period's letters is held by many texts and joins none
+/// of them; a text that is one print of another is still its group.
+#[test]
+fn boilerplate_held_by_many_texts_joins_none_of_them() {
+    let formula = passage("formula", 40);
+    let mut texts: Vec<String> = (0..12)
+        .map(|i| {
+            format!(
+                "{} {formula} {}",
+                passage(&format!("a{i}"), 150),
+                passage(&format!("b{i}"), 150)
+            )
+        })
+        .collect();
+    let letter = passage("letter", 120);
+    texts.push(format!("Dear Sir, {letter}"));
+    texts.push(format!("Sir, {letter} Yours."));
+    let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+    let groups = overlap_groups(&refs);
+    assert_eq!(groups[..12], (0..12).collect::<Vec<_>>()[..]);
+    assert_eq!((groups[12], groups[13]), (12, 12));
+}
+
 #[test]
 fn nothing_overlaps_in_nothing() {
     assert!(overlap_groups(&[]).is_empty());

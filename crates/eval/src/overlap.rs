@@ -6,18 +6,20 @@
 // documents it has not seen when its sources overlap, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! Which texts are one text printed more than once.
+//! Which texts are one text printed more than once, in part or in whole.
 //!
-//! Sources overlap: two editions print the same letter, a manual is quoted in
-//! its errata. Holding out one print and training on the other is not holding
-//! anything out. [`overlap_groups`] puts texts that share enough of the same
-//! passages in one group so that a split can keep a group whole.
+//! Sources overlap: two editions print the same letter, a resolution is
+//! reused inside an article, a manual is quoted in its errata. Holding out
+//! one print and training on the other is not holding anything out.
+//! [`overlap_groups`] puts texts that share enough of the same passages in
+//! one group so that a split can keep a group whole.
 //!
-//! Two texts are the same print when they share at least [`SHARED_TO_MERGE`]
-//! of the sampled runs of [`RUN`] words (every [`SAMPLE_EVERY`]th run by hash,
-//! over the first [`WINDOW`] words), and a run held by more than
-//! [`MAX_HOLDERS`] texts is boilerplate and counts for nothing. Merging is
-//! transitive.
+//! Two texts are one when they share at least [`SHARED_TO_MERGE`] distinct
+//! runs of [`RUN`] words, wherever in either text the runs fall: a passage
+//! reused deep inside a longer text, or a letter one edition prints inside
+//! its neighbour, counts as much as a shared opening. A run held by more than
+//! [`MAX_HOLDERS`] texts is boilerplate - a formula of the period's letters -
+//! and counts for nothing. Merging is transitive.
 
 use std::collections::{HashMap, HashSet};
 
@@ -25,21 +27,17 @@ use splinter_core::digest::Digest;
 
 use crate::verifiers::quotation::words;
 
-/// Words in a run.
-const RUN: usize = 8;
+/// Words in a run: a stretch of this many words in the same order is a
+/// passage, not a coincidence of idiom.
+pub const RUN: usize = 8;
 
-/// One run in this many is sampled, by its hash.
-const SAMPLE_EVERY: u64 = 8;
-
-/// Words of a text the runs are taken from.
-const WINDOW: usize = 700;
-
-/// Sampled runs two texts must share to be one text.
-const SHARED_TO_MERGE: usize = 3;
+/// Distinct shared runs two texts must hold to be one text: a phrase two
+/// letters happen to share is a few runs; a passage reused is dozens.
+pub const SHARED_TO_MERGE: usize = 8;
 
 /// A run held by more texts than this is shared boilerplate, not a print of
 /// one text.
-const MAX_HOLDERS: usize = 6;
+pub const MAX_HOLDERS: usize = 6;
 
 /// For each of `texts`, the index of the first text of its group.
 #[must_use]
@@ -47,11 +45,10 @@ pub fn overlap_groups(texts: &[&str]) -> Vec<usize> {
     let mut holders: HashMap<u64, Vec<usize>> = HashMap::new();
     for (n, text) in texts.iter().enumerate() {
         let w = words(text);
-        let limit = w.len().saturating_sub(RUN).min(WINDOW);
         let mut seen = HashSet::new();
-        for at in 0..limit {
-            let h = hash_run(&w[at..at + RUN]);
-            if h.is_multiple_of(SAMPLE_EVERY) && seen.insert(h) {
+        for run in w.windows(RUN) {
+            let h = hash_run(run);
+            if seen.insert(h) {
                 holders.entry(h).or_default().push(n);
             }
         }

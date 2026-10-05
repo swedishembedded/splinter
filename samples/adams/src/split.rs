@@ -12,16 +12,15 @@
 //! temporal test.
 //!
 //! The unit is the family, not the document. Two documents that share enough
-//! of the same words are one text printed twice, and a model trained on one
-//! would be tested on the other. A family is held out whole or trained on
-//! whole. The split is a hash of the family and a seed, so it does not depend
+//! of the same words, anywhere in either, are one text printed twice or a
+//! passage reused, and a model trained on one would be tested on the other.
+//! A family is held out whole or trained on whole. The split is a hash of the family and a seed, so it does not depend
 //! on file order, and its manifest is hashed so a later change to what was
 //! held out is visible.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_sdk::measure::overlap::overlap_groups;
-use splinter_sdk::measure::verifiers::quotation::words;
 
 use crate::curate::Document;
 
@@ -73,19 +72,10 @@ pub fn assign(docs: &[Document], seed: u64, exam_percent: u64) -> Vec<Assignment
         .collect()
 }
 
-/// Words in a run: a stretch of this many words in the same order is not a
-/// coincidence of idiom but a passage.
-const RUN_WORDS: usize = 8;
-/// Distinct shared runs that make two texts one: a phrase two letters happen to
-/// share is a few runs; a resolution reused inside an article is dozens.
-const MIN_SHARED_RUNS: usize = 5;
-/// A run held by more texts than this is a formula of the period's letters and
-/// joins none of them.
-const MAX_HOLDERS: usize = 6;
-
 /// The pairs of documents (by index, the smaller first) that are one text in
-/// part or whole: they share an overlap group, or at least [`MIN_SHARED_RUNS`]
-/// distinct passages of the whole body, however far in.
+/// part or whole: they share an overlap group, which Splinter's rule finds
+/// from passages shared anywhere in either text, formulas held by many
+/// documents set aside.
 fn related(docs: &[Document]) -> BTreeSet<(usize, usize)> {
     let texts: Vec<&str> = docs.iter().map(|d| d.body.as_str()).collect();
     let groups = overlap_groups(&texts);
@@ -97,34 +87,6 @@ fn related(docs: &[Document]) -> BTreeSet<(usize, usize)> {
             }
         }
     }
-
-    let mut holders: HashMap<String, Vec<usize>> = HashMap::new();
-    for (i, doc) in docs.iter().enumerate() {
-        let words = words(&doc.body);
-        for run in words.windows(RUN_WORDS) {
-            let held = holders.entry(run.join(" ")).or_default();
-            if held.last() != Some(&i) {
-                held.push(i);
-            }
-        }
-    }
-    let mut shared: HashMap<(usize, usize), usize> = HashMap::new();
-    for held in holders
-        .values()
-        .filter(|h| (2..=MAX_HOLDERS).contains(&h.len()))
-    {
-        for (n, &i) in held.iter().enumerate() {
-            for &j in &held[n + 1..] {
-                *shared.entry((i, j)).or_default() += 1;
-            }
-        }
-    }
-    pairs.extend(
-        shared
-            .into_iter()
-            .filter(|&(_, runs)| runs >= MIN_SHARED_RUNS)
-            .map(|(pair, _)| pair),
-    );
     pairs
 }
 

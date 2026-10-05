@@ -250,9 +250,12 @@ Task generation is bounded by the budget and spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,
 parts are visited in a stable order that does not follow their names, and the
 budget stops generation inside a part. A held-out split never divides texts
-that print the same passage (two editions of a letter): records name the
-group of overlapping source text they came from, and a group is held out or
-trained on whole. Records about one group are one unit of evidence to the
+that print the same passage (two editions of a letter, a letter one edition
+prints inside its neighbour, a passage reused deep inside a longer text):
+records name the group of overlapping source text they came from - texts that
+share eight distinct eight-word runs anywhere in either, a run held by more
+than six texts counting for nothing - and a group is held out or trained on
+whole. Records about one group are one unit of evidence to the
 gate's and the exam's paired tests, and a tenth of a set generated letter by
 letter is two or three of them, so whole groups are held out, newest first,
 until there are eight, as long as that stays within a quarter of the records.

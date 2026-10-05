@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- Texts are grouped as one print by passages shared anywhere in either, not
+  only in their first seven hundred words: a letter one edition prints inside
+  its neighbour, or a passage reused deep inside a longer text, now keeps the
+  two on one side of every held-out split, the samples' included.
 - `learn` is a pipeline of stages run by an engine, which checks for a cancel and
   the budget before each stage, skips a stage that does not apply, and records every
   stage with how long it took and why it failed when it did (`runs show`). Models play
