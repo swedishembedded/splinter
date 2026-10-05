@@ -18,6 +18,8 @@
 pub struct Numeric {
     /// Token name.
     pub name: &'static str,
+    /// The canonical unit (or scale), as the codebooks write it.
+    pub unit: &'static str,
     /// `(variable, factor to the canonical unit)`, first match wins.
     pub vars: &'static [(&'static str, f64)],
     /// Valid range in the canonical unit; anything outside is a code, not a value.
@@ -40,142 +42,170 @@ const YES_NO: &[(f64, &str)] = &[(1.0, "yes"), (2.0, "no")];
 pub const EXAM: &[Numeric] = &[
     Numeric {
         name: "bmi",
+        unit: "kg/m**2",
         vars: &[("BMXBMI", 1.0)],
         valid: (10.0, 100.0),
     },
     Numeric {
         name: "waist_cm",
+        unit: "cm",
         vars: &[("BMXWAIST", 1.0)],
         valid: (40.0, 250.0),
     },
     Numeric {
         name: "height_cm",
+        unit: "cm",
         vars: &[("BMXHT", 1.0)],
         valid: (100.0, 230.0),
     },
     Numeric {
         name: "weight_kg",
+        unit: "kg",
         vars: &[("BMXWT", 1.0)],
         valid: (20.0, 350.0),
     },
     Numeric {
         name: "hba1c_pct",
+        unit: "%",
         vars: &[("LBXGH", 1.0)],
         valid: (2.0, 20.0),
     },
     Numeric {
         name: "glucose_mgdl",
+        unit: "mg/dL",
         vars: &[("LBXGLU", 1.0)],
         valid: (20.0, 800.0),
     },
     Numeric {
         name: "total_chol_mgdl",
+        unit: "mg/dL",
         vars: &[("LBXTC", 1.0)],
         valid: (50.0, 800.0),
     },
     Numeric {
         name: "hdl_mgdl",
+        unit: "mg/dL",
         vars: &[("LBDHDD", 1.0), ("LBXHDD", 1.0), ("LBDHDL", 1.0)],
         valid: (5.0, 250.0),
     },
     // hs-CRP (2015-2018) is in mg/L; the earlier CRP in mg/dL.
     Numeric {
         name: "crp_mgdl",
+        unit: "mg/dL",
         vars: &[("LBXCRP", 1.0), ("LBXHSCRP", 0.1)],
         valid: (0.0, 50.0),
     },
     Numeric {
         name: "creatinine_mgdl",
+        unit: "mg/dL",
         vars: &[("LBXSCR", 1.0), ("LBDSCR", 1.0)],
         valid: (0.1, 25.0),
     },
     Numeric {
         name: "albumin_gdl",
+        unit: "g/dL",
         vars: &[("LBXSAL", 1.0)],
         valid: (1.0, 7.0),
     },
     Numeric {
         name: "alt_ul",
+        unit: "U/L",
         vars: &[("LBXSATSI", 1.0)],
         valid: (1.0, 3000.0),
     },
     Numeric {
         name: "ast_ul",
+        unit: "U/L",
         vars: &[("LBXSASSI", 1.0)],
         valid: (1.0, 3000.0),
     },
     Numeric {
         name: "ggt_ul",
+        unit: "U/L",
         vars: &[("LBXSGTSI", 1.0)],
         valid: (1.0, 3000.0),
     },
     Numeric {
         name: "uric_acid_mgdl",
+        unit: "mg/dL",
         vars: &[("LBXSUA", 1.0)],
         valid: (0.5, 20.0),
     },
     Numeric {
         name: "bun_mgdl",
+        unit: "mg/dL",
         vars: &[("LBXSBU", 1.0)],
         valid: (1.0, 200.0),
     },
     Numeric {
         name: "wbc_k",
+        unit: "1000 cells/uL",
         vars: &[("LBXWBCSI", 1.0)],
         valid: (0.5, 200.0),
     },
     Numeric {
         name: "hemoglobin_gdl",
+        unit: "g/dL",
         vars: &[("LBXHGB", 1.0)],
         valid: (3.0, 25.0),
     },
     Numeric {
         name: "platelets_k",
+        unit: "1000 cells/uL",
         vars: &[("LBXPLTSI", 1.0)],
         valid: (5.0, 2000.0),
     },
     Numeric {
         name: "rdw_pct",
+        unit: "%",
         vars: &[("LBXRDW", 1.0)],
         valid: (8.0, 40.0),
     },
     Numeric {
         name: "lymphocyte_pct",
+        unit: "%",
         vars: &[("LBXLYPCT", 1.0)],
         valid: (0.0, 100.0),
     },
     Numeric {
         name: "mcv_fl",
+        unit: "fL",
         vars: &[("LBXMCVSI", 1.0)],
         valid: (40.0, 150.0),
     },
     Numeric {
         name: "urine_albumin_ugml",
+        unit: "ug/mL",
         vars: &[("URXUMA", 1.0)],
         valid: (0.0, 20000.0),
     },
     Numeric {
         name: "urine_creatinine_mgdl",
+        unit: "mg/dL",
         vars: &[("URXUCR", 1.0)],
         valid: (1.0, 1000.0),
     },
     Numeric {
         name: "income_poverty_ratio",
+        unit: "ratio of family income to poverty threshold",
         vars: &[("INDFMPIR", 1.0)],
         valid: (0.0, 5.0),
     },
     Numeric {
         name: "self_rated_health",
+        unit: "1 excellent to 5 poor",
         vars: &[("HSD010", 1.0)],
         valid: (1.0, 5.0),
     },
     Numeric {
         name: "drinks_per_day",
+        unit: "drinks per drinking day",
         vars: &[("ALQ130", 1.0)],
         valid: (0.0, 30.0),
     },
     Numeric {
         name: "sleep_hours",
+        unit: "hours per night",
         vars: &[("SLD012", 1.0), ("SLD010H", 1.0)],
         valid: (1.0, 24.0),
     },

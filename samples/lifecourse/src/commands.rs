@@ -25,7 +25,7 @@ use splinter_sdk::vocabulary::terms::{Terms, Use};
 use crate::build::{subject, CycleCounts, Design, CODES};
 use crate::experiment::{fit, Arm, RunInfo, Training, STEPS};
 use crate::metrics::{evaluate, ibs_terms, Horizons, Metrics};
-use crate::nhanes::{mortality, Cycle, CYCLES};
+use crate::nhanes::{mortality, mortality_file, Cycle, CYCLES};
 
 const TIMELINES: &str = "timelines.jsonl";
 const DESIGN: &str = "design.jsonl";
@@ -68,11 +68,7 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
     let mut all: Vec<Subject> = Vec::new();
     for (start, suffix) in CYCLES {
         let c = Cycle::load(nhanes, start, suffix)?;
-        let mort_file = mortality_dir.join(format!(
-            "NHANES_{}_{}_MORT_2019_PUBLIC.dat",
-            start,
-            start + 1
-        ));
+        let mort_file = mortality_file(mortality_dir, start);
         let (mort, mdigest) = mortality(&mort_file)?;
         sources.extend(
             c.sources

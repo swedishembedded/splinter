@@ -77,11 +77,33 @@ lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
 lifecourse compare --data <out> --a horizon --b standard
 lifecourse final   --data <out> --arm horizon            # once; --reason to score again
 lifecourse report  --data <out>
+lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```
 
 `--nhanes` is a directory of `<cycle start year>/*.xpt` as CDC distributes
 them, `--mortality` the `NHANES_<y>_<y+1>_MORT_2019_PUBLIC.dat` files. Set
 `BRAIN_BACKEND`/`BRAIN_DEVICE` to choose brain's device.
+
+## Intake
+
+The exam concepts in `src/concepts.rs` were harmonised by hand: each NHANES
+variable with its factor to the concept's unit and the range of real
+measurements. `intake` uses that as ground truth for the intake agent's
+admission rules (`splinter-knowledge`'s `harmonize::admit`). For each cycle,
+the codebook entry (`*.htm`) of each concept's variable, and the cohort's
+values of it, are checked against each concept's values from the other
+variables or cycles. The true mapping must be admitted, and each corruption
+of it rejected.
+
+Over the ten cycles (274 variable-cycle cases), every true mapping was
+admitted. Every unit error (factor times or divided by ten) and every
+mapping that read documented refusal codes as values was rejected. A
+variable assigned to a different concept was admitted in 812 of 7398
+pairs: the rules check a unit and a distribution, so quantities that share
+both (ALT and AST, two of the mg/dL laboratory values) cannot be told
+apart by data alone. Which concept a variable measures rests on the
+proposal's quotation of the codebook, and is scored separately when a
+model is given.
 
 ## Results
 

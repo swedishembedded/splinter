@@ -21,6 +21,7 @@
 //! final    train one arm on everything but the locked test, and score it there once
 //! compare  two arms on the same folds: the corrected resampled t-test per metric
 //! report   the pre-registered criteria against the locked-test results
+//! intake   the harmonisation admission rules, and a model's proposals, against the hand mapping
 //! ```
 
 mod build;
@@ -28,6 +29,7 @@ mod commands;
 mod concepts;
 mod diet;
 mod experiment;
+mod intake;
 mod metrics;
 mod nhanes;
 mod report;
@@ -122,6 +124,29 @@ enum Command {
         #[arg(long)]
         data: PathBuf,
     },
+    /// Measure the harmonisation admission rules, and a served model's
+    /// mapping proposals, against the hand-written exam concepts.
+    Intake {
+        /// Directory holding `<cycle start year>/*.xpt` and `*.htm` codebooks.
+        #[arg(long)]
+        nhanes: PathBuf,
+        /// Directory holding the linkage files: the cohort is who they make eligible.
+        #[arg(long)]
+        mortality: PathBuf,
+        /// Output directory for the reports.
+        #[arg(long)]
+        out: PathBuf,
+        /// A served model's OpenAI-compatible address; without it only the
+        /// rules are measured.
+        #[arg(long, requires_all = ["api_key", "model"])]
+        base_url: Option<String>,
+        /// The served model's key.
+        #[arg(long)]
+        api_key: Option<String>,
+        /// The served model's name.
+        #[arg(long)]
+        model: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -148,5 +173,23 @@ fn main() -> Result<()> {
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
         Command::Compare { data, a, b } => commands::compare(&data, a, b),
         Command::Report { data } => report::report(&data),
+        Command::Intake {
+            nhanes,
+            mortality,
+            out,
+            base_url,
+            api_key,
+            model,
+        } => {
+            let served = match (base_url, api_key, model) {
+                (Some(base_url), Some(api_key), Some(model)) => Some(intake::Served {
+                    base_url,
+                    api_key,
+                    model,
+                }),
+                _ => None,
+            };
+            intake::intake(&nhanes, &mortality, &out, served.as_ref())
+        }
     }
 }

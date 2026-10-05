@@ -132,6 +132,12 @@ impl Cycle {
         }
     }
 
+    /// Every participant's value of `var`, in file order; `None` when no
+    /// one-row-per-participant file holds it as a number.
+    pub fn column(&self, var: &str) -> Option<&[Option<f64>]> {
+        self.tables[*self.var_table.get(var)?].numeric(var)
+    }
+
     /// `var` from the first row of each participant in the multi-row table
     /// `stem` (for a per-person value a multi-row file repeats on every row,
     /// such as the prescription count).
@@ -158,6 +164,15 @@ impl Cycle {
         ids.sort_unstable();
         ids
     }
+}
+
+/// The public-use linked mortality file of the cycle starting `start`.
+pub fn mortality_file(dir: &Path, start: u16) -> PathBuf {
+    dir.join(format!(
+        "NHANES_{}_{}_MORT_2019_PUBLIC.dat",
+        start,
+        start + 1
+    ))
 }
 
 /// A participant's public-use linked mortality record.
