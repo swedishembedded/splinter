@@ -78,6 +78,11 @@ holds up across calendar time rather than only across random splits. The
 later cycles are followed for less time, so five years is the longest
 horizon it scores.
 
+And `ensemble` scores the locked test by the mean of an arm's models trained
+with several seeds on the same subjects as `final` (reusing the model
+`final` saved), and reports how far the members disagree about each
+subject's ten-year risk: the uncertainty that comes from training alone.
+
 ## Commands
 
 ```bash
@@ -89,6 +94,7 @@ lifecourse compare --data <out> --a horizon --b standard
 lifecourse final   --data <out> --arm horizon            # once; --reason to score again
 lifecourse report  --data <out>
 lifecourse temporal --data <out> --arm horizon --split 2009      # secondary: calendar shift
+lifecourse ensemble --data <out> --arm horizon --members 5       # secondary: seeded ensemble on the locked test
 lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```
 

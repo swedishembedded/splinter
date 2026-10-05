@@ -286,7 +286,7 @@ pub struct Run {
     pub reason: Option<String>,
 }
 
-fn write_run(data: &Path, name: &str, run: &Run) -> Result<()> {
+pub fn write_run(data: &Path, name: &str, run: &Run) -> Result<()> {
     let dir = data.join("runs");
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(name);
@@ -447,6 +447,23 @@ pub struct LockedDetail {
     pub risk_10: Vec<(String, f64)>,
 }
 
+/// Every subject outside the locked test (sorted), and the locked test.
+pub fn locked_split(f: &Frozen) -> (Vec<&str>, Vec<&str>) {
+    let locked: std::collections::HashSet<&str> =
+        f.partition.locked.iter().map(String::as_str).collect();
+    let mut train: Vec<&str> = f
+        .subjects
+        .keys()
+        .map(String::as_str)
+        .filter(|id| !locked.contains(id))
+        .collect();
+    train.sort_unstable();
+    (
+        train,
+        f.partition.locked.iter().map(String::as_str).collect(),
+    )
+}
+
 /// Train on everything but the locked test and score the locked test.
 pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Result<()> {
     let f = frozen(data)?;
@@ -457,16 +474,7 @@ pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Res
     if data.join("runs").join(&name).exists() && reason.is_none() {
         bail!("{name}: the locked test was already scored for this arm and seed; pass --reason to score it again, and the reason is recorded");
     }
-    let locked: std::collections::HashSet<&str> =
-        f.partition.locked.iter().map(String::as_str).collect();
-    let mut train: Vec<&str> = f
-        .subjects
-        .keys()
-        .map(String::as_str)
-        .filter(|id| !locked.contains(id))
-        .collect();
-    train.sort_unstable();
-    let test: Vec<&str> = f.partition.locked.iter().map(String::as_str).collect();
+    let (train, test) = locked_split(&f);
     let Scored {
         mut run,
         test: test_subjects,

@@ -21,6 +21,7 @@
 //! final    train one arm on everything but the locked test, and score it there once
 //! compare  two arms on the same folds: the corrected resampled t-test per metric
 //! report   the pre-registered criteria against the locked-test results
+//! ensemble the locked test scored by several seeds' models together (secondary)
 //! temporal train on the earlier cycles, score the later ones (secondary; never the locked test)
 //! intake   the harmonisation admission rules, and a model's proposals, against the hand mapping
 //! ```
@@ -29,6 +30,7 @@ mod build;
 mod commands;
 mod concepts;
 mod diet;
+mod ensemble;
 mod experiment;
 mod intake;
 mod intervals;
@@ -126,6 +128,19 @@ enum Command {
         #[arg(long)]
         data: PathBuf,
     },
+    /// Secondary analysis: the locked test scored by an ensemble of the arm's
+    /// models trained with seeds 1..=members on the same subjects as `final`.
+    Ensemble {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Which arm.
+        #[arg(long, value_enum)]
+        arm: Arm,
+        /// How many members.
+        #[arg(long, default_value_t = 5)]
+        members: u64,
+    },
     /// Secondary analysis of calendar shift: train on the non-locked subjects
     /// of the cycles before `split`, score those of `split` and later.
     Temporal {
@@ -191,6 +206,7 @@ fn main() -> Result<()> {
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
         Command::Compare { data, a, b } => commands::compare(&data, a, b),
         Command::Report { data } => report::report(&data),
+        Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
         Command::Temporal {
             data,
             arm,

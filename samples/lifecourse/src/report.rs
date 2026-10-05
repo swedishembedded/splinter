@@ -437,6 +437,29 @@ pub fn report(data: &Path) -> Result<()> {
             )?;
         }
     }
+    writeln!(out, "\n## Secondary, not pre-registered: seeded ensembles\n\nThe locked test scored by the mean of several models of one arm trained with different seeds on the same subjects; the spread is the largest minus the smallest member's ten-year risk per subject.\n\n| run | IBS 0-15 | Uno C 10 | spread mean | spread p90 |\n|---|---|---|---|---|")?;
+    let mut names: Vec<String> = std::fs::read_dir(data.join("runs"))?
+        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+        .filter(|n| n.contains("-ens") && n.ends_with("-locked.json"))
+        .collect();
+    names.sort();
+    for n in names {
+        let v: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(data.join("runs").join(&n))?)?;
+        let num = |x: &serde_json::Value| {
+            x.as_f64()
+                .map_or("not measured".to_string(), |v| format!("{v:.4}"))
+        };
+        writeln!(
+            out,
+            "| {} | {} | {} | {} | {} |",
+            n.trim_end_matches(".json"),
+            num(&v["metrics"]["ibs_0_15"]["value"]),
+            num(&v["metrics"]["uno_c"]["10"]["value"]),
+            num(&v["spread_10"][0]),
+            num(&v["spread_10"][1])
+        )?;
+    }
     writeln!(out, "\n## Secondary, not pre-registered: calendar shift\n\nTrained on the non-locked subjects of the cycles before 2009, scored on those of 2009 and later (the locked test is not read). Later cycles are followed for less time: five years is the longest horizon scored.\n\n| arm | test subjects | Brier 5 | Uno C 5 | D-calibration p |\n|---|---|---|---|---|")?;
     for arm in [Arm::Horizon, Arm::Additive, Arm::Standard, Arm::AgeSex] {
         let path = data
