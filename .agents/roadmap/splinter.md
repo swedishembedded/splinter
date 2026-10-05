@@ -160,32 +160,36 @@ the released adapter answers the same questions from plain `brain serve`.
    brain provides for timeline (record) data is trained, measured and
    released by the same machinery. The design and the data findings are in
    the longitudinal health model research note; the health-specific parts
-   live only in a sample. Open, in order:
-   - Record sources: a parser for tabular record files (SAS transport, CSV)
-     and their codebooks, captured with digests and provenance like any
-     other source.
-   - Timeline datasets: a `timeline-v1` format and manifest; a split that
-     keeps a group whole, stratifies, and freezes a locked test set before
-     any training; repeated grouped stratified cross-validation over the
-     rest, nested so a fold's validation part informs nothing in that fold,
-     every fold pinned by digest.
-   - Experiments as records: each run (dataset, split, fold, seed, code and
-     configuration) is an experiment with its metrics in the experience
-     database; paired comparisons across folds use the corrected resampled
-     t-test, the locked test a subject- and cluster-level paired bootstrap;
-     a label-permutation rerun is part of every reported result.
-   - A trainer by capability: the model adapter advertises `timeline` as an
-     objective (the phase 8 item above), backed by brain's timeline model
-     SDK; outputs are immutable artifacts with manifests.
-   - A metric gate: paired bootstrap of a continuous metric difference over
-     subjects or clusters, improvement on one declared metric and
-     non-inferiority bounds on the rest; unmeasured fails, as today.
-   - Terms travel with data: each source's licence or data-use terms are
-     carried by lineage to datasets and releases, and a release refuses a
-     combination they forbid.
-   - An intake agent: a generator-role typed call proposes variable
-     harmonisation mappings from codebook text, admitted by code (quoted
-     text present, converted distributions overlap, physical ranges).
-   - `samples/lifecourse`: the NHANES timeline builder (prospective
-     mortality, retrospective onset ages), the frozen benchmark, baselines
-     and the first deep model, with a README stating what was measured.
+   live only in a sample. Done:
+   - Record sources: SAS transport files (`knowledge::tabular`, held to a
+     reference reader on real files) and per-variable HTML codebooks
+     (`knowledge::codebook`).
+   - Timeline datasets: `timeline-v1` format and manifest; a locked test and
+     repeated grouped stratified cross-validation, pinned by digest
+     (`data::partition`, the frozen ledger).
+   - A metric gate: improvement with a paired interval and non-inferiority
+     bounds on the rest, unmeasured failing (`eval::metric_gate`).
+   - Terms travel with data (`core::terms`, the dataset manifest); the
+     sample refuses to train on terms that do not permit it.
+   - An intake agent: a typed call proposes a variable's mapping onto a
+     concept quoting its codebook (`agent::mapper`), and code admits it
+     (`knowledge::harmonize`: quotation present, documented refusal codes
+     out of range, values inside the proposed range, distribution matching
+     the concept's other sources). On the sample's ten NHANES cycles the
+     rules admit every hand-checked mapping and stop every unit error and
+     refusal-code leak; a variable put on a similar concept is not always
+     stopped, so concept identity rests on the proposal.
+   - `samples/lifecourse`: the NHANES timeline builder, the frozen
+     benchmark, baselines and the deep model, cross-validation, the locked
+     test, the pre-registered report, and secondary analyses (calendar
+     shift, Venn-Abers intervals, seeded ensembles); the final model saved
+     where brain serves it.
+   Open, in order:
+   - A trainer by capability: the pipeline's train stage still maps
+     `timeline-v1` to no regime (the sample trains through the SDK); a
+     timeline candidate, its release and the metric gate as its release
+     check belong in the pipeline.
+   - Experiments as records: cross-validation runs are JSON files beside
+     the data, not experiences in the database.
+   - The intake agent run with a served model over the sample's variables,
+     scored against the hand mapping (`lifecourse intake --base-url`).
