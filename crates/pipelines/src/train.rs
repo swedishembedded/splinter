@@ -28,7 +28,9 @@
 //! [`REPLAY_SEED`], from the part of its datasets that was trained on and
 //! never from what it held out, so its held-out tasks stay unseen for the
 //! retention check. Replayed records are never held out, so the held-out
-//! score measures the new data. From a `local:` reference there is no
+//! score measures the new data, and they take a fixed share of the training
+//! draws ([`DEFAULT_REPLAY_SHARE`]), so a large replay set cannot take the
+//! steps from the new data. From a `local:` reference there is no
 //! release, so nothing is replayed. brain's preference fine-tune trains on
 //! its pairs alone, so a preference candidate replays nothing; the frozen
 //! reference it is trained against - the model it continues - is what keeps
@@ -72,6 +74,12 @@ pub const DEFAULT_LORA_RANK: u32 = 8;
 pub const DEFAULT_LORA_ALPHA: f32 = 16.0;
 /// The fraction of each earlier release's training records replayed.
 pub const DEFAULT_REPLAY_FRACTION: f64 = 0.25;
+/// The share of a supervised run's training draws that come from the replayed
+/// records when there are any. A plain union of the new records and the replay
+/// lets a large replay set take most steps and starve the new data, which is
+/// what the run is for; the share holds the replay to a quarter of the draws
+/// however many records it holds.
+pub const DEFAULT_REPLAY_SHARE: f32 = 0.25;
 /// The DPO temperature of a preference fine-tune when a command names none:
 /// brain's default.
 pub use splinter_model::train::DEFAULT_DPO_BETA;
@@ -150,6 +158,9 @@ pub struct TrainPlan {
     pub parent: Option<ReleaseId>,
     /// The replayed records, when any were drawn.
     pub replay_file: Option<PathBuf>,
+    /// The share of the training draws that come from `replay_file`:
+    /// [`DEFAULT_REPLAY_SHARE`] when there is one, else `None`.
+    pub replay_share: Option<f32>,
     /// Optimizer steps.
     pub steps: u32,
     /// LoRA rank of a new adapter.
@@ -323,7 +334,7 @@ impl Trainer for BrainTrainer {
             rank: plan.rank,
             alpha: DEFAULT_LORA_ALPHA,
             replay: &replayed,
-            replay_share: None,
+            replay_share: plan.replay_share,
             grad_accum: plan.tuning.records_per_step.unwrap_or(1),
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
@@ -466,6 +477,10 @@ pub fn train(
             .as_ref()
             .and_then(|r| r.digest.as_ref())
             .map(|_| dir.join(REPLAY_FILE)),
+        replay_share: replay
+            .as_ref()
+            .and_then(|r| r.digest.as_ref())
+            .map(|_| DEFAULT_REPLAY_SHARE),
         steps: request.steps,
         rank: request.rank,
         beta,

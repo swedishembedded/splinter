@@ -393,7 +393,9 @@ release the alias points at - never the base weights once a release
 exists - and a supervised run replays `--replay-fraction` (default 0.25)
 of every earlier release's trained-on chat records, a seeded sample that
 is the same on every run and never includes what that release held out;
-replayed records are never held out. A preference run replays nothing:
+replayed records are never held out, and take a quarter of the training
+draws however many there are, so a large replay cannot starve the new
+records. A preference run replays nothing:
 brain's preference trainer trains on its pairs alone. `--from
 local:<checkpoint>+<adapter>` continues that adapter instead, with no
 replay, and such a candidate cannot replace a champion. The candidate

@@ -55,7 +55,9 @@ use splinter_model::ModelSelection;
 use splinter_orchestrator::Context;
 use splinter_pipelines::eval::{eval, EvalRequest, SuiteChoice};
 use splinter_pipelines::release::{anchor, list, release, rollback, ReleaseRequest, Released};
-use splinter_pipelines::train::{train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
+use splinter_pipelines::train::{
+    train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION, DEFAULT_REPLAY_SHARE,
+};
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
     anchor::freeze(ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
@@ -400,6 +402,10 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
     let replay = next.replay.as_ref().unwrap();
     assert_eq!(replay.fraction, DEFAULT_REPLAY_FRACTION);
     assert_eq!(replay.records, 13);
+    // The replay is a fixed share of the draws, not a plain union: a large
+    // replay set would otherwise take most steps from the new data.
+    assert_eq!(plan.replay_share, Some(DEFAULT_REPLAY_SHARE));
+    assert!(plan.replay_file.is_some());
     assert_eq!(replay.sources[0].release, first);
     assert_eq!(
         (replay.sources[0].available, replay.sources[0].sampled),
