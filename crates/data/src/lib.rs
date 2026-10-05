@@ -46,6 +46,12 @@
 //! [`DatasetStore`] keeps such datasets under the state root, each named by
 //! its manifest's digest. [`replay_sample`] picks which earlier records are
 //! replayed beside new ones.
+//!
+//! Record datasets (one subject per line, such as `timeline-v1`) are not
+//! projected from experiences; what this crate decides for them is how they
+//! are divided for evaluation: [`partition`] holds out a locked test and
+//! lays out repeated grouped stratified cross-validation over the rest,
+//! pinned by digest before anything trains.
 
 #![warn(missing_docs)]
 
@@ -53,6 +59,7 @@ mod corpus;
 mod dataset;
 pub mod frozen;
 pub mod holdout;
+pub mod partition;
 mod render;
 mod replay;
 mod store;
