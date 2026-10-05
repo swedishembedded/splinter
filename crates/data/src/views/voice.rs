@@ -132,7 +132,7 @@ fn stretches(
     let mut open = String::new();
     let mut used = 0;
     for range in sectioner(text, media_type) {
-        let Some(piece) = text.get(range).map(str::trim).filter(|p| !p.is_empty()) else {
+        let Some(piece) = text.get(range).filter(|p| !p.trim().is_empty()) else {
             continue;
         };
         for piece in cut_to_fit(piece, limit, measure) {
