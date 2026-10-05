@@ -137,5 +137,46 @@ model is given.
 
 ## Results
 
-Not yet recorded here: they are added from `report.md` once the locked test
-has been scored.
+Scored 2026-10-05 on the locked test (8,437 subjects; the 15-year primary
+uses the 1,583 of them in the two cycles followed that long, 345 deaths).
+The full tables are in `report.md` beside the data; `runs/REVISIONS` records
+the code each run was built from.
+
+**The pre-registered claim is not made.** Three of the five requirements
+fail:
+
+| requirement | result | met |
+|---|---|---|
+| IBS 1-15 y, horizon minus standard, interval below zero | -0.0012, interval [-0.0046, +0.0020] | no |
+| calibration slope at 10 y within [0.9, 1.1] | 0.861 (predictions too extreme) | no |
+| calibration intercept interval covers zero | [-0.291, +0.041] | yes |
+| no subgroup worse than standard by more than 0.002 | other Hispanic (96 subjects) worse by 0.0030 | no |
+| model on shuffled outcomes no better than age and sex | 0.0742 vs 0.0531 (CV) | yes |
+
+What the evidence does show:
+
+- Every arm ranks risk well and the deep model is better than the
+  conventional risk factors on every accuracy and discrimination summary
+  (not on calibration slope), but not by enough to resolve
+  on 345 deaths. Locked test, IBS 1-15 y: horizon 0.0514, standard 0.0526,
+  age and sex 0.0571, additive on all inputs 0.0492. Ten years, with
+  design-based intervals: Brier 0.0584 [0.0519, 0.0651] against 0.0621
+  [0.0555, 0.0692]; Uno C 0.893 [0.875, 0.910] against 0.877 [0.858,
+  0.895].
+- Cross-validation (25 folds, the 47,816 non-locked subjects) agrees in
+  direction and is far more precise: IBS 0.0471 horizon, 0.0495 standard,
+  0.0531 age and sex, 0.0465 additive; Uno C at 10 y 0.897, 0.880, 0.855,
+  0.900. The training seed moves horizon's fold scores by about half the
+  gap to standard (secondary, three seeds).
+- The additive model on the same inputs is as good as the deep set encoder
+  or better, in cross-validation and on the locked test: one examination per
+  subject carries mostly additive signal, and the encoder adds no measurable
+  value over it here.
+- Secondary, not pre-registered: the mean of five seeds of horizon scores
+  IBS 0.0499 on the locked test, and Venn-Abers recalibration on held-out
+  subjects brings its slope from 0.861 to 0.990; trained on the cycles before
+  2009 and scored on the later ones, five-year Uno C is 0.868 for horizon,
+  0.880 additive, 0.854 standard.
+
+The locked test is now spent for this claim: any further model scored on it
+is an exploratory result, not a test of a prediction.
