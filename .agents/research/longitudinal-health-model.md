@@ -204,10 +204,77 @@ than a context is the likely one), and then as a generic capability.
 
 ## 7. Evaluation protocol, fixed before training
 
-- **Locked test**: 15% of linked adults, stratified by cycle and death, never
-  used for any decision, frozen by digest. A development split for model
-  selection; leave-one-cohort-out once a second cohort exists.
-- **Metrics at 5, 10 and 15 years** (20 where the 1999-2002 cycles allow):
+The claim to be proved is "on people the model never saw, its predictions
+are accurate and calibrated, and better than the established baselines".
+Many randomised splits measure how stable a result is; they do not prove it,
+because every decision made by looking at them leaks into them. So the
+protocol separates the two, and every number it produces is attributable to
+a pinned split, dataset, code and seed.
+
+**Data partitions, fixed once by digest before any model is fitted:**
+
+1. **Locked test**: 15% of linked adults, stratified by cycle, death and age
+   band, frozen. Scored only for a candidate declared final, and every scoring
+   is logged; a second look at it requires a recorded reason. This is where
+   the claim is made.
+2. **Development pool** (the other 85%): **repeated grouped stratified
+   cross-validation**, R = 5 repeats of K = 5 folds, each repeat a new random
+   seed, a subject never divided, folds stratified like the locked test. Each
+   fold's validation part is held out from everything that fold does: early
+   stopping and calibration use an inner split of that fold's training part
+   only (nested), so the fold's score is a genuine out-of-sample score.
+   Hyperparameters are chosen on the 25 folds' mean, never on one fold.
+3. **Temporal validation**: train on 1999-2008, score 2009-2018 at the
+   horizons their follow-up supports (5 years, partly 10). Tests transport
+   across time rather than across random people.
+4. **External validation** when a second cohort is available: train on all
+   NHANES, score the other cohort untouched (leave-one-cohort-out).
+
+**Comparisons are paired.** Every model, baseline and ablation runs on the
+same 25 folds with the same seeds, so a difference is measured per fold.
+Because training sets overlap across folds, the naive spread understates the
+uncertainty: differences are tested with the corrected resampled t-test
+(Nadeau-Bengio variance correction) across folds, and on the locked test with
+a subject-level paired bootstrap that also resamples survey strata and PSUs.
+
+**Pre-registered before the first run** (written into the frozen benchmark,
+changed only by a new benchmark version, never edited):
+
+- Primary metric: integrated Brier score for all-cause death over 0-15 years,
+  survey-weighted.
+- Baselines: (a) age, sex and calendar only; (b) a proportional hazards model
+  on the age timescale with the standard risk factors (blood pressure,
+  cholesterol, HbA1c or glucose, BMI, smoking, diabetes and cardiovascular
+  history); (c) a gradient-boosted survival model on the same inputs as the
+  deep model, so "deep beats simple" is tested on equal information.
+- Success on the locked test, all required: primary metric better than
+  baseline (b) with the paired interval above zero; calibration slope at
+  10 years inside 0.9-1.1 and calibration intercept interval covering zero;
+  D-calibration not rejected; no pre-declared subgroup (sex, age band, race and
+  ethnicity, cycle) worse than baseline (b) beyond a stated bound.
+- External reference values (published NHANES mortality-prediction results)
+  are cited only after they are verified from the primary paper with the
+  same outcome, horizon and population; a mismatched number is not a
+  benchmark.
+
+**Checks that the numbers are real, not leakage:**
+
+- **Label permutation**: the full pipeline rerun with death times shuffled
+  across subjects must fall to the age-sex-calendar level; anything better
+  means information leaks around the split.
+- **Feature audit**: every input is dated at or before the exam; any variable
+  derived from the mortality file or from a later visit is refused by the
+  timeline builder, with a test.
+- **Seed variance**: each configuration at several seeds; a difference smaller
+  than the seed spread is reported as no difference.
+- **Ablations**, each on the same folds: no retrospective onsets, no diet
+  timing, no survey weights, no calendar time, backbone A vs B, deep vs (c).
+  Each one is a reported result, including the ones that show a component
+  does not help.
+- **Search accounting**: the number of configurations tried is recorded with
+  the result, so the selection effect on the development pool is visible.
+
+**Metrics at 5, 10 and 15 years** (20 where the 1999-2002 cycles allow):
   integrated and horizon IPCW Brier score as the primary, Uno and Antolini
   concordance, D-calibration, calibration slope and intercept against
   Aalen-Johansen estimates; survey-weighted with design-based intervals

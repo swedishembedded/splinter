@@ -166,7 +166,14 @@ the released adapter answers the same questions from plain `brain serve`.
      other source.
    - Timeline datasets: a `timeline-v1` format and manifest; a split that
      keeps a group whole, stratifies, and freezes a locked test set before
-     any training.
+     any training; repeated grouped stratified cross-validation over the
+     rest, nested so a fold's validation part informs nothing in that fold,
+     every fold pinned by digest.
+   - Experiments as records: each run (dataset, split, fold, seed, code and
+     configuration) is an experiment with its metrics in the experience
+     database; paired comparisons across folds use the corrected resampled
+     t-test, the locked test a subject- and cluster-level paired bootstrap;
+     a label-permutation rerun is part of every reported result.
    - A trainer by capability: the model adapter advertises `timeline` as an
      objective (the phase 8 item above), backed by brain's timeline model
      SDK; outputs are immutable artifacts with manifests.
