@@ -20,6 +20,9 @@
 //!   evidence.
 //! * [`denoise`] - a passage of a source part, corrupted, as a task to
 //!   restore it: the first task generator feeding the experience store.
+//! * [`codebook`] - what a record file's variables mean, as published.
+//! * [`harmonize`] - a variable mapped onto a shared concept, proposed by a
+//!   model with the codebook words it relied on and admitted by code.
 //! * [`tabular`] - record files as columns: the SAS transport format
 //!   public survey and cohort data are distributed in.
 //! * [`tasks`] - tasks of many kinds proposed by a generator model and
@@ -30,9 +33,11 @@
 
 pub mod advice;
 pub mod capture;
+pub mod codebook;
 pub mod concepts;
 pub mod denoise;
 pub mod gates;
+pub mod harmonize;
 pub mod material;
 pub mod retrieve;
 pub mod sections;
