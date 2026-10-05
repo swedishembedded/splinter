@@ -15,6 +15,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
+use splinter_sdk::measure::metric_gate::{decide, Evidence, Requirement};
 use splinter_sdk::model::timeline::survival::calibration::at_horizon;
 use splinter_sdk::model::timeline::survival::compare::{cluster_bootstrap, cluster_bootstrap_by};
 use splinter_sdk::model::timeline::survival::estimate::censoring;
@@ -76,6 +77,40 @@ pub fn preregistered() -> Criteria {
     }
 }
 
+/// The criteria as the gate's requirements on the evidence `report` names.
+pub fn requirements(c: &Criteria) -> Vec<Requirement> {
+    vec![
+        Requirement::Improves {
+            interval: "ibs_0_15_diff".into(),
+            lower_is_better: true,
+        },
+        Requirement::Within {
+            value: "calibration_slope_10".into(),
+            lo: c.calibration_slope_range.0,
+            hi: c.calibration_slope_range.1,
+        },
+        Requirement::Covers {
+            interval: "calibration_intercept_10".into(),
+            target: 0.0,
+        },
+        Requirement::NotRejected {
+            p_value: "d_calibration_p".into(),
+            alpha: c.d_calibration_alpha,
+        },
+        Requirement::NotWorseBy {
+            prefix: "subgroup:".into(),
+            bound: c.subgroup_bound,
+            lower_is_better: true,
+        },
+        // A model trained on shuffled outcomes scores no better (no lower) than age and sex.
+        Requirement::Within {
+            value: "permuted_minus_age_sex_ibs".into(),
+            lo: 0.0,
+            hi: f64::MAX,
+        },
+    ]
+}
+
 fn cluster(d: &crate::build::Design) -> u64 {
     (d.cycle as u64) * 1_000_000 + d.stratum * 100 + d.psu
 }
@@ -134,7 +169,7 @@ pub fn report(data: &Path) -> Result<()> {
         "# lifecourse report\n\ndataset {}\npartition {}\n",
         f.digests.0, f.digests.1
     )?;
-    let mut verdicts: Vec<(String, bool)> = Vec::new();
+    let mut evidence = Evidence::default();
 
     // 1. Primary: paired per-subject IBS difference, cluster bootstrap.
     let bterms: HashMap<&str, f64> = bdet
@@ -161,7 +196,6 @@ pub fn report(data: &Path) -> Result<()> {
         BOOTSTRAP_SEED,
     )
     .context("too few clusters for an interval")?;
-    let improved = ci.hi < 0.0;
     writeln!(
         out,
         "## Primary: integrated Brier score 0-15 years, all-cause death\n"
@@ -186,10 +220,9 @@ pub fn report(data: &Path) -> Result<()> {
     }
     // perf-number: a confidence level of an interval, not a measurement
     writeln!(out, "\nhorizon minus standard: {:+.5}, 95% design-based interval [{:+.5}, {:+.5}] over {} subjects\n", ci.estimate, ci.lo, ci.hi, diffs.len())?;
-    verdicts.push((
-        "primary metric improves on the standard risk factors (interval below zero)".into(),
-        improved,
-    ));
+    evidence
+        .intervals
+        .insert("ibs_0_15_diff".into(), (ci.lo, ci.hi));
 
     // 2. Calibration at 10 years: slope (point) and intercept (interval).
     let ten: Vec<&Subject> = f
@@ -235,13 +268,9 @@ pub fn report(data: &Path) -> Result<()> {
             "slope {:.3}, intercept {:+.3}, observed/expected {:.3}, mean decile gap {:.4} (n {})",
             c.slope, c.intercept, c.oe_ratio, c.mean_abs_gap, c.n
         )?;
-        verdicts.push((
-            format!(
-                "calibration slope in [{}, {}]",
-                crit.calibration_slope_range.0, crit.calibration_slope_range.1
-            ),
-            (crit.calibration_slope_range.0..=crit.calibration_slope_range.1).contains(&c.slope),
-        ));
+        evidence
+            .values
+            .insert("calibration_slope_10".into(), c.slope);
     }
     if let Some(i) = &intercept {
         writeln!(
@@ -250,17 +279,13 @@ pub fn report(data: &Path) -> Result<()> {
             "intercept 95% design-based interval [{:+.3}, {:+.3}]\n",
             i.lo, i.hi
         )?;
-        verdicts.push((
-            "calibration intercept interval covers zero".into(),
-            i.lo <= 0.0 && i.hi >= 0.0,
-        ));
+        evidence
+            .intervals
+            .insert("calibration_intercept_10".into(), (i.lo, i.hi));
     }
     if let Some(p) = cand.metrics.d_calibration_p {
         writeln!(out, "D-calibration p = {p:.4}\n")?;
-        verdicts.push((
-            "D-calibration not rejected at 0.05".into(),
-            p >= crit.d_calibration_alpha,
-        ));
+        evidence.values.insert("d_calibration_p".into(), p);
     }
 
     // 3. Subgroups: candidate minus baseline IBS per subgroup (point estimates).
@@ -286,7 +311,6 @@ pub fn report(data: &Path) -> Result<()> {
             }
         }
     }
-    let mut worst: f64 = f64::NEG_INFINITY;
     for (g, ids) in &groups {
         let wmean = |t: &HashMap<&str, f64>| {
             let (a, b) = ids
@@ -296,7 +320,7 @@ pub fn report(data: &Path) -> Result<()> {
             a / b
         };
         let (c, b) = (wmean(&cterms), wmean(&bterms));
-        worst = worst.max(c - b);
+        evidence.values.insert(format!("subgroup:{g}"), c - b);
         writeln!(
             out,
             "| {g} | {} | {c:.5} | {b:.5} | {:+.5} |",
@@ -304,13 +328,6 @@ pub fn report(data: &Path) -> Result<()> {
             c - b
         )?;
     }
-    verdicts.push((
-        format!(
-            "no subgroup worse than standard by more than {}",
-            crit.subgroup_bound
-        ),
-        worst <= crit.subgroup_bound,
-    ));
 
     // 4. Leakage check: permuted candidate vs age-sex, cross-validated.
     let mean_ibs = |runs: &BTreeMap<(usize, usize), Run>| {
@@ -331,10 +348,9 @@ pub fn report(data: &Path) -> Result<()> {
                 permuted.len(),
                 age_sex.len()
             )?;
-            verdicts.push((
-                "a model trained on shuffled outcomes does no better than age and sex".into(),
-                p >= a,
-            ));
+            evidence
+                .values
+                .insert("permuted_minus_age_sex_ibs".into(), p - a);
         }
         _ => writeln!(
             out,
@@ -369,14 +385,24 @@ pub fn report(data: &Path) -> Result<()> {
     }
 
     writeln!(out, "\n## Verdict\n")?;
-    for (what, ok) in &verdicts {
-        writeln!(out, "- [{}] {what}", if *ok { "x" } else { " " })?;
+    let gate = decide(&requirements(&crit), &evidence);
+    for (req, check) in &gate.checks {
+        let what = serde_json::to_string(req)?;
+        let detail = check
+            .reason
+            .clone()
+            .or_else(|| check.measured.clone())
+            .unwrap_or_default();
+        writeln!(
+            out,
+            "- [{}] {what}: {detail}",
+            if check.passed { "x" } else { " " }
+        )?;
     }
-    let all = verdicts.iter().all(|v| v.1);
     writeln!(
         out,
         "\n**{}**",
-        if all {
+        if gate.passed() {
             "Every pre-registered criterion is met."
         } else {
             "Not every pre-registered criterion is met; the claim is not made."
