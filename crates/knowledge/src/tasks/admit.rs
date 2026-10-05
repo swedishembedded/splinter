@@ -499,6 +499,25 @@ fn evidence(context: &Context<'_>, candidate: &Candidate) -> Result<Vec<Span>, R
             ));
         };
         let (start, end) = match citation.quote.as_deref().filter(|q| !q.trim().is_empty()) {
+            // A kind whose reference is the writer's own passage has the
+            // passage as its evidence: the generator writes it once, and the
+            // section it cites is narrowed to where the passage lies.
+            None if context.kind.reference_verbatim => {
+                match locate_passage(&candidate.reference, text) {
+                    Some(found) => (
+                        section.range.start + found.start,
+                        section.range.start + found.end,
+                    ),
+                    None => {
+                        return Err((
+                            Rejection::NotQuoted,
+                            format!(
+                            "the reference is not a passage of section {position} word for word"
+                        ),
+                        ))
+                    }
+                }
+            }
             None => (section.range.start, section.range.end),
             Some(quote) => match text.find(quote) {
                 Some(at) => (
@@ -536,22 +555,60 @@ fn evidence(context: &Context<'_>, candidate: &Candidate) -> Result<Vec<Span>, R
     Ok(spans)
 }
 
+/// The words of `text`, lower-cased, each with the byte range it occupies.
+fn placed_words(text: &str) -> Vec<(String, std::ops::Range<usize>)> {
+    let mut words = Vec::new();
+    let mut start: Option<usize> = None;
+    for (at, c) in text.char_indices() {
+        if c.is_alphanumeric() {
+            start.get_or_insert(at);
+        } else if let Some(from) = start.take() {
+            words.push((text[from..at].to_lowercase(), from..at));
+        }
+    }
+    if let Some(from) = start {
+        words.push((text[from..].to_lowercase(), from..text.len()));
+    }
+    words
+}
+
+/// Where `reference` lies in `text` as a run of whole words, ignoring case,
+/// punctuation and line breaks: the bytes from its first word to its last,
+/// with the punctuation that closes the last word. `None` when it is not a
+/// passage of `text`.
+fn locate_passage(reference: &str, text: &str) -> Option<std::ops::Range<usize>> {
+    let wanted: Vec<String> = placed_words(reference)
+        .into_iter()
+        .map(|(word, _)| word)
+        .collect();
+    if wanted.is_empty() {
+        return None;
+    }
+    let placed = placed_words(text);
+    placed
+        .windows(wanted.len())
+        .find(|run| {
+            run.iter()
+                .zip(&wanted)
+                .all(|((word, _), want)| word == want)
+        })
+        .map(|run| {
+            let last = run[run.len() - 1].1.end;
+            let closing: usize = text[last..]
+                .chars()
+                .take_while(|c| !c.is_whitespace() && !c.is_alphanumeric())
+                .map(char::len_utf8)
+                .sum();
+            run[0].1.start..last + closing
+        })
+}
+
 /// Whether `reference` is a run of whole words of one of `texts`, ignoring
 /// case, punctuation and line breaks: it was copied, not reworded.
 fn is_passage_of(reference: &str, texts: &[String]) -> bool {
-    let words = |text: &str| -> Vec<String> {
-        text.split(|c: char| !c.is_alphanumeric())
-            .filter(|w| !w.is_empty())
-            .map(str::to_lowercase)
-            .collect()
-    };
-    let wanted = words(reference);
-    !wanted.is_empty()
-        && texts.iter().any(|text| {
-            words(text)
-                .windows(wanted.len())
-                .any(|run| run == wanted.as_slice())
-        })
+    texts
+        .iter()
+        .any(|text| locate_passage(reference, text).is_some())
 }
 
 /// The candidate's privileged items: its reference, hints, checks and

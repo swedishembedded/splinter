@@ -379,8 +379,8 @@ fn builtin_kinds() -> Vec<TaskKind> {
                     describing a concrete predicament in their own words and asking what the \
                     writer of the sections would advise. The reference is the writer's advice \
                     itself: a passage of the sections, copied word for word, of at most 85 \
-                    words, that answers the predicament. Cite that same passage as the \
-                    evidence quote. The instruction must stand on its own: do not mention the \
+                    words, that answers the predicament. Cite the section it is in as the \
+                    evidence. The instruction must stand on its own: do not mention the \
                     sections, a letter, a date or the person written to, and do not give the \
                     advice."
                 .into(),
@@ -402,8 +402,8 @@ fn builtin_kinds() -> Vec<TaskKind> {
                     with the writer of the sections about a matter the sections bear on: their \
                     own situation, a decision, a question about how to think or live. The \
                     reference is the passage of the sections, copied word for word, of at most \
-                    85 words, that the writer would draw on in answering. Cite that same \
-                    passage as the evidence quote. The message must stand on its own: do not \
+                    85 words, that the writer would draw on in answering. Cite the section it \
+                    is in as the evidence. The message must stand on its own: do not \
                     mention the sections, a letter, a date or the person written to, and do \
                     not give the answer."
                 .into(),

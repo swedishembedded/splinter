@@ -17,7 +17,9 @@
 //!
 //! 1. its reply parses, and it is within the requested count;
 //! 2. its evidence cites sections it was shown, each quote is found
-//!    verbatim in its section, and the evidence spans the kind's
+//!    verbatim in its section (for a kind whose reference is the source
+//!    author's own words, a section cited without a quote is narrowed to
+//!    where the reference lies in it), and the evidence spans the kind's
 //!    `min_sections` distinct sections; every span names the source part
 //!    ([`Span::in_part`](splinter_core::experience::Span::in_part)) and
 //!    resolves through the source store;

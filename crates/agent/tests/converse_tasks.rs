@@ -10,8 +10,10 @@
 //! Spec: a conversation as the writer is a kind of task. Its instruction is
 //! the opening message of someone speaking to the writer, standing on its own
 //! and naming no document; its reference is the passage of the cited section,
-//! word for word, the writer would draw on. The answer is a dialogue, graded
-//! by what it states: every number, name and quotation must be in the
+//! word for word, the writer would draw on, and the passage is the evidence:
+//! a citation of the section alone is narrowed to where the passage lies in
+//! it, so the generator writes the passage once. The answer is a dialogue,
+//! graded by what it states: every number, name and quotation must be in the
 //! writing or in what the other speaker said.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
@@ -69,6 +71,43 @@ async fn an_opening_message_with_a_verbatim_passage_is_admitted() {
     assert_eq!(report.admitted.len(), 1, "{report:#?}");
     assert_eq!(report.admitted[0].task.task.kind, "converse");
     assert_eq!(report.admitted[0].task.instruction, OPENING);
+}
+
+#[tokio::test]
+async fn the_passage_is_the_evidence_when_only_its_section_is_cited() {
+    let scratch = Scratch::new("converse-located");
+    let (store, _, source) = stored(&scratch, LETTER);
+    // The passage is the second sentence of the section, written once as the
+    // reference; a paraphrase cited the same way is still no passage.
+    let second = "Never let a day pass without reading something of history or ethics, and always write down what you have read, for the memory fails what the pen has not fixed.";
+    let model = Scripted::new(vec![reply(vec![
+        entry(OPENING, second, 1, None),
+        entry(
+            "My evenings are idle; what would you have me do?",
+            "Read some history or ethics every day and write it down.",
+            1,
+            None,
+        ),
+    ])]);
+    let report = generator(model, store.clone(), vec![])
+        .generate(&source, &[&converse()])
+        .await
+        .unwrap();
+    assert_eq!(report.admitted.len(), 1, "{report:#?}");
+    assert_eq!(report.count(Rejection::NotQuoted), 1);
+    let task = &report.admitted[0].task;
+    assert_eq!(task.evidence.len(), 1);
+    let evidence = String::from_utf8(store.read_span(&task.evidence[0]).unwrap()).unwrap();
+    assert_eq!(
+        evidence, second,
+        "the evidence is the passage, not the section"
+    );
+    let reference = task
+        .privileged
+        .iter()
+        .find(|p| p.content == second)
+        .unwrap();
+    assert_eq!(reference.span.as_ref(), Some(&task.evidence[0]));
 }
 
 #[tokio::test]
