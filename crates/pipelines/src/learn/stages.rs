@@ -21,6 +21,7 @@ use splinter_core::role::Role;
 use splinter_core::source::SourceId;
 use splinter_data::holdout::MIN_SAMPLES;
 use splinter_knowledge::survey::survey;
+use splinter_orchestrator::error::io;
 use splinter_orchestrator::pipeline::{FnStage, Pipeline, StageEnd};
 use splinter_orchestrator::runs::{to_json, Recorder};
 use splinter_orchestrator::{Context, OrchestratorError};
@@ -37,7 +38,9 @@ use crate::curriculum::frontier::{select_frontier, PassAtK};
 use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
-use crate::datasets::{build_with, BuildRequest, Passages, ViewName, DEFAULT_MIN_STRENGTH};
+use crate::datasets::{
+    build_with, examples_in, BuildRequest, Passages, ViewName, DEFAULT_MIN_STRENGTH,
+};
 use crate::exam::{examine, Exam, ExamineRequest};
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
@@ -104,6 +107,8 @@ pub(super) struct LearnState<'a> {
     kept_tasks: Option<TaskSetId>,
     dataset: Option<String>,
     records: usize,
+    /// What the training reads: [`examples_in`] the dataset.
+    examples: usize,
     candidate: Option<String>,
     /// The judge is named and measured, or no task needs one.
     judge_prepared: bool,
@@ -151,6 +156,7 @@ impl<'a> LearnState<'a> {
             kept_tasks: None,
             dataset: None,
             records: 0,
+            examples: 0,
             candidate: None,
             judge_prepared: false,
             min_strength: DEFAULT_MIN_STRENGTH,
@@ -589,6 +595,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     let summary = to_value(&built)?;
     st.dataset = Some(built.dataset.to_string());
     st.records = built.records;
+    st.examples = examples_in(&built.path).map_err(io(&built.path))?;
     st.report.dataset = Some(built);
     Ok(if st.records < MIN_SAMPLES {
         StageEnd::stop(
@@ -615,12 +622,12 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         st.learn
             .steps
             .is_none()
-            .then(|| auto_records_per_step(st.records))
+            .then(|| auto_records_per_step(st.examples))
     });
     let steps = st
         .learn
         .steps
-        .unwrap_or_else(|| steps_for(st.records, records_per_step.unwrap_or(1)));
+        .unwrap_or_else(|| steps_for(st.examples, records_per_step.unwrap_or(1)));
     let candidate = train(
         ctx,
         &TrainRequest {

@@ -438,9 +438,54 @@ fn put_once(to: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
     std::fs::write(to, bytes).map_err(io(to))
 }
 
+/// How many examples a training run reads from the dataset at `path`: for a
+/// chat dataset, the supervised assistant turns of its records (a dialogue is
+/// trained one answer at a time); for any other, its lines.
+///
+/// # Errors
+/// The file cannot be read or holds a line that is not JSON.
+pub fn examples_in(path: &Path) -> std::io::Result<usize> {
+    let text = std::fs::read_to_string(path)?;
+    let mut examples = 0;
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let record: serde_json::Value = serde_json::from_str(line)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        examples += match record.get("messages").and_then(serde_json::Value::as_array) {
+            Some(messages) => messages
+                .iter()
+                .filter(|m| {
+                    m.get("role").and_then(serde_json::Value::as_str) == Some("assistant")
+                        && m.get("train") == Some(&serde_json::Value::Bool(true))
+                })
+                .count(),
+            None => 1,
+        };
+    }
+    Ok(examples)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A dialogue is trained one answer at a time, so a run is sized by its
+    /// answers, not its records.
+    #[test]
+    fn a_dialogue_is_as_many_examples_as_it_has_supervised_answers() {
+        let path =
+            std::env::temp_dir().join(format!("splinter-examples-{}.jsonl", std::process::id()));
+        let turn = |role: &str, train: bool| serde_json::json!({"role": role, "content": "x", "train": train});
+        let dialogue = serde_json::json!({"messages": [
+            turn("system", false), turn("user", false), turn("assistant", true),
+            turn("user", false), turn("assistant", true), turn("assistant", false)
+        ]});
+        let single =
+            serde_json::json!({"messages": [turn("user", false), turn("assistant", true)]});
+        let pair = serde_json::json!({"prompt": "q", "chosen": "a", "rejected": "b"});
+        std::fs::write(&path, format!("{dialogue}\n\n{single}\n{pair}\n")).unwrap();
+        assert_eq!(examples_in(&path).unwrap(), 4);
+        std::fs::remove_file(&path).unwrap();
+    }
 
     #[test]
     fn strip_policies_and_strengths_parse_or_are_refused() {
