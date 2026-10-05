@@ -644,8 +644,12 @@ pub fn temporal(data: &Path, arm: Arm, seed: u64, split: u16) -> Result<()> {
     Ok(())
 }
 
-/// Every cross-validation run of `arm` (not permuted), by fold.
-pub fn cv_runs(data: &Path, arm: Arm) -> Result<BTreeMap<(usize, usize), Run>> {
+/// The training seed the pre-registered comparisons are made with; other
+/// seeds measure how much a result moves with the seed alone.
+pub const PREREGISTERED_SEED: u64 = 1;
+
+/// Every cross-validation run of `arm` with `seed` (not permuted), by fold.
+pub fn cv_runs(data: &Path, arm: Arm, seed: u64) -> Result<BTreeMap<(usize, usize), Run>> {
     let mut out = BTreeMap::new();
     let Ok(dir) = std::fs::read_dir(data.join("runs")) else {
         return Ok(out);
@@ -661,7 +665,7 @@ pub fn cv_runs(data: &Path, arm: Arm) -> Result<BTreeMap<(usize, usize), Run>> {
         let run: Run = serde_json::from_slice(&std::fs::read(e.path())?)?;
         // The name prefix also matches longer arm names (horizon-state):
         // the run's own record decides.
-        if run.arm != arm {
+        if run.arm != arm || run.seed != seed {
             continue;
         }
         if let (Some(fold), false) = (run.fold, run.permuted) {
@@ -707,7 +711,10 @@ pub fn compared_metrics() -> Vec<Compared> {
 
 /// Two arms on the folds both ran on.
 pub fn compare(data: &Path, a: Arm, b: Arm) -> Result<()> {
-    let (ra, rb) = (cv_runs(data, a)?, cv_runs(data, b)?);
+    let (ra, rb) = (
+        cv_runs(data, a, PREREGISTERED_SEED)?,
+        cv_runs(data, b, PREREGISTERED_SEED)?,
+    );
     let folds: Vec<&(usize, usize)> = ra.keys().filter(|k| rb.contains_key(k)).collect();
     if folds.len() < 2 {
         bail!(
