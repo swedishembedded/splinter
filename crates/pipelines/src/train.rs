@@ -91,6 +91,8 @@ pub fn regime_of(format: Format) -> Option<Regime> {
         Format::GenericMessagesV2 => Some(Regime::Sft),
         Format::GenericPreferenceV1 => Some(Regime::Dpo),
         Format::SplinterExportV1 => None,
+        // Trained by the timeline objective, not by an adapter regime.
+        Format::TimelineV1 => None,
     }
 }
 

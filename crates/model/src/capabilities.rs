@@ -28,16 +28,19 @@ pub struct TrainingCapabilities {
     pub chat_sft: bool,
     /// Preference optimisation on (chosen, rejected) pairs.
     pub preference: bool,
+    /// Time-to-event training on subject timelines (`timeline-v1`).
+    pub timeline: bool,
 }
 
 impl TrainingCapabilities {
-    /// What brain's public SDK trains from a dataset file: chat fine-tuning
-    /// and preference fine-tuning. It has no trainer that reads contrastive
-    /// triples for the policy model, rewarded trajectories or a raw text
-    /// corpus.
+    /// What brain's public SDK trains from a dataset file: chat fine-tuning,
+    /// preference fine-tuning and subject timelines. It has no trainer that
+    /// reads contrastive triples for the policy model, rewarded trajectories
+    /// or a raw text corpus.
     pub const BRAIN: Self = Self {
         chat_sft: true,
         preference: true,
+        timeline: true,
     };
 
     /// Whether a file in `format` can be trained from.
@@ -47,6 +50,7 @@ impl TrainingCapabilities {
             Format::GenericMessagesV2 => self.chat_sft,
             Format::GenericPreferenceV1 => self.preference,
             Format::SplinterExportV1 => false,
+            Format::TimelineV1 => self.timeline,
         }
     }
 
@@ -89,6 +93,17 @@ impl DatasetCheck for BrainDatasetCheck {
                 }
             }
             Format::SplinterExportV1 => Ok(()),
+            Format::TimelineV1 => {
+                let subjects = crate::timeline::read_jsonl(pending).map_err(|e| e.to_string())?;
+                if subjects.len() == records {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "{records} subject(s) were written but brain's parser read {}",
+                        subjects.len()
+                    ))
+                }
+            }
         }
     }
 }

@@ -75,6 +75,11 @@ pub enum Format {
     /// Splinter's export-only format, which no trainer reads.
     #[serde(rename = "splinter-export-v1")]
     SplinterExportV1,
+    /// Brain's subject-timeline format: one subject's irregular history and
+    /// its outcomes per line. Not a projection of experiences: a record
+    /// dataset an application builds from its sources.
+    #[serde(rename = "timeline-v1")]
+    TimelineV1,
 }
 
 /// A backend's verdict on a dataset file before it is put in place: the

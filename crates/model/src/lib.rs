@@ -44,6 +44,7 @@ pub mod residency;
 pub mod rl;
 pub mod selection;
 pub mod stats;
+pub mod timeline;
 pub mod train;
 
 pub use capabilities::{BrainDatasetCheck, TrainingCapabilities};
