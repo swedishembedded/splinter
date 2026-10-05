@@ -19,7 +19,7 @@ use splinter_sdk::solving::Solved;
 use splinter_sdk::sources::{SourceAdded, SourceList, SourceSummary};
 use splinter_sdk::status::Status;
 use splinter_sdk::store::runs::Run;
-use splinter_sdk::tasks::{TaskSetList, TaskShow, TasksGenerated};
+use splinter_sdk::tasks::{duration_words, TaskSetList, TaskShow, TasksGenerated};
 use splinter_sdk::train::Candidate;
 use splinter_sdk::verify::Verified;
 use splinter_sdk::vocabulary::source::{Origin, Source};
@@ -200,8 +200,12 @@ impl Report for Source {
 impl Report for TasksGenerated {
     fn human(&self) -> String {
         let mut out = format!(
-            "task set {}: {} task(s) from {} text part(s)\n",
-            self.task_set, self.tasks, self.parts
+            "task set {}: {} task(s) from {} of {} text part(s) in {}\n",
+            self.task_set,
+            self.tasks,
+            self.parts,
+            self.parts_total,
+            duration_words(self.elapsed_secs)
         );
         for (kind, counts) in &self.per_kind {
             let _ = writeln!(

@@ -134,6 +134,54 @@ fn the_budget_stops_generation_inside_a_part() {
     );
 }
 
+/// A run that stops before every part is covered says how much of the
+/// sources it covered and what covering all of them would take at its pace,
+/// so that a run over two per cent of a corpus is never read as a run over
+/// the corpus.
+#[test]
+fn a_stopped_run_reports_its_coverage_and_what_full_coverage_would_take() {
+    let policy = empty_reply(Duration::from_millis(500));
+    let (scratch, ctx) = scratch_context("coverage-honest", policy.clone(), false);
+    let files: Vec<(String, String)> = (0..10)
+        .map(|n| (format!("p{n}.md"), part(&format!("P{n}"), 3)))
+        .collect();
+    let named: Vec<(&str, String)> = files.iter().map(|(n, t)| (n.as_str(), t.clone())).collect();
+    // Ten parts of half a second each against a budget of two and a half:
+    // room to capture the sources first, and not to cover every part.
+    let generated = run(
+        &scratch,
+        &ctx,
+        &named,
+        Some(Instant::now() + Duration::from_millis(2500)),
+    );
+    assert_eq!(generated.parts_total, 10);
+    assert!(
+        generated.parts >= 1 && generated.parts < 10,
+        "{}",
+        generated.parts
+    );
+    let needed = generated
+        .full_coverage_secs
+        .expect("an estimate when parts are left");
+    assert!(
+        needed >= generated.elapsed_secs,
+        "{needed} >= {}",
+        generated.elapsed_secs
+    );
+    let why = generated.stopped.as_deref().unwrap();
+    assert!(
+        why.contains(&format!("{} of 10 part(s)", generated.parts))
+            && why.contains("every part would take"),
+        "{why}"
+    );
+
+    let policy = empty_reply(Duration::ZERO);
+    let (scratch, ctx) = scratch_context("coverage-whole", policy.clone(), false);
+    let generated = run(&scratch, &ctx, &named, None);
+    assert_eq!((generated.parts, generated.parts_total), (10, 10));
+    assert_eq!(generated.full_coverage_secs, None);
+}
+
 #[test]
 fn parts_are_visited_in_a_stable_order_that_does_not_follow_their_names() {
     let files: Vec<(String, String)> = (0..8)

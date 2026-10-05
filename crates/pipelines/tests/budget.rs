@@ -41,3 +41,27 @@ fn a_budget_already_spent_gives_deadlines_no_later_than_now() {
     let d = StageDeadlines::of(start, Some(start));
     assert_eq!(d.tasks, Some(start));
 }
+
+/// When the writer's own text carries a share of the training examples,
+/// training has that much more to do and nothing model-made to wait for:
+/// the stages that make dialogue data give up their share in proportion,
+/// and the tail - training, the exam, the gate - grows by it. Half the
+/// examples from the writer's text doubles the tail; none leaves the
+/// deadlines as they were.
+#[test]
+fn the_tail_grows_with_the_share_of_examples_the_writers_text_carries() {
+    let start = Instant::now();
+    let end = start + Duration::from_secs(10 * 3600);
+    let plain = StageDeadlines::sharing(start, Some(end), 0.0);
+    assert_eq!(plain, StageDeadlines::of(start, Some(end)));
+    let half = StageDeadlines::sharing(start, Some(end), 0.5);
+    let tail = |d: &StageDeadlines| end - d.teach.unwrap();
+    assert_eq!(tail(&half), tail(&plain) * 2);
+    assert!(half.tasks.unwrap() < plain.tasks.unwrap());
+    assert!(half.attempts.unwrap() < plain.attempts.unwrap());
+    assert!(start < half.tasks.unwrap());
+    // The open-ended stages never lose everything: the tail is capped.
+    let most = StageDeadlines::sharing(start, Some(end), 0.95);
+    assert!(most.tasks.unwrap() > start + Duration::from_secs(60));
+    assert!(tail(&most) <= Duration::from_secs(8 * 3600));
+}

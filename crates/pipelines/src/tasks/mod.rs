@@ -163,6 +163,13 @@ pub struct TasksGenerated {
     pub tasks: usize,
     /// Text parts generated from.
     pub parts: usize,
+    /// Text parts across the sources, generated from or not.
+    pub parts_total: usize,
+    /// How long generation ran, in seconds.
+    pub elapsed_secs: u64,
+    /// How long generating from every part would take at the pace measured,
+    /// in seconds: `None` when every part was covered.
+    pub full_coverage_secs: Option<u64>,
     /// Admitted and rejected, by kind.
     pub per_kind: BTreeMap<String, KindTally>,
     /// Rejections, by reason.
@@ -201,17 +208,15 @@ pub fn generate(
         deadline: request.deadline,
         ..Batch::default()
     };
-    let mut stopped = None;
+    let started = Instant::now();
+    let mut parts_total = 0;
+    for source_id in request.sources {
+        parts_total += text_parts(&ctx.sources().get_source(source_id)?).len();
+    }
+    let mut stopped: Option<String> = None;
     'sources: for source_id in request.sources {
         let source = ctx.sources().get_source(source_id)?;
-        let mut parts: Vec<_> = source
-            .parts
-            .iter()
-            .filter(|p| p.media_type.starts_with("text/"))
-            .collect();
-        // Not in name order: a run that stops early has covered a spread of
-        // the parts, not the first files.
-        parts.sort_by_cached_key(|p| Digest::of(p.name.as_bytes()));
+        let parts = text_parts(&source);
         for part in parts {
             if request.cancel.is_cancelled() {
                 return Err(OrchestratorError::Cancelled);
@@ -281,10 +286,24 @@ pub fn generate(
         members: batch.entries,
     };
     let tasks = set.members.len();
+    let elapsed = started.elapsed();
+    let coverage = Coverage::of(batch.parts, parts_total, elapsed);
+    if let (Some(why), Some(needed)) = (&mut stopped, coverage.full_coverage_secs) {
+        why.push_str(&format!(
+            ": {} of {} part(s) in {}; every part would take about {} at that pace",
+            batch.parts,
+            parts_total,
+            duration_words(elapsed.as_secs()),
+            duration_words(needed)
+        ));
+    }
     Ok(TasksGenerated {
         task_set: ctx.tasks().put_set(&set)?,
         tasks,
         parts: batch.parts,
+        parts_total,
+        elapsed_secs: elapsed.as_secs(),
+        full_coverage_secs: coverage.full_coverage_secs,
         per_kind: batch.per_kind,
         rejected: batch.rejected,
         rejections: batch.rejections,
@@ -292,6 +311,57 @@ pub fn generate(
         stopped,
         dropped: batch.dropped,
     })
+}
+
+/// The text parts of `source`, in a stable order that does not follow their
+/// names: a run that stops early has covered a spread of the parts, not the
+/// first files.
+fn text_parts(source: &splinter_core::source::Source) -> Vec<&splinter_core::source::Part> {
+    let mut parts: Vec<_> = source
+        .parts
+        .iter()
+        .filter(|p| p.media_type.starts_with("text/"))
+        .collect();
+    parts.sort_by_cached_key(|p| Digest::of(p.name.as_bytes()));
+    parts
+}
+
+/// How much of the sources a generation covered, and what covering all of
+/// them would take at its pace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Coverage {
+    /// What covering every part would take at the pace measured, in
+    /// seconds; `None` when every part was covered, or none was (no pace).
+    pub full_coverage_secs: Option<u64>,
+}
+
+impl Coverage {
+    /// The coverage of `covered` of `total` parts in `elapsed`.
+    #[must_use]
+    pub fn of(covered: usize, total: usize, elapsed: Duration) -> Self {
+        let full_coverage_secs = (covered > 0 && covered < total)
+            .then(|| (elapsed.as_secs_f64() * total as f64 / covered as f64).round() as u64);
+        Self { full_coverage_secs }
+    }
+}
+
+/// `secs` as whole units, largest first: `2d 3h`, `2h 24m`, `45s`.
+#[must_use]
+pub fn duration_words(secs: u64) -> String {
+    let units = [("d", 86_400), ("h", 3_600), ("m", 60), ("s", 1)];
+    let mut rest = secs;
+    let mut words = Vec::new();
+    for (name, size) in units {
+        if rest >= size && words.len() < 2 {
+            words.push(format!("{}{name}", rest / size));
+            rest %= size;
+        }
+    }
+    if words.is_empty() {
+        "0s".into()
+    } else {
+        words.join(" ")
+    }
 }
 
 /// The text of `part` of `source`, by the author `request` names, if any.
