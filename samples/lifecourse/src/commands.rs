@@ -20,6 +20,7 @@ use splinter_sdk::data::partition::{partition, units_from_json_lines, Partition,
 use splinter_sdk::model::timeline::survival::compare::corrected_resampled_t;
 use splinter_sdk::model::timeline::{read_jsonl, Subject};
 use splinter_sdk::vocabulary::digest::Digest;
+use splinter_sdk::vocabulary::terms::{Terms, Use};
 
 use crate::build::{subject, CycleCounts, Design, CODES};
 use crate::experiment::{fit, Arm, RunInfo, Training, STEPS};
@@ -42,7 +43,19 @@ struct BuildReport {
     horizons: Horizons,
     /// `(file, digest)` of every input read.
     sources: Vec<(String, String)>,
-    terms: &'static str,
+    terms: Terms,
+}
+
+/// The terms of the NHANES public-use files and the public-use linked
+/// mortality file.
+pub fn nhanes_terms() -> Terms {
+    let mut t = Terms::public_domain("NHANES public-use data (US federal public domain)");
+    t.conditions = vec![
+        "NCHS data use restrictions: no attempt to identify any participant".into(),
+        "the public-use mortality file perturbs follow-up and cause of death for some records"
+            .into(),
+    ];
+    t
 }
 
 /// NHANES files and the linkage as timeline-v1 subjects.
@@ -145,7 +158,7 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
         horizons: Horizons::of(&all),
         cycles,
         sources,
-        terms: "NHANES public-use files and the public-use linked mortality file: US federal public domain. NCHS perturbs follow-up and cause of death for some records in the public-use mortality file to limit disclosure risk.",
+        terms: nhanes_terms(),
     };
     std::fs::write(out.join(TIMELINES), lines)?;
     std::fs::write(out.join(DESIGN), design)?;
@@ -423,6 +436,9 @@ pub struct LockedDetail {
 /// Train on everything but the locked test and score the locked test.
 pub fn final_test(data: &Path, arm: Arm, seed: u64, reason: Option<&str>) -> Result<()> {
     let f = frozen(data)?;
+    nhanes_terms()
+        .permits(Use::Training)
+        .map_err(anyhow::Error::msg)?;
     let name = format!("{}-s{seed}-locked.json", arm.name());
     if data.join("runs").join(&name).exists() && reason.is_none() {
         bail!("{name}: the locked test was already scored for this arm and seed; pass --reason to score it again, and the reason is recorded");

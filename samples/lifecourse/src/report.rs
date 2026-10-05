@@ -384,6 +384,15 @@ pub fn report(data: &Path) -> Result<()> {
         writeln!(out, "| {name} | {} |", cells.join(" | "))?;
     }
 
+    let terms = crate::commands::nhanes_terms();
+    writeln!(
+        out,
+        "\n## Terms\n\n{}: training {:?}, commercial use {:?}, redistribution {:?}",
+        terms.name, terms.training, terms.commercial_use, terms.redistribution
+    )?;
+    for c in &terms.conditions {
+        writeln!(out, "- {c}")?;
+    }
     writeln!(out, "\n## Verdict\n")?;
     let gate = decide(&requirements(&crit), &evidence);
     for (req, check) in &gate.checks {
