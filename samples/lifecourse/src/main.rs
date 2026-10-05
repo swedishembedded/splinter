@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements long-horizon risk prediction from cohort and
+// survey data for its clients. If your team needs expertise in building,
+// validating and proving time-to-event models on real health records, you
+// can procure our services by sending an email to info@swedishembedded.com.
+
+//! Can a model read one examination of a person and say, calibrated, how
+//! likely they are to die - and of what - within the next five to fifteen
+//! years, better than the conventional risk factors can?
+//!
+//! The data are the ten continuous NHANES cycles (1999-2018) with the
+//! public-use linked mortality file (through 2019). Subcommands, in the
+//! order they are meant to be used:
+//!
+//! ```text
+//! build    NHANES files and the mortality linkage as timeline-v1 subjects
+//! freeze   partition once, and pin the data, the partition and the criteria
+//! cv       train and score one arm on every cross-validation fold
+//! final    train one arm on everything but the locked test, and score it there once
+//! compare  two arms on the same folds: the corrected resampled t-test per metric
+//! report   the pre-registered criteria against the locked-test results
+//! ```
+
+mod build;
+mod commands;
+mod concepts;
+mod diet;
+mod experiment;
+mod metrics;
+mod nhanes;
+mod report;
+
+use std::path::PathBuf;
+
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+
+use crate::experiment::Arm;
+
+#[derive(Parser)]
+#[command(about = "Long-horizon mortality prediction from one NHANES examination")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Build timeline-v1 subjects from the NHANES files and the mortality linkage.
+    Build {
+        /// Directory holding `<cycle start year>/*.xpt`.
+        #[arg(long)]
+        nhanes: PathBuf,
+        /// Directory holding `NHANES_<y>_<y+1>_MORT_2019_PUBLIC.dat`.
+        #[arg(long)]
+        mortality: PathBuf,
+        /// Output directory.
+        #[arg(long)]
+        data: PathBuf,
+    },
+    /// Partition the built subjects once and pin data, partition and criteria.
+    Freeze {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+    },
+    /// Train and score one arm on cross-validation folds.
+    Cv {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Which arm.
+        #[arg(long, value_enum)]
+        arm: Arm,
+        /// Seed of the run.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// Only these repeats (default: all).
+        #[arg(long)]
+        repeat: Vec<usize>,
+        /// Only these folds (default: all).
+        #[arg(long)]
+        fold: Vec<usize>,
+        /// Train on outcomes shuffled across the training subjects: the
+        /// leakage check, which must score no better than the age-sex arm.
+        #[arg(long)]
+        permute: bool,
+    },
+    /// Train one arm on all but the locked test and score it on the locked test.
+    Final {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Which arm.
+        #[arg(long, value_enum)]
+        arm: Arm,
+        /// Seed of the run.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// Why the locked test is scored again for an arm and seed it already
+        /// scored (it is otherwise refused).
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Compare two arms on the folds both ran on.
+    Compare {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// The candidate.
+        #[arg(long, value_enum)]
+        a: Arm,
+        /// The reference.
+        #[arg(long, value_enum)]
+        b: Arm,
+    },
+    /// The pre-registered criteria against the locked-test results.
+    Report {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+    },
+}
+
+fn main() -> Result<()> {
+    match Cli::parse().command {
+        Command::Build {
+            nhanes,
+            mortality,
+            data,
+        } => commands::build(&nhanes, &mortality, &data),
+        Command::Freeze { data } => commands::freeze(&data),
+        Command::Cv {
+            data,
+            arm,
+            seed,
+            repeat,
+            fold,
+            permute,
+        } => commands::cv(&data, arm, seed, &repeat, &fold, permute),
+        Command::Final {
+            data,
+            arm,
+            seed,
+            reason,
+        } => commands::final_test(&data, arm, seed, reason.as_deref()),
+        Command::Compare { data, a, b } => commands::compare(&data, a, b),
+        Command::Report { data } => report::report(&data),
+    }
+}
