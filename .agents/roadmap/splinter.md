@@ -156,3 +156,29 @@ the released adapter answers the same questions from plain `brain serve`.
      asks for an objective by name.
    - Resuming a pipeline from where it stopped: a stage's summary is recorded;
      its output is not yet enough to restart from.
+9. **Any model, any dataset.** Splinter trains more than a chat LLM: a model
+   brain provides for timeline (record) data is trained, measured and
+   released by the same machinery. The design and the data findings are in
+   the longitudinal health model research note; the health-specific parts
+   live only in a sample. Open, in order:
+   - Record sources: a parser for tabular record files (SAS transport, CSV)
+     and their codebooks, captured with digests and provenance like any
+     other source.
+   - Timeline datasets: a `timeline-v1` format and manifest; a split that
+     keeps a group whole, stratifies, and freezes a locked test set before
+     any training.
+   - A trainer by capability: the model adapter advertises `timeline` as an
+     objective (the phase 8 item above), backed by brain's timeline model
+     SDK; outputs are immutable artifacts with manifests.
+   - A metric gate: paired bootstrap of a continuous metric difference over
+     subjects or clusters, improvement on one declared metric and
+     non-inferiority bounds on the rest; unmeasured fails, as today.
+   - Terms travel with data: each source's licence or data-use terms are
+     carried by lineage to datasets and releases, and a release refuses a
+     combination they forbid.
+   - An intake agent: a generator-role typed call proposes variable
+     harmonisation mappings from codebook text, admitted by code (quoted
+     text present, converted distributions overlap, physical ranges).
+   - `samples/lifecourse`: the NHANES timeline builder (prospective
+     mortality, retrospective onset ages), the frozen benchmark, baselines
+     and the first deep model, with a README stating what was measured.
