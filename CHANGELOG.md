@@ -55,6 +55,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signal, instead of files in a run directory.
 - A bulk stage (solve, verify, critique) commits its writes in groups instead of
   once per record.
+- A judge is trusted for what its verdicts do: its passes must be precise where
+  they admit answers to a training set (verify, teach, critique, author), and
+  both its passes and its fails where two models are compared on them (the
+  gate, the exam). `judge measure` reports both fitnesses.
+- The held-out split runs to eight groups of overlapping source text, newest
+  first, within a quarter of the records, so the gate's and the exam's paired
+  tests over families can reach significance; a tenth and whole groups as
+  before.
+- A learn that trains a person's policy tells the generator the person wrote
+  the sources (`tasks generate --author NAME` by hand), so a question about
+  the writer names a subject the source gives; the teacher's answers and the
+  student's attempts run under the person's prompt, the one the records open
+  with.
+- An instruction quotes its source at a run of eight words, not twenty-four
+  characters, so a question may name a matter in the source's own words; a
+  writer's passage is its own evidence, cited by section and written once.
 
 ## [0.1.0] - 2026-10-01
 
