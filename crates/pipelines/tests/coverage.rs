@@ -41,7 +41,7 @@ fn run(
     scratch: &Scratch,
     ctx: &splinter_orchestrator::Context,
     files: &[(&str, String)],
-    deadline: Option<Instant>,
+    budget: Option<Duration>,
 ) -> splinter_pipelines::tasks::TasksGenerated {
     let dir = scratch.0.join("parts");
     std::fs::create_dir_all(&dir).unwrap();
@@ -50,6 +50,9 @@ fn run(
     }
     let target = SourceTarget::from_learn_arg(&dir.display().to_string()).unwrap();
     let id = sources::add(ctx, &target).unwrap().source.id;
+    // The budget is generation's alone, counted from where it starts, not
+    // from before the sources were captured.
+    let deadline = budget.map(|budget| Instant::now() + budget);
     generate(
         ctx,
         &Generation {
@@ -124,7 +127,7 @@ fn the_budget_stops_generation_inside_a_part() {
         &scratch,
         &ctx,
         &[("long.md", part("L", 60))],
-        Some(Instant::now() + Duration::from_millis(450)),
+        Some(Duration::from_millis(450)),
     );
     assert!(generated.stopped.is_some(), "{generated:#?}");
     assert!(
@@ -146,14 +149,9 @@ fn a_stopped_run_reports_its_coverage_and_what_full_coverage_would_take() {
         .map(|n| (format!("p{n}.md"), part(&format!("P{n}"), 3)))
         .collect();
     let named: Vec<(&str, String)> = files.iter().map(|(n, t)| (n.as_str(), t.clone())).collect();
-    // Ten parts of half a second each against a budget of two and a half:
-    // room to capture the sources first, and not to cover every part.
-    let generated = run(
-        &scratch,
-        &ctx,
-        &named,
-        Some(Instant::now() + Duration::from_millis(2500)),
-    );
+    // Ten parts of half a second each against a budget of two and a half
+    // seconds: some parts covered, not all.
+    let generated = run(&scratch, &ctx, &named, Some(Duration::from_millis(2500)));
     assert_eq!(generated.parts_total, 10);
     assert!(
         generated.parts >= 1 && generated.parts < 10,
