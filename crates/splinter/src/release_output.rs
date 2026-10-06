@@ -115,6 +115,15 @@ impl Report for GateReport {
                 share(m.drop),
                 m.bound
             );
+            if let Some(i) = &m.drop_interval {
+                let _ = writeln!(
+                    out,
+                    "               drop {:.0}% interval over the paired items [{:+.3}, {:+.3}]",
+                    i.level * 100.0,
+                    i.low,
+                    i.high
+                );
+            }
         }
         for p in &self.prompts {
             let _ = writeln!(

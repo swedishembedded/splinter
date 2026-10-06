@@ -64,9 +64,11 @@ use crate::train::{load_candidate, Candidate};
 use probe::{clustered, pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use splinter_core::training::{TrainingCurve, TrainingSummary};
-use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
+use splinter_eval::gate::{
+    self, Check, DropInterval, GateConfig, GateReport, SuitePrompts, SuiteSummary,
+};
 use splinter_eval::paired::PairedOutcome;
-use splinter_model::stats::BrainSignificance;
+use splinter_model::stats::{bootstrap_interval, BrainSignificance};
 use splinter_orchestrator::config::Config;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -560,6 +562,29 @@ impl Suites {
     }
 }
 
+/// The share of resampled drops the anchor's interval holds.
+const DROP_INTERVAL_LEVEL: f64 = 0.95;
+/// Resamples the anchor's interval is made from.
+const DROP_INTERVAL_RESAMPLES: usize = 4000;
+
+/// The bootstrap interval of the champion's accuracy minus the candidate's
+/// over the items both were graded on: an item the champion alone got right
+/// is 1, the candidate alone -1, a tie 0.
+fn drop_interval(outcomes: &[PairedOutcome]) -> Option<DropInterval> {
+    let drops: Vec<f64> = outcomes
+        .iter()
+        .filter_map(PairedOutcome::paired)
+        .map(|(candidate, baseline)| f64::from(baseline) - f64::from(candidate))
+        .collect();
+    bootstrap_interval(&drops, DROP_INTERVAL_RESAMPLES, DROP_INTERVAL_LEVEL, 0).map(|i| {
+        DropInterval {
+            level: DROP_INTERVAL_LEVEL,
+            low: i.low,
+            high: i.high,
+        }
+    })
+}
+
 /// The four checks on `candidate` against `champion`.
 fn run_gate(
     ctx: &Context,
@@ -671,13 +696,20 @@ fn run_gate(
         ),
         (Ok(Some(frozen)), Some(suite)) => match next() {
             Err(why) => Check::unmeasured(why),
-            Ok((c, b)) => gate::anchor(
-                frozen.suite.version,
-                frozen.digest.clone(),
-                suite.summary(),
-                &pair(suite, &c, &b),
-                config.anchor_bound,
-            ),
+            Ok((c, b)) => {
+                let outcomes = pair(suite, &c, &b);
+                let mut check = gate::anchor(
+                    frozen.suite.version,
+                    frozen.digest.clone(),
+                    suite.summary(),
+                    &outcomes,
+                    config.anchor_bound,
+                );
+                if let Some(measured) = check.measured.as_mut() {
+                    measured.drop_interval = drop_interval(&outcomes);
+                }
+                check
+            }
         },
     };
     let serve = match (&suites.held_out, &in_process) {

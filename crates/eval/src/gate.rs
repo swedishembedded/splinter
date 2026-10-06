@@ -230,6 +230,23 @@ pub struct Anchor {
     pub drop: Option<f64>,
     /// The largest drop allowed.
     pub bound: f64,
+    /// The drop's bootstrap interval over the paired items: what a drop on a
+    /// suite this size is to be read by. `None` when too few items were
+    /// paired to resample, or in a report written before it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_interval: Option<DropInterval>,
+}
+
+/// A bootstrap interval of the champion's accuracy minus the candidate's,
+/// resampling the paired items.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DropInterval {
+    /// The share of resampled drops it holds.
+    pub level: f64,
+    /// Its lower end.
+    pub low: f64,
+    /// Its upper end.
+    pub high: f64,
 }
 
 /// The serve check's numbers.
@@ -450,6 +467,7 @@ pub fn anchor(
             comparison,
             drop: Some(drop),
             bound,
+            drop_interval: None,
         },
         failure,
     )

@@ -94,6 +94,10 @@ fn a_candidate_that_passes_every_check_is_released() {
     );
     let anchor = gate.anchor.measured.as_ref().unwrap();
     assert_eq!((anchor.version, anchor.drop), (1, Some(0.0)));
+    assert_eq!(
+        anchor.drop_interval.map(|i| (i.low, i.high)),
+        Some((0.0, 0.0))
+    );
     let serve = gate.serve.measured.as_ref().unwrap();
     assert_eq!(serve.served_digest, candidate.adapter_digest);
     assert!(
@@ -243,7 +247,11 @@ fn each_failing_check_blocks_the_release_and_says_why() {
     let gate = blocked(&ctx, &forgetful).gate;
     assert!(gate.improvement.passed && gate.serve.passed, "{gate:#?}");
     assert!(!gate.anchor.passed);
-    assert_eq!(gate.anchor.measured.as_ref().unwrap().drop, Some(1.0));
+    let measured = gate.anchor.measured.as_ref().unwrap();
+    assert_eq!(measured.drop, Some(1.0));
+    // Four items, all lost: the interval around the drop is the drop itself.
+    let interval = measured.drop_interval.unwrap();
+    assert_eq!((interval.low, interval.high), (1.0, 1.0));
     assert!(gate.anchor.reason.as_deref().unwrap().contains("anchor"));
 
     // No anchor suite frozen: unmeasured, so blocked.
