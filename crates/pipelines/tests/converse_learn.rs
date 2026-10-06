@@ -620,8 +620,8 @@ fn a_run_asked_to_describe_the_writers_text_asks_each_chunk_by_its_description()
     }
 }
 
-/// Records given passages that are all abstentions are single exchanges in
-/// which the writer says the writings do not settle it, in the family of the
+/// Records given passages that are abstentions are single exchanges in which
+/// the writer says the writings do not settle it, in the family of the
 /// dialogue each was made from.
 #[test]
 fn a_run_asked_for_abstentions_trains_on_the_writer_saying_the_writings_do_not_settle_it() {
@@ -630,7 +630,12 @@ fn a_run_asked_for_abstentions_trains_on_the_writer_saying_the_writings_do_not_s
         "The pen fixes what the memory lets slip, so write down what you have read.",
         Some(judge()),
         Some("Benjamin Franklin"),
-        Some(PassageShare::with_abstentions(1.0, 1.0)),
+        Some(PassageShare {
+            records: 1.0,
+            with_evidence: 0.0,
+            abstain: 0.49,
+            unsupported: 0.0,
+        }),
         None,
         false,
     );
@@ -640,18 +645,25 @@ fn a_run_asked_for_abstentions_trains_on_the_writer_saying_the_writings_do_not_s
     let dataset = ran.report.dataset.as_ref().unwrap();
     let text = std::fs::read_to_string(&dataset.path).unwrap();
     assert_eq!(text.lines().count(), 2);
+    let mut abstentions = 0;
     for line in text.lines() {
         let record: serde_json::Value = serde_json::from_str(line).unwrap();
         let turns = record["messages"].as_array().unwrap();
-        assert_eq!(turns.len(), 3, "one exchange: {record}");
-        assert_eq!(turns[2]["train"], true);
-        assert!(
-            turns[2]["content"]
+        let abstained = turns.len() == 3
+            && turns[2]["content"]
                 .as_str()
                 .unwrap()
-                .starts_with("The writings before me do not settle this"),
-            "{record}"
-        );
-        assert!(record["metadata"]["group"].is_string(), "{record}");
+                .starts_with("The writings before me do not settle this");
+        if abstained {
+            abstentions += 1;
+            assert_eq!(turns[2]["train"], true);
+            assert!(record["metadata"]["group"].is_string(), "{record}");
+        }
     }
+    assert!(abstentions >= 1, "{text}");
+    // Half the data is never abstentions.
+    assert!(
+        PassageShare::with_abstentions(1.0, 0.5).validate().is_err(),
+        "half the data refusing is refused"
+    );
 }

@@ -54,6 +54,10 @@ const SPARE: usize = 3;
 /// and enough without it that the model does not lean on it.
 pub const DEFAULT_EVIDENCE_SHARE: f64 = 0.8;
 
+/// Abstentions stay under this share of all the records: they teach where to
+/// stop, and a model taught to stop half the time stops answering.
+pub const MAX_ABSTENTION_SHARE: f64 = 0.5;
+
 /// How much of a dataset is given passages, and what the records given them
 /// teach. The last three are bands of one draw, so they sum to at most 1;
 /// what none takes is distractors alone with the answer unchanged.
@@ -126,6 +130,14 @@ impl PassageShare {
             return Err(OrchestratorError::Refused(format!(
                 "the passage shares {self:?} are not shares: each is in [0, 1] and the evidence, \
                  abstention and unsupported shares together at most 1"
+            )));
+        }
+        if self.records * (self.abstain + self.unsupported) >= MAX_ABSTENTION_SHARE {
+            return Err(OrchestratorError::Refused(format!(
+                "abstentions are {:.0}% of the records: a model taught to say it cannot answer \
+                 half the time stops answering, so they stay under {:.0}%",
+                100.0 * self.records * (self.abstain + self.unsupported),
+                100.0 * MAX_ABSTENTION_SHARE
             )));
         }
         Ok(())
@@ -349,5 +361,8 @@ mod tests {
         // More abstentions than records with passages cannot be made.
         assert!(PassageShare::with_abstentions(0.1, 0.5).validate().is_err());
         assert!(PassageShare::with_abstentions(0.0, 0.1).validate().is_err());
+        // Half the data refusing is not a recipe.
+        assert!(PassageShare::with_abstentions(1.0, 0.5).validate().is_err());
+        assert!(PassageShare::with_abstentions(1.0, 0.4).validate().is_ok());
     }
 }
