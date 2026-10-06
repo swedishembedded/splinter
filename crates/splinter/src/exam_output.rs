@@ -239,3 +239,58 @@ impl Report for crate::exam_session::PlannedExam {
         )
     }
 }
+
+impl Report for crate::exam_session::LabelsExported {
+    fn human(&self) -> String {
+        format!(
+            "{} answer(s) to label written to {}; the key is {}. Fill each item's label with \
+             right or wrong, then: splinter exam-report labels-import {} --key {}\n",
+            self.items,
+            self.out.display(),
+            self.key.display(),
+            self.out.display(),
+            self.key.display()
+        )
+    }
+}
+
+impl Report for splinter_sdk::powered::audit::Agreement {
+    fn human(&self) -> String {
+        format!(
+            "{} labelled answer(s) the judge also decided ({} left out): agreement {:.3}, kappa {}; \
+             of what the judge called right the person called wrong {}, of what it called wrong the \
+             person called right {}; agreement on short answers {}, on long {}; length bias {} ({})\n",
+            self.items,
+            self.left_out,
+            self.agreement,
+            share(self.kappa),
+            share(self.false_right_rate),
+            share(self.false_wrong_rate),
+            share(self.agreement_short),
+            share(self.agreement_long),
+            share(self.length_bias),
+            self.position_bias
+        )
+    }
+}
+
+impl Report for crate::exam_session::Memorisation {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        for a in &self.arms {
+            let _ = writeln!(
+                out,
+                "  {}: {} answer(s); share of 8, 13 and 20 word runs found in the training text {}, {}, {}; \
+                 longest run {} words; {} quote(s) of twenty words or more",
+                a.arm,
+                a.answers,
+                share(a.mean_overlap_8),
+                share(a.mean_overlap_13),
+                share(a.mean_overlap_20),
+                a.longest_run,
+                a.quoting
+            );
+        }
+        out
+    }
+}

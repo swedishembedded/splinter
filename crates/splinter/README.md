@@ -37,6 +37,7 @@ splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... 
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--judge REF] [--prompt GOAL]
 splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | power [--families N] [--tasks-per-family N] [--effect SHARE] [--discordance SHARE] [--icc RHO] [--from-report FILE] | show EXAM
+splinter exam-report labels-export REPORT --out FILE --key FILE [--n N] [--seed N] | labels-import LABELS --key FILE | memorisation REPORT --candidate CANDIDATE
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -271,6 +272,19 @@ comparison's test (the family-clustered interval of the difference above zero) u
 effect, discordance and intraclass correlation, or under the discordance and clustering the
 report of a pilot (`exam --pilot-families N`) estimated, and says how often the test finds the
 effect and how often it finds one that is not there.
+
+The judge is measured against a person, who has to supply the labels:
+`exam-report labels-export` writes a sample of the exam's answers (400 by default)
+stratified by arm, by what the judge said and by length, shuffled and blind to the arm, each
+with the task and its reference passage and an empty `label`, and a key that keeps the arm and
+the judge's verdict; the person fills each `label` with `right` or `wrong`, and `labels-import`
+reports the agreement, Cohen's kappa, the share of what the judge called right that the person
+called wrong and the reverse, agreement on short and on long answers and the length bias
+(the judge grades each answer alone, so there is no position to favour). Nothing here makes up
+a label. `exam-report memorisation` measures how much of each arm's answers is the training
+text again - the share of 8, 13 and 20 word runs found in what the candidate was trained to
+produce, the longest run, the answers quoting twenty words or more - so voice can be told from
+memory; nearest-passage similarity and an authorship embedding are not measured.
 
 The `converse` kind teaches how the writer talks and reasons. Its task is the
 opening message of someone speaking to the writer (admitted only in the first or

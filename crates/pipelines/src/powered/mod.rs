@@ -31,7 +31,10 @@
 //! ([`analysis`]) can be redone without a model.
 
 pub mod analysis;
+pub mod audit;
+pub mod memorisation;
 pub mod plan;
+pub mod reports;
 pub mod voice;
 
 use std::collections::{BTreeMap, BTreeSet};

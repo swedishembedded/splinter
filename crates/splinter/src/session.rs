@@ -18,7 +18,6 @@ use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest};
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
-use splinter_sdk::exam_set::ExamSet;
 use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::learn::{learn, ExamPlan, LearnRequest, Learned};
@@ -44,9 +43,8 @@ use splinter_sdk::vocabulary::terms::Distribution;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::cli::{
-    Cli, Command, DatasetCommand, ExamSetCommand, ExperiencesCommand, Global, JudgeCommand,
-    LearnArgs, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
-    TasksCommand,
+    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
+    ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
 };
 use crate::exam_session;
 use crate::learn_output;
@@ -572,15 +570,8 @@ impl Session {
                 };
                 emit(json, &evaluate(ctx, &request)?);
             }
-            Command::ExamSet(ExamSetCommand::Create(args)) => {
-                emit(json, &exam_session::create(ctx, &args)?);
-            }
-            Command::ExamSet(ExamSetCommand::Power(args)) => {
-                emit(json, &exam_session::power(&args)?);
-            }
-            Command::ExamSet(ExamSetCommand::Show { id }) => {
-                emit(json, &ExamSet::load(ctx, &id)?);
-            }
+            Command::ExamReport(command) => exam_session::report(ctx, json, command)?,
+            Command::ExamSet(command) => exam_session::set(ctx, json, command)?,
             Command::Exam(args) if args.exam_set.is_some() => {
                 emit(json, &exam_session::powered(ctx, &args)?);
             }

@@ -152,3 +152,48 @@ pub struct PowerArgs {
     #[arg(long, value_name = "N", default_value_t = 400)]
     pub replicates: usize,
 }
+
+/// `exam-report`: analyses done after an exam from what its report kept.
+#[derive(Debug, Subcommand)]
+pub enum ExamReportCommand {
+    /// Write a blind, stratified, shuffled sample of the exam's answers for a
+    /// person to label right or wrong, and the key that says which arm gave
+    /// each and what the judge said.
+    LabelsExport {
+        /// The exam report (`exam --exam-set ... --json` output).
+        #[arg(value_name = "REPORT")]
+        report: PathBuf,
+        /// Where the items to label are written (JSON Lines).
+        #[arg(long, value_name = "FILE")]
+        out: PathBuf,
+        /// Where the key is written (JSON).
+        #[arg(long, value_name = "FILE")]
+        key: PathBuf,
+        /// Items to sample.
+        #[arg(long, value_name = "N", default_value_t = 400)]
+        n: usize,
+        /// Varies the sample.
+        #[arg(long, value_name = "N", default_value_t = 0)]
+        seed: u64,
+    },
+    /// What a person's labels say of the judge: agreement, kappa, false
+    /// right and false wrong rates, length bias.
+    LabelsImport {
+        /// The items, each with its `label` filled in `right` or `wrong`.
+        #[arg(value_name = "LABELS")]
+        labels: PathBuf,
+        /// The key `labels-export` wrote.
+        #[arg(long, value_name = "FILE")]
+        key: PathBuf,
+    },
+    /// How much of each arm's answers is the text the candidate was trained to
+    /// produce again: overlap of 8, 13 and 20 word runs and the longest run.
+    Memorisation {
+        /// The exam report.
+        #[arg(value_name = "REPORT")]
+        report: PathBuf,
+        /// The candidate the report is of.
+        #[arg(long, value_name = "CANDIDATE")]
+        candidate: String,
+    },
+}

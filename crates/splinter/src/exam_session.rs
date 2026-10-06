@@ -6,13 +6,15 @@
 use serde_json::json;
 use splinter_sdk::exam_set::{build, ExamBuilt, ExamSet, NewExam};
 use splinter_sdk::powered::plan::{simulate, Plan, Planned};
+use splinter_sdk::powered::{audit, memorisation, reports};
 use splinter_sdk::powered::{run, PoweredExam, PoweredRequest, DEFAULT_RESAMPLES};
 use splinter_sdk::runs::{record, Recorded};
 use splinter_sdk::sources::SourceTarget;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{ExamArgs, ExamSetArgs, PowerArgs};
+use crate::cli::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs};
+use crate::output::emit;
 
 /// Captures the sources, reserves the exam's families and freezes the exam.
 pub fn create(ctx: &Context, args: &ExamSetArgs) -> Result<Recorded<ExamBuilt>, Error> {
@@ -143,4 +145,120 @@ pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
         plan,
         planned: simulate(&plan),
     })
+}
+
+/// What `exam-report labels-export` wrote.
+#[derive(serde::Serialize)]
+pub struct LabelsExported {
+    /// Items to label.
+    pub items: usize,
+    /// The file of items.
+    pub out: std::path::PathBuf,
+    /// The key.
+    pub key: std::path::PathBuf,
+}
+
+/// Writes the sample to label and its key.
+pub fn labels_export(
+    ctx: &Context,
+    report: &std::path::Path,
+    out: &std::path::Path,
+    key: &std::path::Path,
+    n: usize,
+    seed: u64,
+) -> Result<LabelsExported, Error> {
+    let records = reports::read_records(report)?;
+    let (items, keyed) = audit::export(&records, &reports::StoredWording(ctx), n, seed);
+    let lines: Vec<String> = items
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<_, _>>()
+        .map_err(|e| Error::Refused(e.to_string()))?;
+    std::fs::write(out, lines.join("\n") + "\n")
+        .map_err(|e| Error::Refused(format!("{}: {e}", out.display())))?;
+    let key_text =
+        serde_json::to_string_pretty(&keyed).map_err(|e| Error::Refused(e.to_string()))?;
+    std::fs::write(key, key_text).map_err(|e| Error::Refused(format!("{}: {e}", key.display())))?;
+    Ok(LabelsExported {
+        items: items.len(),
+        out: out.to_path_buf(),
+        key: key.to_path_buf(),
+    })
+}
+
+/// What the labels in `labels` say of the judge, by the key in `key`.
+pub fn labels_import(
+    labels: &std::path::Path,
+    key: &std::path::Path,
+) -> Result<audit::Agreement, Error> {
+    let read = |path: &std::path::Path| {
+        std::fs::read_to_string(path)
+            .map_err(|e| Error::Refused(format!("{}: {e}", path.display())))
+    };
+    let keyed: std::collections::BTreeMap<String, audit::Keyed> = serde_json::from_str(&read(key)?)
+        .map_err(|e| Error::Refused(format!("{}: {e}", key.display())))?;
+    let mut given = std::collections::BTreeMap::new();
+    for line in read(labels)?.lines().filter(|l| !l.trim().is_empty()) {
+        let item: audit::Item = serde_json::from_str(line)
+            .map_err(|e| Error::Refused(format!("{}: {e}", labels.display())))?;
+        if let Some(label) = item.label {
+            given.insert(item.id, label);
+        }
+    }
+    Ok(audit::agreement(&given, &keyed))
+}
+
+/// Each arm's memorisation against what the candidate was trained to produce.
+#[derive(serde::Serialize)]
+pub struct Memorisation {
+    /// The arms.
+    pub arms: Vec<memorisation::ArmMemorisation>,
+}
+
+/// Measures the answers of the report against the candidate's training text.
+pub fn memorise(
+    ctx: &Context,
+    report: &std::path::Path,
+    candidate: &str,
+) -> Result<Memorisation, Error> {
+    let records = reports::read_records(report)?;
+    let corpus = reports::training_corpus(ctx, candidate)?;
+    let arms: std::collections::BTreeSet<String> = records
+        .iter()
+        .flat_map(|r| r.arms.keys().cloned())
+        .collect();
+    let arms: Vec<String> = arms.into_iter().collect();
+    Ok(Memorisation {
+        arms: memorisation::summarise(&corpus, &records, &arms),
+    })
+}
+
+/// Runs an `exam-report` command.
+pub fn report(ctx: &Context, json: bool, command: ExamReportCommand) -> Result<(), Error> {
+    match command {
+        ExamReportCommand::LabelsExport {
+            report,
+            out,
+            key,
+            n,
+            seed,
+        } => emit(json, &labels_export(ctx, &report, &out, &key, n, seed)?),
+        ExamReportCommand::LabelsImport { labels, key } => {
+            emit(json, &labels_import(&labels, &key)?);
+        }
+        ExamReportCommand::Memorisation { report, candidate } => {
+            emit(json, &memorise(ctx, &report, &candidate)?);
+        }
+    }
+    Ok(())
+}
+
+/// Runs an `exam-set` command.
+pub fn set(ctx: &Context, json: bool, command: ExamSetCommand) -> Result<(), Error> {
+    match command {
+        ExamSetCommand::Create(args) => emit(json, &create(ctx, &args)?),
+        ExamSetCommand::Power(args) => emit(json, &power(&args)?),
+        ExamSetCommand::Show { id } => emit(json, &ExamSet::load(ctx, &id)?),
+    }
+    Ok(())
 }

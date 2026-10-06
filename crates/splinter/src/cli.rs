@@ -137,6 +137,10 @@ pub enum Command {
     /// have a calibrated judge compare them; or, with --exam-set, to a frozen
     /// exam of reserved families, with every verdict kept.
     Exam(ExamArgs),
+    /// Analyses done after an exam from what its report kept: labels to
+    /// calibrate the judge by, and memorisation.
+    #[command(subcommand)]
+    ExamReport(ExamReportCommand),
     /// Make and show frozen exams: families reserved from sources, tasks
     /// written from their text alone.
     #[command(subcommand)]
@@ -768,7 +772,7 @@ impl LineageArgs {
 mod exam;
 mod state;
 mod train;
-pub use exam::{ExamArgs, ExamSetArgs, ExamSetCommand, PowerArgs};
+pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs};
 pub use state::{RunsCommand, StateCommand};
 pub use train::{RehearseArgs, TrainArgs};
 
