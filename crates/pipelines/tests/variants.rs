@@ -48,6 +48,7 @@ use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_pipelines::variants::{generate_variants, VariantsRequest};
 use splinter_pipelines::verify::verify_set;
 use splinter_store::runs::read_run;
+use splinter_store::tasks::{TaskEntry, TaskSet};
 
 /// A context whose policy is the manual's, and the tasks `tasks` writes
 /// from the manual (recall, and denoise, which cannot be varied).
@@ -137,6 +138,61 @@ fn each_task_gets_variants_in_a_set_of_their_own_recording_what_they_vary() {
             .ends_with(common::POLICY));
         assert!(member.prompt.is_some());
     }
+}
+
+/// Tasks are addressed by content, so a variant worded exactly as another
+/// task of the set would be that task: recorded as a variant, it would make
+/// an original something that is "never trained on".
+#[test]
+fn a_variant_worded_as_another_task_of_the_set_is_left_out() {
+    let (_scratch, ctx, generated) = manual_tasks("variants-twin");
+    let originals = ctx.tasks().get_set(&generated.task_set).unwrap();
+    let baud = originals
+        .members
+        .iter()
+        .find(|m| ctx.tasks().get(&m.task).unwrap().instruction == BAUD_QUESTION)
+        .unwrap()
+        .clone();
+    let twin = ctx
+        .tasks()
+        .get(&baud.task)
+        .unwrap()
+        .with_instruction(BAUD_VARIANTS[0])
+        .unwrap();
+    let twin = ctx.tasks().put(&twin).unwrap();
+    let set = ctx
+        .tasks()
+        .put_set(&TaskSet {
+            name: "a fact asked twice".into(),
+            members: vec![
+                baud.clone(),
+                TaskEntry {
+                    task: twin.clone(),
+                    ..baud.clone()
+                },
+            ],
+        })
+        .unwrap();
+    let variants = generate_variants(
+        &ctx,
+        &VariantsRequest {
+            task_set: &set,
+            generator: &ModelRef::policy_default(),
+            per_task: 3,
+            deadline: None,
+            cancel: CancelToken::new(),
+        },
+    )
+    .unwrap();
+    let recorded = ctx.tasks().get_set(&variants.variant_set.unwrap()).unwrap();
+    assert!(
+        recorded
+            .members
+            .iter()
+            .all(|m| m.task != twin && m.task != baud.task),
+        "{recorded:#?}"
+    );
+    assert_eq!(recorded.members.len(), 2, "the two wordings no task has");
 }
 
 #[test]
@@ -323,4 +379,69 @@ fn learn_measures_the_candidate_on_variants_of_what_it_trained_on() {
         "the variants and the held-out record"
     );
     assert_eq!(improvement.comparison.candidate_wins, 4, "{improvement:#?}");
+}
+
+/// A task some set lists as an original is one: an older store that
+/// recorded it as the variant of another (a variant worded as it was) does
+/// not make it untrainable.
+#[test]
+fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
+    let (_scratch, ctx, generated) = manual_tasks("variants-recorded-twin");
+    let originals = ctx.tasks().get_set(&generated.task_set).unwrap();
+    let baud = originals
+        .members
+        .iter()
+        .find(|m| ctx.tasks().get(&m.task).unwrap().instruction == BAUD_QUESTION)
+        .unwrap()
+        .clone();
+    let twin = ctx
+        .tasks()
+        .get(&baud.task)
+        .unwrap()
+        .with_instruction(BAUD_VARIANTS[0])
+        .unwrap();
+    let twin = ctx.tasks().put(&twin).unwrap();
+    let twin_entry = TaskEntry {
+        task: twin,
+        ..baud.clone()
+    };
+    let facts = ctx
+        .tasks()
+        .put_set(&TaskSet {
+            name: "a fact asked twice".into(),
+            members: vec![baud.clone(), twin_entry.clone()],
+        })
+        .unwrap();
+    ctx.tasks()
+        .put_set(&TaskSet {
+            name: "recorded by an older run".into(),
+            members: vec![TaskEntry {
+                variant_of: Some(baud.task.clone()),
+                ..twin_entry
+            }],
+        })
+        .unwrap();
+    let solved = solve_set(
+        &ctx,
+        &facts,
+        &ModelRef::policy_default(),
+        None,
+        &CancelToken::new(),
+    )
+    .unwrap();
+    verify_set(&ctx, &solved.experience_set, None, &CancelToken::new()).unwrap();
+    let built = build(
+        &ctx,
+        &BuildRequest {
+            sets: vec![solved.experience_set],
+            view: ViewName::SftFinal,
+            strip: None,
+            min_strength: None,
+            system_prompt: None,
+            export_only: false,
+            limit: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(built.records, 2);
 }

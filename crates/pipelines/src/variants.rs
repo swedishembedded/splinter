@@ -99,6 +99,7 @@ pub fn generate_variants(
     let generator = ModelTaskGenerator::new(Arc::new(proposer), ctx.sources()).with_policy(policy);
     let mut out = VariantsGenerated::default();
     let mut members: Vec<TaskEntry> = Vec::new();
+    let original_ids: BTreeSet<&Digest> = originals.members.iter().map(|m| &m.task).collect();
     for entry in &originals.members {
         if request.cancel.is_cancelled() {
             return Err(OrchestratorError::Cancelled);
@@ -139,6 +140,18 @@ pub fn generate_variants(
             }));
         for generated in report.admitted {
             let id = ctx.tasks().put(&generated.task)?;
+            // Tasks are addressed by content: a variant worded as another
+            // task of the set is that task, and recording it as a variant
+            // would make an original a task that is never trained on.
+            if original_ids.contains(&id) {
+                *out.rejected.entry("duplicate".into()).or_default() += 1;
+                out.rejections.push(RejectionNote {
+                    reason: "duplicate".into(),
+                    kind: generated.task.task.kind.to_string(),
+                    detail: generated.task.instruction.clone(),
+                });
+                continue;
+            }
             if members.iter().all(|m| m.task != id) {
                 members.push(TaskEntry {
                     task: id,
@@ -161,21 +174,28 @@ pub fn generate_variants(
 }
 
 /// Every stored variant, with the task it is a variant of: each variant
-/// once, in the order the task sets list them.
+/// once, in the order the task sets list them. A task that some set lists as
+/// an original is one whatever else records of it (tasks are addressed by
+/// content, so a variant worded as an original is that original).
 pub(crate) fn stored_variants(ctx: &Context) -> Result<Vec<(Digest, Digest)>, OrchestratorError> {
     let store = ctx.tasks();
-    let mut seen = BTreeSet::new();
-    let mut variants = Vec::new();
+    let mut originals = BTreeSet::new();
+    let mut listed = Vec::new();
     for id in store.list_sets()? {
         for entry in store.get_set(&id)?.members {
-            if let Some(original) = entry.variant_of {
-                if seen.insert(entry.task.clone()) {
-                    variants.push((entry.task, original));
+            match entry.variant_of {
+                Some(original) => listed.push((entry.task, original)),
+                None => {
+                    originals.insert(entry.task);
                 }
             }
         }
     }
-    Ok(variants)
+    let mut seen = BTreeSet::new();
+    Ok(listed
+        .into_iter()
+        .filter(|(variant, _)| !originals.contains(variant) && seen.insert(variant.clone()))
+        .collect())
 }
 
 /// Refuses `experiences` when one is of a variant task: a variant is
