@@ -52,7 +52,10 @@
 //! projected from experiences; what this crate decides for them is how they
 //! are divided for evaluation: [`partition`] holds out a locked test and
 //! lays out repeated grouped stratified cross-validation over the rest,
-//! pinned by digest before anything trains.
+//! pinned by digest before anything trains. [`split`] adds the temporal and
+//! leave-one-source-out splits and the leakage gates a split passes: no group
+//! in two parts, a held-out source held out whole, nothing after a cutoff in
+//! training, nothing fitted outside the training units.
 
 #![warn(missing_docs)]
 
@@ -63,6 +66,7 @@ pub mod holdout;
 pub mod partition;
 mod render;
 mod replay;
+pub mod split;
 mod store;
 mod strip;
 mod trajectory;
@@ -566,6 +570,9 @@ pub enum ViewError {
         /// The validator's error.
         reason: String,
     },
+    /// A split or a dataset about to be written fails a leakage gate.
+    #[error(transparent)]
+    Leakage(#[from] split::LeakageError),
     /// A file operation failed.
     #[error("{path}: {source}")]
     Io {

@@ -38,6 +38,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::partition::Unit;
+use crate::split::{verify_disjoint, Part};
 use crate::ViewError;
 
 /// How one sample stands to the split: the group it is held out or trained
@@ -343,6 +345,25 @@ fn split_file(
     } else {
         examinable
     };
+    // The rule never divides a group; the gate checks the files about to be
+    // written rather than trusting the rule that made them.
+    let units = |lines: &[&&str], side: &str| -> Vec<Unit> {
+        lines
+            .iter()
+            .enumerate()
+            .map(|(n, line)| Unit {
+                id: format!("{side}-{n}"),
+                group: record_membership(line)
+                    .group
+                    .unwrap_or_else(|| format!("{side}-{n}")),
+                stratum: String::new(),
+            })
+            .collect()
+    };
+    verify_disjoint(&[
+        (Part::Train, &units(&train, "kept")),
+        (Part::Test, &units(&scored, "out")),
+    ])?;
     let write = |name: &str, lines: &[&&str]| -> Result<PathBuf, ViewError> {
         let path = dir.join(name);
         let mut body = lines.iter().map(|l| **l).collect::<Vec<_>>().join("\n");
