@@ -18,6 +18,10 @@
 //! * [`metric_gate`] - the release decision over continuous metrics and
 //!   their intervals, for a model judged by a metric rather than item by
 //!   item: requirements as data, unmeasured as failure.
+//! * [`predictive_gate`] - the release gate for a predictive model over
+//!   paired held-out units: performance, calibration, retention on
+//!   subgroups, serving correctness and data-policy compliance, built on
+//!   [`metric_gate`] requirements.
 //! * [`significance`] - the paired sign test the gate rests on, handed in by
 //!   the model backend.
 //! * [`paired`] - two models graded on the same items, compared only where
@@ -46,5 +50,6 @@ pub mod gate;
 pub mod metric_gate;
 pub mod overlap;
 pub mod paired;
+pub mod predictive_gate;
 pub mod significance;
 pub mod verifiers;

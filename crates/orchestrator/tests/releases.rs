@@ -100,13 +100,13 @@ fn keep(f: &Fixture, bytes: &[u8]) -> Digest {
 fn unmeasured_gate() -> ReleaseGate {
     let why = "written by the release store spec";
     ReleaseGate::Llm {
-        report: GateReport::new(
+        report: Box::new(GateReport::new(
             GateConfig::default(),
             Check::unmeasured(why),
             Check::unmeasured(why),
             Check::unmeasured(why),
             Check::unmeasured(why),
-        ),
+        )),
     }
 }
 

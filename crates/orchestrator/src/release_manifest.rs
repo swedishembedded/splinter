@@ -27,6 +27,7 @@ use splinter_core::terms::{Distribution, Terms};
 use splinter_core::training::{ReplaySample, TrainingSummary};
 use splinter_eval::gate::GateReport;
 use splinter_eval::metric_gate::Evidence;
+use splinter_eval::predictive_gate::PredictiveReport;
 
 /// The `format` every manifest is written with.
 pub const RELEASE_FORMAT: &str = "splinter-release-v4";
@@ -119,8 +120,14 @@ impl ReleasedArtifact {
 pub enum ReleaseGate {
     /// The four-check gate over graded answers.
     Llm {
-        /// The report.
-        report: GateReport,
+        /// The report, boxed so the variants stay small.
+        report: Box<GateReport>,
+    },
+    /// The five-check gate over a predictive model's metrics on paired
+    /// held-out units.
+    Predictive {
+        /// The report, boxed so the variants stay small.
+        report: Box<PredictiveReport>,
     },
 }
 
@@ -130,7 +137,18 @@ impl ReleaseGate {
     #[must_use]
     pub fn llm(&self) -> Option<&GateReport> {
         match self {
-            Self::Llm { report } => Some(report),
+            Self::Llm { report } => Some(report.as_ref()),
+            Self::Predictive { .. } => None,
+        }
+    }
+
+    /// The predictive gate's report, when that is the gate the release
+    /// passed.
+    #[must_use]
+    pub fn predictive(&self) -> Option<&PredictiveReport> {
+        match self {
+            Self::Predictive { report } => Some(report.as_ref()),
+            Self::Llm { .. } => None,
         }
     }
 }
@@ -291,7 +309,9 @@ impl ManifestV3 {
             datasets: self.datasets,
             replay: self.replay,
             training: self.training,
-            gate: ReleaseGate::Llm { report: self.gate },
+            gate: ReleaseGate::Llm {
+                report: Box::new(self.gate),
+            },
             metrics: None,
             terms: self.terms,
             distribution: self.distribution,

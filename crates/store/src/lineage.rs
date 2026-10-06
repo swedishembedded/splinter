@@ -18,7 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use splinter_expdb::model::{DatasetNode, ModelNode, TrainingRun};
+use splinter_expdb::model::{DatasetNode, Entity, ModelNode, TrainingRun};
 use splinter_expdb::{ContentId, RecordId};
 
 use crate::documents::encode;
@@ -176,8 +176,36 @@ impl Workspace {
         parent: Option<&Digest>,
     ) -> Result<Digest, StoreError> {
         let (id, entity) = encode(CANDIDATE, document)?;
+        self.record_candidate_node(Some(entity), candidate, datasets, objective, parent)?;
+        Ok(id)
+    }
+
+    /// Records the candidate `candidate` that was trained outside Splinter's
+    /// own trainers (a full checkpoint brain trained): the training that made
+    /// it from `datasets`, continuing `parent` when it had one, in one commit,
+    /// with no candidate document - the release's manifest is its record.
+    /// Every dataset must have been recorded. Recording the same candidate
+    /// again changes nothing.
+    pub fn record_external_candidate(
+        &self,
+        candidate: &str,
+        datasets: &[Digest],
+        objective: &str,
+        parent: Option<&Digest>,
+    ) -> Result<(), StoreError> {
+        self.record_candidate_node(None, candidate, datasets, objective, parent)
+    }
+
+    fn record_candidate_node(
+        &self,
+        entity: Option<Entity>,
+        candidate: &str,
+        datasets: &[Digest],
+        objective: &str,
+        parent: Option<&Digest>,
+    ) -> Result<(), StoreError> {
         if self.node("candidate", candidate)?.is_some() {
-            return Ok(id);
+            return Ok(());
         }
         let mut sources = Vec::with_capacity(datasets.len());
         for dataset in datasets {
@@ -206,7 +234,9 @@ impl Workspace {
         let key = node_key("candidate", candidate)?;
         let objective = objective.to_owned();
         self.write(|s| {
-            put_spilling(s, entity.clone())?;
+            if let Some(entity) = &entity {
+                put_spilling(s, entity.clone())?;
+            }
             let runs = s.with_collector(|c| {
                 sources
                     .iter()
@@ -220,8 +250,7 @@ impl Workspace {
                     .collect::<splinter_expdb::Result<Vec<_>>>()
             })?;
             Self::name_node(s, key, "candidate", candidate, runs)
-        })?;
-        Ok(id)
+        })
     }
 
     /// Records the release whose manifest is `document`, named `name`, made by

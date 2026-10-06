@@ -71,6 +71,7 @@ needs Splinter installed.
 | Supervised fine-tuning with replay, preference fine-tuning by DPO | working |
 | Four-check release gate, immutable releases, rollback | working |
 | Lineage from an answer back to the source bytes | working |
+| A predictive release gate for non-language models (`release_predictive`): the champion and candidate are scored on the same held-out units (a different unit set is refused); performance, calibration, retention on named subgroups, serving correctness and data-policy compliance are decided from pre-registered requirements over numbers the caller measured, and an unmeasured number fails | working |
 | Releases of a full checkpoint (brain owns its format; Splinter keeps the immutable file, its digest, the architecture name and the brain and splinter commits) beside adapter releases, with the same aliases, compare-and-set moves and rollback; manifests of earlier formats still load | working |
 | Usage policy on every source (`redistributable`, `research_only`, `noncommercial`, `restricted_DUA`, `unknown`) carried to the dataset, training run and release; an unrestricted release is refused unless every axis is allowed, `unknown` never is, and a restricted release records its terms (`source add --usage-policy`, `release --unrestricted`) | working |
 | Models by role (policy, teacher, generator, planner, judge, critic, router) | working |

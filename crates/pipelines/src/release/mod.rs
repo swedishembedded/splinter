@@ -27,12 +27,18 @@
 //! suite shows forgotten are queued for new tasks
 //! ([`crate::curriculum::queue`]).
 //!
+//! A candidate that is not a language model - a full checkpoint scored by
+//! metrics on held-out units - is released through [`predictive`], which
+//! decides the predictive gate over the numbers its caller measured and
+//! writes the same kind of release.
+//!
 //! `rollback` points an alias at the release its current one was trained
 //! from, and refuses when there is none.
 
 pub mod anchor;
 pub mod leakage;
 pub mod meaning;
+pub mod predictive;
 pub mod probe;
 pub mod serve;
 
@@ -341,7 +347,7 @@ fn manifest(
             terms: candidate.terms.clone(),
         },
         gate: ReleaseGate::Llm {
-            report: gate.clone(),
+            report: Box::new(gate.clone()),
         },
         metrics: None,
         terms,

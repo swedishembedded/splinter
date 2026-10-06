@@ -139,13 +139,13 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
             terms: None,
         },
         gate: ReleaseGate::Llm {
-            report: GateReport::new(
+            report: Box::new(GateReport::new(
                 GateConfig::default(),
                 Check::unmeasured(unmeasured),
                 Check::unmeasured(unmeasured),
                 Check::unmeasured(unmeasured),
                 Check::unmeasured(unmeasured),
-            ),
+            )),
         },
         metrics: None,
         provenance: Provenance::default(),
