@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The release gate's serve check no longer loses every served verdict: the
+  served answers are decided (the judge, a model of its own, loads) only after
+  the `brain serve` process has exited, instead of while it holds the device,
+  where the judge ran out of memory and left each served answer ungraded and so
+  "different". An ungraded served answer, or a server that stops answering, is
+  now "not measured" (with what the server last wrote), never a disagreement.
 ### Added
 - `exam CANDIDATE --exam-set EXAM --deployed-only` asks only the candidate under the prompt it is deployed
   with, for a candidate to be paired offline with the base and prompted arms of another report of the

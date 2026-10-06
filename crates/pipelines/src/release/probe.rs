@@ -284,22 +284,50 @@ pub fn grade(
     suite: &Suite,
     cancel: &CancelToken,
 ) -> Result<Vec<Probe>, OrchestratorError> {
-    // The judge the command names grades the kinds a judge grades; the
-    // judged verdict is the one a task of such a kind is decided by, and two
-    // models are compared on it.
-    let judge = Judge::active(ctx, Use::Comparison)?;
+    // A judge that is refused is refused before the model is asked anything.
+    Judge::active(ctx, Use::Comparison)?;
+    let answered = answer_all(ctx, model, suite, cancel)?;
+    judge_all(ctx, suite, answered)
+}
+
+/// What a model answered to every task of a suite, not yet decided.
+pub struct Answered(Vec<Experience>);
+
+/// `model`'s answer to every task of `suite`, in order, as [`grade`] asks
+/// them; [`judge_all`] decides them. The two are apart so that a model
+/// served by another process can be stopped between them: the judge is a
+/// model of its own that needs the device the server holds.
+pub fn answer_all(
+    ctx: &Context,
+    model: &Model,
+    suite: &Suite,
+    cancel: &CancelToken,
+) -> Result<Answered, OrchestratorError> {
     // Every task is answered before any is judged: a device holds one base
     // at a time, and a judge that is another model than the one asked would
     // otherwise be loaded and the asked model reloaded for every task.
-    let experiences = suite
-        .tasks
-        .iter()
-        .map(|task| answer(ctx, model, task, cancel))
-        .collect::<Result<Vec<_>, _>>()?;
     suite
         .tasks
         .iter()
-        .zip(experiences)
+        .map(|task| answer(ctx, model, task, cancel))
+        .collect::<Result<Vec<_>, _>>()
+        .map(Answered)
+}
+
+/// The outcome of every answer of `answered`, to the tasks of `suite`, as
+/// [`grade`] decides it. The judge the command names grades the kinds a
+/// judge grades; the judged verdict is the one a task of such a kind is
+/// decided by, and two models are compared on it.
+pub fn judge_all(
+    ctx: &Context,
+    suite: &Suite,
+    answered: Answered,
+) -> Result<Vec<Probe>, OrchestratorError> {
+    let judge = Judge::active(ctx, Use::Comparison)?;
+    suite
+        .tasks
+        .iter()
+        .zip(answered.0)
         .map(|(task, experience)| verdict_of(ctx, task, experience, judge.as_ref()))
         .collect()
 }

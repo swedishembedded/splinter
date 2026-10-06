@@ -289,6 +289,9 @@ pub enum Brain {
     /// The stand-in, reporting the real digest and answering something
     /// else than the candidate in-process, whatever it is asked.
     Different,
+    /// The stand-in, reporting the real digest and then dying with an
+    /// out-of-memory message when it is first asked something.
+    Crashing,
 }
 
 /// The file standing for the device being held: while it exists, the
@@ -333,9 +336,11 @@ pub fn gate_context(test: &str, brain: Brain) -> (Scratch, Context) {
     let mut config = config(&scratch);
     config.brain_binary = match brain {
         Brain::Missing => None,
-        Brain::Honest | Brain::WrongDigest | Brain::Divergent | Brain::Different => {
-            Some(fake_brain(&scratch.0, brain))
-        }
+        Brain::Honest
+        | Brain::WrongDigest
+        | Brain::Divergent
+        | Brain::Different
+        | Brain::Crashing => Some(fake_brain(&scratch.0, brain)),
     };
     let base = arm(&config, None);
     let ctx = Context::new(config, false)
@@ -707,6 +712,7 @@ fn fake_brain(dir: &Path, brain: Brain) -> PathBuf {
         .replace("@WRONG@", python(brain == Brain::WrongDigest))
         .replace("@DIVERGENT@", python(brain == Brain::Divergent))
         .replace("@DIFFERENT@", python(brain == Brain::Different))
+        .replace("@CRASHING@", python(brain == Brain::Crashing))
         .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string())
         .replace("@LOG@", &dir.join(REQUEST_LOG).display().to_string());
     std::fs::write(&path, script).unwrap();
@@ -756,6 +762,9 @@ def text_of(content):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
+        if @CRASHING@:
+            print("wgpu error: Out of Memory", file=sys.stderr, flush=True)
+            os._exit(1)
         if self.headers.get("Authorization") != "Bearer sk-fake":
             self.send_response(401); self.end_headers(); return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))

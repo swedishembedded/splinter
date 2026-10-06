@@ -33,7 +33,13 @@
 //! stopped when the check ends, however it ends.
 //!
 //! The server loads its own copy of the base, so every base this process
-//! keeps resident is released before it starts.
+//! keeps resident is released before it starts. The answers are decided
+//! only after the server has exited ([`ask_then_judge`]): the judge, a model
+//! of its own, would otherwise run out of memory on the device the server
+//! holds and every served verdict would be lost. A served answer that could
+//! not be graded is not a disagreement: the check is not measured
+//! ([`ungraded`]), and so is one whose server stopped answering, with what
+//! the server last wrote.
 //!
 //! Without a `brain` binary, or when it does not start, the check is not
 //! measured - and the gate fails.
@@ -49,14 +55,14 @@ use splinter_agent::CancelToken;
 use splinter_model::local::GREEDY_SAMPLING;
 
 use crate::release::meaning;
-use crate::release::probe::{grade, Probe, Suite};
+use crate::release::probe::{answer_all, judge_all, Probe, Suite};
 use splinter_eval::gate::{self, Check, Disagreement, Serve};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
 /// What starts every line naming the adapter brain serves.
 const STARTUP_PREFIX: &str = "brain serve: ";
-/// The most output lines kept to explain a server that did not start.
+/// The most output lines kept to explain a server that did not start or stopped answering.
 const KEPT_LINES: usize = 20;
 
 /// What the serve check is asked to prove.
@@ -190,10 +196,9 @@ fn serve_and_ask(
             return Err(Failure::Cancelled);
         }
         if let Ok(Some(status)) = running.0.try_wait() {
-            kept.extend(lines.try_iter());
             return Err(Failure::Unmeasured(format!(
                 "brain serve exited ({status}) before it served: {}",
-                kept.join(" | ")
+                recent_output(&lines, &mut kept)
             )));
         }
         let left = deadline.saturating_duration_since(Instant::now());
@@ -201,7 +206,7 @@ fn serve_and_ask(
             return Err(Failure::Unmeasured(format!(
                 "brain serve did not report its adapter and readiness within {}s: {}",
                 startup.as_secs(),
-                kept.join(" | ")
+                recent_output(&lines, &mut kept)
             )));
         }
         match lines.recv_timeout(left.min(Duration::from_millis(100))) {
@@ -209,10 +214,7 @@ fn serve_and_ask(
                 if startup_line.is_none() && is_adapter_line(&line) {
                     startup_line = Some(line.clone());
                 }
-                if kept.len() == KEPT_LINES {
-                    kept.remove(0);
-                }
-                kept.push(line);
+                remember(&mut kept, line);
             }
             Err(RecvTimeoutError::Timeout) => {}
             // Both streams closed: the exit is reported by `try_wait` above
@@ -252,13 +254,28 @@ fn serve_and_ask(
         Some(system) => served.with_system(system),
         None => served,
     };
-    let answers = grade(ctx, &served, sample, cancel).map_err(|e| match e {
-        OrchestratorError::Cancelled => Failure::Cancelled,
-        other => Failure::Unmeasured(format!("asking the served candidate: {other}")),
-    })?;
+    let answers = ask_then_judge(
+        running,
+        || {
+            answer_all(ctx, &served, sample, cancel).map_err(|e| match e {
+                OrchestratorError::Cancelled => Failure::Cancelled,
+                other => Failure::Unmeasured(format!(
+                    "asking the served candidate: {other}; brain serve said: {}",
+                    recent_output(&lines, &mut kept)
+                )),
+            })
+        },
+        |answered| {
+            judge_all(ctx, sample, answered).map_err(|e| match e {
+                OrchestratorError::Cancelled => Failure::Cancelled,
+                other => Failure::Unmeasured(format!("grading the served answers: {other}")),
+            })
+        },
+    )?;
     measured.sampled = sample.tasks.len();
-    // The server has answered everything it will be asked.
-    drop(running);
+    if let Some(why) = ungraded(&answers, in_process) {
+        return Err(Failure::Unmeasured(why));
+    }
     let agree = agreements(ctx, &answers, in_process).map_err(Failure::Unmeasured)?;
     for (((task, served), local), agreed) in
         sample.tasks.iter().zip(&answers).zip(in_process).zip(agree)
@@ -276,6 +293,39 @@ fn serve_and_ask(
         }
     }
     Ok(gate::serve(measured))
+}
+
+/// Asks with the server running, stops it, then judges what it answered.
+/// The judge is a model of its own that needs the device the server holds
+/// until its process has exited: judged with the server alive, its load
+/// runs out of device memory and every verdict is lost.
+fn ask_then_judge<A, P>(
+    server: Running,
+    ask: impl FnOnce() -> Result<A, Failure>,
+    judge: impl FnOnce(A) -> Result<P, Failure>,
+) -> Result<P, Failure> {
+    let answered = ask()?;
+    drop(server);
+    judge(answered)
+}
+
+/// Why the served answers cannot be compared, when a task the in-process
+/// answer was graded on has no verdict on the served one: grading failed
+/// there, and calling that a disagreement would blame the served model for
+/// it.
+fn ungraded(served: &[Probe], in_process: &[Probe]) -> Option<String> {
+    let count = served
+        .iter()
+        .zip(in_process)
+        .filter(|(s, l)| s.verdict.is_none() && l.verdict.is_some())
+        .count();
+    (count > 0).then(|| {
+        format!(
+            "the served answers to {count} of {} task(s) were not graded, though the in-process \
+             ones were",
+            served.len()
+        )
+    })
 }
 
 /// Per task, whether the served answer is the in-process one: [`alike`] as
@@ -361,6 +411,22 @@ fn alike(a: &Probe, b: &Probe) -> bool {
         }
         _ => false,
     }
+}
+
+/// Keeps `line` among the last [`KEPT_LINES`] of `kept`.
+fn remember(kept: &mut Vec<String>, line: String) {
+    if kept.len() == KEPT_LINES {
+        kept.remove(0);
+    }
+    kept.push(line);
+}
+
+/// What the server last wrote, as one line of text.
+fn recent_output(lines: &Receiver<String>, kept: &mut Vec<String>) -> String {
+    for line in lines.try_iter() {
+        remember(kept, line);
+    }
+    kept.join(" | ")
 }
 
 /// Every line the child writes, from stdout and stderr alike.
@@ -498,5 +564,37 @@ mod tests {
             None
         );
         assert_eq!(parse_adapter_line("APIKEY openai sk-brain-1"), None);
+    }
+
+    #[test]
+    fn the_server_is_gone_before_its_answers_are_judged() {
+        let child = Command::new("sleep").arg("60").spawn().unwrap();
+        let pid = child.id();
+        let alive = move || Path::new(&format!("/proc/{pid}")).exists();
+        let judged = ask_then_judge(
+            Running(child),
+            || {
+                assert!(alive(), "the server answers while it runs");
+                Ok(7)
+            },
+            |answered| {
+                assert!(!alive(), "the judge needs the device the server held");
+                Ok(answered)
+            },
+        );
+        assert!(matches!(judged, Ok(7)));
+    }
+
+    #[test]
+    fn a_served_answer_that_was_not_graded_is_not_a_disagreement() {
+        let probe = |verdict| Probe {
+            answer: Some("a".into()),
+            verdict,
+        };
+        let local = [probe(Some(true)), probe(None), probe(Some(false))];
+        assert_eq!(ungraded(&local, &local), None);
+        let served = [probe(None), probe(None), probe(Some(false))];
+        let why = ungraded(&served, &local).unwrap();
+        assert!(why.contains("1 of 3"), "{why}");
     }
 }

@@ -316,6 +316,23 @@ fn a_served_candidate_that_says_the_same_in_other_words_is_released() {
 }
 
 #[test]
+fn a_server_that_dies_while_asked_is_not_measured_and_says_what_it_wrote() {
+    let (scratch, ctx) = gate_context("release-crashing", Brain::Crashing);
+    freeze_anchor(&scratch, &ctx);
+    let (good, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+
+    let decided = decide(&ctx, &good);
+    let gate = &decided.gate;
+    assert!(!gate.serve.passed && decided.release.is_none(), "{gate:#?}");
+    assert!(gate.serve.measured.is_none(), "{gate:#?}");
+    let why = gate.serve.reason.as_deref().unwrap();
+    assert!(
+        why.contains("not measured") && why.contains("wgpu error: Out of Memory"),
+        "{why}"
+    );
+}
+
+#[test]
 fn a_served_candidate_that_answers_something_else_is_not_released() {
     let (scratch, ctx) = gate_context("release-different", Brain::Different);
     freeze_anchor(&scratch, &ctx);
