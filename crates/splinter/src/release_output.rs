@@ -47,6 +47,19 @@ impl Report for GateReport {
                 m.alpha
             );
         }
+        if let Some(t) = self
+            .improvement
+            .measured
+            .as_ref()
+            .and_then(|m| m.task_level)
+        {
+            let _ = writeln!(
+                out,
+                "               by task (not what decides): candidate ahead by {:+.3} [{:+.3}, {:+.3}] \
+                 with families resampled, exact sign test over tasks p = {:.4}",
+                t.difference, t.low, t.high, t.p_value
+            );
+        }
         if let Some(m) = &self.improvement.measured {
             for (label, part) in [
                 ("generalisation (held-out records)", &m.generalisation),

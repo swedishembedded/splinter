@@ -41,6 +41,7 @@ pub mod meaning;
 pub mod predictive;
 pub mod probe;
 pub mod serve;
+mod statistics;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -64,14 +65,13 @@ use crate::train::{load_candidate, Candidate};
 use probe::{clustered, pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use splinter_core::training::{TrainingCurve, TrainingSummary};
-use splinter_eval::gate::{
-    self, Check, DropInterval, GateConfig, GateReport, SuitePrompts, SuiteSummary,
-};
+use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
 use splinter_eval::paired::PairedOutcome;
-use splinter_model::stats::{bootstrap_interval, BrainSignificance};
+use splinter_model::stats::BrainSignificance;
 use splinter_orchestrator::config::Config;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use statistics::{drop_interval, items_to_see_two_points, task_level, with_task_level};
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]
@@ -562,47 +562,6 @@ impl Suites {
     }
 }
 
-/// The share of resampled drops the anchor's interval holds.
-const DROP_INTERVAL_LEVEL: f64 = 0.95;
-/// Resamples the anchor's interval is made from.
-const DROP_INTERVAL_RESAMPLES: usize = 4000;
-
-/// The bootstrap interval of the champion's accuracy minus the candidate's
-/// over the items both were graded on: an item the champion alone got right
-/// is 1, the candidate alone -1, a tie 0.
-fn drop_interval(outcomes: &[PairedOutcome]) -> Option<DropInterval> {
-    let drops: Vec<f64> = outcomes
-        .iter()
-        .filter_map(PairedOutcome::paired)
-        .map(|(candidate, baseline)| f64::from(baseline) - f64::from(candidate))
-        .collect();
-    bootstrap_interval(&drops, DROP_INTERVAL_RESAMPLES, DROP_INTERVAL_LEVEL, 0).map(|i| {
-        DropInterval {
-            level: DROP_INTERVAL_LEVEL,
-            low: i.low,
-            high: i.high,
-        }
-    })
-}
-
-/// One-sided 5% and 80% power quantiles of the standard normal, summed and
-/// squared: the factor of the sample size of a paired difference.
-const POWER_FACTOR: f64 = 6.18;
-
-/// The drop a suite is asked to be able to see, in share of items.
-const WANTED_DROP: f64 = 0.02;
-
-/// The paired items it takes to see a drop of [`WANTED_DROP`] with four
-/// chances in five, at the discordance `comparison` found: the variance of an
-/// item's difference is about the share of items on which the arms differ.
-fn items_to_see_two_points(comparison: &splinter_eval::paired::Comparison) -> Option<usize> {
-    let discordant = comparison.candidate_wins + comparison.baseline_wins;
-    (comparison.paired > 0 && discordant > 0).then(|| {
-        let share = discordant as f64 / comparison.paired as f64;
-        (POWER_FACTOR * share / (WANTED_DROP * WANTED_DROP)).ceil() as usize
-    })
-}
-
 /// The four checks on `candidate` against `champion`.
 fn run_gate(
     ctx: &Context,
@@ -669,6 +628,9 @@ fn run_gate(
                     config.alpha,
                     &BrainSignificance,
                 );
+                if let Some(measured) = check.measured.as_mut() {
+                    measured.task_level = task_level(&outcomes);
+                }
                 if let (Some(measured), Some(parts)) = (check.measured.as_mut(), &suites.parts) {
                     let (recall, generalisation): (Vec<PairedOutcome>, Vec<PairedOutcome>) =
                         outcomes
@@ -678,10 +640,13 @@ fn run_gate(
                         parts.generalisation.clone(),
                         &generalisation,
                         &BrainSignificance,
-                    );
-                    measured.recall = parts.recall.clone().and_then(|summary| {
-                        gate::part_result(summary, &recall, &BrainSignificance)
-                    });
+                    )
+                    .map(|part| with_task_level(part, &generalisation));
+                    measured.recall = parts
+                        .recall
+                        .clone()
+                        .and_then(|summary| gate::part_result(summary, &recall, &BrainSignificance))
+                        .map(|part| with_task_level(part, &recall));
                 }
                 in_process = Some(c);
                 check

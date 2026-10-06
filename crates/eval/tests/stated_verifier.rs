@@ -143,6 +143,9 @@ fn a_correct_answer_is_not_failed_for_how_the_fact_is_written() {
             "Fifteen plus twenty-seven is forty-two, so forty-two (42).",
         ),
         ("six", "A hexagon has 6 sides."),
+        ("42", "Fifteen plus twenty-seven is forty-two."),
+        ("forty-two", "The sum is 42."),
+        ("mouse", "Mouse."),
     ] {
         assert_eq!(
             judged(Some(reference), Some(answer)).0,

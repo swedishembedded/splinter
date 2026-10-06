@@ -658,6 +658,17 @@ fn variants_of_the_trained_facts_give_the_sign_test_enough_tasks() {
         generalisation.sign_test.p_value > improvement.alpha,
         "three records alone are not significant: {generalisation:?}"
     );
+    // What the tasks say beside the family-level decision: twelve wins, no
+    // losses, over the held-out records and the variants together.
+    let by_task = improvement.task_level.unwrap();
+    assert!(by_task.p_value < 0.001, "{by_task:?}");
+    assert!(by_task.low <= by_task.difference && by_task.difference <= by_task.high);
+    assert!(improvement
+        .generalisation
+        .as_ref()
+        .unwrap()
+        .task_level
+        .is_some());
     let recall = improvement.recall.as_ref().unwrap();
     assert_eq!(recall.suite.tasks, 9);
     assert_eq!(recall.comparison.candidate_wins, 9);

@@ -197,17 +197,42 @@ const NUMBER_WORDS: &[(&str, u32)] = &[
 
 /// The other way `reference` is written when it is one whole number: the
 /// digits of a number word, or the word of digits; `None` for anything else.
-fn other_numeral(reference: &str) -> Option<String> {
-    if let Ok(n) = reference.parse::<u32>() {
-        return NUMBER_WORDS
+fn other_numeral(reference: &str) -> Vec<String> {
+    let word_of = |n: u32| {
+        NUMBER_WORDS
             .iter()
             .find(|(_, value)| *value == n)
-            .map(|(word, _)| (*word).to_string());
+            .map(|(word, _)| (*word).to_string())
+    };
+    if let Ok(n) = reference.parse::<u32>() {
+        if let Some(word) = word_of(n) {
+            return vec![word];
+        }
+        // 21 to 99 as tens and units: forty-two, forty two.
+        if (21..100).contains(&n) {
+            if let (Some(tens), Some(units)) = (word_of(n / 10 * 10), word_of(n % 10)) {
+                return vec![format!("{tens}-{units}"), format!("{tens} {units}")];
+            }
+        }
+        return Vec::new();
     }
-    NUMBER_WORDS
-        .iter()
-        .find(|(word, _)| *word == reference)
-        .map(|(_, value)| value.to_string())
+    let compound = reference.split(['-', ' ']).collect::<Vec<_>>();
+    let value = |word: &str| {
+        NUMBER_WORDS
+            .iter()
+            .find(|(w, _)| *w == word)
+            .map(|(_, v)| *v)
+    };
+    match compound.as_slice() {
+        [word] => value(word).map(|v| v.to_string()).into_iter().collect(),
+        [tens, units] => value(tens)
+            .zip(value(units))
+            .filter(|(t, u)| (20..100).contains(t) && *t % 10 == 0 && *u < 10)
+            .map(|(t, u)| (t + u).to_string())
+            .into_iter()
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// Whether `reference` occurs in `answer` with no letter or digit
@@ -227,7 +252,9 @@ fn states(answer: &str, reference: &str) -> Stating {
         return Stating::Absent;
     }
     let found = occurs(&answer, &reference)
-        || other_numeral(&reference).is_some_and(|other| occurs(&answer, &other));
+        || other_numeral(&reference)
+            .iter()
+            .any(|other| occurs(&answer, other));
     let bound = STATED_FACTOR * reference.chars().count() + STATED_SLACK;
     match (found, answer.chars().count() > bound) {
         (false, _) => Stating::Absent,

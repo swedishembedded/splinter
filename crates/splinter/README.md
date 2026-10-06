@@ -618,7 +618,11 @@ candidate learned and is not used. A variant whose wording the candidate
 trained on - the same question, a near duplicate, or its words inside a
 longer training prompt - is left out like any leaked held-out task. The
 gate prints how many variants were measured and how many were left out,
-by reason; the manifest records them. The decision rests on the two together,
+by reason; the manifest records them. The decision rests on the two together by the family-level sign test, which stays the rule even
+though its p-value moves with one family when only a dozen are discordant; the report therefore
+also gives, for the whole suite and for each part, the difference in the share right with an
+interval that resamples families and the exact sign test over the tasks, to read it by.
+The decision rests on the two together,
 but the report keeps them apart: generalisation (the held-out records, text
 the candidate was not trained on) and recall under paraphrase (the variants
 of trained tasks) each print their own comparison and sign test, and the

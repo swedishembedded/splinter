@@ -156,6 +156,28 @@ pub struct Improvement {
     /// when no variant was measured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recall: Option<PartResult>,
+    /// The tasks' own evidence over the whole suite the decision rests on;
+    /// see [`TaskLevel`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_level: Option<TaskLevel>,
+}
+
+/// What the tasks themselves say, beside the family-level sign test the gate
+/// decides on: that test rests on as many units as there are discordant
+/// families, a dozen or so, so a decision by it moves with one family. This
+/// pairs by task, tests the tasks only one model got right exactly, and gives
+/// the difference in the share right with an interval that resamples families.
+/// It informs the decision and does not make it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TaskLevel {
+    /// The one-sided exact sign test over the discordant tasks.
+    pub p_value: f64,
+    /// The candidate's share right minus the champion's.
+    pub difference: f64,
+    /// The lower end of the family-clustered bootstrap interval.
+    pub low: f64,
+    /// Its upper end.
+    pub high: f64,
 }
 
 /// One part of the improvement suite compared on its own.
@@ -167,6 +189,9 @@ pub struct PartResult {
     pub comparison: Comparison,
     /// The sign test over its paired tasks, a family counted once.
     pub sign_test: SignTest,
+    /// The tasks' own evidence; see [`TaskLevel`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_level: Option<TaskLevel>,
 }
 
 /// One part of the improvement suite, whose paired `outcomes` are compared
@@ -182,6 +207,7 @@ pub fn part_result(
     (comparison.paired > 0).then(|| PartResult {
         suite,
         sign_test: significance.sign_test(&by_cluster(outcomes)),
+        task_level: None,
         comparison,
     })
 }
@@ -394,6 +420,7 @@ pub fn improvement(
             alpha,
             generalisation: None,
             recall: None,
+            task_level: None,
         },
         failure,
     )

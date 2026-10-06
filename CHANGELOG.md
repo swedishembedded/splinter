@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leave less to learn from than is examined.
 
 ### Changed
+- The gate's improvement report adds what the tasks themselves say beside the family-level sign
+  test it decides on - a difference in the share right with an interval that resamples families
+  and an exact sign test over the tasks - for the whole suite and for each of its two parts.
+  The decision rule is unchanged: the family-level sign test stays the rule, because a report is
+  not a change of rule, and its p-value moves with a single family when only a dozen are
+  discordant (so the task-level numbers are what to read it by).
+- The `stated` verifier also reads a whole number from 21 to 99 written as tens and units
+  (`forty-two`, `forty two`) as the same number in digits.
 - A judge decodes greedily (the judge's version is now 4, so an earlier calibration
   is measured again): one answer gets one verdict, whichever time it is judged.
 - The anchor check reports the bootstrap interval of the drop over the paired
