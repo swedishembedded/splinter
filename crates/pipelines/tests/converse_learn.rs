@@ -81,6 +81,18 @@ fn policy(third: &'static str) -> Scripted {
                 "evidence": [{ "section": 0, "quote": passage }]
             }]})
             .to_string()
+        } else if prompt.contains("Write one question that a person of a later age") {
+            json!({ "question": "What would you make of a telegraph that reaches across the sea?" })
+                .to_string()
+        } else if prompt.contains("A question is put to you with some of your writings") {
+            json!({ "reply": "The writings before me do not settle this, and I will not guess at what \
+                they leave unsaid; they speak of study and of thrift and no more than that." })
+            .to_string()
+        } else if prompt.contains("Say what the passage is about") {
+            json!({ "description": "Advice to a young person about keeping a daily habit and a strict \
+                account of what goes on in the household, written as counsel from an older \
+                correspondent who has found it serves."})
+            .to_string()
         } else if prompt.contains(STUDENT_ROLE) {
             let message = if prompt.contains("And then?") {
                 "Why does the pen matter so much?"
@@ -168,6 +180,7 @@ fn attempt(
     persona: Option<&str>,
     passages: Option<PassageShare>,
     voice: Option<f64>,
+    describe_voice: bool,
 ) -> (
     Result<Learned, OrchestratorError>,
     common::Scratch,
@@ -203,6 +216,7 @@ fn attempt(
             persona: persona.map(str::to_string),
             passages,
             voice,
+            describe_voice,
             // A scripted policy answers no general task, so it has nothing
             // to rehearse.
             rehearsal: Some(0.0),
@@ -224,7 +238,7 @@ fn run(
     test: &str,
     third: &'static str,
 ) -> (splinter_pipelines::learn::LearnReport, common::Scratch) {
-    let (learned, scratch, _ctx, _) = attempt(test, third, Some(judge()), None, None, None);
+    let (learned, scratch, _ctx, _) = attempt(test, third, Some(judge()), None, None, None, false);
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
     };
@@ -327,6 +341,7 @@ fn a_kind_only_a_judge_can_pass_is_refused_a_judge_that_is_also_the_teacher() {
         None,
         None,
         None,
+        false,
     );
     let Err(refused) = learned else {
         panic!("a judge that grades itself is refused");
@@ -347,6 +362,7 @@ fn a_judge_that_cannot_tell_a_reference_from_another_is_refused_with_its_numbers
         None,
         None,
         None,
+        false,
     );
     let Err(refused) = learned else {
         panic!("an imprecise judge is refused");
@@ -369,6 +385,7 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
         Some("Benjamin Franklin"),
         None,
         None,
+        false,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -516,6 +533,7 @@ fn the_writers_own_passage_joins_the_training_set_as_an_answer() {
         None,
         None,
         None,
+        false,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -556,6 +574,7 @@ fn a_share_of_the_training_records_carries_passages_in_the_prompt() {
             ..PassageShare::default()
         }),
         None,
+        false,
     );
     let Learned::Ran(ran) = learned.unwrap() else {
         panic!("a learn that is not a dry run runs");
@@ -571,5 +590,68 @@ fn a_share_of_the_training_records_carries_passages_in_the_prompt() {
         assert!(prompt.contains(MATERIAL_HEADING), "{prompt}");
         assert!(prompt.contains("habit of study") || prompt.contains("strict account"));
         assert_eq!(record["messages"][2]["role"], "assistant");
+    }
+}
+
+/// A run asked to describe the writer's passages asks them by those
+/// descriptions, and says how it did.
+#[test]
+fn a_run_asked_to_describe_the_writers_text_asks_each_chunk_by_its_description() {
+    let (learned, _scratch, _ctx, _) = attempt(
+        "converse-learn-described",
+        "The pen fixes what the memory lets slip, so write down what you have read.",
+        Some(judge()),
+        Some("Benjamin Franklin"),
+        None,
+        None,
+        true,
+    );
+    let Learned::Ran(ran) = learned.unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let voice = ran.report.voice.as_ref().expect("the writer's own text");
+    let described = voice.described.as_ref().expect("the descriptions' report");
+    assert!(described.written >= 1, "{described:?}");
+    let text = std::fs::read_to_string(&voice.path).unwrap();
+    for line in text.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        let ask = record["messages"][1]["content"].as_str().unwrap();
+        assert!(ask.contains("Advice to a young person"), "{ask}");
+    }
+}
+
+/// Records given passages that are all abstentions are single exchanges in
+/// which the writer says the writings do not settle it, in the family of the
+/// dialogue each was made from.
+#[test]
+fn a_run_asked_for_abstentions_trains_on_the_writer_saying_the_writings_do_not_settle_it() {
+    let (learned, _scratch, _ctx, _) = attempt(
+        "converse-learn-abstain",
+        "The pen fixes what the memory lets slip, so write down what you have read.",
+        Some(judge()),
+        Some("Benjamin Franklin"),
+        Some(PassageShare::with_abstentions(1.0, 1.0)),
+        None,
+        false,
+    );
+    let Learned::Ran(ran) = learned.unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let dataset = ran.report.dataset.as_ref().unwrap();
+    let text = std::fs::read_to_string(&dataset.path).unwrap();
+    assert_eq!(text.lines().count(), 2);
+    for line in text.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        let turns = record["messages"].as_array().unwrap();
+        assert_eq!(turns.len(), 3, "one exchange: {record}");
+        assert_eq!(turns[2]["train"], true);
+        assert!(
+            turns[2]["content"]
+                .as_str()
+                .unwrap()
+                .starts_with("The writings before me do not settle this"),
+            "{record}"
+        );
+        assert!(record["metadata"]["group"].is_string(), "{record}");
     }
 }
