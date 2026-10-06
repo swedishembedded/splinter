@@ -235,11 +235,13 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         alpha: flag(args, "--alpha").map_or(Ok(32.0), |v| v.parse())?,
         replay: &[],
         replay_share: None,
+        weighted_replay: &[],
         grad_accum: flag(args, "--records-per-step").map_or(Ok(1), |v| v.parse())?,
         continue_from: None,
         cancel: None,
         bf16_base: args.iter().any(|a| a == "--bf16"),
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
+        seed: None,
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
@@ -348,17 +350,6 @@ fn apply_report_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Jefferson's own works that are not letters, as files under `resources`.
-/// The Life and Morals of Jesus of Nazareth is not among them: it is the
-/// Gospels cut and arranged, with a modern editor's introduction, and what it
-/// would teach is not Jefferson's prose.
-const OWN_WORKS: [&str; 4] = [
-    "notes-on-the-state-of-virginia-1853",
-    "a-summary-view-of-the-rights-of-british-america-1774",
-    "manual-of-parliamentary-practice-1820",
-    "declaration-of-independence",
-];
-
 fn materials_command(args: &[String]) -> anyhow::Result<()> {
     let resources = PathBuf::from(
         flag(args, "--resources").ok_or_else(|| anyhow::anyhow!("--resources DIR is required"))?,
@@ -368,32 +359,52 @@ fn materials_command(args: &[String]) -> anyhow::Result<()> {
     let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
     let letters = corpus::load_letters(&resources)?;
     let family = corpus::families(&letters);
-    let files = corpus::materials(&letters, &family, seed);
+    let works = corpus::own_works(&resources)?;
+    let work_texts: Vec<&str> = works.iter().map(|(_, text)| text.as_str()).collect();
+    // Nothing the directory holds may be one text with an exam letter, in any
+    // edition: what is, is held back before anything is written.
+    let cleared = corpus::materials_clear_of_exam(&letters, &family, &work_texts, seed)?;
     std::fs::create_dir_all(out.join("letters"))?;
     std::fs::create_dir_all(out.join("works"))?;
-    for (name, text) in &files {
+    for (name, text) in &cleared.letters {
         std::fs::write(out.join("letters").join(name), text)?;
     }
-    let mut works = 0;
-    for stem in OWN_WORKS {
-        let path = resources
-            .join("thomas-jefferson")
-            .join(format!("{stem}.txt"));
-        if !path.is_file() {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path)
-            .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-        std::fs::write(
-            out.join("works").join(format!("{stem}.txt")),
-            corpus::strip_gutenberg(&text),
-        )?;
-        works += 1;
+    for (stem, text) in &works {
+        std::fs::write(out.join("works").join(format!("{stem}.txt")), text)?;
     }
     println!(
-        "{} letters and {works} works written under {}",
-        files.len(),
-        out.display()
+        "{} letters and {} works written under {}; {} exam families, none one text with any of \
+         them (at most {} runs shared); {} letter file(s) held back for overlapping an exam letter",
+        cleared.letters.len(),
+        works.len(),
+        out.display(),
+        cleared.leaks.len(),
+        cleared
+            .leaks
+            .iter()
+            .map(|l| l.shared_runs)
+            .max()
+            .unwrap_or(0),
+        cleared.held_back.len()
+    );
+    let share_over = |share: f64| {
+        cleared
+            .leaks
+            .iter()
+            .filter(|l| l.run_share >= share)
+            .count()
+    };
+    println!(
+        "exam families whose runs of words the directory holds: {} at 90% or more, {} at 5% or \
+         more, at most {:.1}%",
+        share_over(0.9),
+        share_over(0.05),
+        cleared
+            .leaks
+            .iter()
+            .map(|l| l.run_share)
+            .fold(0.0, f64::max)
+            * 100.0
     );
     Ok(())
 }

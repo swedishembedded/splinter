@@ -127,12 +127,14 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         alpha: t.alpha,
         replay: &t.replay,
         replay_share: t.replay_share,
+        weighted_replay: &[],
         grad_accum: t.grad_accum,
         continue_from: t.continue_from.as_deref(),
         cancel: None,
         bf16_base: t.bf16,
         learning_rate: t.learning_rate,
         // The records hold answers and no reasoning: trained for no-think mode.
+        seed: None,
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };

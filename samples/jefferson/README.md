@@ -50,6 +50,13 @@ nothing and the report says no claim is made.
 works (not the Life and Morals of Jesus of Nazareth, which is the Gospels cut and
 arranged with a modern editor's introduction, and would put a quarter of the
 corpus in other voices), and withholds the exam families for the independent check below.
+A letter ends where its volume turns to a book, a part, an appendix or an index, so
+a work or an index printed after a volume's last letter is not glued into it, and a
+stretch of more than 15,000 words under a letter's heading is no letter. A letter that
+one of Jefferson's own works prints too is not a letter of the corpus, and a letter file
+that Splinter's overlap rule would call one text with an exam letter is held back;
+the command refuses to write when a work is, and prints how many exam families share
+runs of words with what it wrote.
 Splinter makes its own held-out split from what it is given, by group of
 overlapping text, so its exam and the independent one are different letters.
 
