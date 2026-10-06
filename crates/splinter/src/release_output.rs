@@ -47,6 +47,31 @@ impl Report for GateReport {
                 m.alpha
             );
         }
+        if let Some(m) = &self.improvement.measured {
+            for (label, part) in [
+                ("generalisation (held-out records)", &m.generalisation),
+                (
+                    "recall under paraphrase (variants of trained tasks)",
+                    &m.recall,
+                ),
+            ] {
+                if let Some(part) = part {
+                    let c = &part.comparison;
+                    let _ = writeln!(
+                        out,
+                        "               {label}: {} task(s), {} paired: candidate {} vs champion {}; \
+                         wins {}-{}; sign test p = {:.4}",
+                        part.suite.tasks,
+                        c.paired,
+                        share(c.candidate_accuracy),
+                        share(c.baseline_accuracy),
+                        c.candidate_wins,
+                        c.baseline_wins,
+                        part.sign_test.p_value
+                    );
+                }
+            }
+        }
         if let Some(v) = self
             .improvement
             .measured
@@ -55,7 +80,7 @@ impl Report for GateReport {
         {
             let _ = writeln!(
                 out,
-                "               {} of them variant(s) of what it trained on, {} left out ({})",
+                "               {} variant(s) of what it trained on measured, {} left out ({})",
                 v.tasks,
                 v.excluded.values().sum::<usize>(),
                 tally(&v.excluded)
@@ -89,6 +114,13 @@ impl Report for GateReport {
                 share(m.comparison.baseline_accuracy),
                 share(m.drop),
                 m.bound
+            );
+        }
+        for p in &self.prompts {
+            let _ = writeln!(
+                out,
+                "  prompts      {}: candidate under {}; champion under {}",
+                p.suite, p.candidate, p.champion
             );
         }
         let _ = writeln!(out, "  serve        {}", verdict(&self.serve));

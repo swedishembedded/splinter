@@ -12,7 +12,10 @@
 //! 1. **Improvement** on the new data's held-out tasks - the records
 //!    training held out, and the variants of the tasks it trained on (the
 //!    same fact in other words, which is what shows a fact was learned) -
-//!    a one-sided paired sign test ([`Significance`]) over the tasks both
+//!    decided over both together, and reported for each alone: the held-out
+//!    records measure generalisation to text the candidate was not trained
+//!    on, the variants measure recall of trained facts under paraphrase, and
+//!    a report never lets one pass for the other. The decision is a one-sided paired sign test ([`Significance`]) over the tasks both
 //!    models were graded on,
 //!    candidate right and champion wrong against the reverse, significant
 //!    at `alpha` ([`DEFAULT_ALPHA`]). Ties and unpaired tasks carry no
@@ -137,12 +140,50 @@ pub struct Improvement {
     /// left out, by reason; `None` when no variant was written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variants: Option<SuiteSummary>,
-    /// Candidate against champion on it.
+    /// Candidate against champion on the two together: what the decision
+    /// rests on.
     pub comparison: Comparison,
-    /// The sign test over the paired tasks.
+    /// The sign test over the paired tasks of both.
     pub sign_test: SignTest,
     /// The significance level it was held to.
     pub alpha: f64,
+    /// Generalisation: the held-out records alone, text the candidate was
+    /// not trained on. `None` in a report written before the suites were
+    /// reported apart, or when the decision was not measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generalisation: Option<PartResult>,
+    /// Recall under paraphrase: the variants of trained tasks alone. `None`
+    /// when no variant was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recall: Option<PartResult>,
+}
+
+/// One part of the improvement suite compared on its own.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PartResult {
+    /// The part's tasks.
+    pub suite: SuiteSummary,
+    /// Candidate against champion on it.
+    pub comparison: Comparison,
+    /// The sign test over its paired tasks, a family counted once.
+    pub sign_test: SignTest,
+}
+
+/// One part of the improvement suite, whose paired `outcomes` are compared
+/// on their own by the rule the decision uses; `None` when no task of it was
+/// graded for both models.
+#[must_use]
+pub fn part_result(
+    suite: SuiteSummary,
+    outcomes: &[PairedOutcome],
+    significance: &dyn Significance,
+) -> Option<PartResult> {
+    let comparison = compare(outcomes);
+    (comparison.paired > 0).then(|| PartResult {
+        suite,
+        sign_test: significance.sign_test(&by_cluster(outcomes)),
+        comparison,
+    })
 }
 
 /// One earlier release's suite in the retention check.
@@ -228,6 +269,19 @@ pub struct Disagreement {
     pub served_verdict: Option<bool>,
 }
 
+/// The system prompt each arm was asked a suite under: the numbers of two
+/// arms are comparable only when this is known.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SuitePrompts {
+    /// The suite's name.
+    pub suite: String,
+    /// What the candidate was asked under: `default`, or `persona: ` and the
+    /// start of the prompt it was trained under.
+    pub candidate: String,
+    /// The same for the champion.
+    pub champion: String,
+}
+
 /// The whole gate: every check with its numbers, and the decision.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GateReport {
@@ -243,9 +297,20 @@ pub struct GateReport {
     pub serve: Check<Serve>,
     /// Whether every check passed.
     pub passed: bool,
+    /// The prompt each arm was asked each suite under; empty in a report
+    /// written before it was recorded.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompts: Vec<SuitePrompts>,
 }
 
 impl GateReport {
+    /// This report stating which prompt each arm was asked each suite under.
+    #[must_use]
+    pub fn with_prompts(mut self, prompts: Vec<SuitePrompts>) -> Self {
+        self.prompts = prompts;
+        self
+    }
+
     /// The report of these four checks.
     #[must_use]
     pub fn new(
@@ -263,6 +328,7 @@ impl GateReport {
             anchor,
             serve,
             passed,
+            prompts: Vec::new(),
         }
     }
 }
@@ -302,6 +368,8 @@ pub fn improvement(
             comparison,
             sign_test: test,
             alpha,
+            generalisation: None,
+            recall: None,
         },
         failure,
     )

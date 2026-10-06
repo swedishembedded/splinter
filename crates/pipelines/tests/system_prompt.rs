@@ -19,14 +19,14 @@ mod common;
 use std::sync::Arc;
 
 use common::gate::{
-    anchor_file, candidate_on, dataset_under, decide, gate_context, request_log, Brain, ANCHOR,
-    FACTS,
+    anchor_file, candidate_on, dataset_under, decide, gate_context, reply, request_log, Brain,
+    ANCHOR, FACTS,
 };
 use common::{scratch_context, Scripted};
 use splinter_agent::solve::{Model, SYSTEM_PROMPT};
 use splinter_core::model_ref::ModelRef;
 use splinter_pipelines::ask::ask;
-use splinter_pipelines::release::anchor;
+use splinter_pipelines::release::{anchor, arm};
 
 const PERSONA: &str = "You are a surveyor of the old school. Answer as one.";
 
@@ -111,4 +111,61 @@ fn the_served_candidate_is_asked_under_the_prompt_it_was_trained_under() {
             .all(|systems| systems == &[PERSONA.to_string()]),
         "{asked:?}"
     );
+}
+
+#[test]
+fn the_anchor_is_asked_under_the_default_prompt_by_both_arms_and_the_report_says_which() {
+    let (scratch, ctx) = gate_context("system-prompt-anchor", Brain::Honest);
+    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
+    let facts: Vec<usize> = (0..FACTS).collect();
+    let data = dataset_under(&ctx, "alpha", &facts, Some(PERSONA));
+    let (candidate, _) = candidate_on(&ctx, data, &[ANCHOR, "alpha"]);
+    // Both arms record the system turns they are asked under.
+    let topics = |known: &[&str]| -> Scripted {
+        let known: Vec<String> = known.iter().map(|t| t.to_string()).collect();
+        Scripted::new(move |prompt| reply(&known, prompt))
+    };
+    let base = topics(&[ANCHOR]);
+    let tuned = topics(&[ANCHOR, "alpha"]);
+    ctx.add_model(
+        arm(ctx.config(), None),
+        Model::new(Arc::new(base.clone()), "scripted/base"),
+    );
+    ctx.add_model(
+        arm(ctx.config(), Some(&candidate.adapter)),
+        Model::new(Arc::new(tuned.clone()), "scripted/tuned"),
+    );
+    let decided = decide(&ctx, &candidate);
+    assert!(decided.release.is_some(), "{:#?}", decided.gate);
+
+    let systems_for = |model: &Scripted, topic: &str| -> Vec<Vec<String>> {
+        let prompts = model.prompts.lock().unwrap();
+        let systems = model.systems.lock().unwrap();
+        prompts
+            .iter()
+            .zip(systems.iter())
+            .filter(|(prompt, _)| prompt.contains(&format!("the {topic} code")))
+            .map(|(_, systems)| systems.clone())
+            .collect()
+    };
+    let only = |asked: Vec<Vec<String>>, system: &str| {
+        assert!(!asked.is_empty());
+        assert!(
+            asked.iter().all(|s| s == &[system.to_string()]),
+            "{asked:?}"
+        );
+    };
+    only(systems_for(&tuned, ANCHOR), SYSTEM_PROMPT);
+    only(systems_for(&base, ANCHOR), SYSTEM_PROMPT);
+    only(systems_for(&tuned, "alpha"), PERSONA);
+    only(systems_for(&base, "alpha"), SYSTEM_PROMPT);
+
+    let prompts = &decided.gate.prompts;
+    let of = |name: &str| prompts.iter().find(|p| p.suite.starts_with(name)).unwrap();
+    assert!(of("held-out")
+        .candidate
+        .starts_with("persona: You are a surveyor"));
+    assert_eq!(of("held-out").champion, "default");
+    assert_eq!(of("anchor").candidate, "default");
+    assert_eq!(of("anchor").champion, "default");
 }

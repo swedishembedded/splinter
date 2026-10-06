@@ -638,6 +638,18 @@ fn variants_of_the_trained_facts_give_the_sign_test_enough_tasks() {
     );
     assert_eq!(improvement.comparison.candidate_wins, 12);
     assert!(improvement.sign_test.p_value < improvement.alpha);
+    // The two kinds of task are reported apart: generalisation to the
+    // held-out records, recall of trained facts under paraphrase.
+    let generalisation = improvement.generalisation.as_ref().unwrap();
+    assert_eq!(generalisation.suite.tasks, 3);
+    assert_eq!(generalisation.comparison.candidate_wins, 3);
+    assert!(
+        generalisation.sign_test.p_value > improvement.alpha,
+        "three records alone are not significant: {generalisation:?}"
+    );
+    let recall = improvement.recall.as_ref().unwrap();
+    assert_eq!(recall.suite.tasks, 9);
+    assert_eq!(recall.comparison.candidate_wins, 9);
     let variants = improvement.variants.as_ref().unwrap();
     assert_eq!(variants.tasks, 9, "{variants:#?}");
     assert_eq!(
@@ -661,5 +673,15 @@ fn variants_of_what_the_candidate_did_not_learn_do_not_count_as_evidence() {
     let improvement = gate.improvement.measured.as_ref().unwrap();
     assert_eq!(improvement.variants.as_ref().unwrap().tasks, 9);
     assert_eq!(improvement.sign_test.discordant, 0);
+    assert_eq!(improvement.recall.as_ref().unwrap().comparison.paired, 9);
+    assert_eq!(
+        improvement
+            .generalisation
+            .as_ref()
+            .unwrap()
+            .comparison
+            .paired,
+        3
+    );
     assert!(!gate.improvement.passed);
 }

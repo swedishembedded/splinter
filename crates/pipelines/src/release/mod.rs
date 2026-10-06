@@ -42,6 +42,7 @@ pub mod predictive;
 pub mod probe;
 pub mod serve;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -63,7 +64,8 @@ use crate::train::{load_candidate, Candidate};
 use probe::{clustered, pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use splinter_core::training::{TrainingCurve, TrainingSummary};
-use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
+use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
+use splinter_eval::paired::PairedOutcome;
 use splinter_model::stats::BrainSignificance;
 use splinter_orchestrator::config::Config;
 use splinter_orchestrator::context::Context;
@@ -377,44 +379,86 @@ fn soft<T>(result: Result<T, OrchestratorError>) -> Result<Result<T, String>, Or
     }
 }
 
+/// Which system prompt an arm is asked a suite under.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Asked {
+    /// The one the arm was trained under, as it is deployed.
+    Deployed,
+    /// The default one, whichever arm: for a suite that measures the weights
+    /// and not the persona.
+    Default,
+}
+
+/// How a report names the prompt `system` is: `default` or the start of the
+/// persona prompt.
+fn prompt_name(system: Option<&str>) -> String {
+    const SHOWN: usize = 60;
+    match system {
+        None => "default".into(),
+        Some(system) => {
+            let start: String = system.chars().take(SHOWN).collect();
+            let cut = if system.chars().count() > SHOWN {
+                "..."
+            } else {
+                ""
+            };
+            format!("persona: {start}{cut}")
+        }
+    }
+}
+
 /// The model `reference` names graded on each of `suites`, decoding
 /// greedily ([`probe::greedy`]) where its sampling can be set here - a
 /// verdict is then the weights', not a draw's, and the served candidate is
-/// asked the same way. The arms differ only by adapter, so the second one
-/// graded runs on the base the first one loaded; the serve check releases
-/// it before the served candidate starts.
+/// asked the same way. A suite is asked under the arm's `deployed` prompt
+/// or the default one, as its [`Asked`] says. The arms differ only by
+/// adapter, so the second one graded runs on the base the first one loaded;
+/// the serve check releases it before the served candidate starts.
 fn grade_arm(
     ctx: &Context,
     reference: &ModelRef,
-    system: Option<&str>,
-    suites: &[&Suite],
+    deployed: Option<&str>,
+    suites: &[(&Suite, Asked)],
     cancel: &CancelToken,
 ) -> Result<Vec<Graded>, OrchestratorError> {
     let model = match soft(probe::greedy(ctx, reference))? {
         Ok(model) => model,
         Err(why) => return Ok(suites.iter().map(|_| Err(why.clone())).collect()),
     };
-    // Each arm is asked as it is deployed: under the prompt it was trained
-    // under, whatever that is.
-    let model = match system {
-        Some(system) => model.with_system(system),
-        None => model,
-    };
     let mut graded = Vec::with_capacity(suites.len());
-    for suite in suites {
-        graded.push(soft(probe::grade(ctx, &model, suite, cancel))?);
+    for (suite, asked) in suites {
+        let asked_model = match (asked, deployed) {
+            (Asked::Deployed, Some(system)) => model.clone().with_system(system),
+            _ => model.clone(),
+        };
+        graded.push(soft(probe::grade(ctx, &asked_model, suite, cancel))?);
     }
     Ok(graded)
 }
 
 /// The suites the gate grades on, each built or with why it could not be.
 struct Suites {
+    /// The improvement suite: the held-out records and the variants of
+    /// trained tasks together, what the decision rests on.
     held_out: Result<Suite, String>,
+    /// How the improvement suite divides, when it was built.
+    parts: Option<Parts>,
     /// The variants among the held-out suite, when any were written.
     variants: Option<SuiteSummary>,
     retention: Result<Vec<(ReleaseId, Suite)>, String>,
     anchor: Result<Option<anchor::FrozenAnchor>, String>,
     anchor_suite: Option<Suite>,
+}
+
+/// The two kinds of task the improvement suite holds, told apart so each is
+/// reported on its own: generalisation to held-out records and recall of
+/// trained facts asked in other words.
+struct Parts {
+    generalisation: SuiteSummary,
+    recall: Option<SuiteSummary>,
+    /// The addresses of the recall tasks: those of the variants suite that no
+    /// held-out record already is.
+    recall_items: BTreeSet<String>,
 }
 
 impl Suites {
@@ -429,6 +473,7 @@ impl Suites {
                 let why = format!("the candidate's training records: {why}");
                 return Ok(Self {
                     held_out: Err(why.clone()),
+                    parts: None,
                     variants: None,
                     retention: Err(why.clone()),
                     anchor: Err(why),
@@ -449,14 +494,29 @@ impl Suites {
             )?);
             Ok::<_, OrchestratorError>((held_out, variants))
         })())?;
-        let (held_out, variants) = match improvement {
+        let (held_out, parts, variants) = match improvement {
             Ok((mut held_out, variants)) => {
                 let summary = (!variants.tasks.is_empty() || !variants.excluded.is_empty())
                     .then(|| variants.summary());
+                let held_out_items: BTreeSet<String> = held_out
+                    .tasks
+                    .iter()
+                    .map(|t| t.task.id.to_string())
+                    .collect();
+                let parts = Parts {
+                    generalisation: held_out.summary(),
+                    recall: summary.clone(),
+                    recall_items: variants
+                        .tasks
+                        .iter()
+                        .map(|t| t.task.id.to_string())
+                        .filter(|id| !held_out_items.contains(id))
+                        .collect(),
+                };
                 held_out.absorb(variants);
-                (Ok(held_out), summary)
+                (Ok(held_out), Some(parts), summary)
             }
-            Err(why) => (Err(why), None),
+            Err(why) => (Err(why), None, None),
         };
         let retention = soft(champion.map_or(Ok(Vec::new()), |champion| {
             ctx.releases()
@@ -477,6 +537,7 @@ impl Suites {
             .map(|frozen| clean(frozen.probe_suite()));
         Ok(Self {
             held_out,
+            parts,
             variants,
             retention,
             anchor,
@@ -484,13 +545,17 @@ impl Suites {
         })
     }
 
-    /// Every suite built, in a fixed order: held-out, retention, anchor.
-    fn all(&self) -> Vec<&Suite> {
-        let mut all: Vec<&Suite> = self.held_out.iter().collect();
+    /// Every suite built with the prompt it is asked under, in a fixed order:
+    /// held-out, retention, anchor. The anchor measures what the weights
+    /// kept of general capability, so both arms are asked it under the
+    /// default prompt; the others are asked as deployed.
+    fn all(&self) -> Vec<(&Suite, Asked)> {
+        let mut all: Vec<(&Suite, Asked)> =
+            self.held_out.iter().map(|s| (s, Asked::Deployed)).collect();
         if let Ok(retention) = &self.retention {
-            all.extend(retention.iter().map(|(_, suite)| suite));
+            all.extend(retention.iter().map(|(_, suite)| (suite, Asked::Deployed)));
         }
-        all.extend(self.anchor_suite.iter());
+        all.extend(self.anchor_suite.iter().map(|s| (s, Asked::Default)));
         all
     }
 }
@@ -514,6 +579,20 @@ fn run_gate(
         Some(champion) => ctx.system_prompt_of(&champion.manifest.datasets)?,
         None => None,
     };
+    let prompts = all
+        .iter()
+        .map(|(suite, asked)| {
+            let name = |deployed: &Option<String>| match asked {
+                Asked::Deployed => prompt_name(deployed.as_deref()),
+                Asked::Default => prompt_name(None),
+            };
+            SuitePrompts {
+                suite: suite.name.clone(),
+                candidate: name(&candidate_prompt),
+                champion: name(&champion_prompt),
+            }
+        })
+        .collect();
     let mut theirs = grade_arm(
         ctx,
         &candidate_ref,
@@ -539,13 +618,28 @@ fn run_gate(
         Ok(suite) => match next() {
             Err(why) => Check::unmeasured(why),
             Ok((c, b)) => {
-                let check = gate::improvement(
+                let outcomes = clustered(ctx, suite, pair(suite, &c, &b))?;
+                let mut check = gate::improvement(
                     suite.summary(),
                     suites.variants.clone(),
-                    &clustered(ctx, suite, pair(suite, &c, &b))?,
+                    &outcomes,
                     config.alpha,
                     &BrainSignificance,
                 );
+                if let (Some(measured), Some(parts)) = (check.measured.as_mut(), &suites.parts) {
+                    let (recall, generalisation): (Vec<PairedOutcome>, Vec<PairedOutcome>) =
+                        outcomes
+                            .into_iter()
+                            .partition(|o| parts.recall_items.contains(&o.item));
+                    measured.generalisation = gate::part_result(
+                        parts.generalisation.clone(),
+                        &generalisation,
+                        &BrainSignificance,
+                    );
+                    measured.recall = parts.recall.clone().and_then(|summary| {
+                        gate::part_result(summary, &recall, &BrainSignificance)
+                    });
+                }
                 in_process = Some(c);
                 check
             }
@@ -610,13 +704,7 @@ fn run_gate(
         }
         _ => Check::unmeasured("the held-out tasks were not graded in-process to compare with"),
     };
-    Ok(GateReport::new(
-        *config,
-        improvement,
-        retention,
-        anchor,
-        serve,
-    ))
+    Ok(GateReport::new(*config, improvement, retention, anchor, serve).with_prompts(prompts))
 }
 
 /// One release, as `release list` shows it.

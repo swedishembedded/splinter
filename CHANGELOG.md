@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The release gate's improvement check still decides over the held-out
+  records and the variants of trained tasks together, but its report keeps
+  them apart: generalisation to held-out records and recall under paraphrase
+  each carry their own comparison and sign test. The gate report states the
+  system prompt each arm was asked each suite under, and the anchor suite is
+  asked of both arms under the default prompt, so the anchor no longer
+  compares a persona-prompted candidate with an unprompted base.
+
 ### Added
 - The timeline pipeline (`splinter_sdk::timeline`): import and split stages, a train stage for `timeline-v1` datasets (immutable candidates packed into one deterministic file), an evaluation stage scoring a candidate against a champion on the same held-out units with participant-clustered bootstrap differences, a release stage through the predictive gate that records a failing candidate as rejected, and the lineage of a release down to source file lines; `samples/health` runs it on a synthetic cohort.
 
