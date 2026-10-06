@@ -235,6 +235,13 @@ pub struct Anchor {
     /// paired to resample, or in a report written before it was kept.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drop_interval: Option<DropInterval>,
+    /// How many paired items a suite would need for four chances in five of
+    /// seeing a drop of two points at the share of items this one found
+    /// discordant (one-sided, at the level the sign test is held to): what a
+    /// suite this size can and cannot detect. `None` when no item was
+    /// discordant or none paired.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items_to_see_two_points: Option<usize>,
 }
 
 /// A bootstrap interval of the champion's accuracy minus the candidate's,
@@ -468,6 +475,7 @@ pub fn anchor(
             drop: Some(drop),
             bound,
             drop_interval: None,
+            items_to_see_two_points: None,
         },
         failure,
     )

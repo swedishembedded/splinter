@@ -250,6 +250,9 @@ fn each_failing_check_blocks_the_release_and_says_why() {
     let measured = gate.anchor.measured.as_ref().unwrap();
     assert_eq!(measured.drop, Some(1.0));
     // Four items, all lost: the interval around the drop is the drop itself.
+    // Every one of four items discordant: about fifteen thousand would be
+    // needed to see two points at that discordance.
+    assert_eq!(measured.items_to_see_two_points, Some(15450));
     let interval = measured.drop_interval.unwrap();
     assert_eq!((interval.low, interval.high), (1.0, 1.0));
     assert!(gate.anchor.reason.as_deref().unwrap().contains("anchor"));

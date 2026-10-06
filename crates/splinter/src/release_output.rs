@@ -115,6 +115,14 @@ impl Report for GateReport {
                 share(m.drop),
                 m.bound
             );
+            if let Some(n) = m.items_to_see_two_points {
+                let _ = writeln!(
+                    out,
+                    "               a drop of 0.02 would need about {n} paired items to be seen with \
+                     four chances in five at this discordance; this suite has {}",
+                    m.comparison.paired
+                );
+            }
             if let Some(i) = &m.drop_interval {
                 let _ = writeln!(
                     out,

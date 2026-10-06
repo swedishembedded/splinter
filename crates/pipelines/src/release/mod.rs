@@ -585,6 +585,24 @@ fn drop_interval(outcomes: &[PairedOutcome]) -> Option<DropInterval> {
     })
 }
 
+/// One-sided 5% and 80% power quantiles of the standard normal, summed and
+/// squared: the factor of the sample size of a paired difference.
+const POWER_FACTOR: f64 = 6.18;
+
+/// The drop a suite is asked to be able to see, in share of items.
+const WANTED_DROP: f64 = 0.02;
+
+/// The paired items it takes to see a drop of [`WANTED_DROP`] with four
+/// chances in five, at the discordance `comparison` found: the variance of an
+/// item's difference is about the share of items on which the arms differ.
+fn items_to_see_two_points(comparison: &splinter_eval::paired::Comparison) -> Option<usize> {
+    let discordant = comparison.candidate_wins + comparison.baseline_wins;
+    (comparison.paired > 0 && discordant > 0).then(|| {
+        let share = discordant as f64 / comparison.paired as f64;
+        (POWER_FACTOR * share / (WANTED_DROP * WANTED_DROP)).ceil() as usize
+    })
+}
+
 /// The four checks on `candidate` against `champion`.
 fn run_gate(
     ctx: &Context,
@@ -707,6 +725,8 @@ fn run_gate(
                 );
                 if let Some(measured) = check.measured.as_mut() {
                     measured.drop_interval = drop_interval(&outcomes);
+                    measured.items_to_see_two_points =
+                        items_to_see_two_points(&measured.comparison);
                 }
                 check
             }
