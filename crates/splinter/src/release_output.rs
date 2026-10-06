@@ -135,6 +135,9 @@ impl Report for Released {
         for concept in &self.requeued {
             let _ = writeln!(out, "forgotten, queued for new tasks: {concept}");
         }
+        for warning in &self.warnings {
+            let _ = writeln!(out, "warning: {warning}");
+        }
         match &self.release {
             Some(id) => {
                 let _ = writeln!(out, "released {id}; {} points at it", self.alias);

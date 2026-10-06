@@ -30,7 +30,9 @@
 
 use std::path::{Path, PathBuf};
 
-use splinter_core::training::{HeldOutScore, PreferenceScore};
+use splinter_core::training::{
+    CurvePoint, HeldOutScore, PreferenceScore, Selection, TrainingCurve,
+};
 
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
@@ -48,6 +50,17 @@ pub struct FineTune<'a> {
     pub train: &'a Path,
     /// Chat-format JSONL records scored before and after, never trained on.
     pub held_out: &'a Path,
+    /// Chat-format JSONL records scored every `eval_every` steps as the run
+    /// trains, never trained on: the curve, and what the best step is
+    /// selected on. `None` monitors nothing (and `eval_every` must be 0).
+    pub monitor: Option<&'a Path>,
+    /// Steps between evaluations of the monitoring records; 0 never
+    /// evaluates and the last step is exported.
+    pub eval_every: u32,
+    /// Evaluations without improvement before the run stops; 0 runs the
+    /// whole budget. With `eval_every > 0` the adapter exported is the best
+    /// evaluation's either way.
+    pub patience: u32,
     /// This attempt's own directory: the packed dataset, the adapter and its
     /// training record land here.
     pub attempt_dir: &'a Path,
@@ -152,6 +165,8 @@ pub struct Trained {
     pub base: HeldOutScore,
     /// The base plus the new adapter on the same records.
     pub tuned: HeldOutScore,
+    /// The monitoring curve, and which step the adapter is.
+    pub curve: TrainingCurve,
 }
 
 /// What a chat dataset holds, as the trainer's own parser counts it.
@@ -251,6 +266,13 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     for replayed in request.replay {
         validate_dataset(replayed)?;
     }
+    if let Some(monitor) = request.monitor {
+        validate_dataset(monitor)?;
+    } else if request.eval_every > 0 {
+        return Err(failed(
+            "the run was asked to evaluate as it trains but given no monitoring records".into(),
+        ));
+    }
     let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
         .dataset(request.train)
         .held_out(request.held_out)
@@ -261,7 +283,15 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .rank(request.rank)
         .alpha(request.alpha)
         .bf16_base(request.bf16_base)
-        .grad_accum(request.grad_accum);
+        .grad_accum(request.grad_accum)
+        .eval_every(request.eval_every)
+        .patience(request.patience)
+        // A monitored run exports its best evaluation whether or not its
+        // patience ever runs out.
+        .keep_best(request.eval_every > 0);
+    if let Some(monitor) = request.monitor {
+        fine_tune = fine_tune.monitor(monitor);
+    }
     if let Some(share) = request.replay_share {
         fine_tune = fine_tune.replay_share(share);
     }
@@ -292,6 +322,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     if outcome.status != brain::FineTuneStatus::Completed {
         return Err(failed("it did not complete".into()));
     }
+    let curve = curve_of(&outcome);
     Ok(Trained {
         adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
         adapter_digest: outcome
@@ -313,7 +344,34 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
             .tuned_score
             .map(held_out_score)
             .ok_or_else(|| incomplete("tuned score"))?,
+        curve,
     })
+}
+
+/// brain's monitoring curve and selection as Splinter records them.
+fn curve_of(outcome: &brain::ChatFineTuneOutcome) -> TrainingCurve {
+    TrainingCurve {
+        steps: outcome.steps,
+        steps_completed: outcome.steps_completed,
+        eval_every: outcome.eval_every,
+        patience: outcome.patience,
+        monitor_records: outcome.monitor_records,
+        points: outcome
+            .curve
+            .iter()
+            .map(|p| CurvePoint {
+                step: p.step,
+                train_loss: p.train_loss,
+                monitor_loss: p.monitor_loss,
+            })
+            .collect(),
+        selected_step: outcome.selected_step,
+        selection: match outcome.selection {
+            brain::Selection::LastStep => Selection::LastStep,
+            brain::Selection::BestMonitorLoss => Selection::BestMonitorLoss,
+        },
+        stopped_early: outcome.stopped_early,
+    }
 }
 
 /// One preference fine-tune: what to train, on which pairs, and where its

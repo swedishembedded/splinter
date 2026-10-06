@@ -23,7 +23,7 @@ use splinter_sdk::tasks::{duration_words, TaskSetList, TaskShow, TasksGenerated}
 use splinter_sdk::train::Candidate;
 use splinter_sdk::verify::Verified;
 use splinter_sdk::vocabulary::source::{Origin, Source};
-use splinter_sdk::vocabulary::training::Regime;
+use splinter_sdk::vocabulary::training::{Regime, Selection, TrainingCurve};
 use splinter_sdk::Error;
 
 /// A report a command prints.
@@ -595,16 +595,80 @@ impl Report for Candidate {
             Regime::Sft => "supervised fine-tuning",
             Regime::Dpo => "preference (DPO) fine-tuning",
         };
-        format!(
-            "candidate {} trained by {regime} from {} ({parent}) on {} record(s)\n  replayed: {replay}\n  adapter: {} ({})\n  {measured}\n  not released: `splinter release {}` runs the gate\n",
+        let mut out = format!(
+            "candidate {} trained by {regime} from {} ({parent}) on {} record(s)\n  replayed: {replay}\n  adapter: {} ({})\n  {measured}\n",
             self.candidate,
             self.from,
             self.records,
             self.adapter.display(),
             self.adapter_digest,
+        );
+        if let Some(curve) = &self.curve {
+            out.push_str(&curve_lines(curve));
+        }
+        for warning in self.warnings() {
+            let _ = writeln!(out, "  warning: {warning}");
+        }
+        let _ = writeln!(
+            out,
+            "  not released: `splinter release {}` runs the gate",
             self.candidate
-        )
+        );
+        out
     }
+}
+
+/// A training curve as text: the steps trained of the budget, the step
+/// carried and why, the gap at it, and every evaluation.
+fn curve_lines(curve: &TrainingCurve) -> String {
+    let mut out = String::new();
+    let stopped = if curve.stopped_early {
+        format!(
+            ", stopped early (no improvement for {} evaluations)",
+            curve.patience
+        )
+    } else {
+        String::new()
+    };
+    let why = match curve.selection {
+        Selection::LastStep => "the last step",
+        Selection::BestMonitorLoss => "the best monitoring loss",
+    };
+    let _ = writeln!(
+        out,
+        "  steps: {} of a budget of {}{stopped}; carries step {} ({why})",
+        curve.steps_completed, curve.steps, curve.selected_step
+    );
+    if curve.eval_every == 0 {
+        let _ = writeln!(out, "  monitoring: none");
+        return out;
+    }
+    let _ = write!(
+        out,
+        "  monitoring: {} record(s) every {} step(s)",
+        curve.monitor_records, curve.eval_every
+    );
+    if let (Some(selected), Some(gap)) = (curve.selected(), curve.generalisation_gap()) {
+        let _ = write!(
+            out,
+            "; at step {}: training loss {}, monitoring loss {}, gap {} ({:.0}%)",
+            selected.step,
+            loss(Some(selected.train_loss)),
+            loss(Some(selected.monitor_loss)),
+            loss(Some(gap)),
+            100.0 * gap / selected.monitor_loss
+        );
+    }
+    out.push('\n');
+    let points: Vec<String> = curve
+        .points
+        .iter()
+        .map(|p| format!("{} {:.3}/{:.3}", p.step, p.train_loss, p.monitor_loss))
+        .collect();
+    if !points.is_empty() {
+        let _ = writeln!(out, "  curve (step train/monitor): {}", points.join(", "));
+    }
+    out
 }
 
 impl Report for RunList {

@@ -33,8 +33,7 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
-use splinter_core::training::HeldOutScore;
-use splinter_core::training::Regime;
+use splinter_core::training::{HeldOutScore, Regime, TrainingCurve};
 use splinter_data::holdout::holdout_split_grouped;
 use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use splinter_eval::gate::GateConfig;
@@ -378,7 +377,7 @@ pub fn candidate_on(ctx: &Context, data: DatasetId, knows: &[&str]) -> (Candidat
             datasets: vec![data.to_string()],
             from: policy(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
-            steps: 1,
+            steps: Some(1),
             rank: 4,
             beta: None,
             tuning: Tuning::default(),
@@ -499,6 +498,9 @@ pub struct FakeTrainer {
     pub called: Mutex<Vec<Regime>>,
     /// The context's resident bases as each training started.
     pub resident_at_start: Mutex<Vec<usize>>,
+    /// The curve its next supervised candidate reports; `None` reports a
+    /// run that monitored nothing and carries its last step.
+    pub curve: Mutex<Option<TrainingCurve>>,
 }
 
 impl FakeTrainer {
@@ -509,6 +511,7 @@ impl FakeTrainer {
             plans: Mutex::new(Vec::new()),
             called: Mutex::new(Vec::new()),
             resident_at_start: Mutex::new(Vec::new()),
+            curve: Mutex::new(None),
         }
     }
 }
@@ -592,6 +595,12 @@ impl Trainer for FakeTrainer {
             block: 0,
             base: unscored(),
             tuned: unscored(),
+            curve: self
+                .curve
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| TrainingCurve::unmonitored(plan.steps, plan.steps)),
         })
     }
 

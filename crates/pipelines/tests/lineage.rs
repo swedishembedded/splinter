@@ -129,6 +129,7 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
             base_score: candidate.base_score,
             tuned_score: candidate.tuned_score,
             preference: candidate.preference.clone(),
+            curve: candidate.curve.clone(),
             record: serde_json::json!({ "trainer": "fake" }),
         },
         gate: GateReport::new(

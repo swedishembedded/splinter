@@ -239,6 +239,10 @@ pub struct Examined {
     /// The candidate with retrieval against the candidate alone, by the same
     /// rule; `None` when there is no retrieval arm.
     pub paired_retrieval: Option<SignTest>,
+    /// What the candidate's training curve warns of about the adapter
+    /// examined (`Candidate::warnings`); empty for an exam of models that
+    /// are not a stored candidate.
+    pub training_warnings: Vec<String>,
 }
 
 /// Runs `request`; see the module documentation.
@@ -480,6 +484,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         retrieval,
         paired_retrieval: (trusted && !pairs_retrieval.is_empty())
             .then(|| sign_test(&pairs_retrieval)),
+        training_warnings: Vec::new(),
     })
 }
 
@@ -591,7 +596,7 @@ pub fn examine(
     }
     let tasks = spaced(&suite.tasks, MAX_EXAM_TASKS);
     let candidate = arm(ctx.config(), Some(&trained.adapter));
-    let examined = exam(
+    let mut examined = exam(
         ctx,
         &ExamRequest {
             tasks: &tasks,
@@ -606,5 +611,6 @@ pub fn examine(
             cancel: cancel.clone(),
         },
     )?;
+    examined.training_warnings = trained.warnings();
     Ok(Exam::Ran(Box::new(examined)))
 }

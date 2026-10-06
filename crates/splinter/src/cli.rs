@@ -16,7 +16,8 @@ use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::learn::{parse_budget, DEFAULT_VOICE_SHARE};
 use splinter_sdk::lineage::Direction;
 use splinter_sdk::train::{
-    DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_STEPS,
+    DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE,
+    DEFAULT_REPLAY_FRACTION, EVALUATIONS_PER_BUDGET, MAX_MONITOR_SHARE, MAX_PASSES,
 };
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
@@ -171,6 +172,17 @@ fn strength(text: &str) -> Result<Strength, String> {
     parse_strength(text).map_err(|e| e.to_string())
 }
 
+fn monitor_share(text: &str) -> Result<f64, String> {
+    let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
+    if share > 0.0 && share <= MAX_MONITOR_SHARE {
+        Ok(share)
+    } else {
+        Err(format!(
+            "{text:?} is not a share in (0, {MAX_MONITOR_SHARE}]"
+        ))
+    }
+}
+
 fn voice_share(text: &str) -> Result<f64, String> {
     let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
     if (0.0..1.0).contains(&share) {
@@ -258,9 +270,10 @@ pub struct LearnArgs {
          {DEFAULT_VOICE_SHARE}]"
     ))]
     pub voice: Option<f64>,
-    /// Optimizer steps of the training.
+    /// The step budget of the training: the most steps it may take.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
-        help = format!("Optimizer steps of the training [default: {DEFAULT_STEPS}]"))]
+        help = format!("The step budget of the training: the most steps it may take [default: \
+                        {MAX_PASSES} passes over the examples, within bounds]"))]
     pub steps: Option<u32>,
     /// LoRA rank of the adapter.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
@@ -273,6 +286,9 @@ pub struct LearnArgs {
     /// dataset, when the steps are not named).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,
+    /// How the training is watched.
+    #[command(flatten)]
+    pub monitoring: MonitoringArgs,
     /// Hold the frozen base at bf16, half the bytes of fp32: what a 7B
     /// base needs to train on one 24 GiB card.
     #[arg(long)]
@@ -280,6 +296,39 @@ pub struct LearnArgs {
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,
+}
+
+/// How a supervised training run is watched as it trains, for the commands
+/// that train: a share of its training families is set aside and scored
+/// every few steps, the adapter of the evaluation with the lowest loss on
+/// them is the candidate's, and the run stops once that loss has gone a
+/// patience of evaluations without improving.
+#[derive(Debug, Default, Args)]
+pub struct MonitoringArgs {
+    /// Steps between evaluations of the monitoring records; 0 monitors
+    /// nothing and the candidate carries its last step.
+    #[arg(long, value_name = "N", help = format!(
+        "Steps between evaluations of the monitoring records; 0 monitors nothing and the \
+         candidate carries its last step [default: {EVALUATIONS_PER_BUDGET} evaluations over the \
+         step budget]"
+    ))]
+    pub eval_every: Option<u32>,
+    /// Evaluations without improvement before the training stops; 0 runs
+    /// the whole budget (the best evaluation is carried either way).
+    #[arg(long, value_name = "N", help = format!(
+        "Evaluations without improvement before the training stops; 0 runs the whole budget \
+         (the best evaluation is carried either way) [default: {DEFAULT_PATIENCE}]"
+    ))]
+    pub patience: Option<u32>,
+    /// The share of the training families set aside as the monitoring
+    /// records, in (0, 1/2]: whole families, never the held-out ones the
+    /// gate and the exam decide on.
+    #[arg(long, value_name = "SHARE", value_parser = monitor_share, help = format!(
+        "The share of the training families set aside as the monitoring records, in (0, \
+         {MAX_MONITOR_SHARE}]: whole families, never the held-out ones the gate and the exam \
+         decide on [default: {DEFAULT_MONITOR_SHARE}]"
+    ))]
+    pub monitor_share: Option<f64>,
 }
 
 /// pass@k's parameters, for the commands that measure it.
@@ -576,9 +625,11 @@ pub struct TrainArgs {
     /// when training from a policy alias.
     #[arg(long, default_value_t = DEFAULT_REPLAY_FRACTION, value_name = "F")]
     pub replay_fraction: f64,
-    /// Optimizer steps.
-    #[arg(long, default_value_t = DEFAULT_STEPS, value_name = "N")]
-    pub steps: u32,
+    /// The step budget: the most steps the training may take.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
+        help = format!("The step budget: the most steps the training may take [default: \
+                        {MAX_PASSES} passes over the examples, within bounds]"))]
+    pub steps: Option<u32>,
     /// LoRA rank of a new adapter.
     #[arg(long, default_value_t = DEFAULT_LORA_RANK, value_name = "R")]
     pub rank: u32,
@@ -588,9 +639,13 @@ pub struct TrainArgs {
     /// The peak learning rate (brain's default if not given).
     #[arg(long, value_name = "LR")]
     pub lr: Option<f32>,
-    /// Records averaged into one optimizer step (one if not given).
+    /// Records averaged into one optimizer step (default: one when the steps
+    /// are named, else from the size of the dataset).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,
+    /// How the training is watched.
+    #[command(flatten)]
+    pub monitoring: MonitoringArgs,
 }
 
 /// `--beta`'s help, naming the default it falls back to.
@@ -695,83 +750,8 @@ impl LineageArgs {
     }
 }
 
-/// `state ...`.
-#[derive(Debug, Subcommand)]
-pub enum StateCommand {
-    /// What the experience database holds, as files.
-    Status,
-    /// Merge small files, index what is not indexed and retire finished
-    /// writers; nothing stored changes.
-    Maintain {
-        /// Also delete files nothing reaches that are past their grace
-        /// period; a snapshot a dataset pinned is never touched.
-        #[arg(long)]
-        collect: bool,
-    },
-    /// Let go of a snapshot a dataset (or another holder) keeps alive, named
-    /// as `state status` lists it, so its files can be collected.
-    Unpin {
-        /// The holder's name.
-        holder: String,
-    },
-    /// Check the database and every file it tracks, and report each one that
-    /// is missing or damaged; exits 1 when anything is.
-    Verify {
-        /// Read every byte instead of only checking sizes.
-        #[arg(long)]
-        deep: bool,
-    },
-    /// Recover what verify finds: fill holes from copies (archives or other
-    /// state roots), rebuild indexes, and with --accept-loss write off what
-    /// no copy has.
-    Repair {
-        /// A copy to take missing files from: an archive file, or another
-        /// state root. May be given more than once.
-        #[arg(long = "from", value_name = "PATH")]
-        from: Vec<PathBuf>,
-        /// Give up on what no copy has: withdraw damaged database files and
-        /// record lost artifacts in the ledger, which `state status` lists.
-        #[arg(long)]
-        accept_loss: bool,
-    },
-    /// Pack the database and the files it tracks into one archive; the same
-    /// state always gives the same bytes.
-    Archive {
-        /// Where to write the archive (a .tar.zst).
-        file: PathBuf,
-        /// Leave the artifacts (adapters, datasets) out.
-        #[arg(long)]
-        no_artifacts: bool,
-        /// An earlier archive: carry only what it lacks. Restore the result
-        /// together with that archive.
-        #[arg(long, value_name = "ARCHIVE")]
-        since: Option<PathBuf>,
-    },
-    /// Unpack an archive (and the archives an incremental one was made
-    /// after) into an empty state root, verifying everything first.
-    Restore {
-        /// The archive to restore, then any it builds on.
-        #[arg(required = true)]
-        files: Vec<PathBuf>,
-    },
-}
-
-/// `runs ...`.
-#[derive(Debug, Subcommand)]
-pub enum RunsCommand {
-    /// List the recorded runs.
-    List,
-    /// Show one run's record: arguments, stages, status, outputs.
-    Show {
-        /// The run's id.
-        id: String,
-    },
-    /// Ask a run in progress to stop.
-    Cancel {
-        /// The run's id.
-        id: String,
-    },
-}
+mod state;
+pub use state::{RunsCommand, StateCommand};
 
 #[cfg(test)]
 mod tests;

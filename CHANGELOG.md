@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A supervised training run is watched as it trains: a share of its training
+  families (`--monitor-share`, default a tenth, whole families, never the
+  held-out ones the gate and the exam decide on) is scored every
+  `--eval-every` steps and at the last step, the candidate carries the adapter
+  of the evaluation with the lowest monitoring loss instead of the last
+  step's, and the run stops once that loss has gone `--patience` evaluations
+  (default four) without improving. The candidate's record and the `train` and
+  `learn` reports carry the curve (step, mean training loss of the interval,
+  monitoring loss), the step carried and why, and the generalisation gap at
+  it, and warn when the gap is more than a quarter of the monitoring loss,
+  when the monitoring loss rose after the step carried, or when it was still
+  falling when the budget ran out; the release gate (`warnings`) and the exam
+  (`training_warnings`) repeat the warnings beside their verdicts.
 - The `voice` view: the writer's own text as training data, with no model in
   the loop - every text part of the sources cut into stretches of whole
   paragraphs, each a record in the shape the policy is asked in (the persona
@@ -50,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- The step count of a training run is a budget, not a target: `--steps` (now
+  optional on `train` too) is the most steps a run may take, by default three
+  passes over the examples instead of two, and the monitoring decides where
+  the run stops and which step it carries. What a step averages follows the
+  size of the dataset on `train` as it did on `learn` when the steps are not
+  named.
 - A held-out split chooses its families among the records that can be
   examined (those projected from a task or an experience); a record of the
   writer's own text follows its family, held out with it or trained on, and the

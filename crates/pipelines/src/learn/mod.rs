@@ -38,7 +38,10 @@
 //! trains beside it on the writer's own text (the `voice` view): a share of
 //! the examples ([`LearnRequest::voice`]) built by code from the sources,
 //! each the writer's words word for word as the answer, held out with the
-//! family of the letter it prints. The candidate trained on it continues
+//! family of the letter it prints. The training's step budget is a ceiling
+//! of passes over the examples ([`crate::train::sizing`]); the run monitors
+//! a share of its training families as it goes and carries its best
+//! evaluation's adapter. The candidate trained on it continues
 //! that release, and goes through the release gate, which grades it
 //! closed-book and releases it only if every check passes (`--no-release`
 //! stops at the candidate).
@@ -65,7 +68,8 @@ use crate::raft::PassageShare;
 
 use crate::sources::SourceTarget;
 use crate::tasks::{check_kinds, DEFAULT_LEARN_KINDS};
-use crate::train::{Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK, DEFAULT_STEPS};
+pub use crate::train::{auto_records_per_step, auto_steps, steps_for, MAX_AUTO_STEPS, MAX_PASSES};
+use crate::train::{Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK};
 
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
@@ -79,10 +83,6 @@ pub const STAGES: [&str; 16] = [
     "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "author", "frontier",
     "variants", "critique", "select", "dataset", "train", "exam", "release",
 ];
-
-/// How many passes a `learn` run makes over what it has learned when its
-/// steps are not given.
-pub const EPOCHS: u32 = 2;
 
 /// The share of the training examples that is the writer's own text when a
 /// run learns to think like a person and names no share: as many records
@@ -99,47 +99,6 @@ pub fn voice_limit(examples: usize, share: f64) -> usize {
         return 0;
     }
     (examples as f64 * share / (1.0 - share)).ceil() as usize
-}
-
-/// The most steps a `learn` run takes when they are not given.
-pub const MAX_AUTO_STEPS: u32 = 2000;
-
-/// How many records a step of a run over `records` records averages when
-/// none is given: one per [`RECORDS_PER_STEP_UNIT`] records there are, at
-/// least one and at most [`MAX_RECORDS_PER_STEP`]. A set this small is made of
-/// long, individual answers, and an update on one record at a time is noise
-/// that the next record undoes.
-#[must_use]
-pub fn auto_records_per_step(records: usize) -> u32 {
-    u32::try_from(records / RECORDS_PER_STEP_UNIT)
-        .unwrap_or(u32::MAX)
-        .clamp(1, MAX_RECORDS_PER_STEP)
-}
-
-/// The data a step averages one more record for.
-pub const RECORDS_PER_STEP_UNIT: usize = 16;
-
-/// The most records a step averages when none is given.
-pub const MAX_RECORDS_PER_STEP: u32 = 8;
-
-/// The steps of a run over `records` records when none are given: about
-/// [`EPOCHS`] passes at [`auto_records_per_step`] records a step, never fewer
-/// than [`DEFAULT_STEPS`] and never more than [`MAX_AUTO_STEPS`].
-#[must_use]
-pub fn auto_steps(records: usize) -> u32 {
-    steps_for(records, auto_records_per_step(records))
-}
-
-/// The steps of about [`EPOCHS`] passes over `records` records at
-/// `records_per_step` a step, within the same bounds.
-#[must_use]
-pub fn steps_for(records: usize, records_per_step: u32) -> u32 {
-    let reads = u32::try_from(records)
-        .unwrap_or(u32::MAX)
-        .saturating_mul(EPOCHS);
-    reads
-        .div_ceil(records_per_step.max(1))
-        .clamp(DEFAULT_STEPS, MAX_AUTO_STEPS)
 }
 
 /// One `learn`.
@@ -183,11 +142,13 @@ pub struct LearnRequest {
     /// cannot answer a task closed-book at all, where its attempts cost the
     /// most and teach nothing. Implies no frontier.
     pub distill: bool,
-    /// Optimizer steps of the training; [`DEFAULT_STEPS`] when `None`.
+    /// The step budget of the training; [`auto_steps`] of the examples
+    /// when `None`.
     pub steps: Option<u32>,
     /// LoRA rank of the adapter; [`DEFAULT_LORA_RANK`] when `None`.
     pub rank: Option<u32>,
-    /// The base's precision and the learning rate of the training.
+    /// The base's precision, the learning rate and how the training is
+    /// watched.
     pub tuning: Tuning,
     /// The models this run names for roles (teacher, generator, planner);
     /// a role not named is played as [`splinter_core::role`] says.
@@ -316,9 +277,8 @@ pub fn learn(
         steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
         tuning: Tuning {
-            bf16_base: request.tuning.bf16_base,
             learning_rate: request.tuning.learning_rate.or(Some(DEFAULT_LEARNING_RATE)),
-            records_per_step: request.tuning.records_per_step,
+            ..request.tuning
         },
         quotas: request.quotas,
     };

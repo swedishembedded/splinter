@@ -43,7 +43,7 @@ fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
         datasets: datasets.iter().map(ToString::to_string).collect(),
         from: policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
-        steps: 1,
+        steps: Some(1),
         rank: 4,
         beta,
         tuning: Tuning::default(),
@@ -162,7 +162,9 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
         &CancelToken::new(),
     )
     .unwrap();
-    assert_eq!(trainer.plans.lock().unwrap()[0].tuning, Tuning::default());
+    // The plan resolves what the request left open and keeps what it named.
+    let plan = trainer.plans.lock().unwrap()[0].clone();
+    assert!(!plan.tuning.bf16_base && plan.tuning.learning_rate.is_none());
     assert!(!Tuning::default().bf16_base && Tuning::default().learning_rate.is_none());
 
     let tuned = TrainRequest {
@@ -170,6 +172,7 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
             bf16_base: true,
             learning_rate: Some(2e-4),
             records_per_step: Some(4),
+            ..Tuning::default()
         },
         ..request(&[&chat], None)
     };

@@ -219,10 +219,11 @@ fn an_assistant_that_is_no_model_reference_is_refused_by_name() {
     );
 }
 
-/// A run trains for about two passes over what it has learned, never fewer
-/// steps than the default and never more than a day's work, and a step
-/// averages several records once there are enough of them for the update to
-/// be steadier for it: sixteen records to a step's one, up to eight.
+/// A run's step budget is three passes over what it has learned - a ceiling
+/// the monitoring stops short of - never fewer steps than the default and
+/// never more than a day's work, and a step averages several records once
+/// there are enough of them for the update to be steadier for it: sixteen
+/// records to a step's one, up to eight.
 #[test]
 fn the_steps_and_what_a_step_reads_follow_the_size_of_the_dataset() {
     assert_eq!(
@@ -240,9 +241,9 @@ fn the_steps_and_what_a_step_reads_follow_the_size_of_the_dataset() {
     );
     assert_eq!(
         auto_steps(185),
-        47,
-        "two passes over 185 records, eight to a step"
+        70,
+        "three passes over 185 records, eight to a step"
     );
-    assert_eq!(auto_steps(1_000), 250);
+    assert_eq!(auto_steps(1_000), 375);
     assert_eq!(auto_steps(1_000_000), MAX_AUTO_STEPS, "bounded above");
 }

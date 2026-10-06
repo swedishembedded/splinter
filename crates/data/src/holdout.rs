@@ -27,6 +27,14 @@
 //! nothing trained on is a print of a held-out letter and the families held
 //! out are the same however much of the writer's text is beside them. A set
 //! with nothing to examine holds out its records as units, as before.
+//!
+//! The records to train on are split once more, by the same family rule
+//! ([`monitor_split_file`]): a share of their families is the monitoring
+//! set a run scores as it trains and selects its best step on. It is carved
+//! from the training families, never from the held-out ones, because the
+//! gate and the exam decide on the held-out families, and a step chosen for
+//! its loss on them would make that decision on evidence the choice had
+//! already seen. The price is a tenth of the training records.
 
 use std::path::{Path, PathBuf};
 
@@ -78,6 +86,40 @@ pub fn holdout_split_grouped<T>(
     })
 }
 
+/// How much of a set a split takes out, in units of the examinable samples.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SplitRule {
+    /// The share of the units wanted out (at least one unit).
+    pub share: f64,
+    /// Whole groups are taken past the share until this many are out, as
+    /// long as that stays within `most`.
+    pub min_units: usize,
+    /// The share of the units the set taken out may grow to for the sake of
+    /// `min_units`.
+    pub most: f64,
+}
+
+impl SplitRule {
+    /// The held-out rule: a tenth, grown to [`MIN_HELD_OUT_UNITS`] units
+    /// within a [`MAX_HELD_OUT_SHARE`]th, for the paired test the gate runs.
+    pub const HELD_OUT: SplitRule = SplitRule {
+        share: 0.1,
+        min_units: MIN_HELD_OUT_UNITS,
+        most: 1.0 / MAX_HELD_OUT_SHARE as f64,
+    };
+
+    /// The monitoring rule: `share` of the units, whole groups, and no more
+    /// - a loss curve needs positions, not units of evidence.
+    #[must_use]
+    pub fn monitor(share: f64) -> SplitRule {
+        SplitRule {
+            share,
+            min_units: 1,
+            most: share,
+        }
+    }
+}
+
 /// [`holdout_split_grouped`] over the samples `membership` says can be
 /// examined, the rest following their group: held out with it, else trained
 /// on (see the module documentation). When fewer than [`MIN_SAMPLES`]
@@ -86,6 +128,16 @@ pub fn holdout_split_by<T>(
     samples: &[T],
     membership: impl Fn(&T) -> Membership,
 ) -> Option<(Vec<&T>, Vec<&T>)> {
+    split_by_rule(samples, membership, &SplitRule::HELD_OUT)
+}
+
+/// [`holdout_split_by`] taking out what `rule` says instead of the
+/// held-out rule.
+pub fn split_by_rule<'a, T>(
+    samples: &'a [T],
+    membership: impl Fn(&T) -> Membership,
+    rule: &SplitRule,
+) -> Option<(Vec<&'a T>, Vec<&'a T>)> {
     if samples.len() < MIN_SAMPLES {
         return None;
     }
@@ -112,13 +164,15 @@ pub fn holdout_split_by<T>(
     for &n in &units {
         *sizes.entry(keys[n].as_str()).or_default() += 1;
     }
-    let wanted = (units.len() / 10).max(1);
+    // Floors, as a tenth and a quarter of the count always were.
+    let of_units = |share: f64| (units.len() as f64 * share).floor() as usize;
+    let wanted = of_units(rule.share).max(1);
     let half = units.len() / 2;
-    let most = units.len() / MAX_HELD_OUT_SHARE;
+    let most = of_units(rule.most);
     let mut held: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let mut count = 0;
     for &n in units.iter().rev() {
-        if count >= wanted && held.len() >= MIN_HELD_OUT_UNITS {
+        if count >= wanted && held.len() >= rule.min_units {
             break;
         }
         let key = keys[n].as_str();
@@ -127,7 +181,7 @@ pub fn holdout_split_by<T>(
         }
         let size = sizes[key];
         let for_the_tenth = count < wanted && count + size <= half;
-        let for_the_units = held.len() < MIN_HELD_OUT_UNITS && count + size <= most;
+        let for_the_units = held.len() < rule.min_units && count + size <= most;
         if for_the_tenth || for_the_units {
             held.insert(key);
             count += size;
@@ -203,6 +257,10 @@ pub struct Split {
 const TRAIN_FILE: &str = "train.jsonl";
 /// The file name the held-out records are written under.
 const HELD_OUT_FILE: &str = "held_out.jsonl";
+/// The file name the records a monitored run fits are written under.
+const FIT_FILE: &str = "fit.jsonl";
+/// The file name the monitoring records are written under.
+const MONITOR_FILE: &str = "monitor.jsonl";
 
 /// Writes `dataset`'s records into `dir` as two files - the records to train
 /// on and the ones held out that can be scored - split by
@@ -210,6 +268,52 @@ const HELD_OUT_FILE: &str = "held_out.jsonl";
 /// parsers read it. Refused when the dataset has fewer than [`MIN_SAMPLES`]
 /// records.
 pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError> {
+    let (train, held_out) = split_file(
+        dataset,
+        dir,
+        &SplitRule::HELD_OUT,
+        TRAIN_FILE,
+        HELD_OUT_FILE,
+    )?;
+    Ok(Split { train, held_out })
+}
+
+/// The two halves of a split of the records to train on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MonitorSplit {
+    /// The records the run fits.
+    pub fit: PathBuf,
+    /// The records it scores as it trains: the examinable ones of the
+    /// monitoring families. The writer's text of those families is in
+    /// neither file.
+    pub monitor: PathBuf,
+}
+
+/// Writes the records of `train` (a [`Split::train`] file) into `dir` as two
+/// files - the records to fit and the monitoring records - split by the
+/// family rule with [`SplitRule::monitor`] of `share`. Refused when there
+/// are fewer than [`MIN_SAMPLES`] records.
+pub fn monitor_split_file(train: &Path, dir: &Path, share: f64) -> Result<MonitorSplit, ViewError> {
+    let (fit, monitor) = split_file(
+        train,
+        dir,
+        &SplitRule::monitor(share),
+        FIT_FILE,
+        MONITOR_FILE,
+    )?;
+    Ok(MonitorSplit { fit, monitor })
+}
+
+/// The records of `dataset` split by `rule` into `dir/kept` and `dir/out`,
+/// the latter the examinable records taken out (every record, when none is
+/// examinable).
+fn split_file(
+    dataset: &Path,
+    dir: &Path,
+    rule: &SplitRule,
+    kept: &str,
+    out: &str,
+) -> Result<(PathBuf, PathBuf), ViewError> {
     let io = |path: &Path| {
         let path = path.to_path_buf();
         move |source| ViewError::Io { path, source }
@@ -220,11 +324,12 @@ pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect();
-    let (train, held_out) =
-        holdout_split_records(&records).ok_or_else(|| ViewError::TooFewRecords {
+    let (train, held_out) = split_by_rule(&records, record_membership, rule).ok_or_else(|| {
+        ViewError::TooFewRecords {
             path: dataset.to_path_buf(),
             records: records.len(),
-        })?;
+        }
+    })?;
     // A score over the examinable records is a score of what the policy is
     // asked as, comparable whatever the writer's text beside them; when
     // none is, every record is (see [`holdout_split_by`]).
@@ -245,10 +350,7 @@ pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError
         std::fs::write(&path, body).map_err(io(&path))?;
         Ok(path)
     };
-    Ok(Split {
-        train: write(TRAIN_FILE, &train)?,
-        held_out: write(HELD_OUT_FILE, &scored)?,
-    })
+    Ok((write(kept, &train)?, write(out, &scored)?))
 }
 
 #[cfg(test)]
@@ -331,6 +433,57 @@ mod tests {
         let train_file = std::fs::read_to_string(&split.train).unwrap();
         assert_eq!(train_file.lines().count(), records.len() - 8);
         assert!(!train_file.contains("family-9"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The monitoring set is a share of the training families, whole, and
+    /// no more; the writer's text of a monitored family is in neither file,
+    /// as with the held-out families.
+    #[test]
+    fn the_monitoring_set_is_a_share_of_the_training_families_taken_whole() {
+        let examined = |group: &str, n: u32| {
+            format!(
+                r#"{{"messages":[],"metadata":{{"experiences":["blake3:{n:064x}"],"group":"{group}"}}}}"#
+            )
+        };
+        let voice = |group: &str, n: u32| {
+            format!(
+                r#"{{"messages":[],"metadata":{{"sources":["blake3:{n:064x}"],"group":"{group}","view":"voice"}}}}"#
+            )
+        };
+        // Ten families of four examined records, and two records of the
+        // writer's text per family.
+        let mut records: Vec<String> = Vec::new();
+        for n in 0..40u32 {
+            records.push(examined(&format!("family-{}", n / 4), n));
+        }
+        for n in 0..20u32 {
+            records.push(voice(&format!("family-{}", n / 2), 100 + n));
+        }
+        let dir = std::env::temp_dir().join(format!("views-monitor-split-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let train = dir.join("train.jsonl");
+        std::fs::write(&train, format!("{}\n", records.join("\n"))).unwrap();
+
+        let split = monitor_split_file(&train, &dir, 0.1).unwrap();
+        let monitor = std::fs::read_to_string(&split.monitor).unwrap();
+        let fit = std::fs::read_to_string(&split.fit).unwrap();
+        // A tenth of forty units is one family of four, the newest, and the
+        // paired test's eight units are not asked for.
+        assert_eq!(monitor.lines().count(), 4, "{monitor}");
+        assert!(monitor
+            .lines()
+            .all(|l| l.contains("family-9") && l.contains("experiences")));
+        assert_eq!(
+            fit.lines().count(),
+            records.len() - 6,
+            "the family's four examined and two voice records leave"
+        );
+        assert!(!fit.contains("family-9"));
+
+        let split = monitor_split_file(&train, &dir, 0.3).unwrap();
+        let monitor = std::fs::read_to_string(&split.monitor).unwrap();
+        assert_eq!(monitor.lines().count(), 12, "three families of four");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

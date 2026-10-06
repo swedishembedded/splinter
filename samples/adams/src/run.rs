@@ -116,6 +116,11 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         model_dir: &t.base,
         train: &split.train,
         held_out: &split.held_out,
+        // The sample's own fine-tune runs its steps as given, unwatched;
+        // `splinter learn` and `splinter train` monitor and select.
+        monitor: None,
+        eval_every: 0,
+        patience: 0,
         attempt_dir: &t.attempt,
         steps: t.steps,
         rank: t.rank,

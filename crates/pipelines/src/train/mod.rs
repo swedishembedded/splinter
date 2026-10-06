@@ -19,7 +19,14 @@
 //!
 //! The datasets are concatenated in the order given into the candidate's
 //! own directory, and the newest records of that file are held out
-//! (`splinter_eval::holdout`). Trained from `policy:<alias>`, a candidate
+//! (`splinter_data::holdout`). A supervised run then sets a share of the
+//! training families aside as its monitoring set ([`sizing`]), scores it
+//! every few steps as it trains, exports the adapter of the evaluation with
+//! the lowest monitoring loss and stops once that loss has gone a patience of
+//! evaluations without improving; the step budget is a ceiling of passes
+//! over the data, not a target. The curve, the step carried and what the
+//! curve warns of ([`Candidate::warnings`]) are recorded with the candidate,
+//! and the release gate and the exam repeat the warnings. Trained from `policy:<alias>`, a candidate
 //! continues the adapter of the release the alias was resolved to - never
 //! the base weights once a release exists. A supervised candidate trained
 //! so also replays a seeded sample of every earlier release's chat
@@ -37,16 +44,24 @@
 //! it close to what came before, and the gate's retention check measures
 //! whether it did.
 
+mod candidate;
+pub mod sizing;
+
+pub use candidate::{candidate_count, candidate_ids, load_candidate, Candidate};
+pub use sizing::{
+    auto_records_per_step, auto_steps, eval_every_for, steps_for, DEFAULT_MONITOR_SHARE,
+    DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
+};
+
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use splinter_agent::CancelToken;
-use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::training::{
-    HeldOutScore, PreferenceSummary, Regime, ReplaySample, ReplaySource,
+    HeldOutScore, PreferenceSummary, Regime, ReplaySample, ReplaySource, TrainingCurve,
 };
-use splinter_data::holdout::split_dataset_file;
+use splinter_data::holdout::{monitor_split_file, split_dataset_file};
 use splinter_data::{replay_sample, Format, Fraction, StoredDataset};
 use splinter_model::train::{
     fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
@@ -54,7 +69,7 @@ use splinter_model::train::{
 use splinter_model::{ModelSelection, PolicyError};
 use splinter_store::artifacts::ArtifactSpec;
 
-use crate::datasets::{record_dataset_lineage, resolve_dataset};
+use crate::datasets::{examples_in, record_dataset_lineage, resolve_dataset};
 use crate::release::probe::split_records;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
@@ -66,7 +81,8 @@ use splinter_orchestrator::error::{io, OrchestratorError};
 /// short run, which brain's own default (set for long runs) does not.
 pub const DEFAULT_LEARNING_RATE: f32 = 2e-4;
 
-/// Training steps when a command names none.
+/// The fewest steps a run's budget is when a command names none; the budget
+/// itself is passes over the data ([`sizing`]).
 pub const DEFAULT_STEPS: u32 = 40;
 /// LoRA rank of a new adapter when a command names none.
 pub const DEFAULT_LORA_RANK: u32 = 8;
@@ -86,8 +102,6 @@ pub use splinter_model::train::DEFAULT_DPO_BETA;
 /// The seed of the replay draw: the same records are replayed every time.
 pub const REPLAY_SEED: u64 = 0;
 
-/// The class a candidate's record is stored under.
-const CANDIDATE: &str = "candidate";
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
 
@@ -114,8 +128,20 @@ pub struct Tuning {
     pub bf16_base: bool,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
-    /// Records averaged into one optimizer step; one when `None`.
+    /// Records averaged into one optimizer step. `None` is one when the
+    /// steps are named, else [`auto_records_per_step`] of the examples.
     pub records_per_step: Option<u32>,
+    /// Steps between evaluations of the monitoring set; `None` is
+    /// [`eval_every_for`] the budget, 0 monitors nothing and the candidate
+    /// carries its last step.
+    pub eval_every: Option<u32>,
+    /// Evaluations without improvement before the run stops; `None` is
+    /// [`DEFAULT_PATIENCE`], 0 runs the whole budget (the best evaluation is
+    /// carried either way).
+    pub patience: Option<u32>,
+    /// The share of the training families set aside as the monitoring set;
+    /// `None` is [`DEFAULT_MONITOR_SHARE`].
+    pub monitor_share: Option<f64>,
 }
 
 /// One training request.
@@ -128,14 +154,14 @@ pub struct TrainRequest {
     pub from: ModelRef,
     /// The fraction of each earlier release's training records replayed.
     pub replay_fraction: f64,
-    /// Optimizer steps.
-    pub steps: u32,
+    /// The step budget; `None` is [`auto_steps`] of the datasets' examples.
+    pub steps: Option<u32>,
     /// LoRA rank of a new adapter.
     pub rank: u32,
     /// The DPO temperature, for preference datasets only;
     /// [`DEFAULT_DPO_BETA`] when `None`.
     pub beta: Option<f32>,
-    /// The base's precision and the learning rate.
+    /// The base's precision, the learning rate and how the run is watched.
     pub tuning: Tuning,
 }
 
@@ -161,132 +187,20 @@ pub struct TrainPlan {
     /// The share of the training draws that come from `replay_file`:
     /// [`DEFAULT_REPLAY_SHARE`] when there is one, else `None`.
     pub replay_share: Option<f32>,
-    /// Optimizer steps.
+    /// The step budget.
     pub steps: u32,
     /// LoRA rank of a new adapter.
     pub rank: u32,
     /// The DPO temperature; used by the preference regime only.
     pub beta: f32,
-    /// The base's precision and the learning rate.
+    /// The base's precision and the learning rate, every option resolved.
     pub tuning: Tuning,
-}
-
-/// A trained candidate, as stored: everything but where its adapter file is.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct StoredCandidate {
-    candidate: String,
-    from: String,
-    #[serde(default)]
-    regime: Regime,
-    base: PathBuf,
-    parent: Option<ReleaseId>,
-    datasets: Vec<DatasetId>,
-    replay: Option<ReplaySample>,
-    adapter_artifact: Digest,
-    adapter_digest: String,
-    base_digest: String,
-    training_record: serde_json::Value,
-    steps: u32,
-    rank: u32,
-    #[serde(default)]
-    base_score: Option<HeldOutScore>,
-    #[serde(default)]
-    tuned_score: Option<HeldOutScore>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    preference: Option<PreferenceSummary>,
-    records: usize,
-}
-
-/// A trained candidate.
-#[derive(Clone, Debug, Serialize)]
-pub struct Candidate {
-    /// Its id.
-    pub candidate: String,
-    /// The reference it was trained from.
-    pub from: String,
-    /// How it was trained.
-    pub regime: Regime,
-    /// The base checkpoint.
-    pub base: PathBuf,
-    /// The release it was trained from; `None` from a base or a `local:`
-    /// adapter.
-    pub parent: Option<ReleaseId>,
-    /// The new datasets trained on.
-    pub datasets: Vec<DatasetId>,
-    /// The earlier records replayed; `None` with no release to replay.
-    pub replay: Option<ReplaySample>,
-    /// The adapter file: an artifact, a real file at a stable path.
-    pub adapter: PathBuf,
-    /// The artifact the adapter is kept as.
-    pub adapter_artifact: Digest,
-    /// Its digest, as brain reports it.
-    pub adapter_digest: String,
-    /// The digest of the base it was trained on, as its card records it.
-    pub base_digest: String,
-    /// brain's training record for it.
-    pub training_record: serde_json::Value,
-    /// Optimizer steps.
-    pub steps: u32,
-    /// LoRA rank asked for.
-    pub rank: u32,
-    /// The base on the held-out records; `None` when not measured (the
-    /// preference regime measures preferences instead).
-    pub base_score: Option<HeldOutScore>,
-    /// The base with the adapter on the same records; `None` when not
-    /// measured.
-    pub tuned_score: Option<HeldOutScore>,
-    /// The preference measurements; `None` for the supervised regime.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preference: Option<PreferenceSummary>,
-    /// Records in the new datasets, trained and held out together.
-    pub records: usize,
-}
-
-impl Candidate {
-    fn stored(&self) -> StoredCandidate {
-        StoredCandidate {
-            candidate: self.candidate.clone(),
-            from: self.from.clone(),
-            regime: self.regime,
-            base: self.base.clone(),
-            parent: self.parent.clone(),
-            datasets: self.datasets.clone(),
-            replay: self.replay.clone(),
-            adapter_artifact: self.adapter_artifact.clone(),
-            adapter_digest: self.adapter_digest.clone(),
-            base_digest: self.base_digest.clone(),
-            training_record: self.training_record.clone(),
-            steps: self.steps,
-            rank: self.rank,
-            base_score: self.base_score,
-            tuned_score: self.tuned_score,
-            preference: self.preference.clone(),
-            records: self.records,
-        }
-    }
-
-    fn from_stored(ctx: &Context, stored: StoredCandidate) -> Result<Self, OrchestratorError> {
-        Ok(Self {
-            adapter: ctx.artifacts().path(&stored.adapter_artifact)?,
-            candidate: stored.candidate,
-            from: stored.from,
-            regime: stored.regime,
-            base: stored.base,
-            parent: stored.parent,
-            datasets: stored.datasets,
-            replay: stored.replay,
-            adapter_artifact: stored.adapter_artifact,
-            adapter_digest: stored.adapter_digest,
-            base_digest: stored.base_digest,
-            training_record: stored.training_record,
-            steps: stored.steps,
-            rank: stored.rank,
-            base_score: stored.base_score,
-            tuned_score: stored.tuned_score,
-            preference: stored.preference,
-            records: stored.records,
-        })
-    }
+    /// Steps between monitoring evaluations; 0 monitors nothing.
+    pub eval_every: u32,
+    /// Evaluations without improvement before the run stops; 0 never stops.
+    pub patience: u32,
+    /// The share of the training families set aside to monitor on.
+    pub monitor_share: f64,
 }
 
 /// Trains a candidate; the seam `train` and `learn` train through. `train`
@@ -324,11 +238,20 @@ impl Trainer for BrainTrainer {
         cancel: &CancelToken,
     ) -> Result<Trained, OrchestratorError> {
         let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
+        // The monitoring set is carved from the training half: the held-out
+        // half is the gate's and the exam's evidence, and a step chosen on
+        // it would be chosen on what it is then judged by.
+        let monitored = (plan.eval_every > 0)
+            .then(|| monitor_split_file(&split.train, &plan.dir, plan.monitor_share))
+            .transpose()?;
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
         fine_tune(&FineTune {
             model_dir: &plan.base,
-            train: &split.train,
+            train: monitored.as_ref().map_or(&split.train, |m| &m.fit),
             held_out: &split.held_out,
+            monitor: monitored.as_ref().map(|m| m.monitor.as_path()),
+            eval_every: plan.eval_every,
+            patience: plan.patience,
             attempt_dir: &plan.dir,
             steps: plan.steps,
             rank: plan.rank,
@@ -443,6 +366,36 @@ pub fn train(
         }
     };
     let datasets: Vec<StoredDataset> = resolved.into_iter().map(|(d, _)| d).collect();
+    let monitor_share = request
+        .tuning
+        .monitor_share
+        .unwrap_or(DEFAULT_MONITOR_SHARE);
+    if !(monitor_share > 0.0 && monitor_share <= MAX_MONITOR_SHARE) {
+        return Err(OrchestratorError::Refused(format!(
+            "the monitor share {monitor_share} is not in (0, {MAX_MONITOR_SHARE}]: a run monitors \
+             some of its training families and fits the rest"
+        )));
+    }
+    // The budget and what a step averages follow the data unless the command
+    // named them: a command that names its steps means optimizer steps of
+    // single records, as it always did.
+    let examples = datasets
+        .iter()
+        .map(|d| examples_in(&d.path).map_err(io(&d.path)))
+        .sum::<Result<usize, _>>()?;
+    let records_per_step = request.tuning.records_per_step.or_else(|| {
+        request
+            .steps
+            .is_none()
+            .then(|| auto_records_per_step(examples))
+    });
+    let steps = request
+        .steps
+        .unwrap_or_else(|| steps_for(examples, records_per_step.unwrap_or(1)));
+    let eval_every = request
+        .tuning
+        .eval_every
+        .unwrap_or_else(|| eval_every_for(steps));
     let ModelSelection::Local(weights) = ctx.selection(&request.from)? else {
         return Err(OrchestratorError::Refused(format!(
             "{} is reached over the network and cannot be trained here",
@@ -481,15 +434,22 @@ pub fn train(
             .as_ref()
             .and_then(|r| r.digest.as_ref())
             .map(|_| DEFAULT_REPLAY_SHARE),
-        steps: request.steps,
+        steps,
         rank: request.rank,
         beta,
         // A base too large for the card at fp32 is a fact about the machine,
         // not about the command that trains it.
         tuning: Tuning {
             bf16_base: request.tuning.bf16_base || ctx.config().bf16_base,
+            records_per_step,
+            eval_every: Some(eval_every),
+            patience: Some(request.tuning.patience.unwrap_or(DEFAULT_PATIENCE)),
+            monitor_share: Some(monitor_share),
             ..request.tuning
         },
+        eval_every,
+        patience: request.tuning.patience.unwrap_or(DEFAULT_PATIENCE),
+        monitor_share,
     };
     // A fine-tune loads its own copy of the base: the device holds no
     // other while it trains.
@@ -587,24 +547,15 @@ fn keep_candidate(ctx: &Context, finished: Finished<'_>) -> Result<Candidate, Or
         adapter_digest: trained.adapter_digest,
         base_digest: trained.base_digest,
         training_record,
-        steps: request.steps,
+        steps: plan.steps,
         rank: request.rank,
         base_score: trained.base_score,
         tuned_score: trained.tuned_score,
         preference: trained.preference,
+        curve: trained.curve,
         records: trained.records,
     };
-    let datasets: Vec<Digest> = record.datasets.iter().map(|d| d.0.clone()).collect();
-    ctx.workspace().record_candidate(
-        &record.stored(),
-        &record.candidate,
-        &datasets,
-        match regime {
-            Regime::Sft => "sft",
-            Regime::Dpo => "dpo",
-        },
-        record.parent.as_ref().map(|release| &release.0),
-    )?;
+    candidate::record_candidate(ctx, &record, regime)?;
     Ok(record)
 }
 
@@ -618,6 +569,7 @@ struct Outcome {
     base_score: Option<HeldOutScore>,
     tuned_score: Option<HeldOutScore>,
     preference: Option<PreferenceSummary>,
+    curve: Option<TrainingCurve>,
 }
 
 impl From<Trained> for Outcome {
@@ -631,6 +583,7 @@ impl From<Trained> for Outcome {
             base_score: Some(t.base),
             tuned_score: Some(t.tuned),
             preference: None,
+            curve: Some(t.curve),
         }
     }
 }
@@ -651,6 +604,7 @@ impl From<TrainedPreference> for Outcome {
                 train_score: t.train_score,
                 held_out_score: t.held_out_score,
             }),
+            curve: None,
         }
     }
 }
@@ -698,59 +652,4 @@ fn draw_replay(
         sample.digest = Some(Digest::of(text.as_bytes()));
     }
     Ok(sample)
-}
-
-/// The candidate `id` (or a unique prefix of it) names, as trained.
-pub fn load_candidate(ctx: &Context, id: &str) -> Result<Candidate, OrchestratorError> {
-    let all = stored_candidates(ctx)?;
-    let matching: Vec<&StoredCandidate> =
-        all.iter().filter(|c| c.candidate.starts_with(id)).collect();
-    let found = match matching.as_slice() {
-        [] => {
-            return Err(OrchestratorError::NotFound {
-                what: "candidate",
-                id: id.into(),
-            })
-        }
-        [one] => *one,
-        many => match many.iter().find(|c| c.candidate == id) {
-            Some(exact) => *exact,
-            None => {
-                return Err(OrchestratorError::AmbiguousId {
-                    what: "candidate",
-                    id: id.into(),
-                    matches: many.len(),
-                })
-            }
-        },
-    };
-    Candidate::from_stored(ctx, found.clone())
-}
-
-fn stored_candidates(ctx: &Context) -> Result<Vec<StoredCandidate>, OrchestratorError> {
-    ctx.workspace().refresh()?;
-    let mut all = Vec::new();
-    for id in ctx.workspace().documents_in_order(CANDIDATE)? {
-        if let Some(stored) = ctx
-            .workspace()
-            .get_document::<StoredCandidate>(CANDIDATE, &id)?
-        {
-            all.push(stored);
-        }
-    }
-    all.sort_by(|a, b| a.candidate.cmp(&b.candidate));
-    Ok(all)
-}
-
-/// Every trained candidate's id, oldest first.
-pub fn candidate_ids(ctx: &Context) -> Result<Vec<String>, OrchestratorError> {
-    Ok(stored_candidates(ctx)?
-        .into_iter()
-        .map(|c| c.candidate)
-        .collect())
-}
-
-/// How many candidates were trained under the state root.
-pub fn candidate_count(ctx: &Context) -> Result<usize, OrchestratorError> {
-    Ok(candidate_ids(ctx)?.len())
 }

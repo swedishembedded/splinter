@@ -112,8 +112,17 @@ fn exam_line(summary: &serde_json::Value) -> String {
             right(false, "alone"),
         )
     });
+    let warnings: String = ran["training_warnings"]
+        .as_array()
+        .map(|w| {
+            w.iter()
+                .filter_map(|w| w.as_str())
+                .map(|w| format!("\nwarning: {w}"))
+                .collect()
+        })
+        .unwrap_or_default();
     format!(
-        "{} task(s) from {} source family(ies), judge {} {trust}: base {}; candidate {}{test}{prompted}{retrieval}",
+        "{} task(s) from {} source family(ies), judge {} {trust}: base {}; candidate {}{test}{prompted}{retrieval}{warnings}",
         ran["tasks"],
         ran["families"],
         judge["judge"].as_str().unwrap_or("?"),

@@ -213,7 +213,10 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         panic!("train");
     };
     assert_eq!(train.datasets.len(), 2);
-    assert_eq!((train.steps, train.rank, train.beta), (10, 4, Some(0.2)));
+    assert_eq!(
+        (train.steps, train.rank, train.beta),
+        (Some(10), 4, Some(0.2))
+    );
     assert_eq!(train.replay_fraction, 0.5);
 
     let Command::Release(release) = command(&["release", "candidate-1", "--alias", "staging"])
@@ -249,6 +252,46 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         panic!("train");
     };
     assert_eq!(train.lr, Some(0.0002));
+    assert!(
+        train.steps.is_none()
+            && train.monitoring.eval_every.is_none()
+            && train.monitoring.patience.is_none(),
+        "the budget, the cadence and the patience follow the data unless named"
+    );
+    let Command::Train(train) = command(&[
+        "train",
+        "d1",
+        "--eval-every",
+        "0",
+        "--patience",
+        "2",
+        "--monitor-share",
+        "0.2",
+    ]) else {
+        panic!("train");
+    };
+    assert_eq!(
+        (
+            train.monitoring.eval_every,
+            train.monitoring.patience,
+            train.monitoring.monitor_share
+        ),
+        (Some(0), Some(2), Some(0.2))
+    );
+    assert!(
+        parse(&["train", "d1", "--monitor-share", "0.6"]).is_err(),
+        "more than half monitored is refused"
+    );
+    assert!(parse(&["train", "d1", "--monitor-share", "0"]).is_err());
+    let Command::Learn(learn) =
+        command(&["learn", "docs", "--patience", "0", "--monitor-share", "0.5"])
+    else {
+        panic!("learn");
+    };
+    assert_eq!(
+        (learn.monitoring.patience, learn.monitoring.monitor_share),
+        (Some(0), Some(0.5))
+    );
     let Command::Exam(exam) = command(&["exam", "c1", "--judge", "local:Qwen/Qwen3-8B"]) else {
         panic!("exam");
     };

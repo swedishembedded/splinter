@@ -13,7 +13,8 @@ splinter                          REPL on the current policy (a line is handled 
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
-                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--with-passages SHARE] [--voice SHARE] [--bf16-base]
+                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--eval-every N] [--patience N] [--monitor-share SHARE]
+                         [--with-passages SHARE] [--voice SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -28,6 +29,7 @@ splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mi
                        [--system-prompt TEXT] [--limit N]
 splinter dataset export <DATASET-ID> --out DIR
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B] [--lr LR] [--records-per-step N]
+                                [--eval-every N] [--patience N] [--monitor-share SHARE]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
@@ -319,11 +321,14 @@ every reply is the answer and comes at once; training renders its answers the
 same way, so both settings work), and `SPLINTER_BF16_BASE` holds a large policy's base at bf16 so it
 trains on one card. `SPLINTER_REMOTE_CONCURRENCY` is how many requests to a model
 reached over an API may be in flight at once (4 by default); a model on the local
-device is asked one at a time. Unless `--steps` is given a run trains about two passes
-over what it learned, within bounds, at a learning rate suited to a short
-LoRA run, and a step averages several records - one per sixteen the data holds, up
-to eight, or `--records-per-step N` - because an update on a single long,
-individual answer is noise the next record undoes.
+device is asked one at a time. Unless `--steps` is given a run's step budget
+is three passes over what it learned, within bounds, at a learning rate
+suited to a short LoRA run, and a step averages several records - one per
+sixteen the data holds, up to eight, or `--records-per-step N` - because an
+update on a single long, individual answer is noise the next record undoes.
+The budget is a ceiling: the run is watched as it trains (see `train`) and
+carries the step with the best monitoring loss, stopping early once that
+loss stops improving.
 
 ## The curriculum
 
@@ -436,6 +441,26 @@ scored by nobody): a supervised candidate
 reports the held-out loss of base and candidate, a preference candidate
 brain's preference score on the held-out pairs (how often, and by how
 many nats, it prefers the chosen answer more than its reference does).
+
+A supervised run is watched as it trains. A share of the training families
+(`--monitor-share`, default 0.1, whole families) is set aside as the
+monitoring records - carved from the training half, never from the held-out
+half the gate and the exam decide on, so no step is chosen on the evidence
+it is then judged by - and scored every `--eval-every` steps (default:
+sixteen evaluations over the step budget, and at the last step). The
+candidate carries the adapter of the evaluation with the lowest monitoring
+loss, not the last step's, and the run stops once that loss has gone
+`--patience` evaluations (default 4) without improving; `--patience 0` runs
+the whole budget and still carries the best, `--eval-every 0` monitors
+nothing and carries the last step. `--steps` is the budget, the most steps
+the run may take: by default three passes over the examples. The candidate's
+report shows the steps trained of the budget, the step carried and why, the
+training and monitoring loss at it and the gap between them, the whole curve
+(step, mean training loss since the previous evaluation, monitoring loss),
+and warns when the gap at the carried step is more than a quarter of the
+monitoring loss, when the monitoring loss rose after the step carried, or
+when it was still falling at the end of the budget; the release gate and the
+exam repeat those warnings beside their verdicts.
 From `policy:<alias>` (the default) it continues the adapter of the
 release the alias points at - never the base weights once a release
 exists - and a supervised run replays `--replay-fraction` (default 0.25)
@@ -464,6 +489,12 @@ is printed with its numbers, and a check that could not be measured fails:
 | retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
 | anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's |
 | serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `SPLINTER_BRAIN_BIN`), with the base checkpoint the candidate was trained on as its `BRAIN_QWEN_WEIGHTS`, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |
+
+A gate that passes is not silent about the candidate's training curve: the
+warnings `train` reported (a large generalisation gap at the step carried, a
+monitoring loss that rose after it or was still falling at the end of the
+budget) are printed again with the verdict and carried in the JSON report
+(`warnings`), as the exam carries them (`training_warnings`).
 
 The improvement check measures whether the candidate learned the facts it
 was trained on, on questions it was not trained on: the held-out records (the

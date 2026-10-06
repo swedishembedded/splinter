@@ -470,6 +470,9 @@ impl Session {
                     tuning: Tuning {
                         learning_rate: args.lr,
                         records_per_step: args.records_per_step,
+                        eval_every: args.monitoring.eval_every,
+                        patience: args.monitoring.patience,
+                        monitor_share: args.monitoring.monitor_share,
                         ..Tuning::default()
                     },
                 };
@@ -660,6 +663,9 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
             bf16_base: args.bf16_base,
             learning_rate: args.lr,
             records_per_step: args.records_per_step,
+            eval_every: args.monitoring.eval_every,
+            patience: args.monitoring.patience,
+            monitor_share: args.monitoring.monitor_share,
         },
         roles: [
             (Role::Planner, args.planner),

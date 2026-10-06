@@ -52,7 +52,7 @@ use crate::curriculum::queue::enqueue_retention;
 use crate::train::{load_candidate, Candidate};
 use probe::{clustered, pair, Probe, Suite};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
-use splinter_core::training::TrainingSummary;
+use splinter_core::training::{TrainingCurve, TrainingSummary};
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuiteSummary};
 use splinter_model::stats::BrainSignificance;
 use splinter_orchestrator::config::Config;
@@ -97,6 +97,11 @@ pub struct Released {
     /// The concepts the candidate forgot on a retention suite that failed,
     /// queued for new tasks.
     pub requeued: Vec<Concept>,
+    /// What the candidate's training curve warns of about the adapter the
+    /// gate judged ([`Candidate::warnings`]): a pass is not silent about a
+    /// large generalisation gap or a monitoring loss that rose before the
+    /// end.
+    pub warnings: Vec<String>,
     /// The release written; `None` when the gate blocked it.
     pub release: Option<ReleaseId>,
     /// The release's adapter file.
@@ -180,6 +185,7 @@ pub fn release(
         champion: champion_id.clone(),
         gate,
         requeued,
+        warnings: candidate.warnings(),
         release: None,
         adapter: None,
     };
@@ -236,6 +242,13 @@ fn resume(
         champion: made.manifest.parent.clone(),
         gate: made.manifest.gate.clone(),
         requeued: Vec::new(),
+        warnings: made
+            .manifest
+            .training
+            .curve
+            .as_ref()
+            .map(TrainingCurve::warnings)
+            .unwrap_or_default(),
         release: Some(made.id.clone()),
         adapter: Some(made.adapter.clone()),
     })
@@ -276,6 +289,7 @@ fn manifest(
             base_score: candidate.base_score,
             tuned_score: candidate.tuned_score,
             preference: candidate.preference.clone(),
+            curve: candidate.curve.clone(),
             record,
         },
         gate: gate.clone(),

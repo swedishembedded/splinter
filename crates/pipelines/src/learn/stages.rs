@@ -30,7 +30,7 @@ use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
-use super::{auto_records_per_step, steps_for, voice_limit, DEFAULT_VOICE_SHARE};
+use super::{voice_limit, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
@@ -79,8 +79,8 @@ pub(super) struct Learn<'a> {
     /// The identity each role in use was given.
     pub(super) roles_used: BTreeMap<Role, String>,
     pub(super) no_release: bool,
-    /// Optimizer steps (`None`: [`auto_steps`] of the dataset), LoRA rank
-    /// and tuning of the training.
+    /// The step budget (`None`: [`super::auto_steps`] of the dataset), LoRA
+    /// rank and tuning of the training.
     pub(super) steps: Option<u32>,
     pub(super) rank: u32,
     pub(super) tuning: Tuning,
@@ -679,32 +679,18 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     if st.datasets.is_empty() {
         unreachable!("the train stage follows the dataset stage")
     }
-    // What a step averages is the data's to say unless a command did, and
-    // only when the steps are not named: a command that names its steps means
-    // optimizer steps of single records, as it always did.
-    let records_per_step = st.learn.tuning.records_per_step.or_else(|| {
-        st.learn
-            .steps
-            .is_none()
-            .then(|| auto_records_per_step(st.examples))
-    });
-    let steps = st
-        .learn
-        .steps
-        .unwrap_or_else(|| steps_for(st.examples, records_per_step.unwrap_or(1)));
+    // The budget, what a step averages and how the run is watched follow
+    // the data unless the command named them; `train` resolves them.
     let candidate = train(
         ctx,
         &TrainRequest {
             datasets: st.datasets.clone(),
             from: st.learn.policy.clone(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
-            steps,
+            steps: st.learn.steps,
             rank: st.learn.rank,
             beta: None,
-            tuning: Tuning {
-                records_per_step,
-                ..st.learn.tuning
-            },
+            tuning: st.learn.tuning,
         },
         st.learn.trainer,
         &run.cancel_token(),
