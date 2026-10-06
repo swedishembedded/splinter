@@ -77,6 +77,7 @@ needs Splinter installed.
 | Models by role (policy, teacher, generator, planner, judge, critic, router) | working |
 | Several tasks in flight for a model reached over an API | working |
 | The Rust SDK (`splinter-sdk`) | working, young: the API will move |
+| Longitudinal record files (one participant per line, `timeline-v1` fields plus interventions that say whether they were randomised) imported as one immutable content-addressed episode per participant on the participant's own clock and the calendar, every item tied to its file line, file digest and usage terms, raw identifiers replaced by opaque keyed keys; importing again adds nothing | working |
 | Training from rewarded trajectories, raw text, contrastive pairs | planned: projected as an export format; no trainer reads it yet |
 | A `chat` intent at the front door | planned |
 | Resuming a pipeline from a checkpoint | planned |

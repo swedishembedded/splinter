@@ -147,6 +147,21 @@ impl Workspace {
         for id in from {
             attempts.push(projection_of(self, id)?.attempt);
         }
+        self.record_dataset_from_attempts(dataset, lineage, attempts)
+    }
+
+    /// Records the dataset `dataset` as derived from the attempts or episodes
+    /// `attempts`, pinning the database as it is now. Recording the same
+    /// dataset again changes nothing.
+    pub(crate) fn record_dataset_from_attempts(
+        &self,
+        dataset: &Digest,
+        lineage: &DatasetLineage,
+        attempts: Vec<RecordId>,
+    ) -> Result<(), StoreError> {
+        if self.node("dataset", dataset.as_str())?.is_some() {
+            return Ok(());
+        }
         let key = node_key("dataset", dataset.as_str())?;
         let holder = format!("dataset-{}", dataset.hex());
         self.write(|s| {

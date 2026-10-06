@@ -29,6 +29,9 @@
 //!   release, and the record of how a candidate was trained.
 //! * [`kinds`] and [`selfcontained`] - the names tasks travel under, and the
 //!   rule that an instruction must stand on its own.
+//! * [`longitudinal`] - a participant's irregular history as a file states it
+//!   and as it is kept: opaque keys in place of identifiers, provenance on
+//!   every item.
 //! * [`terms`] - the terms data came under, combined most-restrictively
 //!   over sources and carried to datasets and releases.
 //!
@@ -46,6 +49,7 @@ pub mod digest;
 pub mod evidence;
 pub mod experience;
 pub mod kinds;
+pub mod longitudinal;
 pub mod model_ref;
 pub mod prompt;
 pub mod release;
