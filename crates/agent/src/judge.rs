@@ -36,9 +36,10 @@ pub const PRODUCER: &str = "splinter-agent/judge";
 /// The producer name of a fit judge's verdicts, before its model identity.
 pub const FIT_PRODUCER: &str = "splinter-agent/judge-fit";
 
-/// The judge's version: bumped whenever its prompt or reply parsing
-/// changes.
-pub const VERSION: &str = "3";
+/// The judge's version: bumped whenever its prompt, its decoding or its
+/// reply parsing changes, so that a calibration measured on another reading
+/// is not reused.
+pub const VERSION: &str = "4";
 
 /// The task kind of the closed-book task a judge is asked.
 pub const JUDGE_TASK_KIND: &str = "judge";

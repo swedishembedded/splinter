@@ -42,6 +42,8 @@ use splinter_eval::verifiers::quotation::{QuotationPolicy, QuotationVerifier, St
 use splinter_eval::verifiers::speech::SpeechVerifier;
 use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
+use splinter_model::local::GREEDY_SAMPLING;
+use splinter_model::Sampling;
 use splinter_store::experiences::SetId;
 
 use splinter_core::model_ref::ModelRef;
@@ -146,7 +148,7 @@ impl Judge {
     /// The judge `reference` names, with its stored calibration; refused
     /// when it was never calibrated.
     pub fn load(ctx: &Context, reference: &ModelRef) -> Result<Self, OrchestratorError> {
-        let model = ctx.model(reference)?;
+        let model = judge_model(ctx, reference)?;
         let producer = judge_verifier(ctx, &model).producer();
         ctx.workspace().refresh()?;
         let calibration = latest_calibration(ctx, &producer)?.ok_or_else(|| {
@@ -189,7 +191,7 @@ impl Judge {
         tasks: &[Task],
         judging: Judging,
     ) -> Result<Self, OrchestratorError> {
-        let model = ctx.model(reference)?;
+        let model = judge_model(ctx, reference)?;
         let verifier = judge_verifier_for(ctx, &model, judging);
         let minimum = ctx.config().min_calibration_controls;
         ctx.workspace().refresh()?;
@@ -302,6 +304,21 @@ pub fn kind_needs_judge(kind: &str) -> bool {
     Catalogue::builtin()
         .get(kind)
         .is_some_and(|spec| spec.needs_judge())
+}
+
+/// The model `reference` names as a judge: decoding greedily where its
+/// sampling can be set here, so that one answer gets one verdict whichever
+/// time it is judged; as it samples where it cannot (a model reached over an
+/// API, or handed in rather than loaded). A judge does not reason aloud.
+pub(crate) fn judge_model(ctx: &Context, reference: &ModelRef) -> Result<Model, OrchestratorError> {
+    let greedy = Sampling {
+        thinking: false,
+        ..GREEDY_SAMPLING
+    };
+    match ctx.resampled(reference, greedy)? {
+        Some(model) => Ok(model),
+        None => ctx.model(reference),
+    }
 }
 
 /// The judged verifier on `model`.

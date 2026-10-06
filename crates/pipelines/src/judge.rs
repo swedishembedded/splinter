@@ -25,7 +25,7 @@ use crate::exam::{misjudged, Misjudged};
 use crate::experiences::resolve_experience;
 use crate::judging::{controls, reference, spaced};
 use crate::verify::{
-    judge_verifier, judge_verifier_for, store_calibration, trusted_for, Judging, Use,
+    judge_model, judge_verifier, judge_verifier_for, store_calibration, trusted_for, Judging, Use,
     MAX_CALIBRATION_TASKS,
 };
 use splinter_core::model_ref::ModelRef;
@@ -87,7 +87,7 @@ pub fn calibrate_judge(
             labelled.display()
         )));
     }
-    let model = ctx.model(judge)?;
+    let model = judge_model(ctx, judge)?;
     let verifier = judge_verifier(ctx, &model);
     let calibration = calibrate(&verifier, &examples)?;
     let stored = store_calibration(ctx, &calibration)?;
@@ -153,7 +153,7 @@ pub fn measure_judge(
                 .into(),
         ));
     }
-    let model = ctx.model(judge)?;
+    let model = judge_model(ctx, judge)?;
     let verifier = judge_verifier_for(ctx, &model, judging);
     let (calibration, measurements) = measure(&verifier, &labelled)?;
     let minimum = ctx.config().min_calibration_controls;

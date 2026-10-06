@@ -340,7 +340,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     // itself: two resident bases at once do not fit a card the size of the
     // models'.
     ctx.release_bases();
-    let judge_model = ctx.model(request.judge)?;
+    let judge_model = crate::verify::judge_model(ctx, request.judge)?;
     let judge = judge_verifier(ctx, &judge_model);
     let labelled = controls(ctx, request.controls)?;
     let (calibration, measurements) = measure(&judge, &labelled)?;

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- A judge decodes greedily (the judge's version is now 4, so an earlier calibration
+  is measured again): one answer gets one verdict, whichever time it is judged.
+- The anchor check reports the bootstrap interval of the drop over the paired
+  items beside the point estimate; the 0.02 bound is unchanged.
 - The release gate's improvement check still decides over the held-out
   records and the variants of trained tasks together, but its report keeps
   them apart: generalisation to held-out records and recall under paraphrase
