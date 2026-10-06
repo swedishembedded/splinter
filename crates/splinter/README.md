@@ -13,7 +13,7 @@ splinter                          REPL on the current policy (a line is handled 
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
-                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
+                         [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
                          [--with-passages SHARE] [--voice SHARE] [--rehearsal SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
@@ -30,7 +30,7 @@ splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mi
 splinter dataset export <DATASET-ID> --out DIR
 splinter rehearse --records N
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--rehearsal DATASET-ID [--rehearsal-share F]] [--steps N] [--rank R] [--beta B]
-                                [--lr LR] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
+                                [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
@@ -419,8 +419,14 @@ same way, so both settings work), and `SPLINTER_BF16_BASE` holds a large policy'
 trains on one card. `SPLINTER_REMOTE_CONCURRENCY` is how many requests to a model
 reached over an API may be in flight at once (4 by default); a model on the local
 device is asked one at a time. Unless `--steps` is given a run's step budget
-is three passes over what it learned, within bounds, at a learning rate
-suited to a short LoRA run, and a step averages several records - one per
+is three passes over what it learned, within bounds, at one learning rate
+suited to a short LoRA run for `train` and `learn` alike (`--lr`, 2e-4),
+a LoRA alpha of twice the rank (`--alpha`, so the update's scale does not
+change with the rank) and no weight decay (`--weight-decay`), all recorded
+in the candidate. Each pass takes every record once in a fresh order, a step
+is a mean over its supervised tokens, the rate warms up over a twentieth of
+the steps and decays over all of them, and a run that stops on its plateau
+first cools the rate down to the floor. A step averages several records - one per
 sixteen the data holds, up to eight, or `--records-per-step N` - because an
 update on a single long, individual answer is noise the next record undoes.
 The budget is a ceiling: the run is watched as it trains (see `train`) and

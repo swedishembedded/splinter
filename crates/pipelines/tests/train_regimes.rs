@@ -35,7 +35,8 @@ use splinter_core::training::Regime;
 use splinter_orchestrator::Context;
 use splinter_pipelines::release::anchor;
 use splinter_pipelines::train::{
-    train, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_REPLAY_FRACTION,
+    train, TrainRequest, Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_REPLAY_FRACTION,
+    DEFAULT_WEIGHT_DECAY,
 };
 
 fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
@@ -152,7 +153,7 @@ fn a_run_trains_one_regime_and_beta_only_for_preferences() {
 }
 
 #[test]
-fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
+fn the_tuning_of_a_run_reaches_the_trainer_and_every_default_is_resolved_into_the_plan() {
     let (_scratch, ctx) = gate_context("train-tuning", Brain::Missing);
     let chat = dataset(&ctx, "alpha", FACTS);
     let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
@@ -165,23 +166,33 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_defaults_to_brains_own() {
     .unwrap();
     // The plan resolves what the request left open and keeps what it named.
     let plan = trainer.plans.lock().unwrap()[0].clone();
-    assert!(!plan.tuning.bf16_base && plan.tuning.learning_rate.is_none());
+    // `train` and `learn` share one learning rate, a scale of two whatever
+    // the rank, and no weight decay, each recorded in the plan.
+    assert!(!plan.tuning.bf16_base);
+    assert_eq!(plan.tuning.learning_rate, Some(DEFAULT_LEARNING_RATE));
+    assert_eq!(plan.tuning.alpha, Some(2.0 * plan.rank as f32));
+    assert_eq!(plan.tuning.weight_decay, Some(DEFAULT_WEIGHT_DECAY));
     assert!(!Tuning::default().bf16_base && Tuning::default().learning_rate.is_none());
 
     let tuned = TrainRequest {
         tuning: Tuning {
             bf16_base: true,
-            learning_rate: Some(2e-4),
+            learning_rate: Some(1e-4),
+            alpha: Some(64.0),
+            weight_decay: Some(0.01),
             records_per_step: Some(4),
             ..Tuning::default()
         },
+        rank: 32,
         ..request(&[&chat], None)
     };
     let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
     train(&ctx, &tuned, &trainer, &CancelToken::new()).unwrap();
     let plan = trainer.plans.lock().unwrap()[0].clone();
     assert!(plan.tuning.bf16_base);
-    assert_eq!(plan.tuning.learning_rate, Some(2e-4));
+    assert_eq!(plan.tuning.learning_rate, Some(1e-4));
+    assert_eq!((plan.rank, plan.tuning.alpha), (32, Some(64.0)));
+    assert_eq!(plan.tuning.weight_decay, Some(0.01));
 }
 
 #[test]

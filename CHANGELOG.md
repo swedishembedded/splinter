@@ -142,6 +142,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- The training recipe: `train` and `learn` share one learning rate (2e-4;
+  `train` used brain's 3e-4), the LoRA alpha is twice the rank instead of 16
+  at every rank, the weight decay on the adapter is 0 instead of 0.1, and
+  `--lr`, `--alpha` and `--weight-decay` name them on both commands; the
+  resolved values are in the candidate's plan. brain now takes a step as a
+  mean over its supervised tokens, draws every record once per epoch, warms
+  up over a twentieth of the steps, and cools the rate down to its floor when
+  a run stops on its patience.
 - No record of a dataset goes unused by the splits. The writer's text of a
   held-out family is written to its own file (`held_out_text.jsonl`) and the
   writer's text of a monitoring family is monitored (`monitor_text.jsonl`)

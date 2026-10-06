@@ -88,9 +88,10 @@ use splinter_core::release::ReleaseId;
 use splinter_orchestrator::context::{Context, PolicyPin};
 use splinter_orchestrator::error::{io, OrchestratorError};
 
-/// The peak learning rate a `learn` run trains a LoRA adapter at when none is
-/// given: the rate that moves a low-rank update in the few hundred steps of a
-/// short run, which brain's own default (set for long runs) does not.
+/// The peak learning rate a run (`train` and `learn` alike) trains a LoRA
+/// adapter at when none is given: the rate that moves a low-rank update in
+/// the few hundred steps of a short run, which brain's own default (set for
+/// long runs) does not. The plan records it, so a run says what it ran at.
 pub const DEFAULT_LEARNING_RATE: f32 = 2e-4;
 
 /// The fewest steps a run's budget is when a command names none; the budget
@@ -98,8 +99,19 @@ pub const DEFAULT_LEARNING_RATE: f32 = 2e-4;
 pub const DEFAULT_STEPS: u32 = 40;
 /// LoRA rank of a new adapter when a command names none.
 pub const DEFAULT_LORA_RANK: u32 = 8;
-/// LoRA alpha of a new adapter: the update is scaled by `alpha / rank`.
-pub const DEFAULT_LORA_ALPHA: f32 = 16.0;
+/// LoRA alpha of a new adapter per unit of rank: the update is scaled by
+/// `alpha / rank`, so a scale of two holds at whatever rank is trained and a
+/// rank compared with another differs in capacity alone.
+pub const DEFAULT_LORA_ALPHA_PER_RANK: f32 = 2.0;
+/// The AdamW weight decay of an adapter when none is given: none. An adapter
+/// starts at zero and decay only pulls what it has learned back to it.
+pub const DEFAULT_WEIGHT_DECAY: f32 = 0.0;
+
+/// The LoRA alpha of a new adapter of `rank` when none is given.
+#[must_use]
+pub fn default_alpha(rank: u32) -> f32 {
+    DEFAULT_LORA_ALPHA_PER_RANK * rank as f32
+}
 /// The fraction of each earlier release's training records replayed.
 pub const DEFAULT_REPLAY_FRACTION: f64 = 0.25;
 /// The share of a supervised run's training draws that come from the replayed
@@ -143,8 +155,13 @@ pub struct Tuning {
     /// base train on one 24 GiB card. Supervised runs only; brain's
     /// preference trainer holds its base at its own tier.
     pub bf16_base: bool,
-    /// The peak learning rate; brain's default when `None`.
+    /// The peak learning rate; [`DEFAULT_LEARNING_RATE`] when `None`.
     pub learning_rate: Option<f32>,
+    /// The LoRA alpha of a new adapter; [`default_alpha`] of the rank when
+    /// `None`.
+    pub alpha: Option<f32>,
+    /// The AdamW weight decay; [`DEFAULT_WEIGHT_DECAY`] when `None`.
+    pub weight_decay: Option<f32>,
     /// Records averaged into one optimizer step. `None` is one when the
     /// steps are named, else [`auto_records_per_step`] of the examples.
     pub records_per_step: Option<u32>,
@@ -305,7 +322,11 @@ impl Trainer for BrainTrainer {
             attempt_dir: &plan.dir,
             steps: plan.steps,
             rank: plan.rank,
-            alpha: DEFAULT_LORA_ALPHA,
+            alpha: plan
+                .tuning
+                .alpha
+                .unwrap_or_else(|| default_alpha(plan.rank)),
+            weight_decay: plan.tuning.weight_decay.unwrap_or(DEFAULT_WEIGHT_DECAY),
             replay: &replayed,
             replay_share: plan.replay_share,
             weighted_replay: &rehearsed,
@@ -337,7 +358,10 @@ impl Trainer for BrainTrainer {
             attempt_dir: &plan.dir,
             steps: plan.steps,
             rank: plan.rank,
-            alpha: DEFAULT_LORA_ALPHA,
+            alpha: plan
+                .tuning
+                .alpha
+                .unwrap_or_else(|| default_alpha(plan.rank)),
             beta: plan.beta,
             nll_weight: 0.0,
             grad_accum: 1,
@@ -535,6 +559,14 @@ pub fn train(
         // not about the command that trains it.
         tuning: Tuning {
             bf16_base: request.tuning.bf16_base || ctx.config().bf16_base,
+            learning_rate: Some(
+                request
+                    .tuning
+                    .learning_rate
+                    .unwrap_or(DEFAULT_LEARNING_RATE),
+            ),
+            alpha: Some(request.tuning.alpha.unwrap_or(default_alpha(request.rank))),
+            weight_decay: Some(request.tuning.weight_decay.unwrap_or(DEFAULT_WEIGHT_DECAY)),
             records_per_step,
             eval_every: Some(eval_every),
             patience: Some(request.tuning.patience.unwrap_or(DEFAULT_PATIENCE)),

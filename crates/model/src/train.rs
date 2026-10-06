@@ -65,8 +65,9 @@ pub struct FineTune<'a> {
     /// This attempt's own directory: the packed dataset, the adapter and its
     /// training record land here.
     pub attempt_dir: &'a Path,
-    /// Optimizer steps to train for; warmup is the first fifth of them and
-    /// the learning rate decays over all of them.
+    /// Optimizer steps to train for; warmup is the first twentieth of them
+    /// and the learning rate decays over all of them (a run that stops on
+    /// its patience cools the rate down first).
     pub steps: u32,
     /// LoRA rank of the adapter's low-rank update matrices.
     pub rank: u32,
@@ -98,6 +99,8 @@ pub struct FineTune<'a> {
     pub bf16_base: bool,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
+    /// The AdamW weight decay on the adapter's matrices.
+    pub weight_decay: f32,
     /// The seed of a fresh adapter's initialisation and the batch order;
     /// brain's default when `None`. Two runs that differ only here show
     /// how much of a measured difference is the draw.
@@ -316,6 +319,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
+        .weight_decay(request.weight_decay)
         .bf16_base(request.bf16_base)
         .grad_accum(request.grad_accum)
         .eval_every(request.eval_every)

@@ -75,7 +75,7 @@ use crate::raft::PassageShare;
 use crate::sources::SourceTarget;
 use crate::tasks::{check_kinds, DEFAULT_LEARN_KINDS};
 pub use crate::train::{auto_records_per_step, auto_steps, steps_for, MAX_AUTO_STEPS, MAX_PASSES};
-use crate::train::{Trainer, Tuning, DEFAULT_LEARNING_RATE, DEFAULT_LORA_RANK};
+use crate::train::{Trainer, Tuning, DEFAULT_LORA_RANK};
 
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
@@ -349,10 +349,7 @@ pub fn learn(
         no_release: request.no_release,
         steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
-        tuning: Tuning {
-            learning_rate: request.tuning.learning_rate.or(Some(DEFAULT_LEARNING_RATE)),
-            ..request.tuning
-        },
+        tuning: request.tuning,
         quotas: request.quotas,
         exam: request.exam,
     };

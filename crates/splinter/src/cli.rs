@@ -340,9 +340,9 @@ pub struct LearnArgs {
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("LoRA rank of the adapter [default: {DEFAULT_LORA_RANK}]"))]
     pub rank: Option<u32>,
-    /// The peak learning rate of the training (brain's default if not given).
-    #[arg(long, value_name = "LR")]
-    pub lr: Option<f32>,
+    /// The learning rate, alpha and weight decay of the training.
+    #[command(flatten)]
+    pub optimiser: OptimiserArgs,
     /// Records averaged into one optimizer step (default: from the size of the
     /// dataset, when the steps are not named).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
@@ -774,7 +774,7 @@ mod state;
 mod train;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs};
 pub use state::{RunsCommand, StateCommand};
-pub use train::{RehearseArgs, TrainArgs};
+pub use train::{OptimiserArgs, RehearseArgs, TrainArgs};
 
 #[cfg(test)]
 mod tests;

@@ -486,15 +486,14 @@ impl Session {
                     steps: args.steps,
                     rank: args.rank,
                     beta: args.beta,
-                    tuning: Tuning {
-                        learning_rate: args.lr,
+                    tuning: args.optimiser.applied_to(Tuning {
                         records_per_step: args.records_per_step,
                         eval_every: args.monitoring.eval_every,
                         patience: args.monitoring.patience,
                         monitor_share: args.monitoring.monitor_share,
                         seed: args.seed,
                         ..Tuning::default()
-                    },
+                    }),
                 };
                 let candidate = record(ctx, "train", &request, |run| {
                     train(ctx, &request, self.splinter.trainer(), &run.cancel_token())
@@ -715,15 +714,15 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         distill: args.distill,
         steps: args.steps,
         rank: args.rank,
-        tuning: Tuning {
+        tuning: args.optimiser.applied_to(Tuning {
             bf16_base: args.bf16_base,
-            learning_rate: args.lr,
             records_per_step: args.records_per_step,
             eval_every: args.monitoring.eval_every,
             patience: args.monitoring.patience,
             monitor_share: args.monitoring.monitor_share,
             seed: args.seed,
-        },
+            ..Tuning::default()
+        }),
         roles: [
             (Role::Planner, args.planner),
             (Role::Teacher, args.teacher),
@@ -774,12 +773,20 @@ mod tests {
             "16",
             "--lr",
             "0.0002",
+            "--alpha",
+            "32",
+            "--weight-decay",
+            "0.01",
             "--bf16-base",
         ]);
         assert!(r.distill);
         assert_eq!((r.steps, r.rank), (Some(300), Some(16)));
         assert!(r.tuning.bf16_base);
         assert_eq!(r.tuning.learning_rate, Some(0.0002));
+        assert_eq!(
+            (r.tuning.alpha, r.tuning.weight_decay),
+            (Some(32.0), Some(0.01))
+        );
         assert_eq!(r.voice, None, "the run decides from its persona");
         assert_eq!(
             request(&["learn", "docs", "--voice", "0.25"]).voice,
