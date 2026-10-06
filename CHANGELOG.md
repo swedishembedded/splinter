@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `reserve`: the exam's families are reserved before any task is generated or dataset
+  built. A family is the group of text parts that print the same text (named as a split
+  names it); a stable hash of the name picks them, and the text of each, every edition of
+  it, is left out of the source everything after reads (the source records the parts as
+  skipped for being reserved) while the exam is written from a source of those parts alone.
+  It refuses, naming why, when too few families can be examined or reserving them would
+  leave less to learn from than is examined.
+
 ### Changed
 - A judge decodes greedily (the judge's version is now 4, so an earlier calibration
   is measured again): one answer gets one verdict, whichever time it is judged.

@@ -81,7 +81,7 @@ pub(crate) fn assign_groups(
 /// The group of each text part of `sources` and of each of `blobs`: texts
 /// that overlap share one ([`overlap_groups`]), named by the least content
 /// digest in it.
-fn groups_of(
+pub(crate) fn groups_of(
     ctx: &Context,
     sources: &[SourceId],
     blobs: BTreeSet<Digest>,

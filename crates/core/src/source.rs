@@ -101,6 +101,9 @@ pub enum SkipReason {
     NotRegular,
     /// Its path is not UTF-8, so it cannot be named as a part.
     NonUtf8Name,
+    /// Held back from what is learned from: its text is reserved for the
+    /// exam, with every other text that overlaps it.
+    Reserved,
 }
 
 /// A file of a repository tree left out of the capture, and why.
