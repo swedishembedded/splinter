@@ -184,7 +184,19 @@ the released adapter answers the same questions from plain `brain serve`.
      test, the pre-registered report, and secondary analyses (calendar
      shift, Venn-Abers intervals, seeded ensembles); the final model saved
      where brain serves it.
+   - Longitudinal import and projection: a record file (`timeline-v1` fields
+     plus interventions that say whether they were randomised) is imported as
+     one immutable content-addressed episode per participant (`store::longitudinal`),
+     with opaque keyed participant and group keys in place of identifiers and
+     provenance on every item; `data::timeline_dataset` projects episodes to
+     `timeline-v1` at a prediction point and `data::split` adds the temporal
+     and leave-one-source-out splits and the leakage gates.
    Open, in order:
+   - `samples/lifecourse` still builds its subjects from the raw files
+     directly; it moves onto the import (its builder produces the record file,
+     the import and projection do the rest) with its frozen partition pinned
+     by the split's address. Future measurements are not carried as forecast
+     targets by the projection yet.
    - A trainer by capability: the pipeline's train stage still maps
      `timeline-v1` to no regime (the sample trains through the SDK); a
      timeline candidate, its release and the metric gate as its release

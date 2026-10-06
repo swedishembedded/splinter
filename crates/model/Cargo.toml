@@ -25,6 +25,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+splinter-store = { workspace = true }
 tempfile = { workspace = true }
 
 [features]

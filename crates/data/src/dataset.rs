@@ -242,21 +242,6 @@ pub fn write_dataset(
         text.push_str(&line(format, objective, index, record)?);
         text.push('\n');
     }
-    let io = |path: &Path| {
-        let path = path.to_path_buf();
-        move |source| ViewError::Io { path, source }
-    };
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(io(parent))?;
-    }
-    let pending = path.with_extension("pending");
-    std::fs::write(&pending, &text).map_err(io(&pending))?;
-    if let Err(reason) = check.check(format, &pending, projection.records.len()) {
-        // The refusal is the error worth reporting; a leftover pending file
-        // is harmless and replaced by the next write.
-        let _ = std::fs::remove_file(&pending);
-        return Err(invalid(path, reason));
-    }
     let trained_messages = (format == Format::GenericMessagesV2).then(|| {
         projection
             .records
@@ -267,21 +252,66 @@ pub fn write_dataset(
             })
             .sum()
     });
-    let digest = Digest::of(text.as_bytes());
-    let manifest = canonical_json(&manifest(projection, format, &digest))?;
-    std::fs::rename(&pending, path).map_err(io(path))?;
-    let manifest_file = manifest_path(path);
-    // Canonical JSON is UTF-8 by construction, so nothing is substituted.
-    let manifest_text = String::from_utf8_lossy(&manifest);
-    std::fs::write(&manifest_file, manifest_text.as_bytes()).map_err(io(&manifest_file))?;
+    let (digest, manifest) = place_dataset(
+        path,
+        &text,
+        format,
+        projection.records.len(),
+        check,
+        |digest| Ok(canonical_json(&manifest(projection, format, digest))?),
+    )?;
     Ok(Dataset {
         path: path.to_path_buf(),
         format,
         digest,
         records: projection.records.len(),
         trained_messages,
-        manifest: Digest::of(&manifest),
+        manifest,
     })
+}
+
+/// Places `text`, holding `records` records of `format`, at `path`, and the
+/// manifest `manifest` makes from the text's digest beside it: the file is
+/// written beside its destination, `check` reads it as the trainer will, and
+/// only then is it moved into place, then the manifest. A refusal leaves
+/// nothing at `path`. Returns the digests of the file and of its manifest.
+pub(crate) fn place_dataset(
+    path: &Path,
+    text: &str,
+    format: Format,
+    records: usize,
+    check: &dyn DatasetCheck,
+    manifest: impl FnOnce(&Digest) -> Result<Vec<u8>, ViewError>,
+) -> Result<(Digest, Digest), ViewError> {
+    let io = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source| ViewError::Io { path, source }
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(io(parent))?;
+    }
+    let pending = path.with_extension("pending");
+    std::fs::write(&pending, text).map_err(io(&pending))?;
+    if let Err(reason) = check.check(format, &pending, records) {
+        // The refusal is the error worth reporting; a leftover pending file
+        // is harmless and replaced by the next write.
+        let _ = std::fs::remove_file(&pending);
+        return Err(invalid(path, reason));
+    }
+    let digest = Digest::of(text.as_bytes());
+    let manifest = match manifest(&digest) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            let _ = std::fs::remove_file(&pending);
+            return Err(error);
+        }
+    };
+    std::fs::rename(&pending, path).map_err(io(path))?;
+    let manifest_file = manifest_path(path);
+    // Canonical JSON is UTF-8 by construction, so nothing is substituted.
+    let manifest_text = String::from_utf8_lossy(&manifest);
+    std::fs::write(&manifest_file, manifest_text.as_bytes()).map_err(io(&manifest_file))?;
+    Ok((digest, Digest::of(&manifest)))
 }
 
 /// `record` as one line of `format`, refused when its shape does not serve

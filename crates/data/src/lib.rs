@@ -55,7 +55,10 @@
 //! pinned by digest before anything trains. [`split`] adds the temporal and
 //! leave-one-source-out splits and the leakage gates a split passes: no group
 //! in two parts, a held-out source held out whole, nothing after a cutoff in
-//! training, nothing fitted outside the training units.
+//! training, nothing fitted outside the training units. [`timeline_dataset`]
+//! projects longitudinal episodes (kept by `splinter-store`) into
+//! participant-safe `timeline-v1` records at a prediction point and writes
+//! them, and the parts of a split, with manifests.
 
 #![warn(missing_docs)]
 
@@ -69,6 +72,7 @@ mod replay;
 pub mod split;
 mod store;
 mod strip;
+pub mod timeline_dataset;
 mod trajectory;
 mod views;
 
