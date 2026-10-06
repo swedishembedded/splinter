@@ -35,7 +35,7 @@ use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::dialogue::{probes_beyond_the_source, STUDENT_ROLE};
-use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::learn::{learn, ExamPlan, LearnRequest, Learned};
 use splinter_pipelines::raft::PassageShare;
 use splinter_pipelines::release::arm;
 use splinter_pipelines::train::{TrainPlan, Trainer};
@@ -203,7 +203,14 @@ fn attempt(
             persona: persona.map(str::to_string),
             passages,
             voice,
+            // A scripted policy answers no general task, so it has nothing
+            // to rehearse.
+            rehearsal: Some(0.0),
             roles,
+            exam: ExamPlan {
+                families: Some(0),
+                ..ExamPlan::default()
+            },
             no_release: true,
             distill: true,
             ..LearnRequest::default()

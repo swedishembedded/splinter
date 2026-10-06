@@ -18,9 +18,10 @@ use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest};
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
+use splinter_sdk::exam_set::ExamSet;
 use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
-use splinter_sdk::learn::{learn, LearnRequest, Learned};
+use splinter_sdk::learn::{learn, ExamPlan, LearnRequest, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::raft::{PassageShare, DEFAULT_EVIDENCE_SHARE};
 use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE, REHEARSAL_SEED};
@@ -43,9 +44,11 @@ use splinter_sdk::vocabulary::terms::Distribution;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::cli::{
-    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, LearnArgs,
-    ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
+    Cli, Command, DatasetCommand, ExamSetCommand, ExperiencesCommand, Global, JudgeCommand,
+    LearnArgs, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
+    TasksCommand,
 };
+use crate::exam_session;
 use crate::learn_output;
 use crate::output::{self, emit, shell_words};
 
@@ -569,6 +572,15 @@ impl Session {
                 };
                 emit(json, &evaluate(ctx, &request)?);
             }
+            Command::ExamSet(ExamSetCommand::Create(args)) => {
+                emit(json, &exam_session::create(ctx, &args)?);
+            }
+            Command::ExamSet(ExamSetCommand::Show { id }) => {
+                emit(json, &ExamSet::load(ctx, &id)?);
+            }
+            Command::Exam(args) if args.exam_set.is_some() => {
+                emit(json, &exam_session::powered(ctx, &args)?);
+            }
             Command::Exam(args) => {
                 let retrieve = &args.retrieval;
                 let arguments = json!({
@@ -690,6 +702,11 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         persona: args.persona,
         voice: args.voice,
         rehearsal: args.rehearsal,
+        exam: ExamPlan {
+            families: args.exam_families,
+            tasks: args.exam_tasks,
+            resamples: args.exam_resamples.map(|n| n as usize),
+        },
         passages: args.with_passages.map(|records| PassageShare {
             records,
             with_evidence: DEFAULT_EVIDENCE_SHARE,

@@ -298,6 +298,53 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert_eq!(exam.candidate, "c1");
     assert!(exam.judge.is_some());
     assert!(parse(&["exam"]).is_err(), "an exam needs a candidate");
+    let Command::Exam(powered) = command(&[
+        "exam",
+        "c1",
+        "--exam-set",
+        "e1",
+        "--resamples",
+        "5",
+        "--no-voice",
+    ]) else {
+        panic!("exam");
+    };
+    assert_eq!(powered.exam_set.as_deref(), Some("e1"));
+    assert_eq!((powered.resamples, powered.no_voice), (Some(5), true));
+    assert!(
+        parse(&["exam", "c1", "--resamples", "3"]).is_err(),
+        "resamples belong to a frozen exam"
+    );
+    assert!(parse(&["exam", "c1", "--exam-set", "e1", "--resamples", "0"]).is_err());
+    let Command::ExamSet(ExamSetCommand::Create(created)) = command(&[
+        "exam-set",
+        "create",
+        "./materials",
+        "--families",
+        "12",
+        "--not-trained-by",
+        "c1",
+        "--not-trained-by",
+        "c2",
+    ]) else {
+        panic!("exam-set create");
+    };
+    assert_eq!((created.families, created.not_trained_by.len()), (12, 2));
+    assert_eq!(created.kinds, ["converse", "advise", "explain"]);
+    let Command::Learn(reserving) = command(&[
+        "learn",
+        "docs",
+        "--exam-families",
+        "0",
+        "--exam-tasks",
+        "50",
+    ]) else {
+        panic!("learn");
+    };
+    assert_eq!(
+        (reserving.exam_families, reserving.exam_tasks),
+        (Some(0), Some(50))
+    );
     let Command::Learn(learn) = command(&["learn", "docs", "--no-release"]) else {
         panic!("learn");
     };

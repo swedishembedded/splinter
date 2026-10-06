@@ -20,6 +20,8 @@
 
 mod cli;
 mod curriculum_output;
+mod exam_output;
+mod exam_session;
 mod learn_output;
 mod lineage_output;
 mod output;

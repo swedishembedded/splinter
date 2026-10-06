@@ -29,7 +29,8 @@ use splinter_data::frozen::Ledger;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::grouping::task_clusters;
-use crate::reserve::{Reservation, ReservedFamily};
+use crate::reserve::{reserve, Reservation, ReserveRequest, ReservedFamily};
+use crate::sources::{add, SourceTarget};
 use crate::tasks::{generate, Generation};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
@@ -264,4 +265,78 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
         .pin_file(&file)
         .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     Ok(exam)
+}
+
+/// An exam to be made from sources, apart from any `learn`.
+pub struct NewExam<'a> {
+    /// The sources, as a command line names them.
+    pub sources: &'a [SourceTarget],
+    /// Families to reserve.
+    pub families: usize,
+    /// Varies the choice of families.
+    pub seed: u64,
+    /// The most tasks.
+    pub max_tasks: usize,
+    /// The kinds of task.
+    pub kinds: &'a [String],
+    /// The generator model.
+    pub generator: &'a ModelRef,
+    /// What the learner is after.
+    pub goal: Option<&'a str>,
+    /// Who wrote the sources, when they are one person's.
+    pub author: Option<&'a str>,
+    /// Candidates (by id) whose training, and that of the releases they
+    /// continue, any reserved family must be clear of: the exam is for
+    /// measuring them.
+    pub not_trained_by: &'a [String],
+    /// Stops generation.
+    pub cancel: CancelToken,
+}
+
+/// What [`build`] made.
+#[derive(Clone, Debug, Serialize)]
+pub struct ExamBuilt {
+    /// The families reserved and the sources divided by them.
+    pub reservation: Reservation,
+    /// The frozen exam.
+    pub exam: ExamSet,
+}
+
+/// Captures `request.sources`, reserves the exam's families among them
+/// (clear of what the named candidates were trained on), writes the exam from
+/// the reserved text and freezes it.
+pub fn build(ctx: &Context, request: &NewExam<'_>) -> Result<ExamBuilt, OrchestratorError> {
+    let mut sources = Vec::new();
+    for target in request.sources {
+        sources.push(add(ctx, target)?.source.id);
+    }
+    let mut touched_by = Vec::new();
+    for candidate in request.not_trained_by {
+        touched_by.extend(crate::powered::datasets_trained_on(
+            ctx,
+            &crate::train::load_candidate(ctx, candidate)?,
+        )?);
+    }
+    let reservation = reserve(
+        ctx,
+        &ReserveRequest {
+            sources: &sources,
+            families: request.families,
+            seed: request.seed,
+            touched_by: &touched_by,
+        },
+    )?;
+    let exam = create(
+        ctx,
+        &ExamSetRequest {
+            reservation: &reservation,
+            kinds: request.kinds,
+            generator: request.generator,
+            goal: request.goal,
+            author: request.author,
+            max_tasks: request.max_tasks,
+            cancel: request.cancel.clone(),
+        },
+    )?;
+    Ok(ExamBuilt { reservation, exam })
 }

@@ -141,7 +141,22 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
     match stage {
         "sources" => format!("{} source(s)", summary.as_array().map_or(0, Vec::len)),
         "plan" => plan_line(summary),
+        "exam" if !summary["ran"]["comparisons"].is_null() || summary["not_run"].is_string() => {
+            crate::exam_output::powered_line(summary)
+        }
         "exam" => exam_line(summary),
+        "reserve" => format!(
+            "{} of {} families reserved ({} could have been)",
+            summary["families"].as_array().map_or(0, Vec::len),
+            summary["total_families"],
+            summary["examinable"]
+        ),
+        "exam-set" => format!(
+            "{} task(s) over {} reserved families, frozen as {}",
+            summary["tasks"].as_array().map_or(0, Vec::len),
+            summary["families"].as_array().map_or(0, Vec::len),
+            summary["id"].as_str().unwrap_or("?")
+        ),
         "tasks" => format!("{} task(s) in {}", field("tasks"), field("task_set")),
         "solve" => format!(
             "{} solved, {} answered, in {}",

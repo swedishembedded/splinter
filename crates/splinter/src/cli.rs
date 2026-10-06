@@ -13,8 +13,11 @@ use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_sdk::eval::SuiteChoice;
+use splinter_sdk::exam_set::DEFAULT_EXAM_TASKS;
 use splinter_sdk::learn::{parse_budget, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use splinter_sdk::lineage::Direction;
+use splinter_sdk::powered::DEFAULT_RESAMPLES;
+use splinter_sdk::reserve::DEFAULT_EXAM_FAMILIES;
 use splinter_sdk::train::{
     DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET,
     MAX_MONITOR_SHARE, MAX_PASSES,
@@ -131,8 +134,13 @@ pub enum Command {
     /// show the anchor suite.
     Eval(EvalArgs),
     /// Put a candidate and the policy it continues to its held-out tasks and
-    /// have a calibrated judge compare them.
+    /// have a calibrated judge compare them; or, with --exam-set, to a frozen
+    /// exam of reserved families, with every verdict kept.
     Exam(ExamArgs),
+    /// Make and show frozen exams: families reserved from sources, tasks
+    /// written from their text alone.
+    #[command(subcommand)]
+    ExamSet(ExamSetCommand),
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
@@ -290,6 +298,26 @@ pub struct LearnArgs {
          {DEFAULT_REHEARSAL_SHARE}]"
     ))]
     pub rehearsal: Option<f64>,
+    /// How many families of the sources to reserve for the exam before
+    /// anything is generated or built: their text, in every edition, is in no
+    /// source the run reads after that. 0 reserves none.
+    #[arg(long, value_name = "N", help = format!(
+        "How many families of the sources to reserve for the exam before anything is generated \
+         or built: their text, in every edition, is in no source the run reads after that; the \
+         run is refused when the sources cannot spare them; 0 reserves none [default for a run \
+         with a persona: {DEFAULT_EXAM_FAMILIES}]"
+    ))]
+    pub exam_families: Option<usize>,
+    /// The most tasks the exam holds.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
+        help = format!("The most tasks the reserved exam holds, spread over its families \
+                        [default: {DEFAULT_EXAM_TASKS}]"))]
+    pub exam_tasks: Option<usize>,
+    /// Answers per task per arm in the exam.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
+        help = format!("Answers per task per arm in the reserved exam: the greedy one and the \
+                        rest sampled [default: {DEFAULT_RESAMPLES}]"))]
+    pub exam_resamples: Option<u32>,
     /// The step budget of the training: the most steps it may take.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("The step budget of the training: the most steps it may take [default: \
@@ -696,26 +724,6 @@ pub struct EvalArgs {
     pub judge: Option<ModelRef>,
 }
 
-/// `exam`.
-#[derive(Debug, Args)]
-pub struct ExamArgs {
-    /// The candidate to examine: its id, or a unique prefix of it.
-    #[arg(value_name = "CANDIDATE")]
-    pub candidate: String,
-    /// The model that judges (default: the judge role's model).
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
-    /// Also ask the base under this goal, as a prompt-only baseline the
-    /// candidate is compared with (`learn` uses its goal).
-    #[arg(long, value_name = "GOAL")]
-    pub prompt: Option<String>,
-    /// Also ask the candidate with retrieved passages shown before each
-    /// task, and report whether retrieval found the passage the task was
-    /// written from.
-    #[command(flatten)]
-    pub retrieval: RetrieveArgs,
-}
-
 /// `lineage`.
 #[derive(Debug, Args)]
 pub struct LineageArgs {
@@ -748,8 +756,10 @@ impl LineageArgs {
     }
 }
 
+mod exam;
 mod state;
 mod train;
+pub use exam::{ExamArgs, ExamSetArgs, ExamSetCommand};
 pub use state::{RunsCommand, StateCommand};
 pub use train::{RehearseArgs, TrainArgs};
 

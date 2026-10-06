@@ -23,9 +23,12 @@ use crate::curriculum::quota::Selected;
 use crate::curriculum::teacher::Taught;
 use crate::datasets::Built;
 use crate::exam::Exam;
+use crate::exam_set::ExamSet;
 use crate::plan::Plan;
+use crate::powered::PoweredExam;
 use crate::rehearsal::Rehearsed;
 use crate::release::Released;
+use crate::reserve::Reservation;
 use crate::solving::Solved;
 use crate::sources::{SourceSummary, SourceTarget};
 use crate::tasks::TasksGenerated;
@@ -103,6 +106,11 @@ pub struct LearnReport {
     /// The plan stage: the survey and the planner's choice; `None` when no
     /// plan was asked for.
     pub plan: Option<Planned>,
+    /// The reserve stage: the exam's families, taken out of the sources
+    /// before anything was generated; `None` when none were reserved.
+    pub reserve: Option<Reservation>,
+    /// The exam-set stage: the frozen exam written from them.
+    pub exam_set: Option<ExamSet>,
     /// The tasks stage.
     pub tasks: Option<TasksGenerated>,
     /// The solve stage.
@@ -137,6 +145,9 @@ pub struct LearnReport {
     /// The exam stage: base against candidate on held-out tasks, graded by a
     /// calibrated judge and by the grounding check.
     pub exam: Option<Exam>,
+    /// The exam stage of a run that reserved its exam: the powered exam, with
+    /// every verdict of every arm.
+    pub powered: Option<PoweredExam>,
     /// Why the pipeline stopped before training or releasing, if it did.
     pub stopped: Option<String>,
 }

@@ -29,6 +29,7 @@ use splinter_store::experiences::SetId;
 use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
+use super::exam_stages::{exam_set_stage, exam_stage, reserve_stage};
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
 use super::{records_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
@@ -41,11 +42,12 @@ use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{
     build_with, examples_in, BuildRequest, Built, Passages, ViewName, DEFAULT_MIN_STRENGTH,
 };
-use crate::exam::{examine, Exam, ExamineRequest};
+use crate::exam_set::ExamSet;
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
 use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
 use crate::release::{release, ReleaseRequest};
+use crate::reserve::DEFAULT_EXAM_FAMILIES;
 use crate::retrieval::{library_of, Retrieval};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
@@ -89,12 +91,14 @@ pub(super) struct Learn<'a> {
     pub(super) rank: u32,
     pub(super) tuning: Tuning,
     pub(super) quotas: Quotas,
+    /// The exam reserved up front, as the request names it.
+    pub(super) exam: super::ExamPlan,
 }
 
 /// The run so far: what it was asked, what its stages reported, and what
 /// they hand the stages after them.
 pub(super) struct LearnState<'a> {
-    learn: Learn<'a>,
+    pub(super) learn: Learn<'a>,
     pub(super) report: LearnReport,
     /// When the run began: what the stage deadlines are counted from.
     started: Instant,
@@ -103,8 +107,8 @@ pub(super) struct LearnState<'a> {
     distill: bool,
     /// pass@k's parameters; `None` keeps every task.
     frontier: Option<PassAtK>,
-    kinds: Vec<String>,
-    source_ids: Vec<SourceId>,
+    pub(super) kinds: Vec<String>,
+    pub(super) source_ids: Vec<SourceId>,
     task_set: Option<TaskSetId>,
     /// The student's graded attempts, then the frontier's.
     attempts: Option<SetId>,
@@ -114,6 +118,8 @@ pub(super) struct LearnState<'a> {
     sets: Vec<SetId>,
     /// The tasks kept, whose variants are written.
     kept_tasks: Option<TaskSetId>,
+    /// The frozen exam, when the run reserved one.
+    pub(super) exam_set: Option<ExamSet>,
     /// The datasets trained on: the dialogues, then the writer's own text
     /// when the run has it.
     datasets: Vec<String>,
@@ -122,7 +128,7 @@ pub(super) struct LearnState<'a> {
     records: usize,
     /// What the training reads: [`examples_in`] the datasets.
     examples: usize,
-    candidate: Option<String>,
+    pub(super) candidate: Option<String>,
     /// The judge is named and measured, or no task needs one.
     judge_prepared: bool,
     /// The weakest decision the training set counts: judged verdicts too
@@ -141,7 +147,7 @@ impl<'a> LearnState<'a> {
     /// Who the policy becomes: the persona the request names, else the one
     /// the plan found in the goal. The sources are what that person wrote,
     /// so the generator is told they are the author.
-    fn persona(&self) -> Option<&str> {
+    pub(super) fn persona(&self) -> Option<&str> {
         let planned = self
             .report
             .plan
@@ -172,6 +178,20 @@ impl<'a> LearnState<'a> {
         })
     }
 
+    /// The families the run reserves for its exam: what the request names,
+    /// else [`DEFAULT_EXAM_FAMILIES`] when the policy learns to think like
+    /// a person and none otherwise.
+    pub(super) fn exam_families(&self) -> usize {
+        self.learn
+            .exam
+            .families
+            .unwrap_or(if self.persona().is_some() {
+                DEFAULT_EXAM_FAMILIES
+            } else {
+                0
+            })
+    }
+
     /// Shares the budget between the stages as the voice share says: the
     /// plan may have named the persona, and with it the writer's text.
     fn share_budget(&mut self) {
@@ -197,6 +217,7 @@ impl<'a> LearnState<'a> {
             failed: 0,
             sets: Vec::new(),
             kept_tasks: None,
+            exam_set: None,
             datasets: Vec::new(),
             rehearsal: None,
             records: 0,
@@ -282,6 +303,16 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
                 .when(|s| s.learn.planner.is_some())
                 .ignoring_budget(),
         )
+        .then(
+            FnStage::new("reserve", reserve_stage)
+                .when(|s| s.exam_families() > 0)
+                .ignoring_budget(),
+        )
+        .then(
+            FnStage::new("exam-set", exam_set_stage)
+                .when(|s| s.exam_families() > 0)
+                .ignoring_budget(),
+        )
         .then(FnStage::new("tasks", tasks_stage).ignoring_budget())
         .then(FnStage::new("solve", solve_stage).when(|s| !s.distill))
         .then(
@@ -320,10 +351,12 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
         )
 }
 
-type Done = Result<StageEnd, OrchestratorError>;
+pub(super) type Done = Result<StageEnd, OrchestratorError>;
 
 /// A stage's summary as the run records it.
-fn to_value(summary: &impl serde::Serialize) -> Result<serde_json::Value, OrchestratorError> {
+pub(super) fn to_value(
+    summary: &impl serde::Serialize,
+) -> Result<serde_json::Value, OrchestratorError> {
     to_json("the stage summary", summary)
 }
 
@@ -746,32 +779,6 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
 
 /// How many passages a training record carries when it is given any.
 const PASSAGES_SHOWN: usize = 4;
-
-/// The candidate is trained and stored whatever the exam finds; an exam that
-/// cannot run says why in the report and the release gate still decides.
-fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
-    let Some(id) = st.candidate.as_ref() else {
-        unreachable!("the exam stage follows the train stage")
-    };
-    let examined = match examine(
-        ctx,
-        &ExamineRequest {
-            candidate: id,
-            base: Some(&st.learn.policy),
-            judge: Some(st.learn.judge),
-            prompted: st.learn.goal,
-            retrieval: None,
-        },
-        &run.cancel_token(),
-    ) {
-        Ok(examined) => examined,
-        Err(OrchestratorError::Cancelled) => return Err(OrchestratorError::Cancelled),
-        Err(e) => Exam::NotRun(format!("the exam failed: {e}")),
-    };
-    let summary = to_value(&examined)?;
-    st.report.exam = Some(examined);
-    Ok(StageEnd::done(summary))
-}
 
 fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
     let Some(id) = st.candidate.clone() else {

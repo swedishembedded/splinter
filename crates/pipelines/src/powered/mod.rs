@@ -134,10 +134,22 @@ pub struct Powered {
     pub comparisons: Vec<Comparison>,
     /// The voice of each arm, by the likelihood it gives the writer's text.
     pub voice: Vec<voice::VoiceScore>,
+    /// Why the voice could not be scored, when it could not.
+    pub voice_error: Option<String>,
     /// Every task with every arm's every answer and verdict.
     pub records: Vec<TaskRecord>,
     /// What the candidate's training curve warns of.
     pub training_warnings: Vec<String>,
+}
+
+/// What the exam stage of a run that reserved its exam came to.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PoweredExam {
+    /// The exam ran.
+    Ran(Box<Powered>),
+    /// It could not run, and why.
+    NotRun(String),
 }
 
 /// One arm to be asked.
@@ -167,7 +179,7 @@ fn prompt_name(system: Option<&str>, goal: Option<&str>) -> String {
 }
 
 /// The datasets that made `candidate` and everything it continues.
-fn datasets_trained_on(
+pub(crate) fn datasets_trained_on(
     ctx: &Context,
     candidate: &Candidate,
 ) -> Result<Vec<DatasetId>, OrchestratorError> {
@@ -390,7 +402,9 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
     };
     let families: BTreeSet<&str> = examined.iter().map(|t| t.family.as_str()).collect();
 
-    let voice = if request.voice {
+    // The voice score needs the device and the policy base on disk; where it
+    // cannot be had the rest of the exam stands, and the report says why.
+    let (voice, voice_error) = if request.voice {
         let arms: Vec<voice::VoiceArm<'_>> = specs
             .iter()
             .map(|s| voice::VoiceArm {
@@ -400,15 +414,19 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
             })
             .collect();
         ctx.release_bases();
-        voice::score(
+        match voice::score(
             ctx,
             request.exam,
             &seen_parts,
             &arms,
             &ctx.root().path().join("tmp"),
-        )?
+        ) {
+            Ok(scores) => (scores, None),
+            Err(OrchestratorError::Cancelled) => return Err(OrchestratorError::Cancelled),
+            Err(e) => (Vec::new(), Some(e.to_string())),
+        }
     } else {
-        Vec::new()
+        (Vec::new(), None)
     };
     Ok(Powered {
         exam: request.exam.id.clone(),
@@ -432,6 +450,7 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
         arms: summarise(&records, &arm_names),
         comparisons,
         voice,
+        voice_error,
         records,
         training_warnings: trained.warnings(),
     })

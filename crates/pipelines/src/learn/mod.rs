@@ -55,6 +55,7 @@
 //! nothing to work on or the budget is spent; `--dry-run` resolves the
 //! plan and writes nothing.
 
+mod exam_stages;
 mod report;
 mod stages;
 
@@ -84,9 +85,10 @@ use splinter_orchestrator::roles;
 use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 17] = [
-    "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "author", "frontier",
-    "variants", "critique", "select", "dataset", "rehearse", "train", "exam", "release",
+pub const STAGES: [&str; 19] = [
+    "policy", "sources", "plan", "reserve", "exam-set", "tasks", "solve", "verify", "teach",
+    "author", "frontier", "variants", "critique", "select", "dataset", "rehearse", "train", "exam",
+    "release",
 ];
 
 /// The share of the training examples that is the writer's own text when a
@@ -111,6 +113,20 @@ pub fn records_at_share(examples: usize, share: f64) -> usize {
         return 0;
     }
     (examples as f64 * share / (1.0 - share)).ceil() as usize
+}
+
+/// The exam a run reserves up front.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct ExamPlan {
+    /// The families reserved: `None` is [`crate::reserve::DEFAULT_EXAM_FAMILIES`]
+    /// for a run with a persona and none otherwise, `Some(0)` none at all.
+    pub families: Option<usize>,
+    /// The most tasks the exam holds; [`crate::exam_set::DEFAULT_EXAM_TASKS`]
+    /// when `None`.
+    pub tasks: Option<usize>,
+    /// Answers per task per arm; [`crate::powered::DEFAULT_RESAMPLES`] when
+    /// `None`.
+    pub resamples: Option<usize>,
 }
 
 /// One `learn`.
@@ -174,6 +190,8 @@ pub struct LearnRequest {
     pub pass_at_k: PassAtK,
     /// The diversity quotas on the training set.
     pub quotas: Quotas,
+    /// The exam reserved before anything is generated.
+    pub exam: ExamPlan,
 }
 
 /// Runs `request`, training with `trainer`.
@@ -274,6 +292,18 @@ pub fn learn(
                 .into_iter()
                 .filter(|stage| !(request.no_release && *stage == "release"))
                 .filter(|stage| !(!request.plan && *stage == "plan"))
+                .filter(|stage| {
+                    !(["reserve", "exam-set"].contains(stage)
+                        && request
+                            .exam
+                            .families
+                            .unwrap_or(if request.persona.is_some() {
+                                crate::reserve::DEFAULT_EXAM_FAMILIES
+                            } else {
+                                0
+                            })
+                            == 0)
+                })
                 .filter(|stage| !(!measures_frontier && *stage == "frontier"))
                 .filter(|stage| !(!request.plan && !authors && *stage == "author"))
                 .filter(|stage| {
@@ -316,6 +346,7 @@ pub fn learn(
             ..request.tuning
         },
         quotas: request.quotas,
+        exam: request.exam,
     };
     let frontier = measures_frontier.then_some(request.pass_at_k);
     let recorded = record(ctx, "learn", request, |run| {

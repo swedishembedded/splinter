@@ -35,6 +35,8 @@ splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
+splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--judge REF] [--prompt GOAL]
+splinter exam-set create SOURCE... [--families N] [--tasks N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | show EXAM
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -220,6 +222,45 @@ what a result on a few families has to be read by. It never reaches a
 training set. Each control the judge did not
 judge as labelled is reported with the answer and the judge's reason, so a judge
 that is not trusted can be seen failing.
+
+**The powered exam.** An exam of a few families cannot show a gain: the paired
+tests above rest on as many units of evidence as families, which is a handful.
+`learn --exam-families N` (thirty by default for a run with a persona, none
+otherwise; 0 reserves none) reserves the exam's families before anything is
+generated or built, after the plan. A family is a group of text parts that
+print the same text (the groups a split uses, named by the least content digest
+in them); a stable hash of the name chooses N of the examinable ones - long
+enough to write tasks from, not so long that reserving them costs the run its
+corpus, in a directory source, and not text the policy's own lineage was trained
+on - and the run is refused, saying why, when the sources cannot spare that many
+or reserving them would leave less to learn from than is examined. The text of a
+reserved family in every edition is left out of the sources the run reads from
+then on (the source records the parts as skipped, reserved), so no task, dataset
+or passage index can hold it, and the exam is written from a source of the
+reserved parts alone, within `--exam-tasks` tasks spread over the families, and
+frozen under `<state>/exams/<id>/` with a ledger that refuses a changed manifest.
+`splinter exam-set create` makes such an exam from sources apart from any
+`learn`, clear of what the candidates named by `--not-trained-by` (and the
+releases they continue) were trained on; `splinter exam CANDIDATE --exam-set`
+puts a candidate to it. Four arms answer each task - the base, the base under the
+prompt the candidate was trained under (the goal when it has none), the
+candidate under the default prompt and the candidate under its own prompt - the
+first answer greedy and the rest sampled (`--resamples`, three by default); a
+family the candidate or a release it continues was trained on is left out. A
+judge calibrated on controls from the tasks' references, and on harder wrong
+answers (each task answered with the most similar reference of another family),
+decodes greedily and judges each answer alone, shown only the task, the reference
+and the answer: it cannot know which arm gave it or what was judged before. The
+report keeps every answer and verdict of every arm so the analysis can be redone,
+and for each pair of arms gives the per-task counts, the exact sign test over
+tasks and over families, the difference in the share right and in the pass rate
+over the samples with a family-clustered bootstrap interval, the same test over
+answers of like length, the answers' lengths, the invented specifics, the number
+of discordant tasks and the smallest difference the exam's own spread over
+families could have shown at 80% power. The voice of each arm is also scored with
+no judge, by the likelihood it gives the writer's own text of the reserved
+families (brain's held-out scoring path). The `exam` stage of a `learn` that
+reserved its exam runs this exam.
 
 The `converse` kind teaches how the writer talks and reasons. Its task is the
 opening message of someone speaking to the writer (admitted only in the first or
