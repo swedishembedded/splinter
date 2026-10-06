@@ -16,15 +16,15 @@ use std::str::FromStr;
 use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::dataset::DatasetId;
-use splinter_core::digest::canonical_json;
+use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{ExperienceId, PrivilegedKind};
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 pub use splinter_data::Strip;
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Fraction,
-    Objective, OutcomeView, Preference, Projection, Rehearsal, Retrieval, SftFinal, SftStep,
-    StoredDataset, VerifierView, View, Voice,
+    Objective, OutcomeView, Preference, Projection, RecordBody, Rehearsal, Retrieval, SftFinal,
+    SftStep, StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
@@ -32,7 +32,7 @@ use splinter_store::error::StoreError;
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
-use crate::grouping::assign_groups;
+use crate::grouping::{assign_groups, part_families};
 use crate::raft::{with_passages, PassageShare};
 use crate::retrieval::Retrieval as PassageSearch;
 use crate::variants::refuse_variants;
@@ -231,6 +231,26 @@ pub struct BuildRequest {
     /// The most records, kept evenly spread over the projection
     /// ([`Projection::thinned_to`]); `None` keeps every one.
     pub limit: Option<usize>,
+    /// How the writer's own text is written, for the voice view.
+    pub voice: VoiceBuild,
+}
+
+/// How the voice view writes the writer's text into records; the other
+/// views ignore it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct VoiceBuild {
+    /// Who the writer is: the requests are written as theirs and half the
+    /// records are asked under their persona prompt, half under the line
+    /// that says who the model is. Excludes `system_prompt`, which would
+    /// replace both. `None` writes requests with no writer named, under
+    /// `system_prompt` or the default.
+    pub writer: Option<String>,
+    /// The most tokens of the writer's text, kept evenly spread over it
+    /// ([`Projection::thinned_to_tokens`]); `None` keeps all of it.
+    pub token_budget: Option<usize>,
+    /// The most of the tokens one family (the prints of one text, or one
+    /// work) may supply; `None` is [`DEFAULT_MAX_FAMILY_SHARE`].
+    pub max_family_share: Option<f64>,
 }
 
 /// What `dataset build` reports.
@@ -362,10 +382,47 @@ pub fn build_with(
                     .map(|section| section.range)
                     .collect()
             };
-            Voice::new(&source_store)
+            // Prints of one text are one family: one of them is projected.
+            let families = part_families(ctx, corpus.sources())?;
+            let family_of = |content: &Digest| families.get(content).cloned();
+            let share = request
+                .voice
+                .max_family_share
+                .unwrap_or(DEFAULT_MAX_FAMILY_SHARE);
+            if !(share > 0.0 && share <= 1.0) {
+                return Err(OrchestratorError::Refused(format!(
+                    "the family share {share} is not a share in (0, 1]"
+                )));
+            }
+            let voice = Voice::new(&source_store)
                 .measured_by(&tokens)
                 .sectioned_by(&sectioner)
-                .project(&corpus)
+                .keeping_one_print_of(&family_of)
+                .bounding_families_to(share);
+            let voice = match request.voice.writer.as_deref() {
+                Some(_) if request.system_prompt.is_some() => {
+                    return Err(OrchestratorError::Refused(
+                        "the voice view writes its own system turns when it is told the \
+                         writer, so no system prompt applies as well"
+                            .into(),
+                    ))
+                }
+                Some(writer) => voice.written_as(writer),
+                None => voice,
+            };
+            let mut projection = voice.project(&corpus)?;
+            if let Some(budget) = request.voice.token_budget {
+                let answer_tokens = |record: &splinter_data::Record| match &record.body {
+                    RecordBody::Chat { messages } => messages
+                        .iter()
+                        .filter(|m| m.train)
+                        .map(|m| tokens(&m.content))
+                        .sum(),
+                    _ => 0,
+                };
+                projection = projection.thinned_to_tokens(budget, &answer_tokens);
+            }
+            Ok(projection)
         }
     }?;
     projection.terms = terms;
@@ -529,6 +586,36 @@ pub fn examples_in(path: &Path) -> std::io::Result<usize> {
         };
     }
     Ok(examples)
+}
+
+/// The tokens, as the policy's own tokenizer counts them, of the supervised
+/// answers of the chat dataset at `path`; characters at the fallback ratio
+/// when the policy's tokenizer is not at hand.
+///
+/// # Errors
+/// The file cannot be read or holds a line that is not JSON.
+pub fn supervised_tokens_in(ctx: &Context, path: &Path) -> std::io::Result<usize> {
+    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
+    let tokens = |text: &str| {
+        counter
+            .as_ref()
+            .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
+    };
+    let text = std::fs::read_to_string(path)?;
+    let mut total = 0;
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let record: serde_json::Value = serde_json::from_str(line)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let answers = record
+            .get("messages")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|m| m.get("train") == Some(&serde_json::Value::Bool(true)))
+            .filter_map(|m| m.get("content").and_then(serde_json::Value::as_str));
+        total += answers.map(&tokens).sum::<usize>();
+    }
+    Ok(total)
 }
 
 #[cfg(test)]

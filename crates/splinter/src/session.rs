@@ -15,7 +15,7 @@ use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
-use splinter_sdk::datasets::{build, export, BuildRequest};
+use splinter_sdk::datasets::{build, export, BuildRequest, VoiceBuild};
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
@@ -453,6 +453,9 @@ impl Session {
                 system_prompt,
                 export_only,
                 limit,
+                writer,
+                token_limit,
+                max_family_share,
             }) => {
                 let request = BuildRequest {
                     sets: sets
@@ -465,6 +468,11 @@ impl Session {
                     system_prompt,
                     export_only,
                     limit,
+                    voice: VoiceBuild {
+                        writer,
+                        token_budget: token_limit,
+                        max_family_share,
+                    },
                 };
                 emit(
                     json,

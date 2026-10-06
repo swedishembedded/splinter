@@ -36,9 +36,10 @@
 //! selected is the dataset - the student's records: the instruction alone,
 //! whatever the solver was shown. A run that learns to think like a person
 //! trains beside it on the writer's own text (the `voice` view): a share of
-//! the examples ([`LearnRequest::voice`]) built by code from the sources,
-//! each the writer's words word for word as the answer, held out with the
-//! family of the letter it prints. Such a run also rehearses the base
+//! the training tokens ([`LearnRequest::voice`]) built by code from the
+//! sources, chunks of the writer's words word for word as the answer to a
+//! request that names what the passage is, spread over the whole of the
+//! sources and held out with the family of the letter it prints. Such a run also rehearses the base
 //! model's own answers to general tasks (the `rehearse` stage,
 //! [`crate::rehearsal`]): a share of the training draws
 //! ([`LearnRequest::rehearsal`]) and of the monitoring set, so the persona
@@ -91,11 +92,11 @@ pub const STAGES: [&str; 19] = [
     "release",
 ];
 
-/// The share of the training examples that is the writer's own text when a
-/// run learns to think like a person and names no share: as many records
-/// of the writer's words as there are dialogue answers, so neither drowns
-/// the other.
-pub const DEFAULT_VOICE_SHARE: f64 = 0.5;
+/// The share of the training tokens that is the writer's own text when a
+/// run learns to think like a person and names no share: most of what the
+/// adapter reads is the writer's words, and the dialogues, which are what
+/// the policy is asked as, keep the rest.
+pub const DEFAULT_VOICE_SHARE: f64 = 0.7;
 
 /// The share of the training draws that are the base model's own answers
 /// to general tasks when a run learns to think like a person and names no
@@ -113,6 +114,14 @@ pub fn records_at_share(examples: usize, share: f64) -> usize {
         return 0;
     }
     (examples as f64 * share / (1.0 - share)).ceil() as usize
+}
+
+/// How many tokens go beside `tokens` so that they are `share` of all the
+/// tokens: `tokens * share / (1 - share)`, rounded up; none for a share of
+/// zero. What sizes the writer's own text against the dialogue answers.
+#[must_use]
+pub fn tokens_at_share(tokens: usize, share: f64) -> usize {
+    records_at_share(tokens, share)
 }
 
 /// The exam a run reserves up front.
@@ -154,7 +163,7 @@ pub struct LearnRequest {
     /// context where it holds the answer and to answer without it where it
     /// does not. Needs the embedding model.
     pub passages: Option<PassageShare>,
-    /// The share of the training examples that is the writer's own text
+    /// The share of the training tokens that is the writer's own text
     /// (the `voice` view) when the policy learns to think like a person, in
     /// `[0, 1)`: `None` is [`DEFAULT_VOICE_SHARE`] for a run with a persona
     /// and none without, `Some(0.0)` none at all.
@@ -234,7 +243,7 @@ pub fn learn(
         if !(0.0..1.0).contains(&share) {
             return Err(OrchestratorError::Refused(format!(
                 "the voice share {share} is not in [0, 1): the writer's own text cannot be every \
-                 example, since the dialogues are what the policy is asked as"
+                 token, since the dialogues are what the policy is asked as"
             )));
         }
     }

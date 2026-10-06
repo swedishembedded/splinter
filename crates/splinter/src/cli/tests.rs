@@ -162,6 +162,9 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         system_prompt,
         export_only,
         limit,
+        writer,
+        token_limit,
+        max_family_share,
     }) = command(&[
         "dataset",
         "build",
@@ -178,10 +181,20 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--export-only",
         "--limit",
         "5",
+        "--writer",
+        "The Writer",
+        "--token-limit",
+        "9000",
+        "--max-family-share",
+        "0.2",
     ])
     else {
         panic!("dataset build");
     };
+    assert_eq!(
+        (writer.as_deref(), token_limit, max_family_share),
+        (Some("The Writer"), Some(9000), Some(0.2))
+    );
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(Strip::Mix { .. })));

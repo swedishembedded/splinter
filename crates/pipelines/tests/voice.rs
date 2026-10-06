@@ -32,7 +32,7 @@ use splinter_core::source::PartRef;
 use splinter_data::holdout::holdout_split_records;
 use splinter_data::Exclusion;
 use splinter_orchestrator::Context;
-use splinter_pipelines::datasets::{build, BuildRequest, ViewName};
+use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_store::experiences::ExperienceSet;
 
@@ -151,6 +151,7 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
             system_prompt: Some(prompt.clone()),
             export_only: false,
             limit: None,
+            voice: VoiceBuild::default(),
         },
     )
     .unwrap();
@@ -164,14 +165,17 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
             system_prompt: Some(prompt.clone()),
             export_only: false,
             limit: None,
+            voice: VoiceBuild::default(),
         },
     )
     .unwrap();
     assert_eq!(dialogues.records, 12);
-    // Every text part, the reprint among them, became a record of the
-    // writer's own words under the persona, with the part it prints named
-    // and no model's experience behind it.
-    assert_eq!(voice.records, 13, "{:?}", voice.excluded);
+    // Every letter became a record of the writer's own words under the
+    // persona, with the part it prints named and no model's experience
+    // behind it; the reprint of letter 0 is the same family as its first
+    // print, and only one print of a family is projected.
+    assert_eq!(voice.records, 12, "{:?}", voice.excluded);
+    assert_eq!(voice.excluded.get(&Exclusion::Duplicate), Some(&1));
     let lines: Vec<serde_json::Value> = std::fs::read_to_string(&voice.path)
         .unwrap()
         .lines()
@@ -180,6 +184,11 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
     for record in &lines {
         assert_eq!(record["messages"][0]["content"], prompt);
         assert_eq!(record["messages"][1]["role"], "user");
+        let ask = record["messages"][1]["content"].as_str().unwrap();
+        assert!(
+            ask.starts_with("Write to a friend in 1800 about: "),
+            "{ask}"
+        );
         assert_eq!(record["messages"][2]["train"], true);
         assert!(record["metadata"]["experiences"].is_null());
         assert_eq!(record["metadata"]["sources"].as_array().unwrap().len(), 1);
@@ -192,20 +201,9 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
             r["messages"][2]["content"]
                 .as_str()
                 .unwrap()
-                .contains("a few words more")
+                .contains("axa ")
         })
         .unwrap();
-    let first_print = lines
-        .iter()
-        .find(|r| {
-            let answer = r["messages"][2]["content"].as_str().unwrap();
-            answer.contains("axa ") && !answer.contains("a few words more")
-        })
-        .unwrap();
-    assert_eq!(
-        reprint["metadata"]["group"], first_print["metadata"]["group"],
-        "two prints of one letter are one family"
-    );
 
     // The dialogue about letter 0 and both prints of it name one family,
     // whichever dataset the record is in.
@@ -265,7 +263,6 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
         held.iter().any(|l| l.contains("\"view\":\"sft-final\"")),
         "the families are the dialogues'"
     );
-    assert_eq!(voice.excluded.get(&Exclusion::Duplicate), None);
 }
 
 #[test]
@@ -290,9 +287,71 @@ fn the_voice_dataset_is_limited_to_a_spread_of_the_corpus() {
             system_prompt: None,
             export_only: false,
             limit: Some(5),
+            voice: VoiceBuild::default(),
         },
     )
     .unwrap();
     assert_eq!(voice.records, 5);
-    assert_eq!(voice.excluded.get(&Exclusion::OverLimit), Some(&8));
+    assert_eq!(voice.excluded.get(&Exclusion::OverLimit), Some(&7));
+}
+
+#[test]
+fn a_known_writer_is_asked_as_under_two_system_turns_within_a_token_budget() {
+    let (scratch, ctx) = scratch_context("voice-writer", Scripted::new(|_| String::new()), false);
+    let source = materials(&scratch, &ctx, 12);
+    let set = ctx
+        .experiences()
+        .put_set(&ExperienceSet {
+            name: "one conversation".into(),
+            members: vec![conversation(&ctx, &source, "letter-0.txt", 0)],
+        })
+        .unwrap();
+    let request = |writer: Option<&str>, system_prompt: Option<String>, budget| BuildRequest {
+        sets: vec![set.clone()],
+        view: ViewName::Voice,
+        strip: None,
+        min_strength: None,
+        system_prompt,
+        export_only: false,
+        limit: None,
+        voice: VoiceBuild {
+            writer: writer.map(String::from),
+            token_budget: budget,
+            max_family_share: None,
+        },
+    };
+    let refused = build(&ctx, &request(Some("The Writer"), Some("p".into()), None));
+    assert!(
+        refused.is_err(),
+        "a system prompt would replace the writer's two"
+    );
+
+    let all = build(&ctx, &request(Some("The Writer"), None, None)).unwrap();
+    let systems: BTreeSet<String> = std::fs::read_to_string(&all.path)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let record: serde_json::Value = serde_json::from_str(l).unwrap();
+            record["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        systems,
+        BTreeSet::from([
+            persona_prompt("The Writer"),
+            "You are The Writer.".to_string()
+        ]),
+        "half the records carry the persona prompt, half the identity line"
+    );
+
+    // A budget of half the tokens keeps about half the chunks, spread.
+    let half = build(
+        &ctx,
+        &request(Some("The Writer"), None, Some(all.records * 40)),
+    )
+    .unwrap();
+    assert!(half.records < all.records && half.records > 0, "{half:?}");
 }

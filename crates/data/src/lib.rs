@@ -100,7 +100,7 @@ pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use views::{
     chars_as_tokens, Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Rehearsal,
-    Retrieval, Sectioner, SftFinal, SftStep, VerifierView, Voice,
+    Retrieval, Sectioner, SftFinal, SftStep, VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
 
 /// The training objective a view's records serve.
@@ -299,6 +299,38 @@ pub enum Exclusion {
     NoReference,
     /// A record past the limit a projection was thinned to.
     OverLimit,
+    /// Text too short to be a record: a heading, a signature, a stub.
+    TooShort,
+}
+
+/// Which of items of `sizes` to keep so that they hold at most `budget`
+/// between them, evenly spread over the items: every item when they fit,
+/// else the share of them the budget is of the total, taken at a steady
+/// stride rather than from the front. The first item taken is kept even when
+/// it alone is over the budget: a budget of something is never nothing.
+pub(crate) fn spread(sizes: &[usize], budget: usize) -> Vec<bool> {
+    let total: usize = sizes.iter().sum();
+    if total <= budget {
+        return vec![true; sizes.len()];
+    }
+    let share = budget as f64 / total as f64;
+    let (mut owed, mut used) = (0.5f64, 0usize);
+    let mut kept: Vec<bool> = sizes
+        .iter()
+        .map(|&size| {
+            owed += share;
+            let keep = owed >= 1.0 - 1e-9 && (used + size <= budget || used == 0);
+            if keep {
+                owed -= 1.0;
+                used += size;
+            }
+            keep
+        })
+        .collect();
+    if budget > 0 && !kept.contains(&true) {
+        kept[sizes.len() / 2] = true;
+    }
+    kept
 }
 
 /// A view's output: its records and what it left out.
@@ -394,6 +426,25 @@ impl Projection {
             .into_iter()
             .enumerate()
             .filter_map(|(n, record)| kept.contains(&n).then_some(record))
+            .collect();
+        *self.excluded.entry(Exclusion::OverLimit).or_insert(0) += total - self.records.len();
+        self
+    }
+
+    /// The same projection thinned to at most `budget` tokens as `size`
+    /// counts them, kept evenly spread over it: a budget reaches the whole
+    /// of what the view projects rather than its first part. The records dropped are counted
+    /// as [`Exclusion::OverLimit`].
+    #[must_use]
+    pub fn thinned_to_tokens(mut self, budget: usize, size: &dyn Fn(&Record) -> usize) -> Self {
+        let sizes: Vec<usize> = self.records.iter().map(size).collect();
+        let kept = spread(&sizes, budget);
+        let total = self.records.len();
+        let records = std::mem::take(&mut self.records);
+        self.records = records
+            .into_iter()
+            .zip(kept)
+            .filter_map(|(record, keep)| keep.then_some(record))
             .collect();
         *self.excluded.entry(Exclusion::OverLimit).or_insert(0) += total - self.records.len();
         self
@@ -625,5 +676,48 @@ mod tests {
             0
         );
         assert_eq!(projection.thinned_to(1).records.len(), 1);
+    }
+
+    /// A token budget keeps a steady stride of the records, never over the
+    /// budget, from the first part of the projection to the last.
+    #[test]
+    fn a_token_budget_keeps_a_spread_of_the_records_within_it() {
+        let mut projection = Projection::new("voice", Objective::Sft, None, None);
+        for n in 0..20 {
+            projection.push(
+                RecordBody::Text {
+                    text: "w".repeat(10 + n % 3),
+                },
+                Provenance::default(),
+            );
+        }
+        let size = |record: &Record| match &record.body {
+            RecordBody::Text { text } => text.len(),
+            _ => unreachable!(),
+        };
+        let total: usize = projection.records.iter().map(size).sum();
+        let thinned = projection.clone().thinned_to_tokens(total / 2, &size);
+        let used: usize = thinned.records.iter().map(size).sum();
+        assert!(
+            used <= total / 2 && used > total / 2 - 24,
+            "{used} of {total}"
+        );
+        let kept_from_each_half = |half: std::ops::Range<usize>| {
+            half.filter(|&n| thinned.records.iter().any(|r| r == &projection.records[n]))
+                .count()
+        };
+        assert!(kept_from_each_half(0..10) >= 4 && kept_from_each_half(10..20) >= 4);
+        assert_eq!(
+            thinned.count(Exclusion::OverLimit),
+            20 - thinned.records.len()
+        );
+        assert_eq!(
+            projection
+                .clone()
+                .thinned_to_tokens(total, &size)
+                .records
+                .len(),
+            20
+        );
     }
 }

@@ -7,9 +7,8 @@
 // you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The voice view: the writer's own text as the supervised answer, in the
-//! shape the policy is trained and asked in - a system turn, a user turn,
-//! and the writer's words word for word as the reply.
+//! The voice view: the writer's own text, the whole corpus of it, as the
+//! supervised answer to a request that says what the passage is.
 //!
 //! A conversation written by a teacher costs a model's time for every
 //! answer, and a run over a large body of writing reaches a few per cent of
@@ -18,56 +17,77 @@
 //! in the corpus is a candidate, in a stable order that does not follow the
 //! parts' names, so a limited projection covers a spread of the corpus.
 //!
-//! A part is cut into stretches of whole sections - as the builder's
-//! sectioner divides the text ([`Voice::sectioned_by`]; without one a part
-//! is one section) - of at most
-//! [`STRETCH_TOKENS`] tokens, measured as the policy's tokenizer counts them
-//! when the builder has it ([`Voice::measured_by`]) and else as characters
-//! at [`CHARS_PER_TOKEN`], so that no record outgrows the row the
-//! conversations it is trained beside need (a chat fine-tune's row is sized
-//! by its longest record, and a row twice as long costs twice the memory and
-//! time at every step). Each stretch is one record: the one user turn
-//! [`ASK`], and the stretch, whole, as the answer. Measured, opening the
-//! user turn with the part's heading or with the stretch's own first
-//! sentence changed nothing in what the policy learned for the dialogues
-//! it is asked as, and left that much of the writer's text unsupervised; so
-//! every word is the answer and no model writes any of it. Content
-//! projected twice is a [`Exclusion::Duplicate`], content that is not text
-//! [`Exclusion::NotText`], empty content [`Exclusion::Empty`]. There is no
-//! student input to strip and no verdict to read.
+//! A part is cut into chunks of [`MIN_CHUNK_WORDS`] to [`MAX_CHUNK_WORDS`]
+//! words (`chunks`): whole sentences, closed where a paragraph ends, a
+//! heading always with the text it heads and no chunk of nothing but a
+//! heading. Each chunk is one record whose answer is the chunk, word for
+//! word, and whose request is written by code from what the text says of
+//! itself - whom it is to, in which year, what it opens on (`prompt`) - so
+//! the model learns to write about what it is asked, in the writer's words.
+//! Told who the writer is ([`Voice::written_as`]), half the records are
+//! asked under the persona prompt and half under the identity line alone, so
+//! the voice is carried by the adapter and not only by the prompt.
+//!
+//! Two prints of one text are one family ([`Voice::keeping_one_print_of`]):
+//! only one is projected, and no family supplies more than its share of the
+//! tokens ([`Voice::bounding_families_to`]). Content projected twice is a
+//! [`Exclusion::Duplicate`], content that is not text [`Exclusion::NotText`],
+//! empty content [`Exclusion::Empty`], a text with too little to be a record
+//! [`Exclusion::TooShort`]. There is no student input to strip and no
+//! verdict to read.
 
-use std::collections::HashSet;
+mod chunks;
+mod prompt;
+
+use std::collections::{BTreeMap, HashSet};
 use std::ops::Range;
 
 use splinter_core::digest::Digest;
+use splinter_core::prompt::persona_prompt;
 use splinter_store::sources::SourceStore;
 
 use super::source_text;
 use crate::render::message;
-use crate::{Corpus, Exclusion, Objective, Projection, Provenance, RecordBody, View, ViewError};
+use crate::{
+    spread, Corpus, Exclusion, Objective, Projection, Provenance, RecordBody, View, ViewError,
+};
+use chunks::{chunks, Limits};
 
 /// The name every voice record carries.
 pub const NAME: &str = "voice";
 
-/// The most tokens of the writer's text one record answers with: with the
-/// system and user turns before it, within the 1024-token row a persona
-/// run's conversations need.
-pub const STRETCH_TOKENS: usize = 768;
+/// A chunk closes at a paragraph end once it holds this many words.
+pub const MIN_CHUNK_WORDS: usize = 250;
+
+/// The most words a chunk holds.
+pub const MAX_CHUNK_WORDS: usize = 650;
+
+/// The most tokens a chunk holds: with the system and request turns before
+/// it, within the 1024-token row a persona run's conversations need.
+pub const MAX_CHUNK_TOKENS: usize = 880;
+
+/// The fewest words of body a text or a chunk must hold to be a record.
+pub const MIN_BODY_WORDS: usize = 25;
+
+/// The most of the voice tokens one family may supply by default: a work of
+/// many chunks is a tenth of the writer's text, not the half of it.
+pub const DEFAULT_MAX_FAMILY_SHARE: f64 = 0.1;
 
 /// How many characters count as one token when no tokenizer measures the
 /// text: fewer than prose takes, so the bound holds for text that tokenizes
 /// badly.
 pub const CHARS_PER_TOKEN: usize = 3;
 
-/// The user turn every stretch is the answer to.
-pub const ASK: &str = "Write one of your writings, as you wrote it.";
-
-/// How a text's length is measured against [`STRETCH_TOKENS`].
+/// How a text's length is measured against [`MAX_CHUNK_TOKENS`].
 pub type Measure<'m> = &'m (dyn Fn(&str) -> usize + 'm);
 
 /// How a text of a media type is divided into sections, as byte ranges in
-/// it: a stretch holds whole sections where it can.
+/// it: a chunk closes where a section does.
 pub type Sectioner<'x> = &'x (dyn Fn(&str, &str) -> Vec<Range<usize>> + 'x);
+
+/// The family of a text part's content: the name shared by the prints of one
+/// text, `None` when it has none.
+pub type FamilyOf<'f> = &'f (dyn Fn(&Digest) -> Option<String> + 'f);
 
 /// The whole text as one section: the sectioner when none is given.
 #[must_use]
@@ -88,22 +108,28 @@ pub struct Voice<'s, 'm> {
     sources: &'s SourceStore,
     measure: Measure<'m>,
     sectioner: Sectioner<'m>,
+    author: Option<&'m str>,
+    family_of: Option<FamilyOf<'m>>,
+    max_family_share: f64,
 }
 
 impl<'s, 'm> Voice<'s, 'm> {
-    /// The view reading source content from `sources`, its stretches
-    /// measured in characters, each part one section.
+    /// The view reading source content from `sources`, its chunks measured
+    /// in characters, each part one section, no family bound.
     #[must_use]
     pub fn new(sources: &'s SourceStore) -> Self {
         Self {
             sources,
             measure: &chars_as_tokens,
             sectioner: &whole_text,
+            author: None,
+            family_of: None,
+            max_family_share: 1.0,
         }
     }
 
-    /// The same view with its stretches measured by `measure`: the tokens
-    /// of the model to be trained.
+    /// The same view with its chunks measured by `measure`: the tokens of
+    /// the model to be trained.
     #[must_use]
     pub fn measured_by(self, measure: Measure<'m>) -> Self {
         Self { measure, ..self }
@@ -114,77 +140,105 @@ impl<'s, 'm> Voice<'s, 'm> {
     pub fn sectioned_by(self, sectioner: Sectioner<'m>) -> Self {
         Self { sectioner, ..self }
     }
-}
 
-/// `text` cut into stretches of whole sections of at most `limit` as
-/// `measure` counts; a section longer than that is cut at whitespace. Each
-/// piece is measured once, the blank line between pieces counted as one,
-/// since a tokenizer's count over a paragraph boundary is the sum of its
-/// parts to within a token.
-fn stretches(
-    text: &str,
-    media_type: &str,
-    limit: usize,
-    measure: Measure<'_>,
-    sectioner: Sectioner<'_>,
-) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut open = String::new();
-    let mut used = 0;
-    for range in sectioner(text, media_type) {
-        let Some(piece) = text.get(range).filter(|p| !p.trim().is_empty()) else {
-            continue;
-        };
-        for piece in cut_to_fit(piece, limit, measure) {
-            let size = measure(piece);
-            if !open.is_empty() && used + 1 + size > limit {
-                out.push(std::mem::take(&mut open));
-                used = 0;
-            }
-            if !open.is_empty() {
-                open.push_str("\n\n");
-                used += 1;
-            }
-            open.push_str(piece);
-            used += size;
+    /// The same view writing its requests as `author`'s, half of them under
+    /// the persona prompt of `author` and half under the line that says who
+    /// the model is and nothing more.
+    #[must_use]
+    pub fn written_as(self, author: &'m str) -> Self {
+        Self {
+            author: Some(author),
+            ..self
         }
     }
-    if !open.is_empty() {
-        out.push(open);
+
+    /// The same view projecting one print of each text that `family_of`
+    /// puts in a family: the print whose content is the family's name.
+    #[must_use]
+    pub fn keeping_one_print_of(self, family_of: FamilyOf<'m>) -> Self {
+        Self {
+            family_of: Some(family_of),
+            ..self
+        }
     }
-    out
+
+    /// The same view in which no family supplies more than `share` of the
+    /// tokens - or its even share, when there are fewer families than that
+    /// leaves room for.
+    #[must_use]
+    pub fn bounding_families_to(self, share: f64) -> Self {
+        Self {
+            max_family_share: share,
+            ..self
+        }
+    }
+
+    fn limits() -> Limits {
+        Limits {
+            min_words: MIN_CHUNK_WORDS,
+            max_words: MAX_CHUNK_WORDS,
+            max_tokens: MAX_CHUNK_TOKENS,
+            min_body_words: MIN_BODY_WORDS,
+        }
+    }
+
+    /// The system turn the author's persona makes of a record answering
+    /// `answer`: half the records, by the answer's own digest so the half
+    /// does not move with what else is projected, are asked under the
+    /// identity line alone. `None` when the author is not known.
+    fn system_for(&self, answer: &str) -> Option<String> {
+        let author = self.author?;
+        let digest = Digest::of(answer.as_bytes());
+        let bare = digest
+            .as_str()
+            .chars()
+            .last()
+            .and_then(|c| c.to_digit(16))
+            .is_some_and(|nibble| nibble % 2 == 0);
+        Some(if bare {
+            identity(author)
+        } else {
+            persona_prompt(author)
+        })
+    }
+
+    /// Which candidates to keep so that no family supplies more than its
+    /// share of the tokens, each family thinned evenly.
+    fn within_family_bound(&self, candidates: &[Candidate]) -> Vec<bool> {
+        let mut by_family: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+        for (n, c) in candidates.iter().enumerate() {
+            by_family.entry(&c.family).or_default().push(n);
+        }
+        let total: usize = candidates.iter().map(|c| c.tokens).sum();
+        let share = self
+            .max_family_share
+            .max(1.0 / by_family.len().max(1) as f64);
+        let allowed = (share * total as f64) as usize;
+        let mut kept = vec![true; candidates.len()];
+        for members in by_family.values() {
+            let sizes: Vec<usize> = members.iter().map(|&n| candidates[n].tokens).collect();
+            // A family keeps at least its largest chunk, whatever the bound.
+            let room = allowed.max(sizes.iter().copied().max().unwrap_or(0));
+            for (&n, keep) in members.iter().zip(spread(&sizes, room)) {
+                kept[n] = keep;
+            }
+        }
+        kept
+    }
 }
 
-/// `text` as pieces of at most `limit` as `measure` counts, each cut at the
-/// last whitespace that fits (or, when no whitespace does, at the last
-/// character that does). The measure grows with the text, so the cut is
-/// found by bisection over the candidate boundaries.
-fn cut_to_fit<'t>(text: &'t str, limit: usize, measure: Measure<'_>) -> Vec<&'t str> {
-    let mut pieces = Vec::new();
-    let mut rest = text;
-    while measure(rest) > limit {
-        let fits = |boundaries: Vec<usize>| -> Option<usize> {
-            let fitting = boundaries.partition_point(|&at| measure(&rest[..at]) <= limit);
-            (fitting > 0).then(|| boundaries[fitting - 1])
-        };
-        let at_whitespace: Vec<usize> = rest
-            .char_indices()
-            .filter(|(at, c)| *at > 0 && c.is_whitespace())
-            .map(|(at, _)| at)
-            .collect();
-        let at_any = || rest.char_indices().map(|(at, _)| at).skip(1).collect();
-        let Some(cut) = fits(at_whitespace).or_else(|| fits(at_any())) else {
-            // Not even one character fits: the piece is what it is.
-            pieces.push(rest);
-            return pieces;
-        };
-        pieces.push(rest[..cut].trim_end());
-        rest = rest[cut..].trim_start();
-    }
-    if !rest.is_empty() {
-        pieces.push(rest);
-    }
-    pieces
+/// One record about to be projected: its family and size, for the bound.
+struct Candidate {
+    family: String,
+    tokens: usize,
+    body: RecordBody,
+    system: Option<String>,
+    source: Digest,
+}
+
+/// The line that says who the model is, with nothing about how to answer.
+fn identity(author: &str) -> String {
+    format!("You are {}.", author.trim())
 }
 
 impl View for Voice<'_, '_> {
@@ -199,6 +253,7 @@ impl View for Voice<'_, '_> {
     fn project(&self, corpus: &Corpus) -> Result<Projection, ViewError> {
         let mut projection = Projection::new(NAME, Objective::Sft, None, None);
         let mut seen: HashSet<Digest> = HashSet::new();
+        let mut candidates: Vec<Candidate> = Vec::new();
         for id in corpus.sources() {
             let source = self.sources.get_source(id)?;
             let mut parts: Vec<_> = source
@@ -210,7 +265,11 @@ impl View for Voice<'_, '_> {
             // parts, not the first files.
             parts.sort_by_cached_key(|p| Digest::of(p.name.as_bytes()));
             for part in parts {
-                if !seen.insert(part.content.clone()) {
+                let family = self.family_of.and_then(|f| f(&part.content));
+                let other_print = family
+                    .as_deref()
+                    .is_some_and(|name| name != part.content.as_str());
+                if other_print || !seen.insert(part.content.clone()) {
                     projection.exclude(Exclusion::Duplicate);
                     continue;
                 }
@@ -221,83 +280,64 @@ impl View for Voice<'_, '_> {
                         continue;
                     }
                 };
-                for stretch in stretches(
-                    text.trim(),
+                let family = family.unwrap_or_else(|| part.content.as_str().to_string());
+                let text = text.trim();
+                let (cut, heading) = chunks(
+                    text,
                     &part.media_type,
-                    STRETCH_TOKENS,
+                    &Self::limits(),
                     self.measure,
                     self.sectioner,
-                ) {
-                    projection.push(
-                        RecordBody::Chat {
+                );
+                if cut.is_empty() {
+                    projection.exclude(Exclusion::TooShort);
+                    continue;
+                }
+                let heading = heading.map(|range| text[range].to_string());
+                for chunk in cut {
+                    let answer = &text[chunk.range.clone()];
+                    let request = prompt::request(
+                        self.author,
+                        heading.as_deref(),
+                        &text[chunk.body_start..chunk.range.end],
+                    );
+                    candidates.push(Candidate {
+                        family: family.clone(),
+                        tokens: (self.measure)(answer),
+                        body: RecordBody::Chat {
                             messages: vec![
-                                message("user", ASK, false),
-                                message("assistant", &stretch, true),
+                                message("user", &request, false),
+                                message("assistant", answer, true),
                             ],
                         },
-                        Provenance {
-                            sources: vec![part.content.clone()],
-                            ..Provenance::default()
-                        },
-                    );
+                        system: self.system_for(answer),
+                        source: part.content.clone(),
+                    });
+                }
+            }
+        }
+        let kept = self.within_family_bound(&candidates);
+        for (candidate, keep) in candidates.into_iter().zip(kept) {
+            if !keep {
+                projection.exclude(Exclusion::OverLimit);
+                continue;
+            }
+            projection.push(
+                candidate.body,
+                Provenance {
+                    sources: vec![candidate.source],
+                    ..Provenance::default()
+                },
+            );
+            // `push` opens every conversation with the default system turn;
+            // a known writer's records open with the writer's own.
+            if let (Some(system), Some(record)) = (candidate.system, projection.records.last_mut())
+            {
+                if let RecordBody::Chat { messages } = &mut record.body {
+                    messages[0].content = system;
                 }
             }
         }
         Ok(projection)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A long text is cut into stretches of whole paragraphs within the
-    /// limit, a paragraph longer than the limit at a word boundary, and
-    /// nothing is lost or reordered.
-    #[test]
-    fn a_long_text_is_cut_into_stretches_of_whole_paragraphs() {
-        let paragraph = |n: usize| format!("Paragraph {n} says {}.", "something ".repeat(8));
-        let body: Vec<String> = (0..10).map(paragraph).collect();
-        let body = body.join("\n\n");
-        let chars = |text: &str| text.chars().count();
-        // Paragraphs at blank lines, as a sectioner divides prose.
-        let paragraphs = |text: &str, _: &str| -> Vec<Range<usize>> {
-            let mut at = 0;
-            text.split("\n\n")
-                .map(|p| {
-                    let range = at..at + p.len();
-                    at += p.len() + 2;
-                    range
-                })
-                .collect()
-        };
-        let cut = stretches(&body, "text/plain", 300, &chars, &paragraphs);
-        assert!(cut.len() > 1);
-        for stretch in &cut {
-            assert!(stretch.chars().count() <= 300, "{}", stretch.len());
-            assert!(
-                stretch.starts_with("Paragraph"),
-                "a stretch starts on a paragraph"
-            );
-        }
-        assert_eq!(cut.join("\n\n"), body, "nothing is lost or reordered");
-        let long = "word ".repeat(100);
-        let pieces = cut_to_fit(long.trim(), 120, &chars);
-        assert!(pieces.len() >= 4 && pieces.iter().all(|p| p.len() <= 120 && !p.ends_with(' ')));
-        assert_eq!(pieces.join(" "), long.trim());
-        // Measured in words, a stretch holds whole paragraphs of few words.
-        let words = |text: &str| text.split_whitespace().count();
-        let by_words = stretches(&body, "text/plain", 25, &words, &paragraphs);
-        // Without a sectioner a text is one section, cut at whitespace alone.
-        let one = stretches(&body, "text/plain", 300, &chars, &whole_text);
-        assert!(one.iter().all(|s| s.chars().count() <= 300));
-        assert_eq!(
-            one.join(" ").split_whitespace().count(),
-            body.split_whitespace().count()
-        );
-        assert!(by_words.iter().all(|s| words(s) <= 25), "{by_words:?}");
-        assert_eq!(by_words.join("\n\n"), body);
-        // Without a tokenizer, characters count conservatively as tokens.
-        assert_eq!(chars_as_tokens("abcdefg"), 3);
     }
 }

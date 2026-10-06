@@ -142,6 +142,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- The voice view is the whole corpus of the writer's text as chunks of 250 to
+  650 words: whole sentences, closed at paragraph ends, never a heading alone,
+  each asked for by a request built by code from its recipient, year and
+  opening, half of them under the identity line instead of the persona prompt,
+  one print of each text, no family over a tenth of the tokens. `--voice` is
+  now a share of the training tokens (default 0.7) and `dataset build` takes
+  `--writer`, `--token-limit` and `--max-family-share`.
 - A handful of answers of another strength, kind or concept no longer switches
   on a quota cap for the rest of a pool: a group under one candidate in twenty
   counts for none of a dimension's groups, so two formal answers beside 163

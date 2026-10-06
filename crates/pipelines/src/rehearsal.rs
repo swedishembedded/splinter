@@ -49,7 +49,7 @@ use splinter_knowledge::tasks::{DEFAULT_REPAIRS, DEFAULT_REQUEST_DEADLINE};
 use splinter_model::local::GREEDY_SAMPLING;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
-use crate::datasets::{build, BuildRequest, Built, ViewName};
+use crate::datasets::{build, BuildRequest, Built, ViewName, VoiceBuild};
 use crate::release::{anchor, arm};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::tasks::remaining;
@@ -284,6 +284,7 @@ pub fn rehearse(ctx: &Context, request: &RehearseRequest) -> Result<Rehearsed, O
             system_prompt: None,
             export_only: false,
             limit: None,
+            voice: VoiceBuild::default(),
         },
     )?;
     Ok(Rehearsed {

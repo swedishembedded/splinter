@@ -113,6 +113,16 @@ pub(crate) fn groups_of(
         .collect())
 }
 
+/// The family of each text part of `sources`: prints of one text share a
+/// family, named by the least content digest among them (the print the voice
+/// view keeps).
+pub(crate) fn part_families(
+    ctx: &Context,
+    sources: &[SourceId],
+) -> Result<BTreeMap<Digest, String>, OrchestratorError> {
+    groups_of(ctx, sources, BTreeSet::new())
+}
+
 /// The cluster of each of `tasks`: the group of the source text it is
 /// grounded in, the least of them for a task grounded in several; `None`
 /// for a task grounded in none. Tasks of one cluster draw on text that is the

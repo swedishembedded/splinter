@@ -28,7 +28,7 @@ pub use retrieval::Retrieval;
 pub use sft_final::SftFinal;
 pub use sft_step::SftStep;
 pub use verifier::VerifierView;
-pub use voice::{chars_as_tokens, Sectioner, Voice};
+pub use voice::{chars_as_tokens, Sectioner, Voice, DEFAULT_MAX_FAMILY_SHARE};
 
 use splinter_store::experiences::StoreError;
 

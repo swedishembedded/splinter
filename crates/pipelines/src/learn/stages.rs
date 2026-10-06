@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 
 use super::exam_stages::{exam_set_stage, exam_stage, reserve_stage};
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
-use super::{records_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
+use super::{records_at_share, tokens_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
@@ -40,7 +40,8 @@ use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{
-    build_with, examples_in, BuildRequest, Built, Passages, ViewName, DEFAULT_MIN_STRENGTH,
+    build_with, examples_in, supervised_tokens_in, BuildRequest, Built, Passages, ViewName,
+    VoiceBuild, DEFAULT_MIN_STRENGTH,
 };
 use crate::exam_set::ExamSet;
 use crate::plan::plan as make_plan;
@@ -626,6 +627,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         system_prompt: st.system_prompt(),
         export_only: false,
         limit: None,
+        voice: VoiceBuild::default(),
     };
     // Passages of the run's own sources, when a share of the records is to
     // carry them: the embedding model is loaded for it and the index kept.
@@ -662,17 +664,24 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     st.datasets = vec![built.dataset.to_string()];
     st.records = built.records;
     st.examples = examples_in(&built.path).map_err(io(&built.path))?;
-    // The writer's own text beside the dialogues, as many records as make
-    // it the share asked of the examples; the split holds it out with the
-    // families it prints.
-    let limit = records_at_share(st.examples, st.voice_share());
-    let voice = if limit > 0 {
+    // The writer's own text beside the dialogues: tokens enough to make it the
+    // share asked, spread over all the sources, written as the persona's.
+    let budget = tokens_at_share(
+        supervised_tokens_in(ctx, &built.path).map_err(io(&built.path))?,
+        st.voice_share(),
+    );
+    let voice = if budget > 0 {
         let voice = build_with(
             ctx,
             &BuildRequest {
                 view: ViewName::Voice,
                 min_strength: None,
-                limit: Some(limit),
+                system_prompt: None,
+                voice: VoiceBuild {
+                    writer: st.persona().map(str::to_string),
+                    token_budget: Some(budget),
+                    ..VoiceBuild::default()
+                },
                 ..request
             },
             None,

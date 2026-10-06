@@ -277,12 +277,12 @@ pub struct LearnArgs {
     /// the goal, if any).
     #[arg(long, value_name = "NAME")]
     pub persona: Option<String>,
-    /// The share of the training examples that is the writer's own text,
-    /// in [0, 1): records built by code from the sources, a stretch of the
+    /// The share of the training tokens that is the writer's own text,
+    /// in [0, 1): records built by code from the sources, a chunk of the
     /// writer's words word for word as the answer, trained beside the
     /// dialogues and held out with the families they print. 0 turns it off.
     #[arg(long, value_name = "SHARE", value_parser = voice_share, help = format!(
-        "The share of the training examples that is the writer's own text, in [0, 1): records \
+        "The share of the training tokens that is the writer's own text, in [0, 1): records \
          built by code from the sources, no model involved, trained beside the dialogues and held \
          out with the families they print; 0 turns it off [default for a run with a persona: \
          {DEFAULT_VOICE_SHARE}]"
@@ -670,6 +670,20 @@ pub enum DatasetCommand {
         /// projection (for voice, over the parts of the sources).
         #[arg(long, value_name = "N")]
         limit: Option<usize>,
+        /// For the voice view: who the writer is. Requests are written as
+        /// theirs and half the records open with their persona prompt, half
+        /// with the line that says who the model is; refused with
+        /// --system-prompt.
+        #[arg(long, value_name = "NAME")]
+        writer: Option<String>,
+        /// For the voice view: keep at most this many tokens of the
+        /// writer's text, evenly spread over all of it.
+        #[arg(long, value_name = "N")]
+        token_limit: Option<usize>,
+        /// For the voice view: the most of the tokens one family may
+        /// supply.
+        #[arg(long, value_name = "SHARE")]
+        max_family_share: Option<f64>,
     },
     /// Copy a dataset and its manifest into a directory.
     Export {

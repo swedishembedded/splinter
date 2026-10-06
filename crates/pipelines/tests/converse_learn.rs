@@ -393,15 +393,20 @@ fn a_persona_opens_every_training_conversation_and_the_manifest_records_it() {
     assert!(!text.contains(STUDENT_ROLE));
     // A run that learns to be a person trains on the writer's own text
     // beside the dialogues by default: records of the letters word for word
-    // under the same prompt, as many as make them half the examples, in a
-    // dataset of their own that the training takes with the dialogues.
+    // asked under the persona prompt or the line naming the writer, a share
+    // of the tokens, in a dataset of their own that the training takes with
+    // the dialogues.
     let voice = ran.report.voice.as_ref().expect("the writer's own text");
     assert!(voice.records >= 1, "{voice:?}");
     let voice_text = std::fs::read_to_string(&voice.path).unwrap();
     let mut answers = 0;
     for line in voice_text.lines() {
         let record: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert_eq!(record["messages"][0]["content"], prompt);
+        let system = record["messages"][0]["content"].as_str().unwrap();
+        assert!(
+            system == prompt || system == "You are Benjamin Franklin.",
+            "{system}"
+        );
         let answer = record["messages"][2]["content"].as_str().unwrap();
         assert!(
             LETTER.contains(answer) || THRIFT.contains(answer),

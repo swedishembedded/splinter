@@ -38,7 +38,7 @@ use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
-use splinter_pipelines::datasets::{build, BuildRequest, ViewName};
+use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned, STAGES};
 use splinter_pipelines::release::arm;
 use splinter_pipelines::solving::solve_set;
@@ -259,6 +259,7 @@ fn a_variant_never_enters_a_training_dataset() {
             system_prompt: None,
             export_only: false,
             limit: None,
+            voice: VoiceBuild::default(),
         },
     )
     .unwrap_err();
@@ -452,6 +453,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             system_prompt: None,
             export_only: false,
             limit: None,
+            voice: VoiceBuild::default(),
         },
     )
     .unwrap();

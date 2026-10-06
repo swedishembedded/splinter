@@ -25,6 +25,7 @@ splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
 splinter judge calibrate <LABELLED-FILE> --judge REF | measure <TASKSET-ID> --judge REF [--fit]
 splinter experiences list | show <ID> [--graph] | replay <ID>
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
+                       [--writer NAME] [--token-limit N] [--max-family-share SHARE]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
                        [--system-prompt TEXT] [--limit N]
 splinter dataset export <DATASET-ID> --out DIR
@@ -149,8 +150,8 @@ decides whether it is released (`--no-release` stops at the candidate).
 that failed, and keeps every task. `--budget` bounds the run's wall-clock time: task generation stops at
 three tenths of it, the student's attempts at half and the teacher's answers at
 four fifths, and training and the exam then run to the end. When a share of the
-examples is the writer's own text (`--voice`), training has that much more to do
-and nothing model-made to wait for, so the tail grows by it - half the examples
+training tokens is the writer's own text (`--voice`), training has that much more to do
+and nothing model-made to wait for, so the tail grows by it - half the share
 doubles it, to two fifths - and the open-ended stages give up their share in
 proportion, never below a fifth of the budget between them. The tasks stage
 reports how many of the sources' text parts it generated from, how long it ran,
@@ -329,30 +330,36 @@ The `voice` view is the writer's own text as training data, with no model in
 the loop. A conversation costs a teacher's time for every answer, and a run over
 a large body of writing reaches a few per cent of it before its budget is spent;
 the writer's text costs nothing to turn into records and has the diction and
-reasoning no paraphrase has. Every text part of the sources is cut into
-stretches of whole paragraphs of at most 768 tokens - counted by the policy's
-own tokenizer, the unit its training row is sized in, so a record never
-outgrows the row the conversations need - and each
-becomes one record in the shape the policy is trained and asked in: the persona
-system prompt, one user turn asking for a piece of the writer's writing, and the
-stretch, whole, as the supervised answer. Opening the user turn with the part's
-heading or with the stretch's own first sentence was measured to change nothing
-in what the policy learned for the dialogues it is asked as, and left that much
-of the writer's text unsupervised, so every word is the answer. A record names
-the part it prints and no experience, so a dataset shows what is the writer's
-and what a model wrote. A run with a persona trains on the writer's text by default:
-`--voice SHARE` is the share of the training examples it makes (half, so as
-many records as there are dialogue answers; `--voice 0` turns it off), the
-records chosen as an even spread over the parts in a stable order that does not
-follow their names (`dataset build --view voice --limit N` does the same by
-hand), and the training is sized by all its examples. Such a record is held out
-with the family of the letter it prints: the families held out are decided by
-the records that can be examined - those projected from a task or an
+reasoning no paraphrase has. Every text part of the sources is cut into chunks
+of 250 to 650 words (and at most 880 tokens, counted by the policy's own
+tokenizer, so a record never outgrows the 1024-token row the conversations
+need): whole sentences, closed where a paragraph ends, an address line or
+heading always with the text it heads, and no chunk of a heading alone or of a
+few words. Each chunk becomes one record whose supervised answer is the chunk
+word for word and whose request is written by code from what the text says of
+itself: `Write, as NAME, to RECIPIENT in YEAR about: <its opening>`. Half of
+the records open with the persona system prompt and half with the line that
+says only who the model is, so the voice is carried by the adapter and not
+only by the prompt. Two prints of one text are one family and only one is
+projected, and no family supplies more than a tenth of the tokens
+(`--max-family-share` on `dataset build`; `--writer NAME` names the writer and
+`--token-limit N` keeps at most N tokens, spread evenly over all the chunks).
+A record names the part it prints and no experience, so a dataset shows what is
+the writer's and what a model wrote. A run with a persona trains on the
+writer's text by default: `--voice SHARE` is the share of the training tokens it
+makes (seven tenths; `--voice 0` turns it off), the chunks chosen as an even
+spread over the whole of the sources in a stable order that does not follow
+their names, and the training is sized by all its examples. Such a record is
+held out with the family of the letter it prints: the families held out are
+decided by the records that can be examined - those projected from a task or an
 experience - and a record of the writer's text goes where its family goes,
 however many there are and wherever they sit, so the exam never asks about a
 letter the policy was trained on under another print's name. The held-out score
 is measured on the examinable held-out records, what the policy is asked as; the
-writer's text held out beside them is trained on by nobody and scored by nobody.
+writer's text of the held-out families is written to a file of its own
+(`held_out_text.jsonl`), trained on by nobody, and the writer's text of the
+monitoring families is monitored with the dialogues, where most of a run's
+tokens are.
 
 A run with a persona also rehearses the base (the `rehearse` stage). A
 fine-tune on one person's answers erodes the base's general behaviour before
