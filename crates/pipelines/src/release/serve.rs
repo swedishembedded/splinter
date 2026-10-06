@@ -273,7 +273,8 @@ fn serve_and_ask(
         },
     )?;
     measured.sampled = sample.tasks.len();
-    if let Some(why) = ungraded(&answers, in_process) {
+    let ids: Vec<String> = sample.tasks.iter().map(|t| t.task.id.to_string()).collect();
+    if let Some(why) = ungraded(&ids, &answers, in_process) {
         return Err(Failure::Unmeasured(why));
     }
     let agree = agreements(ctx, &answers, in_process).map_err(Failure::Unmeasured)?;
@@ -310,20 +311,30 @@ fn ask_then_judge<A, P>(
 }
 
 /// Why the served answers cannot be compared, when a task the in-process
-/// answer was graded on has no verdict on the served one: grading failed
-/// there, and calling that a disagreement would blame the served model for
-/// it.
-fn ungraded(served: &[Probe], in_process: &[Probe]) -> Option<String> {
-    let count = served
+/// answer was graded on has no verdict on the served one: the server gave
+/// no answer or the grading failed there, and calling either a disagreement
+/// would blame the served model for it. Each such task is named with which.
+fn ungraded(tasks: &[String], served: &[Probe], in_process: &[Probe]) -> Option<String> {
+    let named: Vec<String> = tasks
         .iter()
-        .zip(in_process)
-        .filter(|(s, l)| s.verdict.is_none() && l.verdict.is_some())
-        .count();
-    (count > 0).then(|| {
+        .zip(served.iter().zip(in_process))
+        .filter(|(_, (s, l))| s.verdict.is_none() && l.verdict.is_some())
+        .map(|(task, (s, _))| {
+            let what = if s.answer.is_some() {
+                "answered, verdict undecided"
+            } else {
+                "no answer"
+            };
+            format!("{task} ({what})")
+        })
+        .collect();
+    (!named.is_empty()).then(|| {
         format!(
-            "the served answers to {count} of {} task(s) were not graded, though the in-process \
-             ones were",
-            served.len()
+            "the served answers to {} of {} task(s) were not graded, though the in-process \
+             ones were: {}",
+            named.len(),
+            served.len(),
+            named.join(", ")
         )
     })
 }
@@ -592,9 +603,15 @@ mod tests {
             verdict,
         };
         let local = [probe(Some(true)), probe(None), probe(Some(false))];
-        assert_eq!(ungraded(&local, &local), None);
-        let served = [probe(None), probe(None), probe(Some(false))];
-        let why = ungraded(&served, &local).unwrap();
-        assert!(why.contains("1 of 3"), "{why}");
+        let ids = ["t1".to_string(), "t2".to_string(), "t3".to_string()];
+        assert_eq!(ungraded(&ids, &local, &local), None);
+        let mut served = [probe(None), probe(None), probe(Some(false))];
+        served[1].answer = None;
+        let why = ungraded(&ids, &served, &local).unwrap();
+        assert!(
+            why.contains("1 of 3") && why.contains("t1 (answered, verdict undecided)"),
+            "{why}"
+        );
+        assert!(!why.contains("t2"), "{why}");
     }
 }
