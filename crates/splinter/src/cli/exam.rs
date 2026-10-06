@@ -3,6 +3,8 @@
 
 //! The grammar of `exam` and `exam-set`.
 
+use std::path::PathBuf;
+
 use clap::{Args, Subcommand};
 use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
@@ -58,6 +60,10 @@ pub enum ExamSetCommand {
     /// Capture the sources, reserve families of them, write the exam from
     /// that text alone and freeze it.
     Create(ExamSetArgs),
+    /// Simulate the planned paired test to size an exam before it is paid
+    /// for: its power at an assumed effect, and how often it calls a
+    /// difference that is not there.
+    Power(PowerArgs),
     /// Show a frozen exam.
     Show {
         /// Its id, or its manifest file.
@@ -106,4 +112,43 @@ pub struct ExamSetArgs {
     /// for measuring it.
     #[arg(long, value_name = "CANDIDATE")]
     pub not_trained_by: Vec<String>,
+}
+
+/// `exam-set power`.
+#[derive(Debug, Args)]
+pub struct PowerArgs {
+    /// Families of the exam.
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_EXAM_FAMILIES)]
+    pub families: usize,
+    /// Tasks of each.
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_TASKS_PER_FAMILY)]
+    pub tasks_per_family: usize,
+    /// The lead of the first arm in the share of tasks right (0.10 is ten
+    /// points).
+    #[arg(long, value_name = "SHARE", default_value_t = 0.10)]
+    pub effect: f64,
+    /// The share of tasks only one of the arms gets right.
+    #[arg(
+        long,
+        value_name = "SHARE",
+        default_value_t = 0.30,
+        conflicts_with = "from_report"
+    )]
+    pub discordance: f64,
+    /// The intraclass correlation of the per-task difference in a family.
+    #[arg(
+        long,
+        value_name = "RHO",
+        default_value_t = 0.10,
+        conflicts_with = "from_report"
+    )]
+    pub icc: f64,
+    /// Take the discordance and the intraclass correlation of the primary
+    /// comparison from the report of a pilot (`exam --json` output), not from
+    /// an assumption.
+    #[arg(long, value_name = "FILE")]
+    pub from_report: Option<PathBuf>,
+    /// Simulated exams.
+    #[arg(long, value_name = "N", default_value_t = 400)]
+    pub replicates: usize,
 }

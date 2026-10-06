@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a like-length test, invented specifics, answer lengths, a power report with the exam's own discordance and intraclass correlation, the primary
   comparison fixed with the exam and the secondary ones Holm-corrected, a judge-free voice
   score, and the judge's false passes on harder wrong answers.
+- `splinter exam-set power` simulates the exam's planned paired test to size it, and
+  `exam --pilot-families N` puts a candidate to some of the families to estimate the exam's
+  discordance and clustering first.
 - `reserve`: the exam's families are reserved before any task is generated or dataset
   built. A family is the group of text parts that print the same text (named as a split
   names it); a stable hash of the name picks them, and the text of each, every edition of

@@ -218,3 +218,24 @@ pub fn powered_line(summary: &serde_json::Value) -> String {
         arms.join(", ")
     )
 }
+
+impl Report for crate::exam_session::PlannedExam {
+    fn human(&self) -> String {
+        let (p, r) = (&self.plan, &self.planned);
+        format!(
+            "{} families of {} tasks ({} tasks), the first arm {:.0} points ahead, {:.0}% of \
+             tasks discordant, intraclass correlation {:.2} (design effect {:.2}): the planned test \
+             finds it in {:.0}% of {} simulated exams; with no difference it finds one in {:.1}%\n",
+            p.families,
+            p.tasks_per_family,
+            r.tasks,
+            p.effect * 100.0,
+            p.discordance * 100.0,
+            p.icc,
+            r.design_effect,
+            r.power * 100.0,
+            p.replicates,
+            r.false_positive_rate * 100.0
+        )
+    }
+}

@@ -768,7 +768,7 @@ impl LineageArgs {
 mod exam;
 mod state;
 mod train;
-pub use exam::{ExamArgs, ExamSetArgs, ExamSetCommand};
+pub use exam::{ExamArgs, ExamSetArgs, ExamSetCommand, PowerArgs};
 pub use state::{RunsCommand, StateCommand};
 pub use train::{RehearseArgs, TrainArgs};
 

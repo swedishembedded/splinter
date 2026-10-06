@@ -413,10 +413,18 @@ fn sd(values: &[f64]) -> f64 {
 /// its tasks weigh. The generator is seeded, so the same records give the
 /// same interval.
 fn clustered_interval(by_family: &BTreeMap<&str, Vec<f64>>) -> Option<Interval> {
-    let families: Vec<(f64, usize)> = by_family
-        .values()
-        .map(|f| (f.iter().sum::<f64>(), f.len()))
-        .collect();
+    interval_of(
+        by_family
+            .values()
+            .map(|f| (f.iter().sum::<f64>(), f.len()))
+            .collect(),
+        RESAMPLES,
+    )
+}
+
+/// [`clustered_interval`] over families given as `(sum of differences, tasks)`,
+/// with `resamples` draws.
+pub(crate) fn interval_of(families: Vec<(f64, usize)>, resamples: usize) -> Option<Interval> {
     if families.len() < 2 {
         return None;
     }
@@ -432,7 +440,7 @@ fn clustered_interval(by_family: &BTreeMap<&str, Vec<f64>>) -> Option<Interval> 
         z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
         z ^ (z >> 31)
     };
-    let mut means: Vec<f64> = (0..RESAMPLES)
+    let mut means: Vec<f64> = (0..resamples)
         .map(|_| {
             let (sum, count) = (0..families.len()).fold((0.0, 0usize), |(s, n), _| {
                 let (fs, fnn) =

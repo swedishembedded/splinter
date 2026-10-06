@@ -36,7 +36,7 @@ splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--judge REF] [--prompt GOAL]
-splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | show EXAM
+splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | power [--families N] [--tasks-per-family N] [--effect SHARE] [--discordance SHARE] [--icc RHO] [--from-report FILE] | show EXAM
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -265,6 +265,12 @@ families could have shown at 80% power. The voice of each arm is also scored wit
 no judge, by the likelihood it gives the writer's own text of the reserved
 families (brain's held-out scoring path). The `exam` stage of a `learn` that
 reserved its exam runs this exam.
+
+`splinter exam-set power` sizes an exam before it is paid for: it simulates the primary
+comparison's test (the family-clustered interval of the difference above zero) under an assumed
+effect, discordance and intraclass correlation, or under the discordance and clustering the
+report of a pilot (`exam --pilot-families N`) estimated, and says how often the test finds the
+effect and how often it finds one that is not there.
 
 The `converse` kind teaches how the writer talks and reasons. Its task is the
 opening message of someone speaking to the writer (admitted only in the first or

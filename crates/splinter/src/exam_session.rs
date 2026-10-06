@@ -5,13 +5,14 @@
 
 use serde_json::json;
 use splinter_sdk::exam_set::{build, ExamBuilt, ExamSet, NewExam};
+use splinter_sdk::powered::plan::{simulate, Plan, Planned};
 use splinter_sdk::powered::{run, PoweredExam, PoweredRequest, DEFAULT_RESAMPLES};
 use splinter_sdk::runs::{record, Recorded};
 use splinter_sdk::sources::SourceTarget;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{ExamArgs, ExamSetArgs};
+use crate::cli::{ExamArgs, ExamSetArgs, PowerArgs};
 
 /// Captures the sources, reserves the exam's families and freezes the exam.
 pub fn create(ctx: &Context, args: &ExamSetArgs) -> Result<Recorded<ExamBuilt>, Error> {
@@ -88,5 +89,58 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
             Err(e) if e.is_refusal() => Ok(PoweredExam::NotRun(e.to_string())),
             Err(e) => Err(e),
         }
+    })
+}
+
+/// What `exam-set power` found: the plan and what it came to.
+#[derive(serde::Serialize)]
+pub struct PlannedExam {
+    /// The assumptions, the discordance and clustering taken from a pilot's
+    /// report when one was named.
+    pub plan: Plan,
+    /// What simulating the planned test gave.
+    pub planned: Planned,
+}
+
+/// Simulates the planned paired test.
+pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
+    let (discordance, icc) = match &args.from_report {
+        None => (args.discordance, args.icc),
+        Some(file) => {
+            let text = std::fs::read_to_string(file)
+                .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
+            let report: serde_json::Value = serde_json::from_str(&text)
+                .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
+            // The report is the run's record or the bare report.
+            let powered = report["outputs"]["ran"]
+                .as_object()
+                .map(|_| &report["outputs"]["ran"])
+                .or_else(|| report["ran"].as_object().map(|_| &report["ran"]))
+                .unwrap_or(&report);
+            let power = &powered["comparisons"][0]["power"];
+            let read = |name: &str| {
+                power[name].as_f64().ok_or_else(|| {
+                    Error::Refused(format!(
+                        "{} holds no primary comparison's {name}",
+                        file.display()
+                    ))
+                })
+            };
+            (read("discordance")?, read("icc")?)
+        }
+    };
+    let plan = Plan {
+        families: args.families,
+        tasks_per_family: args.tasks_per_family,
+        effect: args.effect,
+        discordance,
+        icc,
+        replicates: args.replicates,
+        resamples: 500,
+        seed: 0,
+    };
+    Ok(PlannedExam {
+        plan,
+        planned: simulate(&plan),
     })
 }

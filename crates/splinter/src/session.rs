@@ -575,6 +575,9 @@ impl Session {
             Command::ExamSet(ExamSetCommand::Create(args)) => {
                 emit(json, &exam_session::create(ctx, &args)?);
             }
+            Command::ExamSet(ExamSetCommand::Power(args)) => {
+                emit(json, &exam_session::power(&args)?);
+            }
             Command::ExamSet(ExamSetCommand::Show { id }) => {
                 emit(json, &ExamSet::load(ctx, &id)?);
             }
