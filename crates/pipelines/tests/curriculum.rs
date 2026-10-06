@@ -745,3 +745,38 @@ fn quotas_cap_each_share_after_removing_near_duplicates_deterministically() {
         "a pool of one kind is never capped by kind"
     );
 }
+
+/// A pool that holds a handful of answers of another strength is a pool of
+/// one strength for the quota: the two formal answers of a recall task or two
+/// must not switch on a cap that discards a quarter of the judged ones.
+#[test]
+fn a_stray_group_does_not_switch_on_a_cap_for_the_rest_of_the_pool() {
+    use Strength::{Formal, Judged};
+    let kinds = ["advise", "explain", "compare", "reflect"];
+    let mut pool: Vec<Candidate> = (0..163u8)
+        .map(|n| {
+            let words: String = (0..8).map(|w| format!("w{n}x{w} ")).collect();
+            candidate_of(
+                n,
+                &format!("Say what the writer held, {words}"),
+                &format!("concept-{n}"),
+                kinds[n as usize % kinds.len()],
+                Judged,
+            )
+        })
+        .collect();
+    pool.extend((163..165u8).map(|n| {
+        let words: String = (0..8).map(|w| format!("w{n}x{w} ")).collect();
+        candidate_of(
+            n,
+            &format!("Recall the date, {words}"),
+            &format!("concept-{n}"),
+            "recall",
+            Formal,
+        )
+    }));
+    let kept = select(pool, &Quotas::default());
+    assert_eq!(kept.duplicates, 0);
+    assert_eq!(kept.capped.get("strength"), None, "{:#?}", kept.capped);
+    assert_eq!(kept.selected.len(), 165, "{:#?}", kept.capped);
+}

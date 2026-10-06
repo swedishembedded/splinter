@@ -142,6 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- A handful of answers of another strength, kind or concept no longer switches
+  on a quota cap for the rest of a pool: a group under one candidate in twenty
+  counts for none of a dimension's groups, so two formal answers beside 163
+  judged ones no longer discard 39 of them.
 - The training recipe: `train` and `learn` share one learning rate (2e-4;
   `train` used brain's 3e-4), the LoRA alpha is twice the rank instead of 16
   at every rank, the weight decay on the adapter is 0 instead of 0.1, and

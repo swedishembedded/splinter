@@ -21,13 +21,16 @@
 //! 3. Of the `n` left, each group - a concept, a task kind, a verification
 //!    strength - may keep at most `ceil(max(share, 1 / groups) * n)`
 //!    candidates, where `share` is that dimension's quota and `groups` how
-//!    many distinct groups of it the `n` hold: a quota never demands more
-//!    diversity than the pool has, so a pool of one kind keeps it whole.
+//!    many distinct groups of it the `n` hold, a group holding under
+//!    [`STRAY_SHARE`] of them counting for none: a quota never demands more
+//!    diversity than the pool has, so a pool of one kind keeps it whole, and
+//!    a handful of answers of another kind is not diversity a cap on the
+//!    rest could lean on.
 //!    In the same order, a candidate is kept only when every group it
 //!    belongs to (each of its concepts, its kind, its strength) is still
 //!    under its cap.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 use splinter_core::annotation::Strength;
@@ -47,6 +50,12 @@ pub const DEFAULT_MAX_KIND_SHARE: f64 = 0.5;
 /// The largest share of a training set one verification strength may take
 /// by default.
 pub const DEFAULT_MAX_STRENGTH_SHARE: f64 = 0.75;
+
+/// The share of a pool a group must hold to count as one of its groups: a
+/// group under one candidate in twenty is a stray, and two of them must not
+/// turn a pool that is all of one kind into a pool a cap discards a quarter
+/// of.
+pub const STRAY_SHARE: f64 = 0.05;
 
 /// The quotas; each share in `(0, 1]`.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -129,13 +138,20 @@ struct Caps {
 
 impl Caps {
     fn new<'a>(groups: impl Iterator<Item = &'a String>, share: f64, pool: usize) -> Self {
-        let counted: BTreeSet<&String> = groups.collect();
-        let fair = 1.0 / counted.len().max(1) as f64;
+        let mut sizes: BTreeMap<&String, usize> = BTreeMap::new();
+        for group in groups {
+            *sizes.entry(group).or_default() += 1;
+        }
+        let material = sizes
+            .values()
+            .filter(|&&size| size as f64 >= STRAY_SHARE * pool as f64)
+            .count();
+        let fair = 1.0 / material.max(1) as f64;
         // Rounded up, less a hair so a product that is whole up to float
         // error (0.1 * 30) is not rounded past it.
         let limit = (share.max(fair) * pool as f64 - 1e-9).ceil().max(0.0) as usize;
         Self {
-            cap: counted.into_iter().map(|g| (g.clone(), limit)).collect(),
+            cap: sizes.into_keys().map(|g| (g.clone(), limit)).collect(),
             kept: BTreeMap::new(),
         }
     }
