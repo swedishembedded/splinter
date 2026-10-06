@@ -168,3 +168,29 @@ files are imported as the ontology's `nhanes_mortality` dataset (`--dataset`
 changes it; the outcomes asked for must be listed for it). With no `--policy`
 the terms are `unknown`: `train` refuses until someone who holds the data's
 terms declares them. No data is kept in this repository.
+
+## Fasting-trial transition analysis
+
+`analysis/fasting_transitions.py` asks, for each readable fasting trial taken
+alone (the protocols differ, so trials are never pooled), whether the assigned
+arm improves out-of-sample prediction of end-of-intervention outcomes beyond
+baseline covariates. It is an evaluation of learned signal, not evidence of a
+treatment policy and not a claim about lifespan.
+
+Inputs are a directory holding `bath_if_rct/`, `timet/` and `queen_mary_tre/`
+as downloaded (read-only). The Queen Mary file is a single-arm pilot, so it
+gets a table and an uncontrolled within-person summary but no arm model.
+Per outcome with enough complete cases it runs repeated cross-validation with
+ridge (alpha chosen on training rows only) for baseline-only, baseline plus
+arm, and arm x baseline-value models, and reports the paired gain of the arm
+with a participant bootstrap interval beside the unadjusted randomised effect
+and the smallest difference the trial could detect. Observed adherence
+measures are post-randomisation, kept under their own role, and enter only an
+exploratory model that is labelled non-causal. Missing values are dropped per
+outcome and counted, never imputed.
+
+```bash
+python -I samples/health/analysis/fasting_transitions.py --self-test
+python -I samples/health/analysis/fasting_transitions.py \
+  --data-dir "$HEALTH_DATA" --out-dir "$OUT_DIR"   # tables, results.json, report.md
+```
