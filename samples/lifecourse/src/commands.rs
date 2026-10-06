@@ -17,7 +17,6 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use splinter_sdk::data::frozen::Ledger;
 use splinter_sdk::data::partition::{partition, units_from_json_lines, Partition, PartitionSpec};
-use splinter_sdk::model::timeline::survival::compare::corrected_resampled_t;
 use splinter_sdk::model::timeline::{read_jsonl, Subject, TimelineModel};
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::terms::{Terms, Use};
@@ -629,95 +628,6 @@ pub fn cv_runs(data: &Path, arm: Arm, seed: u64) -> Result<BTreeMap<(usize, usiz
         }
     }
     Ok(out)
-}
-
-/// A metric two arms are compared on; its name says which way is better.
-pub struct Compared {
-    /// Name, with the better direction.
-    pub name: &'static str,
-    /// Reads it from a run's metrics.
-    pub get: fn(&Metrics) -> Option<f64>,
-}
-
-/// The metrics compared.
-pub fn compared_metrics() -> Vec<Compared> {
-    vec![
-        Compared {
-            name: "ibs_0_15 (lower better)",
-            get: |m| m.ibs_0_15.as_ref().map(|x| x.value),
-        },
-        Compared {
-            name: "brier_10 (lower better)",
-            get: |m| m.brier.get(&10).map(|x| x.value),
-        },
-        Compared {
-            name: "uno_c_5 (higher better)",
-            get: |m| m.uno_c.get(&5).map(|x| x.value),
-        },
-        Compared {
-            name: "uno_c_10 (higher better)",
-            get: |m| m.uno_c.get(&10).map(|x| x.value),
-        },
-        Compared {
-            name: "calibration_slope_10",
-            get: |m| m.calibration_10.as_ref().map(|c| c.slope),
-        },
-    ]
-}
-
-/// Two arms on the folds both ran on.
-pub fn compare(data: &Path, a: Arm, b: Arm) -> Result<()> {
-    let (ra, rb) = (
-        cv_runs(data, a, PREREGISTERED_SEED)?,
-        cv_runs(data, b, PREREGISTERED_SEED)?,
-    );
-    let folds: Vec<&(usize, usize)> = ra.keys().filter(|k| rb.contains_key(k)).collect();
-    if folds.len() < 2 {
-        bail!(
-            "{} folds ran for both arms; at least two are needed",
-            folds.len()
-        );
-    }
-    // Each fold tests on about 1/(K-1) of what it trains on: K from the
-    // partition, never from which folds happen to have run.
-    let k = frozen(data)?.partition.spec.folds as usize;
-    let test_over_train = 1.0 / (k as f64 - 1.0);
-    println!(
-        "{} vs {} on {} folds (test/train {:.3})",
-        a.name(),
-        b.name(),
-        folds.len(),
-        test_over_train
-    );
-    println!(
-        "{:<28} {:>10} {:>10} {:>10} {:>22} {:>8}",
-        "metric",
-        a.name(),
-        b.name(),
-        "diff",
-        "95% CI (corrected)",
-        "p"
-    );
-    for Compared { name, get } in compared_metrics() {
-        let pairs: Vec<(f64, f64)> = folds
-            .iter()
-            .filter_map(|f| Some((get(&ra[f].metrics)?, get(&rb[f].metrics)?)))
-            .collect();
-        let diffs: Vec<f64> = pairs.iter().map(|(x, y)| x - y).collect();
-        let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
-        let (ma, mb) = (
-            mean(&pairs.iter().map(|p| p.0).collect::<Vec<_>>()),
-            mean(&pairs.iter().map(|p| p.1).collect::<Vec<_>>()),
-        );
-        match corrected_resampled_t(&diffs, test_over_train) {
-            Some(t) => println!(
-                "{name:<28} {ma:>10.5} {mb:>10.5} {:>+10.5} [{:>+9.5}, {:>+9.5}] {:>8.4}",
-                t.mean, t.ci95.0, t.ci95.1, t.p_two_sided
-            ),
-            None => println!("{name:<28} {ma:>10.5} {mb:>10.5} (no variance across folds)"),
-        }
-    }
-    Ok(())
 }
 
 /// The design records by subject id.

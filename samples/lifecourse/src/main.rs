@@ -19,7 +19,8 @@
 //! freeze   partition once, and pin the data, the partition and the criteria
 //! cv       train and score one arm on every cross-validation fold
 //! final    train one arm on everything but the locked test, and score it there once
-//! compare  two arms on the same folds: the corrected resampled t-test per metric
+//! compare  two arms (or an external baseline) on the same folds: the corrected resampled t-test per metric
+//! external score a baseline's out-of-fold prediction files with the arms' metrics (secondary)
 //! report   the pre-registered criteria against the locked-test results
 //! amend    pin an amendment to the criteria beside them (never an edit)
 //! ensemble the locked test scored by several seeds' models together (secondary)
@@ -29,10 +30,12 @@
 
 mod build;
 mod commands;
+mod compare;
 mod concepts;
 mod diet;
 mod ensemble;
 mod experiment;
+mod external;
 mod intake;
 mod intervals;
 mod metrics;
@@ -45,6 +48,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+use crate::compare::Comparand;
 use crate::experiment::Arm;
 
 #[derive(Parser)]
@@ -112,17 +116,28 @@ enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Compare two arms on the folds both ran on.
+    /// Compare two arms, or an arm and a scored baseline, on the folds both ran on.
     Compare {
         /// The build's output directory.
         #[arg(long)]
         data: PathBuf,
-        /// The candidate.
-        #[arg(long, value_enum)]
-        a: Arm,
-        /// The reference.
-        #[arg(long, value_enum)]
-        b: Arm,
+        /// The candidate: an arm, or `external:<baseline>`.
+        #[arg(long)]
+        a: Comparand,
+        /// The reference: an arm, or `external:<baseline>`.
+        #[arg(long)]
+        b: Comparand,
+    },
+    /// Secondary: score a baseline's out-of-fold prediction files
+    /// (`baselines/<name>/r<repeat>-k<fold>.jsonl` in the data directory) with
+    /// the metrics the arms are scored with, on the cross-validation folds.
+    External {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// The baseline's name: its directory under `baselines/`.
+        #[arg(long)]
+        baseline: String,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
@@ -213,7 +228,8 @@ fn main() -> Result<()> {
             seed,
             reason,
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
-        Command::Compare { data, a, b } => commands::compare(&data, a, b),
+        Command::Compare { data, a, b } => compare::compare(&data, &a, &b),
+        Command::External { data, baseline } => external::score(&data, &baseline),
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),

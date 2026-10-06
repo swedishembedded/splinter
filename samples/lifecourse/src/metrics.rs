@@ -28,6 +28,27 @@ use splinter_sdk::model::timeline::{observed, Prediction, Subject};
 
 use crate::build::CODES;
 
+/// What the metrics ask of a model's prediction for one subject: the
+/// all-cause survival and the cumulative incidence of one cause, at any time
+/// since the examination. Brain's [`Prediction`] answers it, and so does a
+/// prediction file written by another program ([`crate::external`]).
+pub trait Outlook {
+    /// Probability of no death by `t` years.
+    fn survival(&self, t: f64) -> f64;
+    /// Probability of death from `code` by `t` years; `None` when the model
+    /// gives no cause-specific incidence.
+    fn cause_cif(&self, code: &str, t: f64) -> Option<f64>;
+}
+
+impl Outlook for Prediction {
+    fn survival(&self, t: f64) -> f64 {
+        Prediction::survival(self, t)
+    }
+    fn cause_cif(&self, code: &str, t: f64) -> Option<f64> {
+        self.cif(code, t)
+    }
+}
+
 /// The horizon over which the primary metric integrates, and its grid.
 pub const PRIMARY_HORIZON: u32 = 15;
 
@@ -119,12 +140,12 @@ pub(crate) fn all_cause(obs: Vec<Obs>) -> Vec<Obs> {
         .collect()
 }
 
-pub(crate) fn subset<'a>(
+pub(crate) fn subset<'a, P>(
     subjects: &'a [Subject],
-    preds: &'a [Prediction],
+    preds: &'a [P],
     h: &Horizons,
     t: f64,
-) -> (Vec<Subject>, Vec<&'a Prediction>) {
+) -> (Vec<Subject>, Vec<&'a P>) {
     let idx: Vec<usize> = (0..subjects.len())
         .filter(|&i| h.supports(&subjects[i], t))
         .collect();
@@ -143,7 +164,11 @@ fn events_by(obs: &[Obs], cause: usize, t: f64) -> usize {
 /// Each subject's integrated all-cause Brier term over 1..=15 years (the
 /// trapezoid rule over yearly terms, divided by the window), for subjects
 /// whose cycle supports 15 years; `(subject_id, term)`.
-pub fn ibs_terms(subjects: &[Subject], preds: &[Prediction], h: &Horizons) -> Vec<(String, f64)> {
+pub fn ibs_terms<P: Outlook>(
+    subjects: &[Subject],
+    preds: &[P],
+    h: &Horizons,
+) -> Vec<(String, f64)> {
     let (subs, ps) = subset(subjects, preds, h, PRIMARY_HORIZON as f64);
     if subs.is_empty() {
         return vec![];
@@ -172,7 +197,7 @@ pub fn ibs_terms(subjects: &[Subject], preds: &[Prediction], h: &Horizons) -> Ve
 }
 
 /// The pre-registered metrics of `preds` on `subjects`.
-pub fn evaluate(subjects: &[Subject], preds: &[Prediction], h: &Horizons) -> Metrics {
+pub fn evaluate<P: Outlook>(subjects: &[Subject], preds: &[P], h: &Horizons) -> Metrics {
     let mut m = Metrics::default();
     let terms = ibs_terms(subjects, preds, h);
     if !terms.is_empty() {
@@ -236,10 +261,15 @@ pub fn evaluate(subjects: &[Subject], preds: &[Prediction], h: &Horizons) -> Met
                 let mut order: Vec<&str> = vec![code];
                 order.extend(CODES.iter().filter(|c| *c != code));
                 let cobs = observed(&subs, &order);
-                let cif: Vec<f64> = ps
+                // A model that gives no cause-specific incidence has no
+                // cause-specific metrics, rather than NaN ones.
+                let Some(cif) = ps
                     .iter()
-                    .map(|p| p.cif(code, 10.0).unwrap_or(f64::NAN))
-                    .collect();
+                    .map(|p| p.cause_cif(code, 10.0))
+                    .collect::<Option<Vec<f64>>>()
+                else {
+                    continue;
+                };
                 let events = events_by(&cobs, 0, 10.0);
                 let gb = brier(&cif, &cobs, 0, 10.0, &g);
                 let gc = uno(&cif, &cobs, 0, 10.0, &g);

@@ -25,9 +25,8 @@ use splinter_sdk::model::timeline::survival::Obs;
 use splinter_sdk::model::timeline::{observed, Subject, Value};
 
 use crate::build::CODES;
-use crate::commands::{
-    compared_metrics, cv_runs, designs, frozen, Compared, LockedDetail, Run, PREREGISTERED_SEED,
-};
+use crate::commands::{cv_runs, designs, frozen, LockedDetail, Run, PREREGISTERED_SEED};
+use crate::compare::{compared_metrics, Compared};
 use crate::experiment::Arm;
 
 /// One arm's runs by `(repeat, fold)`.
@@ -461,6 +460,35 @@ pub fn report(data: &Path) -> Result<()> {
             })
             .collect();
         writeln!(out, "| {name} | {} |", cells.join(" | "))?;
+    }
+
+    // Baselines made elsewhere, scored on the same folds: secondary comparators.
+    let baselines = crate::external::names(data);
+    if !baselines.is_empty() {
+        writeln!(out, "\n## Secondary: external baselines (cross-validation only)\n\nPredictions made by another program (`baselines/`), scored by the same metrics on the same folds; mean over the folds scored (in brackets). Never scored on the locked test.\n\n| metric | {} |\n|---|{}",
+            baselines.join(" | "), "---|".repeat(baselines.len()))?;
+        let scored: Vec<_> = baselines
+            .iter()
+            .map(|b| crate::external::scores(data, b))
+            .collect::<Result<_>>()?;
+        for Compared { name, get } in compared_metrics() {
+            let cells: Vec<String> = scored
+                .iter()
+                .map(|folds| {
+                    let v: Vec<f64> = folds.values().filter_map(get).collect();
+                    if v.is_empty() {
+                        "-".into()
+                    } else {
+                        format!(
+                            "{:.5} ({})",
+                            v.iter().sum::<f64>() / v.len() as f64,
+                            v.len()
+                        )
+                    }
+                })
+                .collect();
+            writeln!(out, "| {name} | {} |", cells.join(" | "))?;
+        }
     }
 
     // Seed spread: the same folds retrained with other seeds.
