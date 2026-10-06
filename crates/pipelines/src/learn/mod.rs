@@ -168,6 +168,9 @@ pub struct LearnRequest {
     /// `[0, 1)`: `None` is [`DEFAULT_VOICE_SHARE`] for a run with a persona
     /// and none without, `Some(0.0)` none at all.
     pub voice: Option<f64>,
+    /// Ask the writer's passages by what the generator says they are about
+    /// ([`crate::describe`]) instead of by their heading and opening.
+    pub describe_voice: bool,
     /// The share of the training draws that are the base model's own
     /// answers to general tasks ([`crate::rehearsal`]), in `[0, 1)`: `None`
     /// is [`DEFAULT_REHEARSAL_SHARE`] for a run with a persona and none
@@ -346,6 +349,7 @@ pub fn learn(
         goal: request.goal.as_deref(),
         persona: request.persona.as_deref(),
         voice: request.voice,
+        describe_voice: request.describe_voice,
         rehearsal: request.rehearsal,
         passages: request.passages,
         deadline: budget.map(|b| Instant::now() + b),

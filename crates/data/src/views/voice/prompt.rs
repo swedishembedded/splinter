@@ -22,8 +22,15 @@ const SUBJECT_WORDS: usize = 14;
 /// The request chunk `body` is the answer to. `heading` is the text's own
 /// heading (an address line and a place and date, say) when it has one;
 /// `body` is the chunk's text after any heading; `author` names the writer.
+/// A `description` of what the chunk is about says its subject in place of
+/// its opening.
 #[must_use]
-pub fn request(author: Option<&str>, heading: Option<&str>, body: &str) -> String {
+pub fn request(
+    author: Option<&str>,
+    heading: Option<&str>,
+    body: &str,
+    description: Option<&str>,
+) -> String {
     let opening = author.map_or_else(|| "Write".to_string(), |name| format!("Write, as {name},"));
     let addressed = match (heading.and_then(recipient_in), heading.and_then(year_in)) {
         (Some(to), Some(year)) => format!(" to {to} in {year}"),
@@ -31,7 +38,7 @@ pub fn request(author: Option<&str>, heading: Option<&str>, body: &str) -> Strin
         (None, Some(year)) => format!(" in {year}"),
         (None, None) => String::new(),
     };
-    let subject = subject_of(body);
+    let subject = description.map_or_else(|| subject_of(body), |d| d.trim().to_string());
     if subject.is_empty() {
         format!("{}.", format!("{opening}{addressed}").trim_end_matches(','))
     } else {
@@ -104,14 +111,15 @@ mod tests {
         let heading = "To E. Randolph\n\nMonticello, 1794";
         let body = "I have to thank you for the transmission of the letters. More follows.";
         assert_eq!(
-            request(Some("The Writer"), Some(heading), body),
+            request(Some("The Writer"), Some(heading), body, None),
             "Write, as The Writer, to E. Randolph in 1794 about: I have to thank you for the transmission of the letters."
         );
         assert_eq!(
             request(
                 None,
                 Some("To Albert Gallatin, Esq\nMonticello, 1810"),
-                "Well met."
+                "Well met.",
+                None
             ),
             "Write to Albert Gallatin in 1810 about: Well met."
         );
@@ -124,10 +132,26 @@ mod tests {
             None,
             Some("To G. Hay\nWashington, 1807"),
             "DEAR SIR,--Your letter of the 9th is this moment received. More.",
+            None,
         );
         assert_eq!(
             asked,
             "Write to G. Hay in 1807 about: Your letter of the 9th is this moment received."
+        );
+    }
+
+    /// A description of the passage is its subject, whatever it opens on.
+    #[test]
+    fn a_description_is_the_subject_when_there_is_one() {
+        let asked = request(
+            Some("The Writer"),
+            Some("To E. Randolph\nMonticello, 1794"),
+            "I have to thank you for the letters. More follows.",
+            Some("  Thanks a friend for papers and gives a view on the militia. "),
+        );
+        assert_eq!(
+            asked,
+            "Write, as The Writer, to E. Randolph in 1794 about: Thanks a friend for papers and gives a view on the militia."
         );
     }
 
@@ -136,7 +160,7 @@ mod tests {
     #[test]
     fn a_passage_without_a_heading_is_asked_for_by_its_opening() {
         let body = "the length of the pendulum has been differently estimated by different persons knowing no reason to respect any of them more than Sir Isaac Newton";
-        let asked = request(Some("The Writer"), None, body);
+        let asked = request(Some("The Writer"), None, body, None);
         assert_eq!(
             asked,
             "Write, as The Writer, about: the length of the pendulum has been differently estimated by different persons knowing no ..."

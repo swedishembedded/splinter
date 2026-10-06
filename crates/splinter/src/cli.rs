@@ -288,6 +288,10 @@ pub struct LearnArgs {
          {DEFAULT_VOICE_SHARE}]"
     ))]
     pub voice: Option<f64>,
+    /// Ask the writer's passages by what the generator says they are about
+    /// instead of by their heading and opening.
+    #[arg(long)]
+    pub describe_voice: bool,
     /// The share of the training draws that are the base model's own
     /// answers to general tasks, in [0, 1): a rehearsal set built by the
     /// `rehearse` stage - sums and format requests built by code, and
@@ -684,6 +688,12 @@ pub enum DatasetCommand {
         /// supply.
         #[arg(long, value_name = "SHARE")]
         max_family_share: Option<f64>,
+        /// For the voice view: the model that writes, for each passage, a
+        /// description of what it is about, which its request carries in
+        /// place of the passage's opening (a passage with no admitted
+        /// description keeps the opening).
+        #[arg(long, value_parser = model_ref, value_name = "REF")]
+        describe_with: Option<ModelRef>,
     },
     /// Copy a dataset and its manifest into a directory.
     Export {

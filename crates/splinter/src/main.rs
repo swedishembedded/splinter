@@ -23,6 +23,7 @@ mod curriculum_output;
 mod exam_output;
 mod exam_session;
 mod learn_output;
+mod learn_request;
 mod lineage_output;
 mod output;
 mod release_output;

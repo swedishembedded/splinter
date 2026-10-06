@@ -99,8 +99,9 @@ pub use replay::replay_sample;
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use views::{
-    chars_as_tokens, Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Rehearsal,
-    Retrieval, Sectioner, SftFinal, SftStep, VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
+    chars_as_tokens, description, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
+    OutcomeView, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep, VerifierView,
+    Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
 
 /// The training objective a view's records serve.

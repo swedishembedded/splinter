@@ -165,6 +165,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         writer,
         token_limit,
         max_family_share,
+        describe_with,
     }) = command(&[
         "dataset",
         "build",
@@ -187,6 +188,8 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "9000",
         "--max-family-share",
         "0.2",
+        "--describe-with",
+        "local:Qwen/Qwen3-8B",
     ])
     else {
         panic!("dataset build");
@@ -195,6 +198,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         (writer.as_deref(), token_limit, max_family_share),
         (Some("The Writer"), Some(9000), Some(0.2))
     );
+    assert!(describe_with.is_some());
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(Strip::Mix { .. })));

@@ -25,14 +25,17 @@ mod common;
 use std::collections::BTreeSet;
 
 use common::{scratch_context, Scratch, Scripted};
+use splinter_agent::CancelToken;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::experience::{Environment, Experience, Provenance, Span, Task};
+use splinter_core::model_ref::ModelRef;
 use splinter_core::prompt::persona_prompt;
 use splinter_core::source::PartRef;
 use splinter_data::holdout::holdout_split_records;
 use splinter_data::Exclusion;
 use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
+use splinter_pipelines::describe::DescribeRequest;
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_store::experiences::ExperienceSet;
 
@@ -317,7 +320,7 @@ fn a_known_writer_is_asked_as_under_two_system_turns_within_a_token_budget() {
         voice: VoiceBuild {
             writer: writer.map(String::from),
             token_budget: budget,
-            max_family_share: None,
+            ..VoiceBuild::default()
         },
     };
     let refused = build(&ctx, &request(Some("The Writer"), Some("p".into()), None));
@@ -354,4 +357,93 @@ fn a_known_writer_is_asked_as_under_two_system_turns_within_a_token_budget() {
     )
     .unwrap();
     assert!(half.records < all.records && half.records > 0, "{half:?}");
+}
+
+/// A passage is asked for by what a model says it is about when its
+/// description stands, and by its heading and opening when it does not;
+/// what was written once is not written again.
+#[test]
+fn a_passage_is_asked_by_its_description_unless_the_description_copies_it() {
+    // The model describes every letter in other words but the one that
+    // opens `dxa`, which it can only repeat.
+    let described = Scripted::new(|prompt| {
+        let description = if prompt.contains("dxa dxb") {
+            let words: Vec<String> = (0..30).map(|i| format!("dx{}", letters(i))).collect();
+            words.join(" ")
+        } else {
+            "A friend is told of a matter of weight, in plain words, as the correspondent saw \
+             it that year and what ought to follow from it for everyone concerned."
+                .to_string()
+        };
+        format!(r#"{{"description": "{description}"}}"#)
+    });
+    let (scratch, ctx) = scratch_context("voice-described", described.clone(), false);
+    let source = materials(&scratch, &ctx, 12);
+    let set = ctx
+        .experiences()
+        .put_set(&ExperienceSet {
+            name: "one conversation".into(),
+            members: vec![conversation(&ctx, &source, "letter-0.txt", 0)],
+        })
+        .unwrap();
+    let request = |describe: bool| BuildRequest {
+        sets: vec![set.clone()],
+        view: ViewName::Voice,
+        strip: None,
+        min_strength: None,
+        system_prompt: None,
+        export_only: false,
+        limit: None,
+        voice: VoiceBuild {
+            describe: describe.then(|| DescribeRequest {
+                generator: ModelRef::policy_default(),
+                deadline: None,
+                cancel: CancelToken::new(),
+            }),
+            ..VoiceBuild::default()
+        },
+    };
+    let asks = |built: &splinter_pipelines::datasets::Built| -> Vec<String> {
+        std::fs::read_to_string(&built.path)
+            .unwrap()
+            .lines()
+            .map(|l| {
+                let record: serde_json::Value = serde_json::from_str(l).unwrap();
+                let turns = record["messages"].as_array().unwrap();
+                turns[turns.len() - 2]["content"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
+    };
+
+    let plain = build(&ctx, &request(false)).unwrap();
+    assert!(plain.described.is_none());
+    assert!(asks(&plain)
+        .iter()
+        .all(|a| a.contains("about: ") && !a.contains("plain words")));
+
+    let built = build(&ctx, &request(true)).unwrap();
+    let report = built.described.clone().unwrap();
+    assert_eq!((report.written, report.reused), (11, 0), "{report:?}");
+    assert_eq!(report.rejected.values().sum::<usize>(), 1, "{report:?}");
+    let asked = asks(&built);
+    assert_eq!(asked.len(), 12);
+    assert_eq!(
+        asked
+            .iter()
+            .filter(|a| a.ends_with("what ought to follow from it for everyone concerned."))
+            .count(),
+        11
+    );
+    let kept = asked.iter().find(|a| a.contains("dxa dxb")).unwrap();
+    assert!(
+        kept.starts_with("Write to a friend in 1800 about: dxa"),
+        "{kept}"
+    );
+
+    // A second build reuses what was written.
+    let again = build(&ctx, &request(true)).unwrap().described.unwrap();
+    assert_eq!((again.written, again.reused), (0, 11), "{again:?}");
 }

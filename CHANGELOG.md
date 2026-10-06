@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `learn --describe-voice` and `dataset build --describe-with REF`: the writer's chunks are asked
+  for by a model-written description of their content (20 to 60 words, refused when it carries
+  the passage's phrasing; the chunk keeps the heading-and-opening request otherwise), kept per
+  generator and reused by later builds.
 - The powered exam. `learn --exam-families N --exam-tasks-per-family N --dev-families N
   --dev-tasks-per-family N --exam-resamples N` (fifty final-test families of eight tasks and
   fifty dev families of four by default for a persona run) reserves both up front and writes it from the

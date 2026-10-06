@@ -37,6 +37,7 @@
 //! verdict to read.
 
 mod chunks;
+pub mod description;
 mod prompt;
 
 use std::collections::{BTreeMap, HashSet};
@@ -89,6 +90,11 @@ pub type Sectioner<'x> = &'x (dyn Fn(&str, &str) -> Vec<Range<usize>> + 'x);
 /// text, `None` when it has none.
 pub type FamilyOf<'f> = &'f (dyn Fn(&Digest) -> Option<String> + 'f);
 
+/// What a passage is about, in words that are not its own, when one has been
+/// written for it: the request of its record says it in place of the
+/// passage's opening.
+pub type DescriptionOf<'d> = &'d (dyn Fn(&str) -> Option<String> + 'd);
+
 /// The whole text as one section: the sectioner when none is given.
 #[must_use]
 pub fn whole_text(text: &str, _media_type: &str) -> Vec<Range<usize>> {
@@ -111,6 +117,7 @@ pub struct Voice<'s, 'm> {
     author: Option<&'m str>,
     family_of: Option<FamilyOf<'m>>,
     max_family_share: f64,
+    description_of: Option<DescriptionOf<'m>>,
 }
 
 impl<'s, 'm> Voice<'s, 'm> {
@@ -125,6 +132,7 @@ impl<'s, 'm> Voice<'s, 'm> {
             author: None,
             family_of: None,
             max_family_share: 1.0,
+            description_of: None,
         }
     }
 
@@ -169,6 +177,17 @@ impl<'s, 'm> Voice<'s, 'm> {
     pub fn bounding_families_to(self, share: f64) -> Self {
         Self {
             max_family_share: share,
+            ..self
+        }
+    }
+
+    /// The same view asking for each chunk `description_of` has a
+    /// description of by what it is about, and by its opening - as before -
+    /// each other chunk.
+    #[must_use]
+    pub fn described_by(self, description_of: DescriptionOf<'m>) -> Self {
+        Self {
+            description_of: Some(description_of),
             ..self
         }
     }
@@ -300,6 +319,9 @@ impl View for Voice<'_, '_> {
                         self.author,
                         heading.as_deref(),
                         &text[chunk.body_start..chunk.range.end],
+                        self.description_of
+                            .and_then(|describe| describe(answer))
+                            .as_deref(),
                     );
                     candidates.push(Candidate {
                         family: family.clone(),

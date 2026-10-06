@@ -43,6 +43,7 @@ use crate::datasets::{
     build_with, examples_in, supervised_tokens_in, BuildRequest, Built, Passages, ViewName,
     VoiceBuild, DEFAULT_MIN_STRENGTH,
 };
+use crate::describe::DescribeRequest;
 use crate::exam_set::ExamSet;
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
@@ -69,6 +70,8 @@ pub(super) struct Learn<'a> {
     /// The share of the training examples that is the writer's own text, as
     /// the request names it; `None` is the default for a run with a persona.
     pub(super) voice: Option<f64>,
+    /// Whether the writer's passages are asked by a description of them.
+    pub(super) describe_voice: bool,
     /// The share of the training draws that are the base's own answers, as
     /// the request names it; `None` is the default for a run with a persona.
     pub(super) rehearsal: Option<f64>,
@@ -615,7 +618,7 @@ fn select_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) ->
     Ok(StageEnd::done(summary))
 }
 
-fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+fn dataset_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
     let Some(selected) = &st.report.select else {
         unreachable!("the dataset stage follows the select stage")
     };
@@ -680,6 +683,11 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
                 voice: VoiceBuild {
                     writer: st.persona().map(str::to_string),
                     token_budget: Some(budget),
+                    describe: st.learn.describe_voice.then(|| DescribeRequest {
+                        generator: st.learn.generator.clone(),
+                        deadline: st.stage_deadlines.teach,
+                        cancel: run.cancel_token(),
+                    }),
                     ..VoiceBuild::default()
                 },
                 ..request

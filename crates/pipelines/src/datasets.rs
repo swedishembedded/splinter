@@ -32,6 +32,7 @@ use splinter_store::error::StoreError;
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
+use crate::describe::{describe, DescribeRequest, Described};
 use crate::grouping::{assign_groups, part_families};
 use crate::raft::{with_passages, PassageShare};
 use crate::retrieval::Retrieval as PassageSearch;
@@ -237,7 +238,7 @@ pub struct BuildRequest {
 
 /// How the voice view writes the writer's text into records; the other
 /// views ignore it.
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct VoiceBuild {
     /// Who the writer is: the requests are written as theirs and half the
     /// records are asked under their persona prompt, half under the line
@@ -251,6 +252,11 @@ pub struct VoiceBuild {
     /// The most of the tokens one family (the prints of one text, or one
     /// work) may supply; `None` is [`DEFAULT_MAX_FAMILY_SHARE`].
     pub max_family_share: Option<f64>,
+    /// Ask each passage by what a model says it is about
+    /// ([`crate::describe`]) instead of by its heading and opening; a
+    /// passage that gets no admitted description keeps the latter. `None`
+    /// asks every passage by its heading and opening.
+    pub describe: Option<DescribeRequest>,
 }
 
 /// What `dataset build` reports.
@@ -270,6 +276,8 @@ pub struct Built {
     pub excluded: BTreeMap<Exclusion, usize>,
     /// The dataset file.
     pub path: PathBuf,
+    /// How the passages of a described voice dataset were described.
+    pub described: Option<Described>,
 }
 
 impl From<StoredDataset> for Built {
@@ -282,6 +290,7 @@ impl From<StoredDataset> for Built {
             records: stored.manifest.counts.records,
             excluded: stored.manifest.counts.excluded,
             path: stored.path,
+            described: None,
         }
     }
 }
@@ -346,6 +355,7 @@ pub fn build_with(
     let strength = request.min_strength.unwrap_or(DEFAULT_MIN_STRENGTH);
     let strip = request.strip.clone().unwrap_or_default();
     let source_store = ctx.sources();
+    let mut described = None;
     let mut projection = match view {
         ViewName::SftFinal => SftFinal::new(strength).with_strip(strip).project(&corpus),
         ViewName::SftStep => SftStep::new(strength).with_strip(strip).project(&corpus),
@@ -410,19 +420,44 @@ pub fn build_with(
                 Some(writer) => voice.written_as(writer),
                 None => voice,
             };
-            let mut projection = voice.project(&corpus)?;
-            if let Some(budget) = request.voice.token_budget {
-                let answer_tokens = |record: &splinter_data::Record| match &record.body {
-                    RecordBody::Chat { messages } => messages
+            let answer_tokens = |record: &splinter_data::Record| match &record.body {
+                RecordBody::Chat { messages } => messages
+                    .iter()
+                    .filter(|m| m.train)
+                    .map(|m| tokens(&m.content))
+                    .sum(),
+                _ => 0,
+            };
+            let thinned = |projection: Projection| match request.voice.token_budget {
+                Some(budget) => projection.thinned_to_tokens(budget, &answer_tokens),
+                None => projection,
+            };
+            let projection = thinned(voice.project(&corpus)?);
+            match &request.voice.describe {
+                None => Ok(projection),
+                // The passages the dataset keeps are the ones described;
+                // the projection is made again with their descriptions.
+                Some(describe_request) => {
+                    let answers: Vec<&str> = projection
+                        .records
                         .iter()
-                        .filter(|m| m.train)
-                        .map(|m| tokens(&m.content))
-                        .sum(),
-                    _ => 0,
-                };
-                projection = projection.thinned_to_tokens(budget, &answer_tokens);
+                        .filter_map(|record| match &record.body {
+                            RecordBody::Chat { messages } => messages
+                                .iter()
+                                .find(|m| m.train)
+                                .map(|m| m.content.as_str()),
+                            _ => None,
+                        })
+                        .collect();
+                    let (written, report) = describe(ctx, describe_request, &answers)?;
+                    described = Some(report);
+                    let description_of =
+                        |answer: &str| written.get(&Digest::of(answer.as_bytes())).cloned();
+                    Ok(thinned(
+                        voice.described_by(&description_of).project(&corpus)?,
+                    ))
+                }
             }
-            Ok(projection)
         }
     }?;
     projection.terms = terms;
@@ -437,7 +472,10 @@ pub fn build_with(
     }
     assign_groups(ctx, &corpus, &mut projection)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;
-    Ok(Built::from(stored))
+    Ok(Built {
+        described,
+        ..Built::from(stored)
+    })
 }
 
 /// The terms a dataset made from `sources` comes under: the most restrictive

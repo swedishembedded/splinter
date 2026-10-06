@@ -14,7 +14,7 @@ splinter "<sentence>"             the front door: a sentence becomes one of the 
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
-                         [--with-passages SHARE] [--voice SHARE] [--rehearsal SHARE] [--bf16-base]
+                         [--with-passages SHARE] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -344,6 +344,12 @@ only by the prompt. Two prints of one text are one family and only one is
 projected, and no family supplies more than a tenth of the tokens
 (`--max-family-share` on `dataset build`; `--writer NAME` names the writer and
 `--token-limit N` keeps at most N tokens, spread evenly over all the chunks).
+`--describe-voice` (`dataset build --describe-with REF`) asks each chunk by what the
+generator says it is about instead of by its opening: 20 to 60 words in the model's own
+words, admitted only when no run of eight words, and under a third of its words in runs of
+four, are the passage's own; a chunk with no admitted description keeps the opening request.
+Descriptions are kept per generator under the state's `work/describe`, so a second build
+reuses them.
 A record names the part it prints and no experience, so a dataset shows what is
 the writer's and what a model wrote. A run with a persona trains on the
 writer's text by default: `--voice SHARE` is the share of the training tokens it

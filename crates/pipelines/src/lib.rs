@@ -48,6 +48,7 @@ pub mod critique;
 pub mod curriculum;
 pub mod dataset_ref;
 pub mod datasets;
+pub mod describe;
 pub mod dialogue;
 pub mod eval;
 pub mod exam;
