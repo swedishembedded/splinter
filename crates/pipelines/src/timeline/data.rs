@@ -33,7 +33,7 @@ use splinter_core::terms::Terms;
 use splinter_data::partition::{partition, PartitionSpec};
 use splinter_data::split::{leave_one_source_out, temporal_split, DataSplit, Part};
 use splinter_data::timeline_dataset::{
-    members, project_split, write_timeline_splits, ProjectionSpec,
+    members_of, project_split, write_timeline_splits, ProjectionSpec,
 };
 use splinter_model::BrainDatasetCheck;
 use splinter_orchestrator::context::Context;
@@ -105,6 +105,8 @@ pub enum SplitPlan {
 /// One `split` command.
 #[derive(Clone, Debug, Serialize)]
 pub struct SplitRequest {
+    /// The imported dataset to cut; `None` cuts every episode in the store.
+    pub dataset: Option<String>,
     /// How to cut.
     pub plan: SplitPlan,
     /// The seed of every shuffle.
@@ -147,13 +149,18 @@ pub fn split_timeline(
     request: &SplitRequest,
 ) -> Result<SplitReport, OrchestratorError> {
     let episodes = LongitudinalStore::new(ctx.workspace());
-    let all = members(&episodes, |_| String::new())?;
+    let all = members_of(&episodes, request.dataset.as_deref(), |_| String::new())?;
     if all.is_empty() {
-        return Err(OrchestratorError::Refused(
-            "no episode is imported: import a record file first".into(),
-        ));
+        return Err(OrchestratorError::Refused(match &request.dataset {
+            Some(name) => {
+                format!("no episode of dataset {name:?} is imported: import its record file first")
+            }
+            None => "no episode is imported: import a record file first".into(),
+        }));
     }
-    let basis = canonical_json(&episodes.addresses()?)
+    let mut keys: Vec<&str> = all.iter().map(|m| m.unit.id.as_str()).collect();
+    keys.sort_unstable();
+    let basis = canonical_json(&keys)
         .map(|bytes| Digest::of(&bytes))
         .map_err(|e| refuse("the imported episodes have no address", e))?;
     let split: DataSplit = match &request.plan {

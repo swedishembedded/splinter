@@ -15,8 +15,13 @@
 //!   none are given, the optional heads, the schedule and the seed), the run,
 //!   and the digest of the resolved configuration.
 //! * [`probe`] - the predictions a shipped file is held to, and their comparison.
+//! * [`scoring`] - two models scored on the same held-out units: per outcome
+//!   code and horizon discrimination, error and calibration, and the
+//!   candidate-minus-champion differences with participant-clustered
+//!   bootstrap intervals, as the named numbers the release gate reads.
 
 pub mod probe;
+pub mod scoring;
 pub mod training;
 
 pub use brain::survival;

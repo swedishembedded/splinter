@@ -17,7 +17,8 @@
 //! the numbers with their intervals and the requirements they were written
 //! against ([`PredictiveRelease`]). Splinter computes none of it. It checks
 //! the units pair up, decides the five checks
-//! ([`splinter_eval::predictive_gate`]), and, only when all pass, keeps the
+//! ([`splinter_eval::predictive_gate`]), records a candidate that fails as
+//! rejected (the champion stays where it is), and, only when all pass, keeps the
 //! checkpoint immutably, makes the release official with its place in the
 //! lineage and moves the alias from the champion it was measured against.
 //!
@@ -39,11 +40,12 @@ use splinter_eval::predictive_gate::{
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::releases::{
-    Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, StoredRelease, RELEASE_FORMAT,
+    Provenance, Rejection, ReleaseGate, ReleaseManifest, ReleasedArtifact, StoredRelease,
+    RELEASE_FORMAT,
 };
 use splinter_store::artifacts::ArtifactSpec;
 
-use crate::datasets::{record_dataset_lineage, resolve_dataset};
+use crate::dataset_ref::{record_lineage, resolve_any, AnyDataset};
 use splinter_core::model_ref::is_alias_name;
 
 /// The checkpoint file a candidate is, as its producer reports it.
@@ -153,14 +155,14 @@ pub fn release_predictive(
     let datasets = request
         .datasets
         .iter()
-        .map(|id| resolve_dataset(ctx, id))
+        .map(|id| resolve_any(ctx, id))
         .collect::<Result<Vec<_>, _>>()?;
     // The terms of what it was trained on, and of the champion it continues,
     // whose own terms already hold everything before it.
     let terms = combine_stated(
         datasets
             .iter()
-            .map(|d| d.manifest.terms.as_ref())
+            .map(|d| d.terms())
             .chain(champion.as_ref().map(|c| Some(&c.manifest.terms))),
     );
     let report = decide_predictive(
@@ -184,6 +186,16 @@ pub fn release_predictive(
         artifact: None,
     };
     if !released.report.passed {
+        store.record_rejection(&Rejection {
+            candidate: request.candidate.clone(),
+            alias: request.alias.clone(),
+            champion: champion_id.clone(),
+            datasets: datasets.iter().map(|d| d.id().clone()).collect(),
+            checkpoint: request.checkpoint.digest.clone(),
+            distribution: request.distribution,
+            report: released.report.clone(),
+            metrics: request.measurements.evidence.clone(),
+        })?;
         return Ok(released);
     }
 
@@ -194,9 +206,9 @@ pub fn release_predictive(
             .with_sha256(),
     )?;
     for dataset in &datasets {
-        record_dataset_lineage(ctx, dataset)?;
+        record_lineage(ctx, dataset)?;
     }
-    let dataset_ids: Vec<DatasetId> = datasets.iter().map(|d| d.id.clone()).collect();
+    let dataset_ids: Vec<DatasetId> = datasets.iter().map(|d| d.id().clone()).collect();
     let dataset_digests: Vec<Digest> = dataset_ids.iter().map(|d| d.0.clone()).collect();
     ctx.workspace().record_external_candidate(
         &request.candidate,
@@ -207,7 +219,7 @@ pub fn release_predictive(
     let mut provenance = request.provenance.clone();
     provenance
         .dataset_snapshots
-        .extend(datasets.iter().map(|d| d.manifest.dataset.clone()));
+        .extend(datasets.iter().map(|d| d.snapshot().clone()));
     if !provenance
         .evaluation_splits
         .contains(&released.report.units_digest)
@@ -238,7 +250,7 @@ pub fn release_predictive(
             preference: None,
             curve: None,
             record: request.training.record.clone(),
-            terms: combine_stated(datasets.iter().map(|d| d.manifest.terms.as_ref())),
+            terms: combine_stated(datasets.iter().map(AnyDataset::terms)),
         },
         gate: ReleaseGate::Predictive {
             report: Box::new(released.report.clone()),

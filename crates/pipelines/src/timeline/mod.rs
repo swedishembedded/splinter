@@ -13,8 +13,14 @@
 //! * [`data`] - a record file becomes episodes, and episodes become the stored
 //!   parts of one split.
 //! * [`train`] - stored parts of one split become an immutable candidate.
-//! * [`records`] - the records a candidate and its evaluation leave.
+//! * [`evaluate`] - a candidate and a champion scored on the same held-out
+//!   units under requirements registered before scoring.
+//! * [`release`] - an evaluation becomes a release only through the gate; a
+//!   candidate that fails is recorded as rejected.
+//! * [`records`] - the record a candidate leaves.
 
 pub mod data;
+pub mod evaluate;
 pub mod records;
+pub mod release;
 pub mod train;

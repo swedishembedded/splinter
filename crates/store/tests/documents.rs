@@ -87,3 +87,26 @@ fn documents_are_listed_in_the_order_they_were_stored() {
     assert_eq!(ws.document_ids("note").unwrap(), sorted);
     let _ = std::fs::remove_dir_all(root.path());
 }
+
+#[test]
+fn measured_numbers_read_back_verified() {
+    // A release records measured metrics: awkward floats, not tidy decimals.
+    // Parsing must give back the very same number, or the address check on
+    // read refuses a document that was stored correctly.
+    let (workspace, root) = workspace("float-round-trip");
+    let mut x = 0.123_456_789_f64;
+    let measured: Vec<f64> = (0..500)
+        .map(|_| {
+            x = (x * 7.918_273_645 + 0.318_209_886).fract() * 3.0 - 1.0;
+            x * 1e-3_f64.powi((x * 7.0) as i32)
+        })
+        .collect();
+    let id = workspace.put_document("measurements", &measured).unwrap();
+    workspace.commit().unwrap();
+    // Read by another process's workspace: from the files, not from memory.
+    let back: Vec<f64> = Workspace::at(&root)
+        .get_document("measurements", &id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(back, measured);
+}

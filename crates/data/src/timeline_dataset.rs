@@ -333,8 +333,22 @@ pub fn members(
     store: &LongitudinalStore,
     stratum: impl Fn(&History) -> String,
 ) -> Result<Vec<Member>, ViewError> {
+    members_of(store, None, stratum)
+}
+
+/// The episodes of the one imported dataset `dataset` (every episode when
+/// `None`) as [`Member`]s: a store may hold several cohorts, and a split cuts
+/// one of them.
+pub fn members_of(
+    store: &LongitudinalStore,
+    dataset: Option<&str>,
+    stratum: impl Fn(&History) -> String,
+) -> Result<Vec<Member>, ViewError> {
     let mut found = Vec::new();
     store.for_each_history(|_, history| {
+        if dataset.is_some_and(|d| history.provenance.dataset != d) {
+            return Ok(());
+        }
         found.push(Member {
             unit: Unit {
                 id: history.participant.to_string(),

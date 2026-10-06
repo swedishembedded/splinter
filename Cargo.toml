@@ -58,7 +58,9 @@ fastcdc = "3"
 # The JSON schema of a typed call's reply; the version sven's typed calls use.
 schemars = { version = "1", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `float_roundtrip`: a stored document is checked against its address on read, so
+# a measured number must parse back to the very same float it was written as.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"

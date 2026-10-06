@@ -29,8 +29,12 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
+use splinter_eval::metric_gate::Evidence;
+use splinter_eval::predictive_gate::PredictiveReport;
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
@@ -46,11 +50,36 @@ use splinter_core::model_ref::is_alias_name;
 use splinter_core::terms::Distribution;
 
 const RELEASE: &str = "release";
+const REJECTION: &str = "release_rejection";
 const ALIAS_PREFIX: &str = "alias-";
 
 /// The longest lineage walked: a guard against a corrupt store, far past
 /// any real history.
 const MAX_LINEAGE: usize = 10_000;
+
+/// A predictive candidate the gate refused: kept so that "why was it not
+/// released" has an answer after the process that decided it is gone. It is
+/// content-addressed, so deciding the same candidate on the same numbers again
+/// records nothing new, and it never touches an alias.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Rejection {
+    /// The candidate's id.
+    pub candidate: String,
+    /// The alias it was to replace its champion on.
+    pub alias: String,
+    /// The champion it was measured against; `None` before any release.
+    pub champion: Option<ReleaseId>,
+    /// The datasets it was trained on.
+    pub datasets: Vec<DatasetId>,
+    /// The SHA-256 of the checkpoint file it would have released.
+    pub checkpoint: Digest,
+    /// How widely the release was asked to be handed on.
+    pub distribution: Distribution,
+    /// The gate, with every number it decided on.
+    pub report: PredictiveReport,
+    /// What was measured.
+    pub metrics: Evidence,
+}
 
 /// A release as stored and verified. A release stored in an older format is
 /// read as the current one with what it never recorded stated as unknown
@@ -178,6 +207,28 @@ impl ReleaseStore {
             .into_iter()
             .map(ReleaseId)
             .collect())
+    }
+
+    /// Records that the gate refused a candidate. Recording the same
+    /// rejection again changes nothing; returns its address.
+    pub fn record_rejection(&self, rejection: &Rejection) -> Result<Digest, OrchestratorError> {
+        Ok(self.workspace.put_document(REJECTION, rejection)?)
+    }
+
+    /// Every recorded rejection, in the order they were recorded.
+    pub fn rejections(&self) -> Result<Vec<Rejection>, OrchestratorError> {
+        self.workspace
+            .documents_in_order(REJECTION)?
+            .into_iter()
+            .map(|id| {
+                self.workspace.get_document(REJECTION, &id)?.ok_or_else(|| {
+                    OrchestratorError::NotFound {
+                        what: "release rejection",
+                        id: id.to_string(),
+                    }
+                })
+            })
+            .collect()
     }
 
     /// The release made from `candidate`, if one was made: a candidate is

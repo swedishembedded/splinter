@@ -55,6 +55,9 @@ pub struct ReleaseTrace {
     /// per experience, and those they were retried, critiqued or revised
     /// from.
     pub attempts: usize,
+    /// How many longitudinal episodes it traces back to: the participants'
+    /// histories its timeline datasets were projected from.
+    pub episodes: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -339,12 +342,14 @@ impl Workspace {
         let reached = self.read(|s| {
             let index = s.snapshot()?.index()?;
             let reached = index.reachable_from(start, None);
-            let attempts = reached
-                .iter()
-                .filter(|id| {
-                    index.kind_of(**id) == Some(splinter_expdb::model::RecordKind::Attempt)
-                })
-                .count();
+            let count = |kind| {
+                reached
+                    .iter()
+                    .filter(|id| index.kind_of(**id) == Some(kind))
+                    .count()
+            };
+            let attempts = count(splinter_expdb::model::RecordKind::Attempt);
+            let episodes = count(splinter_expdb::model::RecordKind::Episode);
             // Newest first by the time on the records, which every reader
             // agrees on, and not by the random ids of the writers.
             let mut stamped: Vec<(u64, RecordId)> = reached
@@ -355,10 +360,12 @@ impl Workspace {
             Ok((
                 stamped.into_iter().map(|(_, id)| id).collect::<Vec<_>>(),
                 attempts,
+                episodes,
             ))
         })?;
         let mut trace = ReleaseTrace {
             attempts: reached.1,
+            episodes: reached.2,
             ..ReleaseTrace::default()
         };
         let reached = reached.0;

@@ -52,4 +52,5 @@ pub mod overlap;
 pub mod paired;
 pub mod predictive_gate;
 pub mod significance;
+pub mod timeline_metrics;
 pub mod verifiers;
