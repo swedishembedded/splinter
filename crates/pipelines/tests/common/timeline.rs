@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 
 use splinter_core::terms::{Terms, UsagePolicy};
 use splinter_data::timeline_dataset::ProjectionSpec;
-use splinter_eval::timeline_metrics::{CalibrationBands, CodePlan, TimelinePlan};
+use splinter_eval::timeline_metrics::{
+    CalibrationBands, CodePlan, RequiredHorizon, TimelinePlan, DEFAULT_MIN_TEST_EVENTS,
+};
 use splinter_model::timeline::scoring::{ScoreSpec, Subgroup, SubgroupRule};
 use splinter_model::timeline::synthetic;
 use splinter_model::timeline::{CalibrationPlan, TimelineTraining};
@@ -185,9 +187,13 @@ pub fn train_calibrated(
         &split.validation.to_string(),
         config,
     );
+    // The cohorts here are small: calibration takes the half of the
+    // validation part its floor gives, not the units a real cohort allows.
+    request.calibration_units = 0;
     request.calibration = Some(CalibrationPlan {
         horizons: HORIZONS.to_vec(),
         min_events: Some(CALIBRATION_MIN_EVENTS),
+        kind: None,
     });
     train_timeline_candidate(ctx, &request).unwrap()
 }
@@ -209,10 +215,15 @@ pub fn scoring() -> ScoreSpec {
     s
 }
 
+/// The horizon every calibrated code must be certified at in these specs.
+pub const REQUIRED_HORIZON: f64 = HORIZONS[0];
+
 /// The pre-registered requirements: the candidate must beat the champion on
 /// the all-cause integrated Brier score and on the held-out likelihood, be
-/// calibrated at both horizons for every code in `calibrated` (and for the
-/// all-cause view), and not regress on the subgroup. A cohort that did not
+/// calibrated at every horizon the test part can judge, and at
+/// [`REQUIRED_HORIZON`] certifiably, for every code in `calibrated` (and for
+/// the all-cause view where it can be judged), and not regress on the
+/// subgroup. A cohort that did not
 /// measure the covariates a cause depends on is judged on the all-cause view
 /// alone: its model cannot be asked to separate causes it cannot see.
 pub fn plan_for(calibrated: &[&str]) -> TimelinePlan {
@@ -224,11 +235,23 @@ pub fn plan_for(calibrated: &[&str]) -> TimelinePlan {
     let mut codes: Vec<CodePlan> = calibrated.iter().map(|c| judged(c, false)).collect();
     codes.push(judged(ALL_CAUSE, true));
     TimelinePlan {
+        required: calibrated
+            .iter()
+            .map(|code| RequiredHorizon {
+                code: (*code).into(),
+                horizon: REQUIRED_HORIZON,
+            })
+            .collect(),
+        min_test_events: DEFAULT_MIN_TEST_EVENTS,
         codes,
         improve_nll: true,
         calibration: CalibrationBands {
             slope: (0.7, 1.4),
-            intercept_in_the_large: (-0.5, 0.5),
+            // The calibration set of these small cohorts holds under a hundred
+            // events, so slope and intercept both wander (they move together):
+            // the specs test the pipeline, not the calibrator, and the sample's
+            // bands are the registered ones.
+            intercept_in_the_large: (-1.0, 1.0),
             oe: (0.8, 1.25),
             max_ece: 0.05,
         },

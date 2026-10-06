@@ -18,13 +18,16 @@
 //! and reports its decision. A candidate that fails is recorded as rejected
 //! and the alias stays where it was.
 
+use std::collections::BTreeMap;
+
 use splinter_core::model_ref::is_alias_name;
 use splinter_core::release::ReleaseId;
 use splinter_core::terms::Distribution;
+use splinter_eval::timeline_metrics::{HorizonJudgement, Judgement};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
-use splinter_orchestrator::releases::Provenance;
+use splinter_orchestrator::releases::{CertifiedHorizon, Provenance};
 
 use super::evaluate::{load_timeline_evaluation, ModelRef};
 use super::records::ARCHITECTURE;
@@ -49,6 +52,31 @@ pub fn resolve_release(ctx: &Context, given: &str) -> Result<ReleaseId, Orchestr
             store.list()?.into_iter().map(|r| r.0),
         )?))
     }
+}
+
+/// The horizons a release certifies: those of the outcome codes the model
+/// predicts (`codes`; the all-cause union is a view, not an output) that the
+/// plan judged. A release exists only when every judged horizon met its
+/// bands, so judged is certified.
+fn certified(
+    judgements: &[HorizonJudgement],
+    codes: &[String],
+) -> BTreeMap<String, Vec<CertifiedHorizon>> {
+    let mut by_code: BTreeMap<String, Vec<CertifiedHorizon>> = BTreeMap::new();
+    for j in judgements
+        .iter()
+        .filter(|j| j.status == Judgement::Judged && codes.contains(&j.code))
+    {
+        by_code
+            .entry(j.code.clone())
+            .or_default()
+            .push(CertifiedHorizon {
+                horizon: j.horizon,
+                test_events: j.test_events.unwrap_or_default(),
+                basis: j.basis.unwrap_or_default(),
+            });
+    }
+    by_code
 }
 
 /// One `release_timeline` command.
@@ -117,6 +145,7 @@ pub fn release_timeline(
             provenance: Provenance {
                 training_config: Some(record.config_digest.clone()),
                 calibration: record.calibration.as_ref().map(|c| c.digest.clone()),
+                certified_horizons: certified(&evaluation.judgements, &evaluation.scoring.codes),
                 brain_commit: record.brain_commit.clone(),
                 splinter_commit: record.splinter_commit.clone(),
                 ..Provenance::default()

@@ -26,6 +26,8 @@
 //!   that is refused leaves the manifest as it was.
 #![allow(clippy::unwrap_used)]
 
+use std::collections::BTreeMap;
+
 use serde_json::json;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
@@ -34,9 +36,10 @@ use splinter_core::terms::{Distribution, Permission, Terms, UsagePolicy};
 use splinter_core::training::{Regime, TrainingSummary};
 use splinter_eval::gate::{Check, GateConfig, GateReport};
 use splinter_eval::metric_gate::Evidence;
+use splinter_eval::timeline_metrics::CalibrationBasis;
 use splinter_orchestrator::releases::{
-    ArtifactKind, Provenance, ReleaseGate, ReleaseManifest, ReleaseStore, ReleasedArtifact,
-    MANIFEST_V2, MANIFEST_V3, RELEASE_FORMAT,
+    ArtifactKind, CertifiedHorizon, Provenance, ReleaseGate, ReleaseManifest, ReleaseStore,
+    ReleasedArtifact, MANIFEST_V2, MANIFEST_V3, RELEASE_FORMAT,
 };
 use splinter_orchestrator::OrchestratorError;
 use splinter_store::artifacts::{ArtifactSpec, ArtifactStore};
@@ -309,6 +312,23 @@ fn only_the_current_format_is_written() {
 }
 
 #[test]
+fn a_release_made_before_horizons_were_certified_loads_with_none() {
+    let f = fixture("uncertified");
+    let manifest = checkpoint(&f, "risk-0", None);
+    let written = serde_json::to_value(&manifest).unwrap();
+    assert!(
+        written.get("provenance").is_none(),
+        "nothing recorded leaves the stored bytes as a previous version wrote them: {written}"
+    );
+    let id = f
+        .workspace
+        .record_release(&written, "release", "risk-0", None)
+        .unwrap();
+    let loaded = f.store.get(&ReleaseId(id)).unwrap();
+    assert!(loaded.manifest.provenance.certified_horizons.is_empty());
+}
+
+#[test]
 fn a_full_checkpoint_is_stored_and_read_back_by_its_digest() {
     let f = fixture("checkpoint");
     let mut manifest = checkpoint(&f, "risk-1", None);
@@ -317,6 +337,14 @@ fn a_full_checkpoint_is_stored_and_read_back_by_its_digest() {
         training_config: Some(Digest::of(b"config")),
         evaluation_splits: vec![Digest::of(b"split")],
         calibration: Some(Digest::of(b"calibration")),
+        certified_horizons: BTreeMap::from([(
+            "death:cvd".to_owned(),
+            vec![CertifiedHorizon {
+                horizon: 5.0,
+                test_events: 412,
+                basis: CalibrationBasis::Calibrated,
+            }],
+        )]),
         brain_commit: Some("3f019a23".into()),
         splinter_commit: Some("05f13d4".into()),
         sven_commit: Some("02adbda".into()),

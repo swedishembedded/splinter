@@ -19,16 +19,19 @@
 //! sending the whole history again with one more record; nothing is kept
 //! between calls. The report prints both forecasts as brain returns them: the
 //! as-of time, the model's identity, what the history covered, the curves, the
-//! risk at each horizon (calibrated, with its interval, only where the model
-//! was calibrated for exactly that horizon), the data-quality warnings and
-//! whether the model abstained.
+//! risk at each horizon (calibrated, with an interval where the calibrator has
+//! one, only where the release certified that code and horizon: elsewhere the
+//! raw risk is given with a note), the data-quality warnings and whether the
+//! model abstained.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context as _, Result};
 use serde_json::{json, Value as Json};
 use splinter_sdk::model::timeline::serving::{history_json, parse_history};
 use splinter_sdk::model::timeline::{read_jsonl, ForecastRequest, Subject, TimelineModel};
+use splinter_sdk::releases::CertifiedHorizon;
 use splinter_sdk::timeline::release::resolve_release;
 use splinter_sdk::vocabulary::dataset::DatasetId;
 use splinter_sdk::vocabulary::digest::Digest;
@@ -94,13 +97,66 @@ pub fn with_checkup(history: &Json, checkup: &Checkup) -> Result<Json> {
     Ok(later)
 }
 
-/// The forecast of `history` as brain serves it, as JSON.
-pub fn forecast(model: &TimelineModel, history: &Json, horizons: &[f64]) -> Result<Json> {
+/// The horizons a release certified, by outcome code.
+pub type Certified = BTreeMap<String, Vec<CertifiedHorizon>>;
+
+/// How close two horizons must be to be the same one.
+const HORIZON_TOLERANCE: f64 = 1e-9;
+
+/// `forecast` restricted to what the release certified: at a certified code
+/// and horizon the risks stay as brain gave them (calibrated where the model
+/// has a calibration there) and say what they were certified on; at any other
+/// the calibrated risk and its interval are removed and a note says the
+/// horizon is uncertified and the raw risk is what is given. A calibrated
+/// value is never shown where the gate did not judge it.
+pub fn certify(forecast: &mut Json, certified: &Certified) {
+    let Some(horizons) = forecast["horizons"].as_array_mut() else {
+        return;
+    };
+    for at in horizons {
+        let horizon = at["horizon"].as_f64().unwrap_or(f64::NAN);
+        let Some(risks) = at["risks"].as_object_mut() else {
+            continue;
+        };
+        for (code, risk) in risks {
+            let found = certified.get(code).and_then(|list| {
+                list.iter()
+                    .find(|c| (c.horizon - horizon).abs() <= HORIZON_TOLERANCE)
+            });
+            match found {
+                Some(c) => {
+                    risk["certified"] = json!({"test_events": c.test_events, "basis": c.basis});
+                }
+                None => {
+                    if let Some(fields) = risk.as_object_mut() {
+                        fields.remove("calibrated");
+                        fields.remove("interval");
+                    }
+                    risk["note"] = json!(
+                        "uncertified horizon: the raw risk is given; the release judged no \
+                         calibrated risk here"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// The forecast of `history` as brain serves it, as JSON, restricted to what
+/// the release certified ([`certify`]).
+pub fn forecast(
+    model: &TimelineModel,
+    history: &Json,
+    horizons: &[f64],
+    certified: &Certified,
+) -> Result<Json> {
     let history = parse_history(history)?;
     let forecast = model
         .forecast_history(&history, &ForecastRequest::new(horizons.iter().copied()))
         .context("forecasting the patient history")?;
-    Ok(serde_json::to_value(&forecast)?)
+    let mut forecast = serde_json::to_value(&forecast)?;
+    certify(&mut forecast, certified);
+    Ok(forecast)
 }
 
 /// Both forecasts of `subject`: before, and after `checkup` is appended to its
@@ -112,11 +168,12 @@ pub fn compare(
     subject: &Subject,
     checkup: &Checkup,
     horizons: &[f64],
+    certified: &Certified,
 ) -> Result<Json> {
     let history = history_json(subject);
     let appended = with_checkup(&history, checkup)?;
-    let before = forecast(model, &history, horizons)?;
-    let after = forecast(model, &appended, horizons)?;
+    let before = forecast(model, &history, horizons, certified)?;
+    let after = forecast(model, &appended, horizons, certified)?;
     let numbers = |forecast: &Json| {
         let mut f = forecast.clone();
         f.as_object_mut().map(|o| o.remove("input_warnings"));
@@ -160,8 +217,10 @@ pub fn predict(
             subjects.len()
         )
     })?;
-    let mut report = compare(&model, subject, checkup, horizons)?;
+    let certified = &stored.manifest.provenance.certified_horizons;
+    let mut report = compare(&model, subject, checkup, horizons, certified)?;
     report["release"] = json!(id.to_string());
+    report["certified_horizons"] = json!(certified);
     report["loaded_by"] = json!("brain TimelineModel::load on the unpacked file");
     report["horizons"] = json!(horizons);
     Ok(report)
@@ -224,6 +283,7 @@ mod tests {
             &subject,
             &checkup(new, Some("sd"), 2.0),
             &[2.0, 4.0],
+            &Certified::new(),
         )
         .unwrap();
         assert_eq!(report["forecast_changed"], true);
@@ -260,6 +320,7 @@ mod tests {
             &subject,
             &checkup(same, Some("sd"), 0.0),
             &[2.0, 4.0],
+            &Certified::new(),
         )
         .unwrap();
         assert_eq!(report["forecast_changed"], false);
@@ -284,6 +345,7 @@ mod tests {
                 &subject,
                 &checkup(new, Some(malformed), 1.0),
                 &[2.0],
+                &Certified::new(),
             )
             .unwrap_err()
             .to_string();
@@ -292,11 +354,69 @@ mod tests {
         // A well-formed unit the model was not trained on is refused, never converted.
         let why = format!(
             "{:#}",
-            compare(&model, &subject, &checkup(new, Some("mg/dL"), 1.0), &[2.0]).unwrap_err()
+            compare(
+                &model,
+                &subject,
+                &checkup(new, Some("mg/dL"), 1.0),
+                &[2.0],
+                &Certified::new()
+            )
+            .unwrap_err()
         );
         assert!(
             why.contains("x1") && why.contains("sd") && why.contains("mg/dL"),
             "{why}"
         );
+    }
+
+    fn forecast_with_calibrated_risks() -> Json {
+        let risk =
+            |raw: f64| json!({"raw": raw, "calibrated": raw + 0.01, "interval": [raw, raw + 0.02]});
+        json!({"horizons": [
+            {"horizon": 5.0, "survival": 0.9, "risks": {"death:cvd": risk(0.05), "death:cancer": risk(0.03)}},
+            {"horizon": 10.0, "survival": 0.8, "risks": {"death:cvd": risk(0.12), "death:cancer": risk(0.08)}}
+        ]})
+    }
+
+    #[test]
+    fn only_certified_horizons_carry_calibrated_values() {
+        let certified = Certified::from([(
+            "death:cvd".to_owned(),
+            vec![CertifiedHorizon {
+                horizon: 5.0,
+                test_events: 300,
+                basis: splinter_sdk::measure::timeline_metrics::CalibrationBasis::Calibrated,
+            }],
+        )]);
+        let mut f = forecast_with_calibrated_risks();
+        certify(&mut f, &certified);
+        let at = |h: usize, code: &str| f["horizons"][h]["risks"][code].clone();
+        let kept = at(0, "death:cvd");
+        assert!((kept["calibrated"].as_f64().unwrap() - 0.06).abs() < 1e-12);
+        assert_eq!(kept["certified"]["test_events"], 300);
+        assert!(kept["note"].is_null());
+        for withheld in [
+            at(0, "death:cancer"),
+            at(1, "death:cvd"),
+            at(1, "death:cancer"),
+        ] {
+            assert!(withheld["calibrated"].is_null() && withheld["interval"].is_null());
+            assert!(
+                withheld["raw"].is_number(),
+                "the raw risk stays: {withheld}"
+            );
+            assert!(withheld["note"].as_str().unwrap().contains("uncertified"));
+        }
+    }
+
+    #[test]
+    fn a_release_that_certified_nothing_serves_no_calibrated_value() {
+        let mut f = forecast_with_calibrated_risks();
+        certify(&mut f, &Certified::new());
+        for at in f["horizons"].as_array().unwrap() {
+            for risk in at["risks"].as_object().unwrap().values() {
+                assert!(risk.get("calibrated").is_none() && risk.get("interval").is_none());
+            }
+        }
     }
 }

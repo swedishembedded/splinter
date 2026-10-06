@@ -21,7 +21,9 @@
 //!
 //! A horizon at which an outcome has fewer than `min_events` events in the
 //! scored set is ABSENT from every table: not measured is never reported as
-//! zero, and a requirement on it then fails as unmeasured.
+//! zero, and a requirement on it then fails as unmeasured. Its event count is
+//! still reported ([`ViewScores::events`]), because whether a horizon is
+//! judged at all is decided on that count, however small.
 //!
 //! * [`Predicted`] - one model's predictions for the subjects ([`predict_arm`]).
 //! * [`compare`] - two arms' predictions scored and differenced ([`Comparison`]).
@@ -35,8 +37,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_eval::metric_gate::Evidence;
+pub use splinter_eval::timeline_metrics::CalibrationBasis;
 use splinter_eval::timeline_metrics::{
-    arm_metric, arm_nll, diff_metric, subgroup_diff, subgroup_events, Arm, NLL_DIFF,
+    arm_events, arm_metric, arm_nll, diff_metric, subgroup_diff, subgroup_events, Arm, NLL_DIFF,
 };
 
 use super::training::TimelineError;
@@ -239,24 +242,6 @@ pub struct HorizonScores {
     pub calibration_basis: CalibrationBasis,
 }
 
-/// Which risk a horizon's calibration is judged on. Discrimination and error
-/// are always the model's raw risk, so two models are compared on what they
-/// predict; calibration is judged on the risk the model is served as.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CalibrationBasis {
-    /// The model's raw cumulative incidence: it has no calibration at this
-    /// code and horizon, or none at all.
-    #[default]
-    Raw,
-    /// The Venn-Abers calibrated risk brain serves at this code and horizon.
-    Calibrated,
-    /// brain declared this code and horizon uncalibrated (too few validation
-    /// events): nothing is judged, and a requirement on it fails as
-    /// unmeasured, never as zero.
-    Uncalibrated,
-}
-
 /// Calibration at a horizon.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Calibration {
@@ -277,9 +262,21 @@ pub struct Calibration {
     pub ece: f64,
 }
 
+/// The events of a view's outcome by one horizon in the scored set.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HorizonEvents {
+    /// The horizon.
+    pub horizon: f64,
+    /// Events by the horizon, however few.
+    pub events: usize,
+}
+
 /// One arm's metrics for one view (an outcome code or the all-cause union).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ViewScores {
+    /// Events by every requested horizon, measured or not.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<HorizonEvents>,
     /// The integrated Brier score over the grid; absent below `min_events`.
     pub ibs: Option<f64>,
     /// The horizons that were measured, in order.
@@ -346,6 +343,19 @@ pub struct Comparison {
 }
 
 impl Comparison {
+    /// The risk the candidate's calibration of `view` was judged on at
+    /// `horizon`; `None` when the horizon was not measured.
+    #[must_use]
+    pub fn candidate_basis(&self, view: &str, horizon: f64) -> Option<CalibrationBasis> {
+        self.candidate
+            .views
+            .get(view)?
+            .horizons
+            .iter()
+            .find(|h| h.horizon == horizon)
+            .map(|h| h.calibration_basis)
+    }
+
     /// Every measured number under the names the release gate reads. A number
     /// that was not measured has no entry.
     #[must_use]
@@ -359,6 +369,10 @@ impl Comparison {
             for (view, s) in &scores.views {
                 if let Some(ibs) = s.ibs {
                     e.values.insert(arm_metric(arm, view, None, "ibs"), ibs);
+                }
+                for h in &s.events {
+                    e.values
+                        .insert(arm_events(arm, view, h.horizon), h.events as f64);
                 }
                 for h in &s.horizons {
                     let at = Some(h.horizon);

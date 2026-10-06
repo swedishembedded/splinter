@@ -26,7 +26,9 @@ use brain::survival::estimate::{censoring, Step};
 use brain::survival::Obs;
 use brain::timeline::{Evaluation, EvaluationSpec};
 
-use super::{ArmScores, Calibration, CalibrationBasis, HorizonScores, ScoreSpec, ViewScores};
+use super::{
+    ArmScores, Calibration, CalibrationBasis, HorizonEvents, HorizonScores, ScoreSpec, ViewScores,
+};
 use crate::timeline::training::TimelineError;
 use crate::timeline::{observed, Subject, TimelineModel};
 
@@ -144,10 +146,10 @@ pub struct Predicted {
 /// The risk a cause view's calibration is judged on at one horizon.
 #[derive(Clone, Debug)]
 pub(super) enum Basis {
+    /// The model's raw risk: it has no calibrated risk here.
     Raw,
     /// The calibrated risk of every subject.
     Calibrated(Vec<f64>),
-    Uncalibrated,
 }
 
 impl Basis {
@@ -155,37 +157,22 @@ impl Basis {
         match self {
             Basis::Raw => CalibrationBasis::Raw,
             Basis::Calibrated(_) => CalibrationBasis::Calibrated,
-            Basis::Uncalibrated => CalibrationBasis::Uncalibrated,
         }
     }
 }
 
-/// How `model` stands to calibration at `code` and `horizon` for these
-/// predictions: its calibrated risk where it has one for every subject,
-/// uncalibrated where brain lists the pair as unsupported by the validation
-/// data, raw otherwise (no calibration, or the horizon was not asked for).
-fn basis_of(
-    model: &TimelineModel,
-    predictions: &[crate::timeline::Prediction],
-    code: &str,
-    horizon: f64,
-) -> Basis {
-    let calibrated: Vec<Option<f64>> = predictions
+/// The risk calibration is judged on at `code` and `horizon`: the calibrated
+/// risk where brain serves one for every subject, the raw risk otherwise (no
+/// calibration, the horizon was not asked for, or the validation data could
+/// not support one: a model left raw at a horizon is judged raw there).
+fn basis_of(predictions: &[crate::timeline::Prediction], code: &str, horizon: f64) -> Basis {
+    let calibrated: Option<Vec<f64>> = predictions
         .iter()
         .map(|p| p.calibrated_cif(code, horizon))
         .collect();
-    if !calibrated.is_empty() && calibrated.iter().all(Option::is_some) {
-        return Basis::Calibrated(calibrated.into_iter().flatten().collect());
-    }
-    let declared = model.calibration().is_some_and(|c| {
-        c.uncalibrated()
-            .iter()
-            .any(|g| g.code == code && (g.horizon - horizon).abs() <= 1e-9 * horizon.abs().max(1.0))
-    });
-    if declared || calibrated.iter().any(Option::is_some) {
-        Basis::Uncalibrated
-    } else {
-        Basis::Raw
+    match calibrated {
+        Some(risk) if !risk.is_empty() => Basis::Calibrated(risk),
+        _ => Basis::Raw,
     }
 }
 
@@ -240,7 +227,7 @@ pub fn predict_arm(
         .map(|code| {
             spec.horizons
                 .iter()
-                .map(|h| basis_of(model, &predictions, code, *h))
+                .map(|h| basis_of(&predictions, code, *h))
                 .collect()
         })
         .collect();
@@ -366,12 +353,26 @@ fn score_union(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> 
             calibration_basis: CalibrationBasis::Raw,
         });
     }
-    ViewScores { ibs, horizons }
+    ViewScores {
+        events: horizon_events(out, v, spec),
+        ibs,
+        horizons,
+    }
+}
+
+/// The events of view `v` by every horizon of `spec`.
+fn horizon_events(out: &Outcomes, v: usize, spec: &ScoreSpec) -> Vec<HorizonEvents> {
+    spec.horizons
+        .iter()
+        .map(|t| HorizonEvents {
+            horizon: *t,
+            events: out.events(v, *t, 0..out.obs[v].len()),
+        })
+        .collect()
 }
 
 /// An outcome code's scores as brain's `evaluate` computed them, with the
-/// calibration replaced by the calibrated risk's where the model has one and
-/// dropped where brain declared the horizon uncalibrated.
+/// calibration replaced by the calibrated risk's where the model has one.
 fn score_code(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> ViewScores {
     let code = &out.views[v].name;
     let last = spec.last_horizon();
@@ -407,7 +408,6 @@ fn score_code(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> V
                 &out.g[v],
                 CALIBRATION_GROUPS,
             )),
-            Basis::Uncalibrated => None,
         };
         horizons.push(HorizonScores {
             horizon: *t,
@@ -419,7 +419,11 @@ fn score_code(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> V
             calibration_basis: basis.label(),
         });
     }
-    ViewScores { ibs, horizons }
+    ViewScores {
+        events: horizon_events(out, v, spec),
+        ibs,
+        horizons,
+    }
 }
 
 /// One arm's scores.

@@ -18,6 +18,8 @@
 //! immutable content-addressed file and records its digest; it never reads
 //! the file.
 
+use std::collections::BTreeMap;
+
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 use splinter_core::dataset::DatasetId;
@@ -29,6 +31,7 @@ use splinter_eval::claim_gate::ClaimGate;
 use splinter_eval::gate::GateReport;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveReport;
+use splinter_eval::timeline_metrics::CalibrationBasis;
 
 use crate::generation::GenerationMark;
 
@@ -170,9 +173,24 @@ impl ReleaseGate {
     }
 }
 
+/// A horizon whose calibration the release gate judged on enough held-out
+/// events and found within the registered bands: the only horizons at which
+/// the release stands behind its risk as calibrated.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CertifiedHorizon {
+    /// The horizon after the prediction time, in the data's unit.
+    pub horizon: f64,
+    /// The events by the horizon in the held-out units it was judged on.
+    pub test_events: usize,
+    /// The risk that was judged, and so the one that is certified: the
+    /// calibrated risk, or the raw one where the model carries no calibration
+    /// at this code and horizon.
+    pub basis: CalibrationBasis,
+}
+
 /// What a release was made and judged from, by digest, beyond the datasets
 /// it names: enough to rebuild the claim that it was measured fairly.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Provenance {
     /// The digests of the datasets' record files it was trained on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -186,6 +204,12 @@ pub struct Provenance {
     /// The digest of its calibration artifact, when it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calibration: Option<Digest>,
+    /// The horizons the gate certified, by outcome code: a risk is calibrated
+    /// only at these. A horizon not listed was not judged (too few held-out
+    /// events) and is served as the model's raw risk. Absent for a release
+    /// made before horizons were certified, and for one with no outcome code.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub certified_horizons: BTreeMap<String, Vec<CertifiedHorizon>>,
     /// The commit of brain that trained and serves it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brain_commit: Option<String>,

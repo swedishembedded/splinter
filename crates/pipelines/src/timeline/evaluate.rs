@@ -31,7 +31,7 @@ use splinter_core::release::ReleaseId;
 use splinter_data::split::Part;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveSpec;
-use splinter_eval::timeline_metrics::TimelinePlan;
+use splinter_eval::timeline_metrics::{HorizonJudgement, TimelinePlan};
 use splinter_model::timeline::scoring::{compare, predict_arm, Comparison, ScoreSpec};
 use splinter_model::timeline::{read_jsonl, Subject};
 use splinter_orchestrator::context::Context;
@@ -101,8 +101,16 @@ pub struct TimelineEvaluation {
     pub test: DatasetId,
     /// The address of the split the test part belongs to.
     pub split: Digest,
-    /// The requirements, written before anything was scored.
+    /// The requirements, written before anything was scored, as the plan
+    /// registers them for the horizons the test part could judge.
     pub spec: PredictiveSpec,
+    /// The plan the requirements were made from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<TimelinePlan>,
+    /// How the plan judged each (code, horizon): judged or uncertified, on
+    /// how many test events, and on which risk.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub judgements: Vec<HorizonJudgement>,
     /// How the arms were scored.
     pub scoring: ScoreSpec,
     /// Every number of both arms and their differences.
@@ -190,6 +198,13 @@ pub fn evaluate_timeline(
     ctx: &Context,
     request: &TimelineEvaluateRequest,
 ) -> Result<TimelineEvaluated, OrchestratorError> {
+    if request.scoring.min_events > request.plan.min_test_events {
+        return Err(OrchestratorError::Refused(format!(
+            "the scoring measures a horizon from {} events but the plan judges one only from {}: \
+             a judged horizon would lack its numbers",
+            request.scoring.min_events, request.plan.min_test_events
+        )));
+    }
     let (candidate_id, record) = load_timeline_candidate(ctx, &request.candidate)?;
     let candidate = Arm {
         model_ref: ModelRef::Candidate {
@@ -278,6 +293,9 @@ pub fn evaluate_timeline(
         compare(&champion_arm, &candidate_arm, &subjects, &request.scoring).map_err(lift)?;
     let mut evidence = comparison.evidence();
     serving.add_to(&mut evidence);
+    let judgements = request
+        .plan
+        .judgements(&evidence, |code, h| comparison.candidate_basis(code, h));
 
     let evaluation = TimelineEvaluation {
         format: EVALUATION_FORMAT.into(),
@@ -285,7 +303,9 @@ pub fn evaluate_timeline(
         champion: champion.model_ref,
         test: test_id,
         split: candidate.record.split.clone(),
-        spec: request.plan.spec(),
+        spec: request.plan.spec(&evidence),
+        plan: Some(request.plan.clone()),
+        judgements,
         scoring: request.scoring.clone(),
         comparison,
         evidence,

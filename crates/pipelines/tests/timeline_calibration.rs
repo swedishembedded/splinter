@@ -10,9 +10,8 @@
 //! Spec: a candidate is calibrated on validation units early stopping did
 //! not read, never on a test unit, and the calibration travels in the packed
 //! file beside the weights and round-trips; the gate judges calibration on the
-//! calibrated risk where there is one and on the raw risk otherwise, says
-//! which, and has nothing to judge where brain declared a horizon
-//! uncalibrated; serving correctness is measured on the test units from the
+//! calibrated risk where there is one and on the raw risk otherwise, and says
+//! which; serving correctness is measured on the test units from the
 //! shipped file, and a model whose test units mostly lie outside its support
 //! does not pass it. Trains small models: run under the device lock.
 #![allow(clippy::unwrap_used)]
@@ -28,7 +27,7 @@ use splinter_core::terms::UsagePolicy;
 use splinter_data::timeline_dataset::ProjectionSpec;
 use splinter_eval::metric_gate::decide;
 use splinter_eval::timeline_metrics::{
-    arm_metric, Arm, SERVE_ABSTENTION_RATE, SERVE_BATCH_MAX_ABS_DIFF, SERVE_INVALID_PROBABILITIES,
+    SERVE_ABSTENTION_RATE, SERVE_BATCH_MAX_ABS_DIFF, SERVE_INVALID_PROBABILITIES,
     SERVE_MAX_ABS_DIFF, SERVE_NON_MONOTONE_CURVES,
 };
 use splinter_model::timeline::scoring::CalibrationBasis;
@@ -88,7 +87,7 @@ fn the_calibration_is_packed_with_the_weights_and_round_trips() {
 }
 
 #[test]
-fn a_horizon_brain_declares_uncalibrated_has_nothing_to_judge_and_fails_unmeasured() {
+fn a_horizon_left_uncalibrated_is_judged_raw_and_the_record_says_so() {
     let (scratch, ctx) = context("timeline-calibration-gap");
     let file = write_synthetic(&scratch.0, "cohort.jsonl", 3000, 32);
     let split = prepare(&ctx, &file, "cohort", UsagePolicy::Redistributable, 3);
@@ -100,11 +99,14 @@ fn a_horizon_brain_declares_uncalibrated_has_nothing_to_judge_and_fails_unmeasur
     request.calibration = Some(CalibrationPlan {
         horizons: HORIZONS.to_vec(),
         min_events: Some(1_000_000),
+        kind: None,
     });
     let candidate = train_timeline_candidate(&ctx, &request).unwrap();
     let outcome = &candidate.candidate.calibration.as_ref().unwrap().outcome;
     assert!(outcome.calibrated.is_empty());
     assert!(!outcome.uncalibrated.is_empty());
+    assert_eq!(outcome.events.len(), outcome.uncalibrated.len());
+    assert!(outcome.events.iter().all(|e| !e.fitted));
 
     let baseline = train(&ctx, &split, training(3, 1));
     let measured = evaluate(
@@ -114,23 +116,19 @@ fn a_horizon_brain_declares_uncalibrated_has_nothing_to_judge_and_fails_unmeasur
         &split,
     );
     let scores = &measured.evaluation.comparison.candidate.views["death:a"];
+    assert!(!scores.horizons.is_empty());
     for h in &scores.horizons {
-        assert_eq!(h.calibration_basis, CalibrationBasis::Uncalibrated);
-        assert!(h.calibration.is_none(), "absent, never zero");
-        assert!(h.uno_c.is_some(), "discrimination is still the raw risk's");
+        assert_eq!(h.calibration_basis, CalibrationBasis::Raw);
+        assert!(h.calibration.is_some(), "the raw risk is what is judged");
     }
-    let name = arm_metric(Arm::Candidate, "death:a", Some(HORIZONS[0]), "slope");
-    assert!(!measured.evaluation.evidence.values.contains_key(&name));
-    let gate = decide(
-        &measured.evaluation.spec.calibration,
-        &measured.evaluation.evidence,
-    );
-    assert!(!gate.passed(), "an unmeasured calibration is not a pass");
-    // The all-cause union has no calibration of brain's to judge: raw.
-    assert!(measured.evaluation.comparison.candidate.views["death:any"]
-        .horizons
+    for j in measured
+        .evaluation
+        .judgements
         .iter()
-        .all(|h| h.calibration_basis == CalibrationBasis::Raw));
+        .filter(|j| j.code == "death:a")
+    {
+        assert_eq!(j.basis, Some(CalibrationBasis::Raw), "{j:?}");
+    }
 }
 
 /// A cohort whose source `cycle-b` is the same hazards on much older subjects

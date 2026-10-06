@@ -18,7 +18,12 @@
 //! participant group (never dividing a group) into the units early stopping
 //! reads and the units the calibration is fitted on: brain calibrates on
 //! subjects the model was neither trained nor early-stopped on, so the two
-//! uses cannot share a unit. The calibration is written beside the weights
+//! uses cannot share a unit. A calibration is only as good as the events
+//! behind it, so it gets at least [`DEFAULT_CALIBRATION_UNITS`] units (the
+//! request's `calibration_units`) when the part allows, and no less than half
+//! of it; early stopping always keeps a quarter. The calibrator is brain's
+//! default kind unless the plan names another, and the units and the events
+//! per code and horizon are recorded with the candidate. The calibration is written beside the weights
 //! (`calibration.json`), packed with them, and its digest recorded. The stage refuses datasets that are
 //! not parts of one split, a training part that shares a group with the
 //! validation part, and terms that do not permit training; it certifies,
@@ -64,9 +69,14 @@ use super::records::{
 pub const CALIBRATION_FILE: &str = "calibration.json";
 /// The file brain records the training support in, beside the weights.
 pub const SUPPORT_FILE: &str = "support.json";
-/// The share of the validation part's groups the calibration is fitted on;
-/// early stopping reads the rest.
-pub const CALIBRATION_SHARE: f64 = 0.5;
+/// The fewest validation units a calibration is fitted on, when the
+/// validation part is large enough to give them: a calibrator fitted on a few
+/// hundred events is mostly noise.
+pub const DEFAULT_CALIBRATION_UNITS: usize = 3000;
+/// The least share of the validation part the calibration is fitted on.
+pub const MIN_CALIBRATION_SHARE: f64 = 0.5;
+/// The most: early stopping always keeps the rest.
+pub const MAX_CALIBRATION_SHARE: f64 = 0.75;
 
 /// How many early-stopping subjects the probe a release is held to is taken on.
 pub const DEFAULT_PROBE_SUBJECTS: usize = 16;
@@ -87,9 +97,12 @@ pub struct TimelineTrainRequest {
     /// Early-stopping subjects the probe is taken on.
     pub probe_subjects: usize,
     /// Calibrate the trained model's risks on a share of the validation part
-    /// ([`CALIBRATION_SHARE`]) early stopping then does not read; `None`
-    /// trains a model that is served, and judged, raw.
+    /// early stopping then does not read; `None` trains a model that is
+    /// served, and judged, raw.
     pub calibration: Option<CalibrationPlan>,
+    /// The fewest validation units the calibration is fitted on, when the
+    /// validation part allows ([`DEFAULT_CALIBRATION_UNITS`]).
+    pub calibration_units: usize,
     /// The commit of Splinter that is training, as the caller knows it.
     pub splinter_commit: Option<String>,
 }
@@ -104,6 +117,7 @@ impl TimelineTrainRequest {
             config,
             probe_subjects: DEFAULT_PROBE_SUBJECTS,
             calibration: None,
+            calibration_units: DEFAULT_CALIBRATION_UNITS,
             splinter_commit: None,
         }
     }
@@ -111,10 +125,7 @@ impl TimelineTrainRequest {
     /// The same request, also calibrating the risk by each of `horizons`.
     #[must_use]
     pub fn calibrated_at(mut self, horizons: Vec<f64>) -> Self {
-        self.calibration = Some(CalibrationPlan {
-            horizons,
-            min_events: None,
-        });
+        self.calibration = Some(CalibrationPlan::at(horizons));
         self
     }
 }
@@ -224,27 +235,54 @@ pub fn load_bundle(
     TimelineModel::load(&dir).map_err(|e| lift(e.into()))
 }
 
+/// How many of `len` validation units the calibration takes: `wanted` when
+/// that is between the least and the most share of them.
+fn calibration_target(len: usize, wanted: usize) -> usize {
+    let least = (len as f64 * MIN_CALIBRATION_SHARE).ceil() as usize;
+    let most = (len as f64 * MAX_CALIBRATION_SHARE).floor() as usize;
+    wanted.clamp(least, most.max(least))
+}
+
 /// The validation part divided into the units early stopping reads and the
 /// units a calibration is fitted on, by participant group: a group is never
 /// divided, nothing is dropped, and the same units always divide the same way.
+/// The calibration gets at least `min_calibration_units` of them when that is
+/// within [`MIN_CALIBRATION_SHARE`] to [`MAX_CALIBRATION_SHARE`] of the part;
+/// a part too small for that gives the calibration the most share and early
+/// stopping the rest.
 pub fn divide_validation(
     held: &[Subject],
+    min_calibration_units: usize,
 ) -> Result<(Vec<Subject>, Vec<Subject>), OrchestratorError> {
-    let (early, calibration) = split_by_rule(
-        held,
-        |s| Membership {
-            group: s.group_id.clone(),
-            examinable: true,
-            side: None,
-        },
-        &SplitRule::monitor(CALIBRATION_SHARE),
-    )
-    .ok_or_else(|| {
-        OrchestratorError::Refused(format!(
-            "{} validation unit(s) cannot be divided into early-stopping and calibration units",
-            held.len()
-        ))
-    })?;
+    let membership = |s: &Subject| Membership {
+        group: s.group_id.clone(),
+        examinable: true,
+        side: None,
+    };
+    let mut sizes: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for s in held {
+        if let Some(group) = s.group_id.as_deref() {
+            *sizes.entry(group).or_default() += 1;
+        }
+    }
+    let largest_group = sizes.values().copied().max().unwrap_or(1);
+    let target = calibration_target(held.len(), min_calibration_units);
+    // Whole groups are taken for early stopping until its wanted count is
+    // reached or passed, by at most one group less one unit: asking for that
+    // much fewer keeps the calibration at or above its target.
+    let early_wanted = held
+        .len()
+        .saturating_sub(target)
+        .saturating_sub(largest_group - 1)
+        .max(1);
+    let share = (early_wanted as f64 + 0.5) / held.len().max(1) as f64;
+    let (calibration, early) = split_by_rule(held, membership, &SplitRule::monitor(share))
+        .ok_or_else(|| {
+            OrchestratorError::Refused(format!(
+                "{} validation unit(s) cannot be divided into early-stopping and calibration units",
+                held.len()
+            ))
+        })?;
     // `split_by_rule` takes the share out as its second half.
     Ok((
         early.into_iter().cloned().collect(),
@@ -330,7 +368,7 @@ pub fn train_timeline_candidate(
         .map_err(|e| OrchestratorError::Refused(format!("the fit is not certified: {e}")))?;
 
     let (early, calibration_units) = match &request.calibration {
-        Some(_) => divide_validation(&held)?,
+        Some(_) => divide_validation(&held, request.calibration_units)?,
         None => (held.clone(), Vec::new()),
     };
     let mut trained = train_timeline(&train, &early, &request.config).map_err(lift)?;
@@ -504,32 +542,63 @@ mod tests {
         subjects
     }
 
+    fn ids(part: &[Subject]) -> std::collections::HashSet<String> {
+        part.iter().map(|s| s.subject_id.clone()).collect()
+    }
+
+    fn groups(part: &[Subject]) -> std::collections::HashSet<String> {
+        part.iter().filter_map(|s| s.group_id.clone()).collect()
+    }
+
     #[test]
     fn validation_units_divide_by_group_without_loss_or_overlap() {
         let held = grouped(60);
-        let (early, calibration) = divide_validation(&held).unwrap();
+        let (early, calibration) = divide_validation(&held, 0).unwrap();
         assert_eq!(early.len() + calibration.len(), held.len());
         assert!(!early.is_empty() && !calibration.is_empty());
-        let groups = |part: &[Subject]| -> std::collections::HashSet<String> {
-            part.iter().filter_map(|s| s.group_id.clone()).collect()
-        };
         assert!(groups(&early).is_disjoint(&groups(&calibration)));
-        let ids = |part: &[Subject]| -> std::collections::HashSet<String> {
-            part.iter().map(|s| s.subject_id.clone()).collect()
-        };
         assert!(ids(&early).is_disjoint(&ids(&calibration)));
-        let (again_early, again_calibration) = divide_validation(&held).unwrap();
+        let (again_early, again_calibration) = divide_validation(&held, 0).unwrap();
         assert_eq!(ids(&early), ids(&again_early));
         assert_eq!(ids(&calibration), ids(&again_calibration));
         assert!(
-            calibration.len() * 2 <= held.len(),
-            "early stopping keeps at least half"
+            calibration.len() * 2 >= held.len(),
+            "calibration keeps at least half"
         );
     }
 
     #[test]
+    fn calibration_gets_the_units_it_asks_for_when_the_part_allows() {
+        let held = grouped(1000);
+        for wanted in [500, 620, 701, 750] {
+            let (early, calibration) = divide_validation(&held, wanted).unwrap();
+            assert!(
+                calibration.len() >= wanted,
+                "{wanted}: {}",
+                calibration.len()
+            );
+            assert_eq!(early.len() + calibration.len(), held.len());
+            assert!(groups(&early).is_disjoint(&groups(&calibration)));
+        }
+    }
+
+    #[test]
+    fn a_part_too_small_for_the_ask_keeps_a_quarter_for_early_stopping() {
+        let held = grouped(1000);
+        let (early, calibration) = divide_validation(&held, 5000).unwrap();
+        assert!(
+            calibration.len() >= 700 && calibration.len() <= 750,
+            "{}",
+            calibration.len()
+        );
+        assert!(early.len() >= 250, "{}", early.len());
+    }
+
+    #[test]
     fn too_few_validation_units_are_refused_by_name() {
-        let why = divide_validation(&grouped(1)).unwrap_err().to_string();
+        let why = divide_validation(&grouped(1), 3000)
+            .unwrap_err()
+            .to_string();
         assert!(why.contains("1 validation unit"), "{why}");
     }
 }

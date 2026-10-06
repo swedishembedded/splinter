@@ -48,6 +48,7 @@ fn fixture() -> Fixture {
     let plan = CalibrationPlan {
         horizons: vec![3.0, 6.0],
         min_events: Some(5),
+        kind: None,
     };
     calibrate_timeline(&mut model, calibration, &plan).unwrap();
     // Tests run in parallel: each fixture saves into a directory of its own.

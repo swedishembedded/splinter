@@ -38,6 +38,14 @@ pub enum Requirement {
         /// Upper bound.
         hi: f64,
     },
+    /// A value is at least `min`: a count the evidence must reach before a
+    /// judgement made on it means anything (events, units).
+    AtLeast {
+        /// The value's name.
+        value: String,
+        /// The least it may be.
+        min: f64,
+    },
     /// An interval contains `target`.
     Covers {
         /// The interval's name.
@@ -112,6 +120,13 @@ fn decide_one(r: &Requirement, e: &Evidence) -> Check<String> {
                     .then(|| format!("{value} {v:.6} is outside [{lo}, {hi}]")),
             ),
         },
+        Requirement::AtLeast { value, min } => match e.values.get(value) {
+            None => Check::unmeasured(format!("no value {value}")),
+            Some(&v) => check(
+                format!("{v:.6}"),
+                (v < *min).then(|| format!("{value} {v} is below the required {min}")),
+            ),
+        },
         Requirement::Covers { interval, target } => match e.intervals.get(interval) {
             None => Check::unmeasured(format!("no interval {interval}")),
             Some(&(lo, hi)) => check(
@@ -171,6 +186,7 @@ mod tests {
         e.intervals.insert("intercept".into(), (-0.2, 0.1));
         e.values.insert("slope".into(), 0.97);
         e.values.insert("dcal_p".into(), 0.3);
+        e.values.insert("events".into(), 250.0);
         e.values.insert("subgroup:sex=male".into(), -0.002);
         e.values.insert("subgroup:sex=female".into(), 0.001);
         e
@@ -192,6 +208,10 @@ mod tests {
                 interval: "intercept".into(),
                 target: 0.0,
             },
+            Requirement::AtLeast {
+                value: "events".into(),
+                min: 200.0,
+            },
             Requirement::NotWorseBy {
                 prefix: "subgroup:".into(),
                 bound: 0.002,
@@ -207,8 +227,11 @@ mod tests {
         let mut e = evidence();
         e.intervals.insert("ibs_diff".into(), (-0.004, 0.0005));
         e.values.insert("subgroup:sex=female".into(), 0.003);
+        e.values.insert("events".into(), 150.0);
         let g = decide(&reqs, &e);
-        assert!(!g.checks[0].1.passed && !g.checks[3].1.passed && g.checks[1].1.passed);
+        assert!(!g.checks[0].1.passed && !g.checks[4].1.passed && g.checks[1].1.passed);
+        assert!(!g.checks[3].1.passed, "150 events are below 200");
+        assert!(g.checks[3].1.reason.as_deref().unwrap().contains("below"));
     }
 
     #[test]

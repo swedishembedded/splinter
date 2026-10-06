@@ -25,6 +25,7 @@
 //! predict  the released file, loaded by plain brain: a patient history forecast, a new checkup appended, forecast again
 //! lineage  a release back to its training run, datasets, episodes, source lines and source file digests
 //! real     the same loop on a directory of timeline-v1 files, with terms from a declared policy
+//! preregistration the cohort, seeds and calibration rule fixed before the experiment
 //! ontology the outcome definitions and the datasets listed for each
 //! ```
 
@@ -42,7 +43,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use splinter_sdk::model::timeline::{Backbone, Mixer, NextEvents, StackConfig};
+use splinter_sdk::model::timeline::{Backbone, CalibrationKind, Mixer, NextEvents, StackConfig};
 use splinter_sdk::timeline::data::SplitPlan;
 
 use crate::ontology::{Ontology, NHANES_DATASET};
@@ -140,6 +141,24 @@ enum MixerArg {
     GatedDeltaNet,
     /// Gated delta rule blocks with an attention block every fourth.
     Hybrid,
+}
+
+/// The kind of calibrator fitted on the validation units.
+#[derive(Clone, Copy, ValueEnum)]
+enum KindArg {
+    /// A logistic map of the raw risk, no interval; brain's default.
+    Logistic,
+    /// Isotonic regression with a Venn-Abers interval; needs many more events.
+    VennAbers,
+}
+
+impl From<KindArg> for CalibrationKind {
+    fn from(kind: KindArg) -> Self {
+        match kind {
+            KindArg::Logistic => CalibrationKind::Logistic,
+            KindArg::VennAbers => CalibrationKind::VennAbers,
+        }
+    }
 }
 
 /// The optional heads and state of brain's timeline model; each is brain's
@@ -252,6 +271,13 @@ enum Command {
         /// units early stopping does not read, comma separated.
         #[arg(long, value_delimiter = ',', default_values_t = [5.0, 10.0])]
         calibrate_at: Vec<f64>,
+        /// The kind of calibrator (brain's default, logistic, when absent).
+        #[arg(long, value_enum)]
+        calibration_kind: Option<KindArg>,
+        /// The fewest validation units the calibration is fitted on, when the
+        /// validation part allows; early stopping reads the rest.
+        #[arg(long, default_value_t = steps::MIN_CALIBRATION_UNITS)]
+        calibration_units: usize,
         /// Train a model that is served raw, with no calibration.
         #[arg(long)]
         no_calibration: bool,
@@ -279,6 +305,14 @@ enum Command {
         /// The seed of the resamples; drawn and printed when not given.
         #[arg(long)]
         seed: Option<u64>,
+        /// The fewest test events of a code by a horizon for its calibration
+        /// to be judged; a horizon with fewer is uncertified, not failed.
+        #[arg(long, default_value_t = steps::MIN_TEST_EVENTS)]
+        min_test_events: usize,
+        /// Horizons, in years, every outcome code must be certified at for a
+        /// release: one the test part cannot judge rejects the candidate.
+        #[arg(long, value_delimiter = ',', default_values_t = [steps::REQUIRED_HORIZON])]
+        require: Vec<f64>,
     },
     /// Release the evaluated candidate if the gate passes; else record it as rejected.
     Release {
@@ -346,6 +380,8 @@ enum Command {
         #[command(flatten)]
         cut: Cut,
     },
+    /// Print the pre-registered experiment: cohort, seeds and calibration rule.
+    Preregistration,
     /// Print the outcome definitions and the datasets listed for each, or the
     /// cause group of an NHANES linked-mortality recode.
     Ontology {
@@ -407,6 +443,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             batch,
             shape,
             calibrate_at,
+            calibration_kind,
+            calibration_units,
             no_calibration,
         } => {
             let name = format!("train-{label}");
@@ -431,6 +469,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     } else {
                         calibrate_at
                     },
+                    calibration_kind: calibration_kind.map(Into::into),
+                    calibration_units,
                 },
             )?;
             emit(&run, &name, &report)?;
@@ -443,6 +483,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             all_cause_only,
             reps,
             seed,
+            min_test_events,
+            require,
         } => {
             let name = format!("eval-{label}");
             let report = steps::eval(
@@ -455,6 +497,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     all_cause_only,
                     reps,
                     seed,
+                    min_test_events,
+                    required: require,
                 },
             )?;
             emit(&run, &name, &report)?;
@@ -524,6 +568,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             )?;
             print(&report)?;
         }
+        Command::Preregistration => print(&steps::preregistration())?,
         Command::Ontology {
             nhanes_recode: Some(recode),
         } => {

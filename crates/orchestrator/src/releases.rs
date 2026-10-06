@@ -52,8 +52,8 @@ use splinter_store::StateRoot;
 use crate::error::{io, OrchestratorError};
 use crate::release_manifest::ManifestDocument;
 pub use crate::release_manifest::{
-    ArtifactKind, Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, MANIFEST_V2,
-    MANIFEST_V3, RELEASE_FORMAT,
+    ArtifactKind, CertifiedHorizon, Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact,
+    MANIFEST_V2, MANIFEST_V3, RELEASE_FORMAT,
 };
 use splinter_core::model_ref::is_alias_name;
 use splinter_core::terms::Distribution;

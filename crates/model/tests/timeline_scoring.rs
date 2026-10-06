@@ -14,7 +14,7 @@
 //! units. Trains small models: run under the device lock.
 #![allow(clippy::unwrap_used)]
 
-use splinter_eval::timeline_metrics::{arm_metric, diff_metric, Arm, NLL_DIFF};
+use splinter_eval::timeline_metrics::{arm_events, arm_metric, diff_metric, Arm, NLL_DIFF};
 use splinter_model::timeline::scoring::{
     compare, predict_arm, CalibrationBasis, Comparison, ScoreSpec, Subgroup, SubgroupRule,
 };
@@ -117,12 +117,14 @@ fn scoring_is_measured_paired_reproducible_and_absent_where_unmeasured() {
         evidence.intervals[NLL_DIFF]
     );
 
-    // Too few events: absent, not zero.
+    // Too few events: absent, not zero (the counts themselves are reported).
     let mut strict = spec.clone();
     strict.min_events = 100_000;
     let none = run(&f, &strict).evidence();
     assert!(
-        none.values.keys().all(|k| !k.contains(":h")),
+        none.values
+            .keys()
+            .all(|k| !k.contains(":h") || k.ends_with(":events")),
         "{:?}",
         none.values.keys().collect::<Vec<_>>()
     );
@@ -210,6 +212,30 @@ fn brains_evaluation_of_a_code_is_what_the_union_view_computes_independently() {
 }
 
 #[test]
+fn events_are_reported_at_every_horizon_even_where_nothing_else_is_measured() {
+    let f = fixture();
+    let mut spec = spec(vec![3.0, 6.0]);
+    spec.min_events = 1_000_000;
+    let comparison = run(&f, &spec);
+    let evidence = comparison.evidence();
+    for arm in [Arm::Champion, Arm::Candidate] {
+        let counts: Vec<f64> = [3.0, 6.0]
+            .iter()
+            .map(|h| evidence.values[&arm_events(arm, "death:a", *h)])
+            .collect();
+        assert!(counts[0] > 0.0 && counts[0] <= counts[1], "{counts:?}");
+        assert!(
+            !evidence
+                .values
+                .contains_key(&arm_metric(arm, "death:a", Some(3.0), "slope")),
+            "no calibration is reported below the measurement minimum"
+        );
+    }
+    assert!(comparison.candidate.views["death:a"].horizons.is_empty());
+    assert!(comparison.candidate_basis("death:a", 3.0).is_none());
+}
+
+#[test]
 fn calibration_is_judged_on_the_risk_the_model_is_served_as_and_the_record_says_which() {
     let (all, _) = synthetic::population(1600, 8);
     let (train, rest) = all.split_at(800);
@@ -239,6 +265,7 @@ fn calibration_is_judged_on_the_risk_the_model_is_served_as_and_the_record_says_
     let plan = CalibrationPlan {
         horizons: vec![4.0],
         min_events: Some(5),
+        kind: None,
     };
     let outcome = calibrate_timeline(&mut model, validation, &plan).unwrap();
     assert!(outcome
@@ -246,23 +273,34 @@ fn calibration_is_judged_on_the_risk_the_model_is_served_as_and_the_record_says_
         .iter()
         .any(|(c, h)| c == "death:a" && *h == 4.0));
     assert_eq!(
+        outcome.kind,
+        Some(splinter_model::timeline::CalibrationKind::Logistic)
+    );
+    let recorded = outcome
+        .events
+        .iter()
+        .find(|e| e.code == "death:a" && e.horizon == 4.0)
+        .expect("the validation events behind a calibrated pair are recorded");
+    assert!(recorded.fitted && recorded.events >= 5);
+    assert_eq!(
         basis(&model),
         [
             (CalibrationBasis::Calibrated, true),
             (CalibrationBasis::Raw, true)
         ]
     );
-    // Asked for but declared uncalibrated by brain: nothing is judged there.
+    // Asked for but left uncalibrated by brain: the model is raw there, and
+    // judged raw, never as if it had a calibration.
     let plan = CalibrationPlan {
         horizons: vec![4.0, 8.0],
         min_events: Some(1_000_000),
+        kind: None,
     };
-    calibrate_timeline(&mut model, validation, &plan).unwrap();
+    let outcome = calibrate_timeline(&mut model, validation, &plan).unwrap();
+    assert!(outcome.events.iter().all(|e| !e.fitted));
+    assert_eq!(outcome.events.len(), outcome.uncalibrated.len());
     assert_eq!(
         basis(&model),
-        [
-            (CalibrationBasis::Uncalibrated, false),
-            (CalibrationBasis::Uncalibrated, false)
-        ]
+        [(CalibrationBasis::Raw, true), (CalibrationBasis::Raw, true)]
     );
 }

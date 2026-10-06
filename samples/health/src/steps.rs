@@ -17,15 +17,21 @@ use std::path::Path;
 use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 use splinter_sdk::data::timeline_dataset::ProjectionSpec;
-use splinter_sdk::measure::timeline_metrics::{CalibrationBands, CodePlan, TimelinePlan};
+use splinter_sdk::measure::timeline_metrics::{
+    CalibrationBands, CodePlan, RequiredHorizon, TimelinePlan, DEFAULT_MIN_TEST_EVENTS,
+};
 use splinter_sdk::model::timeline::scoring::{ScoreSpec, Subgroup, SubgroupRule};
-use splinter_sdk::model::timeline::{Backbone, NextEvents, TimelineTraining};
+use splinter_sdk::model::timeline::{
+    Backbone, CalibrationKind, CalibrationPlan, NextEvents, TimelineTraining,
+};
 use splinter_sdk::timeline::data::{
     import_records, split_timeline, ImportRequest, SplitPlan, SplitRequest,
 };
 use splinter_sdk::timeline::evaluate::{evaluate_timeline, Champion, TimelineEvaluateRequest};
 use splinter_sdk::timeline::release::{release_timeline, TimelineReleaseRequest};
-use splinter_sdk::timeline::train::{train_timeline_candidate, TimelineTrainRequest};
+use splinter_sdk::timeline::train::{
+    train_timeline_candidate, TimelineTrainRequest, DEFAULT_CALIBRATION_UNITS,
+};
 use splinter_sdk::vocabulary::terms::{Distribution, Terms};
 use splinter_sdk::Context;
 
@@ -184,6 +190,45 @@ pub struct TrainArgs {
     /// The horizons the trained model's risks are calibrated at, on the
     /// validation units early stopping does not read; none leaves it raw.
     pub calibrate_at: Vec<f64>,
+    /// The kind of calibrator; brain's default (logistic) when `None`.
+    pub calibration_kind: Option<CalibrationKind>,
+    /// The fewest validation units the calibration is fitted on, when the
+    /// validation part allows.
+    pub calibration_units: usize,
+}
+
+/// The seeds the release experiment is run over, declared before any run.
+pub const PRE_REGISTERED_SEEDS: [u64; 5] = [1, 2, 3, 4, 5];
+/// The horizon, in years, every outcome code must be certified at for a
+/// release, unless the command line names others.
+pub const REQUIRED_HORIZON: f64 = 5.0;
+/// The fewest validation units the calibration is fitted on, unless the
+/// command line asks for another.
+pub const MIN_CALIBRATION_UNITS: usize = DEFAULT_CALIBRATION_UNITS;
+/// The fewest test events of a code by a horizon for its calibration to be
+/// judged, unless the command line asks for another.
+pub const MIN_TEST_EVENTS: usize = DEFAULT_MIN_TEST_EVENTS;
+
+/// The pre-registered experiment as data: the cohort, the seeds and the
+/// calibration rule of the release gate, as the defaults of this sample fix them.
+pub fn preregistration() -> serde_json::Value {
+    let b = bands();
+    serde_json::json!({
+        "participants": crate::synth::DEFAULT_PARTICIPANTS,
+        "training_seeds": PRE_REGISTERED_SEEDS,
+        "calibration": {
+            "kind": "logistic (brain's default)",
+            "min_units": MIN_CALIBRATION_UNITS,
+        },
+        "judged_from_test_events": MIN_TEST_EVENTS,
+        "required_horizon": REQUIRED_HORIZON,
+        "bands": {
+            "slope": b.slope,
+            "intercept_in_the_large": b.intercept_in_the_large,
+            "observed_over_expected": b.oe,
+            "max_ece": b.max_ece,
+        },
+    })
 }
 
 /// The outcome codes a dataset is trained on: what it supplies, each of them
@@ -233,6 +278,13 @@ pub fn train(run: &Run, args: &TrainArgs) -> Result<serde_json::Value> {
         TimelineTrainRequest::new(&split.report.train, &split.report.validation, config);
     if !args.calibrate_at.is_empty() {
         request = request.calibrated_at(args.calibrate_at.clone());
+        if let Some(plan) = request.calibration.as_mut() {
+            *plan = CalibrationPlan {
+                kind: args.calibration_kind,
+                ..plan.clone()
+            };
+        }
+        request.calibration_units = args.calibration_units;
     }
     request.splinter_commit = splinter_commit();
     let trained = train_timeline_candidate(&ctx, &request)?;
@@ -253,8 +305,11 @@ pub fn train(run: &Run, args: &TrainArgs) -> Result<serde_json::Value> {
         "round_trip_max_abs_diff": c.round_trip_max_abs_diff,
         "calibration": c.calibration.as_ref().map(|k| serde_json::json!({
             "digest": k.digest.to_string(),
+            "kind": k.outcome.kind,
             "units": k.outcome.units,
             "early_stopping_units": k.early_stopping_units,
+            "min_events": k.outcome.min_events,
+            "events": k.outcome.events,
             "calibrated": k.outcome.calibrated,
             "uncalibrated": k.outcome.uncalibrated,
         })),
@@ -280,10 +335,15 @@ pub struct EvalArgs {
     pub reps: usize,
     /// The resampling seed; drawn and printed when `None`.
     pub seed: Option<u64>,
+    /// The fewest test events of a code by a horizon for its calibration to
+    /// be judged; a horizon with fewer is uncertified.
+    pub min_test_events: usize,
+    /// The horizons every outcome code must be certified at for a release.
+    pub required: Vec<f64>,
 }
 
-/// The bands the plan holds a candidate's calibration to, registered in the
-/// README beside the reason for each.
+/// The bands the plan holds a candidate's calibration to at every judged
+/// horizon, registered in the README beside the reason for each.
 pub fn bands() -> CalibrationBands {
     CalibrationBands {
         slope: (0.7, 1.4),
@@ -328,8 +388,19 @@ pub fn eval(run: &Run, args: &EvalArgs) -> Result<serde_json::Value> {
         codes.iter().map(|c| judged(c, false)).collect()
     };
     plan_codes.push(judged(ALL_CAUSE, true));
+    let required = codes
+        .iter()
+        .flat_map(|code| {
+            args.required.iter().map(|horizon| RequiredHorizon {
+                code: code.clone(),
+                horizon: *horizon,
+            })
+        })
+        .collect();
     let plan = TimelinePlan {
         codes: plan_codes,
+        min_test_events: args.min_test_events,
+        required,
         improve_nll: true,
         calibration: bands(),
         subgroups: record.subgroups.iter().map(|s| s.name.clone()).collect(),
@@ -365,6 +436,7 @@ pub fn eval(run: &Run, args: &EvalArgs) -> Result<serde_json::Value> {
         "candidate": e.candidate,
         "champion": e.champion,
         "test_units": e.comparison.units.len(),
+        "judgements": e.judgements,
         "candidate_minus_champion": intervals,
         "values": e.evidence.values.iter().filter(|(k, _)| k.starts_with("candidate:") || k.starts_with("subgroup") || k.starts_with("serve")).collect::<std::collections::BTreeMap<_, _>>(),
     }))
@@ -418,6 +490,16 @@ pub fn release(run: &Run, evaluation: &str, alias: &str, unrestricted: bool) -> 
             report.policy.reason.clone().unwrap_or_default()
         ));
     }
+    let certified = match &released.release {
+        Some(id) => {
+            ctx.releases()
+                .get(id)?
+                .manifest
+                .provenance
+                .certified_horizons
+        }
+        None => Default::default(),
+    };
     Ok(Decision {
         released: released.release.is_some(),
         report: serde_json::json!({
@@ -429,6 +511,7 @@ pub fn release(run: &Run, evaluation: &str, alias: &str, unrestricted: bool) -> 
             "artifact": released.artifact.map(|p| p.display().to_string()),
             "distribution": if unrestricted { "unrestricted" } else { "restricted" },
             "units": report.units,
+            "certified_horizons": certified,
             "failed_checks": failed,
         }),
     })

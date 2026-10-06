@@ -30,11 +30,12 @@ pub mod training;
 
 pub use brain::survival;
 pub use brain::timeline::{
-    observed, read_jsonl, synthetic, AtRisk, Backbone, Calibration, Event, ForecastRequest, Gap,
-    Mixer, Observation, PatientHistory, Prediction, RiskForecast, StackConfig, Subject,
-    TimelineConfig, TimelineModel, TimelineReport, TimelineSpec, Value,
+    observed, read_jsonl, synthetic, AtRisk, Backbone, Calibration, CalibrationKind, Event,
+    ForecastRequest, Gap, Mixer, Observation, PatientHistory, Prediction, RiskForecast,
+    StackConfig, Subject, TimelineConfig, TimelineModel, TimelineReport, TimelineSpec, Value,
 };
 pub use training::{
-    brain_revision, calibrate_timeline, derive_knots, train_timeline, CalibrationOutcome,
-    CalibrationPlan, NextEvents, TimelineError, TimelineTraining, TrainedTimeline,
+    brain_revision, calibrate_timeline, derive_knots, train_timeline, CalibrationEvents,
+    CalibrationOutcome, CalibrationPlan, NextEvents, TimelineError, TimelineTraining,
+    TrainedTimeline,
 };

@@ -137,10 +137,10 @@ fn a_better_candidate_is_released_and_a_worse_one_is_rejected_and_recorded() {
         let expected = if calibrated {
             CalibrationBasis::Calibrated
         } else {
-            CalibrationBasis::Uncalibrated
+            CalibrationBasis::Raw
         };
         assert_eq!(h.calibration_basis, expected, "death:a by {}", h.horizon);
-        assert_eq!(h.calibration.is_some(), calibrated);
+        assert!(h.calibration.is_some());
     }
     assert!(comparison.candidate.views[ALL_CAUSE]
         .horizons

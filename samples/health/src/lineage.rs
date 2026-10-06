@@ -66,6 +66,34 @@ pub fn render(l: &TimelineLineage) -> String {
             let _ = writeln!(out, "    served raw: no calibration");
         }
     }
+    if let Some(c) = &l.calibration {
+        let kind = c.kind.map_or("not recorded", |k| k.name());
+        for e in &c.events {
+            let _ = writeln!(
+                out,
+                "    calibration events {} by {}: {} ({}, {kind})",
+                e.code,
+                e.horizon,
+                e.events,
+                if e.fitted { "fitted" } else { "left raw" }
+            );
+        }
+    }
+    if l.certified_horizons.is_empty() {
+        let _ = writeln!(
+            out,
+            "    certified horizons: none; no calibrated risk is certified"
+        );
+    }
+    for (code, horizons) in &l.certified_horizons {
+        for h in horizons {
+            let _ = writeln!(
+                out,
+                "    certified {code} by {}: judged on {} test events, {:?} risk",
+                h.horizon, h.test_events, h.basis
+            );
+        }
+    }
     for split in &l.evaluation_splits {
         let _ = writeln!(out, "    judged on the held-out units {split}");
     }

@@ -26,7 +26,7 @@ use super::{
     observed, Backbone, Gap, Subject, TimelineModel, TimelineReport, TimelineSpec,
     TimelineSpec as Spec,
 };
-use brain::timeline::CalibrationSpec;
+use brain::timeline::{CalibrationKind, CalibrationSpec};
 
 /// Hazard pieces a derived knot grid has when the request names no count.
 pub const DEFAULT_PIECES: usize = 8;
@@ -330,9 +330,40 @@ pub struct CalibrationPlan {
     /// model's last knot.
     pub horizons: Vec<f64>,
     /// The fewest validation events a code needs by a horizon to be
-    /// calibrated there (and as many still event-free); brain's own minimum
-    /// when `None`.
+    /// calibrated there (and as many still event-free); the kind's own
+    /// minimum when `None`.
     pub min_events: Option<usize>,
+    /// The kind of calibrator; brain's default (a logistic map, no interval)
+    /// when `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<CalibrationKind>,
+}
+
+impl CalibrationPlan {
+    /// A plan calibrating at `horizons` with brain's defaults.
+    #[must_use]
+    pub fn at(horizons: Vec<f64>) -> Self {
+        Self {
+            horizons,
+            min_events: None,
+            kind: None,
+        }
+    }
+}
+
+/// How many validation events a (code, horizon) had, and whether a calibrator
+/// was fitted on them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationEvents {
+    /// The outcome code.
+    pub code: String,
+    /// The horizon.
+    pub horizon: f64,
+    /// Validation events of the code by the horizon.
+    pub events: usize,
+    /// Whether a calibrator was fitted (otherwise the pair is in
+    /// [`CalibrationOutcome::uncalibrated`], with the reason).
+    pub fitted: bool,
 }
 
 /// What fitting a calibration did.
@@ -342,8 +373,14 @@ pub struct CalibrationOutcome {
     pub plan: CalibrationPlan,
     /// Subjects the calibrators were fitted on.
     pub units: usize,
+    /// The kind of calibrator fitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<CalibrationKind>,
     /// The event minimum that applied.
     pub min_events: usize,
+    /// The validation events behind every (code, horizon) asked for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<CalibrationEvents>,
     /// The (code, horizon) pairs calibrated.
     pub calibrated: Vec<(String, f64)>,
     /// The pairs the validation data could not support: not calibrated, and
@@ -366,6 +403,9 @@ pub fn calibrate_timeline(
         ));
     }
     let mut spec = CalibrationSpec::new(plan.horizons.iter().copied());
+    if let Some(kind) = plan.kind {
+        spec = spec.kind(kind);
+    }
     if let Some(n) = plan.min_events {
         spec = spec.min_events(n);
     }
@@ -373,7 +413,24 @@ pub fn calibrate_timeline(
     Ok(CalibrationOutcome {
         plan: plan.clone(),
         units: fitted.validation_subjects,
+        kind: Some(fitted.kind),
         min_events: fitted.min_events,
+        events: fitted
+            .entries()
+            .iter()
+            .map(|e| CalibrationEvents {
+                code: e.code.clone(),
+                horizon: e.horizon,
+                events: e.events,
+                fitted: true,
+            })
+            .chain(fitted.uncalibrated().iter().map(|g| CalibrationEvents {
+                code: g.code.clone(),
+                horizon: g.horizon,
+                events: g.events,
+                fitted: false,
+            }))
+            .collect(),
         calibrated: fitted
             .entries()
             .iter()

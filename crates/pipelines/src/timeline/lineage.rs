@@ -27,8 +27,10 @@ use splinter_core::release::ReleaseId;
 use splinter_core::terms::{Distribution, Terms};
 use splinter_data::split::Part;
 use splinter_data::timeline_dataset::SourceFile;
+use splinter_model::timeline::{CalibrationEvents, CalibrationKind};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::releases::CertifiedHorizon;
 use splinter_store::longitudinal::LongitudinalStore;
 
 use super::records::TimelineCandidate;
@@ -87,6 +89,10 @@ pub struct CalibrationTrace {
     pub units_digest: Digest,
     /// Validation units early stopping read instead.
     pub early_stopping_units: usize,
+    /// The kind of calibrator; absent for a record made before kinds existed.
+    pub kind: Option<CalibrationKind>,
+    /// The validation events behind each (code, horizon) asked for.
+    pub events: Vec<CalibrationEvents>,
     /// The (code, horizon) pairs brain left uncalibrated for want of events.
     pub uncalibrated: Vec<(String, f64)>,
 }
@@ -120,6 +126,9 @@ pub struct TimelineLineage {
     pub terms: Terms,
     /// Its calibration; `None` for a release served raw.
     pub calibration: Option<CalibrationTrace>,
+    /// The horizons the gate certified, by outcome code: its risk is
+    /// calibrated only there.
+    pub certified_horizons: BTreeMap<String, Vec<CertifiedHorizon>>,
     /// The datasets it was trained on.
     pub datasets: Vec<DatasetTrace>,
 }
@@ -139,6 +148,8 @@ fn calibration_trace(
             units: c.outcome.units,
             units_digest: c.units_digest.clone(),
             early_stopping_units: c.early_stopping_units,
+            kind: c.outcome.kind,
+            events: c.outcome.events.clone(),
             uncalibrated: c
                 .outcome
                 .uncalibrated
@@ -248,6 +259,7 @@ pub fn timeline_lineage(
         distribution: stored.manifest.distribution,
         terms: stored.manifest.terms.clone(),
         calibration: calibration_trace(&record, stored.manifest.provenance.calibration.as_ref())?,
+        certified_horizons: stored.manifest.provenance.certified_horizons.clone(),
         datasets,
     })
 }
