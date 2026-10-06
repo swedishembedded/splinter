@@ -13,8 +13,9 @@
 //! * [`fine_tune`]: supervised fine-tuning on a `generic-messages-v2` chat
 //!   dataset through [`brain::ChatFineTune`], which validates both halves
 //!   of the split against the base's tokenizer and chat template, trains
-//!   the adapter on one (with any replayed datasets mixed in), and scores
-//!   base and tuned on the other at one precision.
+//!   the adapter on one (with any replayed datasets mixed in, each weighted
+//!   file at its own share of the draws), and scores base and tuned on the
+//!   other at one precision.
 //! * [`train_preference`]: direct preference optimisation on a
 //!   `generic-preference-v1` pair dataset through
 //!   [`brain::PreferenceFineTune`], against a frozen reference - the model
@@ -78,6 +79,11 @@ pub struct FineTune<'a> {
     /// The share of training draws that come from `replay` in all; `None`
     /// mixes the plain union, in which a large replay set takes most steps.
     pub replay_share: Option<f32>,
+    /// Chat datasets each mixed into training at a share of the draws of
+    /// its own (never held out), beside `replay`: a base model's own answers
+    /// rehearsed at a set rate, say. The shares, with `replay_share`, leave
+    /// the new records the rest.
+    pub weighted_replay: &'a [(PathBuf, f32)],
     /// Records averaged into one optimizer step: the effective batch size.
     pub grad_accum: u32,
     /// An adapter to continue training instead of starting a fresh one; its
@@ -92,6 +98,10 @@ pub struct FineTune<'a> {
     pub bf16_base: bool,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
+    /// The seed of a fresh adapter's initialisation and the batch order;
+    /// brain's default when `None`. Two runs that differ only here show
+    /// how much of a measured difference is the draw.
+    pub seed: Option<u64>,
     /// Whether the model is trained to reason before it answers. Off, it is
     /// trained for no-think mode - what Splinter asks of it by default - so a
     /// reasoning model trains on the state a no-think prompt leaves it in
@@ -266,6 +276,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     for replayed in request.replay {
         validate_dataset(replayed)?;
     }
+    for (weighted, _) in request.weighted_replay {
+        validate_dataset(weighted)?;
+    }
     if let Some(monitor) = request.monitor {
         validate_dataset(monitor)?;
     } else if request.eval_every > 0 {
@@ -298,8 +311,14 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
     }
+    if let Some(seed) = request.seed {
+        fine_tune = fine_tune.seed(seed);
+    }
     for replayed in request.replay {
         fine_tune = fine_tune.replay(replayed);
+    }
+    for (weighted, share) in request.weighted_replay {
+        fine_tune = fine_tune.replay_at(weighted, *share);
     }
     if let Some(adapter) = request.continue_from {
         fine_tune = fine_tune.continue_from(adapter);

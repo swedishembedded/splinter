@@ -107,6 +107,26 @@ pub struct ReplaySample {
     pub digest: Option<Digest>,
 }
 
+/// The base model's own answers to general prompts rehearsed beside the new
+/// records, so the new data does not move the model off what it already
+/// does.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RehearsalSample {
+    /// The rehearsal dataset the records came from.
+    pub dataset: DatasetId,
+    /// The share of the training draws the rehearsed records take.
+    pub share: f32,
+    /// Records rehearsed: mixed into training at `share`.
+    pub trained: usize,
+    /// Records set aside for the monitoring set instead, so the step
+    /// selected is the one that keeps the base's answers as well as it fits
+    /// the new ones.
+    pub monitored: usize,
+    /// The digest of the file of rehearsed records; `None` when there were
+    /// none.
+    pub digest: Option<Digest>,
+}
+
 /// A preference candidate's measurements: brain's preference score of the
 /// adapter against the reference it was trained against.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

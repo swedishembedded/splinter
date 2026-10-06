@@ -41,6 +41,7 @@ use splinter_pipelines::train::{
 fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
     TrainRequest {
         datasets: datasets.iter().map(ToString::to_string).collect(),
+        rehearsal: None,
         from: policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
         steps: Some(1),

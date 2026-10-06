@@ -60,6 +60,7 @@ pub mod learn;
 pub mod lineage;
 pub mod plan;
 pub mod raft;
+pub mod rehearsal;
 pub mod release;
 pub mod rerank;
 pub mod retrieval;

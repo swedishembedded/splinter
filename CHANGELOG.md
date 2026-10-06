@@ -17,6 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A stored document of measured floating-point numbers was refused on read as altered: serde_json now parses floats exactly.
 
 ### Added (earlier)
+- Rehearsal of the base model's own answers, against the forgetting a persona
+  fine-tune shows on the anchor suite: the `rehearse` stage of `learn` (and
+  `splinter rehearse --records N`) builds a dataset of general tasks the base
+  answers itself - `arithmetic` and `format` tasks built by code from a seed
+  with their references, and general requests the base writes one domain at a
+  time - answered by the base with no adapter under the default prompt,
+  decoding greedily, graded by the kinds' code verifiers alone; the new
+  `rehearsal` view keeps every answer not decided wrong. No anchor task, nor a
+  near copy of one, is ever in the set, and the gate's leakage check reads the
+  rehearsed records. `learn --rehearsal SHARE` (default a quarter of the
+  training draws for a run with a persona; `0` turns it off) and `train
+  --rehearsal DATASET-ID [--rehearsal-share F]` mix the records in at their own
+  share, never held out, and put a monitoring share of them into the
+  monitoring set, so the step carried balances the new records against the
+  base's answers. Candidates, releases and the lineage record the rehearsal.
+- `train --seed N` and `learn --seed N`: the seed of the adapter's
+  initialisation and the batch order, so two runs that differ only in it
+  show how much of a measured difference is the draw.
+- `eval` names the tasks a model got wrong on each suite, with the answer it
+  gave (`missed`), so what a candidate lost against the base can be read off
+  two evaluations.
 - A supervised training run is watched as it trains: a share of its training
   families (`--monitor-share`, default a tenth, whole families, never the
   held-out ones the gate and the exam decide on) is scored every

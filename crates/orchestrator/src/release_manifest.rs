@@ -24,7 +24,7 @@ use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_core::terms::{Distribution, Terms};
-use splinter_core::training::{ReplaySample, TrainingSummary};
+use splinter_core::training::{RehearsalSample, ReplaySample, TrainingSummary};
 use splinter_eval::gate::GateReport;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveReport;
@@ -202,6 +202,10 @@ pub struct ReleaseManifest {
     pub datasets: Vec<DatasetId>,
     /// The earlier records replayed beside them.
     pub replay: Option<ReplaySample>,
+    /// The base's own answers rehearsed beside them; `None` when none
+    /// were, and for a release recorded before rehearsal was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rehearsal: Option<RehearsalSample>,
     /// How it was trained.
     pub training: TrainingSummary,
     /// The gate it passed, with every number.
@@ -308,6 +312,7 @@ impl ManifestV3 {
             candidate: self.candidate,
             datasets: self.datasets,
             replay: self.replay,
+            rehearsal: None,
             training: self.training,
             gate: ReleaseGate::Llm {
                 report: Box::new(self.gate),

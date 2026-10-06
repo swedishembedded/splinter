@@ -34,7 +34,7 @@ use splinter_store::tasks::{TaskSet, TaskSetId};
 
 use crate::curriculum::frontier::tally;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
-use crate::verify::{verify_set, Verified};
+use crate::verify::{verify_set, Grading, Verified};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -106,7 +106,12 @@ pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, Orches
             cancel: request.cancel.clone(),
         },
     )?;
-    let verify = verify_set(ctx, &solve.experience_set, None, &request.cancel)?;
+    let verify = verify_set(
+        ctx,
+        &solve.experience_set,
+        Grading::ActiveJudge,
+        &request.cancel,
+    )?;
     Ok(Taught {
         task_set,
         solve,

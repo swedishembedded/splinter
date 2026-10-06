@@ -551,6 +551,64 @@ fn learn_can_distill_and_tune_the_training_it_runs() {
 }
 
 #[test]
+fn a_rehearsal_is_built_by_its_own_verb_and_mixed_in_by_train() {
+    let Command::Rehearse(args) = command(&["rehearse", "--records", "120"]) else {
+        panic!("rehearse");
+    };
+    assert_eq!(args.records, 120);
+    assert!(
+        parse(&["rehearse"]).is_err(),
+        "the size is the caller's to say"
+    );
+    assert!(parse(&["rehearse", "--records", "0"]).is_err());
+
+    let Command::Train(plain) = command(&["train", "ds-1"]) else {
+        panic!("train");
+    };
+    assert_eq!(
+        (plain.rehearsal, plain.rehearsal_share, plain.seed),
+        (None, None, None)
+    );
+    let Command::Train(mixed) = command(&[
+        "train",
+        "ds-1",
+        "--rehearsal",
+        "ds-2",
+        "--rehearsal-share",
+        "0.3",
+        "--seed",
+        "1338",
+    ]) else {
+        panic!("train --rehearsal");
+    };
+    assert_eq!(mixed.rehearsal.as_deref(), Some("ds-2"));
+    assert_eq!((mixed.rehearsal_share, mixed.seed), (Some(0.3), Some(1338)));
+    assert!(
+        parse(&["train", "ds-1", "--rehearsal-share", "0.3"]).is_err(),
+        "a share of nothing"
+    );
+    for bad in ["0", "1", "1.5"] {
+        assert!(
+            parse(&[
+                "train",
+                "ds-1",
+                "--rehearsal",
+                "ds-2",
+                "--rehearsal-share",
+                bad
+            ])
+            .is_err(),
+            "{bad}"
+        );
+    }
+    let Command::Learn(learn) = command(&["learn", "docs", "--rehearsal", "0"]) else {
+        panic!("learn");
+    };
+    assert_eq!(learn.rehearsal, Some(0.0), "0 turns it off");
+    assert!(parse(&["learn", "docs", "--rehearsal", "1"]).is_err());
+}
+
+#[test]
 fn learn_names_the_model_that_plans() {
     let Command::Learn(plain) = command(&["learn", "docs"]) else {
         panic!("learn");

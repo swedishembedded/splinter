@@ -51,23 +51,34 @@ impl SftFinal {
 
     fn record(&self, entry: &Entry) -> Result<(RecordBody, Provenance), Exclusion> {
         require_pass(entry, self.min_strength)?;
-        let answer = entry
-            .experience
-            .final_output
-            .as_deref()
-            .ok_or(Exclusion::NoFinalOutput)?;
-        let turn = student_turn(entry, &self.strip)?;
-        let messages = dialogue(&entry.experience.trajectory, &turn).unwrap_or_else(|| {
-            vec![
-                message("user", &turn, false),
-                message("assistant", answer, true),
-            ]
-        });
-        Ok((
-            RecordBody::Chat { messages },
-            Provenance::of(vec![entry.id.clone()]),
-        ))
+        final_answer_record(entry, &self.strip)
     }
+}
+
+/// `entry`'s final answer as a chat record, whatever its verdicts: the
+/// student's turn under `strip` and the answer supervised, or the whole
+/// dialogue when the trajectory is one. The shape every view of a final
+/// answer yields; which entries qualify is the view's.
+pub(crate) fn final_answer_record(
+    entry: &Entry,
+    strip: &Strip,
+) -> Result<(RecordBody, Provenance), Exclusion> {
+    let answer = entry
+        .experience
+        .final_output
+        .as_deref()
+        .ok_or(Exclusion::NoFinalOutput)?;
+    let turn = student_turn(entry, strip)?;
+    let messages = dialogue(&entry.experience.trajectory, &turn).unwrap_or_else(|| {
+        vec![
+            message("user", &turn, false),
+            message("assistant", answer, true),
+        ]
+    });
+    Ok((
+        RecordBody::Chat { messages },
+        Provenance::of(vec![entry.id.clone()]),
+    ))
 }
 
 impl View for SftFinal {

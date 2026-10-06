@@ -239,6 +239,7 @@ pub fn release_predictive(
         candidate: request.candidate.clone(),
         datasets: dataset_ids,
         replay: None,
+        rehearsal: None,
         training: TrainingSummary {
             from: request.training.from.clone(),
             steps: request.training.steps,

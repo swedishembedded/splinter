@@ -63,7 +63,7 @@ use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::anchor;
 use splinter_pipelines::solving::solve_set;
 use splinter_pipelines::status::status;
-use splinter_pipelines::verify::verify_set;
+use splinter_pipelines::verify::{verify_set, Grading};
 use splinter_store::decision::decide as decision;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
@@ -511,7 +511,13 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "gamma"]));
     let set = facts(&ctx, &["alpha", "gamma"], 3);
     let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new()).unwrap();
-    verify_set(&ctx, &solved.experience_set, None, &CancelToken::new()).unwrap();
+    verify_set(
+        &ctx,
+        &solved.experience_set,
+        Grading::ActiveJudge,
+        &CancelToken::new(),
+    )
+    .unwrap();
 
     let base = weakest(&ctx, 5).unwrap();
     assert_eq!(base.policy.release, None);
@@ -524,7 +530,13 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     let release = released(&ctx, "alpha", &[ANCHOR, "alpha", "gamma"]);
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "alpha"]));
     let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new()).unwrap();
-    verify_set(&ctx, &solved.experience_set, None, &CancelToken::new()).unwrap();
+    verify_set(
+        &ctx,
+        &solved.experience_set,
+        Grading::ActiveJudge,
+        &CancelToken::new(),
+    )
+    .unwrap();
 
     let now = status(&ctx).unwrap().concepts;
     assert_eq!(now.policy.release, Some(release.clone()));

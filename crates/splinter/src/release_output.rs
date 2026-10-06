@@ -221,6 +221,18 @@ impl Report for Evaluated {
                     String::new()
                 }
             );
+            for missed in &score.missed {
+                let _ = writeln!(
+                    out,
+                    "    missed ({}): {} -> {}",
+                    missed.kind,
+                    missed.instruction.replace('\n', " "),
+                    missed
+                        .answer
+                        .as_deref()
+                        .map_or_else(|| "(no answer)".to_string(), |a| a.replace('\n', " "))
+                );
+            }
         }
         out
     }

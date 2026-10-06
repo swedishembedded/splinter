@@ -29,6 +29,7 @@
 //! | [`DenoiseView`] | SFT | a denoise task's corrupted passage and its original |
 //! | [`Cpt`] | continued pretraining | the raw text of source parts |
 //! | [`Voice`] | SFT | the writer's own text, a stretch of whole sections at a time, as the answer |
+//! | [`Rehearsal`] | SFT | a model's own answers as given, unless a verifier decided one wrong |
 //!
 //! Every conversation a view projects starts with [`SYSTEM_PROMPT`], the
 //! system turn every model run on a task is sent: the policy is trained
@@ -98,8 +99,8 @@ pub use replay::replay_sample;
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use views::{
-    chars_as_tokens, Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Retrieval,
-    Sectioner, SftFinal, SftStep, VerifierView, Voice,
+    chars_as_tokens, Cpt, Critic, DecisionView, DenoiseView, OutcomeView, Preference, Rehearsal,
+    Retrieval, Sectioner, SftFinal, SftStep, VerifierView, Voice,
 };
 
 /// The training objective a view's records serve.

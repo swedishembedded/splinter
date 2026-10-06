@@ -13,8 +13,8 @@ splinter                          REPL on the current policy (a line is handled 
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
-                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--eval-every N] [--patience N] [--monitor-share SHARE]
-                         [--with-passages SHARE] [--voice SHARE] [--bf16-base]
+                         [--steps N] [--rank R] [--lr LR] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
+                         [--with-passages SHARE] [--voice SHARE] [--rehearsal SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -28,8 +28,9 @@ splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mi
                        [--min-strength executable|formal|consistency|judged] [--export-only]
                        [--system-prompt TEXT] [--limit N]
 splinter dataset export <DATASET-ID> --out DIR
-splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--steps N] [--rank R] [--beta B] [--lr LR] [--records-per-step N]
-                                [--eval-every N] [--patience N] [--monitor-share SHARE]
+splinter rehearse --records N
+splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--rehearsal DATASET-ID [--rehearsal-share F]] [--steps N] [--rank R] [--beta B]
+                                [--lr LR] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
@@ -288,6 +289,37 @@ letter the policy was trained on under another print's name. The held-out score
 is measured on the examinable held-out records, what the policy is asked as; the
 writer's text held out beside them is trained on by nobody and scored by nobody.
 
+A run with a persona also rehearses the base (the `rehearse` stage). A
+fine-tune on one person's answers erodes the base's general behaviour before
+it forgets a fact: under the plain assistant prompt it answers a sum at length
+and gets it wrong, or answers in a paragraph where a word was asked, which is
+what the release gate's anchor suite catches. What holds a model to its base
+is training beside the new records on what the base itself answers, with no
+corpus from outside: the base model - the policy's base checkpoint with no
+adapter, under the default assistant prompt, decoding greedily as the gate
+asks it - answers a set of general tasks, and its answers are rehearsed as it
+gave them. Half the tasks are `arithmetic` and `format` tasks built by code
+from a seed (fresh numbers and subjects, a sum asked worked through or for the
+number alone, a list asked one item per line), each with its reference, so an
+answer the base got wrong is graded wrong and never rehearsed; the rest are
+general requests the base writes itself, one domain at a time over sixteen
+everyday domains, graded by nothing and kept as given. No anchor task, nor a
+near copy of one (the same text in other case and spacing, a close rewording,
+its words inside a longer prompt), is ever in the set: every anchor
+instruction is held against each task by the generator's own near-duplicate
+rule before it is stored, since a candidate rehearsed on an anchor task would
+pass the anchor check by having trained on it; the gate's leakage check reads
+the rehearsed records too. `--rehearsal SHARE` is the share of the training
+draws the rehearsed records take (a quarter by default for a run with a
+persona; `--rehearsal 0` turns it off, and a run without a persona rehearses
+nothing unless asked), the set sized so that a rehearsed record is drawn about
+as often as a dialogue answer; a tenth of its records (the monitoring share)
+join the monitoring set instead, so the step the run carries is the one that
+keeps the base's answers as well as it fits the new ones. `rehearse --records
+N` builds such a set by hand and `train --rehearsal DATASET-ID
+[--rehearsal-share F]` mixes it, or any chat dataset of the base's own
+answers, into a training run.
+
 Task generation is bounded by the budget and spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,
 parts are visited in a stable order that does not follow their names, and the
@@ -417,7 +449,9 @@ Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
 `dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
 `verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`, `voice`
 (the writer's own text as answers, from every text part of the sources the
-experience sets cite; see above). `--limit N` keeps at most N records of any
+experience sets cite; see above), `rehearsal` (a model's own answers as it
+gave them, every experience with a final answer that no verifier decided
+wrong, under the default prompt). `--limit N` keeps at most N records of any
 view, evenly spread over the projection, the rest counted as `over_limit`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
 (the student sees only the instruction - also for a teacher's solve,
@@ -468,7 +502,17 @@ of every earlier release's trained-on chat records, a seeded sample that
 is the same on every run and never includes what that release held out;
 replayed records are never held out, and take a quarter of the training
 draws however many there are, so a large replay cannot starve the new
-records. A preference run replays nothing:
+records. `--rehearsal DATASET-ID` mixes a rehearsal dataset (`rehearse`; see
+`learn`) in the same way at `--rehearsal-share` of the draws (default 0.25;
+the replay's quarter and this share must leave the new records some draws),
+never held out, and puts `--monitor-share` of its records into the
+monitoring set beside the training families' records, so the step carried is
+chosen on the mixture the run trains. The candidate records what it
+rehearsed (dataset, share, records trained on and monitored), and the records
+mixed in are kept as an artifact the gate's leakage check reads. `--seed N`
+seeds the adapter's initialisation and the batch order (brain's default
+otherwise): two runs that differ only in the seed show how much of a measured
+difference is the draw. A preference run replays and rehearses nothing:
 brain's preference trainer trains on its pairs alone. `--from
 local:<checkpoint>+<adapter>` continues that adapter instead, with no
 replay, and such a candidate cannot replace a champion. The candidate
@@ -515,7 +559,7 @@ measured as before.
 A release is written once under `<state>/releases/<hex>/`: the adapter
 file, read-only, and `manifest.json` in canonical JSON - the base model and
 its digest, the adapter digest, the parent release, the candidate, the new
-datasets and the replay sample with their digests, the training record
+datasets, the replay sample and the rehearsal with their digests, the training record
 (brain's included), every gate number with the anchor suite's version and
 digest, and `created_at`. `<hex>` is the manifest's digest: the release
 id. `<state>/releases/aliases/<name>` names the release an alias points
@@ -540,7 +584,9 @@ the adapter records.
 `eval <REF>` grades one model - a candidate id, or a model reference -
 closed-book on `--suite held-out` (the default: a candidate's new data, or
 the release a policy alias points at), `retention` (every earlier release,
-each reported), `anchor`, or a FILE of tasks. The anchor suite is frozen
+each reported), `anchor`, or a FILE of tasks, and names every task it got
+wrong with the answer it gave, so two evaluations show what a candidate
+lost against the base. The anchor suite is frozen
 from one or more files with `eval --suite anchor --freeze FILE...` (the
 files' tasks in order are one version; different tasks are the next version;
 the same tasks are the same version) and shown with `eval --suite anchor`. An
@@ -693,7 +739,7 @@ graph is derived from what the stores already record, on every call:
 | experience | `critique_of`, `retry_of`, `revision_of`, `preferred_over`, `variant_of` | the experience its relation names |
 | verdict | `verdict_on`, `produced_by` | the experience it grades, the verifier that gave it |
 | dataset | `projected_from` | each experience, task and source content its manifest names |
-| candidate, release | `trained_on`, `trained_from`, `replayed`, `adapter` | its datasets, parent release, replay sample, adapter digest |
+| candidate, release | `trained_on`, `trained_from`, `replayed`, `rehearsed`, `adapter` | its datasets, parent release, replay sample, rehearsal dataset, adapter digest |
 | replay sample | `sampled_from` | each earlier release it drew from |
 | release | `release_of` | its candidate |
 | answer | `answered_with`, `answered_by`, `open_book` | the release, the model, the source shown |

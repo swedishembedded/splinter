@@ -13,11 +13,11 @@ use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_sdk::eval::SuiteChoice;
-use splinter_sdk::learn::{parse_budget, DEFAULT_VOICE_SHARE};
+use splinter_sdk::learn::{parse_budget, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use splinter_sdk::lineage::Direction;
 use splinter_sdk::train::{
-    DEFAULT_DPO_BETA, DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE,
-    DEFAULT_REPLAY_FRACTION, EVALUATIONS_PER_BUDGET, MAX_MONITOR_SHARE, MAX_PASSES,
+    DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET,
+    MAX_MONITOR_SHARE, MAX_PASSES,
 };
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
@@ -113,6 +113,11 @@ pub enum Command {
     Dataset(DatasetCommand),
     /// Train a candidate adapter on datasets; it is not released.
     Train(TrainArgs),
+    /// Build a rehearsal dataset: the base model's own answers to general
+    /// tasks - sums and format requests built by code, and requests the
+    /// base writes itself - never an anchor task or a near copy of one; for
+    /// `train --rehearsal`, so a fine-tune keeps what the base does.
+    Rehearse(RehearseArgs),
     /// Run the release gate on a candidate and release it if every check
     /// passes; or list the releases.
     Release(ReleaseArgs),
@@ -271,6 +276,20 @@ pub struct LearnArgs {
          {DEFAULT_VOICE_SHARE}]"
     ))]
     pub voice: Option<f64>,
+    /// The share of the training draws that are the base model's own
+    /// answers to general tasks, in [0, 1): a rehearsal set built by the
+    /// `rehearse` stage - sums and format requests built by code, and
+    /// requests the base writes itself, never an anchor task - answered by
+    /// the base with no adapter under the default prompt, mixed into
+    /// training at this share and into the monitoring set, so the run does
+    /// not move the model off what the base does. 0 turns it off.
+    #[arg(long, value_name = "SHARE", value_parser = voice_share, help = format!(
+        "The share of the training draws that are the base model's own answers to general tasks, \
+         in [0, 1): built by the rehearse stage, never an anchor task, mixed into training and \
+         the monitoring set; 0 turns it off [default for a run with a persona: \
+         {DEFAULT_REHEARSAL_SHARE}]"
+    ))]
+    pub rehearsal: Option<f64>,
     /// The step budget of the training: the most steps it may take.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("The step budget of the training: the most steps it may take [default: \
@@ -287,6 +306,11 @@ pub struct LearnArgs {
     /// dataset, when the steps are not named).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,
+    /// The seed of the adapter's initialisation and the batch order (brain's
+    /// default if not given); two runs that differ only here show how much
+    /// of a measured difference is the draw.
+    #[arg(long, value_name = "N")]
+    pub seed: Option<u64>,
     /// How the training is watched.
     #[command(flatten)]
     pub monitoring: MonitoringArgs,
@@ -583,7 +607,7 @@ pub enum DatasetCommand {
         #[arg(required = true, value_name = "EXPERIENCE-SET")]
         sets: Vec<String>,
         /// sft-final, sft-step, critic, preference, verifier, decision,
-        /// retrieval, outcome, denoise, cpt or voice.
+        /// retrieval, outcome, denoise, cpt, voice or rehearsal.
         #[arg(long, required = true, value_parser = view, value_name = "VIEW")]
         view: ViewName,
         /// What the student sees: all (only the instruction), keep:K,..
@@ -615,49 +639,6 @@ pub enum DatasetCommand {
         #[arg(long, required = true, value_name = "DIR")]
         out: PathBuf,
     },
-}
-
-/// `train`: the datasets' objective decides how - chat datasets by
-/// supervised fine-tuning, preference datasets by DPO.
-#[derive(Debug, Args)]
-pub struct TrainArgs {
-    /// The datasets, by id or unique prefix, all chat or all preference
-    /// pairs; the newest records of the last are held out for scoring.
-    #[arg(required = true, value_name = "DATASET-ID")]
-    pub datasets: Vec<String>,
-    /// The base to train, and an adapter on it to continue.
-    #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
-    pub from: ModelRef,
-    /// The fraction of each earlier release's training records replayed,
-    /// when training from a policy alias.
-    #[arg(long, default_value_t = DEFAULT_REPLAY_FRACTION, value_name = "F")]
-    pub replay_fraction: f64,
-    /// The step budget: the most steps the training may take.
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
-        help = format!("The step budget: the most steps the training may take [default: \
-                        {MAX_PASSES} passes over the examples, within bounds]"))]
-    pub steps: Option<u32>,
-    /// LoRA rank of a new adapter.
-    #[arg(long, default_value_t = DEFAULT_LORA_RANK, value_name = "R")]
-    pub rank: u32,
-    /// The DPO temperature, for preference datasets only.
-    #[arg(long, value_name = "BETA", help = beta_help())]
-    pub beta: Option<f32>,
-    /// The peak learning rate (brain's default if not given).
-    #[arg(long, value_name = "LR")]
-    pub lr: Option<f32>,
-    /// Records averaged into one optimizer step (default: one when the steps
-    /// are named, else from the size of the dataset).
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
-    pub records_per_step: Option<u32>,
-    /// How the training is watched.
-    #[command(flatten)]
-    pub monitoring: MonitoringArgs,
-}
-
-/// `--beta`'s help, naming the default it falls back to.
-fn beta_help() -> String {
-    format!("The DPO temperature, for preference datasets only [default: {DEFAULT_DPO_BETA}]")
 }
 
 /// `--usage-policy`'s value.
@@ -768,7 +749,9 @@ impl LineageArgs {
 }
 
 mod state;
+mod train;
 pub use state::{RunsCommand, StateCommand};
+pub use train::{RehearseArgs, TrainArgs};
 
 #[cfg(test)]
 mod tests;

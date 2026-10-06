@@ -8,6 +8,11 @@
 /// the verifier.
 pub const DENOISE: &str = "denoise";
 
+/// The task kind of a general request with no reference answer: what a
+/// base model is asked so that its own answer can be kept and replayed as
+/// it is, graded by nothing.
+pub const GENERAL: &str = "general";
+
 /// The privileged kind an authored executable check travels as.
 pub const EXECUTABLE_CHECK: &str = "executable-check";
 

@@ -30,7 +30,7 @@ use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
-use super::{voice_limit, DEFAULT_VOICE_SHARE};
+use super::{records_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
@@ -44,14 +44,15 @@ use crate::datasets::{
 use crate::exam::{examine, Exam, ExamineRequest};
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
+use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
 use crate::release::{release, ReleaseRequest};
 use crate::retrieval::{library_of, Retrieval};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
 use crate::tasks::{generate, Generation};
-use crate::train::{train, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
+use crate::train::{train, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
-use crate::verify::{kind_needs_judge, verify_set, Judge};
+use crate::verify::{kind_needs_judge, verify_set, Grading, Judge};
 use splinter_core::annotation::Strength;
 
 /// What one learn run was asked, resolved.
@@ -66,6 +67,9 @@ pub(super) struct Learn<'a> {
     /// The share of the training examples that is the writer's own text, as
     /// the request names it; `None` is the default for a run with a persona.
     pub(super) voice: Option<f64>,
+    /// The share of the training draws that are the base's own answers, as
+    /// the request names it; `None` is the default for a run with a persona.
+    pub(super) rehearsal: Option<f64>,
     /// The share of training records given retrieved passages, when any.
     pub(super) passages: Option<PassageShare>,
     pub(super) deadline: Option<Instant>,
@@ -113,6 +117,8 @@ pub(super) struct LearnState<'a> {
     /// The datasets trained on: the dialogues, then the writer's own text
     /// when the run has it.
     datasets: Vec<String>,
+    /// The rehearsal dataset, when the run built one.
+    rehearsal: Option<String>,
     records: usize,
     /// What the training reads: [`examples_in`] the datasets.
     examples: usize,
@@ -155,6 +161,17 @@ impl<'a> LearnState<'a> {
         })
     }
 
+    /// The share of the training draws that are the base's own answers:
+    /// what the request names, else [`DEFAULT_REHEARSAL_SHARE`] when the
+    /// policy learns to think like a person and none otherwise.
+    fn rehearsal_share(&self) -> f64 {
+        self.learn.rehearsal.unwrap_or(if self.persona().is_some() {
+            DEFAULT_REHEARSAL_SHARE
+        } else {
+            0.0
+        })
+    }
+
     /// Shares the budget between the stages as the voice share says: the
     /// plan may have named the persona, and with it the writer's text.
     fn share_budget(&mut self) {
@@ -181,6 +198,7 @@ impl<'a> LearnState<'a> {
             sets: Vec::new(),
             kept_tasks: None,
             datasets: Vec::new(),
+            rehearsal: None,
             records: 0,
             examples: 0,
             candidate: None,
@@ -288,6 +306,7 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
         )
         .then(FnStage::new("select", select_stage).ignoring_budget())
         .then(FnStage::new("dataset", dataset_stage).ignoring_budget())
+        .then(FnStage::new("rehearse", rehearse_stage).when(|s| s.rehearsal_share() > 0.0))
         .then(FnStage::new("train", train_stage))
         .then(
             FnStage::new("exam", exam_stage)
@@ -418,7 +437,7 @@ fn verify_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) 
     let Some(graded) = st.attempts.as_ref() else {
         unreachable!("the verify stage follows the solve stage")
     };
-    let verified = verify_set(ctx, graded, None, &run.cancel_token())?;
+    let verified = verify_set(ctx, graded, Grading::ActiveJudge, &run.cancel_token())?;
     let summary = to_value(&verified)?;
     st.failed = verified.failed;
     st.report.verify = Some(verified);
@@ -628,7 +647,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     // The writer's own text beside the dialogues, as many records as make
     // it the share asked of the examples; the split holds it out with the
     // families it prints.
-    let limit = voice_limit(st.examples, st.voice_share());
+    let limit = records_at_share(st.examples, st.voice_share());
     let voice = if limit > 0 {
         let voice = build_with(
             ctx,
@@ -675,6 +694,26 @@ struct DatasetStage<'a> {
     voice: Option<&'a Built>,
 }
 
+/// The base model's own answers to general tasks, as many records as make
+/// the rehearsal share of the examples, so a rehearsed record is drawn
+/// about as often as a dialogue answer; the train stage mixes them in at
+/// that share and monitors on a share of them.
+fn rehearse_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+    let rehearsed = rehearse(
+        ctx,
+        &RehearseRequest {
+            records: records_at_share(st.examples, st.rehearsal_share()),
+            seed: REHEARSAL_SEED,
+            deadline: st.learn.deadline,
+            cancel: run.cancel_token(),
+        },
+    )?;
+    let summary = to_value(&rehearsed)?;
+    st.rehearsal = Some(rehearsed.dataset.dataset.to_string());
+    st.report.rehearsal = Some(rehearsed);
+    Ok(StageEnd::done(summary))
+}
+
 fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
     if st.datasets.is_empty() {
         unreachable!("the train stage follows the dataset stage")
@@ -685,6 +724,10 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         ctx,
         &TrainRequest {
             datasets: st.datasets.clone(),
+            rehearsal: st.rehearsal.clone().map(|dataset| Rehearse {
+                dataset,
+                share: st.rehearsal_share(),
+            }),
             from: st.learn.policy.clone(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps: st.learn.steps,

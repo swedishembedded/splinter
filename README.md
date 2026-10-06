@@ -68,7 +68,7 @@ needs Splinter installed.
 | Learn from documents, repositories and command output | working |
 | Closed-book solving, verification, critique and retry | working |
 | Pass@k frontier selection with a teacher for what the policy never solves | working |
-| Supervised fine-tuning with replay, preference fine-tuning by DPO | working |
+| Supervised fine-tuning with replay and a rehearsal of the base's own answers, preference fine-tuning by DPO | working |
 | Four-check release gate, immutable releases, rollback | working |
 | Lineage from an answer back to the source bytes | working |
 | A predictive release gate for non-language models (`release_predictive`): the champion and candidate are scored on the same held-out units (a different unit set is refused); performance, calibration, retention on named subgroups, serving correctness and data-policy compliance are decided from pre-registered requirements over numbers the caller measured, and an unmeasured number fails | working |
@@ -181,7 +181,10 @@ check load their own copy, so every resident base is released before
 either starts and loaded again by the next model use.
 
 A trained candidate continues the current release (the champion) - by
-supervised fine-tuning with a replay of what earlier releases learned, or
+supervised fine-tuning with a replay of what earlier releases learned and,
+for a persona, a rehearsal of the base model's own answers to general tasks
+it writes and solves itself, so the new material does not move it off what
+it already does, or
 by DPO on pairs preferring a verified answer over a failed one - and
 becomes the policy only if the release gate measures that it improved on
 the new material's held-out questions - the facts it was trained on asked

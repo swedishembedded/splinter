@@ -28,6 +28,11 @@
 //! * [`tasks`] - tasks of many kinds proposed by a generator model and
 //!   admitted by code: grounded in the source, self-contained, checked by
 //!   running them where the answer is computed, and new to their batch.
+//! * [`rehearsal`] - general tasks for a base model to answer so its own
+//!   answers can be replayed beside new training: sums and format requests
+//!   built by code with fresh numbers, the brief a model writes general
+//!   requests from, and the admission that keeps every anchor task and its
+//!   near copies out.
 
 #![warn(missing_docs)]
 
@@ -39,8 +44,10 @@ pub mod denoise;
 pub mod gates;
 pub mod harmonize;
 pub mod material;
+pub mod rehearsal;
 pub mod retrieve;
 pub mod sections;
+mod seeded;
 pub mod survey;
 pub mod tabular;
 pub mod tasks;

@@ -23,8 +23,8 @@ use splinter_core::terms::{combine_stated, Terms};
 pub use splinter_data::Strip;
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Fraction,
-    Objective, OutcomeView, Preference, Projection, Retrieval, SftFinal, SftStep, StoredDataset,
-    VerifierView, View, Voice,
+    Objective, OutcomeView, Preference, Projection, Rehearsal, Retrieval, SftFinal, SftStep,
+    StoredDataset, VerifierView, View, Voice,
 };
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
@@ -77,11 +77,14 @@ pub enum ViewName {
     /// The writer's own text as the answer, in the shape the policy is
     /// asked in.
     Voice,
+    /// A model's own answers as given, unless a verifier decided one wrong:
+    /// what a run rehearses so the new data does not move it off them.
+    Rehearsal,
 }
 
 impl ViewName {
     /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::SftFinal,
         Self::SftStep,
         Self::Critic,
@@ -93,6 +96,7 @@ impl ViewName {
         Self::Denoise,
         Self::Cpt,
         Self::Voice,
+        Self::Rehearsal,
     ];
 
     /// The name a command line uses.
@@ -110,6 +114,7 @@ impl ViewName {
             Self::Denoise => "denoise",
             Self::Cpt => "cpt",
             Self::Voice => "voice",
+            Self::Rehearsal => "rehearsal",
         }
     }
 
@@ -118,7 +123,10 @@ impl ViewName {
     }
 
     fn takes_min_strength(self) -> bool {
-        !matches!(self, Self::Cpt | Self::Denoise | Self::Voice)
+        !matches!(
+            self,
+            Self::Cpt | Self::Denoise | Self::Voice | Self::Rehearsal
+        )
     }
 }
 
@@ -336,6 +344,7 @@ pub fn build_with(
             .with_strip(strip)
             .project(&corpus),
         ViewName::Denoise => DenoiseView::new().with_strip(strip).project(&corpus),
+        ViewName::Rehearsal => Rehearsal::new().project(&corpus),
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
         ViewName::Voice => {
             // The stretches are measured in the policy's own tokens, the

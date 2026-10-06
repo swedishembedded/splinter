@@ -46,7 +46,7 @@ use splinter_store::tasks::{TaskSet, TaskSetId};
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};
 use crate::learn::PolicyUsed;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
-use crate::verify::{verify_set, Verified};
+use crate::verify::{verify_set, Grading, Verified};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -367,7 +367,12 @@ pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, 
             cancel: request.cancel.clone(),
         },
     )?;
-    let verify = verify_set(ctx, &solve.experience_set, None, &request.cancel)?;
+    let verify = verify_set(
+        ctx,
+        &solve.experience_set,
+        Grading::ActiveJudge,
+        &request.cancel,
+    )?;
     let teach = teach(
         ctx,
         &TeachRequest {

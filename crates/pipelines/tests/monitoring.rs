@@ -37,6 +37,7 @@ use splinter_pipelines::train::{
 fn request(data: &str, steps: Option<u32>, tuning: Tuning) -> TrainRequest {
     TrainRequest {
         datasets: vec![data.to_string()],
+        rehearsal: None,
         from: policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
         steps,

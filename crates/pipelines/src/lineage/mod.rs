@@ -166,6 +166,9 @@ pub enum Relation {
     TrainedFrom,
     /// A candidate or a release replayed a sample of earlier records.
     Replayed,
+    /// A candidate or a release rehearsed a dataset of the base's own
+    /// answers.
+    Rehearsed,
     /// A replay sample drew from an earlier release.
     SampledFrom,
     /// A candidate or a release has an adapter.
@@ -205,6 +208,7 @@ impl Relation {
             Self::TrainedOn => "trained_on",
             Self::TrainedFrom => "trained_from",
             Self::Replayed => "replayed",
+            Self::Rehearsed => "rehearsed",
             Self::SampledFrom => "sampled_from",
             Self::Adapter => "adapter",
             Self::ReleaseOf => "release_of",

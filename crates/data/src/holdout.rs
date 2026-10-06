@@ -296,13 +296,19 @@ pub struct MonitorSplit {
 /// family rule with [`SplitRule::monitor`] of `share`. Refused when there
 /// are fewer than [`MIN_SAMPLES`] records.
 pub fn monitor_split_file(train: &Path, dir: &Path, share: f64) -> Result<MonitorSplit, ViewError> {
-    let (fit, monitor) = split_file(
-        train,
-        dir,
-        &SplitRule::monitor(share),
-        FIT_FILE,
-        MONITOR_FILE,
-    )?;
+    monitor_split_named(train, dir, share, (FIT_FILE, MONITOR_FILE))
+}
+
+/// [`monitor_split_file`] writing its two files under `names` - `(fit,
+/// monitor)` - so a second set split into the same directory keeps its
+/// files apart from the first's.
+pub fn monitor_split_named(
+    train: &Path,
+    dir: &Path,
+    share: f64,
+    names: (&str, &str),
+) -> Result<MonitorSplit, ViewError> {
+    let (fit, monitor) = split_file(train, dir, &SplitRule::monitor(share), names.0, names.1)?;
     Ok(MonitorSplit { fit, monitor })
 }
 

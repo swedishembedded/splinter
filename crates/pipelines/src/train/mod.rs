@@ -38,16 +38,26 @@
 //! score measures the new data, and they take a fixed share of the training
 //! draws ([`DEFAULT_REPLAY_SHARE`]), so a large replay set cannot take the
 //! steps from the new data. From a `local:` reference there is no
-//! release, so nothing is replayed. brain's preference fine-tune trains on
+//! release, so nothing is replayed. A supervised run may also rehearse a
+//! dataset of the base model's own answers ([`TrainRequest::rehearsal`]):
+//! its records are mixed in at their own share of the draws, never held
+//! out, and a monitoring share of them goes into the monitoring set beside
+//! the training families', so the step selected is the one that keeps the
+//! base's answers as well as it fits the new ones; the records rehearsed
+//! are kept as an artifact ([`REHEARSAL_FILE`]) the leakage check reads.
+//! brain's preference fine-tune trains on
 //! its pairs alone, so a preference candidate replays nothing; the frozen
 //! reference it is trained against - the model it continues - is what keeps
 //! it close to what came before, and the gate's retention check measures
 //! whether it did.
 
 mod candidate;
+mod rehearsal;
 pub mod sizing;
 
 pub use candidate::{candidate_count, candidate_ids, load_candidate, Candidate};
+use rehearsal::{prepare_rehearsal, RehearsalSplit};
+pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
 pub use sizing::{
     auto_records_per_step, auto_steps, eval_every_for, steps_for, DEFAULT_MONITOR_SHARE,
     DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
@@ -60,7 +70,8 @@ use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_core::training::{
-    HeldOutScore, PreferenceSummary, Regime, ReplaySample, ReplaySource, TrainingCurve,
+    HeldOutScore, PreferenceSummary, Regime, RehearsalSample, ReplaySample, ReplaySource,
+    TrainingCurve,
 };
 use splinter_data::holdout::{monitor_split_file, split_dataset_file};
 use splinter_data::{replay_sample, Format, Fraction, StoredDataset};
@@ -106,6 +117,10 @@ pub const REPLAY_SEED: u64 = 0;
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
 
+/// The monitoring set a run with a rehearsal scores: the training
+/// families' monitoring records and the rehearsal's together.
+const MONITOR_ALL_FILE: &str = "monitor_all.jsonl";
+
 /// The regime a dataset of `format` is trained by; `None` for a format
 /// brain does not train.
 #[must_use]
@@ -143,6 +158,10 @@ pub struct Tuning {
     /// The share of the training families set aside as the monitoring set;
     /// `None` is [`DEFAULT_MONITOR_SHARE`].
     pub monitor_share: Option<f64>,
+    /// The seed of a fresh adapter's initialisation and the batch order;
+    /// brain's default when `None`. Two runs that differ only here show
+    /// how much of a measured difference is the draw.
+    pub seed: Option<u64>,
 }
 
 /// One training request.
@@ -150,6 +169,9 @@ pub struct Tuning {
 pub struct TrainRequest {
     /// The datasets trained on, by id or unique prefix, in order.
     pub datasets: Vec<String>,
+    /// A dataset of the base's own answers rehearsed beside them; `None`
+    /// rehearses nothing.
+    pub rehearsal: Option<Rehearse>,
     /// What to train: `policy:<alias>` continues its release, `local:`
     /// a base and an optional adapter on it.
     pub from: ModelRef,
@@ -188,6 +210,8 @@ pub struct TrainPlan {
     /// The share of the training draws that come from `replay_file`:
     /// [`DEFAULT_REPLAY_SHARE`] when there is one, else `None`.
     pub replay_share: Option<f32>,
+    /// The rehearsed records, when a dataset is rehearsed.
+    pub rehearsal: Option<RehearsalPlan>,
     /// The step budget.
     pub steps: u32,
     /// LoRA rank of a new adapter.
@@ -245,12 +269,32 @@ impl Trainer for BrainTrainer {
         let monitored = (plan.eval_every > 0)
             .then(|| monitor_split_file(&split.train, &plan.dir, plan.monitor_share))
             .transpose()?;
+        // The monitoring set is the training families' monitoring records
+        // and the rehearsal's together: the step selected is the one that
+        // generalises best on the mixture the run trains, not on the new
+        // records alone.
+        let monitor = match (
+            &monitored,
+            plan.rehearsal.as_ref().and_then(|r| r.monitor.as_ref()),
+        ) {
+            (Some(m), Some(rehearsed)) => Some(concatenate(
+                &[&m.monitor, rehearsed],
+                &plan.dir.join(MONITOR_ALL_FILE),
+            )?),
+            (Some(m), None) => Some(m.monitor.clone()),
+            (None, _) => None,
+        };
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
+        let rehearsed: Vec<(PathBuf, f32)> = plan
+            .rehearsal
+            .iter()
+            .map(|r| (r.fit.clone(), r.share))
+            .collect();
         fine_tune(&FineTune {
             model_dir: &plan.base,
             train: monitored.as_ref().map_or(&split.train, |m| &m.fit),
             held_out: &split.held_out,
-            monitor: monitored.as_ref().map(|m| m.monitor.as_path()),
+            monitor: monitor.as_deref(),
             eval_every: plan.eval_every,
             patience: plan.patience,
             attempt_dir: &plan.dir,
@@ -259,11 +303,13 @@ impl Trainer for BrainTrainer {
             alpha: DEFAULT_LORA_ALPHA,
             replay: &replayed,
             replay_share: plan.replay_share,
+            weighted_replay: &rehearsed,
             grad_accum: plan.tuning.records_per_step.unwrap_or(1),
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
             bf16_base: plan.tuning.bf16_base,
             learning_rate: plan.tuning.learning_rate,
+            seed: plan.tuning.seed,
             // The records hold answers and no reasoning, so the model is
             // trained for no-think mode whatever it is later asked.
             thinking: false,
@@ -300,13 +346,26 @@ impl Trainer for BrainTrainer {
 
 /// `plan`'s datasets concatenated in order into one file in its directory.
 fn combine(plan: &TrainPlan) -> Result<PathBuf, OrchestratorError> {
-    let combined = plan.dir.join("dataset.jsonl");
+    let paths: Vec<&Path> = plan.datasets.iter().map(|d| d.path.as_path()).collect();
+    concatenate(&paths, &plan.dir.join("dataset.jsonl"))
+}
+
+/// The records of `files`, in order, written to `into`; a record is a
+/// non-blank line.
+pub(super) fn concatenate(files: &[&Path], into: &Path) -> Result<PathBuf, OrchestratorError> {
     let mut text = String::new();
-    for dataset in &plan.datasets {
-        text.push_str(&std::fs::read_to_string(&dataset.path).map_err(io(&dataset.path))?);
+    for file in files {
+        for line in std::fs::read_to_string(file)
+            .map_err(io(file))?
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+        {
+            text.push_str(line);
+            text.push('\n');
+        }
     }
-    std::fs::write(&combined, &text).map_err(io(&combined))?;
-    Ok(combined)
+    std::fs::write(into, &text).map_err(io(into))?;
+    Ok(into.to_path_buf())
 }
 
 fn trainer_error(e: PolicyError) -> OrchestratorError {
@@ -424,6 +483,32 @@ pub fn train(
         (Some(pin), Regime::Sft) => Some(draw_replay(ctx, &pin.release, fraction, &dir)?),
         _ => None,
     };
+    let replay_share = replay
+        .as_ref()
+        .and_then(|r| r.digest.as_ref())
+        .map(|_| DEFAULT_REPLAY_SHARE);
+    let rehearsal = match (&request.rehearsal, regime) {
+        (None, _) => None,
+        (Some(_), Regime::Dpo) => {
+            return Err(OrchestratorError::Refused(
+                "a preference run trains on its pairs alone and rehearses nothing".into(),
+            ))
+        }
+        (Some(_), Regime::Other) => return Err(OrchestratorError::Refused(
+            "a run of an objective brain owns trains on its records alone and rehearses nothing"
+                .into(),
+        )),
+        (Some(rehearse), Regime::Sft) => Some(prepare_rehearsal(
+            ctx,
+            rehearse,
+            &RehearsalSplit {
+                dir: &dir,
+                monitored: eval_every > 0,
+                monitor_share,
+                replay_share,
+            },
+        )?),
+    };
     let plan = TrainPlan {
         candidate: candidate.clone(),
         regime,
@@ -436,10 +521,8 @@ pub fn train(
             .as_ref()
             .and_then(|r| r.digest.as_ref())
             .map(|_| dir.join(REPLAY_FILE)),
-        replay_share: replay
-            .as_ref()
-            .and_then(|r| r.digest.as_ref())
-            .map(|_| DEFAULT_REPLAY_SHARE),
+        replay_share,
+        rehearsal,
         steps,
         rank: request.rank,
         beta,
@@ -538,6 +621,22 @@ fn keep_candidate(ctx: &Context, finished: Finished<'_>) -> Result<Candidate, Or
             ));
         }
     }
+    let rehearsal = match &plan.rehearsal {
+        Some(rehearsed) => {
+            let kept = artifacts.put_file(
+                &rehearsed.fit,
+                &ArtifactSpec::new("rehearsal", "splinter-train").with_extension(".jsonl"),
+            )?;
+            Some(RehearsalSample {
+                dataset: rehearsed.dataset.id.clone(),
+                share: rehearsed.share,
+                trained: rehearsed.trained,
+                monitored: rehearsed.monitored,
+                digest: Some(kept.digest),
+            })
+        }
+        None => None,
+    };
     let record_text =
         std::fs::read_to_string(&trained.training_record).map_err(io(&trained.training_record))?;
     let training_record =
@@ -553,6 +652,7 @@ fn keep_candidate(ctx: &Context, finished: Finished<'_>) -> Result<Candidate, Or
         parent: plan.parent.clone(),
         datasets: plan.datasets.iter().map(|d| d.id.clone()).collect(),
         replay: replay.clone(),
+        rehearsal,
         adapter: artifacts.path(&adapter.digest)?,
         adapter_artifact: adapter.digest,
         adapter_digest: trained.adapter_digest,

@@ -89,6 +89,17 @@ impl Seen {
             .then_some(Repeat::Exact)
     }
 
+    /// Whether an admitted instruction's words, in order, lie inside `text`:
+    /// the mirror of [`Self::leaks`], for a text that must not carry an
+    /// admitted item within it.
+    #[must_use]
+    pub fn encloses(&self, text: &str) -> bool {
+        let text = spaced_words(text);
+        self.spaced
+            .iter()
+            .any(|admitted| admitted.trim() != "" && text.contains(admitted))
+    }
+
     /// Records `instruction` as admitted.
     pub fn admit(&mut self, instruction: &str) {
         self.digests.insert(digest(instruction));
@@ -270,5 +281,9 @@ mod tests {
         assert_eq!(seen.leaks("the UART run"), None, "words in order, adjacent");
         assert_eq!(seen.leaks("art run"), None, "whole words only");
         assert_eq!(seen.leaks("console UART"), Some(Repeat::Exact));
+        let mut short = Seen::new(3, 0.8);
+        short.admit("What is the capital of France?");
+        assert!(short.encloses("Quick one: what is the capital of France? Answer briefly."));
+        assert!(!short.encloses("What is the capital of Spain?"));
     }
 }

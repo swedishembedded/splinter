@@ -393,6 +393,7 @@ pub fn candidate_on(ctx: &Context, data: DatasetId, knows: &[&str]) -> (Candidat
         ctx,
         &TrainRequest {
             datasets: vec![data.to_string()],
+            rehearsal: None,
             from: policy(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps: Some(1),

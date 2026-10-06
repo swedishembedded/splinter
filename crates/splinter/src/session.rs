@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
+use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
@@ -22,6 +23,7 @@ use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::learn::{learn, LearnRequest, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::raft::{PassageShare, DEFAULT_EVIDENCE_SHARE};
+use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE, REHEARSAL_SEED};
 use splinter_sdk::release::{self, ReleaseRequest};
 use splinter_sdk::rerank::ModelReranker;
 use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
@@ -32,9 +34,9 @@ use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::state;
 use splinter_sdk::status::status;
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
-use splinter_sdk::train::{train, TrainRequest, Tuning};
+use splinter_sdk::train::{train, Rehearse, TrainRequest, Tuning};
 use splinter_sdk::variants;
-use splinter_sdk::verify::{verify_set, Judge, Judging};
+use splinter_sdk::verify::{verify_set, Grading, Judge, Judging};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::role::Role;
 use splinter_sdk::vocabulary::terms::Distribution;
@@ -386,7 +388,12 @@ impl Session {
                     .transpose()?;
                 let arguments = json!({ "experience_set": set, "judge": args.judge });
                 let verified = record(ctx, "verify", &arguments, |run| {
-                    verify_set(ctx, &set, judge.as_ref(), &run.cancel_token())
+                    verify_set(
+                        ctx,
+                        &set,
+                        judge.as_ref().map_or(Grading::ActiveJudge, Grading::Judge),
+                        &run.cancel_token(),
+                    )
                 })?;
                 emit(json, &verified);
             }
@@ -469,6 +476,10 @@ impl Session {
             Command::Train(args) => {
                 let request = TrainRequest {
                     datasets: args.datasets,
+                    rehearsal: args.rehearsal.map(|dataset| Rehearse {
+                        dataset,
+                        share: args.rehearsal_share.unwrap_or(DEFAULT_REHEARSAL_SHARE),
+                    }),
                     from: args.from,
                     replay_fraction: args.replay_fraction,
                     steps: args.steps,
@@ -480,6 +491,7 @@ impl Session {
                         eval_every: args.monitoring.eval_every,
                         patience: args.monitoring.patience,
                         monitor_share: args.monitoring.monitor_share,
+                        seed: args.seed,
                         ..Tuning::default()
                     },
                 };
@@ -487,6 +499,24 @@ impl Session {
                     train(ctx, &request, self.splinter.trainer(), &run.cancel_token())
                 })?;
                 emit(json, &candidate);
+            }
+            Command::Rehearse(args) => {
+                let request = RehearseRequest {
+                    records: args.records,
+                    seed: REHEARSAL_SEED,
+                    deadline: None,
+                    cancel: CancelToken::new(),
+                };
+                let rehearsed = record(ctx, "rehearse", &request, |run| {
+                    rehearse(
+                        ctx,
+                        &RehearseRequest {
+                            cancel: run.cancel_token(),
+                            ..request.clone()
+                        },
+                    )
+                })?;
+                emit(json, &rehearsed);
             }
             Command::Release(args) => {
                 if matches!(args.command, Some(ReleaseCommand::List)) {
@@ -659,6 +689,7 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         goal: args.goal,
         persona: args.persona,
         voice: args.voice,
+        rehearsal: args.rehearsal,
         passages: args.with_passages.map(|records| PassageShare {
             records,
             with_evidence: DEFAULT_EVIDENCE_SHARE,
@@ -678,6 +709,7 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
             eval_every: args.monitoring.eval_every,
             patience: args.monitoring.patience,
             monitor_share: args.monitoring.monitor_share,
+            seed: args.seed,
         },
         roles: [
             (Role::Planner, args.planner),
@@ -741,5 +773,18 @@ mod tests {
             Some(0.25)
         );
         assert_eq!(request(&["learn", "docs", "--voice", "0"]).voice, Some(0.0));
+        assert_eq!(r.rehearsal, None, "the run decides from its persona");
+        assert_eq!(
+            request(&["learn", "docs", "--rehearsal", "0.4"]).rehearsal,
+            Some(0.4)
+        );
+        assert_eq!(
+            request(&["learn", "docs", "--rehearsal", "0"]).rehearsal,
+            Some(0.0)
+        );
+        assert_eq!(
+            request(&["learn", "docs", "--seed", "7"]).tuning.seed,
+            Some(7)
+        );
     }
 }

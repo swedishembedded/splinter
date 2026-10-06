@@ -24,6 +24,7 @@ use crate::curriculum::teacher::Taught;
 use crate::datasets::Built;
 use crate::exam::Exam;
 use crate::plan::Plan;
+use crate::rehearsal::Rehearsed;
 use crate::release::Released;
 use crate::solving::Solved;
 use crate::sources::{SourceSummary, SourceTarget};
@@ -126,6 +127,9 @@ pub struct LearnReport {
     /// The writer's own text trained beside it (the `voice` view); `None`
     /// when the run has no persona or asked for none.
     pub voice: Option<Built>,
+    /// The rehearse stage: the base's own answers to general tasks, mixed
+    /// into training; `None` when the run has no persona or asked for none.
+    pub rehearsal: Option<Rehearsed>,
     /// The candidate trained.
     pub candidate: Option<Candidate>,
     /// The release gate on it, and the release when it passed.

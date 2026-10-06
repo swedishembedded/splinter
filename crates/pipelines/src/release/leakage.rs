@@ -15,8 +15,8 @@
 //! in other words, or an earlier release's held-out question asked again in
 //! new data can sit on both sides of it. Before anything is graded, every
 //! suite's instructions are checked against the prompts of every record
-//! the candidate trained on - its datasets' trained-on records and the
-//! records it replayed - by the task generator's near-duplicate rule
+//! the candidate trained on - its datasets' trained-on records, the
+//! records it replayed and the ones it rehearsed - by the task generator's near-duplicate rule
 //! ([`Seen::leaks`]: the same question normalised, an overlap of word
 //! shingles at the generator's threshold, or the question's words inside a
 //! longer prompt). A task that matches is left out and counted under
@@ -39,17 +39,12 @@ pub(crate) fn trained_prompts(
     candidate: &Candidate,
 ) -> Result<Seen, OrchestratorError> {
     let (mut trained_on, _held_out) = split_records(ctx, &candidate.datasets)?;
-    if candidate
-        .replay
-        .as_ref()
-        .is_some_and(|r| r.digest.is_some())
-    {
-        let digest = candidate.replay.as_ref().and_then(|r| r.digest.as_ref());
-        let path = ctx.artifacts().path(digest.ok_or_else(|| {
-            OrchestratorError::Refused(
-                "a candidate that replayed records names no replay file".into(),
-            )
-        })?)?;
+    let mixed_in = [
+        candidate.replay.as_ref().and_then(|r| r.digest.as_ref()),
+        candidate.rehearsal.as_ref().and_then(|r| r.digest.as_ref()),
+    ];
+    for digest in mixed_in.into_iter().flatten() {
+        let path = ctx.artifacts().path(digest)?;
         let text = std::fs::read_to_string(&path).map_err(io(&path))?;
         trained_on.extend(
             text.lines()

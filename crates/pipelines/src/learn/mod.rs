@@ -38,7 +38,12 @@
 //! trains beside it on the writer's own text (the `voice` view): a share of
 //! the examples ([`LearnRequest::voice`]) built by code from the sources,
 //! each the writer's words word for word as the answer, held out with the
-//! family of the letter it prints. The training's step budget is a ceiling
+//! family of the letter it prints. Such a run also rehearses the base
+//! model's own answers to general tasks (the `rehearse` stage,
+//! [`crate::rehearsal`]): a share of the training draws
+//! ([`LearnRequest::rehearsal`]) and of the monitoring set, so the persona
+//! does not cost the model its general behaviour, which the release gate's
+//! anchor suite holds it to. The training's step budget is a ceiling
 //! of passes over the examples ([`crate::train::sizing`]); the run monitors
 //! a share of its training families as it goes and carries its best
 //! evaluation's adapter. The candidate trained on it continues
@@ -79,9 +84,9 @@ use splinter_orchestrator::roles;
 use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 16] = [
+pub const STAGES: [&str; 17] = [
     "policy", "sources", "plan", "tasks", "solve", "verify", "teach", "author", "frontier",
-    "variants", "critique", "select", "dataset", "train", "exam", "release",
+    "variants", "critique", "select", "dataset", "rehearse", "train", "exam", "release",
 ];
 
 /// The share of the training examples that is the writer's own text when a
@@ -90,11 +95,18 @@ pub const STAGES: [&str; 16] = [
 /// the other.
 pub const DEFAULT_VOICE_SHARE: f64 = 0.5;
 
-/// How many records of the writer's own text go beside `examples` dialogue
-/// answers so that they are `share` of all the examples: `examples * share
-/// / (1 - share)`, rounded up; none for a share of zero.
+/// The share of the training draws that are the base model's own answers
+/// to general tasks when a run learns to think like a person and names no
+/// share: [`DEFAULT_REHEARSAL_SHARE`]. A run without a persona rehearses
+/// nothing unless asked.
+pub use crate::rehearsal::DEFAULT_REHEARSAL_SHARE;
+
+/// How many records go beside `examples` so that they are `share` of all
+/// the examples: `examples * share / (1 - share)`, rounded up; none for a
+/// share of zero. What sizes the writer's own text and the rehearsal set
+/// against the dialogue answers.
 #[must_use]
-pub fn voice_limit(examples: usize, share: f64) -> usize {
+pub fn records_at_share(examples: usize, share: f64) -> usize {
     if share <= 0.0 {
         return 0;
     }
@@ -123,6 +135,11 @@ pub struct LearnRequest {
     /// `[0, 1)`: `None` is [`DEFAULT_VOICE_SHARE`] for a run with a persona
     /// and none without, `Some(0.0)` none at all.
     pub voice: Option<f64>,
+    /// The share of the training draws that are the base model's own
+    /// answers to general tasks ([`crate::rehearsal`]), in `[0, 1)`: `None`
+    /// is [`DEFAULT_REHEARSAL_SHARE`] for a run with a persona and none
+    /// without, `Some(0.0)` none at all.
+    pub rehearsal: Option<f64>,
     /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`] unless `plan` is set.
     pub kinds: Vec<String>,
     /// Let a planner model survey the sources and choose the task kinds,
@@ -195,6 +212,14 @@ pub fn learn(
             )));
         }
     }
+    if let Some(share) = request.rehearsal {
+        if !(0.0..1.0).contains(&share) {
+            return Err(OrchestratorError::Refused(format!(
+                "the rehearsal share {share} is not in [0, 1): the base's own answers cannot be \
+                 every draw, since the new records are what the run is for"
+            )));
+        }
+    }
     let targets = request
         .sources
         .iter()
@@ -252,6 +277,15 @@ pub fn learn(
                 .filter(|stage| !(!measures_frontier && *stage == "frontier"))
                 .filter(|stage| !(!request.plan && !authors && *stage == "author"))
                 .filter(|stage| {
+                    !(*stage == "rehearse"
+                        && !request.plan
+                        && request.rehearsal.unwrap_or(if request.persona.is_some() {
+                            DEFAULT_REHEARSAL_SHARE
+                        } else {
+                            0.0
+                        }) <= 0.0)
+                })
+                .filter(|stage| {
                     !(request.distill && ["solve", "verify", "critique"].contains(stage))
                 })
                 .collect(),
@@ -265,6 +299,7 @@ pub fn learn(
         goal: request.goal.as_deref(),
         persona: request.persona.as_deref(),
         voice: request.voice,
+        rehearsal: request.rehearsal,
         passages: request.passages,
         deadline: budget.map(|b| Instant::now() + b),
         trainer,
@@ -359,13 +394,14 @@ mod tests {
         assert_eq!(stages::pipeline().names(), STAGES);
     }
 
-    /// The writer's text is as many records as makes it the share asked.
+    /// The writer's text, or the rehearsal, is as many records as makes it
+    /// the share asked.
     #[test]
-    fn the_voice_limit_makes_the_writers_text_the_share_asked() {
-        assert_eq!(voice_limit(214, 0.5), 214);
-        assert_eq!(voice_limit(100, 0.25), 34);
-        assert_eq!(voice_limit(100, 0.0), 0);
-        assert_eq!(voice_limit(0, 0.5), 0);
+    fn the_records_at_a_share_make_it_the_share_asked() {
+        assert_eq!(records_at_share(214, 0.5), 214);
+        assert_eq!(records_at_share(100, 0.25), 34);
+        assert_eq!(records_at_share(100, 0.0), 0);
+        assert_eq!(records_at_share(0, 0.5), 0);
     }
 
     #[test]

@@ -17,7 +17,7 @@ use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_core::terms::Terms;
 use splinter_core::training::{
-    HeldOutScore, PreferenceSummary, Regime, ReplaySample, TrainingCurve,
+    HeldOutScore, PreferenceSummary, Regime, RehearsalSample, ReplaySample, TrainingCurve,
 };
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -36,6 +36,8 @@ pub(super) struct StoredCandidate {
     parent: Option<ReleaseId>,
     datasets: Vec<DatasetId>,
     replay: Option<ReplaySample>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rehearsal: Option<RehearsalSample>,
     adapter_artifact: Digest,
     adapter_digest: String,
     base_digest: String,
@@ -73,6 +75,10 @@ pub struct Candidate {
     pub datasets: Vec<DatasetId>,
     /// The earlier records replayed; `None` with no release to replay.
     pub replay: Option<ReplaySample>,
+    /// The base's own answers rehearsed beside the new records; `None` when
+    /// none were.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rehearsal: Option<RehearsalSample>,
     /// The adapter file: an artifact, a real file at a stable path.
     pub adapter: PathBuf,
     /// The artifact the adapter is kept as.
@@ -129,6 +135,7 @@ impl Candidate {
             parent: self.parent.clone(),
             datasets: self.datasets.clone(),
             replay: self.replay.clone(),
+            rehearsal: self.rehearsal.clone(),
             adapter_artifact: self.adapter_artifact.clone(),
             adapter_digest: self.adapter_digest.clone(),
             base_digest: self.base_digest.clone(),
@@ -154,6 +161,7 @@ impl Candidate {
             parent: stored.parent,
             datasets: stored.datasets,
             replay: stored.replay,
+            rehearsal: stored.rehearsal,
             adapter_artifact: stored.adapter_artifact,
             adapter_digest: stored.adapter_digest,
             base_digest: stored.base_digest,

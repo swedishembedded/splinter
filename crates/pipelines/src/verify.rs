@@ -26,7 +26,7 @@ use splinter_agent::CancelToken;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, ExperienceId, Task};
-use splinter_core::kinds::DENOISE;
+use splinter_core::kinds::{DENOISE, GENERAL};
 use splinter_eval::denoise::FormalVerifier;
 use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
@@ -396,6 +396,11 @@ pub(crate) fn verifiers_for(
     if kind == DENOISE {
         return Ok(Strongest::new(vec![Box::new(FormalVerifier::new())]));
     }
+    // A general request has no reference: nothing grades its answer, and
+    // the answer stands as what the model said.
+    if kind == GENERAL {
+        return Ok(Strongest::new(Vec::new()));
+    }
     let catalogue = Catalogue::builtin();
     let Some(spec) = catalogue.get(kind) else {
         return Err(OrchestratorError::Refused(format!(
@@ -511,20 +516,36 @@ pub struct Verified {
     pub unverified: Vec<Unverified>,
 }
 
+/// Who grades the kinds a judge grades when a set is verified.
+#[derive(Clone, Copy)]
+pub enum Grading<'a> {
+    /// The judge the context names, measured for admission; none when it
+    /// names none.
+    ActiveJudge,
+    /// This judge.
+    Judge(&'a Judge),
+    /// No judge: the kinds' code verifiers alone, and a kind only a judge
+    /// grades is left undecided.
+    CodeOnly,
+}
+
 /// Appends verdicts to every experience of `set`, graded by its kind's
-/// verifiers (the judged one only with `judge`).
+/// verifiers (the judged one as `grading` says).
 pub fn verify_set(
     ctx: &Context,
     set: &SetId,
-    judge: Option<&Judge>,
+    grading: Grading<'_>,
     cancel: &CancelToken,
 ) -> Result<Verified, OrchestratorError> {
     // Verdicts appended here admit answers to a training set.
-    let active = match judge {
-        Some(_) => None,
-        None => Judge::active(ctx, Use::Admission)?,
+    let active = match grading {
+        Grading::ActiveJudge => Judge::active(ctx, Use::Admission)?,
+        Grading::Judge(_) | Grading::CodeOnly => None,
     };
-    let judge = judge.or(active.as_ref());
+    let judge = match grading {
+        Grading::Judge(judge) => Some(judge),
+        Grading::ActiveJudge | Grading::CodeOnly => active.as_ref(),
+    };
     let store = ctx.experiences();
     let batch = ctx.workspace().batch();
     let members = store.get_set(set)?.members;

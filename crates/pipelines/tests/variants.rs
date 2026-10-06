@@ -46,7 +46,7 @@ use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation};
 use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_pipelines::variants::{generate_variants, VariantsRequest};
-use splinter_pipelines::verify::verify_set;
+use splinter_pipelines::verify::{verify_set, Grading};
 use splinter_store::runs::read_run;
 use splinter_store::tasks::{TaskEntry, TaskSet};
 
@@ -242,7 +242,13 @@ fn a_variant_never_enters_a_training_dataset() {
         &CancelToken::new(),
     )
     .unwrap();
-    verify_set(&ctx, &solved.experience_set, None, &CancelToken::new()).unwrap();
+    verify_set(
+        &ctx,
+        &solved.experience_set,
+        Grading::ActiveJudge,
+        &CancelToken::new(),
+    )
+    .unwrap();
     let refused = build(
         &ctx,
         &BuildRequest {
@@ -429,7 +435,13 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
         &CancelToken::new(),
     )
     .unwrap();
-    verify_set(&ctx, &solved.experience_set, None, &CancelToken::new()).unwrap();
+    verify_set(
+        &ctx,
+        &solved.experience_set,
+        Grading::ActiveJudge,
+        &CancelToken::new(),
+    )
+    .unwrap();
     let built = build(
         &ctx,
         &BuildRequest {

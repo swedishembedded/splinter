@@ -18,7 +18,7 @@ use splinter_store::experiences::StoreError;
 use splinter_store::sources::SourceStore;
 
 use crate::train::{candidate_ids, load_candidate};
-use splinter_core::training::ReplaySample;
+use splinter_core::training::{RehearsalSample, ReplaySample};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::releases::StoredRelease;
@@ -312,14 +312,14 @@ fn replay(graph: &mut Graph, replay: &ReplaySample) -> Option<String> {
 
 /// The edges a candidate and its release share: datasets, parent, replay
 /// and adapter.
-fn training(
-    graph: &mut Graph,
-    id: &str,
-    datasets: &[splinter_core::dataset::DatasetId],
-    parent: Option<&splinter_core::release::ReleaseId>,
-    sample: Option<&ReplaySample>,
-    adapter: &str,
-) {
+fn training(graph: &mut Graph, id: &str, trained: &Trained<'_>) {
+    let Trained {
+        datasets,
+        parent,
+        sample,
+        rehearsal,
+        adapter,
+    } = *trained;
     for dataset in datasets {
         graph.mention(dataset.0.as_str(), NodeKind::Dataset, missing("dataset"));
         graph.link(id, Relation::TrainedOn, dataset.0.as_str());
@@ -331,8 +331,22 @@ fn training(
     if let Some(sample) = sample.and_then(|s| replay(graph, s)) {
         graph.link(id, Relation::Replayed, &sample);
     }
+    if let Some(rehearsal) = rehearsal {
+        let dataset = rehearsal.dataset.0.as_str();
+        graph.mention(dataset, NodeKind::Dataset, missing("dataset"));
+        graph.link(id, Relation::Rehearsed, dataset);
+    }
     graph.mention(adapter, NodeKind::Adapter, || "adapter".into());
     graph.link(id, Relation::Adapter, adapter);
+}
+
+/// What a candidate or a release was trained with, for its edges.
+struct Trained<'a> {
+    datasets: &'a [splinter_core::dataset::DatasetId],
+    parent: Option<&'a splinter_core::release::ReleaseId>,
+    sample: Option<&'a ReplaySample>,
+    rehearsal: Option<&'a RehearsalSample>,
+    adapter: &'a str,
 }
 
 fn candidates(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
@@ -349,10 +363,13 @@ fn candidates(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError>
         training(
             graph,
             &id,
-            &candidate.datasets,
-            candidate.parent.as_ref(),
-            candidate.replay.as_ref(),
-            &candidate.adapter_digest,
+            &Trained {
+                datasets: &candidate.datasets,
+                parent: candidate.parent.as_ref(),
+                sample: candidate.replay.as_ref(),
+                rehearsal: candidate.rehearsal.as_ref(),
+                adapter: &candidate.adapter_digest,
+            },
         );
     }
     Ok(())
@@ -391,10 +408,13 @@ fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
         training(
             graph,
             release,
-            &manifest.datasets,
-            manifest.parent.as_ref(),
-            manifest.replay.as_ref(),
-            manifest.artifact.content_digest().as_str(),
+            &Trained {
+                datasets: &manifest.datasets,
+                parent: manifest.parent.as_ref(),
+                sample: manifest.replay.as_ref(),
+                rehearsal: manifest.rehearsal.as_ref(),
+                adapter: manifest.artifact.content_digest().as_str(),
+            },
         );
     }
     Ok(())

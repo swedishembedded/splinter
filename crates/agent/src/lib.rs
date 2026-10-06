@@ -24,6 +24,8 @@
 //!   relations; and the bounded loop of critique and retry.
 //! * [`mapper`] - a model asked how a documented variable maps onto a
 //!   shared concept, its proposal left to the knowledge crate to admit.
+//! * [`prompts`] - a model asked to write user requests of a domain, each
+//!   a string, which requests are kept left to the caller.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
 
@@ -34,6 +36,7 @@ pub mod converse;
 pub mod critic;
 pub mod judge;
 pub mod mapper;
+pub mod prompts;
 pub mod proposer;
 pub mod repair;
 pub mod replay;

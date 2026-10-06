@@ -333,6 +333,7 @@ fn manifest(
         candidate: candidate.candidate.clone(),
         datasets: candidate.datasets.clone(),
         replay: candidate.replay.clone(),
+        rehearsal: candidate.rehearsal.clone(),
         training: TrainingSummary {
             from: candidate.from.clone(),
             steps: candidate.steps,

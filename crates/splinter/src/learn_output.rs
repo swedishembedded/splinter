@@ -219,6 +219,21 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
                 field("dataset")
             )
         }
+        "rehearse" => format!(
+            "{} task(s) for the base ({} by code, {} general by the base; {} refused as anchor \
+             tasks, {} repeats): {} answered, {} record(s) in {}{}",
+            field("tasks"),
+            field("form_tasks"),
+            field("general_tasks"),
+            field("excluded_as_anchor"),
+            field("repeated"),
+            summary["solved"]["answered"],
+            summary["dataset"]["records"],
+            summary["dataset"]["dataset"].as_str().unwrap_or("?"),
+            summary["stopped"]
+                .as_str()
+                .map_or(String::new(), |why| format!("; stopped: {why}"))
+        ),
         "train" => format!("candidate {}", field("candidate")),
         "policy" => match &summary["release"] {
             serde_json::Value::Null => {
@@ -332,6 +347,9 @@ impl Report for LearnReport {
         }
         if let Some(r) = &self.voice {
             stage(&mut out, "voice", r.human());
+        }
+        if let Some(r) = &self.rehearsal {
+            stage(&mut out, "rehearse", r.human());
         }
         if let Some(r) = &self.candidate {
             stage(&mut out, "train", r.human());

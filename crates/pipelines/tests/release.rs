@@ -340,6 +340,7 @@ fn a_held_out_task_trained_on_is_left_out_of_the_gate() {
         &ctx,
         &TrainRequest {
             datasets: vec![leaky.to_string()],
+            rehearsal: None,
             from: policy(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps: Some(1),
@@ -463,6 +464,7 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
         &ctx,
         &TrainRequest {
             datasets: vec![data.to_string()],
+            rehearsal: None,
             from: base,
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             steps: Some(1),
@@ -575,8 +577,15 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
     };
     let held_out = score(SuiteChoice::HeldOut);
     assert_eq!((held_out[0].graded, held_out[0].accuracy), (8, Some(1.0)));
+    assert!(held_out[0].missed.is_empty());
     let anchor = score(SuiteChoice::Anchor);
     assert_eq!((anchor[0].graded, anchor[0].accuracy), (5, Some(0.0)));
+    // What it got wrong is named, with the answer it gave.
+    assert_eq!(anchor[0].missed.len(), 5);
+    assert!(anchor[0]
+        .missed
+        .iter()
+        .all(|m| m.kind == "recall" && m.answer.as_deref() == Some("I do not know.")));
     let refused = eval(
         &ctx,
         &EvalRequest {
