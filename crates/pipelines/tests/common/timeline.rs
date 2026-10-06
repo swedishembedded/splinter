@@ -67,6 +67,9 @@ pub fn write_synthetic_without(
         .map(|(i, s)| {
             let mut line = serde_json::to_value(s).unwrap();
             line["group_id"] = format!("household-{}", i / 2).into();
+            // Households alternate between two survey cycles: a household is
+            // never in two sources.
+            line["source"] = ["cycle-a", "cycle-b"][(i / 2) % 2].into();
             line["interventions"] = serde_json::json!([]);
             line.to_string()
         })
@@ -132,9 +135,9 @@ pub fn terms(policy: UsagePolicy, name: &str) -> Terms {
 /// cohorts below, early stopping ends the run near its best held-out likelihood.
 pub const STEPS: u32 = 600;
 /// Participants of the cohort that took the new measurements.
-pub const FULL: usize = 9000;
+pub const FULL: usize = 12000;
 /// Participants of the earlier cohort that recorded conventional factors only.
-pub const CONVENTIONAL: usize = 4000;
+pub const CONVENTIONAL: usize = 12000;
 
 /// The all-cause view's name.
 pub const ALL_CAUSE: &str = "death:any";
@@ -183,16 +186,20 @@ pub fn scoring() -> ScoreSpec {
 
 /// The pre-registered requirements: the candidate must beat the champion on
 /// the all-cause integrated Brier score and on the held-out likelihood, be
-/// calibrated at both horizons for every judged code, and not regress on the
-/// subgroup.
-pub fn plan() -> TimelinePlan {
+/// calibrated at both horizons for every code in `calibrated` (and for the
+/// all-cause view), and not regress on the subgroup. A cohort that did not
+/// measure the covariates a cause depends on is judged on the all-cause view
+/// alone: its model cannot be asked to separate causes it cannot see.
+pub fn plan_for(calibrated: &[&str]) -> TimelinePlan {
     let judged = |code: &str, must_improve| CodePlan {
         code: code.into(),
         horizons: HORIZONS.to_vec(),
         must_improve,
     };
+    let mut codes: Vec<CodePlan> = calibrated.iter().map(|c| judged(c, false)).collect();
+    codes.push(judged(ALL_CAUSE, true));
     TimelinePlan {
-        codes: vec![judged("death:a", false), judged(ALL_CAUSE, true)],
+        codes,
         improve_nll: true,
         calibration: CalibrationBands {
             slope: (0.7, 1.4),
@@ -207,12 +214,28 @@ pub fn plan() -> TimelinePlan {
     }
 }
 
+/// The requirements for a cohort that measured everything: every cause is judged.
+pub fn plan() -> TimelinePlan {
+    plan_for(&["death:a"])
+}
+
 /// Evaluates `candidate` against `champion` on the test part of `split`.
 pub fn evaluate(
     ctx: &Context,
     candidate: &str,
     champion: Champion,
     split: &SplitReport,
+) -> TimelineEvaluated {
+    evaluate_under(ctx, candidate, champion, split, plan())
+}
+
+/// [`evaluate`] under the requirements `plan`.
+pub fn evaluate_under(
+    ctx: &Context,
+    candidate: &str,
+    champion: Champion,
+    split: &SplitReport,
+    plan: TimelinePlan,
 ) -> TimelineEvaluated {
     evaluate_timeline(
         ctx,
@@ -221,7 +244,7 @@ pub fn evaluate(
             champion,
             test: split.test.to_string(),
             scoring: scoring(),
-            plan: plan(),
+            plan,
         },
     )
     .unwrap()

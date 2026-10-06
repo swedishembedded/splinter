@@ -19,8 +19,8 @@
 mod common;
 
 use common::timeline::{
-    context, evaluate, failures, plan, prepare, scoring, train, training, write_synthetic,
-    write_synthetic_without, ALL_CAUSE, CONVENTIONAL, FULL, STEPS,
+    context, evaluate, evaluate_under, failures, plan, plan_for, prepare, scoring, train, training,
+    write_synthetic, write_synthetic_without, ALL_CAUSE, CONVENTIONAL, FULL, STEPS,
 };
 use splinter_core::terms::{Distribution, UsagePolicy};
 use splinter_data::split::Part;
@@ -79,11 +79,13 @@ fn a_better_candidate_is_released_and_a_worse_one_is_rejected_and_recorded() {
     // The first release is measured against an untrained baseline.
     let baseline = train(&ctx, &on_earlier, training(3, 1));
     let first = train(&ctx, &on_earlier, training(STEPS, 2));
-    let measured = evaluate(
+    // Its cohort did not measure what the causes depend on: all-cause only.
+    let measured = evaluate_under(
         &ctx,
         &first.id,
         Champion::Candidate(baseline.id.clone()),
         &on_earlier,
+        plan_for(&[]),
     );
     let first_release = release_timeline(
         &ctx,

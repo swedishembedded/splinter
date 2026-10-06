@@ -1,0 +1,133 @@
+{
+  "schema": "health-outcome-ontology-v1",
+  "version": "1.0.0",
+  "note": "Definitions are data. 'supported_locally' lists the datasets present on this machine that can supply the outcome with the stated definition; an outcome with an empty list is defined but cannot be trained or evaluated here. Incompatible definitions across cohorts are never pooled: each definition names its own supporting datasets.",
+  "outcomes": [
+    {
+      "canonical_name": "all_cause_mortality",
+      "event_code": "death:any",
+      "kind": "terminal",
+      "definition": "Death from any cause. Derived as the union of the cause groups death:cvd, death:cancer, death:other (an all-cause curve is the sum of the three cumulative incidences).",
+      "source_definitions": {
+        "nhanes_mortality": "MORTSTAT = 1 in the public-use linked mortality file; follow-up months PERMTH_EXM; administrative censoring 2019-12-31"
+      },
+      "first_qualifying_event": "the death",
+      "competing_events": [],
+      "washout_for_incident": "not applicable (terminal)",
+      "supported_locally": ["nhanes_mortality"],
+      "caveats": ["NCHS perturbs follow-up and cause of death for some public-use records", "ELIGSTAT must be 1: ineligible participants are excluded, not censored"]
+    },
+    {
+      "canonical_name": "cardiovascular_mortality",
+      "event_code": "death:cvd",
+      "kind": "terminal",
+      "definition": "Death with underlying cause heart disease or cerebrovascular disease.",
+      "source_definitions": {
+        "nhanes_mortality": "UCOD_LEADING recode 001 (diseases of heart, I00-I09, I11, I13, I20-I51) or 005 (cerebrovascular diseases, I60-I69)"
+      },
+      "first_qualifying_event": "the death",
+      "competing_events": ["death:cancer", "death:other"],
+      "washout_for_incident": "not applicable (terminal)",
+      "supported_locally": ["nhanes_mortality"],
+      "caveats": ["a cause of death is not an incident cardiovascular event: it excludes survived MI, stroke and heart failure"]
+    },
+    {
+      "canonical_name": "cancer_mortality",
+      "event_code": "death:cancer",
+      "kind": "terminal",
+      "definition": "Death with underlying cause malignant neoplasm.",
+      "source_definitions": {
+        "nhanes_mortality": "UCOD_LEADING recode 002 (malignant neoplasms, C00-C97)"
+      },
+      "first_qualifying_event": "the death",
+      "competing_events": ["death:cvd", "death:other"],
+      "washout_for_incident": "not applicable (terminal)",
+      "supported_locally": ["nhanes_mortality"],
+      "caveats": ["cancer INCIDENCE is not defined here: no local source records incident cancer consistently across cohorts"]
+    },
+    {
+      "canonical_name": "type2_diabetes_onset",
+      "event_code": "dx:t2d",
+      "kind": "incident",
+      "definition": "First diagnosis of type 2 diabetes after a washout free of diabetes at entry.",
+      "source_definitions": {},
+      "first_qualifying_event": "first qualifying record after entry",
+      "competing_events": ["death:any"],
+      "washout_for_incident": "participants with a diabetes diagnosis, antidiabetic medication, HbA1c >= 6.5 percent or fasting glucose >= 126 mg/dL at entry are excluded",
+      "supported_locally": [],
+      "caveats": ["NHANES records prevalent self-reported diabetes only; no incident diagnoses follow the examination", "requires a cohort with repeated checkups (CARDIA, Whitehall II, DPP/DPPOS, Look AHEAD): not present locally"]
+    },
+    {
+      "canonical_name": "myocardial_infarction",
+      "event_code": "dx:mi",
+      "kind": "incident",
+      "definition": "First non-fatal or fatal myocardial infarction after a washout.",
+      "source_definitions": {},
+      "first_qualifying_event": "first adjudicated or coded MI after entry",
+      "competing_events": ["death:any"],
+      "washout_for_incident": "no prior MI at entry",
+      "supported_locally": [],
+      "caveats": ["not available locally"]
+    },
+    {
+      "canonical_name": "stroke",
+      "event_code": "dx:stroke",
+      "kind": "incident",
+      "definition": "First stroke after a washout.",
+      "source_definitions": {},
+      "first_qualifying_event": "first adjudicated or coded stroke after entry",
+      "competing_events": ["death:any"],
+      "washout_for_incident": "no prior stroke at entry",
+      "supported_locally": [],
+      "caveats": ["not available locally"]
+    },
+    {
+      "canonical_name": "heart_failure",
+      "event_code": "dx:hf",
+      "kind": "incident",
+      "definition": "First heart failure diagnosis after a washout.",
+      "source_definitions": {},
+      "first_qualifying_event": "first adjudicated or coded heart failure after entry",
+      "competing_events": ["death:any"],
+      "washout_for_incident": "no prior heart failure at entry",
+      "supported_locally": [],
+      "caveats": ["not available locally"]
+    },
+    {
+      "canonical_name": "chronic_kidney_disease",
+      "event_code": "dx:ckd",
+      "kind": "incident",
+      "definition": "First eGFR below 60 mL/min/1.73 m2 confirmed on a later measurement, or a coded CKD diagnosis, after a washout.",
+      "source_definitions": {},
+      "first_qualifying_event": "first confirmed qualifying record after entry",
+      "competing_events": ["death:any"],
+      "washout_for_incident": "eGFR >= 60 and no CKD diagnosis at entry",
+      "supported_locally": [],
+      "caveats": ["NHANES has one creatinine per participant: a confirmation visit cannot exist", "not available locally"]
+    },
+    {
+      "canonical_name": "major_cardiovascular_event",
+      "event_code": "dx:mace",
+      "kind": "incident",
+      "definition": "First of MI, stroke or cardiovascular death.",
+      "source_definitions": {},
+      "first_qualifying_event": "earliest of the components",
+      "competing_events": ["death:other"],
+      "washout_for_incident": "no prior MI or stroke at entry",
+      "supported_locally": [],
+      "caveats": ["composite: requires its components from one cohort with a common adjudication"]
+    },
+    {
+      "canonical_name": "all_cause_hospitalization",
+      "event_code": "dx:hosp",
+      "kind": "recurrent",
+      "definition": "Any inpatient admission after entry.",
+      "source_definitions": {},
+      "first_qualifying_event": "first admission (recurrent admissions need their own at-risk windows)",
+      "competing_events": ["death:any"],
+      "washout_for_incident": "not applicable (recurrent)",
+      "supported_locally": [],
+      "caveats": ["not available locally"]
+    }
+  ]
+}

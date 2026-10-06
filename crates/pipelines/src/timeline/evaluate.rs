@@ -40,8 +40,8 @@ use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
 
 use super::records::TimelineCandidate;
+use super::release::resolve_release;
 use super::train::{lift, load_bundle, load_timeline_candidate, Scratch};
-use splinter_core::model_ref::is_alias_name;
 
 /// The `format` of an evaluation record.
 pub const EVALUATION_FORMAT: &str = "splinter-timeline-evaluation-v1";
@@ -152,17 +152,7 @@ fn arm_of(ctx: &Context, champion: &Champion) -> Result<Arm, OrchestratorError> 
         }
         Champion::Release(given) => {
             let store = ctx.releases();
-            let id = if is_alias_name(given) {
-                store.alias(given)?.ok_or_else(|| {
-                    OrchestratorError::Refused(format!("alias {given} points at no release"))
-                })?
-            } else {
-                ReleaseId(ids::resolve(
-                    "release",
-                    given,
-                    store.list()?.into_iter().map(|r| r.0),
-                )?)
-            };
+            let id = resolve_release(ctx, given)?;
             let release = store.get(&id)?;
             let (_, record) =
                 load_timeline_candidate(ctx, &release.manifest.candidate).map_err(|e| {

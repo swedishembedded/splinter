@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The timeline pipeline (`splinter_sdk::timeline`): import and split stages, a train stage for `timeline-v1` datasets (immutable candidates packed into one deterministic file), an evaluation stage scoring a candidate against a champion on the same held-out units with participant-clustered bootstrap differences, a release stage through the predictive gate that records a failing candidate as rejected, and the lineage of a release down to source file lines; `samples/health` runs it on a synthetic cohort.
+
+### Fixed
+- A stored document of measured floating-point numbers was refused on read as altered: serde_json now parses floats exactly.
+
+### Added (earlier)
 - A supervised training run is watched as it trains: a share of its training
   families (`--monitor-share`, default a tenth, whole families, never the
   held-out ones the gate and the exam decide on) is scored every

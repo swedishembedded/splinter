@@ -18,9 +18,12 @@
 //! and reports its decision. A candidate that fails is recorded as rejected
 //! and the alias stays where it was.
 
+use splinter_core::model_ref::is_alias_name;
+use splinter_core::release::ReleaseId;
 use splinter_core::terms::Distribution;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::ids;
 use splinter_orchestrator::releases::Provenance;
 
 use super::evaluate::{load_timeline_evaluation, ModelRef};
@@ -30,6 +33,23 @@ use crate::release::predictive::{
     release_predictive, CheckpointFile, CheckpointTraining, PredictiveRelease, PredictiveReleased,
 };
 use splinter_eval::predictive_gate::Measurements;
+
+/// The release `given` names: the alias that points at one, or an id or a
+/// unique prefix of one.
+pub fn resolve_release(ctx: &Context, given: &str) -> Result<ReleaseId, OrchestratorError> {
+    let store = ctx.releases();
+    if is_alias_name(given) {
+        store.alias(given)?.ok_or_else(|| {
+            OrchestratorError::Refused(format!("alias {given} points at no release"))
+        })
+    } else {
+        Ok(ReleaseId(ids::resolve(
+            "release",
+            given,
+            store.list()?.into_iter().map(|r| r.0),
+        )?))
+    }
+}
 
 /// One `release_timeline` command.
 #[derive(Clone, Debug)]

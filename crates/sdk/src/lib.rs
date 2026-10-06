@@ -35,7 +35,7 @@
 //! # What a caller works with
 //!
 //! * The commands, one module each - [`learn`], [`ask`], [`sources`],
-//!   [`tasks`], [`solving`], [`verify`], [`critique`], [`datasets`],
+//!   [`tasks`], [`timeline`], [`solving`], [`verify`], [`critique`], [`datasets`],
 //!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`state`],
 //!   [`router`] and the rest - with their requests and reports.
 //! * What a command works with: [`Config`], [`Context`], [`Runtime`], the
@@ -66,7 +66,7 @@ pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Run
 pub use splinter_pipelines::{
     ask, budget, critique, curriculum, datasets, dialogue, eval, exam, experiences, judge, learn,
     lineage, plan, raft, release, rerank, retrieval, router, solving, sources, state, status,
-    tasks, train, variants, verify,
+    tasks, timeline, train, variants, verify,
 };
 
 // The layers, each under one name.

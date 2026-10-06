@@ -56,6 +56,7 @@ splinter-tool-syntax = "sample"
 splinter-jefferson = "sample"
 splinter-adams = "sample"
 splinter-lifecourse = "sample"
+splinter-health = "sample"
 
 [brain]
 allowed = ["splinter-model"]

@@ -1,0 +1,7 @@
+{
+  "schema": "health-outcome-supports-v1",
+  "note": "Datasets the controlled sample supplies outcomes for, beside the datasets outcomes-v1.json lists. An outcome is requestable on a dataset only if outcomes-v1.json or this file lists the dataset for it.",
+  "datasets": {
+    "synthetic_health": ["death:cvd", "death:cancer", "death:any"]
+  }
+}
