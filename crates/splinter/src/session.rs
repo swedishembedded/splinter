@@ -37,6 +37,7 @@ use splinter_sdk::variants;
 use splinter_sdk::verify::{verify_set, Judge, Judging};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::role::Role;
+use splinter_sdk::vocabulary::terms::Distribution;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::cli::{
@@ -270,11 +271,17 @@ impl Session {
                 }
             }
             Command::Status => emit(json, &status(ctx)?),
-            Command::Source(SourceCommand::Add { target }) => {
+            Command::Source(SourceCommand::Add {
+                target,
+                usage_policy,
+            }) => {
                 let target = SourceTarget::from_args(&target)?;
+                let terms = usage_policy.map(|policy| policy.terms(policy.as_str()));
                 emit(
                     json,
-                    &record(ctx, "source add", &target, |_| sources::add(ctx, &target))?,
+                    &record(ctx, "source add", &target, |_| {
+                        sources::add_with_terms(ctx, &target, terms)
+                    })?,
                 );
             }
             Command::Source(SourceCommand::List) => emit(json, &sources::list(ctx)?),
@@ -496,6 +503,11 @@ impl Session {
                 }
                 let request = ReleaseRequest {
                     alias: args.alias,
+                    distribution: if args.unrestricted {
+                        Distribution::Unrestricted
+                    } else {
+                        Distribution::Restricted
+                    },
                     ..ReleaseRequest::new(candidate)
                 };
                 let released = record(ctx, "release", &request, |run| {

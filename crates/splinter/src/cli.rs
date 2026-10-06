@@ -22,6 +22,7 @@ use splinter_sdk::train::{
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
+use splinter_sdk::vocabulary::terms::UsagePolicy;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
 /// a repository, a command's output - and it generates tasks from it,
@@ -407,6 +408,12 @@ pub enum SourceCommand {
             value_name = "PATH|cmd:COMMAND..."
         )]
         target: Vec<String>,
+        /// The usage policy the content is under: redistributable,
+        /// research_only, noncommercial, restricted_DUA or unknown. Without
+        /// it the terms are unstated, which no release can be distributed
+        /// under. The policy is part of the source's identity.
+        #[arg(long, value_parser = usage_policy, value_name = "POLICY")]
+        usage_policy: Option<UsagePolicy>,
     },
     /// List the stored sources.
     List,
@@ -653,6 +660,11 @@ fn beta_help() -> String {
     format!("The DPO temperature, for preference datasets only [default: {DEFAULT_DPO_BETA}]")
 }
 
+/// `--usage-policy`'s value.
+fn usage_policy(text: &str) -> Result<UsagePolicy, String> {
+    UsagePolicy::parse(text)
+}
+
 /// `release`.
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]
@@ -666,6 +678,11 @@ pub struct ReleaseArgs {
     /// The calibrated model that judges the tasks a judge decides.
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,
+    /// Release for distribution and commercial use: refused unless the terms
+    /// of everything the candidate was made from allow both. Without it the
+    /// release is restricted: it records the terms and stays local.
+    #[arg(long)]
+    pub unrestricted: bool,
     /// `list`.
     #[command(subcommand)]
     pub command: Option<ReleaseCommand>,

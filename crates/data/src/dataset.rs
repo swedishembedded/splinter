@@ -149,9 +149,10 @@ pub struct Manifest {
     /// `None` when it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
-    /// The terms the records' data came under, combined over their sources;
-    /// `None` when no source stated any (a manifest written before terms
-    /// existed keeps its address).
+    /// The terms the records' data came under, combined over their sources
+    /// (the most restrictive of each axis, a source stating none counting as
+    /// unknown); `None` when no source stated any, which consumers treat as
+    /// unknown (a manifest written before terms existed keeps its address).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms: Option<splinter_core::terms::Terms>,
 }
@@ -366,9 +367,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
             excluded: projection.excluded.clone(),
         },
         system_prompt: projection.system_prompt.clone(),
-        // Sources do not state terms yet; a record dataset that knows its
-        // sources' terms sets them.
-        terms: None,
+        terms: projection.terms.clone(),
     }
 }
 

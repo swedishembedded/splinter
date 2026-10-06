@@ -39,6 +39,7 @@ pub mod error;
 pub mod ids;
 pub mod model_ref;
 pub mod pipeline;
+mod release_manifest;
 pub mod releases;
 pub mod roles;
 pub mod runs;

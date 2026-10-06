@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
+use splinter_core::terms::Terms;
 use splinter_core::training::{
     HeldOutScore, PreferenceSummary, Regime, ReplaySample, TrainingCurve,
 };
@@ -50,6 +51,8 @@ pub(super) struct StoredCandidate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     curve: Option<TrainingCurve>,
     records: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    terms: Option<Terms>,
 }
 
 /// A trained candidate.
@@ -99,6 +102,11 @@ pub struct Candidate {
     pub curve: Option<TrainingCurve>,
     /// Records in the new datasets, trained and held out together.
     pub records: usize,
+    /// The terms of what it was trained on: its datasets' and those of the
+    /// release it continued, combined (the most restrictive of each axis);
+    /// `None` when none were stated, which is unknown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terms: Option<Terms>,
 }
 
 impl Candidate {
@@ -132,6 +140,7 @@ impl Candidate {
             preference: self.preference.clone(),
             curve: self.curve.clone(),
             records: self.records,
+            terms: self.terms.clone(),
         }
     }
 
@@ -156,6 +165,7 @@ impl Candidate {
             preference: stored.preference,
             curve: stored.curve,
             records: stored.records,
+            terms: stored.terms,
         })
     }
 }

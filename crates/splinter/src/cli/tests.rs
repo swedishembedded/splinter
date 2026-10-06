@@ -74,7 +74,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     );
     assert!(matches!(command(&["status"]), Command::Status));
 
-    let Command::Source(SourceCommand::Add { target }) =
+    let Command::Source(SourceCommand::Add { target, .. }) =
         command(&["source", "add", "cmd:ls", "-la", "/tmp"])
     else {
         panic!("source add");

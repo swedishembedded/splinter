@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::clock::Clock;
 use crate::digest::{canonical_json, Digest};
+use crate::terms::Terms;
 
 /// The content address of a [`Source`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -176,6 +177,13 @@ pub struct Source {
     pub captured_at: String,
     /// Its parts, ordered by name, each name once.
     pub parts: Vec<Part>,
+    /// The terms the content came under; `None` when none were stated, which
+    /// every consumer treats as unknown ([`crate::terms::Terms::unknown`]).
+    /// Part of the address: the same bytes under other terms are another
+    /// source, so a stronger restriction can never be lost by capturing the
+    /// content again, and a source stated before terms existed keeps its id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms: Option<Terms>,
 }
 
 /// The fields a source's address is computed over.
@@ -183,6 +191,8 @@ pub struct Source {
 struct SourceBody<'a> {
     origin: &'a Origin,
     parts: &'a [Part],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    terms: Option<&'a Terms>,
 }
 
 impl Source {
@@ -222,7 +232,7 @@ impl Source {
         if self.parts.iter().any(|p| p.name.is_empty()) {
             return Err(SourceError::Missing("part name"));
         }
-        let expected = address(&self.origin, &self.parts)?;
+        let expected = address(&self.origin, &self.parts, self.terms.as_ref())?;
         if expected != self.id {
             return Err(SourceError::Address {
                 recorded: self.id.clone(),
@@ -233,10 +243,15 @@ impl Source {
     }
 }
 
-fn address(origin: &Origin, parts: &[Part]) -> Result<SourceId, SourceError> {
+fn address(
+    origin: &Origin,
+    parts: &[Part],
+    terms: Option<&Terms>,
+) -> Result<SourceId, SourceError> {
     Ok(SourceId(Digest::of(&canonical_json(&SourceBody {
         origin,
         parts,
+        terms,
     })?)))
 }
 
@@ -289,10 +304,11 @@ impl CapturedSource {
             })
             .collect();
         let source = Source {
-            id: address(&origin, &parts)?,
+            id: address(&origin, &parts, None)?,
             origin,
             captured_at: clock.utc_now(),
             parts,
+            terms: None,
         };
         source.validate()?;
         Ok(Self {
@@ -302,6 +318,15 @@ impl CapturedSource {
                 .map(|(name, (_, bytes))| (name, bytes))
                 .collect(),
         })
+    }
+
+    /// The same capture stated as coming under `terms`; its id changes with
+    /// them (see [`Source::terms`]).
+    pub fn with_terms(mut self, terms: Terms) -> Result<Self, SourceError> {
+        self.source.id = address(&self.source.origin, &self.source.parts, Some(&terms))?;
+        self.source.terms = Some(terms);
+        self.source.validate()?;
+        Ok(self)
     }
 
     /// The source.

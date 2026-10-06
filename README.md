@@ -71,6 +71,7 @@ needs Splinter installed.
 | Supervised fine-tuning with replay, preference fine-tuning by DPO | working |
 | Four-check release gate, immutable releases, rollback | working |
 | Lineage from an answer back to the source bytes | working |
+| Usage policy on every source (`redistributable`, `research_only`, `noncommercial`, `restricted_DUA`, `unknown`) carried to the dataset, training run and release; an unrestricted release is refused unless every axis is allowed, `unknown` never is, and a restricted release records its terms (`source add --usage-policy`, `release --unrestricted`) | working |
 | Models by role (policy, teacher, generator, planner, judge, critic, router) | working |
 | Several tasks in flight for a model reached over an API | working |
 | The Rust SDK (`splinter-sdk`) | working, young: the API will move |

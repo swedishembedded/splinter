@@ -13,7 +13,10 @@
 //! copied, and one file is never two. A [`ReleaseId`] is the digest of the
 //! manifest's canonical form, and the manifest names the adapter by its digest,
 //! so one id pins both. The manifest and the release's place in the lineage are
-//! made official in one commit; one that already exists is refused.
+//! made official in one commit; one that already exists is refused. A manifest
+//! records the terms of everything the release was made from and how widely it
+//! may be handed on; the store refuses one that claims to be unrestricted when
+//! those terms do not allow every use, so the rule holds for every caller.
 //!
 //! An alias is a pointer, so its history is kept: moving one is a
 //! compare-and-set on its version ([`ReleaseStore::move_alias`]): it moves only
@@ -25,8 +28,6 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
-use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_store::artifacts::ArtifactStore;
@@ -35,50 +36,21 @@ use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
 use crate::error::OrchestratorError;
+use crate::release_manifest::ManifestDocument;
+pub use crate::release_manifest::{ReleaseManifest, MANIFEST_V2, RELEASE_FORMAT};
 use splinter_core::model_ref::is_alias_name;
-use splinter_core::training::{ReplaySample, TrainingSummary};
-use splinter_eval::gate::GateReport;
+use splinter_core::terms::Distribution;
 
 const RELEASE: &str = "release";
 const ALIAS_PREFIX: &str = "alias-";
-/// The `format` every manifest carries.
-pub const RELEASE_FORMAT: &str = "splinter-release-v2";
 
 /// The longest lineage walked: a guard against a corrupt store, far past
 /// any real history.
 const MAX_LINEAGE: usize = 10_000;
 
-/// What a release is and why it was released.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ReleaseManifest {
-    /// Always [`RELEASE_FORMAT`].
-    pub format: String,
-    /// The base model, as brain's model store names it.
-    pub base_model: String,
-    /// The digest of the base checkpoint file the adapter sits on.
-    pub base_digest: Digest,
-    /// The digest of the adapter file, as brain reports it.
-    pub adapter_digest: Digest,
-    /// The artifact the adapter is kept as.
-    pub adapter_artifact: Digest,
-    /// The release it was trained from; `None` for the first.
-    pub parent: Option<ReleaseId>,
-    /// The candidate it was.
-    pub candidate: String,
-    /// The new datasets it was trained on; their held-out records are its
-    /// suite.
-    pub datasets: Vec<DatasetId>,
-    /// The earlier records replayed beside them.
-    pub replay: Option<ReplaySample>,
-    /// How it was trained.
-    pub training: TrainingSummary,
-    /// The gate it passed, with every number.
-    pub gate: GateReport,
-    /// When it was released, from the injected clock.
-    pub created_at: String,
-}
-
-/// A release as stored and verified.
+/// A release as stored and verified. A release stored in an older format is
+/// read as the current one with what it never recorded stated as unknown
+/// (see [`MANIFEST_V2`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredRelease {
     /// Its id.
@@ -111,6 +83,25 @@ impl ReleaseStore {
     /// release came from, in one commit. Refused when the release already
     /// exists: a release is written once.
     pub fn put(&self, manifest: &ReleaseManifest) -> Result<StoredRelease, OrchestratorError> {
+        if manifest.format != RELEASE_FORMAT {
+            return Err(OrchestratorError::Refused(format!(
+                "release of candidate {}: format {:?} is not {RELEASE_FORMAT}, the only format \
+                 written",
+                manifest.candidate, manifest.format
+            )));
+        }
+        if manifest.distribution == Distribution::Unrestricted {
+            manifest
+                .terms
+                .permits_unrestricted_release()
+                .map_err(|why| {
+                    OrchestratorError::Refused(format!(
+                        "release of candidate {} cannot be unrestricted: {why}; release it as \
+                         restricted to keep it local",
+                        manifest.candidate
+                    ))
+                })?;
+        }
         let artifact = self.artifacts.get(&manifest.adapter_artifact)?;
         if artifact.sha256.as_ref() != Some(&manifest.adapter_digest) {
             return Err(OrchestratorError::Refused(format!(
@@ -135,13 +126,14 @@ impl ReleaseStore {
     /// The release `id`, verified: the manifest hashes to `id`, and its
     /// adapter is there at the size that was kept.
     pub fn get(&self, id: &ReleaseId) -> Result<StoredRelease, OrchestratorError> {
-        let manifest: ReleaseManifest =
+        let document: ManifestDocument =
             self.workspace
                 .get_document(RELEASE, &id.0)?
                 .ok_or_else(|| OrchestratorError::NotFound {
                     what: "release",
                     id: id.to_string(),
                 })?;
+        let manifest = document.into_manifest();
         let adapter = self.artifacts.path(&manifest.adapter_artifact)?;
         Ok(StoredRelease {
             id: id.clone(),

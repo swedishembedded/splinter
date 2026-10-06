@@ -20,6 +20,7 @@ use splinter_knowledge::capture::{
     DEFAULT_MAX_FILE_BYTES,
 };
 
+use splinter_core::terms::Terms;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
@@ -159,9 +160,27 @@ pub struct SourceAdded {
 
 /// Captures `target` and stores it. A stored id is looked up instead.
 pub fn add(ctx: &Context, target: &SourceTarget) -> Result<SourceAdded, OrchestratorError> {
+    add_with_terms(ctx, target, None)
+}
+
+/// [`add`], the content stated as coming under `terms` when given. Terms are
+/// part of a source's identity, so the same content under other terms is
+/// another source, and a stored source cannot be restated: add the content
+/// again under the terms instead.
+pub fn add_with_terms(
+    ctx: &Context,
+    target: &SourceTarget,
+    terms: Option<Terms>,
+) -> Result<SourceAdded, OrchestratorError> {
     let store = ctx.sources();
     let captured = match target {
         SourceTarget::Stored { id } => {
+            if terms.is_some() {
+                return Err(OrchestratorError::Refused(format!(
+                    "source {id} is already stored, and its terms are part of its identity; add \
+                     the content again under the terms instead"
+                )));
+            }
             let source = store.get_source(&resolve(ctx, id)?)?;
             return Ok(SourceAdded {
                 source: SourceSummary::from(&source),
@@ -174,6 +193,12 @@ pub fn add(ctx: &Context, target: &SourceTarget) -> Result<SourceAdded, Orchestr
             let spec = CommandSpec::new(argv.clone(), &ctx.config().working_dir, env);
             capture_command(&spec, ctx.clock())?
         }
+    };
+    let captured = match terms {
+        Some(terms) => captured.with_terms(terms).map_err(|e| {
+            OrchestratorError::Refused(format!("the terms of the captured source: {e}"))
+        })?,
+        None => captured,
     };
     let new = !store.contains(&captured.source().id)?;
     let id = store.put_source(&captured)?;

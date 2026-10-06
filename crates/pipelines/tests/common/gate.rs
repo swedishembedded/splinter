@@ -33,6 +33,7 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::terms::Terms;
 use splinter_core::training::{HeldOutScore, Regime, TrainingCurve};
 use splinter_data::holdout::holdout_split_grouped;
 use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
@@ -134,6 +135,21 @@ pub fn dataset_under(
     facts: &[usize],
     prompt: Option<&str>,
 ) -> DatasetId {
+    dataset_made(ctx, topic, facts, prompt, None)
+}
+
+/// [`dataset`] of `n` facts whose manifest states `terms`.
+pub fn dataset_with_terms(ctx: &Context, topic: &str, n: usize, terms: Option<Terms>) -> DatasetId {
+    dataset_made(ctx, topic, &(0..n).collect::<Vec<_>>(), None, terms)
+}
+
+fn dataset_made(
+    ctx: &Context,
+    topic: &str,
+    facts: &[usize],
+    prompt: Option<&str>,
+    terms: Option<Terms>,
+) -> DatasetId {
     let positions: Vec<usize> = (0..facts.len()).collect();
     let held_out: Vec<usize> = holdout_split_grouped(&positions, |_| None)
         .map(|(_, held)| held.into_iter().copied().collect())
@@ -176,6 +192,7 @@ pub fn dataset_under(
         records,
         excluded: BTreeMap::new(),
         system_prompt: None,
+        terms,
     };
     let projection = match prompt {
         Some(prompt) => projection.with_system_prompt(prompt),
@@ -226,6 +243,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         records,
         excluded: BTreeMap::new(),
         system_prompt: None,
+        terms: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }

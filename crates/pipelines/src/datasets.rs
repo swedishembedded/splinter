@@ -18,6 +18,8 @@ use splinter_core::annotation::Strength;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::canonical_json;
 use splinter_core::experience::{ExperienceId, PrivilegedKind};
+use splinter_core::source::SourceId;
+use splinter_core::terms::{combine_stated, Terms};
 pub use splinter_data::Strip;
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Fraction,
@@ -26,6 +28,7 @@ use splinter_data::{
 };
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
+use splinter_store::error::StoreError;
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
@@ -308,6 +311,7 @@ pub fn build_with(
             }
         }
     }
+    let terms = source_terms(ctx, sources.iter())?;
     for source in sources {
         corpus.add_source(source);
     }
@@ -355,6 +359,7 @@ pub fn build_with(
                 .project(&corpus)
         }
     }?;
+    projection.terms = terms;
     if let Some(limit) = request.limit {
         projection = projection.thinned_to(limit);
     }
@@ -367,6 +372,26 @@ pub fn build_with(
     assign_groups(ctx, &corpus, &mut projection)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;
     Ok(Built::from(stored))
+}
+
+/// The terms a dataset made from `sources` comes under: the most restrictive
+/// of each axis over every source. A source that states none, or that the
+/// store does not hold, counts as unknown, so one unread licence among stated
+/// ones fails closed; `None` when no source states any.
+pub fn source_terms<'a>(
+    ctx: &Context,
+    sources: impl IntoIterator<Item = &'a SourceId>,
+) -> Result<Option<Terms>, OrchestratorError> {
+    let store = ctx.sources();
+    let mut stated = Vec::new();
+    for source in sources {
+        stated.push(match store.get_source(source) {
+            Ok(found) => found.terms,
+            Err(StoreError::UnknownSource(_)) => None,
+            Err(other) => return Err(other.into()),
+        });
+    }
+    Ok(combine_stated(stated.iter().map(Option::as_ref)))
 }
 
 /// Stores `projection` as a dataset and records where it came from: the

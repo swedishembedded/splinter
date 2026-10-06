@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::dataset::DatasetId;
 use crate::digest::Digest;
 use crate::release::ReleaseId;
+use crate::terms::Terms;
 
 /// One held-out score: teacher-forced loss and token accuracy over the
 /// supervised positions of the held-out records.
@@ -279,6 +280,11 @@ pub struct TrainingSummary {
     pub curve: Option<TrainingCurve>,
     /// brain's own training record of the adapter.
     pub record: serde_json::Value,
+    /// The terms of what it trained on: its datasets' and those of the
+    /// release it continued, combined; `None` when none were stated, which
+    /// is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms: Option<Terms>,
 }
 
 #[cfg(test)]

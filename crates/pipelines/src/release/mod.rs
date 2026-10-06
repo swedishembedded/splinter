@@ -43,6 +43,7 @@ use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
+use splinter_core::terms::{combine_stated, Distribution, Terms};
 use splinter_knowledge::concepts::Concept;
 use splinter_model::local::{load_source, resolve_base};
 use splinter_model::selection::local_model_name;
@@ -68,6 +69,12 @@ pub struct ReleaseRequest {
     pub alias: String,
     /// The gate's thresholds.
     pub gate: GateConfig,
+    /// How widely the release may be handed on. [`Distribution::Restricted`]
+    /// (the default) records the terms and keeps the release local;
+    /// [`Distribution::Unrestricted`] is refused, before anything is
+    /// measured, unless the terms of everything the candidate was made from
+    /// allow it.
+    pub distribution: Distribution,
 }
 
 impl ReleaseRequest {
@@ -78,6 +85,7 @@ impl ReleaseRequest {
             candidate: candidate.into(),
             alias: POLICY_DEFAULT.into(),
             gate: GateConfig::default(),
+            distribution: Distribution::default(),
         }
     }
 }
@@ -166,6 +174,16 @@ pub fn release(
         )));
     }
     let champion = champion_id.as_ref().map(|id| store.get(id)).transpose()?;
+    let terms = release_terms(&candidate, champion.as_ref());
+    if request.distribution == Distribution::Unrestricted {
+        terms.permits_unrestricted_release().map_err(|why| {
+            OrchestratorError::Refused(format!(
+                "candidate {} cannot be released unrestricted: {why}; release it restricted to \
+                 keep it local",
+                candidate.candidate
+            ))
+        })?;
+    }
     let base_source = load_source(
         &resolve_base(&config.policy_base)
             .map_err(|e| OrchestratorError::Refused(format!("the policy base: {e}")))?,
@@ -192,7 +210,7 @@ pub fn release(
     if !released.gate.passed {
         return Ok(released);
     }
-    let manifest = manifest(ctx, &candidate, &released.gate)?;
+    let manifest = manifest(ctx, &candidate, &released.gate, terms, request.distribution)?;
     // The release is made official first, with its place in the lineage, in
     // one commit; only then does the alias move.
     let stored = store.put(&manifest)?;
@@ -254,6 +272,16 @@ fn resume(
     })
 }
 
+/// The terms a release of `candidate` is made under: what training recorded,
+/// combined with the champion's, which it continues. Unknown when neither
+/// states any, so an unstated licence never counts as a granted one.
+fn release_terms(candidate: &Candidate, champion: Option<&StoredRelease>) -> Terms {
+    combine_stated(
+        std::iter::once(candidate.terms.as_ref()).chain(champion.map(|c| Some(&c.manifest.terms))),
+    )
+    .unwrap_or_else(|| Terms::unknown("unstated"))
+}
+
 /// The manifest of `candidate` released after `gate`. The base digest is
 /// the one training recorded on the adapter's card: the serve check has
 /// just had brain bind the adapter to the base on disk, which it refuses
@@ -262,6 +290,8 @@ fn manifest(
     ctx: &Context,
     candidate: &Candidate,
     gate: &GateReport,
+    terms: Terms,
+    distribution: Distribution,
 ) -> Result<ReleaseManifest, OrchestratorError> {
     let base_digest = Digest::parse(&candidate.base_digest).map_err(|e| {
         OrchestratorError::Refused(format!("candidate {}: {e}", candidate.candidate))
@@ -291,8 +321,11 @@ fn manifest(
             preference: candidate.preference.clone(),
             curve: candidate.curve.clone(),
             record,
+            terms: candidate.terms.clone(),
         },
         gate: gate.clone(),
+        terms,
+        distribution,
         created_at: ctx.clock().utc_now(),
     })
 }

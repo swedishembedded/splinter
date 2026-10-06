@@ -46,6 +46,7 @@ use splinter_core::experience::{Environment, ExperienceId, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
+use splinter_core::terms::{Distribution, Terms};
 use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{Check, GateConfig, GateReport};
 use splinter_orchestrator::releases::{ReleaseManifest, RELEASE_FORMAT};
@@ -131,6 +132,7 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
             preference: candidate.preference.clone(),
             curve: candidate.curve.clone(),
             record: serde_json::json!({ "trainer": "fake" }),
+            terms: None,
         },
         gate: GateReport::new(
             GateConfig::default(),
@@ -139,6 +141,8 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
             Check::unmeasured(unmeasured),
             Check::unmeasured(unmeasured),
         ),
+        terms: Terms::unknown("written by the lineage spec"),
+        distribution: Distribution::Restricted,
         created_at: NOW.into(),
     };
     let store = ctx.releases();

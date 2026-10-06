@@ -314,6 +314,11 @@ pub struct Projection {
     /// what it is asked under.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+    /// The terms the records' data came under, combined over their sources
+    /// ([`splinter_core::terms::combine_stated`]); `None` when no source
+    /// stated any. Set by whoever resolved the sources, never by a view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms: Option<splinter_core::terms::Terms>,
 }
 
 impl Projection {
@@ -332,6 +337,7 @@ impl Projection {
             records: Vec::new(),
             excluded: BTreeMap::new(),
             system_prompt: None,
+            terms: None,
         }
     }
 

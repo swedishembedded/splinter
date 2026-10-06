@@ -58,6 +58,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
+use splinter_core::terms::{combine_stated, Terms};
 use splinter_core::training::{
     HeldOutScore, PreferenceSummary, Regime, ReplaySample, ReplaySource, TrainingCurve,
 };
@@ -554,9 +555,27 @@ fn keep_candidate(ctx: &Context, finished: Finished<'_>) -> Result<Candidate, Or
         preference: trained.preference,
         curve: trained.curve,
         records: trained.records,
+        terms: plan_terms(ctx, plan)?,
     };
     candidate::record_candidate(ctx, &record, regime)?;
     Ok(record)
+}
+
+/// The terms of what `plan` trains on: its datasets' and those of the release
+/// it continues, whose own terms already hold everything it was trained on, so
+/// the strongest restriction anywhere upstream is the one that carries on.
+fn plan_terms(ctx: &Context, plan: &TrainPlan) -> Result<Option<Terms>, OrchestratorError> {
+    let parent = plan
+        .parent
+        .as_ref()
+        .map(|id| ctx.releases().get(id))
+        .transpose()?;
+    Ok(combine_stated(
+        plan.datasets
+            .iter()
+            .map(|d| d.manifest.terms.as_ref())
+            .chain(parent.as_ref().map(|p| Some(&p.manifest.terms))),
+    ))
 }
 
 /// What either regime's trainer produced, as a candidate records it.
