@@ -50,7 +50,6 @@ use splinter_model::local::GREEDY_SAMPLING;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::datasets::{build, BuildRequest, Built, ViewName};
-use crate::release::probe::greedy;
 use crate::release::{anchor, arm};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::tasks::remaining;
@@ -256,7 +255,6 @@ pub fn rehearse(ctx: &Context, request: &RehearseRequest) -> Result<Rehearsed, O
 
     // The base answers as the gate asks it: greedily, under the default
     // prompt, with no adapter.
-    let greedy = greedy(ctx, &base)?;
     let solved = solve_tasks(
         ctx,
         &SolveRequest {
@@ -270,7 +268,6 @@ pub fn rehearse(ctx: &Context, request: &RehearseRequest) -> Result<Rehearsed, O
             cancel: request.cancel.clone(),
         },
     )?;
-    drop(greedy);
     let verified = verify_set(
         ctx,
         &solved.experience_set,
