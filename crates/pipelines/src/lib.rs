@@ -60,6 +60,7 @@ pub mod judging;
 pub mod learn;
 pub mod lineage;
 pub mod plan;
+pub mod powered;
 pub mod raft;
 pub mod rehearsal;
 pub mod release;
