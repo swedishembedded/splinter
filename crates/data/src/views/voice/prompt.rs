@@ -61,9 +61,27 @@ fn year_in(heading: &str) -> Option<u32> {
         .find(|year| (1000..=2100).contains(year))
 }
 
+/// `body` without a salutation it opens with (`DEAR SIR,--`): the words
+/// before the first dash pair, when they are capitals and punctuation alone
+/// and short.
+fn without_salutation(body: &str) -> &str {
+    match body.find("--") {
+        Some(at)
+            if at <= 40
+                && body[..at]
+                    .chars()
+                    .all(|c| !c.is_lowercase() && (c.is_uppercase() || !c.is_alphanumeric())) =>
+        {
+            body[at + 2..].trim_start()
+        }
+        _ => body,
+    }
+}
+
 /// The opening of `body`: its first sentence, or its first
 /// [`SUBJECT_WORDS`] words when the sentence is longer.
 fn subject_of(body: &str) -> String {
+    let body = without_salutation(body);
     let words: Vec<&str> = body.split_whitespace().collect();
     let sentence_end = words
         .iter()
@@ -96,6 +114,20 @@ mod tests {
                 "Well met."
             ),
             "Write to Albert Gallatin in 1810 about: Well met."
+        );
+    }
+
+    /// A salutation is not what a letter is about.
+    #[test]
+    fn a_salutation_is_not_the_subject() {
+        let asked = request(
+            None,
+            Some("To G. Hay\nWashington, 1807"),
+            "DEAR SIR,--Your letter of the 9th is this moment received. More.",
+        );
+        assert_eq!(
+            asked,
+            "Write to G. Hay in 1807 about: Your letter of the 9th is this moment received."
         );
     }
 
