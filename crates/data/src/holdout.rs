@@ -28,13 +28,24 @@
 //! out are the same however much of the writer's text is beside them. A set
 //! with nothing to examine holds out its records as units, as before.
 //!
+//! The writer's text of a held-out family is written to a file of its own
+//! ([`Split::held_out_text`]): it is not what the policy is asked as, so it
+//! is not in the examinable held-out file a gate scores, but it is the one
+//! measure of the writer's text the run never trained on, and no record of
+//! the set goes nowhere: every record is in exactly one of the files.
+//!
 //! The records to train on are split once more, by the same family rule
 //! ([`monitor_split_file`]): a share of their families is the monitoring
 //! set a run scores as it trains and selects its best step on. It is carved
 //! from the training families, never from the held-out ones, because the
 //! gate and the exam decide on the held-out families, and a step chosen for
 //! its loss on them would make that decision on evidence the choice had
-//! already seen. The price is a tenth of the training records.
+//! already seen. The price is a tenth of the training records. The
+//! monitoring set spans at least [`MIN_MONITOR_FAMILIES`] families where the
+//! data has them, within twice the share, because a loss over one family
+//! measures that family; and the writer's text of the monitoring families
+//! goes to its own file ([`MonitorSplit::monitor_text`]), where a run that
+//! trains mostly on the writer's text can watch what it is learning.
 
 use std::path::{Path, PathBuf};
 
@@ -65,6 +76,11 @@ pub const MIN_HELD_OUT_UNITS: usize = 8;
 /// The share of the samples the held-out set may grow to for the sake of
 /// [`MIN_HELD_OUT_UNITS`], as the divisor of the sample count: a quarter.
 pub const MAX_HELD_OUT_SHARE: usize = 4;
+
+/// The fewest families a monitoring set spans when the training families
+/// allow: a loss over one family is a measure of that family, and a step
+/// selected on it is selected for it.
+pub const MIN_MONITOR_FAMILIES: usize = 3;
 
 /// `samples` split into the ones trained on and the ones held out, a group
 /// never divided: the samples `group` puts under one name (two prints of one
@@ -110,14 +126,14 @@ impl SplitRule {
         most: 1.0 / MAX_HELD_OUT_SHARE as f64,
     };
 
-    /// The monitoring rule: `share` of the units, whole groups, and no more
-    /// - a loss curve needs positions, not units of evidence.
+    /// The monitoring rule: `share` of the units, whole groups, grown to
+    /// [`MIN_MONITOR_FAMILIES`] families within twice the share.
     #[must_use]
     pub fn monitor(share: f64) -> SplitRule {
         SplitRule {
             share,
-            min_units: 1,
-            most: share,
+            min_units: MIN_MONITOR_FAMILIES,
+            most: (2.0 * share).min(1.0),
         }
     }
 }
@@ -245,14 +261,16 @@ pub fn holdout_split_records<S: AsRef<str>>(records: &[S]) -> Option<(Vec<&S>, V
     holdout_split_by(records, record_membership)
 }
 
-/// The two halves of a split dataset file.
+/// The parts of a split dataset file: every record is in exactly one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Split {
     /// The records to train on.
     pub train: PathBuf,
     /// The held-out records a score is measured on: the examinable ones.
-    /// The writer's text held out with their families is in neither file.
     pub held_out: PathBuf,
+    /// The records of the held-out families with no question to ask - the
+    /// writer's text - never trained on; `None` when there are none.
+    pub held_out_text: Option<PathBuf>,
 }
 
 /// The file name the records to train on are written under.
@@ -263,6 +281,9 @@ const HELD_OUT_FILE: &str = "held_out.jsonl";
 const FIT_FILE: &str = "fit.jsonl";
 /// The file name the monitoring records are written under.
 const MONITOR_FILE: &str = "monitor.jsonl";
+/// The suffix of the file the writer's text of the taken-out families is
+/// written under, after the taken-out file's stem: `held_out_text.jsonl`.
+const TEXT_SUFFIX: &str = "_text";
 
 /// Writes `dataset`'s records into `dir` as two files - the records to train
 /// on and the ones held out that can be scored - split by
@@ -270,25 +291,33 @@ const MONITOR_FILE: &str = "monitor.jsonl";
 /// parsers read it. Refused when the dataset has fewer than [`MIN_SAMPLES`]
 /// records.
 pub fn split_dataset_file(dataset: &Path, dir: &Path) -> Result<Split, ViewError> {
-    let (train, held_out) = split_file(
+    let (train, held_out, held_out_text) = split_file(
         dataset,
         dir,
         &SplitRule::HELD_OUT,
         TRAIN_FILE,
         HELD_OUT_FILE,
     )?;
-    Ok(Split { train, held_out })
+    Ok(Split {
+        train,
+        held_out,
+        held_out_text,
+    })
 }
 
-/// The two halves of a split of the records to train on.
+/// The parts of a split of the records to train on: every record is in
+/// exactly one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MonitorSplit {
     /// The records the run fits.
     pub fit: PathBuf,
     /// The records it scores as it trains: the examinable ones of the
-    /// monitoring families. The writer's text of those families is in
-    /// neither file.
+    /// monitoring families.
     pub monitor: PathBuf,
+    /// The records of the monitoring families with no question to ask - the
+    /// writer's text - scored as the run trains, never fitted; `None` when
+    /// there are none.
+    pub monitor_text: Option<PathBuf>,
 }
 
 /// Writes the records of `train` (a [`Split::train`] file) into `dir` as two
@@ -308,20 +337,26 @@ pub fn monitor_split_named(
     share: f64,
     names: (&str, &str),
 ) -> Result<MonitorSplit, ViewError> {
-    let (fit, monitor) = split_file(train, dir, &SplitRule::monitor(share), names.0, names.1)?;
-    Ok(MonitorSplit { fit, monitor })
+    let (fit, monitor, monitor_text) =
+        split_file(train, dir, &SplitRule::monitor(share), names.0, names.1)?;
+    Ok(MonitorSplit {
+        fit,
+        monitor,
+        monitor_text,
+    })
 }
 
-/// The records of `dataset` split by `rule` into `dir/kept` and `dir/out`,
-/// the latter the examinable records taken out (every record, when none is
-/// examinable).
+/// The records of `dataset` split by `rule` into three files of `dir`: `kept`;
+/// `out`, the examinable records taken out (every record, when none is
+/// examinable); and `<out stem>_text.jsonl`, the taken-out records that
+/// cannot be examined, when there are any.
 fn split_file(
     dataset: &Path,
     dir: &Path,
     rule: &SplitRule,
     kept: &str,
     out: &str,
-) -> Result<(PathBuf, PathBuf), ViewError> {
+) -> Result<(PathBuf, PathBuf, Option<PathBuf>), ViewError> {
     let io = |path: &Path| {
         let path = path.to_path_buf();
         move |source| ViewError::Io { path, source }
@@ -340,16 +375,15 @@ fn split_file(
     })?;
     // A score over the examinable records is a score of what the policy is
     // asked as, comparable whatever the writer's text beside them; when
-    // none is, every record is (see [`holdout_split_by`]).
-    let examinable: Vec<&&str> = held_out
+    // none is, every record is (see [`holdout_split_by`]). The writer's text
+    // of the taken-out families is scored apart, in its own file.
+    let (examinable, text): (Vec<&&str>, Vec<&&str>) = held_out
         .iter()
-        .filter(|record| record_membership(record).examinable)
-        .copied()
-        .collect();
-    let scored = if examinable.is_empty() {
-        held_out
+        .partition(|record| record_membership(record).examinable);
+    let (scored, text) = if examinable.is_empty() {
+        (held_out, Vec::new())
     } else {
-        examinable
+        (examinable, text)
     };
     // The rule never divides a group; the gate checks the files about to be
     // written rather than trusting the rule that made them.
@@ -377,7 +411,13 @@ fn split_file(
         std::fs::write(&path, body).map_err(io(&path))?;
         Ok(path)
     };
-    Ok((write(kept, &train)?, write(out, &scored)?))
+    let text_file = if text.is_empty() {
+        None
+    } else {
+        let stem = out.strip_suffix(".jsonl").unwrap_or(out);
+        Some(write(&format!("{stem}{TEXT_SUFFIX}.jsonl"), &text)?)
+    };
+    Ok((write(kept, &train)?, write(out, &scored)?, text_file))
 }
 
 #[cfg(test)]
@@ -447,8 +487,9 @@ mod tests {
 
         // Split into files, the held-out file holds what a score is measured
         // on: the examined records. The writer's text held out with them is
-        // in neither file - trained on by nobody, and not what the policy is
-        // asked as.
+        // in a file of its own - trained on by nobody, scored apart, since it
+        // is not what the policy is asked as - and every record is in exactly
+        // one of the three files.
         let dir = std::env::temp_dir().join(format!("views-voice-split-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let dataset = dir.join("mixed.jsonl");
@@ -457,17 +498,42 @@ mod tests {
         let held_file = std::fs::read_to_string(&split.held_out).unwrap();
         assert_eq!(held_file.lines().count(), 4);
         assert!(held_file.lines().all(|l| l.contains("experiences")));
+        let text_file = std::fs::read_to_string(split.held_out_text.as_ref().unwrap()).unwrap();
+        assert_eq!(text_file.lines().count(), 4, "{text_file}");
+        assert!(text_file
+            .lines()
+            .all(|l| l.contains("voice") && (l.contains("family-9") || l.contains("family-8"))));
         let train_file = std::fs::read_to_string(&split.train).unwrap();
         assert_eq!(train_file.lines().count(), records.len() - 8);
         assert!(!train_file.contains("family-9"));
+        let mut all: Vec<&str> = train_file
+            .lines()
+            .chain(held_file.lines())
+            .chain(text_file.lines())
+            .collect();
+        all.sort_unstable();
+        let mut given: Vec<&str> = records.iter().map(String::as_str).collect();
+        given.sort_unstable();
+        assert_eq!(all, given, "the three files partition the records");
+
+        // A set with no writer's text writes no text file.
+        let examined_only: Vec<String> = (0..20u32)
+            .map(|n| examined(&format!("family-{}", n / 2), n))
+            .collect();
+        std::fs::write(&dataset, format!("{}\n", examined_only.join("\n"))).unwrap();
+        assert_eq!(
+            split_dataset_file(&dataset, &dir).unwrap().held_out_text,
+            None
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// The monitoring set is a share of the training families, whole, and
-    /// no more; the writer's text of a monitored family is in neither file,
-    /// as with the held-out families.
+    /// The monitoring set is a share of the training families, whole, grown
+    /// to several families so that it measures more than one; the writer's
+    /// text of a monitored family goes to its own file, fitted by nobody,
+    /// and every record is in exactly one of the three files.
     #[test]
-    fn the_monitoring_set_is_a_share_of_the_training_families_taken_whole() {
+    fn the_monitoring_set_spans_several_families_and_keeps_their_text_apart() {
         let examined = |group: &str, n: u32| {
             format!(
                 r#"{{"messages":[],"metadata":{{"experiences":["blake3:{n:064x}"],"group":"{group}"}}}}"#
@@ -495,22 +561,65 @@ mod tests {
         let split = monitor_split_file(&train, &dir, 0.1).unwrap();
         let monitor = std::fs::read_to_string(&split.monitor).unwrap();
         let fit = std::fs::read_to_string(&split.fit).unwrap();
-        // A tenth of forty units is one family of four, the newest, and the
-        // paired test's eight units are not asked for.
-        assert_eq!(monitor.lines().count(), 4, "{monitor}");
-        assert!(monitor
+        let text = std::fs::read_to_string(split.monitor_text.as_ref().unwrap()).unwrap();
+        // A tenth of forty units is one family of four; the set is grown to
+        // three families, the newest, within twice the share.
+        assert_eq!(monitor.lines().count(), 8, "{monitor}");
+        let families: std::collections::BTreeSet<&str> = monitor
             .lines()
-            .all(|l| l.contains("family-9") && l.contains("experiences")));
+            .map(|l| {
+                if l.contains("family-9") {
+                    "family-9"
+                } else if l.contains("family-8") {
+                    "family-8"
+                } else {
+                    "other"
+                }
+            })
+            .collect();
+        assert_eq!(families.len(), 2, "{families:?}");
+        assert!(monitor.lines().all(|l| l.contains("experiences")));
         assert_eq!(
-            fit.lines().count(),
-            records.len() - 6,
-            "the family's four examined and two voice records leave"
+            text.lines().count(),
+            4,
+            "the two families' writer's text: {text}"
         );
-        assert!(!fit.contains("family-9"));
+        assert!(text
+            .lines()
+            .all(|l| l.contains("voice") && (l.contains("family-9") || l.contains("family-8"))));
+        assert_eq!(fit.lines().count(), records.len() - 12);
+        assert!(!fit.contains("family-9") && !fit.contains("family-8"));
+        let mut all: Vec<&str> = fit
+            .lines()
+            .chain(monitor.lines())
+            .chain(text.lines())
+            .collect();
+        all.sort_unstable();
+        let mut given: Vec<&str> = records.iter().map(String::as_str).collect();
+        given.sort_unstable();
+        assert_eq!(all, given, "the three files partition the records");
 
         let split = monitor_split_file(&train, &dir, 0.3).unwrap();
         let monitor = std::fs::read_to_string(&split.monitor).unwrap();
         assert_eq!(monitor.lines().count(), 12, "three families of four");
+
+        // A family larger than twice the share is left to train on, and the
+        // set is grown to three families of the others instead: a loss over
+        // one large family would measure that family.
+        let mut lopsided: Vec<String> = (0..9u32)
+            .map(|n| examined(&format!("small-{n}"), n))
+            .collect();
+        lopsided.extend((0..11u32).map(|n| examined("large", 50 + n)));
+        lopsided.push(examined("small-9", 9));
+        std::fs::write(&train, format!("{}\n", lopsided.join("\n"))).unwrap();
+        let split = monitor_split_file(&train, &dir, 0.1).unwrap();
+        let monitor = std::fs::read_to_string(&split.monitor).unwrap();
+        assert_eq!(
+            monitor.lines().count(),
+            3,
+            "the three newest small families, not the large one: {monitor}"
+        );
+        assert!(!monitor.contains(r#""group":"large""#));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

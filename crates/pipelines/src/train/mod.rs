@@ -117,8 +117,9 @@ pub const REPLAY_SEED: u64 = 0;
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
 
-/// The monitoring set a run with a rehearsal scores: the training
-/// families' monitoring records and the rehearsal's together.
+/// The monitoring set a run scores when it is made of several files: the
+/// training families' monitoring records, the writer's text of those
+/// families and the rehearsal's records together.
 const MONITOR_ALL_FILE: &str = "monitor_all.jsonl";
 
 /// The regime a dataset of `format` is trained by; `None` for a format
@@ -269,20 +270,24 @@ impl Trainer for BrainTrainer {
         let monitored = (plan.eval_every > 0)
             .then(|| monitor_split_file(&split.train, &plan.dir, plan.monitor_share))
             .transpose()?;
-        // The monitoring set is the training families' monitoring records
-        // and the rehearsal's together: the step selected is the one that
-        // generalises best on the mixture the run trains, not on the new
-        // records alone.
-        let monitor = match (
-            &monitored,
-            plan.rehearsal.as_ref().and_then(|r| r.monitor.as_ref()),
-        ) {
-            (Some(m), Some(rehearsed)) => Some(concatenate(
-                &[&m.monitor, rehearsed],
-                &plan.dir.join(MONITOR_ALL_FILE),
-            )?),
-            (Some(m), None) => Some(m.monitor.clone()),
-            (None, _) => None,
+        // The monitoring set is the training families' monitoring records,
+        // the writer's text of those families and the rehearsal's records
+        // together: the step selected is the one that generalises best on
+        // the mixture the run trains - the writer's text included, which is
+        // most of the tokens of a persona run - not on the dialogues alone.
+        let monitor = match &monitored {
+            Some(m) => {
+                let parts: Vec<&Path> = std::iter::once(m.monitor.as_path())
+                    .chain(m.monitor_text.as_deref())
+                    .chain(plan.rehearsal.as_ref().and_then(|r| r.monitor.as_deref()))
+                    .collect();
+                Some(if parts.len() == 1 {
+                    m.monitor.clone()
+                } else {
+                    concatenate(&parts, &plan.dir.join(MONITOR_ALL_FILE))?
+                })
+            }
+            None => None,
         };
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
         let rehearsed: Vec<(PathBuf, f32)> = plan

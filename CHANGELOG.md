@@ -142,6 +142,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   learned from.
 
 ### Changed
+- No record of a dataset goes unused by the splits. The writer's text of a
+  held-out family is written to its own file (`held_out_text.jsonl`) and the
+  writer's text of a monitoring family is monitored (`monitor_text.jsonl`)
+  instead of being dropped, so the held-out, monitoring and training files
+  partition the records. The monitoring set spans at least three families
+  (within twice the monitoring share) where the data has them, and its
+  loss, a mean per supervised token, now includes the writer's text, which is
+  most of the tokens of a persona run.
 - The step count of a training run is a budget, not a target: `--steps` (now
   optional on `train` too) is the most steps a run may take, by default three
   passes over the examples instead of two, and the monitoring decides where
