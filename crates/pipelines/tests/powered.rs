@@ -160,6 +160,16 @@ fn arms(ctx: &Context, candidate_adapter: &std::path::Path) -> ModelRef {
 }
 
 fn examined(ctx: &Context, exam: &ExamSet, candidate: &str, judge: &ModelRef) -> Powered {
+    examined_of(ctx, exam, candidate, judge, None)
+}
+
+fn examined_of(
+    ctx: &Context,
+    exam: &ExamSet,
+    candidate: &str,
+    judge: &ModelRef,
+    pilot_families: Option<usize>,
+) -> Powered {
     run(
         ctx,
         &PoweredRequest {
@@ -169,6 +179,7 @@ fn examined(ctx: &Context, exam: &ExamSet, candidate: &str, judge: &ModelRef) ->
             judge: Some(judge),
             goal: None,
             resamples: 3,
+            pilot_families,
             voice: false,
             cancel: &CancelToken::new(),
         },
@@ -232,6 +243,9 @@ fn every_verdict_of_every_arm_is_kept_and_the_arms_are_compared_by_family() {
     // than six wins, which is the unit of evidence.
     assert!((first.p_families - 0.5f64.powi(6)).abs() < 1e-12);
     assert!(first.difference.unwrap().low > 0.0);
+    // A pilot puts the candidate to a few of the families only.
+    let pilot = examined_of(&ctx, &exam, &candidate.candidate, &judge, Some(3));
+    assert_eq!((pilot.families, pilot.tasks), (3, 6));
     let hard = report.hard_controls.unwrap();
     assert_eq!(hard.passed, 0, "{hard:?}");
 }

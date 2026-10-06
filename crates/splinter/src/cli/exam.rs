@@ -42,6 +42,10 @@ pub struct ExamArgs {
         help = format!("With --exam-set: answers per task per arm, the first greedy and the rest \
                         sampled [default: {DEFAULT_RESAMPLES}]"))]
     pub resamples: Option<u32>,
+    /// With --exam-set: put only this many of the exam's families to the
+    /// candidate, as a pilot that estimates the discordance and clustering.
+    #[arg(long, value_name = "N", requires = "exam_set")]
+    pub pilot_families: Option<usize>,
     /// With --exam-set: leave out the voice score, which loads each arm on
     /// the device to give the writer's own text a likelihood.
     #[arg(long, requires = "exam_set")]

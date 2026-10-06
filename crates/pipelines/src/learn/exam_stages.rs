@@ -156,6 +156,7 @@ pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnSt
                     .exam
                     .resamples
                     .unwrap_or(crate::powered::DEFAULT_RESAMPLES),
+                pilot_families: None,
                 voice: true,
                 cancel: &run.cancel_token(),
             },

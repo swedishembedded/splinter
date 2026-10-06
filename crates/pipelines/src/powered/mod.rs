@@ -88,6 +88,11 @@ pub struct PoweredRequest<'a> {
     pub goal: Option<&'a str>,
     /// Answers per task per arm, the first greedy; at least one.
     pub resamples: usize,
+    /// Put only this many of the exam's families to the candidate - the first
+    /// by name, which is arbitrary and fixed - as a pilot that estimates the
+    /// exam's discordance and clustering before the full exam is paid for;
+    /// `None` is every family.
+    pub pilot_families: Option<usize>,
     /// Whether to score the voice (it loads each arm on the device).
     pub voice: bool,
     /// Stops the exam.
@@ -312,11 +317,27 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
         .map(|(t, _)| t.family.as_str())
         .collect::<BTreeSet<_>>()
         .len();
+    let piloted: Option<BTreeSet<&str>> = request.pilot_families.map(|n| {
+        request
+            .exam
+            .tasks
+            .iter()
+            .map(|t| t.family.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(n)
+            .collect()
+    });
     let (tasks, examined): (Vec<Task>, Vec<&ExamTask>) = all
         .into_iter()
         .zip(&request.exam.tasks)
         .zip(&seen)
-        .filter(|(_, seen)| !**seen)
+        .filter(|((_, t), seen)| {
+            !**seen
+                && piloted
+                    .as_ref()
+                    .is_none_or(|p| p.contains(t.family.as_str()))
+        })
         .map(|(pair, _)| pair)
         .unzip();
     if tasks.len() < 2 {
