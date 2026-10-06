@@ -46,6 +46,26 @@ pub fn render(l: &TimelineLineage) -> String {
         l.brain_commit.as_deref().unwrap_or("not recorded"),
         l.splinter_commit.as_deref().unwrap_or("not recorded")
     );
+    match &l.calibration {
+        Some(c) => {
+            let _ = writeln!(
+                out,
+                "    calibration sha256 {} fitted on {} validation units of {} (early stopping read the other {}); uncalibrated: {}",
+                c.digest,
+                c.units,
+                c.validation,
+                c.early_stopping_units,
+                if c.uncalibrated.is_empty() {
+                    "none".to_owned()
+                } else {
+                    format!("{:?}", c.uncalibrated)
+                }
+            );
+        }
+        None => {
+            let _ = writeln!(out, "    served raw: no calibration");
+        }
+    }
     for split in &l.evaluation_splits {
         let _ = writeln!(out, "    judged on the held-out units {split}");
     }

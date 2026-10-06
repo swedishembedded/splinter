@@ -19,17 +19,20 @@
 mod common;
 
 use common::timeline::{
-    context, evaluate, evaluate_under, failures, plan, plan_for, prepare, scoring, train, training,
-    write_synthetic, write_synthetic_without, ALL_CAUSE, CONVENTIONAL, FULL, STEPS,
+    context, evaluate, evaluate_under, failures, plan, plan_for, prepare, scoring, train,
+    train_calibrated, training, write_synthetic, write_synthetic_without, ALL_CAUSE, CONVENTIONAL,
+    FULL, STEPS,
 };
 use splinter_core::terms::{Distribution, UsagePolicy};
 use splinter_data::split::Part;
+use splinter_model::timeline::scoring::CalibrationBasis;
 use splinter_model::timeline::{read_jsonl, TimelineModel};
 use splinter_orchestrator::releases::ArtifactKind;
 use splinter_pipelines::release::rollback;
 use splinter_pipelines::timeline::evaluate::{
     evaluate_timeline, Champion, TimelineEvaluateRequest,
 };
+use splinter_pipelines::timeline::lineage::timeline_lineage;
 use splinter_pipelines::timeline::release::{release_timeline, TimelineReleaseRequest};
 
 const ALIAS: &str = "risk";
@@ -110,11 +113,43 @@ fn a_better_candidate_is_released_and_a_worse_one_is_rejected_and_recorded() {
     );
     assert_eq!(stored.manifest.provenance.dataset_snapshots.len(), 2);
     assert!(stored.manifest.provenance.brain_commit.is_some());
+    // Trained without a calibration, it is released raw and names none.
+    assert!(first.candidate.calibration.is_none());
+    assert_eq!(stored.manifest.provenance.calibration, None);
 
     // A candidate that reads the new measurements, measured on participants
     // neither model has seen, replaces the release in place.
-    let better = train(&ctx, &on_later, training(STEPS, 2));
+    let better = train_calibrated(&ctx, &on_later, training(STEPS, 2));
     let measured = evaluate(&ctx, &better.id, Champion::Release(ALIAS.into()), &on_later);
+    // Calibration is judged on the calibrated risk where the model has one,
+    // and the record says so; the champion and the all-cause union are raw.
+    let comparison = &measured.evaluation.comparison;
+    for h in &comparison.candidate.views["death:a"].horizons {
+        let calibrated = better
+            .candidate
+            .calibration
+            .as_ref()
+            .unwrap()
+            .outcome
+            .calibrated
+            .iter()
+            .any(|(code, horizon)| code == "death:a" && *horizon == h.horizon);
+        let expected = if calibrated {
+            CalibrationBasis::Calibrated
+        } else {
+            CalibrationBasis::Uncalibrated
+        };
+        assert_eq!(h.calibration_basis, expected, "death:a by {}", h.horizon);
+        assert_eq!(h.calibration.is_some(), calibrated);
+    }
+    assert!(comparison.candidate.views[ALL_CAUSE]
+        .horizons
+        .iter()
+        .all(|h| h.calibration_basis == CalibrationBasis::Raw));
+    assert!(comparison.champion.views["death:a"]
+        .horizons
+        .iter()
+        .all(|h| h.calibration_basis == CalibrationBasis::Raw));
     let released = release_timeline(
         &ctx,
         &release_request(&measured.id, Distribution::Unrestricted),
@@ -126,6 +161,27 @@ fn a_better_candidate_is_released_and_a_worse_one_is_rejected_and_recorded() {
     assert_eq!(
         ctx.releases().alias(ALIAS).unwrap(),
         Some(second_id.clone())
+    );
+    // The release records its calibration, and the lineage reports it.
+    let lineage = timeline_lineage(&ctx, &second_id.to_string(), 3).unwrap();
+    let traced = lineage
+        .calibration
+        .expect("a calibrated release traces its calibration");
+    assert_eq!(
+        Some(&traced.digest),
+        ctx.releases()
+            .get(&second_id)
+            .unwrap()
+            .manifest
+            .provenance
+            .calibration
+            .as_ref()
+    );
+    assert_eq!(traced.validation, on_later.validation);
+    assert_eq!(
+        traced.units + traced.early_stopping_units,
+        on_later.records[&Part::Validation],
+        "the validation part is divided, nothing dropped and nothing shared"
     );
 
     // A worse candidate is rejected: the champion stays, and it is recorded.

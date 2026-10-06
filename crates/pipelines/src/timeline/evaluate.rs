@@ -16,11 +16,11 @@
 //! early-stopped on any test unit: numbers over units a model has seen are not
 //! a held-out measurement. Both arms are loaded the way a consumer loads them
 //! (the packed file, unpacked, loaded by plain brain), so what is measured is
-//! the shipped model. The metrics are brain's survival arithmetic through the
-//! model adapter ([`splinter_model::timeline::scoring`]); this stage names
-//! the arms, hands the numbers on and keeps the evaluation as an immutable
-//! document. It also measures serving correctness: the packed file must
-//! predict, on the probe units, what the candidate predicted as trained.
+//! the shipped model. The metrics are brain's (`TimelineModel::evaluate`) and
+//! survival arithmetic through the model adapter
+//! ([`splinter_model::timeline::scoring`]); this stage names the arms, hands
+//! the numbers on and keeps the evaluation as an immutable document. It also
+//! measures serving correctness on the test units ([`super::serving`]).
 
 use std::collections::HashSet;
 
@@ -31,16 +31,16 @@ use splinter_core::release::ReleaseId;
 use splinter_data::split::Part;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveSpec;
-use splinter_eval::timeline_metrics::{TimelinePlan, SERVE_MAX_ABS_DIFF};
-use splinter_model::timeline::probe::{max_abs_difference, probe_values};
+use splinter_eval::timeline_metrics::TimelinePlan;
 use splinter_model::timeline::scoring::{compare, predict_arm, Comparison, ScoreSpec};
-use splinter_model::timeline::{read_jsonl, Subject, TimelineModel};
+use splinter_model::timeline::{read_jsonl, Subject};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
 
 use super::records::TimelineCandidate;
 use super::release::resolve_release;
+use super::serving::{check_serving, ServingCheck};
 use super::train::{lift, load_bundle, load_timeline_candidate, Scratch};
 
 /// The `format` of an evaluation record.
@@ -109,6 +109,9 @@ pub struct TimelineEvaluation {
     pub comparison: Comparison,
     /// The same numbers by the names the gate reads, with the serving check.
     pub evidence: Evidence,
+    /// What the serving check measured on the test units.
+    #[serde(default)]
+    pub serving: Option<ServingCheck>,
 }
 
 impl TimelineEvaluation {
@@ -242,16 +245,39 @@ pub fn evaluate_timeline(
         }
     }
 
+    for (name, arm) in [("candidate", &candidate), ("champion", &champion)] {
+        let (mut trained, mut asked) = (
+            arm.record.config.absorbing.clone(),
+            request.scoring.absorbing.clone(),
+        );
+        trained.sort();
+        asked.sort();
+        if trained != asked {
+            return Err(OrchestratorError::Refused(format!(
+                "the {name} was trained with absorbing codes {trained:?} but the scoring names {asked:?}: \
+                 brain scores a code against the codes its model ended follow-up for"
+            )));
+        }
+    }
+
     let scratch = Scratch::new(ctx, "evaluate")?;
     let champion_model = load_bundle(&champion.file, &scratch.0, "champion")?;
     let candidate_model = load_bundle(&candidate.file, &scratch.0, "candidate")?;
-    let serve = serve_difference(ctx, &candidate, &candidate_model)?;
+    let serving = check_serving(
+        &candidate.record,
+        &candidate.file,
+        &scratch.0.join("served"),
+        &candidate_model,
+        &subjects,
+        &subjects_of(ctx, &candidate.record.held_out)?,
+        &request.scoring.horizons,
+    )?;
     let champion_arm = predict_arm(&champion_model, &subjects, &request.scoring).map_err(lift)?;
     let candidate_arm = predict_arm(&candidate_model, &subjects, &request.scoring).map_err(lift)?;
     let comparison =
         compare(&champion_arm, &candidate_arm, &subjects, &request.scoring).map_err(lift)?;
     let mut evidence = comparison.evidence();
-    evidence.values.insert(SERVE_MAX_ABS_DIFF.into(), serve);
+    serving.add_to(&mut evidence);
 
     let evaluation = TimelineEvaluation {
         format: EVALUATION_FORMAT.into(),
@@ -263,40 +289,12 @@ pub fn evaluate_timeline(
         scoring: request.scoring.clone(),
         comparison,
         evidence,
+        serving: Some(serving),
     };
     let id = ctx
         .workspace()
         .put_document(EVALUATION_CLASS, &evaluation)?;
     Ok(TimelineEvaluated { id, evaluation })
-}
-
-/// The largest difference between what the packed candidate predicts on its
-/// probe units and what the model as trained predicted: NaN (so the serving
-/// requirement fails) when the probe cannot be reproduced.
-fn serve_difference(
-    ctx: &Context,
-    candidate: &Arm,
-    served: &TimelineModel,
-) -> Result<f64, OrchestratorError> {
-    let held = subjects_of(ctx, &candidate.record.held_out)?;
-    let probe: Vec<Subject> = candidate
-        .record
-        .probe
-        .subjects
-        .iter()
-        .filter_map(|id| held.iter().find(|s| &s.subject_id == id).cloned())
-        .collect();
-    if probe.len() != candidate.record.probe.subjects.len() {
-        return Ok(f64::NAN);
-    }
-    let now = probe_values(
-        served,
-        &probe,
-        &candidate.record.config.codes,
-        &candidate.record.probe.horizons,
-    )
-    .map_err(lift)?;
-    Ok(max_abs_difference(&now, &candidate.record.probe.values))
 }
 
 /// The evaluation `id` (a digest or a unique prefix) names.

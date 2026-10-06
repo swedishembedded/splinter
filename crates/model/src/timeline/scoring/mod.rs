@@ -42,7 +42,7 @@ use splinter_eval::timeline_metrics::{
 use super::training::TimelineError;
 use super::{Subject, TimelineModel};
 
-pub use arm::{predict_arm, Predicted, View, ViewKind};
+pub use arm::{predict_arm, Predicted, View, ViewKind, CALIBRATION_GROUPS, IBS_POINTS};
 pub use difference::compare;
 
 /// A percentile interval.
@@ -135,13 +135,8 @@ pub struct ScoreSpec {
     /// The horizons metrics are reported at, increasing, inside both models'
     /// last knot.
     pub horizons: Vec<f64>,
-    /// Points of the grid the integrated Brier score is taken over: evenly
-    /// spaced up to the last horizon.
-    pub ibs_points: usize,
     /// The fewest events of an outcome by a horizon for it to be measured.
     pub min_events: usize,
-    /// Risk groups of the calibration table.
-    pub calibration_groups: usize,
     /// Bootstrap resamples of the differences.
     pub bootstrap_reps: usize,
     /// The interval level, in (0, 1).
@@ -154,8 +149,8 @@ pub struct ScoreSpec {
 
 impl ScoreSpec {
     /// A spec over `codes` of which `absorbing` compete, at `horizons`, with
-    /// ten risk groups, a ten point grid, 200 resamples at level 0.95 and at
-    /// least ten events.
+    /// brain's ten risk groups and twenty point grid ([`CALIBRATION_GROUPS`],
+    /// [`IBS_POINTS`]), 200 resamples at level 0.95 and at least ten events.
     pub fn new<C: Into<String>, A: Into<String>>(
         codes: impl IntoIterator<Item = C>,
         absorbing: impl IntoIterator<Item = A>,
@@ -166,9 +161,7 @@ impl ScoreSpec {
             absorbing: absorbing.into_iter().map(Into::into).collect(),
             all_cause: None,
             horizons,
-            ibs_points: 10,
             min_events: 10,
-            calibration_groups: 10,
             bootstrap_reps: 200,
             level: 0.95,
             seed: 1,
@@ -201,12 +194,8 @@ impl ScoreSpec {
                 self.horizons
             ));
         }
-        if self.ibs_points < 2
-            || self.calibration_groups < 2
-            || self.bootstrap_reps == 0
-            || !(self.level > 0.0 && self.level < 1.0)
-        {
-            return bad("ibs_points and calibration_groups need at least 2, reps at least 1 and the level to be inside (0, 1)".into());
+        if self.bootstrap_reps == 0 || !(self.level > 0.0 && self.level < 1.0) {
+            return bad("reps need to be at least 1 and the level inside (0, 1)".into());
         }
         for (arm, model) in ["champion", "candidate"].iter().zip(models) {
             if let Some(c) = self.codes.iter().find(|c| !model.codes().contains(c)) {
@@ -240,8 +229,30 @@ pub struct HorizonScores {
     pub auc: Option<f64>,
     /// The IPCW Brier score.
     pub brier: Option<f64>,
-    /// The calibration at the horizon.
+    /// The calibration at the horizon, judged on the risk `calibration_basis`
+    /// names; absent when the model declared the horizon uncalibrated.
     pub calibration: Option<Calibration>,
+    /// Which risk the calibration numbers were measured on.
+    #[serde(default)]
+    pub calibration_basis: CalibrationBasis,
+}
+
+/// Which risk a horizon's calibration is judged on. Discrimination and error
+/// are always the model's raw risk, so two models are compared on what they
+/// predict; calibration is judged on the risk the model is served as.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CalibrationBasis {
+    /// The model's raw cumulative incidence: it has no calibration at this
+    /// code and horizon, or none at all.
+    #[default]
+    Raw,
+    /// The Venn-Abers calibrated risk brain serves at this code and horizon.
+    Calibrated,
+    /// brain declared this code and horizon uncalibrated (too few validation
+    /// events): nothing is judged, and a requirement on it fails as
+    /// unmeasured, never as zero.
+    Uncalibrated,
 }
 
 /// Calibration at a horizon.
@@ -255,10 +266,6 @@ pub struct Calibration {
     pub oe: f64,
     /// Expected calibration error over the risk groups.
     pub ece: f64,
-    /// The Aalen-Johansen observed risk.
-    pub observed: f64,
-    /// The mean predicted risk.
-    pub expected: f64,
 }
 
 /// One arm's metrics for one view (an outcome code or the all-cause union).

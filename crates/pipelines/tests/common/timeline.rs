@@ -13,7 +13,7 @@ use splinter_data::timeline_dataset::ProjectionSpec;
 use splinter_eval::timeline_metrics::{CalibrationBands, CodePlan, TimelinePlan};
 use splinter_model::timeline::scoring::{ScoreSpec, Subgroup, SubgroupRule};
 use splinter_model::timeline::synthetic;
-use splinter_model::timeline::TimelineTraining;
+use splinter_model::timeline::{CalibrationPlan, TimelineTraining};
 use splinter_orchestrator::Context;
 use splinter_pipelines::timeline::data::{
     import_records, split_timeline, ImportRequest, SplitPlan, SplitReport, SplitRequest,
@@ -168,6 +168,31 @@ pub fn train(ctx: &Context, split: &SplitReport, config: TimelineTraining) -> Ti
     .unwrap()
 }
 
+/// The fewest validation events a code needs by a horizon to be calibrated
+/// there in these specs: the cohorts are small, so brain's own minimum (30)
+/// would leave the first horizon uncalibrated.
+pub const CALIBRATION_MIN_EVENTS: usize = 10;
+
+/// Trains a candidate on the parts of `split` and calibrates its risks at the
+/// judged horizons on the share of the validation part early stopping does not
+/// read.
+pub fn train_calibrated(
+    ctx: &Context,
+    split: &SplitReport,
+    config: TimelineTraining,
+) -> TimelineTrained {
+    let mut request = TimelineTrainRequest::new(
+        &split.train.to_string(),
+        &split.validation.to_string(),
+        config,
+    );
+    request.calibration = Some(CalibrationPlan {
+        horizons: HORIZONS.to_vec(),
+        min_events: Some(CALIBRATION_MIN_EVENTS),
+    });
+    train_timeline_candidate(ctx, &request).unwrap()
+}
+
 /// How the arms are scored: the all-cause view and a subgroup, a few
 /// resamples.
 pub fn scoring() -> ScoreSpec {
@@ -211,6 +236,8 @@ pub fn plan_for(calibrated: &[&str]) -> TimelinePlan {
         subgroup_margin: 0.002,
         min_subgroup_events: 10,
         serve_tolerance: 1e-6,
+        batch_tolerance: 1e-6,
+        max_abstention_rate: 0.1,
     }
 }
 

@@ -36,6 +36,10 @@ pub const FILE: &str = "synthetic.jsonl";
 /// The declaration `synth` writes.
 pub const DECLARATION: &str = "synthetic.source.json";
 
+/// The unit the first risk factor is stated in: a standard deviation of the
+/// cohort's own distribution.
+pub const X1_UNIT: &str = "sd";
+
 /// The generator's outcome codes as the ontology names them.
 const RENAMED: [(&str, &str); 2] = [("death:a", "death:cvd"), ("death:b", "death:cancer")];
 
@@ -51,6 +55,13 @@ pub fn lines(n: usize, seed: u64) -> Result<Vec<String>> {
             line["group_id"] = format!("household-{}", i / 2).into();
             line["source"] = ["cycle-a", "cycle-b"][(i / 2) % 2].into();
             line["interventions"] = serde_json::json!([]);
+            // The first risk factor is a standardised score: its unit is stated,
+            // so the model records it and refuses a measurement in another.
+            for o in line["observations"].as_array_mut().into_iter().flatten() {
+                if o["var"] == "x1" {
+                    o["unit"] = X1_UNIT.into();
+                }
+            }
             let events: Vec<serde_json::Value> = subject
                 .events
                 .iter()
@@ -127,6 +138,17 @@ mod tests {
             "{causes:?}"
         );
         assert!(causes.contains("death:cvd") && causes.contains("death:cancer"));
+    }
+
+    #[test]
+    fn the_first_risk_factor_states_its_unit_and_the_others_state_none() {
+        for line in lines(50, 5).unwrap() {
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+            for o in v["observations"].as_array().unwrap() {
+                let unit = o.get("unit").and_then(|u| u.as_str());
+                assert_eq!(unit, (o["var"] == "x1").then_some(X1_UNIT), "{o}");
+            }
+        }
     }
 
     #[test]

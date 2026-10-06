@@ -73,6 +73,24 @@ pub struct DatasetTrace {
     pub files: Vec<(SourceFile, usize)>,
 }
 
+/// The calibration a release was served with, and the units it was fitted on.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct CalibrationTrace {
+    /// The SHA-256 of its `calibration.json`, as the release manifest records
+    /// it.
+    pub digest: Digest,
+    /// The validation dataset it was fitted on a share of (never a test part).
+    pub validation: DatasetId,
+    /// Units it was fitted on.
+    pub units: usize,
+    /// The address of the sorted ids of those units.
+    pub units_digest: Digest,
+    /// Validation units early stopping read instead.
+    pub early_stopping_units: usize,
+    /// The (code, horizon) pairs brain left uncalibrated for want of events.
+    pub uncalibrated: Vec<(String, f64)>,
+}
+
 /// The release, the run that made it and everything it was made from.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct TimelineLineage {
@@ -100,8 +118,40 @@ pub struct TimelineLineage {
     pub distribution: Distribution,
     /// The terms of everything it was made from.
     pub terms: Terms,
+    /// Its calibration; `None` for a release served raw.
+    pub calibration: Option<CalibrationTrace>,
     /// The datasets it was trained on.
     pub datasets: Vec<DatasetTrace>,
+}
+
+/// The calibration of `record`, checked against the digest the release
+/// manifest names: the two must agree, or the release does not carry the
+/// calibration its record says.
+fn calibration_trace(
+    record: &TimelineCandidate,
+    manifest_digest: Option<&Digest>,
+) -> Result<Option<CalibrationTrace>, OrchestratorError> {
+    match (&record.calibration, manifest_digest) {
+        (None, None) => Ok(None),
+        (Some(c), Some(named)) if &c.digest == named => Ok(Some(CalibrationTrace {
+            digest: c.digest.clone(),
+            validation: record.held_out.clone(),
+            units: c.outcome.units,
+            units_digest: c.units_digest.clone(),
+            early_stopping_units: c.early_stopping_units,
+            uncalibrated: c
+                .outcome
+                .uncalibrated
+                .iter()
+                .map(|g| (g.code.clone(), g.horizon))
+                .collect(),
+        })),
+        (record_side, manifest_side) => Err(OrchestratorError::Refused(format!(
+            "the release manifest names calibration {manifest_side:?} but its candidate \
+             recorded {:?}",
+            record_side.as_ref().map(|c| &c.digest)
+        ))),
+    }
 }
 
 fn trace(
@@ -197,6 +247,7 @@ pub fn timeline_lineage(
         splinter_commit: record.splinter_commit.clone(),
         distribution: stored.manifest.distribution,
         terms: stored.manifest.terms.clone(),
+        calibration: calibration_trace(&record, stored.manifest.provenance.calibration.as_ref())?,
         datasets,
     })
 }

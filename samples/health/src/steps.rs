@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::data::timeline_dataset::ProjectionSpec;
 use splinter_sdk::measure::timeline_metrics::{CalibrationBands, CodePlan, TimelinePlan};
 use splinter_sdk::model::timeline::scoring::{ScoreSpec, Subgroup, SubgroupRule};
-use splinter_sdk::model::timeline::TimelineTraining;
+use splinter_sdk::model::timeline::{Backbone, NextEvents, TimelineTraining};
 use splinter_sdk::timeline::data::{
     import_records, split_timeline, ImportRequest, SplitPlan, SplitRequest,
 };
@@ -168,6 +168,19 @@ pub struct TrainArgs {
     pub max_tokens: Option<u32>,
     /// Subjects per batch.
     pub batch: u32,
+    /// Read the history visit by visit, carrying a state over this many
+    /// visits.
+    pub visits: Option<u32>,
+    /// What carries the visits to the prediction time (with `visits`).
+    pub backbone: Option<Backbone>,
+    /// A group of events modelled for which comes first, with its weight.
+    pub next_events: Option<NextEvents>,
+    /// A forecast head on this many future measurements per subject, with its
+    /// weight.
+    pub forecasts: Option<(u32, f32)>,
+    /// The horizons the trained model's risks are calibrated at, on the
+    /// validation units early stopping does not read; none leaves it raw.
+    pub calibrate_at: Vec<f64>,
 }
 
 /// The outcome codes a dataset is trained on: what it supplies, each of them
@@ -208,9 +221,16 @@ pub fn train(run: &Run, args: &TrainArgs) -> Result<serde_json::Value> {
     config.additive = args.additive;
     config.max_tokens = args.max_tokens;
     config.batch = args.batch;
+    config.visits = args.visits;
+    config.backbone = args.backbone;
+    config.next_events = args.next_events.clone();
+    config.forecasts = args.forecasts;
     let ctx = run.context()?;
     let mut request =
         TimelineTrainRequest::new(&split.report.train, &split.report.validation, config);
+    if !args.calibrate_at.is_empty() {
+        request = request.calibrated_at(args.calibrate_at.clone());
+    }
     request.splinter_commit = splinter_commit();
     let trained = train_timeline_candidate(&ctx, &request)?;
     run.label(&args.label, &trained.id)?;
@@ -228,6 +248,13 @@ pub fn train(run: &Run, args: &TrainArgs) -> Result<serde_json::Value> {
         "fitted_on_units": c.fit.units,
         "checkpoint_sha256": c.checkpoint_sha256.to_string(),
         "round_trip_max_abs_diff": c.round_trip_max_abs_diff,
+        "calibration": c.calibration.as_ref().map(|k| serde_json::json!({
+            "digest": k.digest.to_string(),
+            "units": k.outcome.units,
+            "early_stopping_units": k.early_stopping_units,
+            "calibrated": k.outcome.calibrated,
+            "uncalibrated": k.outcome.uncalibrated,
+        })),
         "brain_commit": c.brain_commit,
         "splinter_commit": c.splinter_commit,
     }))
@@ -303,6 +330,8 @@ pub fn eval(run: &Run, args: &EvalArgs) -> Result<serde_json::Value> {
         subgroup_margin: 0.002,
         min_subgroup_events: 10,
         serve_tolerance: 1e-6,
+        batch_tolerance: 1e-6,
+        max_abstention_rate: 0.1,
     };
     let ctx = run.context()?;
     let evaluated = evaluate_timeline(

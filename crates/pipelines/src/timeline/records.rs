@@ -24,7 +24,7 @@ use splinter_core::digest::Digest;
 use splinter_core::terms::Terms;
 use splinter_data::split::FitCertificate;
 use splinter_data::timeline_dataset::SourceFile;
-use splinter_model::timeline::TimelineTraining;
+use splinter_model::timeline::{CalibrationOutcome, TimelineTraining};
 
 /// The `format` of a candidate record.
 pub const CANDIDATE_FORMAT: &str = "splinter-timeline-candidate-v1";
@@ -61,6 +61,31 @@ pub struct Probe {
     pub horizons: Vec<f64>,
     /// Cumulative incidence by subject, outcome code, horizon.
     pub values: Vec<f64>,
+    /// The calibrated risk in the same order; `None` where the model has none
+    /// at that code and horizon. Empty for a model with no calibration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calibrated: Vec<Option<f64>>,
+}
+
+/// The calibration kept with a candidate, and what it was fitted on.
+///
+/// The validation part of the split is divided by participant group into the
+/// units early stopping reads and the units the calibration is fitted on, so
+/// the calibrators never see data the model chose its weights on; neither
+/// ever sees a test unit.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationRecord {
+    /// The SHA-256 of the `calibration.json` beside the weights, which the
+    /// release manifest names.
+    pub digest: Digest,
+    /// What fitting did: the plan, the units, the pairs calibrated and the
+    /// pairs left uncalibrated for want of events.
+    pub outcome: CalibrationOutcome,
+    /// Validation units early stopping read.
+    pub early_stopping_units: usize,
+    /// The address of the sorted ids of the units the calibration was fitted
+    /// on.
+    pub units_digest: Digest,
 }
 
 /// A trained candidate.
@@ -99,6 +124,10 @@ pub struct TimelineCandidate {
     pub outcome: TrainingOutcome,
     /// The predictions the packed file is held to.
     pub probe: Probe,
+    /// The calibration packed with the weights; `None` for a model trained
+    /// without one (a baseline, say), which is served and judged raw.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calibration: Option<CalibrationRecord>,
     /// The largest difference between the model as trained and the same
     /// model loaded from the packed file, on the probe: what the round trip
     /// through the file cost.

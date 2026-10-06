@@ -17,6 +17,8 @@
 //!   units under requirements registered before scoring.
 //! * [`release`] - an evaluation becomes a release only through the gate; a
 //!   candidate that fails is recorded as rejected.
+//! * [`serving`] - the shipped file unpacked as a consumer would and measured:
+//!   the serving-correctness inputs of the gate.
 //! * [`lineage`] - from a release back to the line of each source file of every
 //!   participant it was trained on.
 //! * [`records`] - the record a candidate leaves.
@@ -26,4 +28,5 @@ pub mod evaluate;
 pub mod lineage;
 pub mod records;
 pub mod release;
+pub mod serving;
 pub mod train;

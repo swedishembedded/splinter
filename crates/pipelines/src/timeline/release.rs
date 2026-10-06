@@ -116,6 +116,7 @@ pub fn release_timeline(
             distribution: request.distribution,
             provenance: Provenance {
                 training_config: Some(record.config_digest.clone()),
+                calibration: record.calibration.as_ref().map(|c| c.digest.clone()),
                 brain_commit: record.brain_commit.clone(),
                 splinter_commit: record.splinter_commit.clone(),
                 ..Provenance::default()

@@ -22,7 +22,7 @@
 //! train    a candidate (or a baseline) from the training and validation parts
 //! eval     a candidate against a champion on the test part, under registered requirements
 //! release  the candidate becomes the release only if the gate passes; else it is rejected and recorded
-//! predict  the released file, loaded by plain brain: risk curves, a new checkup, risk curves again
+//! predict  the released file, loaded by plain brain: a patient history forecast, a new checkup appended, forecast again
 //! lineage  a release back to its training run, datasets, episodes, source lines and source file digests
 //! real     the same loop on a directory of timeline-v1 files, with terms from a declared policy
 //! ontology the outcome definitions and the datasets listed for each
@@ -42,6 +42,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
+use splinter_sdk::model::timeline::{Backbone, Mixer, NextEvents, StackConfig};
 use splinter_sdk::timeline::data::SplitPlan;
 
 use crate::ontology::{Ontology, NHANES_DATASET};
@@ -118,6 +119,76 @@ impl Cut {
     }
 }
 
+/// What carries the visits to the prediction time.
+#[derive(Clone, Copy, ValueEnum)]
+enum BackboneArg {
+    /// A per-channel continuous-time state.
+    State,
+    /// One layer of attention with rotary angles from real time.
+    Attention,
+}
+
+/// How the blocks of a stack mix the visits.
+#[derive(Clone, Copy, ValueEnum)]
+enum MixerArg {
+    /// Attention over the visits.
+    Attention,
+    /// A gated delta rule whose decay follows the time between visits.
+    GatedDeltaNet,
+    /// Gated delta rule blocks with an attention block every fourth.
+    Hybrid,
+}
+
+/// The optional heads and state of brain's timeline model; each is brain's
+/// own, passed through to the training configuration. With none of them the
+/// model is the default one.
+#[derive(clap::Args)]
+struct Shape {
+    /// Read the history visit by visit, carrying a state over this many visits.
+    #[arg(long)]
+    visits: Option<u32>,
+    /// What carries the visits to the prediction time (needs --visits).
+    #[arg(long, value_enum, requires = "visits", conflicts_with = "mixer")]
+    backbone: Option<BackboneArg>,
+    /// Carry the visits through a stack of blocks mixing as this (needs --visits).
+    #[arg(long, value_enum, requires = "visits")]
+    mixer: Option<MixerArg>,
+    /// The number of blocks of the stack.
+    #[arg(long, default_value_t = 2, requires = "mixer")]
+    blocks: u32,
+    /// Event codes modelled for which comes first after the prediction time,
+    /// comma separated (an outcome or a history event such as `dx`).
+    #[arg(long, value_delimiter = ',')]
+    next_events: Option<Vec<String>>,
+    /// The weight of the next-event group against the outcomes.
+    #[arg(long, default_value_t = 1.0, requires = "next_events")]
+    next_events_weight: f32,
+    /// A forecast head on up to this many future measurements per subject.
+    #[arg(long)]
+    forecasts: Option<u32>,
+    /// The weight of the forecast head against the outcomes.
+    #[arg(long, default_value_t = 1.0, requires = "forecasts")]
+    forecast_weight: f32,
+}
+
+impl Shape {
+    fn backbone(&self) -> Option<Backbone> {
+        match (self.mixer, self.backbone) {
+            (Some(mixer), _) => Some(Backbone::Stack(StackConfig::new(
+                match mixer {
+                    MixerArg::Attention => Mixer::Attention,
+                    MixerArg::GatedDeltaNet => Mixer::GatedDeltaNet,
+                    MixerArg::Hybrid => Mixer::Hybrid,
+                },
+                self.blocks,
+            ))),
+            (None, Some(BackboneArg::State)) => Some(Backbone::State),
+            (None, Some(BackboneArg::Attention)) => Some(Backbone::Attention),
+            (None, None) => None,
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Write a synthetic cohort as a source file with a digest and declared terms.
@@ -170,6 +241,15 @@ enum Command {
         /// Subjects per batch.
         #[arg(long, default_value_t = 256)]
         batch: u32,
+        #[command(flatten)]
+        shape: Shape,
+        /// Horizons, in years, whose risk is calibrated on the validation
+        /// units early stopping does not read, comma separated.
+        #[arg(long, value_delimiter = ',', default_values_t = [5.0, 10.0])]
+        calibrate_at: Vec<f64>,
+        /// Train a model that is served raw, with no calibration.
+        #[arg(long)]
+        no_calibration: bool,
     },
     /// Score a candidate against a champion on the test part.
     Eval {
@@ -218,9 +298,16 @@ enum Command {
         /// Its value.
         #[arg(long, default_value_t = 2.0)]
         value: f64,
+        /// The unit the new value is stated in; the model refuses a unit other
+        /// than the one it was trained on and never converts.
+        #[arg(long)]
+        unit: Option<String>,
         /// How long after the first prediction time, in years.
         #[arg(long, default_value_t = 2.0)]
         after: f64,
+        /// Horizons the forecast is given at, in years, comma separated.
+        #[arg(long, value_delimiter = ',', default_values_t = predict::HORIZONS)]
+        horizons: Vec<f64>,
     },
     /// Trace a release back to its training run, datasets, episodes and source files.
     Lineage {
@@ -309,6 +396,9 @@ fn run(cli: Cli) -> Result<ExitCode> {
             additive,
             max_tokens,
             batch,
+            shape,
+            calibrate_at,
+            no_calibration,
         } => {
             let name = format!("train-{label}");
             let report = steps::train(
@@ -320,6 +410,18 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     additive,
                     max_tokens,
                     batch,
+                    visits: shape.visits,
+                    backbone: shape.backbone(),
+                    next_events: shape.next_events.clone().map(|codes| NextEvents {
+                        codes,
+                        weight: shape.next_events_weight,
+                    }),
+                    forecasts: shape.forecasts.map(|n| (n, shape.forecast_weight)),
+                    calibrate_at: if no_calibration {
+                        Vec::new()
+                    } else {
+                        calibrate_at
+                    },
                 },
             )?;
             emit(&run, &name, &report)?;
@@ -362,13 +464,21 @@ fn run(cli: Cli) -> Result<ExitCode> {
             subject,
             var,
             value,
+            unit,
             after,
+            horizons,
         } => {
             let report = predict::predict(
                 &run,
                 &release,
                 subject,
-                &predict::Checkup { var, value, after },
+                &predict::Checkup {
+                    var,
+                    value,
+                    unit,
+                    after,
+                },
+                &horizons,
             )?;
             emit(&run, &format!("predict-{release}"), &report)?;
         }

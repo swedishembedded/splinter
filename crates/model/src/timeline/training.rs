@@ -23,8 +23,10 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::{canonical_json, Digest};
 
 use super::{
-    observed, Backbone, Subject, TimelineModel, TimelineReport, TimelineSpec, TimelineSpec as Spec,
+    observed, Backbone, Gap, Subject, TimelineModel, TimelineReport, TimelineSpec,
+    TimelineSpec as Spec,
 };
+use brain::timeline::CalibrationSpec;
 
 /// Hazard pieces a derived knot grid has when the request names no count.
 pub const DEFAULT_PIECES: usize = 8;
@@ -316,6 +318,66 @@ pub fn train_timeline(
         model,
         report,
         config,
+    })
+}
+
+/// Which risks a trained model is calibrated for, on which events.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationPlan {
+    /// The horizons after entry whose risk is calibrated, each inside the
+    /// model's last knot.
+    pub horizons: Vec<f64>,
+    /// The fewest validation events a code needs by a horizon to be
+    /// calibrated there (and as many still event-free); brain's own minimum
+    /// when `None`.
+    pub min_events: Option<usize>,
+}
+
+/// What fitting a calibration did.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationOutcome {
+    /// The plan it followed.
+    pub plan: CalibrationPlan,
+    /// Subjects the calibrators were fitted on.
+    pub units: usize,
+    /// The event minimum that applied.
+    pub min_events: usize,
+    /// The (code, horizon) pairs calibrated.
+    pub calibrated: Vec<(String, f64)>,
+    /// The pairs the validation data could not support: not calibrated, and
+    /// not served as if they were.
+    pub uncalibrated: Vec<Gap>,
+}
+
+/// Fits `model`'s calibration on `validation` - subjects it was neither
+/// trained nor early-stopped on, and never the test units - and keeps it with
+/// the model, so saving writes it beside the weights. Refused when there are
+/// no validation subjects or no horizon.
+pub fn calibrate_timeline(
+    model: &mut TimelineModel,
+    validation: &[Subject],
+    plan: &CalibrationPlan,
+) -> Result<CalibrationOutcome, TimelineError> {
+    if validation.is_empty() || plan.horizons.is_empty() {
+        return Err(TimelineError::Request(
+            "calibration needs validation subjects and at least one horizon".into(),
+        ));
+    }
+    let mut spec = CalibrationSpec::new(plan.horizons.iter().copied());
+    if let Some(n) = plan.min_events {
+        spec = spec.min_events(n);
+    }
+    let fitted = model.calibrate(validation, &spec)?;
+    Ok(CalibrationOutcome {
+        plan: plan.clone(),
+        units: fitted.validation_subjects,
+        min_events: fitted.min_events,
+        calibrated: fitted
+            .entries()
+            .iter()
+            .map(|e| (e.code.clone(), e.horizon))
+            .collect(),
+        uncalibrated: fitted.uncalibrated().to_vec(),
     })
 }
 

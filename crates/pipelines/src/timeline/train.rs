@@ -12,7 +12,14 @@
 //! A candidate is trained from two stored parts of one split: the training
 //! part, which the model (its vocabulary, its value normalisation and its
 //! weights) is fitted on, and the validation part, which only early stopping
-//! reads. The test part is never opened. The stage refuses datasets that are
+//! and calibration read. The test part is never opened.
+//!
+//! When the request asks for a calibration, the validation part is divided by
+//! participant group (never dividing a group) into the units early stopping
+//! reads and the units the calibration is fitted on: brain calibrates on
+//! subjects the model was neither trained nor early-stopped on, so the two
+//! uses cannot share a unit. The calibration is written beside the weights
+//! (`calibration.json`), packed with them, and its digest recorded. The stage refuses datasets that are
 //! not parts of one split, a training part that shares a group with the
 //! validation part, and terms that do not permit training; it certifies,
 //! with the split's own ledger, that what was fitted consumed training units
@@ -31,14 +38,18 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::terms::Use;
+use splinter_data::holdout::{split_by_rule, Membership, SplitRule};
 use splinter_data::partition::Unit;
 use splinter_data::split::{verify_disjoint, FitLedger, Part};
 use splinter_data::timeline_store::StoredTimeline;
-use splinter_model::timeline::probe::{max_abs_difference, probe_values};
+use splinter_model::timeline::probe::{
+    max_abs_difference, max_abs_difference_optional, probe_calibrated, probe_values,
+};
 use splinter_model::timeline::{
-    brain_revision, read_jsonl, train_timeline, Subject, TimelineError, TimelineModel,
-    TimelineTraining,
+    brain_revision, calibrate_timeline, read_jsonl, train_timeline, CalibrationPlan, Subject,
+    TimelineError, TimelineModel, TimelineTraining,
 };
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -46,8 +57,16 @@ use splinter_store::artifacts::ArtifactSpec;
 use splinter_store::bundle::{pack_directory, unpack_directory};
 
 use super::records::{
-    Probe, TimelineCandidate, TrainingOutcome, CANDIDATE_CLASS, CANDIDATE_FORMAT,
+    CalibrationRecord, Probe, TimelineCandidate, TrainingOutcome, CANDIDATE_CLASS, CANDIDATE_FORMAT,
 };
+
+/// The file brain writes a calibration to, beside the weights.
+pub const CALIBRATION_FILE: &str = "calibration.json";
+/// The file brain records the training support in, beside the weights.
+pub const SUPPORT_FILE: &str = "support.json";
+/// The share of the validation part's groups the calibration is fitted on;
+/// early stopping reads the rest.
+pub const CALIBRATION_SHARE: f64 = 0.5;
 
 /// How many early-stopping subjects the probe a release is held to is taken on.
 pub const DEFAULT_PROBE_SUBJECTS: usize = 16;
@@ -67,6 +86,10 @@ pub struct TimelineTrainRequest {
     pub config: TimelineTraining,
     /// Early-stopping subjects the probe is taken on.
     pub probe_subjects: usize,
+    /// Calibrate the trained model's risks on a share of the validation part
+    /// ([`CALIBRATION_SHARE`]) early stopping then does not read; `None`
+    /// trains a model that is served, and judged, raw.
+    pub calibration: Option<CalibrationPlan>,
     /// The commit of Splinter that is training, as the caller knows it.
     pub splinter_commit: Option<String>,
 }
@@ -80,8 +103,19 @@ impl TimelineTrainRequest {
             held_out: held_out.into(),
             config,
             probe_subjects: DEFAULT_PROBE_SUBJECTS,
+            calibration: None,
             splinter_commit: None,
         }
+    }
+
+    /// The same request, also calibrating the risk by each of `horizons`.
+    #[must_use]
+    pub fn calibrated_at(mut self, horizons: Vec<f64>) -> Self {
+        self.calibration = Some(CalibrationPlan {
+            horizons,
+            min_events: None,
+        });
+        self
     }
 }
 
@@ -159,14 +193,23 @@ impl Drop for Scratch {
 }
 
 /// The horizons the probe is taken at: a quarter, a half and all of the
-/// model's last knot.
-fn probe_horizons(config: &TimelineTraining) -> Vec<f64> {
+/// model's last knot, and every horizon the calibration is fitted at (a
+/// calibrated risk exists only at exactly those).
+fn probe_horizons(config: &TimelineTraining, calibration: Option<&CalibrationPlan>) -> Vec<f64> {
     let last = config
         .knots
         .as_ref()
         .and_then(|k| k.last().copied())
         .map_or(1.0, f64::from);
-    vec![last / 4.0, last / 2.0, last]
+    let mut horizons = vec![last / 4.0, last / 2.0, last];
+    horizons.extend(
+        calibration
+            .into_iter()
+            .flat_map(|c| c.horizons.iter().copied()),
+    );
+    horizons.sort_by(f64::total_cmp);
+    horizons.dedup();
+    horizons
 }
 
 /// Loads the model packed in `bundle` the way a consumer does: unpacked into
@@ -179,6 +222,43 @@ pub fn load_bundle(
     let dir = scratch.join(name);
     unpack_directory(bundle, &dir)?;
     TimelineModel::load(&dir).map_err(|e| lift(e.into()))
+}
+
+/// The validation part divided into the units early stopping reads and the
+/// units a calibration is fitted on, by participant group: a group is never
+/// divided, nothing is dropped, and the same units always divide the same way.
+pub fn divide_validation(
+    held: &[Subject],
+) -> Result<(Vec<Subject>, Vec<Subject>), OrchestratorError> {
+    let (early, calibration) = split_by_rule(
+        held,
+        |s| Membership {
+            group: s.group_id.clone(),
+            examinable: true,
+        },
+        &SplitRule::monitor(CALIBRATION_SHARE),
+    )
+    .ok_or_else(|| {
+        OrchestratorError::Refused(format!(
+            "{} validation unit(s) cannot be divided into early-stopping and calibration units",
+            held.len()
+        ))
+    })?;
+    // `split_by_rule` takes the share out as its second half.
+    Ok((
+        early.into_iter().cloned().collect(),
+        calibration.into_iter().cloned().collect(),
+    ))
+}
+
+/// The units a calibration was fitted on, as one address.
+fn units_digest(units: &[Subject]) -> Result<Digest, OrchestratorError> {
+    let mut ids: Vec<&str> = units.iter().map(|s| s.subject_id.as_str()).collect();
+    ids.sort_unstable();
+    let bytes = canonical_json(&ids).map_err(|e| {
+        OrchestratorError::Train(format!("the calibration units have no canonical form: {e}"))
+    })?;
+    Ok(Digest::of(&bytes))
 }
 
 /// Trains a timeline candidate from stored parts and keeps it. Nothing is
@@ -248,25 +328,74 @@ pub fn train_timeline_candidate(
         .certify_fit(&ledger)
         .map_err(|e| OrchestratorError::Refused(format!("the fit is not certified: {e}")))?;
 
-    let trained = train_timeline(&train, &held, &request.config).map_err(lift)?;
+    let (early, calibration_units) = match &request.calibration {
+        Some(_) => divide_validation(&held)?,
+        None => (held.clone(), Vec::new()),
+    };
+    let mut trained = train_timeline(&train, &early, &request.config).map_err(lift)?;
+    let calibration_outcome = request
+        .calibration
+        .as_ref()
+        .map(|plan| calibrate_timeline(&mut trained.model, &calibration_units, plan).map_err(lift))
+        .transpose()?;
     let scratch = Scratch::new(ctx, "train")?;
     let saved = scratch.0.join("saved");
     trained.model.save(&saved).map_err(|e| lift(e.into()))?;
     let bundle = scratch.0.join("checkpoint.bundle");
     let packed = pack_directory(&saved, &bundle)?;
+    let calibration = calibration_outcome
+        .map(|outcome| -> Result<CalibrationRecord, OrchestratorError> {
+            let file = saved.join(CALIBRATION_FILE);
+            let bytes = std::fs::read(&file).map_err(|source| OrchestratorError::Io {
+                path: file.clone(),
+                source,
+            })?;
+            Ok(CalibrationRecord {
+                digest: Digest::sha256_of(&bytes),
+                outcome,
+                early_stopping_units: early.len(),
+                units_digest: units_digest(&calibration_units)?,
+            })
+        })
+        .transpose()?;
+    for needed in [SUPPORT_FILE]
+        .into_iter()
+        .chain(calibration.as_ref().map(|_| CALIBRATION_FILE))
+    {
+        if !packed.files.iter().any(|f| f == needed) {
+            return Err(OrchestratorError::Train(format!(
+                "the packed checkpoint holds {:?} but not {needed}: a model is shipped with \
+                 everything brain saved for it; nothing was kept",
+                packed.files
+            )));
+        }
+    }
 
-    let probe_subjects: Vec<Subject> = held
+    let probe_subjects: Vec<Subject> = early
         .iter()
         .take(request.probe_subjects.max(1))
         .cloned()
         .collect();
-    let horizons = probe_horizons(&trained.config);
+    let horizons = probe_horizons(&trained.config, request.calibration.as_ref());
     let codes = &trained.config.codes;
     let as_trained =
         probe_values(&trained.model, &probe_subjects, codes, &horizons).map_err(lift)?;
     let reloaded = load_bundle(&bundle, &scratch.0, "round-trip")?;
     let from_file = probe_values(&reloaded, &probe_subjects, codes, &horizons).map_err(lift)?;
-    let round_trip = max_abs_difference(&as_trained, &from_file);
+    let calibrated_as_trained =
+        probe_calibrated(&trained.model, &probe_subjects, codes, &horizons).map_err(lift)?;
+    let calibrated_from_file =
+        probe_calibrated(&reloaded, &probe_subjects, codes, &horizons).map_err(lift)?;
+    let raw_diff = max_abs_difference(&as_trained, &from_file);
+    let calibrated_diff =
+        max_abs_difference_optional(&calibrated_as_trained, &calibrated_from_file);
+    // A mismatch in shape (a calibrated risk one side lacks) is NaN, which
+    // `f64::max` would silently drop, so each is judged before they are joined.
+    let round_trip = if raw_diff.is_nan() || calibrated_diff.is_nan() {
+        f64::NAN
+    } else {
+        raw_diff.max(calibrated_diff)
+    };
     if round_trip.is_nan() || round_trip > ROUND_TRIP_TOLERANCE {
         return Err(OrchestratorError::Train(format!(
             "the packed checkpoint predicts differently from the model as trained (largest \
@@ -310,7 +439,9 @@ pub fn train_timeline_candidate(
                 .collect(),
             horizons,
             values: as_trained,
+            calibrated: calibrated_as_trained,
         },
+        calibration,
         round_trip_max_abs_diff: round_trip,
         brain_commit: brain_revision().map(str::to_owned),
         splinter_commit: request.splinter_commit.clone(),
@@ -357,4 +488,47 @@ pub fn load_timeline_candidate(
         OrchestratorError::Train(format!("the candidate has no canonical form: {e}"))
     })?;
     Ok((id, candidate))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use splinter_model::timeline::synthetic;
+
+    fn grouped(n: usize) -> Vec<Subject> {
+        let mut subjects = synthetic::population(n, 4).0;
+        for (i, s) in subjects.iter_mut().enumerate() {
+            s.group_id = Some(format!("household-{}", i / 3));
+        }
+        subjects
+    }
+
+    #[test]
+    fn validation_units_divide_by_group_without_loss_or_overlap() {
+        let held = grouped(60);
+        let (early, calibration) = divide_validation(&held).unwrap();
+        assert_eq!(early.len() + calibration.len(), held.len());
+        assert!(!early.is_empty() && !calibration.is_empty());
+        let groups = |part: &[Subject]| -> std::collections::HashSet<String> {
+            part.iter().filter_map(|s| s.group_id.clone()).collect()
+        };
+        assert!(groups(&early).is_disjoint(&groups(&calibration)));
+        let ids = |part: &[Subject]| -> std::collections::HashSet<String> {
+            part.iter().map(|s| s.subject_id.clone()).collect()
+        };
+        assert!(ids(&early).is_disjoint(&ids(&calibration)));
+        let (again_early, again_calibration) = divide_validation(&held).unwrap();
+        assert_eq!(ids(&early), ids(&again_early));
+        assert_eq!(ids(&calibration), ids(&again_calibration));
+        assert!(
+            calibration.len() * 2 <= held.len(),
+            "early stopping keeps at least half"
+        );
+    }
+
+    #[test]
+    fn too_few_validation_units_are_refused_by_name() {
+        let why = divide_validation(&grouped(1)).unwrap_err().to_string();
+        assert!(why.contains("1 validation unit"), "{why}");
+    }
 }

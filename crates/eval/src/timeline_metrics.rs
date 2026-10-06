@@ -24,10 +24,20 @@ use serde::{Deserialize, Serialize};
 use crate::metric_gate::Requirement;
 use crate::predictive_gate::PredictiveSpec;
 
-/// The name of the serving-correctness value: the largest absolute difference
-/// between what the released file predicts and what the trained model
-/// predicted on the probe subjects.
+/// The name of the serving-identity value: the largest absolute difference
+/// between what the shipped file predicts and what the model that was scored
+/// predicts (and, for the model as trained, on its probe subjects).
 pub const SERVE_MAX_ABS_DIFF: &str = "serve_max_abs_diff";
+/// The largest absolute difference between a batched forecast and the same
+/// history forecast alone.
+pub const SERVE_BATCH_MAX_ABS_DIFF: &str = "serve_batch_max_abs_diff";
+/// The share of held-out units the model's support would withhold an answer
+/// for.
+pub const SERVE_ABSTENTION_RATE: &str = "serve_abstention_rate";
+/// How many served probabilities are not finite or not inside [0, 1].
+pub const SERVE_INVALID_PROBABILITIES: &str = "serve_invalid_probabilities";
+/// How many served curves step the wrong way.
+pub const SERVE_NON_MONOTONE_CURVES: &str = "serve_non_monotone_curves";
 /// The name of the held-out event negative log-likelihood difference.
 pub const NLL_DIFF: &str = "diff:nll";
 
@@ -128,8 +138,26 @@ pub struct TimelinePlan {
     pub subgroup_margin: f64,
     /// The fewest events a subgroup needs for its comparison to count.
     pub min_subgroup_events: usize,
-    /// The largest tolerated serving difference.
+    /// The largest tolerated difference between the shipped file's predictions
+    /// and the scored model's.
     pub serve_tolerance: f64,
+    /// The largest tolerated difference between a batched forecast and a
+    /// single one.
+    pub batch_tolerance: f64,
+    /// The largest share of held-out units the support may withhold an answer
+    /// for: a model whose own test units mostly lie outside what it was
+    /// trained on is not served correctly, however well it scores on the
+    /// rest. Registered before scoring, like every band.
+    pub max_abstention_rate: f64,
+}
+
+/// A value that must lie in `[0, hi]`; absent or NaN fails.
+fn within(value: &str, hi: f64) -> Requirement {
+    Requirement::Within {
+        value: value.into(),
+        lo: 0.0,
+        hi,
+    }
 }
 
 impl TimelinePlan {
@@ -185,11 +213,13 @@ impl TimelinePlan {
             performance,
             calibration,
             retention,
-            serving: vec![Requirement::Within {
-                value: SERVE_MAX_ABS_DIFF.into(),
-                lo: 0.0,
-                hi: self.serve_tolerance,
-            }],
+            serving: vec![
+                within(SERVE_MAX_ABS_DIFF, self.serve_tolerance),
+                within(SERVE_BATCH_MAX_ABS_DIFF, self.batch_tolerance),
+                within(SERVE_ABSTENTION_RATE, self.max_abstention_rate),
+                within(SERVE_INVALID_PROBABILITIES, 0.0),
+                within(SERVE_NON_MONOTONE_CURVES, 0.0),
+            ],
         }
     }
 }
@@ -216,6 +246,8 @@ mod tests {
             subgroup_margin: 0.002,
             min_subgroup_events: 10,
             serve_tolerance: 1e-6,
+            batch_tolerance: 1e-6,
+            max_abstention_rate: 0.1,
         }
     }
 
@@ -233,7 +265,11 @@ mod tests {
             2,
             "events of the subgroup, and its worst regression"
         );
-        assert_eq!(spec.serving.len(), 1);
+        assert_eq!(
+            spec.serving.len(),
+            5,
+            "identity, batching, abstention, validity, monotonicity"
+        );
         assert!(spec.calibration.iter().all(|r| matches!(
             r,
             Requirement::Within { value, .. } if value.starts_with("candidate:death:cvd:h")

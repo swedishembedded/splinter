@@ -8,6 +8,13 @@
 // sending an email to info@swedishembedded.com.
 
 //! One model's predictions on the scored subjects, and its metrics.
+//!
+//! Each outcome code's own numbers (Uno's C, AUC, IPCW Brier, integrated
+//! Brier, calibration, event likelihood) are brain's: they come from
+//! `TimelineModel::evaluate`. What stays here is what brain does not provide:
+//! the all-cause union view, the per-subject terms the paired differences are
+//! taken over, and the calibration of the CALIBRATED risk brain serves
+//! (`evaluate` judges the raw risk only).
 
 use std::collections::BTreeMap;
 
@@ -17,10 +24,20 @@ use brain::survival::calibration::at_horizon;
 use brain::survival::concordance::uno;
 use brain::survival::estimate::{censoring, Step};
 use brain::survival::Obs;
+use brain::timeline::{Evaluation, EvaluationSpec};
 
-use super::{ArmScores, Calibration, HorizonScores, ScoreSpec, ViewScores};
+use super::{ArmScores, Calibration, CalibrationBasis, HorizonScores, ScoreSpec, ViewScores};
 use crate::timeline::training::TimelineError;
 use crate::timeline::{observed, Subject, TimelineModel};
+
+/// Risk groups of the calibration table: brain's own
+/// (`horizon::evaluation::CALIBRATION_GROUPS`), so the all-cause view and the
+/// calibrated risk are scored exactly as brain scores a code. A test holds the
+/// two to each other.
+pub const CALIBRATION_GROUPS: usize = 10;
+/// Points of the grid the integrated Brier score is taken over (evenly spaced
+/// up to each horizon): brain's own (`INTEGRATION_POINTS`).
+pub const IBS_POINTS: usize = 20;
 
 /// What a view of the outcomes is.
 #[derive(Clone, Debug, PartialEq)]
@@ -62,8 +79,8 @@ pub(super) fn views(spec: &ScoreSpec) -> Vec<View> {
 /// The times after entry the integrated Brier score is taken over.
 pub(super) fn grid(spec: &ScoreSpec) -> Vec<f64> {
     let last = spec.last_horizon();
-    (1..=spec.ibs_points)
-        .map(|k| last * k as f64 / spec.ibs_points as f64)
+    (1..=IBS_POINTS)
+        .map(|k| last * k as f64 / IBS_POINTS as f64)
         .collect()
 }
 
@@ -118,6 +135,58 @@ pub struct Predicted {
     pub(super) nll: Vec<f64>,
     /// `cif[view][time][subject]` for the horizons, then the grid.
     pub(super) cif: Vec<Vec<Vec<f64>>>,
+    /// brain's evaluation of the outcome codes (the cause views).
+    pub(super) evaluation: Evaluation,
+    /// For each cause view and horizon, the risk calibration is judged on.
+    pub(super) basis: Vec<Vec<Basis>>,
+}
+
+/// The risk a cause view's calibration is judged on at one horizon.
+#[derive(Clone, Debug)]
+pub(super) enum Basis {
+    Raw,
+    /// The calibrated risk of every subject.
+    Calibrated(Vec<f64>),
+    Uncalibrated,
+}
+
+impl Basis {
+    fn label(&self) -> CalibrationBasis {
+        match self {
+            Basis::Raw => CalibrationBasis::Raw,
+            Basis::Calibrated(_) => CalibrationBasis::Calibrated,
+            Basis::Uncalibrated => CalibrationBasis::Uncalibrated,
+        }
+    }
+}
+
+/// How `model` stands to calibration at `code` and `horizon` for these
+/// predictions: its calibrated risk where it has one for every subject,
+/// uncalibrated where brain lists the pair as unsupported by the validation
+/// data, raw otherwise (no calibration, or the horizon was not asked for).
+fn basis_of(
+    model: &TimelineModel,
+    predictions: &[crate::timeline::Prediction],
+    code: &str,
+    horizon: f64,
+) -> Basis {
+    let calibrated: Vec<Option<f64>> = predictions
+        .iter()
+        .map(|p| p.calibrated_cif(code, horizon))
+        .collect();
+    if !calibrated.is_empty() && calibrated.iter().all(Option::is_some) {
+        return Basis::Calibrated(calibrated.into_iter().flatten().collect());
+    }
+    let declared = model.calibration().is_some_and(|c| {
+        c.uncalibrated()
+            .iter()
+            .any(|g| g.code == code && (g.horizon - horizon).abs() <= 1e-9 * horizon.abs().max(1.0))
+    });
+    if declared || calibrated.iter().any(Option::is_some) {
+        Basis::Uncalibrated
+    } else {
+        Basis::Raw
+    }
 }
 
 /// Predicts `subjects` with `model` for every view at every horizon and grid
@@ -154,16 +223,35 @@ pub fn predict_arm(
         }
         cif.push(by_time);
     }
-    let mut nll = Vec::with_capacity(subjects.len());
-    for s in subjects {
-        nll.push(f64::from(model.event_nll(std::slice::from_ref(s))?));
-    }
+    let nll: Vec<f64> = model
+        .event_nll_each(subjects)?
+        .into_iter()
+        .map(f64::from)
+        .collect();
+    let evaluation = model.evaluate(
+        subjects,
+        &EvaluationSpec::new(spec.horizons.clone())
+            .min_events(spec.min_events)
+            .bootstrap(None),
+    )?;
+    let basis = spec
+        .codes
+        .iter()
+        .map(|code| {
+            spec.horizons
+                .iter()
+                .map(|h| basis_of(model, &predictions, code, *h))
+                .collect()
+        })
+        .collect();
     Ok(Predicted {
         units: subjects.iter().map(|s| s.subject_id.clone()).collect(),
         weights: subjects.iter().map(|s| s.weight).collect(),
         clusters: subjects.iter().map(cluster_of).collect(),
         nll,
         cif,
+        evaluation,
+        basis,
     })
 }
 
@@ -241,52 +329,109 @@ pub(super) fn weighted_mean(
     (den > 0.0).then(|| num / den)
 }
 
-/// One arm's scores.
-pub(super) fn score_arm(pred: &Predicted, out: &Outcomes, spec: &ScoreSpec) -> ArmScores {
-    let mut views = BTreeMap::new();
+fn calibration_of(cal: &brain::survival::calibration::HorizonCalibration) -> Option<Calibration> {
+    let finite = |x: f64| x.is_finite().then_some(x);
+    Some(Calibration {
+        slope: finite(cal.slope)?,
+        intercept: finite(cal.intercept)?,
+        oe: finite(cal.oe_ratio)?,
+        ece: cal.ece(),
+    })
+}
+
+/// The all-cause union's scores, computed here (brain scores outcome codes
+/// only) with the same estimators brain uses for a code.
+fn score_union(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> ViewScores {
     let all = || 0..pred.units.len();
-    for (v, view) in out.views.iter().enumerate() {
-        let obs = &out.obs[v];
-        let g = &out.g[v];
-        let ibs = (out.events(v, spec.last_horizon(), all()) >= spec.min_events)
-            .then(|| ibs_terms(out, v, &pred.cif[v], spec))
-            .flatten()
-            .and_then(|terms| weighted_mean(&terms, &pred.weights, all()));
-        let mut horizons = Vec::new();
-        for (k, t) in spec.horizons.iter().enumerate() {
-            let events = out.events(v, *t, all());
-            if events < spec.min_events {
-                continue;
-            }
-            let risk = &pred.cif[v][k];
-            let cal = at_horizon(risk, obs, 0, *t, g, spec.calibration_groups);
-            let finite = |x: f64| x.is_finite().then_some(x);
-            let calibration = match (
-                finite(cal.slope),
-                finite(cal.intercept),
-                finite(cal.oe_ratio),
-            ) {
-                (Some(slope), Some(intercept), Some(oe)) => Some(Calibration {
+    let (obs, g) = (&out.obs[v], &out.g[v]);
+    let ibs = (out.events(v, spec.last_horizon(), all()) >= spec.min_events)
+        .then(|| ibs_terms(out, v, &pred.cif[v], spec))
+        .flatten()
+        .and_then(|terms| weighted_mean(&terms, &pred.weights, all()));
+    let mut horizons = Vec::new();
+    for (k, t) in spec.horizons.iter().enumerate() {
+        let events = out.events(v, *t, all());
+        if events < spec.min_events {
+            continue;
+        }
+        let risk = &pred.cif[v][k];
+        horizons.push(HorizonScores {
+            horizon: *t,
+            events,
+            uno_c: uno(risk, obs, 0, *t, g),
+            auc: auc::at(risk, obs, 0, *t, g),
+            brier: brier(risk, obs, 0, *t, g),
+            calibration: calibration_of(&at_horizon(risk, obs, 0, *t, g, CALIBRATION_GROUPS)),
+            calibration_basis: CalibrationBasis::Raw,
+        });
+    }
+    ViewScores { ibs, horizons }
+}
+
+/// An outcome code's scores as brain's `evaluate` computed them, with the
+/// calibration replaced by the calibrated risk's where the model has one and
+/// dropped where brain declared the horizon uncalibrated.
+fn score_code(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> ViewScores {
+    let code = &out.views[v].name;
+    let last = spec.last_horizon();
+    let ibs = pred
+        .evaluation
+        .at(code, last)
+        .and_then(|m| m.integrated_brier);
+    let mut horizons = Vec::new();
+    for (k, t) in spec.horizons.iter().enumerate() {
+        let Some(m) = pred.evaluation.at(code, *t) else {
+            continue;
+        };
+        let basis = &pred.basis[v][k];
+        let calibration = match basis {
+            Basis::Raw => m
+                .calibration
+                .slope
+                .zip(m.calibration.intercept)
+                .zip(m.calibration.observed_over_expected)
+                .zip(m.calibration.ece)
+                .map(|(((slope, intercept), oe), ece)| Calibration {
                     slope,
                     intercept,
                     oe,
-                    ece: cal.ece(),
-                    observed: cal.observed,
-                    expected: cal.expected,
+                    ece,
                 }),
-                _ => None,
-            };
-            horizons.push(HorizonScores {
-                horizon: *t,
-                events,
-                uno_c: uno(risk, obs, 0, *t, g),
-                auc: auc::at(risk, obs, 0, *t, g),
-                brier: brier(risk, obs, 0, *t, g),
-                calibration,
-            });
-        }
-        views.insert(view.name.clone(), ViewScores { ibs, horizons });
+            Basis::Calibrated(risk) => calibration_of(&at_horizon(
+                risk,
+                &out.obs[v],
+                0,
+                *t,
+                &out.g[v],
+                CALIBRATION_GROUPS,
+            )),
+            Basis::Uncalibrated => None,
+        };
+        horizons.push(HorizonScores {
+            horizon: *t,
+            events: m.events,
+            uno_c: m.uno_c,
+            auc: m.auc,
+            brier: m.brier,
+            calibration,
+            calibration_basis: basis.label(),
+        });
     }
-    let event_nll = weighted_mean(&pred.nll, &pred.weights, all()).unwrap_or(f64::NAN);
-    ArmScores { event_nll, views }
+    ViewScores { ibs, horizons }
+}
+
+/// One arm's scores.
+pub(super) fn score_arm(pred: &Predicted, out: &Outcomes, spec: &ScoreSpec) -> ArmScores {
+    let mut views = BTreeMap::new();
+    for (v, view) in out.views.iter().enumerate() {
+        let scores = match view.kind {
+            ViewKind::Cause(_) => score_code(pred, out, v, spec),
+            ViewKind::AllCause => score_union(pred, out, v, spec),
+        };
+        views.insert(view.name.clone(), scores);
+    }
+    ArmScores {
+        event_nll: pred.evaluation.event_nll,
+        views,
+    }
 }
