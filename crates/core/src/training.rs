@@ -62,6 +62,21 @@ pub enum Regime {
     /// Direct preference optimisation on chosen/rejected pairs
     /// (`generic-preference-v1`).
     Dpo,
+    /// An objective brain owns that Splinter does not name: the regime of a
+    /// full checkpoint trained and released through brain's own trainer.
+    Other,
+}
+
+impl Regime {
+    /// How the regime reads in a sentence: "trained by {label}".
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Sft => "supervised fine-tuning",
+            Self::Dpo => "preference (DPO) fine-tuning",
+            Self::Other => "an objective brain owns",
+        }
+    }
 }
 
 /// Where the replayed records came from.
@@ -256,7 +271,7 @@ pub struct TrainingSummary {
     pub from: String,
     /// Optimizer steps.
     pub steps: u32,
-    /// LoRA rank asked for.
+    /// LoRA rank asked for; 0 for a full checkpoint, which has no adapter.
     pub rank: u32,
     /// Records in the new datasets.
     pub records: usize,

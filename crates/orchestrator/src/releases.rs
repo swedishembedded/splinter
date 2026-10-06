@@ -8,12 +8,13 @@
 
 //! Releases, and the aliases that point at them.
 //!
-//! A release is a manifest in the experience database and the adapter file it
-//! names, which is the artifact its candidate was already kept as: nothing is
-//! copied, and one file is never two. A [`ReleaseId`] is the digest of the
-//! manifest's canonical form, and the manifest names the adapter by its digest,
-//! so one id pins both. The manifest and the release's place in the lineage are
-//! made official in one commit; one that already exists is refused. A manifest
+//! A release is a manifest in the experience database and the file it names (an
+//! adapter or a full checkpoint), which is the artifact its candidate was
+//! already kept as: nothing is copied, and one file is never two. A
+//! [`ReleaseId`] is the digest of the manifest's canonical form, and the
+//! manifest names the file by its digest, so one id pins both. The manifest and
+//! the release's place in the lineage are made official in one commit; one that
+//! already exists is refused. A manifest
 //! records the terms of everything the release was made from and how widely it
 //! may be handed on; the store refuses one that claims to be unrestricted when
 //! those terms do not allow every use, so the rule holds for every caller.
@@ -26,7 +27,7 @@
 //! older release.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
@@ -37,7 +38,10 @@ use splinter_store::StateRoot;
 
 use crate::error::OrchestratorError;
 use crate::release_manifest::ManifestDocument;
-pub use crate::release_manifest::{ReleaseManifest, MANIFEST_V2, RELEASE_FORMAT};
+pub use crate::release_manifest::{
+    ArtifactKind, Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, MANIFEST_V2,
+    MANIFEST_V3, RELEASE_FORMAT,
+};
 use splinter_core::model_ref::is_alias_name;
 use splinter_core::terms::Distribution;
 
@@ -50,15 +54,29 @@ const MAX_LINEAGE: usize = 10_000;
 
 /// A release as stored and verified. A release stored in an older format is
 /// read as the current one with what it never recorded stated as unknown
-/// (see [`MANIFEST_V2`]).
+/// (see [`MANIFEST_V2`] and [`MANIFEST_V3`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredRelease {
     /// Its id.
     pub id: ReleaseId,
-    /// Its adapter file, a real file brain loads from this path.
-    pub adapter: PathBuf,
+    /// Its file (an adapter or a full checkpoint), a real file at this path.
+    pub artifact: PathBuf,
     /// Its manifest.
     pub manifest: ReleaseManifest,
+}
+
+impl StoredRelease {
+    /// The adapter file brain loads on a base; refused for a release that is
+    /// not an adapter, which has none.
+    pub fn adapter(&self) -> Result<&Path, OrchestratorError> {
+        match self.manifest.artifact.kind() {
+            ArtifactKind::Adapter => Ok(&self.artifact),
+            kind => Err(OrchestratorError::Refused(format!(
+                "release {} is a {kind:?}, not an adapter: it has no adapter file to load on a base",
+                self.id
+            ))),
+        }
+    }
 }
 
 /// The releases of one state root.
@@ -102,16 +120,26 @@ impl ReleaseStore {
                     ))
                 })?;
         }
-        let artifact = self.artifacts.get(&manifest.adapter_artifact)?;
-        if artifact.sha256.as_ref() != Some(&manifest.adapter_digest) {
+        if let ReleasedArtifact::FullCheckpoint { architecture, .. } = &manifest.artifact {
+            if architecture.trim().is_empty() {
+                return Err(OrchestratorError::Refused(format!(
+                    "release of candidate {}: a full checkpoint must name its architecture",
+                    manifest.candidate
+                )));
+            }
+        }
+        let kept = self.artifacts.get(manifest.artifact.stored())?;
+        let expected = manifest.artifact.content_digest();
+        if kept.sha256.as_ref() != Some(expected) {
             return Err(OrchestratorError::Refused(format!(
-                "the adapter {} is kept with SHA-256 {}, not the {} the manifest names",
-                artifact.digest,
-                artifact
-                    .sha256
+                "release of candidate {}: the {:?} {} is kept with SHA-256 {}, not the {expected} \
+                 the manifest names",
+                manifest.candidate,
+                manifest.artifact.kind(),
+                kept.digest,
+                kept.sha256
                     .as_ref()
                     .map_or_else(|| "none".to_string(), ToString::to_string),
-                manifest.adapter_digest
             )));
         }
         let id = ReleaseId(self.workspace.record_release(
@@ -134,10 +162,10 @@ impl ReleaseStore {
                     id: id.to_string(),
                 })?;
         let manifest = document.into_manifest();
-        let adapter = self.artifacts.path(&manifest.adapter_artifact)?;
+        let artifact = self.artifacts.path(manifest.artifact.stored())?;
         Ok(StoredRelease {
             id: id.clone(),
-            adapter,
+            artifact,
             manifest,
         })
     }

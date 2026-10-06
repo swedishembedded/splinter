@@ -52,6 +52,7 @@ use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_model::ModelSelection;
+use splinter_orchestrator::releases::{ArtifactKind, ReleasedArtifact};
 use splinter_orchestrator::Context;
 use splinter_pipelines::eval::{eval, EvalRequest, SuiteChoice};
 use splinter_pipelines::release::{anchor, list, release, rollback, ReleaseRequest, Released};
@@ -113,9 +114,19 @@ fn a_candidate_that_passes_every_check_is_released() {
         "the id is the digest of the manifest"
     );
     let manifest = &stored.manifest;
-    assert_eq!(manifest.base_digest, Digest::sha256_of(BASE_BYTES));
-    assert_eq!(manifest.base_model, "Qwen/Qwen3-0.6B");
-    assert_eq!(manifest.adapter_digest.as_str(), candidate.adapter_digest);
+    let ReleasedArtifact::Adapter {
+        base_model,
+        base_digest,
+        adapter_digest,
+        ..
+    } = &manifest.artifact
+    else {
+        panic!("a trained candidate is released as an adapter");
+    };
+    assert_eq!(*base_digest, Digest::sha256_of(BASE_BYTES));
+    assert_eq!(base_model, "Qwen/Qwen3-0.6B");
+    assert_eq!(adapter_digest.as_str(), candidate.adapter_digest);
+    assert_eq!(manifest.artifact.kind(), ArtifactKind::Adapter);
     assert_eq!(manifest.parent, None);
     assert_eq!(manifest.candidate, candidate.candidate);
     assert_eq!(manifest.datasets, candidate.datasets);
@@ -133,10 +144,10 @@ fn a_candidate_that_passes_every_check_is_released() {
             .map(|d| d.0.clone())
             .collect::<Vec<_>>()
     );
-    assert_eq!(&manifest.gate, gate);
+    assert_eq!(manifest.gate.llm(), Some(gate));
     assert_eq!(manifest.created_at, NOW);
     assert_eq!(
-        stored.adapter, candidate.adapter,
+        stored.artifact, candidate.adapter,
         "the release names the file its candidate was kept as: one file, not a copy"
     );
 
@@ -145,7 +156,7 @@ fn a_candidate_that_passes_every_check_is_released() {
     let ModelSelection::Local(weights) = ctx.selection(&policy()).unwrap() else {
         panic!("the policy is local");
     };
-    assert_eq!(weights.adapter.as_deref(), Some(stored.adapter.as_path()));
+    assert_eq!(weights.adapter.as_deref(), Some(stored.artifact.as_path()));
 
     // Immutable: the same release is never written twice, and its adapter file
     // is read-only.
@@ -154,7 +165,7 @@ fn a_candidate_that_passes_every_check_is_released() {
         again.id, id,
         "putting the same manifest again is the same release"
     );
-    assert!(std::fs::metadata(&stored.adapter)
+    assert!(std::fs::metadata(&stored.artifact)
         .unwrap()
         .permissions()
         .readonly());
@@ -395,7 +406,7 @@ fn the_next_candidate_continues_the_champion_and_replays_its_data() {
     assert_eq!(plan.parent, Some(first.clone()));
     assert_eq!(
         plan.continue_from.as_deref(),
-        Some(champion.adapter.as_path()),
+        Some(champion.artifact.as_path()),
         "the champion's adapter is continued, not the base"
     );
     // A quarter of alpha's 52 trained-on records; never one it held out.
@@ -511,7 +522,7 @@ fn rollback_moves_the_alias_back_and_refuses_without_a_previous_release() {
     let ModelSelection::Local(weights) = ctx.selection(&policy()).unwrap() else {
         panic!("local");
     };
-    assert_eq!(weights.adapter, Some(store.get(&first).unwrap().adapter));
+    assert_eq!(weights.adapter, Some(store.get(&first).unwrap().artifact));
     assert!(
         rollback(&ctx, "default").is_err(),
         "the first release has no previous one"

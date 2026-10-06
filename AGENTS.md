@@ -18,8 +18,8 @@ dependencies:
   versioned datasets from it.
 - Sample design and measurement: verifiers the policy cannot reach,
   held-out, retention and anchor suites, release gates.
-- Releases: immutable adapters with manifests, the default alias, lineage
-  from an answer back to its sources.
+- Releases: immutable adapters or full checkpoints with manifests, the
+  default alias, lineage from an answer back to its sources.
 - Owning the embedded runtime's resources (one resident base, phases).
 
 **Out of scope** - use the dependency, or fix it there:

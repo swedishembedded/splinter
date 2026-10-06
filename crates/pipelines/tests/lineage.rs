@@ -49,7 +49,9 @@ use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_core::terms::{Distribution, Terms};
 use splinter_core::training::TrainingSummary;
 use splinter_eval::gate::{Check, GateConfig, GateReport};
-use splinter_orchestrator::releases::{ReleaseManifest, RELEASE_FORMAT};
+use splinter_orchestrator::releases::{
+    Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, RELEASE_FORMAT,
+};
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::ask::ask;
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
@@ -113,10 +115,12 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
     let unmeasured = "written by the lineage spec";
     let manifest = ReleaseManifest {
         format: RELEASE_FORMAT.into(),
-        base_model: "Qwen/Qwen3-0.6B".into(),
-        base_digest: Digest::sha256_of(BASE_BYTES),
-        adapter_digest: Digest::parse(&candidate.adapter_digest).unwrap(),
-        adapter_artifact: candidate.adapter_artifact.clone(),
+        artifact: ReleasedArtifact::Adapter {
+            base_model: "Qwen/Qwen3-0.6B".into(),
+            base_digest: Digest::sha256_of(BASE_BYTES),
+            adapter_digest: Digest::parse(&candidate.adapter_digest).unwrap(),
+            adapter_artifact: candidate.adapter_artifact.clone(),
+        },
         parent: candidate.parent.clone(),
         candidate: candidate.candidate.clone(),
         datasets: candidate.datasets.clone(),
@@ -134,13 +138,17 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
             record: serde_json::json!({ "trainer": "fake" }),
             terms: None,
         },
-        gate: GateReport::new(
-            GateConfig::default(),
-            Check::unmeasured(unmeasured),
-            Check::unmeasured(unmeasured),
-            Check::unmeasured(unmeasured),
-            Check::unmeasured(unmeasured),
-        ),
+        gate: ReleaseGate::Llm {
+            report: GateReport::new(
+                GateConfig::default(),
+                Check::unmeasured(unmeasured),
+                Check::unmeasured(unmeasured),
+                Check::unmeasured(unmeasured),
+                Check::unmeasured(unmeasured),
+            ),
+        },
+        metrics: None,
+        provenance: Provenance::default(),
         terms: Terms::unknown("written by the lineage spec"),
         distribution: Distribution::Restricted,
         created_at: NOW.into(),

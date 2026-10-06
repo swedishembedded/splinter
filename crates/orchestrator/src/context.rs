@@ -557,7 +557,7 @@ impl Context {
                 Some(PolicyPin {
                     alias: alias.to_string(),
                     release,
-                    adapter: stored.adapter,
+                    adapter: stored.adapter()?.to_path_buf(),
                     system_prompt,
                 })
             }

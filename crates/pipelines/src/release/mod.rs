@@ -47,7 +47,10 @@ use splinter_core::terms::{combine_stated, Distribution, Terms};
 use splinter_knowledge::concepts::Concept;
 use splinter_model::local::{load_source, resolve_base};
 use splinter_model::selection::local_model_name;
-use splinter_orchestrator::releases::{ReleaseManifest, StoredRelease, RELEASE_FORMAT};
+use splinter_orchestrator::releases::{
+    ArtifactKind, Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, StoredRelease,
+    RELEASE_FORMAT,
+};
 
 use crate::curriculum::queue::enqueue_retention;
 use crate::train::{load_candidate, Candidate};
@@ -222,7 +225,7 @@ pub fn release(
     )?;
     ctx.repin_policy(&request.alias);
     released.release = Some(stored.id);
-    released.adapter = Some(stored.adapter);
+    released.adapter = Some(stored.artifact);
     Ok(released)
 }
 
@@ -238,6 +241,13 @@ fn resume(
     champion: Option<ReleaseId>,
 ) -> Result<Released, OrchestratorError> {
     let store = ctx.releases();
+    let gate = made.manifest.gate.llm().ok_or_else(|| {
+        OrchestratorError::Refused(format!(
+            "candidate {} was released as {} through another gate, not the answer-grading one",
+            made.manifest.candidate, made.id
+        ))
+    })?;
+    made.adapter()?;
     if champion.as_ref() != Some(&made.id) {
         if champion != made.manifest.parent {
             return Err(OrchestratorError::Refused(format!(
@@ -258,7 +268,7 @@ fn resume(
         candidate: made.manifest.candidate.clone(),
         alias: request.alias.clone(),
         champion: made.manifest.parent.clone(),
-        gate: made.manifest.gate.clone(),
+        gate: gate.clone(),
         requeued: Vec::new(),
         warnings: made
             .manifest
@@ -268,7 +278,7 @@ fn resume(
             .map(TrainingCurve::warnings)
             .unwrap_or_default(),
         release: Some(made.id.clone()),
-        adapter: Some(made.adapter.clone()),
+        adapter: Some(made.artifact.clone()),
     })
 }
 
@@ -300,12 +310,19 @@ fn manifest(
         OrchestratorError::Refused(format!("candidate {}: {e}", candidate.candidate))
     })?;
     let record = candidate.training_record.clone();
+    let dataset_snapshots = candidate
+        .datasets
+        .iter()
+        .map(|id| ctx.datasets().get(id).map(|d| d.manifest.dataset))
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(ReleaseManifest {
         format: RELEASE_FORMAT.into(),
-        base_model: local_model_name(&ctx.config().policy_base),
-        base_digest,
-        adapter_digest,
-        adapter_artifact: candidate.adapter_artifact.clone(),
+        artifact: ReleasedArtifact::Adapter {
+            base_model: local_model_name(&ctx.config().policy_base),
+            base_digest,
+            adapter_digest,
+            adapter_artifact: candidate.adapter_artifact.clone(),
+        },
         parent: candidate.parent.clone(),
         candidate: candidate.candidate.clone(),
         datasets: candidate.datasets.clone(),
@@ -323,9 +340,16 @@ fn manifest(
             record,
             terms: candidate.terms.clone(),
         },
-        gate: gate.clone(),
+        gate: ReleaseGate::Llm {
+            report: gate.clone(),
+        },
+        metrics: None,
         terms,
         distribution,
+        provenance: Provenance {
+            dataset_snapshots,
+            ..Provenance::default()
+        },
         created_at: ctx.clock().utc_now(),
     })
 }
@@ -476,7 +500,8 @@ fn run_gate(
     let suites = Suites::build(ctx, candidate, champion)?;
     let all = suites.all();
     let candidate_ref = arm(ctx.config(), Some(&candidate.adapter));
-    let champion_ref = arm(ctx.config(), champion.map(|c| c.adapter.as_path()));
+    let champion_adapter = champion.map(StoredRelease::adapter).transpose()?;
+    let champion_ref = arm(ctx.config(), champion_adapter);
     let candidate_prompt = ctx.system_prompt_of(&candidate.datasets)?;
     let champion_prompt = match champion {
         Some(champion) => ctx.system_prompt_of(&champion.manifest.datasets)?,
@@ -598,8 +623,10 @@ pub struct ReleaseLine {
     pub candidate: String,
     /// The release it was trained from.
     pub parent: Option<ReleaseId>,
-    /// Its adapter's digest.
-    pub adapter_digest: Digest,
+    /// What kind of file it is.
+    pub kind: ArtifactKind,
+    /// Its file's digest: an adapter's, or a full checkpoint's.
+    pub artifact_digest: Digest,
     /// The aliases pointing at it.
     pub aliases: Vec<String>,
 }
@@ -627,7 +654,8 @@ pub fn list(ctx: &Context) -> Result<ReleaseList, OrchestratorError> {
             created_at: release.manifest.created_at,
             candidate: release.manifest.candidate,
             parent: release.manifest.parent,
-            adapter_digest: release.manifest.adapter_digest,
+            kind: release.manifest.artifact.kind(),
+            artifact_digest: release.manifest.artifact.content_digest().clone(),
             id,
         });
     }

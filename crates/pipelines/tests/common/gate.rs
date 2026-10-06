@@ -492,14 +492,14 @@ pub fn released(ctx: &Context, topic: &str, knows: &[&str]) -> ReleaseId {
 pub fn serve_release(ctx: &Context, id: &ReleaseId) {
     let stored = ctx.releases().get(id).unwrap();
     let adapter: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&stored.adapter).unwrap()).unwrap();
+        serde_json::from_slice(&std::fs::read(&stored.artifact).unwrap()).unwrap();
     let knows: Vec<&str> = adapter["knows"]
         .as_array()
         .unwrap()
         .iter()
         .map(|t| t.as_str().unwrap())
         .collect();
-    ctx.add_model(arm(ctx.config(), Some(&stored.adapter)), knower(&knows));
+    ctx.add_model(arm(ctx.config(), Some(&stored.artifact)), knower(&knows));
 }
 
 /// A trainer double for both regimes: its adapter file is JSON naming the

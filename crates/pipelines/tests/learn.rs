@@ -347,7 +347,7 @@ fn the_policy_is_resolved_once_when_a_run_starts_and_recorded() {
         Some(second),
         "the alias did move"
     );
-    let first_adapter = store.get(&first).unwrap().adapter;
+    let first_adapter = store.get(&first).unwrap().artifact;
     let (plan, resolved_after_move) = mover.seen.lock().unwrap().clone().unwrap();
     assert_eq!(plan.parent, Some(first.clone()));
     assert_eq!(plan.continue_from.as_ref(), Some(&first_adapter));

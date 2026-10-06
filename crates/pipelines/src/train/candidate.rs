@@ -185,6 +185,7 @@ pub(super) fn record_candidate(
         match regime {
             Regime::Sft => "sft",
             Regime::Dpo => "dpo",
+            Regime::Other => "other",
         },
         candidate.parent.as_ref().map(|release| &release.0),
     )?;

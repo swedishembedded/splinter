@@ -23,7 +23,7 @@ use splinter_sdk::tasks::{duration_words, TaskSetList, TaskShow, TasksGenerated}
 use splinter_sdk::train::Candidate;
 use splinter_sdk::verify::Verified;
 use splinter_sdk::vocabulary::source::{Origin, Source};
-use splinter_sdk::vocabulary::training::{Regime, Selection, TrainingCurve};
+use splinter_sdk::vocabulary::training::{Selection, TrainingCurve};
 use splinter_sdk::Error;
 
 /// A report a command prints.
@@ -591,10 +591,7 @@ impl Report for Candidate {
                 loss(self.tuned_score.and_then(|s| s.loss))
             ),
         };
-        let regime = match self.regime {
-            Regime::Sft => "supervised fine-tuning",
-            Regime::Dpo => "preference (DPO) fine-tuning",
-        };
+        let regime = self.regime.label();
         let mut out = format!(
             "candidate {} trained by {regime} from {} ({parent}) on {} record(s)\n  replayed: {replay}\n  adapter: {} ({})\n  {measured}\n",
             self.candidate,

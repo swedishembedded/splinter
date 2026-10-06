@@ -358,6 +358,11 @@ pub fn train(
         )));
     }
     let beta = match (regime, request.beta) {
+        (Regime::Other, _) => {
+            return Err(OrchestratorError::Refused(
+                "the datasets are for a regime brain's adapter trainers do not run".into(),
+            ))
+        }
         (Regime::Dpo, beta) => beta.unwrap_or(DEFAULT_DPO_BETA),
         (Regime::Sft, None) => DEFAULT_DPO_BETA,
         (Regime::Sft, Some(_)) => {
@@ -458,6 +463,11 @@ pub fn train(
     let trained = match regime {
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),
+        Regime::Other => {
+            return Err(OrchestratorError::Refused(
+                "a full checkpoint is not trained by the adapter trainers".into(),
+            ))
+        }
     };
     let record = keep_candidate(
         ctx,

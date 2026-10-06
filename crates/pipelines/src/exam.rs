@@ -53,6 +53,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::releases::StoredRelease;
 use splinter_orchestrator::roles::assignments;
 
 /// One arm's verdicts, a task each: `None` where nothing decided.
@@ -563,10 +564,8 @@ pub fn examine(
                 .as_ref()
                 .map(|id| ctx.releases().get(id))
                 .transpose()?;
-            arm(
-                ctx.config(),
-                continued.as_ref().map(|r| r.adapter.as_path()),
-            )
+            let adapter = continued.as_ref().map(StoredRelease::adapter).transpose()?;
+            arm(ctx.config(), adapter)
         }
     };
     // Each model is asked under the prompt it was trained under.

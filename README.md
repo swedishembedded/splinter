@@ -59,7 +59,7 @@ needs Splinter installed.
 | Experience | an agent's recorded run, immutable and content-addressed; verdicts, rewards and labels are facts derived about it |
 | Datasets | training records projected from experience for one objective, with a manifest naming where every record came from |
 | Candidates | a LoRA adapter trained from the champion on the new material plus a replay of everything learned before |
-| Releases | an immutable adapter with a manifest of every number the release gate measured, and lineage back to the sources |
+| Releases | an immutable adapter or full checkpoint with a manifest of every number the release gate measured, the terms it was made under, and lineage back to the sources |
 
 ## Current status
 
@@ -71,6 +71,7 @@ needs Splinter installed.
 | Supervised fine-tuning with replay, preference fine-tuning by DPO | working |
 | Four-check release gate, immutable releases, rollback | working |
 | Lineage from an answer back to the source bytes | working |
+| Releases of a full checkpoint (brain owns its format; Splinter keeps the immutable file, its digest, the architecture name and the brain and splinter commits) beside adapter releases, with the same aliases, compare-and-set moves and rollback; manifests of earlier formats still load | working |
 | Usage policy on every source (`redistributable`, `research_only`, `noncommercial`, `restricted_DUA`, `unknown`) carried to the dataset, training run and release; an unrestricted release is refused unless every axis is allowed, `unknown` never is, and a restricted release records its terms (`source add --usage-policy`, `release --unrestricted`) | working |
 | Models by role (policy, teacher, generator, planner, judge, critic, router) | working |
 | Several tasks in flight for a model reached over an API | working |

@@ -394,7 +394,7 @@ fn releases(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
             &manifest.datasets,
             manifest.parent.as_ref(),
             manifest.replay.as_ref(),
-            manifest.adapter_digest.as_str(),
+            manifest.artifact.content_digest().as_str(),
         );
     }
     Ok(())
