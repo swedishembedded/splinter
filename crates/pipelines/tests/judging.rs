@@ -21,7 +21,7 @@ mod common;
 use common::{scratch_context, Scripted};
 use splinter_core::annotation::Outcome;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
-use splinter_pipelines::judging::controls;
+use splinter_pipelines::judging::{controls, hard_controls};
 use splinter_pipelines::sources::{self, SourceTarget};
 
 /// `i` spelled in letters, so a word carries no digit and the text is prose.
@@ -127,6 +127,42 @@ fn the_wrong_answer_to_a_task_is_never_another_task_about_the_same_family_of_sou
     assert!(labelled
         .iter()
         .all(|(_, e, _)| e.provenance.solver == "splinter/exam-controls"));
+}
+
+#[test]
+fn the_hard_wrong_answer_is_the_reference_of_another_family_most_like_its_own() {
+    let (scratch, ctx) = scratch_context("judging-hard", Scripted::new(|_| String::new()), false);
+    let a = span_of(&ctx, &scratch.0, "a.txt", &words("alpha", 120));
+    let a_again = span_of(&ctx, &scratch.0, "a2.txt", &words("alpha", 120));
+    let b = span_of(&ctx, &scratch.0, "b.txt", &words("omega", 120));
+    let c = span_of(&ctx, &scratch.0, "c.txt", &words("sigma", 120));
+    let tasks = [
+        task(&a, "Q1?", "Taxes on imported wine should be low."),
+        task(&b, "Q2?", "Imported wine should carry modest taxes."),
+        task(&c, "Q3?", "The militia is the nation's proper defence."),
+        task(
+            &a_again,
+            "Q4?",
+            "Taxes on wine from abroad ought to be low.",
+        ),
+    ];
+    let hard = hard_controls(&ctx, &tasks).unwrap();
+    let wrong_for = |q: &str| -> Vec<String> {
+        hard.iter()
+            .filter(|(t, _)| t.instruction == q)
+            .map(|(_, e)| e.final_output.clone().unwrap())
+            .collect()
+    };
+    // The nearest reference of another family, not the militia one and not
+    // the one from the same family's other print.
+    assert_eq!(
+        wrong_for("Q1?"),
+        ["Imported wine should carry modest taxes."]
+    );
+    assert_eq!(wrong_for("Q3?").len(), 1);
+    assert!(hard
+        .iter()
+        .all(|(t, e)| { e.final_output.as_deref() != Some(t.privileged[0].content.as_str()) }));
 }
 
 #[test]

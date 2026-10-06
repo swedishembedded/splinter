@@ -154,6 +154,27 @@ fn preference_score(s: brain::PreferenceScore) -> PreferenceScore {
     }
 }
 
+/// `base` (a checkpoint directory), with `adapter` folded in when given, scored
+/// on the chat records of `dataset`: the mean per-token loss over the
+/// supervised answers. brain's own scoring path, the one a fine-tune reports
+/// its held-out score by; nothing is trained and nothing is written.
+pub fn score_chat(
+    base: &Path,
+    adapter: Option<&Path>,
+    dataset: &Path,
+) -> Result<HeldOutScore, PolicyError> {
+    let failed = |reason: String| PolicyError::Train {
+        dir: dataset.to_path_buf(),
+        reason,
+    };
+    let base = base
+        .to_str()
+        .ok_or_else(|| failed("the base checkpoint's path is not UTF-8".into()))?;
+    brain::score_chat(base, adapter, dataset)
+        .map(held_out_score)
+        .map_err(|e| failed(format!("scoring {}: {e}", dataset.display())))
+}
+
 /// What one fine-tune produced.
 #[derive(Clone, Debug)]
 pub struct Trained {

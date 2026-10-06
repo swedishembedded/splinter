@@ -35,6 +35,10 @@ pub struct Answer {
     pub grounded: Option<bool>,
     /// Its length in characters.
     pub chars: usize,
+    /// What it said, so that it can be judged again; `None` where the model
+    /// said nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 /// One task: its family and what each arm answered, the first answer of an
@@ -387,6 +391,7 @@ mod tests {
             judged: Some(judged),
             grounded: Some(true),
             chars,
+            text: None,
         }
     }
 
@@ -474,6 +479,7 @@ mod tests {
             judged: Some(false),
             grounded: Some(false),
             chars: 300,
+            text: None,
         });
         let summary = summarise(&[r], &["a".to_string()]);
         assert_eq!(summary[0].right, 1, "the greedy answer decides");

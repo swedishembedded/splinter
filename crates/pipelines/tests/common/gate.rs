@@ -135,12 +135,24 @@ pub fn dataset_under(
     facts: &[usize],
     prompt: Option<&str>,
 ) -> DatasetId {
-    dataset_made(ctx, topic, facts, prompt, None)
+    dataset_made(ctx, topic, facts, prompt, &[], None)
+}
+
+/// [`dataset_under`], every record naming `sources` (the contents of text
+/// parts) among the text it was built from.
+pub fn dataset_citing(
+    ctx: &Context,
+    topic: &str,
+    facts: &[usize],
+    prompt: Option<&str>,
+    sources: &[splinter_core::digest::Digest],
+) -> DatasetId {
+    dataset_made(ctx, topic, facts, prompt, sources, None)
 }
 
 /// [`dataset`] of `n` facts whose manifest states `terms`.
 pub fn dataset_with_terms(ctx: &Context, topic: &str, n: usize, terms: Option<Terms>) -> DatasetId {
-    dataset_made(ctx, topic, &(0..n).collect::<Vec<_>>(), None, terms)
+    dataset_made(ctx, topic, &(0..n).collect::<Vec<_>>(), None, &[], terms)
 }
 
 fn dataset_made(
@@ -148,6 +160,7 @@ fn dataset_made(
     topic: &str,
     facts: &[usize],
     prompt: Option<&str>,
+    sources: &[splinter_core::digest::Digest],
     terms: Option<Terms>,
 ) -> DatasetId {
     let positions: Vec<usize> = (0..facts.len()).collect();
@@ -178,7 +191,7 @@ fn dataset_made(
                 group: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
-                sources: Vec::new(),
+                sources: sources.to_vec(),
                 view: "sft-final".into(),
                 objective: Objective::Sft,
             },

@@ -76,6 +76,54 @@ pub fn controls(
     Ok(labelled)
 }
 
+/// The lower-case words of `text` of more than three letters, as a set.
+fn content_words(text: &str) -> std::collections::BTreeSet<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() > 3)
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Harder wrong answers than [`controls`]' for a judge to be measured on:
+/// each task answered with the reference of the task of another family whose
+/// reference is most like its own in words, the answer a careless reader is
+/// likeliest to take for right. Every one is wrong by construction, so the
+/// share a judge passes is its false-pass rate on a topical near miss.
+pub fn hard_controls(
+    ctx: &Context,
+    tasks: &[Task],
+) -> Result<Vec<(Task, Experience)>, OrchestratorError> {
+    let clusters = task_clusters(ctx, tasks)?;
+    let words: Vec<Option<std::collections::BTreeSet<String>>> = tasks
+        .iter()
+        .map(|t| reference(t).map(content_words))
+        .collect();
+    let mut hard = Vec::new();
+    for (n, task) in tasks.iter().enumerate() {
+        let (Some(own), Some(right)) = (&words[n], reference(task)) else {
+            continue;
+        };
+        let nearest = (0..tasks.len())
+            .filter(|&m| {
+                m != n
+                    && reference(&tasks[m]).is_some_and(|other| other != right)
+                    && (clusters[m].is_none() || clusters[m] != clusters[n])
+            })
+            .filter_map(|m| {
+                let other = words[m].as_ref()?;
+                let union = own.union(other).count();
+                (union > 0).then(|| (own.intersection(other).count() as f64 / union as f64, m))
+            })
+            .max_by(|a, b| a.0.total_cmp(&b.0).then(b.1.cmp(&a.1)));
+        if let Some((_, m)) = nearest {
+            if let Some(wrong) = reference(&tasks[m]) {
+                hard.push((task.clone(), answered(ctx, task, wrong)?));
+            }
+        }
+    }
+    Ok(hard)
+}
+
 /// `items` thinned to at most `most`, evenly from first to last.
 pub(crate) fn spaced<T: Clone>(items: &[T], most: usize) -> Vec<T> {
     if items.len() <= most || most < 2 {

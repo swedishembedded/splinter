@@ -246,6 +246,47 @@ pub struct Examined {
     pub training_warnings: Vec<String>,
 }
 
+/// A judge calibrated on the controls of some tasks.
+pub(crate) struct Calibrated {
+    /// The judge, abstaining on every answer unless it is trusted.
+    pub judge: CalibratedJudge<splinter_agent::judge::JudgeVerifier>,
+    /// How far it can be trusted.
+    pub trust: JudgeTrust,
+    /// Its identity.
+    pub identity: String,
+}
+
+/// The judge `reference` names, measured on the controls made from the
+/// references of `tasks` ([`controls`]). The judge is a different model from
+/// the arms' and needs the device for itself: two resident bases at once do
+/// not fit a card the size of the models'.
+pub(crate) fn calibrate_judge(
+    ctx: &Context,
+    reference: &ModelRef,
+    tasks: &[Task],
+) -> Result<Calibrated, OrchestratorError> {
+    ctx.release_bases();
+    let judge_model = crate::verify::judge_model(ctx, reference)?;
+    let judge = judge_verifier(ctx, &judge_model);
+    let labelled = controls(ctx, tasks)?;
+    let (calibration, measurements) = measure(&judge, &labelled)?;
+    let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
+    let trusted = precise(calibration.precision_pass) && precise(calibration.precision_fail);
+    let judge = CalibratedJudge::new(judge, calibration.clone(), DEFAULT_MIN_PRECISION)?;
+    Ok(Calibrated {
+        judge,
+        trust: JudgeTrust {
+            judge: judge_model.identity.clone(),
+            trusted,
+            controls: labelled.len(),
+            min_precision: DEFAULT_MIN_PRECISION,
+            calibration,
+            misjudged: misjudged(&labelled, &measurements),
+        },
+        identity: judge_model.identity,
+    })
+}
+
 /// Runs `request`; see the module documentation.
 pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, OrchestratorError> {
     if request.controls.len() < 2 {
@@ -336,17 +377,12 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         })
         .transpose()?;
 
-    // The judge is a different model from the arms' and needs the device for
-    // itself: two resident bases at once do not fit a card the size of the
-    // models'.
-    ctx.release_bases();
-    let judge_model = crate::verify::judge_model(ctx, request.judge)?;
-    let judge = judge_verifier(ctx, &judge_model);
-    let labelled = controls(ctx, request.controls)?;
-    let (calibration, measurements) = measure(&judge, &labelled)?;
-    let precise = |p: Option<f64>| p.is_some_and(|p| p >= DEFAULT_MIN_PRECISION);
-    let trusted = precise(calibration.precision_pass) && precise(calibration.precision_fail);
-    let judge = CalibratedJudge::new(judge, calibration.clone(), DEFAULT_MIN_PRECISION)?;
+    let Calibrated {
+        judge,
+        trust,
+        identity: judge_identity,
+    } = calibrate_judge(ctx, request.judge, request.controls)?;
+    let trusted = trust.trusted;
     let grounding = grounding_verifier(ctx);
 
     let grade = |given: &[Experience]| -> Result<(Decided, Decided), OrchestratorError> {
@@ -459,12 +495,8 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         tasks: request.tasks.len(),
         families,
         judge: JudgeTrust {
-            judge: judge_model.identity,
-            trusted,
-            controls: request.controls.len() * 2,
-            min_precision: DEFAULT_MIN_PRECISION,
-            calibration,
-            misjudged: misjudged(&labelled, &measurements),
+            judge: judge_identity,
+            ..trust
         },
         base: arm(base_model, &base_answers, &base_judged, &base_grounded),
         prompted: prompted
