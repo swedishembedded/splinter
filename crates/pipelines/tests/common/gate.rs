@@ -533,6 +533,10 @@ pub struct FakeTrainer {
     /// The curve its next supervised candidate reports; `None` reports a
     /// run that monitored nothing and carries its last step.
     pub curve: Mutex<Option<TrainingCurve>>,
+    /// The steps whose evaluations its next supervised run keeps an adapter
+    /// of when asked to; the adapters carry the step and nothing else, for
+    /// the test to serve as it likes.
+    pub evaluations: Mutex<Vec<u32>>,
 }
 
 impl FakeTrainer {
@@ -544,7 +548,36 @@ impl FakeTrainer {
             called: Mutex::new(Vec::new()),
             resident_at_start: Mutex::new(Vec::new()),
             curve: Mutex::new(None),
+            evaluations: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Writes the adapter of each evaluation asked for.
+    fn kept_evaluations(&self, ctx: &Context, plan: &TrainPlan) -> Vec<(u32, PathBuf)> {
+        if !plan.tuning.keep_evaluations {
+            return Vec::new();
+        }
+        let dir = plan.dir.join("evaluations");
+        std::fs::create_dir_all(&dir).unwrap();
+        self.evaluations
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|step| {
+                let path = dir.join(format!("step-{step}.safetensors"));
+                std::fs::write(&path, serde_json::json!({ "step": step }).to_string()).unwrap();
+                let kept = ctx
+                    .artifacts()
+                    .put_file(
+                        &path,
+                        &splinter_store::artifacts::ArtifactSpec::new("adapter", "test-trainer")
+                            .with_extension(".safetensors")
+                            .with_sha256(),
+                    )
+                    .unwrap();
+                (*step, ctx.artifacts().path(&kept.digest).unwrap())
+            })
+            .collect()
     }
 }
 
@@ -618,6 +651,7 @@ impl Trainer for FakeTrainer {
     ) -> Result<Trained, OrchestratorError> {
         self.called.lock().unwrap().push(Regime::Sft);
         let fake = self.fake(ctx, plan);
+        let evaluations = self.kept_evaluations(ctx, plan);
         Ok(Trained {
             adapter: fake.adapter,
             adapter_digest: fake.digest,
@@ -633,6 +667,7 @@ impl Trainer for FakeTrainer {
                 .unwrap()
                 .clone()
                 .unwrap_or_else(|| TrainingCurve::unmonitored(plan.steps, plan.steps)),
+            evaluations,
         })
     }
 

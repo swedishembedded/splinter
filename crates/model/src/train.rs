@@ -117,6 +117,10 @@ pub struct FineTune<'a> {
     pub thinking: bool,
     /// Told after every optimizer step, so a long run can be watched.
     pub on_step: Option<StepHook<'a>>,
+    /// Where to keep the adapter of every evaluation, as
+    /// `step-<N>.safetensors`; `None` keeps only the one exported. Needs
+    /// `eval_every > 0`.
+    pub keep_evaluations: Option<&'a Path>,
 }
 
 /// A caller's function told of each optimizer step.
@@ -205,6 +209,9 @@ pub struct Trained {
     pub tuned: HeldOutScore,
     /// The monitoring curve, and which step the adapter is.
     pub curve: TrainingCurve,
+    /// The adapter of every evaluation, by the steps trained, when the run
+    /// was asked to keep them.
+    pub evaluations: Vec<(u32, PathBuf)>,
 }
 
 /// What a chat dataset holds, as the trainer's own parser counts it.
@@ -338,6 +345,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         validate_dataset(text)?;
         fine_tune = fine_tune.held_out_text(text);
     }
+    if let Some(dir) = request.keep_evaluations {
+        fine_tune = fine_tune.keep_evaluations(dir);
+    }
     if let Some(share) = request.replay_share {
         fine_tune = fine_tune.replay_share(share);
     }
@@ -375,6 +385,22 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         return Err(failed("it did not complete".into()));
     }
     let curve = curve_of(&outcome);
+    let evaluations = request
+        .keep_evaluations
+        .map(|dir| {
+            curve
+                .points
+                .iter()
+                .map(|p| (p.step, dir.join(format!("step-{}.safetensors", p.step))))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if let Some((step, missing)) = evaluations.iter().find(|(_, path)| !path.is_file()) {
+        return Err(failed(format!(
+            "the adapter of step {step} was not kept: {} is missing",
+            missing.display()
+        )));
+    }
     Ok(Trained {
         adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
         adapter_digest: outcome
@@ -397,6 +423,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
             .map(held_out_score)
             .ok_or_else(|| incomplete("tuned score"))?,
         curve,
+        evaluations,
     })
 }
 

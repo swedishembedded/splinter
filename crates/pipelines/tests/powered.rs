@@ -19,21 +19,28 @@ mod common;
 
 use std::sync::Arc;
 
-use common::gate::{candidate_on, dataset_citing, gate_context, Brain, ANCHOR, FACTS};
+use common::gate::{
+    candidate_on, dataset_citing, gate_context, policy, Brain, FakeTrainer, ANCHOR, FACTS,
+};
 use common::Scripted;
 use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::training::{CurvePoint, Selection, TrainingCurve};
 use splinter_orchestrator::Context;
+use splinter_pipelines::checkpoints::{select, SelectRequest};
 use splinter_pipelines::exam_set::{create, ExamSet, ExamSetRequest, Role};
 use splinter_pipelines::powered::{
-    run, Powered, PoweredRequest, BASE, CANDIDATE, PERSONA, PROMPTED,
+    run, ArmChoice, Powered, PoweredRequest, BASE, CANDIDATE, PERSONA, PROMPTED,
 };
 use splinter_pipelines::release::arm;
 use splinter_pipelines::reserve::{reserve, ReserveRequest};
 use splinter_pipelines::sources::{add, SourceTarget};
+use splinter_pipelines::train::{
+    adopt_checkpoint, load_candidate, train, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION,
+};
 
 const PERSONA_PROMPT: &str = "You are a surveyor of the old school. Answer as one.";
 
@@ -121,15 +128,18 @@ fn exam(ctx: &Context, scratch: &common::Scratch) -> ExamSet {
     .unwrap()
 }
 
+/// A model that gives each question's reference when it `gives` them.
+fn knowing(gives: bool) -> Scripted {
+    Scripted::new(move |prompt| match number_after(prompt, "Letter ") {
+        Some(n) if gives => format!("l{n}w0 l{n}w1 l{n}w2"),
+        _ => "I am not sure.".into(),
+    })
+}
+
 /// Registers the arms: the candidate gives each question's reference, the
 /// base does not; and a judge that passes an answer holding the reference.
 fn arms(ctx: &Context, candidate_adapter: &std::path::Path) -> ModelRef {
-    let knows = |gives: bool| {
-        Scripted::new(move |prompt| match number_after(prompt, "Letter ") {
-            Some(n) if gives => format!("l{n}w0 l{n}w1 l{n}w2"),
-            _ => "I am not sure.".into(),
-        })
-    };
+    let knows = knowing;
     ctx.add_model(
         arm(ctx.config(), None),
         Model::new(Arc::new(knows(false)), "scripted/base"),
@@ -181,6 +191,8 @@ fn examined_of(
             resamples: 3,
             pilot_families,
             voice: false,
+            arms: ArmChoice::All,
+            adapter: None,
             cancel: &CancelToken::new(),
         },
     )
@@ -269,4 +281,112 @@ fn a_family_the_candidate_was_trained_on_is_left_out_of_the_exam() {
     assert_eq!(report.families_trained_on, 1);
     assert_eq!((report.tasks, report.families), (10, 5));
     assert!(report.records.iter().all(|r| r.family != family));
+}
+
+#[test]
+fn a_kept_evaluation_is_chosen_on_the_dev_suite_by_what_it_answers() {
+    let (scratch, ctx) = gate_context("checkpoints", Brain::Missing);
+    let exam = exam(&ctx, &scratch);
+    let facts: Vec<usize> = (0..FACTS).collect();
+    let data = dataset_citing(&ctx, "alpha", &facts, Some(PERSONA_PROMPT), &[]);
+    // A run that kept three evaluations, whose monitoring loss falls to the
+    // last: the candidate carries step 30.
+    let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
+    *trainer.evaluations.lock().unwrap() = vec![10, 20, 30];
+    let point = |step, loss| CurvePoint {
+        step,
+        train_loss: loss + 0.5,
+        monitor_loss: loss,
+    };
+    *trainer.curve.lock().unwrap() = Some(TrainingCurve {
+        steps: 30,
+        steps_completed: 30,
+        eval_every: 10,
+        patience: 0,
+        monitor_records: 10,
+        points: vec![point(10, 1.3), point(20, 1.2), point(30, 1.1)],
+        selected_step: 30,
+        selection: Selection::BestMonitorLoss,
+        stopped_early: false,
+    });
+    let candidate = train(
+        &ctx,
+        &TrainRequest {
+            datasets: vec![data.to_string()],
+            rehearsal: None,
+            from: policy(),
+            replay_fraction: DEFAULT_REPLAY_FRACTION,
+            steps: Some(30),
+            rank: 4,
+            beta: None,
+            tuning: Tuning {
+                keep_evaluations: true,
+                ..Tuning::default()
+            },
+        },
+        &trainer,
+        &CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        candidate
+            .checkpoints
+            .iter()
+            .map(|c| c.step)
+            .collect::<Vec<_>>(),
+        [10, 20, 30]
+    );
+    let judge = arms(&ctx, &candidate.adapter);
+    // Only the adapter of step 20 gives the answers.
+    for checkpoint in &candidate.checkpoints {
+        let adapter = candidate.checkpoint_adapter(&ctx, checkpoint).unwrap();
+        ctx.add_model(
+            arm(ctx.config(), Some(&adapter)),
+            Model::new(Arc::new(knowing(checkpoint.step == 20)), "scripted/step"),
+        );
+    }
+    let selected = select(
+        &ctx,
+        &SelectRequest {
+            candidate: &candidate.candidate,
+            exam: &exam,
+            judge: Some(&judge),
+            cancel: &CancelToken::new(),
+        },
+    )
+    .unwrap();
+    assert_eq!(selected.scored.len(), 3);
+    assert_eq!(selected.chosen.step, 20, "{selected:?}");
+    let right = |step: u32| {
+        selected
+            .scored
+            .iter()
+            .find(|s| s.step == step)
+            .unwrap()
+            .right
+    };
+    assert!(
+        right(20) > 0 && right(10) == 0 && right(30) == 0,
+        "{selected:?}"
+    );
+
+    let adopted = adopt_checkpoint(&ctx, &candidate, 20).unwrap();
+    assert_ne!(adopted.candidate, candidate.candidate);
+    let curve = adopted.curve.as_ref().unwrap();
+    assert_eq!(
+        (curve.selected_step, curve.selection),
+        (20, Selection::DevSuite)
+    );
+    assert_eq!(adopted.tuned_score, None, "not measured of this adapter");
+    assert_eq!(adopted.datasets, candidate.datasets);
+    assert_eq!(
+        adopted.adapter_artifact,
+        candidate.checkpoints[1].adapter_artifact
+    );
+    let reloaded = load_candidate(&ctx, &adopted.candidate).unwrap();
+    assert_eq!(
+        reloaded.adapter_digest,
+        candidate.checkpoints[1].adapter_digest
+    );
+    assert!(adopt_checkpoint(&ctx, &candidate, 25).is_err());
 }

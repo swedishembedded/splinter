@@ -54,6 +54,25 @@ pub struct ExamArgs {
     pub no_voice: bool,
 }
 
+/// `select`: choose the step of a run on what it writes.
+#[derive(Debug, Args)]
+pub struct SelectArgs {
+    /// The candidate, trained with --keep-evaluations: its id, or a unique
+    /// prefix of it.
+    #[arg(value_name = "CANDIDATE")]
+    pub candidate: String,
+    /// The dev suite (its id, or its manifest file) every kept evaluation is
+    /// put to.
+    #[arg(long, required = true, value_name = "EXAM")]
+    pub exam_set: String,
+    /// The model that judges (default: the judge role's model).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub judge: Option<ModelRef>,
+    /// Make the chosen evaluation a candidate of its own, to be released.
+    #[arg(long)]
+    pub adopt: bool,
+}
+
 /// `exam-set`.
 #[derive(Debug, Subcommand)]
 pub enum ExamSetCommand {

@@ -16,15 +16,17 @@ use splinter_orchestrator::runs::Recorder;
 use splinter_orchestrator::{Context, OrchestratorError};
 
 use super::stages::{to_value, Done, LearnState};
+use crate::checkpoints::{select, SelectRequest};
 use crate::exam::{examine, Exam, ExamineRequest};
 use crate::exam_set::{
     create as create_exam_set, ExamSetRequest, Role, DEFAULT_DEV_TASKS_PER_FAMILY,
     DEFAULT_TASKS_PER_FAMILY,
 };
-use crate::powered::{run as run_powered, PoweredExam, PoweredRequest};
+use crate::powered::{run as run_powered, ArmChoice, PoweredExam, PoweredRequest};
 use crate::reserve::{
     reserve, ReserveRequest, ReservedFamily, DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES,
 };
+use crate::train::{adopt_checkpoint, load_candidate};
 use splinter_core::source::SourceId;
 
 impl LearnState<'_> {
@@ -136,6 +138,48 @@ pub(super) fn exam_set_stage(
     Ok(StageEnd::done(summary))
 }
 
+/// Chooses the step of the trained candidate on the dev suite when the run
+/// reserved one and kept its evaluations, and carries the run on with the
+/// candidate that holds it. Without a dev suite the monitoring loss's choice
+/// stands, and the stage says so.
+pub(super) fn checkpoint_stage(
+    ctx: &Context,
+    run: &mut Recorder<'_>,
+    st: &mut LearnState<'_>,
+) -> Done {
+    let Some(id) = st.candidate.clone() else {
+        unreachable!("the checkpoint stage follows the train stage")
+    };
+    let Some(dev) = st.report.dev_set.clone() else {
+        return Ok(StageEnd::done(serde_json::json!({
+            "chosen": null,
+            "why": "the run reserved no dev suite, so the step the monitoring loss chose stands",
+        })));
+    };
+    let candidate = load_candidate(ctx, &id)?;
+    if candidate.checkpoints.is_empty() {
+        return Ok(StageEnd::done(serde_json::json!({
+            "chosen": null,
+            "why": "the training kept no evaluations to choose among",
+        })));
+    }
+    let selected = select(
+        ctx,
+        &SelectRequest {
+            candidate: &id,
+            exam: &dev,
+            judge: Some(st.learn.judge),
+            cancel: &run.cancel_token(),
+        },
+    )?;
+    let adopted = adopt_checkpoint(ctx, &candidate, selected.chosen.step)?;
+    st.candidate = Some(adopted.candidate.clone());
+    st.report.candidate = Some(adopted);
+    let summary = to_value(&selected)?;
+    st.report.checkpoint = Some(selected);
+    Ok(StageEnd::done(summary))
+}
+
 /// The candidate is trained and stored whatever the exam finds; an exam that
 /// cannot run says why in the report and the release gate still decides.
 pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
@@ -158,6 +202,8 @@ pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnSt
                     .unwrap_or(crate::powered::DEFAULT_RESAMPLES),
                 pilot_families: None,
                 voice: true,
+                arms: ArmChoice::All,
+                adapter: None,
                 cancel: &run.cancel_token(),
             },
         ) {

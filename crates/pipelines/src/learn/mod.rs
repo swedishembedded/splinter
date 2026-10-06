@@ -87,9 +87,26 @@ use splinter_orchestrator::roles;
 use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 19] = [
-    "policy", "sources", "plan", "reserve", "exam-set", "tasks", "solve", "verify", "teach",
-    "author", "frontier", "variants", "critique", "select", "dataset", "rehearse", "train", "exam",
+pub const STAGES: [&str; 20] = [
+    "policy",
+    "sources",
+    "plan",
+    "reserve",
+    "exam-set",
+    "tasks",
+    "solve",
+    "verify",
+    "teach",
+    "author",
+    "frontier",
+    "variants",
+    "critique",
+    "select",
+    "dataset",
+    "rehearse",
+    "train",
+    "checkpoint",
+    "exam",
     "release",
 ];
 
@@ -213,6 +230,10 @@ pub struct LearnRequest {
     pub quotas: Quotas,
     /// The exam reserved before anything is generated.
     pub exam: ExamPlan,
+    /// Keep the adapter of every evaluation of the training and choose the
+    /// step by what each writes on the reserved dev suite
+    /// ([`crate::checkpoints`]) instead of by the monitoring loss.
+    pub select_on_dev: bool,
 }
 
 /// Runs `request`, training with `trainer`.
@@ -328,6 +349,7 @@ pub fn learn(
                             })
                             == 0)
                 })
+                .filter(|stage| !(!request.select_on_dev && *stage == "checkpoint"))
                 .filter(|stage| !(!measures_frontier && *stage == "frontier"))
                 .filter(|stage| !(!request.plan && !authors && *stage == "author"))
                 .filter(|stage| {
@@ -369,6 +391,7 @@ pub fn learn(
         tuning: request.tuning,
         quotas: request.quotas,
         exam: request.exam,
+        select_on_dev: request.select_on_dev,
     };
     let frontier = measures_frontier.then_some(request.pass_at_k);
     let recorded = record(ctx, "learn", request, |run| {

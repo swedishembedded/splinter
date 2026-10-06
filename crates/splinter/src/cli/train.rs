@@ -8,11 +8,12 @@ use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::train::{
     Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_LORA_ALPHA_PER_RANK,
-    DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, DEFAULT_WEIGHT_DECAY, MAX_PASSES,
+    DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, DEFAULT_REPLAY_FRACTION,
+    DEFAULT_WEIGHT_DECAY, EVALUATIONS_PER_BUDGET, MAX_MONITOR_SHARE, MAX_PASSES,
 };
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
-use super::{model_ref, MonitoringArgs};
+use super::model_ref;
 
 fn rehearsal_share(text: &str) -> Result<f64, String> {
     let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
@@ -20,6 +21,17 @@ fn rehearsal_share(text: &str) -> Result<f64, String> {
         Ok(share)
     } else {
         Err(format!("{text:?} is not a share in (0, 1)"))
+    }
+}
+
+fn monitor_share(text: &str) -> Result<f64, String> {
+    let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
+    if share > 0.0 && share <= MAX_MONITOR_SHARE {
+        Ok(share)
+    } else {
+        Err(format!(
+            "{text:?} is not a share in (0, {MAX_MONITOR_SHARE}]"
+        ))
     }
 }
 
@@ -42,6 +54,44 @@ fn non_negative_rate(text: &str) -> Result<f32, String> {
         Ok(rate) if rate.is_finite() && rate >= 0.0 => Ok(rate),
         _ => Err(format!("{text:?} is not a number of at least zero")),
     }
+}
+
+/// How a supervised training run is watched as it trains, for the commands
+/// that train: a share of its training families is set aside and scored
+/// every few steps, the adapter of the evaluation with the lowest loss on
+/// them is the candidate's, and the run stops once that loss has gone a
+/// patience of evaluations without improving.
+#[derive(Debug, Default, Args)]
+pub struct MonitoringArgs {
+    /// Steps between evaluations of the monitoring records; 0 monitors
+    /// nothing and the candidate carries its last step.
+    #[arg(long, value_name = "N", help = format!(
+        "Steps between evaluations of the monitoring records; 0 monitors nothing and the \
+         candidate carries its last step [default: {EVALUATIONS_PER_BUDGET} evaluations over the \
+         step budget]"
+    ))]
+    pub eval_every: Option<u32>,
+    /// Evaluations without improvement before the training stops; 0 runs
+    /// the whole budget (the best evaluation is carried either way).
+    #[arg(long, value_name = "N", help = format!(
+        "Evaluations without improvement before the training stops; 0 runs the whole budget \
+         (the best evaluation is carried either way) [default: {DEFAULT_PATIENCE}]"
+    ))]
+    pub patience: Option<u32>,
+    /// The share of the training families set aside as the monitoring
+    /// records, in (0, 1/2]: whole families, never the held-out ones the
+    /// gate and the exam decide on.
+    #[arg(long, value_name = "SHARE", value_parser = monitor_share, help = format!(
+        "The share of the training families set aside as the monitoring records, in (0, \
+         {MAX_MONITOR_SHARE}]: whole families, never the held-out ones the gate and the exam \
+         decide on [default: {DEFAULT_MONITOR_SHARE}]"
+    ))]
+    pub monitor_share: Option<f64>,
+    /// Keep the adapter of every evaluation with the candidate, so a step
+    /// can be chosen on the dev suite (`select`) instead of the monitoring
+    /// loss.
+    #[arg(long)]
+    pub keep_evaluations: bool,
 }
 
 /// What sets how far and how fast an adapter moves: the peak learning rate,

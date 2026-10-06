@@ -38,6 +38,7 @@ pub mod reports;
 pub mod voice;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::solve::{with_system_addendum, Model};
@@ -77,6 +78,18 @@ pub const PERSONA: &str = "candidate-persona";
 /// sampled.
 pub const DEFAULT_RESAMPLES: usize = 3;
 
+/// Which arms an exam asks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ArmChoice {
+    /// The base, the prompted base, the candidate and the candidate under
+    /// its prompt: what the candidate is compared on.
+    #[default]
+    All,
+    /// The candidate as it is deployed - under its prompt when it has one -
+    /// alone, which compares nothing: what a checkpoint is scored by.
+    Deployed,
+}
+
 /// What the powered exam is asked.
 pub struct PoweredRequest<'a> {
     /// The frozen exam.
@@ -99,6 +112,12 @@ pub struct PoweredRequest<'a> {
     pub pilot_families: Option<usize>,
     /// Whether to score the voice (it loads each arm on the device).
     pub voice: bool,
+    /// Which arms to ask.
+    pub arms: ArmChoice,
+    /// An adapter to put to the exam in place of the candidate's own: a
+    /// checkpoint of its run ([`crate::checkpoints`]). `None` is the
+    /// candidate's.
+    pub adapter: Option<&'a Path>,
     /// Stops the exam.
     pub cancel: &'a CancelToken,
 }
@@ -244,7 +263,21 @@ fn arms_of(
     candidate: &ModelRef,
     persona: Option<&str>,
     goal: Option<&str>,
+    choice: ArmChoice,
 ) -> Vec<ArmSpec> {
+    if choice == ArmChoice::Deployed {
+        return vec![ArmSpec {
+            name: if persona.is_some() {
+                PERSONA
+            } else {
+                CANDIDATE
+            },
+            reference: candidate.clone(),
+            tuned: true,
+            system: persona.map(str::to_string),
+            goal: None,
+        }];
+    }
     let mut specs = vec![ArmSpec {
         name: BASE,
         reference: base.clone(),
@@ -353,8 +386,15 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
         )));
     }
 
-    let candidate_ref = arm_ref(ctx.config(), Some(&trained.adapter));
-    let specs = arms_of(&base_ref, &candidate_ref, persona.as_deref(), request.goal);
+    let adapter = request.adapter.unwrap_or(&trained.adapter);
+    let candidate_ref = arm_ref(ctx.config(), Some(adapter));
+    let specs = arms_of(
+        &base_ref,
+        &candidate_ref,
+        persona.as_deref(),
+        request.goal,
+        request.arms,
+    );
     // Every arm answers before the judge is loaded, so the device swaps
     // models as few times as it can.
     let mut answered: Vec<(&'static str, Vec<Vec<Experience>>)> = Vec::new();
@@ -456,7 +496,7 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
             .iter()
             .map(|s| voice::VoiceArm {
                 name: s.name,
-                adapter: s.tuned.then_some(trained.adapter.as_path()),
+                adapter: s.tuned.then_some(adapter),
                 system: s.system.as_deref(),
             })
             .collect();

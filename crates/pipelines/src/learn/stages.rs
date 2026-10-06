@@ -28,7 +28,7 @@ use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
 use super::dataset_stage::dataset_stage;
-use super::exam_stages::{exam_set_stage, exam_stage, reserve_stage};
+use super::exam_stages::{checkpoint_stage, exam_set_stage, exam_stage, reserve_stage};
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
 use super::{records_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
@@ -90,6 +90,8 @@ pub(super) struct Learn<'a> {
     pub(super) quotas: Quotas,
     /// The exam reserved up front, as the request names it.
     pub(super) exam: super::ExamPlan,
+    /// Whether the training step is chosen on the dev suite.
+    pub(super) select_on_dev: bool,
 }
 
 /// The run so far: what it was asked, what its stages reported, and what
@@ -322,6 +324,11 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
         .then(FnStage::new("dataset", dataset_stage).ignoring_budget())
         .then(FnStage::new("rehearse", rehearse_stage).when(|s| s.rehearsal_share() > 0.0))
         .then(FnStage::new("train", train_stage))
+        .then(
+            FnStage::new("checkpoint", checkpoint_stage)
+                .when(|s| s.learn.select_on_dev)
+                .ignoring_budget(),
+        )
         .then(
             FnStage::new("exam", exam_stage)
                 .when(|s| s.report.select.is_some())
@@ -651,7 +658,10 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             steps: st.learn.steps,
             rank: st.learn.rank,
             beta: None,
-            tuning: st.learn.tuning,
+            tuning: Tuning {
+                keep_evaluations: st.learn.tuning.keep_evaluations || st.learn.select_on_dev,
+                ..st.learn.tuning
+            },
         },
         st.learn.trainer,
         &run.cancel_token(),

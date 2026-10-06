@@ -250,6 +250,19 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
                 .map_or(String::new(), |why| format!("; stopped: {why}"))
         ),
         "train" => format!("candidate {}", field("candidate")),
+        "checkpoint" => match &summary["chosen"] {
+            serde_json::Value::Null => field("why"),
+            chosen => format!(
+                "step {} of {} kept evaluation(s) chosen on the dev suite{}",
+                chosen["step"],
+                summary["scored"].as_array().map_or(0, Vec::len),
+                if chosen["gate_passed"] == true {
+                    ""
+                } else {
+                    " (NO evaluation passed the gate on invented specifics)"
+                }
+            ),
+        },
         "policy" => match &summary["release"] {
             serde_json::Value::Null => {
                 format!("policy:{} is the base: no release yet", field("alias"))

@@ -151,6 +151,9 @@ pub enum Selection {
     LastStep,
     /// The evaluation with the lowest monitoring loss.
     BestMonitorLoss,
+    /// The evaluation whose answers did best on the dev suite, not the one
+    /// with the lowest monitoring loss.
+    DevSuite,
 }
 
 /// One evaluation of the monitoring set during training.
@@ -266,7 +269,10 @@ impl TrainingCurve {
                 100.0 * LARGE_GAP_SHARE
             ));
         }
-        if best.step != self.selected_step && best.monitor_loss < selected.monitor_loss {
+        if best.step != self.selected_step
+            && best.monitor_loss < selected.monitor_loss
+            && self.selection != Selection::DevSuite
+        {
             warnings.push(format!(
                 "the monitoring loss rose before the end: its best was {:.3} at step {}, and the \
                  candidate carries step {} at {:.3}",
@@ -388,6 +394,19 @@ mod tests {
         let warnings = still_falling.warnings();
         assert_eq!(warnings.len(), 1, "{warnings:?}");
         assert!(warnings[0].contains("still falling"), "{}", warnings[0]);
+
+        // A step chosen on the dev suite is not warned of for having a higher
+        // monitoring loss than the best: that was the choice.
+        let mut chosen = curve(&[(10, 2.4, 2.0), (20, 1.6, 1.0), (30, 1.4, 1.3)], 30, false);
+        chosen.selection = Selection::DevSuite;
+        assert!(
+            chosen
+                .warnings()
+                .iter()
+                .all(|w| !w.contains("rose before the end")),
+            "{:?}",
+            chosen.warnings()
+        );
 
         let unmonitored = TrainingCurve::unmonitored(40, 40);
         assert_eq!(

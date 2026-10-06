@@ -26,6 +26,7 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         persona: args.persona,
         voice: args.voice,
         describe_voice: args.describe_voice,
+        select_on_dev: args.select_on_dev,
         rehearsal: args.rehearsal,
         exam: ExamPlan {
             families: args.exam_families,
@@ -52,6 +53,7 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
             eval_every: args.monitoring.eval_every,
             patience: args.monitoring.patience,
             monitor_share: args.monitoring.monitor_share,
+            keep_evaluations: args.monitoring.keep_evaluations,
             seed: args.seed,
             ..Tuning::default()
         }),

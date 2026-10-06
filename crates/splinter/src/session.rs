@@ -505,6 +505,7 @@ impl Session {
                         eval_every: args.monitoring.eval_every,
                         patience: args.monitoring.patience,
                         monitor_share: args.monitoring.monitor_share,
+                        keep_evaluations: args.monitoring.keep_evaluations,
                         seed: args.seed,
                         ..Tuning::default()
                     }),
@@ -585,6 +586,7 @@ impl Session {
             }
             Command::ExamReport(command) => exam_session::report(ctx, json, command)?,
             Command::ExamSet(command) => exam_session::set(ctx, json, command)?,
+            Command::Select(args) => emit(json, &exam_session::select(ctx, &args)?),
             Command::Exam(args) if args.exam_set.is_some() => {
                 emit(json, &exam_session::powered(ctx, &args)?);
             }

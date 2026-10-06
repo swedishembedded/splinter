@@ -18,10 +18,7 @@ use splinter_sdk::learn::{parse_budget, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_S
 use splinter_sdk::lineage::Direction;
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
 use splinter_sdk::reserve::{DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES};
-use splinter_sdk::train::{
-    DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET,
-    MAX_MONITOR_SHARE, MAX_PASSES,
-};
+use splinter_sdk::train::{DEFAULT_LORA_RANK, MAX_PASSES};
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
@@ -137,6 +134,9 @@ pub enum Command {
     /// have a calibrated judge compare them; or, with --exam-set, to a frozen
     /// exam of reserved families, with every verdict kept.
     Exam(ExamArgs),
+    /// Choose the step of a run kept with its evaluations by what each writes
+    /// on the dev suite: right answers, no invented specifics, then voice.
+    Select(SelectArgs),
     /// Analyses done after an exam from what its report kept: labels to
     /// calibrate the judge by, and memorisation.
     #[command(subcommand)]
@@ -188,17 +188,6 @@ fn share(text: &str) -> Result<f64, String> {
 
 fn strength(text: &str) -> Result<Strength, String> {
     parse_strength(text).map_err(|e| e.to_string())
-}
-
-fn monitor_share(text: &str) -> Result<f64, String> {
-    let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
-    if share > 0.0 && share <= MAX_MONITOR_SHARE {
-        Ok(share)
-    } else {
-        Err(format!(
-            "{text:?} is not a share in (0, {MAX_MONITOR_SHARE}]"
-        ))
-    }
 }
 
 fn voice_share(text: &str) -> Result<f64, String> {
@@ -299,6 +288,11 @@ pub struct LearnArgs {
     /// instead of by their heading and opening.
     #[arg(long)]
     pub describe_voice: bool,
+    /// Keep the adapter of every evaluation of the training and choose the
+    /// step by what each writes on the reserved dev suite - right answers,
+    /// no invented specifics, then voice - instead of by the monitoring loss.
+    #[arg(long)]
+    pub select_on_dev: bool,
     /// The share of the training draws that are the base model's own
     /// answers to general tasks, in [0, 1): a rehearsal set built by the
     /// `rehearse` stage - sums and format requests built by code, and
@@ -373,39 +367,6 @@ pub struct LearnArgs {
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,
-}
-
-/// How a supervised training run is watched as it trains, for the commands
-/// that train: a share of its training families is set aside and scored
-/// every few steps, the adapter of the evaluation with the lowest loss on
-/// them is the candidate's, and the run stops once that loss has gone a
-/// patience of evaluations without improving.
-#[derive(Debug, Default, Args)]
-pub struct MonitoringArgs {
-    /// Steps between evaluations of the monitoring records; 0 monitors
-    /// nothing and the candidate carries its last step.
-    #[arg(long, value_name = "N", help = format!(
-        "Steps between evaluations of the monitoring records; 0 monitors nothing and the \
-         candidate carries its last step [default: {EVALUATIONS_PER_BUDGET} evaluations over the \
-         step budget]"
-    ))]
-    pub eval_every: Option<u32>,
-    /// Evaluations without improvement before the training stops; 0 runs
-    /// the whole budget (the best evaluation is carried either way).
-    #[arg(long, value_name = "N", help = format!(
-        "Evaluations without improvement before the training stops; 0 runs the whole budget \
-         (the best evaluation is carried either way) [default: {DEFAULT_PATIENCE}]"
-    ))]
-    pub patience: Option<u32>,
-    /// The share of the training families set aside as the monitoring
-    /// records, in (0, 1/2]: whole families, never the held-out ones the
-    /// gate and the exam decide on.
-    #[arg(long, value_name = "SHARE", value_parser = monitor_share, help = format!(
-        "The share of the training families set aside as the monitoring records, in (0, \
-         {MAX_MONITOR_SHARE}]: whole families, never the held-out ones the gate and the exam \
-         decide on [default: {DEFAULT_MONITOR_SHARE}]"
-    ))]
-    pub monitor_share: Option<f64>,
 }
 
 /// pass@k's parameters, for the commands that measure it.
@@ -803,9 +764,9 @@ impl LineageArgs {
 mod exam;
 mod state;
 mod train;
-pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs};
+pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use state::{RunsCommand, StateCommand};
-pub use train::{OptimiserArgs, RehearseArgs, TrainArgs};
+pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
 
 #[cfg(test)]
 mod tests;

@@ -14,7 +14,7 @@ splinter "<sentence>"             the front door: a sentence becomes one of the 
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
-                         [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--bf16-base]
+                         [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--select-on-dev] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -31,7 +31,8 @@ splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mi
 splinter dataset export <DATASET-ID> --out DIR
 splinter rehearse --records N
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--rehearsal DATASET-ID [--rehearsal-share F]] [--steps N] [--rank R] [--beta B]
-                                [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
+                                [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE] [--keep-evaluations]
+splinter select <CANDIDATE-ID> --exam-set DEV-SUITE [--judge REF] [--adopt]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
@@ -591,6 +592,19 @@ and warns when the gap at the carried step is more than a quarter of the
 monitoring loss, when the monitoring loss rose after the step carried, or
 when it was still falling at the end of the budget; the release gate and the
 exam repeat those warnings beside their verdicts.
+`--keep-evaluations` also keeps the adapter of every evaluation with the
+candidate, and `splinter select CANDIDATE --exam-set DEV-SUITE` puts each of
+them to the dev suite (the families `learn --dev-families` reserves apart from
+the final test and from all training) and chooses one by a rule fixed in
+advance: an evaluation whose answers state what the source does not hold in
+more than 8% of the answers checked is out; of those left, the best share of
+answers the judge calls right and every one within a standard error of it are
+in the running; of those, the writer's own text of the dev families gets the
+lowest loss. Correctness decides, voice breaks the tie it cannot, and an
+evaluation that invents is never chosen for its voice. `--adopt` makes the
+chosen evaluation a candidate of its own (its held-out score is not carried
+over: it was measured of another adapter) to release; `learn --select-on-dev`
+does both in the run, between training and the exam.
 From `policy:<alias>` (the default) it continues the adapter of the
 release the alias points at - never the base weights once a release
 exists - and a supervised run replays `--replay-fraction` (default 0.25)

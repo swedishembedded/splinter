@@ -4,16 +4,18 @@
 //! `exam-set create` and the powered `exam`, as recorded runs.
 
 use serde_json::json;
+use splinter_sdk::checkpoints::{select as select_checkpoint, SelectRequest, Selected};
 use splinter_sdk::exam_set::{build, ExamBuilt, ExamSet, NewExam};
 use splinter_sdk::powered::plan::{simulate, Plan, Planned};
 use splinter_sdk::powered::{audit, memorisation, reports};
-use splinter_sdk::powered::{run, PoweredExam, PoweredRequest, DEFAULT_RESAMPLES};
+use splinter_sdk::powered::{run, ArmChoice, PoweredExam, PoweredRequest, DEFAULT_RESAMPLES};
 use splinter_sdk::runs::{record, Recorded};
 use splinter_sdk::sources::SourceTarget;
+use splinter_sdk::train::{adopt_checkpoint, load_candidate};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs};
+use crate::cli::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 use crate::output::emit;
 
 /// Captures the sources, reserves the exam's families and freezes the exam.
@@ -84,6 +86,8 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
                 resamples: args.resamples.map_or(DEFAULT_RESAMPLES, |n| n as usize),
                 pilot_families: args.pilot_families,
                 voice: !args.no_voice,
+                arms: ArmChoice::All,
+                adapter: None,
                 cancel: &cancel,
             },
         ) {
@@ -91,6 +95,47 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
             Err(e) if e.is_refusal() => Ok(PoweredExam::NotRun(e.to_string())),
             Err(e) => Err(e),
         }
+    })
+}
+
+/// What `select` found, and the candidate made of the evaluation chosen when
+/// that was asked.
+#[derive(serde::Serialize)]
+pub struct Picked {
+    /// Every kept evaluation as the dev suite scored it, and the choice.
+    #[serde(flatten)]
+    pub selected: Selected,
+    /// The candidate that carries the chosen evaluation's adapter, with
+    /// `--adopt`.
+    pub adopted: Option<String>,
+}
+
+/// Puts each evaluation the candidate kept to the dev suite and chooses one.
+pub fn select(ctx: &Context, args: &SelectArgs) -> Result<Recorded<Picked>, Error> {
+    let exam = ExamSet::load(ctx, &args.exam_set)?;
+    let arguments = json!({
+        "candidate": args.candidate,
+        "exam_set": exam.id,
+        "judge": args.judge,
+        "adopt": args.adopt,
+    });
+    record(ctx, "select", &arguments, |running| {
+        let selected = select_checkpoint(
+            ctx,
+            &SelectRequest {
+                candidate: &args.candidate,
+                exam: &exam,
+                judge: args.judge.as_ref(),
+                cancel: &running.cancel_token(),
+            },
+        )?;
+        let adopted = if args.adopt {
+            let trained = load_candidate(ctx, &selected.candidate)?;
+            Some(adopt_checkpoint(ctx, &trained, selected.chosen.step)?.candidate)
+        } else {
+            None
+        };
+        Ok(Picked { selected, adopted })
     })
 }
 

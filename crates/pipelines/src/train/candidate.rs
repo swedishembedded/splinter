@@ -25,6 +25,20 @@ use splinter_orchestrator::error::OrchestratorError;
 /// The class a candidate's record is stored under.
 const CANDIDATE: &str = "candidate";
 
+/// The adapter of one evaluation of a run, kept so a step can be chosen on
+/// something other than the monitoring loss.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Checkpoint {
+    /// Steps trained when the adapter was taken.
+    pub step: u32,
+    /// The monitoring loss at that step.
+    pub monitor_loss: f32,
+    /// The artifact the adapter is kept as.
+    pub adapter_artifact: Digest,
+    /// Its SHA-256, as brain reports an adapter's digest.
+    pub adapter_digest: String,
+}
+
 /// A trained candidate, as stored: everything but where its adapter file is.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct StoredCandidate {
@@ -52,6 +66,8 @@ pub(super) struct StoredCandidate {
     preference: Option<PreferenceSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     curve: Option<TrainingCurve>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    checkpoints: Vec<Checkpoint>,
     records: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     terms: Option<Terms>,
@@ -106,6 +122,10 @@ pub struct Candidate {
     /// preference regime and for a candidate recorded before curves were.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub curve: Option<TrainingCurve>,
+    /// The adapter of every evaluation of the run, when it was asked to keep
+    /// them: the one the candidate carries is among them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub checkpoints: Vec<Checkpoint>,
     /// Records in the new datasets, trained and held out together.
     pub records: usize,
     /// The terms of what it was trained on: its datasets' and those of the
@@ -116,6 +136,15 @@ pub struct Candidate {
 }
 
 impl Candidate {
+    /// The adapter file of `checkpoint`.
+    pub fn checkpoint_adapter(
+        &self,
+        ctx: &Context,
+        checkpoint: &Checkpoint,
+    ) -> Result<PathBuf, OrchestratorError> {
+        Ok(ctx.artifacts().path(&checkpoint.adapter_artifact)?)
+    }
+
     /// What the candidate's curve warns of about the adapter it carries
     /// ([`TrainingCurve::warnings`]); nothing for a candidate without one.
     #[must_use]
@@ -146,6 +175,7 @@ impl Candidate {
             tuned_score: self.tuned_score,
             preference: self.preference.clone(),
             curve: self.curve.clone(),
+            checkpoints: self.checkpoints.clone(),
             records: self.records,
             terms: self.terms.clone(),
         }
@@ -172,6 +202,7 @@ impl Candidate {
             tuned_score: stored.tuned_score,
             preference: stored.preference,
             curve: stored.curve,
+            checkpoints: stored.checkpoints,
             records: stored.records,
             terms: stored.terms,
         })
@@ -253,4 +284,40 @@ pub fn candidate_ids(ctx: &Context) -> Result<Vec<String>, OrchestratorError> {
 /// How many candidates were trained under the state root.
 pub fn candidate_count(ctx: &Context) -> Result<usize, OrchestratorError> {
     Ok(candidate_ids(ctx)?.len())
+}
+
+/// The candidate that is `candidate` with the adapter of the evaluation at
+/// `step` instead of the one it carries: a step chosen on something other than
+/// the monitoring loss ([`crate::checkpoints`]). It is a candidate of its
+/// own, trained on what the first was; what was measured of the exported
+/// adapter alone (its held-out score) is not carried over, since it is not
+/// measured of this one, and the curve says the step was chosen on the dev
+/// suite.
+pub fn adopt_checkpoint(
+    ctx: &Context,
+    candidate: &Candidate,
+    step: u32,
+) -> Result<Candidate, OrchestratorError> {
+    let checkpoint = candidate
+        .checkpoints
+        .iter()
+        .find(|c| c.step == step)
+        .ok_or_else(|| {
+            OrchestratorError::Refused(format!(
+                "candidate {} kept no evaluation at step {step}",
+                candidate.candidate
+            ))
+        })?;
+    let mut adopted = candidate.clone();
+    adopted.candidate = splinter_store::new_id_with_prefix("candidate");
+    adopted.adapter = candidate.checkpoint_adapter(ctx, checkpoint)?;
+    adopted.adapter_artifact = checkpoint.adapter_artifact.clone();
+    adopted.adapter_digest = checkpoint.adapter_digest.clone();
+    adopted.tuned_score = None;
+    if let Some(curve) = adopted.curve.as_mut() {
+        curve.selected_step = step;
+        curve.selection = splinter_core::training::Selection::DevSuite;
+    }
+    record_candidate(ctx, &adopted, adopted.regime)?;
+    Ok(adopted)
 }

@@ -52,10 +52,14 @@
 //! whether it did.
 
 mod candidate;
+mod keep;
 mod rehearsal;
 pub mod sizing;
 
-pub use candidate::{candidate_count, candidate_ids, load_candidate, Candidate};
+pub use candidate::{
+    adopt_checkpoint, candidate_count, candidate_ids, load_candidate, Candidate, Checkpoint,
+};
+use keep::{keep_candidate, Finished, Outcome};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
 pub use sizing::{
@@ -68,18 +72,13 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
-use splinter_core::terms::{combine_stated, Terms};
-use splinter_core::training::{
-    HeldOutScore, PreferenceSummary, Regime, RehearsalSample, ReplaySample, ReplaySource,
-    TrainingCurve,
-};
+use splinter_core::training::{Regime, ReplaySample, ReplaySource};
 use splinter_data::holdout::{monitor_split_file, split_dataset_file};
 use splinter_data::{replay_sample, Format, Fraction, StoredDataset};
 use splinter_model::train::{
     fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
 };
 use splinter_model::{ModelSelection, PolicyError};
-use splinter_store::artifacts::ArtifactSpec;
 
 use crate::datasets::{examples_in, record_dataset_lineage, resolve_dataset};
 use crate::release::probe::split_records;
@@ -125,6 +124,10 @@ pub const DEFAULT_REPLAY_SHARE: f32 = 0.25;
 pub use splinter_model::train::DEFAULT_DPO_BETA;
 /// The seed of the replay draw: the same records are replayed every time.
 pub const REPLAY_SEED: u64 = 0;
+
+/// Where the adapters of a run's evaluations are written, inside its
+/// directory.
+const EVALUATIONS_DIR: &str = "evaluations";
 
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
@@ -180,6 +183,10 @@ pub struct Tuning {
     /// brain's default when `None`. Two runs that differ only here show
     /// how much of a measured difference is the draw.
     pub seed: Option<u64>,
+    /// Keep the adapter of every evaluation with the candidate, so a step can
+    /// be chosen on something other than the monitoring loss
+    /// ([`crate::checkpoints`]); only the exported one is kept otherwise.
+    pub keep_evaluations: bool,
 }
 
 /// One training request.
@@ -306,6 +313,10 @@ impl Trainer for BrainTrainer {
             }
             None => None,
         };
+        let kept = plan
+            .tuning
+            .keep_evaluations
+            .then(|| plan.dir.join(EVALUATIONS_DIR));
         let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
         let rehearsed: Vec<(PathBuf, f32)> = plan
             .rehearsal
@@ -341,6 +352,7 @@ impl Trainer for BrainTrainer {
             // trained for no-think mode whatever it is later asked.
             thinking: false,
             on_step: None,
+            keep_evaluations: kept.as_deref(),
         })
         .map_err(trainer_error)
     }
@@ -605,175 +617,6 @@ pub fn train(
     // replay are kept as artifacts and everything else is reproducible.
     let _ = std::fs::remove_dir_all(&dir);
     record
-}
-
-/// A finished training: what was planned, asked and produced, for the
-/// candidate it made.
-struct Finished<'a> {
-    plan: &'a TrainPlan,
-    replay: &'a Option<ReplaySample>,
-    trained: Outcome,
-    request: &'a TrainRequest,
-    candidate: &'a str,
-    regime: Regime,
-}
-
-/// Keeps what training produced: the adapter and the replayed records as
-/// artifacts, then the candidate's record and the training that made it in one
-/// commit.
-fn keep_candidate(ctx: &Context, finished: Finished<'_>) -> Result<Candidate, OrchestratorError> {
-    let Finished {
-        plan,
-        replay,
-        trained,
-        request,
-        candidate,
-        regime,
-    } = finished;
-    let artifacts = ctx.artifacts();
-    let adapter = artifacts.put_file(
-        &trained.adapter,
-        &ArtifactSpec::new("adapter", "brain-trainer")
-            .with_extension(".safetensors")
-            .with_sha256(),
-    )?;
-    let reported = Digest::parse(&trained.adapter_digest)
-        .map_err(|e| OrchestratorError::Train(format!("brain's adapter digest: {e}")))?;
-    if adapter.sha256.as_ref() != Some(&reported) {
-        return Err(OrchestratorError::Train(format!(
-            "brain reported the adapter as {reported} but its file hashes to {}",
-            adapter
-                .sha256
-                .as_ref()
-                .map_or_else(|| "nothing".to_string(), ToString::to_string)
-        )));
-    }
-    if let Some(file) = &plan.replay_file {
-        let kept = artifacts.put_file(
-            file,
-            &ArtifactSpec::new("replay", "splinter-train").with_extension(".jsonl"),
-        )?;
-        if replay.as_ref().and_then(|r| r.digest.as_ref()) != Some(&kept.digest) {
-            return Err(OrchestratorError::Train(
-                "the replayed records changed while they were being kept".into(),
-            ));
-        }
-    }
-    let rehearsal = match &plan.rehearsal {
-        Some(rehearsed) => {
-            let kept = artifacts.put_file(
-                &rehearsed.fit,
-                &ArtifactSpec::new("rehearsal", "splinter-train").with_extension(".jsonl"),
-            )?;
-            Some(RehearsalSample {
-                dataset: rehearsed.dataset.id.clone(),
-                share: rehearsed.share,
-                trained: rehearsed.trained,
-                monitored: rehearsed.monitored,
-                digest: Some(kept.digest),
-            })
-        }
-        None => None,
-    };
-    let record_text =
-        std::fs::read_to_string(&trained.training_record).map_err(io(&trained.training_record))?;
-    let training_record =
-        serde_json::from_str(&record_text).map_err(|source| OrchestratorError::Json {
-            what: trained.training_record.display().to_string(),
-            source,
-        })?;
-    let record = Candidate {
-        candidate: candidate.to_string(),
-        from: request.from.to_string(),
-        regime,
-        base: plan.base.clone(),
-        parent: plan.parent.clone(),
-        datasets: plan.datasets.iter().map(|d| d.id.clone()).collect(),
-        replay: replay.clone(),
-        rehearsal,
-        adapter: artifacts.path(&adapter.digest)?,
-        adapter_artifact: adapter.digest,
-        adapter_digest: trained.adapter_digest,
-        base_digest: trained.base_digest,
-        training_record,
-        steps: plan.steps,
-        rank: request.rank,
-        base_score: trained.base_score,
-        tuned_score: trained.tuned_score,
-        preference: trained.preference,
-        curve: trained.curve,
-        records: trained.records,
-        terms: plan_terms(ctx, plan)?,
-    };
-    candidate::record_candidate(ctx, &record, regime)?;
-    Ok(record)
-}
-
-/// The terms of what `plan` trains on: its datasets' and those of the release
-/// it continues, whose own terms already hold everything it was trained on, so
-/// the strongest restriction anywhere upstream is the one that carries on.
-fn plan_terms(ctx: &Context, plan: &TrainPlan) -> Result<Option<Terms>, OrchestratorError> {
-    let parent = plan
-        .parent
-        .as_ref()
-        .map(|id| ctx.releases().get(id))
-        .transpose()?;
-    Ok(combine_stated(
-        plan.datasets
-            .iter()
-            .map(|d| d.manifest.terms.as_ref())
-            .chain(parent.as_ref().map(|p| Some(&p.manifest.terms))),
-    ))
-}
-
-/// What either regime's trainer produced, as a candidate records it.
-struct Outcome {
-    adapter: PathBuf,
-    adapter_digest: String,
-    base_digest: String,
-    training_record: PathBuf,
-    records: usize,
-    base_score: Option<HeldOutScore>,
-    tuned_score: Option<HeldOutScore>,
-    preference: Option<PreferenceSummary>,
-    curve: Option<TrainingCurve>,
-}
-
-impl From<Trained> for Outcome {
-    fn from(t: Trained) -> Self {
-        Self {
-            adapter: t.adapter,
-            adapter_digest: t.adapter_digest,
-            base_digest: t.base_digest,
-            training_record: t.training_record,
-            records: t.records,
-            base_score: Some(t.base),
-            tuned_score: Some(t.tuned),
-            preference: None,
-            curve: Some(t.curve),
-        }
-    }
-}
-
-impl From<TrainedPreference> for Outcome {
-    fn from(t: TrainedPreference) -> Self {
-        Self {
-            adapter: t.adapter,
-            adapter_digest: t.adapter_digest,
-            base_digest: t.base_digest,
-            training_record: t.training_record,
-            records: t.records,
-            base_score: None,
-            tuned_score: None,
-            preference: Some(PreferenceSummary {
-                beta: t.beta,
-                reference_adapter: t.reference_adapter,
-                train_score: t.train_score,
-                held_out_score: t.held_out_score,
-            }),
-            curve: None,
-        }
-    }
 }
 
 /// Draws the replay sample of every release in `release`'s lineage that

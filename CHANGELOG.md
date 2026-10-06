@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `train --keep-evaluations` keeps the adapter of every evaluation with the candidate; `splinter select`
+  puts each to the dev suite and chooses one by a fixed rule (no more than 8% invented specifics,
+  then the best answers within a standard error, then the writer's text of the dev families by
+  loss); `--adopt` makes it a candidate of its own and `learn --select-on-dev` does both in the run.
+  Needs the brain commit that writes an adapter at each evaluation.
 - `learn --abstain SHARE` (with `--with-passages`): that share of the dialogue records become the
   writer's abstentions, for a retrieval miss or a question beyond the writings, written by the
   base as the writer, admitted by code, and kept in the family of the record they were made from.

@@ -99,6 +99,7 @@ fn curve_lines(curve: &TrainingCurve) -> String {
     let why = match curve.selection {
         Selection::LastStep => "the last step",
         Selection::BestMonitorLoss => "the best monitoring loss",
+        Selection::DevSuite => "the best answers on the dev suite",
     };
     let _ = writeln!(
         out,

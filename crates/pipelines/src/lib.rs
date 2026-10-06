@@ -45,6 +45,7 @@ pub mod abstain;
 pub mod ask;
 pub mod author;
 pub mod budget;
+pub mod checkpoints;
 pub mod critique;
 pub mod curriculum;
 pub mod dataset_ref;

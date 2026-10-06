@@ -143,6 +143,9 @@ pub struct LearnReport {
     pub rehearsal: Option<Rehearsed>,
     /// The candidate trained.
     pub candidate: Option<Candidate>,
+    /// The checkpoint stage: each kept evaluation scored on the dev suite and
+    /// the step chosen; the candidate is then the one that carries it.
+    pub checkpoint: Option<crate::checkpoints::Selected>,
     /// The release gate on it, and the release when it passed.
     pub release: Option<Released>,
     /// The exam stage: base against candidate on held-out tasks, graded by a

@@ -294,3 +294,41 @@ impl Report for crate::exam_session::Memorisation {
         out
     }
 }
+
+impl Report for crate::exam_session::Picked {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "candidate {} on dev suite {}\n",
+            self.selected.candidate, self.selected.exam
+        );
+        for s in &self.selected.scored {
+            let _ = writeln!(
+                out,
+                "  step {:>5}: right {}/{}, invented {}/{}, voice loss {}, monitoring loss {:.3}",
+                s.step,
+                s.right,
+                s.judged,
+                s.invented,
+                s.checked,
+                s.voice_loss.map_or("-".into(), |v| format!("{v:.3}")),
+                s.monitor_loss
+            );
+        }
+        let chosen = &self.selected.chosen;
+        let _ = writeln!(
+            out,
+            "chosen: step {} ({} in the running{})",
+            chosen.step,
+            chosen.in_the_running,
+            if chosen.gate_passed {
+                ""
+            } else {
+                "; NO checkpoint passed the gate on invented specifics"
+            }
+        );
+        if let Some(adopted) = &self.adopted {
+            let _ = writeln!(out, "adopted as candidate {adopted}");
+        }
+        out
+    }
+}
