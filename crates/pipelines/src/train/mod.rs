@@ -316,6 +316,7 @@ impl Trainer for BrainTrainer {
             model_dir: &plan.base,
             train: monitored.as_ref().map_or(&split.train, |m| &m.fit),
             held_out: &split.held_out,
+            held_out_text: split.held_out_text.as_deref(),
             monitor: monitor.as_deref(),
             eval_every: plan.eval_every,
             patience: plan.patience,

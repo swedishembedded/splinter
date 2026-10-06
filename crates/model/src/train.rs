@@ -51,6 +51,10 @@ pub struct FineTune<'a> {
     pub train: &'a Path,
     /// Chat-format JSONL records scored before and after, never trained on.
     pub held_out: &'a Path,
+    /// The writer's own text of the held-out families, scored before and
+    /// after beside them and reported apart in the training record; `None`
+    /// when the data has none.
+    pub held_out_text: Option<&'a Path>,
     /// Chat-format JSONL records scored every `eval_every` steps as the run
     /// trains, never trained on: the curve, and what the best step is
     /// selected on. `None` monitors nothing (and `eval_every` must be 0).
@@ -329,6 +333,10 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .keep_best(request.eval_every > 0);
     if let Some(monitor) = request.monitor {
         fine_tune = fine_tune.monitor(monitor);
+    }
+    if let Some(text) = request.held_out_text {
+        validate_dataset(text)?;
+        fine_tune = fine_tune.held_out_text(text);
     }
     if let Some(share) = request.replay_share {
         fine_tune = fine_tune.replay_share(share);
