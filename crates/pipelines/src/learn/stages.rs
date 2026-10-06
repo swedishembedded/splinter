@@ -47,7 +47,6 @@ use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
 use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
 use crate::release::{release, ReleaseRequest};
-use crate::reserve::DEFAULT_EXAM_FAMILIES;
 use crate::retrieval::{library_of, Retrieval};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
@@ -176,20 +175,6 @@ impl<'a> LearnState<'a> {
         } else {
             0.0
         })
-    }
-
-    /// The families the run reserves for its exam: what the request names,
-    /// else [`DEFAULT_EXAM_FAMILIES`] when the policy learns to think like
-    /// a person and none otherwise.
-    pub(super) fn exam_families(&self) -> usize {
-        self.learn
-            .exam
-            .families
-            .unwrap_or(if self.persona().is_some() {
-                DEFAULT_EXAM_FAMILIES
-            } else {
-                0
-            })
     }
 
     /// Shares the budget between the stages as the voice share says: the

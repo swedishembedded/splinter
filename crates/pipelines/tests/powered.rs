@@ -27,7 +27,7 @@ use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::Context;
-use splinter_pipelines::exam_set::{create, ExamSet, ExamSetRequest};
+use splinter_pipelines::exam_set::{create, ExamSet, ExamSetRequest, Role};
 use splinter_pipelines::powered::{
     run, Powered, PoweredRequest, BASE, CANDIDATE, PERSONA, PROMPTED,
 };
@@ -98,6 +98,7 @@ fn exam(ctx: &Context, scratch: &common::Scratch) -> ExamSet {
         &ReserveRequest {
             sources: &[id],
             families: 6,
+            dev_families: 0,
             seed: 1,
             touched_by: &[],
         },
@@ -106,12 +107,14 @@ fn exam(ctx: &Context, scratch: &common::Scratch) -> ExamSet {
     create(
         ctx,
         &ExamSetRequest {
-            reservation: &reservation,
+            sources: &reservation.exam,
+            families: &reservation.families,
+            role: Role::Final,
             kinds: &["recall".to_string()],
             generator: &generator_ref,
             goal: None,
             author: None,
-            max_tasks: 12,
+            tasks_per_family: 2,
             cancel: CancelToken::new(),
         },
     )
@@ -207,6 +210,15 @@ fn every_verdict_of_every_arm_is_kept_and_the_arms_are_compared_by_family() {
         assert_eq!(record.arms[CANDIDATE][0].judged, Some(true));
         assert_eq!(record.arms[BASE][0].judged, Some(false));
     }
+    // The comparison the exam was fixed on comes first and is not corrected;
+    // the others are, together.
+    let decided = &report.comparisons[0];
+    assert_eq!(
+        (decided.first.as_str(), decided.second.as_str()),
+        (PERSONA, PROMPTED)
+    );
+    assert!(decided.holm_p.is_none());
+    assert!(report.comparisons[1..].iter().all(|c| c.holm_p.is_some()));
     let first = report
         .comparisons
         .iter()

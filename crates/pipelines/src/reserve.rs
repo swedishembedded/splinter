@@ -40,7 +40,12 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 
 /// The families a persona run reserves when it names no number.
-pub const DEFAULT_EXAM_FAMILIES: usize = 30;
+pub const DEFAULT_EXAM_FAMILIES: usize = 50;
+
+/// The families a persona run reserves for choosing its checkpoint when it
+/// names no number: a dev suite no model is trained on and the final test
+/// never sees.
+pub const DEFAULT_DEV_FAMILIES: usize = 50;
 
 /// The fewest words a family has to be examinable: a task needs a passage.
 pub const MIN_FAMILY_WORDS: usize = 120;
@@ -49,8 +54,11 @@ pub const MIN_FAMILY_WORDS: usize = 120;
 pub struct ReserveRequest<'a> {
     /// The sources of the run, as captured.
     pub sources: &'a [SourceId],
-    /// How many families to reserve.
+    /// How many families to reserve for the final test.
     pub families: usize,
+    /// How many more to reserve for the dev suite a checkpoint is chosen on;
+    /// they are as far from training as the final test's, and apart from it.
+    pub dev_families: usize,
     /// Varies the choice; the same seed over the same sources reserves the
     /// same families whatever order the sources are given in.
     pub seed: u64,
@@ -73,8 +81,11 @@ pub struct ReservedFamily {
 /// What was reserved, and the sources to use instead.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Reservation {
-    /// The families reserved, by name.
+    /// The families reserved for the final test, by name.
     pub families: Vec<ReservedFamily>,
+    /// The families reserved for the dev suite, by name.
+    #[serde(default)]
+    pub dev_families: Vec<ReservedFamily>,
     /// Families that could have been.
     pub examinable: usize,
     /// Families across the sources, examinable or not.
@@ -82,8 +93,11 @@ pub struct Reservation {
     /// The sources everything after this reads, one for each of the run's
     /// sources, without the reserved parts.
     pub training: Vec<SourceId>,
-    /// The sources the exam is written from: the reserved parts alone.
+    /// The sources the final test is written from: its reserved parts alone.
     pub exam: Vec<SourceId>,
+    /// The sources the dev suite is written from.
+    #[serde(default)]
+    pub dev: Vec<SourceId>,
 }
 
 /// Refuses a request that cannot be honoured; see [`reserve`].
@@ -192,7 +206,8 @@ pub fn reserve(
     let total_families = table.len();
     // A family larger than this would cost the run too much of what it
     // learns from; reserving a few of that size would be most of the corpus.
-    let largest = total_words / (2 * request.families.max(1));
+    let wanted = request.families + request.dev_families;
+    let largest = total_words / (2 * wanted.max(1));
     let mut examinable: Vec<&String> = table
         .iter()
         .filter(|(_, f)| {
@@ -201,20 +216,18 @@ pub fn reserve(
         .map(|(name, _)| name)
         .collect();
     let pool = examinable.len();
-    if total_families < 2 * request.families {
+    if total_families < 2 * wanted {
         return Err(refuse(format!(
-            "reserving {} of {total_families} families would leave less to learn from than is \
-             examined: --exam-families asks for at most half of them",
-            request.families
+            "reserving {wanted} of {total_families} families would leave less to learn from than \
+             is examined: --exam-families and --dev-families ask for at most half of them together"
         )));
     }
-    if pool < request.families {
+    if pool < wanted {
         return Err(refuse(format!(
-            "the exam needs {} families reserved up front and the sources hold {pool} that can \
+            "the exam needs {wanted} families reserved up front and the sources hold {pool} that can \
              be: of {total_families} families, the rest are shorter than {MIN_FAMILY_WORDS} \
              words, longer than {largest} words, in a source that is not a directory, or already \
-             trained on. Name fewer with --exam-families, or add sources",
-            request.families
+             trained on. Name fewer with --exam-families and --dev-families, or add sources"
         )));
     }
     examinable.sort_by_cached_key(|name| {
@@ -222,25 +235,34 @@ pub fn reserve(
         input.extend_from_slice(name.as_bytes());
         Digest::of(&input).to_string()
     });
-    examinable.truncate(request.families);
-    let reserved: BTreeSet<String> = examinable.into_iter().cloned().collect();
-    let families = reserved
-        .iter()
-        .map(|name| ReservedFamily {
-            family: name.clone(),
-            parts: table[name].parts,
-            words: table[name].words,
-        })
-        .collect();
+    examinable.truncate(wanted);
+    let named = |names: &[&String]| -> Vec<ReservedFamily> {
+        let mut families: Vec<ReservedFamily> = names
+            .iter()
+            .map(|name| ReservedFamily {
+                family: (*name).clone(),
+                parts: table[*name].parts,
+                words: table[*name].words,
+            })
+            .collect();
+        families.sort_by(|a, b| a.family.cmp(&b.family));
+        families
+    };
+    let families = named(&examinable[..request.families]);
+    let dev_families = named(&examinable[request.families..]);
+    let final_set: BTreeSet<&str> = families.iter().map(|f| f.family.as_str()).collect();
+    let dev_set: BTreeSet<&str> = dev_families.iter().map(|f| f.family.as_str()).collect();
+    let reserved: BTreeSet<&str> = final_set.union(&dev_set).copied().collect();
 
     let mut training = Vec::with_capacity(sources.len());
     let mut exam = Vec::new();
+    let mut dev = Vec::new();
     for source in &sources {
         let held = |part: &Part| {
             is_text(part)
                 && group_of
                     .get(&part.content)
-                    .is_some_and(|name| reserved.contains(name))
+                    .is_some_and(|name| reserved.contains(name.as_str()))
         };
         if !source.parts.iter().any(held) {
             training.push(source.id.clone());
@@ -265,6 +287,13 @@ pub fn reserve(
             })
         };
         let (taken, kept): (Vec<&Part>, Vec<&Part>) = source.parts.iter().partition(|p| held(p));
+        let in_dev = |part: &&Part| {
+            group_of
+                .get(&part.content)
+                .is_some_and(|name| dev_set.contains(name.as_str()))
+        };
+        let (taken_dev, taken_final): (Vec<&Part>, Vec<&Part>) =
+            taken.iter().copied().partition(|p| in_dev(p));
         let mut skipped_now = skipped.clone();
         skipped_now.extend(taken.iter().map(|part| Skipped {
             path: part.name.clone(),
@@ -291,14 +320,21 @@ pub fn reserve(
             Ok(store.put_source(&captured)?)
         };
         training.push(put(train_origin, kept)?);
-        exam.push(put(exam_origin, taken)?);
+        if !taken_final.is_empty() {
+            exam.push(put(exam_origin.clone(), taken_final)?);
+        }
+        if !taken_dev.is_empty() {
+            dev.push(put(exam_origin, taken_dev)?);
+        }
     }
     Ok(Reservation {
         families,
+        dev_families,
         examinable: pool,
         total_families,
         training,
         exam,
+        dev,
     })
 }
 

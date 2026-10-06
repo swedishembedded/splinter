@@ -79,8 +79,12 @@ fn comparison(c: &Comparison) -> String {
             m.first_only, m.second_only, m.tasks, m.p_value
         )
     });
+    let corrected = c.holm_p.map_or(
+        " (the primary comparison, not corrected)".to_string(),
+        |p| format!(" (Holm-corrected over families {p:.4})"),
+    );
     format!(
-        "  {} vs {}: {} tasks, only {} right {}, only {} right {}, tied {}; p over tasks {:.4}, over \
+        "  {} vs {}{corrected}: {} tasks, only {} right {}, only {} right {}, tied {}; p over tasks {:.4}, over \
          families {:.4}; share right {interval}; pass rate {score}; like-length answers {matched}; \
          {} family(ies), {} discordant task(s), a difference of {} would be seen at 80% power\n",
         c.first,

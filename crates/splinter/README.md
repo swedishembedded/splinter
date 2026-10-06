@@ -36,7 +36,7 @@ splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--judge REF] [--prompt GOAL]
-splinter exam-set create SOURCE... [--families N] [--tasks N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | show EXAM
+splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | show EXAM
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
 
@@ -225,8 +225,10 @@ that is not trusted can be seen failing.
 
 **The powered exam.** An exam of a few families cannot show a gain: the paired
 tests above rest on as many units of evidence as families, which is a handful.
-`learn --exam-families N` (thirty by default for a run with a persona, none
-otherwise; 0 reserves none) reserves the exam's families before anything is
+`learn --exam-families N` (fifty by default for a run with a persona, none
+otherwise; 0 reserves none; `--exam-tasks-per-family`, eight; and `--dev-families` and
+`--dev-tasks-per-family`, fifty of four, a dev suite on its own families for choosing a
+checkpoint) reserves the exam's families before anything is
 generated or built, after the plan. A family is a group of text parts that
 print the same text (the groups a split uses, named by the least content digest
 in them); a stable hash of the name chooses N of the examinable ones - long

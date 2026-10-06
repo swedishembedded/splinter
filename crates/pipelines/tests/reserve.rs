@@ -57,6 +57,7 @@ fn run(name: &str, letters: usize, families: usize) -> (common::Scratch, Vec<Str
         &ReserveRequest {
             sources: &[id],
             families,
+            dev_families: 0,
             seed: 1,
             touched_by: &[],
         },
@@ -125,6 +126,7 @@ fn too_few_examinable_families_or_too_little_left_to_learn_from_is_refused() {
             &ReserveRequest {
                 sources: std::slice::from_ref(&id),
                 families,
+                dev_families: 0,
                 seed: 1,
                 touched_by: &[],
             },
@@ -150,6 +152,7 @@ fn too_few_examinable_families_or_too_little_left_to_learn_from_is_refused() {
         &ReserveRequest {
             sources: &[id],
             families: 2,
+            dev_families: 0,
             seed: 1,
             touched_by: &[],
         },
@@ -160,4 +163,47 @@ fn too_few_examinable_families_or_too_little_left_to_learn_from_is_refused() {
         short.contains("--exam-families") && short.contains("hold 0"),
         "{short}"
     );
+}
+
+#[test]
+fn the_dev_suite_has_families_of_its_own_as_far_from_training_as_the_final_test() {
+    let (scratch, ctx) = scratch_context("reserve-dev", Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..40 {
+        std::fs::write(
+            dir.join(format!("l{n:02}.txt")),
+            words(&format!("l{n}"), 200),
+        )
+        .unwrap();
+    }
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    let r = reserve(
+        &ctx,
+        &ReserveRequest {
+            sources: &[id],
+            families: 5,
+            dev_families: 3,
+            seed: 1,
+            touched_by: &[],
+        },
+    )
+    .unwrap();
+    assert_eq!((r.families.len(), r.dev_families.len()), (5, 3));
+    let part_names = |ids: &[SourceId]| -> BTreeSet<String> {
+        ids.iter()
+            .flat_map(|id| ctx.sources().get_source(id).unwrap().parts)
+            .map(|p| p.name)
+            .collect()
+    };
+    let (training, exam, dev) = (
+        part_names(&r.training),
+        part_names(&r.exam),
+        part_names(&r.dev),
+    );
+    assert_eq!((training.len(), exam.len(), dev.len()), (32, 5, 3));
+    assert!(training.is_disjoint(&exam) && training.is_disjoint(&dev) && exam.is_disjoint(&dev));
 }

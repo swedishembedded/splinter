@@ -704,7 +704,9 @@ fn learn_request(args: LearnArgs) -> LearnRequest {
         rehearsal: args.rehearsal,
         exam: ExamPlan {
             families: args.exam_families,
-            tasks: args.exam_tasks,
+            tasks_per_family: args.exam_tasks_per_family,
+            dev_families: args.dev_families,
+            dev_tasks_per_family: args.dev_tasks_per_family,
             resamples: args.exam_resamples.map(|n| n as usize),
         },
         passages: args.with_passages.map(|records| PassageShare {

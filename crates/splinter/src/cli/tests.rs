@@ -336,13 +336,13 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "docs",
         "--exam-families",
         "0",
-        "--exam-tasks",
+        "--exam-tasks-per-family",
         "50",
     ]) else {
         panic!("learn");
     };
     assert_eq!(
-        (reserving.exam_families, reserving.exam_tasks),
+        (reserving.exam_families, reserving.exam_tasks_per_family),
         (Some(0), Some(50))
     );
     let Command::Learn(learn) = command(&["learn", "docs", "--no-release"]) else {

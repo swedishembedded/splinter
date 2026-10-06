@@ -118,12 +118,20 @@ pub fn records_at_share(examples: usize, share: f64) -> usize {
 /// The exam a run reserves up front.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct ExamPlan {
-    /// The families reserved: `None` is [`crate::reserve::DEFAULT_EXAM_FAMILIES`]
-    /// for a run with a persona and none otherwise, `Some(0)` none at all.
+    /// The families reserved for the final test: `None` is
+    /// [`crate::reserve::DEFAULT_EXAM_FAMILIES`] for a run with a persona and
+    /// none otherwise, `Some(0)` none at all.
     pub families: Option<usize>,
-    /// The most tasks the exam holds; [`crate::exam_set::DEFAULT_EXAM_TASKS`]
-    /// when `None`.
-    pub tasks: Option<usize>,
+    /// Tasks of each family of the final test;
+    /// [`crate::exam_set::DEFAULT_TASKS_PER_FAMILY`] when `None`.
+    pub tasks_per_family: Option<usize>,
+    /// The families reserved for the dev suite a checkpoint is chosen on:
+    /// `None` is [`crate::reserve::DEFAULT_DEV_FAMILIES`] when a final test is
+    /// reserved, `Some(0)` none.
+    pub dev_families: Option<usize>,
+    /// Tasks of each dev family;
+    /// [`crate::exam_set::DEFAULT_DEV_TASKS_PER_FAMILY`] when `None`.
+    pub dev_tasks_per_family: Option<usize>,
     /// Answers per task per arm; [`crate::powered::DEFAULT_RESAMPLES`] when
     /// `None`.
     pub resamples: Option<usize>,

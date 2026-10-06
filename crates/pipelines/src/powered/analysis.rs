@@ -119,6 +119,12 @@ pub struct Power {
     pub discordant_tasks: usize,
     /// The spread, over families, of the family's mean difference.
     pub family_sd: f64,
+    /// The share of tasks only one of the two arms got right.
+    pub discordance: f64,
+    /// The intraclass correlation of the per-task differences within a
+    /// family (one-way analysis of variance estimator, floored at zero):
+    /// how far tasks of one family are alike in how the arms differ.
+    pub icc: f64,
     /// The smallest true difference in the share of tasks right that this
     /// many families would show at the level the sign test is held to with
     /// four chances in five, by the normal approximation to the families'
@@ -171,10 +177,30 @@ pub struct Comparison {
     pub length_matched: Option<LengthMatched>,
     /// What the exam could have shown.
     pub power: Power,
+    /// The family-level p-value corrected for the secondary comparisons made
+    /// (Holm, step-down); `None` for the primary comparison, which is decided
+    /// on its own and is not corrected.
+    #[serde(default)]
+    pub holm_p: Option<f64>,
+}
+
+/// Holm's step-down correction of `p` values: each, in the order given,
+/// adjusted for how many were made.
+#[must_use]
+pub fn holm(p: &[f64]) -> Vec<f64> {
+    let mut order: Vec<usize> = (0..p.len()).collect();
+    order.sort_by(|&a, &b| p[a].total_cmp(&p[b]));
+    let mut adjusted = vec![0.0; p.len()];
+    let mut running: f64 = 0.0;
+    for (rank, &i) in order.iter().enumerate() {
+        running = running.max(((p.len() - rank) as f64 * p[i]).min(1.0));
+        adjusted[i] = running;
+    }
+    adjusted
 }
 
 /// Resamples of the families an interval is made from.
-const RESAMPLES: usize = 4000;
+const RESAMPLES: usize = 10_000;
 /// The share of resampled differences an interval holds.
 const LEVEL: f64 = 0.95;
 /// The seed of the resampling: the same records give the same interval.
@@ -317,13 +343,58 @@ pub fn compare(records: &[TaskRecord], first: &str, second: &str) -> Comparison 
             second_only: m_second,
             p_value: sign_p(m_first, m_second),
         }),
+        holm_p: None,
         power: Power {
             families: by_family.len(),
             discordant_tasks: first_only + second_only,
             family_sd,
+            discordance: if pairs.is_empty() {
+                0.0
+            } else {
+                (first_only + second_only) as f64 / pairs.len() as f64
+            },
+            icc: icc(&by_family),
             minimum_detectable_difference: (by_family.len() >= 2)
                 .then(|| (Z_ALPHA + Z_POWER) * family_sd / (by_family.len() as f64).sqrt()),
         },
+    }
+}
+
+/// The one-way ANOVA estimate of the intraclass correlation of `groups`'
+/// values, floored at zero; zero when it cannot be estimated.
+fn icc(groups: &BTreeMap<&str, Vec<f64>>) -> f64 {
+    let k = groups.len();
+    let n: usize = groups.values().map(Vec::len).sum();
+    if k < 2 || n <= k {
+        return 0.0;
+    }
+    let grand = groups.values().flatten().sum::<f64>() / n as f64;
+    let between: f64 = groups
+        .values()
+        .map(|g| g.len() as f64 * (g.iter().sum::<f64>() / g.len() as f64 - grand).powi(2))
+        .sum();
+    let within: f64 = groups
+        .values()
+        .map(|g| {
+            let m = g.iter().sum::<f64>() / g.len() as f64;
+            g.iter().map(|v| (v - m).powi(2)).sum::<f64>()
+        })
+        .sum();
+    let ms_between = between / (k - 1) as f64;
+    let ms_within = within / (n - k) as f64;
+    // The size of a group that stands for all of them when sizes differ.
+    let n0 = (n as f64
+        - groups
+            .values()
+            .map(|g| (g.len() * g.len()) as f64)
+            .sum::<f64>()
+            / n as f64)
+        / (k - 1) as f64;
+    let denominator = ms_between + (n0 - 1.0) * ms_within;
+    if denominator <= 0.0 {
+        0.0
+    } else {
+        ((ms_between - ms_within) / denominator).max(0.0)
     }
 }
 
@@ -470,6 +541,35 @@ mod tests {
         let c = compare(&[win, like], "a", "b");
         let matched = c.length_matched.unwrap();
         assert_eq!((matched.tasks, matched.first_only), (1, 1));
+    }
+
+    #[test]
+    fn holm_adjusts_for_the_comparisons_made_and_never_lowers_a_p() {
+        let adjusted = holm(&[0.01, 0.04, 0.03]);
+        assert!((adjusted[0] - 0.03).abs() < 1e-12);
+        assert!((adjusted[2] - 0.06).abs() < 1e-12);
+        assert!(
+            (adjusted[1] - 0.06).abs() < 1e-12,
+            "monotone over the order"
+        );
+    }
+
+    #[test]
+    fn tasks_of_one_family_that_all_differ_alike_have_a_high_intraclass_correlation() {
+        let alike: Vec<TaskRecord> = (0..10)
+            .flat_map(|f| {
+                let family = format!("f{f}");
+                (0..4).map(move |n| record(&family, n, f % 2 == 0, false))
+            })
+            .collect();
+        let mixed: Vec<TaskRecord> = (0..10)
+            .flat_map(|f| {
+                let family = format!("f{f}");
+                (0..4).map(move |n| record(&family, n, n % 2 == 0, false))
+            })
+            .collect();
+        assert!(compare(&alike, "a", "b").power.icc > 0.9);
+        assert!(compare(&mixed, "a", "b").power.icc < 0.05);
     }
 
     #[test]

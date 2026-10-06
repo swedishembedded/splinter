@@ -143,7 +143,9 @@ fn nothing_of_a_reserved_family_in_any_edition_reaches_a_training_dataset() {
             persona: Some("The Writer".into()),
             exam: ExamPlan {
                 families: Some(4),
-                tasks: Some(8),
+                tasks_per_family: Some(2),
+                dev_families: Some(2),
+                dev_tasks_per_family: Some(1),
                 resamples: Some(2),
             },
             rehearsal: Some(0.0),
@@ -161,12 +163,15 @@ fn nothing_of_a_reserved_family_in_any_edition_reaches_a_training_dataset() {
     let report = ran.report;
     assert_eq!(report.stopped, None);
     let reserved = report.reserve.as_ref().unwrap();
-    assert_eq!(reserved.families.len(), 4);
+    assert_eq!(
+        (reserved.families.len(), reserved.dev_families.len()),
+        (4, 2)
+    );
 
     // The words of every reserved part, in every edition of it.
     let sources = ctx.sources();
     let mut held = Vec::new();
-    for id in &reserved.exam {
+    for id in reserved.exam.iter().chain(&reserved.dev) {
         for part in sources.get_source(id).unwrap().parts {
             let text = String::from_utf8(sources.read_blob(&part.content).unwrap()).unwrap();
             let key = text
@@ -202,6 +207,18 @@ fn nothing_of_a_reserved_family_in_any_edition_reaches_a_training_dataset() {
     // put the candidate to it.
     let exam = report.exam_set.as_ref().unwrap();
     assert_eq!(exam.tasks.len(), 8);
+    // The dev suite is written from its own families, apart from the final
+    // test's.
+    let dev = report.dev_set.as_ref().unwrap();
+    assert_eq!(dev.tasks.len(), 2);
+    assert!(dev
+        .tasks
+        .iter()
+        .all(|t| reserved.dev_families.iter().any(|f| f.family == t.family)));
+    assert!(reserved
+        .dev_families
+        .iter()
+        .all(|d| !reserved.families.iter().any(|f| f.family == d.family)));
     let reserved_families: std::collections::BTreeSet<_> =
         reserved.families.iter().map(|f| &f.family).collect();
     assert!(exam

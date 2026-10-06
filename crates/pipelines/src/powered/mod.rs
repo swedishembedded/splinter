@@ -130,7 +130,10 @@ pub struct Powered {
     pub hard_controls: Option<HardControls>,
     /// Each arm over the whole exam.
     pub arms: Vec<ArmSummary>,
-    /// The comparisons, the first arm of each the one said to be better.
+    /// The comparison the exam was fixed to be decided on.
+    pub primary: crate::exam_set::Primary,
+    /// The comparisons, the primary first, the first arm of each the one said
+    /// to be better.
     pub comparisons: Vec<Comparison>,
     /// The voice of each arm, by the likelihood it gives the writer's text.
     pub voice: Vec<voice::VoiceScore>,
@@ -384,19 +387,38 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
     let has = |name: &str| arm_names.iter().any(|a| a == name);
     // A judge that is not trusted abstains on every answer, so there is
     // nothing to compare and the report makes no claim.
+    let primary = request.exam.primary.clone();
     let comparisons = if calibrated.trust.trusted {
-        [
-            (PERSONA, PROMPTED),
-            (PERSONA, BASE),
+        // The primary comparison first and alone as it was fixed with the exam;
+        // the rest are secondary, corrected together for how many were made.
+        let secondary = [
             (CANDIDATE, PROMPTED),
+            (PERSONA, BASE),
             (CANDIDATE, BASE),
             (PERSONA, CANDIDATE),
             (PROMPTED, BASE),
-        ]
-        .into_iter()
-        .filter(|(first, second)| has(first) && has(second))
-        .map(|(first, second)| compare(&records, first, second))
-        .collect()
+        ];
+        let mut made: Vec<Comparison> =
+            std::iter::once((primary.first.as_str(), primary.second.as_str()))
+                .chain(secondary)
+                .filter(|(first, second)| has(first) && has(second))
+                .fold(Vec::new(), |mut made: Vec<Comparison>, (first, second)| {
+                    if !made.iter().any(|c| c.first == first && c.second == second) {
+                        made.push(compare(&records, first, second));
+                    }
+                    made
+                });
+        let corrected = analysis::holm(
+            &made
+                .iter()
+                .skip(1)
+                .map(|c| c.p_families)
+                .collect::<Vec<_>>(),
+        );
+        for (c, p) in made.iter_mut().skip(1).zip(corrected) {
+            c.holm_p = Some(p);
+        }
+        made
     } else {
         Vec::new()
     };
@@ -447,6 +469,7 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
             .collect(),
         judge: calibrated.trust,
         hard_controls,
+        primary,
         arms: summarise(&records, &arm_names),
         comparisons,
         voice,

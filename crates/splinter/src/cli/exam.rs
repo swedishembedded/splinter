@@ -4,9 +4,9 @@
 //! The grammar of `exam` and `exam-set`.
 
 use clap::{Args, Subcommand};
-use splinter_sdk::exam_set::DEFAULT_EXAM_TASKS;
+use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
-use splinter_sdk::reserve::DEFAULT_EXAM_FAMILIES;
+use splinter_sdk::reserve::{DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use super::{model_ref, RetrieveArgs};
@@ -72,9 +72,15 @@ pub struct ExamSetArgs {
     /// How many families to reserve.
     #[arg(long, value_name = "N", default_value_t = DEFAULT_EXAM_FAMILIES)]
     pub families: usize,
-    /// The most tasks the exam holds, spread over the families.
-    #[arg(long, value_name = "N", default_value_t = DEFAULT_EXAM_TASKS)]
-    pub tasks: usize,
+    /// Tasks of each family of the final test.
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_TASKS_PER_FAMILY)]
+    pub tasks_per_family: usize,
+    /// How many more families to reserve for the dev suite.
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_DEV_FAMILIES)]
+    pub dev_families: usize,
+    /// Tasks of each dev family.
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_DEV_TASKS_PER_FAMILY)]
+    pub dev_tasks_per_family: usize,
     /// Task kinds, comma-separated.
     #[arg(long, value_delimiter = ',', value_name = "K,..",
         default_values_t = ["converse".to_string(), "advise".to_string(), "explain".to_string()])]

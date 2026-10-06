@@ -13,11 +13,11 @@ use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, Strip, ViewName};
 use splinter_sdk::eval::SuiteChoice;
-use splinter_sdk::exam_set::DEFAULT_EXAM_TASKS;
+use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::learn::{parse_budget, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use splinter_sdk::lineage::Direction;
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
-use splinter_sdk::reserve::DEFAULT_EXAM_FAMILIES;
+use splinter_sdk::reserve::{DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES};
 use splinter_sdk::train::{
     DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET,
     MAX_MONITOR_SHARE, MAX_PASSES,
@@ -308,11 +308,20 @@ pub struct LearnArgs {
          with a persona: {DEFAULT_EXAM_FAMILIES}]"
     ))]
     pub exam_families: Option<usize>,
-    /// The most tasks the exam holds.
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
-        help = format!("The most tasks the reserved exam holds, spread over its families \
-                        [default: {DEFAULT_EXAM_TASKS}]"))]
-    pub exam_tasks: Option<usize>,
+    /// Tasks of each family of the final test.
+    #[arg(long, value_name = "N", help = format!(
+        "Tasks of each family of the reserved final test [default: {DEFAULT_TASKS_PER_FAMILY}]"))]
+    pub exam_tasks_per_family: Option<usize>,
+    /// How many more families to reserve for the dev suite.
+    #[arg(long, value_name = "N", help = format!(
+        "How many more families to reserve for the dev suite a checkpoint is chosen on, as far \
+         from training as the final test's and apart from it; 0 reserves none [default with a \
+         final test: {DEFAULT_DEV_FAMILIES}]"))]
+    pub dev_families: Option<usize>,
+    /// Tasks of each dev family.
+    #[arg(long, value_name = "N", help = format!(
+        "Tasks of each family of the dev suite [default: {DEFAULT_DEV_TASKS_PER_FAMILY}]"))]
+    pub dev_tasks_per_family: Option<usize>,
     /// Answers per task per arm in the exam.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("Answers per task per arm in the reserved exam: the greedy one and the \

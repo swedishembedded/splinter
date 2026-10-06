@@ -11,13 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The powered exam. `learn --exam-families N --exam-tasks N --exam-resamples N` (thirty
-  families by default for a persona run) reserves the exam up front and writes it from the
+- The powered exam. `learn --exam-families N --exam-tasks-per-family N --dev-families N
+  --dev-tasks-per-family N --exam-resamples N` (fifty final-test families of eight tasks and
+  fifty dev families of four by default for a persona run) reserves both up front and writes it from the
   reserved text alone; `splinter exam-set create|show` makes and shows a frozen exam apart
   from any run; `splinter exam CANDIDATE --exam-set EXAM` puts a candidate to it: base,
   prompted base, candidate and candidate under its prompt, every answer and verdict kept,
   per-task pairing with family-clustered intervals, the sign test over tasks and families,
-  a like-length test, invented specifics, answer lengths, a power report, a judge-free voice
+  a like-length test, invented specifics, answer lengths, a power report with the exam's own discordance and intraclass correlation, the primary
+  comparison fixed with the exam and the secondary ones Holm-corrected, a judge-free voice
   score, and the judge's false passes on harder wrong answers.
 - `reserve`: the exam's families are reserved before any task is generated or dataset
   built. A family is the group of text parts that print the same text (named as a split

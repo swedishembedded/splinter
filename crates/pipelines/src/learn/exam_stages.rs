@@ -17,9 +17,41 @@ use splinter_orchestrator::{Context, OrchestratorError};
 
 use super::stages::{to_value, Done, LearnState};
 use crate::exam::{examine, Exam, ExamineRequest};
-use crate::exam_set::{create as create_exam_set, ExamSetRequest};
+use crate::exam_set::{
+    create as create_exam_set, ExamSetRequest, Role, DEFAULT_DEV_TASKS_PER_FAMILY,
+    DEFAULT_TASKS_PER_FAMILY,
+};
 use crate::powered::{run as run_powered, PoweredExam, PoweredRequest};
-use crate::reserve::{reserve, ReserveRequest};
+use crate::reserve::{
+    reserve, ReserveRequest, ReservedFamily, DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES,
+};
+use splinter_core::source::SourceId;
+
+impl LearnState<'_> {
+    /// The families the run reserves for its exam: what the request names,
+    /// else [`DEFAULT_EXAM_FAMILIES`] when the policy learns to think like
+    /// a person and none otherwise.
+    pub(super) fn dev_families(&self) -> usize {
+        if self.exam_families() == 0 {
+            return 0;
+        }
+        self.learn.exam.dev_families.unwrap_or(DEFAULT_DEV_FAMILIES)
+    }
+
+    /// The families the run reserves for its final test: what the request
+    /// names, else the default when the policy learns to think like a person
+    /// and none otherwise.
+    pub(super) fn exam_families(&self) -> usize {
+        self.learn
+            .exam
+            .families
+            .unwrap_or(if self.persona().is_some() {
+                DEFAULT_EXAM_FAMILIES
+            } else {
+                0
+            })
+    }
+}
 
 /// Reserves the exam's families before anything is generated or built, and
 /// swaps the run's sources for the sources without them.
@@ -37,6 +69,7 @@ pub(super) fn reserve_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnS
         &ReserveRequest {
             sources: &st.source_ids,
             families: st.exam_families(),
+            dev_families: st.dev_families(),
             seed: 0,
             touched_by: &touched_by,
         },
@@ -58,23 +91,46 @@ pub(super) fn exam_set_stage(
         unreachable!("the exam-set stage follows the reserve stage")
     };
     let kinds = st.kinds.clone();
-    let exam = create_exam_set(
-        ctx,
-        &ExamSetRequest {
-            reservation: reserved,
-            kinds: &kinds,
-            generator: st.learn.generator,
-            goal: st.learn.goal,
-            author: st.persona(),
-            max_tasks: st
-                .learn
-                .exam
-                .tasks
-                .unwrap_or(crate::exam_set::DEFAULT_EXAM_TASKS),
-            cancel: run.cancel_token(),
-        },
+    let made = |role: Role, sources: &[SourceId], families: &[ReservedFamily], per: usize| {
+        create_exam_set(
+            ctx,
+            &ExamSetRequest {
+                sources,
+                families,
+                role,
+                kinds: &kinds,
+                generator: st.learn.generator,
+                goal: st.learn.goal,
+                author: st.persona(),
+                tasks_per_family: per,
+                cancel: run.cancel_token(),
+            },
+        )
+    };
+    let exam = made(
+        Role::Final,
+        &reserved.exam,
+        &reserved.families,
+        st.learn
+            .exam
+            .tasks_per_family
+            .unwrap_or(DEFAULT_TASKS_PER_FAMILY),
     )?;
+    let dev = (!reserved.dev.is_empty())
+        .then(|| {
+            made(
+                Role::Dev,
+                &reserved.dev,
+                &reserved.dev_families,
+                st.learn
+                    .exam
+                    .dev_tasks_per_family
+                    .unwrap_or(DEFAULT_DEV_TASKS_PER_FAMILY),
+            )
+        })
+        .transpose()?;
     let summary = to_value(&exam)?;
+    st.report.dev_set = dev;
     st.exam_set = Some(exam.clone());
     st.report.exam_set = Some(exam);
     Ok(StageEnd::done(summary))

@@ -37,9 +37,14 @@ use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 
-/// The tasks an exam holds when no budget is named: over about thirty
-/// families, enough discordant tasks to see a gain of a fifth.
-pub const DEFAULT_EXAM_TASKS: usize = 240;
+/// The tasks of each family of the final test when none is named: fifty
+/// families of eight make about four hundred tasks, enough for four chances in
+/// five of seeing a gain of ten points at the discordance and the clustering
+/// the plan assumes ([`crate::powered::plan`]).
+pub const DEFAULT_TASKS_PER_FAMILY: usize = 8;
+
+/// The tasks of each family of the dev suite when none is named.
+pub const DEFAULT_DEV_TASKS_PER_FAMILY: usize = 4;
 
 /// The directory under the state root the exam sets are kept in.
 const DIRECTORY: &str = "exams";
@@ -49,8 +54,12 @@ const MANIFEST: &str = "exam.json";
 
 /// What an exam set is made from.
 pub struct ExamSetRequest<'a> {
-    /// The reservation the exam is written from.
-    pub reservation: &'a Reservation,
+    /// The sources the exam is written from: reserved parts alone.
+    pub sources: &'a [SourceId],
+    /// The families reserved, whether or not a task is written from each.
+    pub families: &'a [ReservedFamily],
+    /// Whether this is the final test or the dev suite.
+    pub role: Role,
     /// The kinds of task; the ones a judge can grade against a reference.
     pub kinds: &'a [String],
     /// The generator model.
@@ -59,10 +68,44 @@ pub struct ExamSetRequest<'a> {
     pub goal: Option<&'a str>,
     /// Who wrote the sources, when they are one person's.
     pub author: Option<&'a str>,
-    /// The most tasks the exam holds.
-    pub max_tasks: usize,
+    /// The most tasks of one family the exam holds.
+    pub tasks_per_family: usize,
     /// Stops generation.
     pub cancel: CancelToken,
+}
+
+/// What an exam set is for.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// The final test: opened once, after one checkpoint is chosen.
+    #[default]
+    Final,
+    /// The dev suite a checkpoint is chosen on.
+    Dev,
+}
+
+/// The comparison an exam is decided on, fixed before any model is put to it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Primary {
+    /// The arm said to be better: the candidate asked under the prompt it is
+    /// deployed with.
+    pub first: String,
+    /// The arm it is compared with: the base told the same, asked the same.
+    pub second: String,
+    /// What is compared: the share of tasks the judge says give what the
+    /// reference says, on the greedy answer, with a family-clustered interval.
+    pub endpoint: String,
+}
+
+impl Default for Primary {
+    fn default() -> Self {
+        Self {
+            first: crate::powered::PERSONA.into(),
+            second: crate::powered::PROMPTED.into(),
+            endpoint: "share of tasks judged right on the greedy answer".into(),
+        }
+    }
 }
 
 /// One task of the exam and the family it is written from.
@@ -90,8 +133,14 @@ pub struct ExamSet {
     pub tasks: Vec<ExamTask>,
     /// The kinds asked for.
     pub kinds: Vec<String>,
-    /// The budget it was held to.
-    pub max_tasks: usize,
+    /// The most tasks of one family it was held to.
+    pub tasks_per_family: usize,
+    /// What it is for.
+    #[serde(default)]
+    pub role: Role,
+    /// The primary comparison, fixed with the exam.
+    #[serde(default)]
+    pub primary: Primary,
     /// What the exam is made of, so that the file alone carries it to
     /// another state root: [`ExamSet::load`] installs it where it is missing.
     #[serde(default)]
@@ -221,8 +270,8 @@ impl ExamSet {
     }
 }
 
-/// Generates the exam from `request.reservation.exam`, holds it to its
-/// budget, and freezes it.
+/// Generates the exam from `request.sources`, holds it to its tasks per
+/// family, and freezes it.
 ///
 /// # Errors
 /// Refused when no task was admitted from the reserved text.
@@ -230,7 +279,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
     let generated = generate(
         ctx,
         &Generation {
-            sources: &request.reservation.exam,
+            sources: request.sources,
             sections: &[],
             kinds: request.kinds,
             generator: request.generator,
@@ -248,12 +297,8 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
         .map(|entry| store.get(&entry.task))
         .collect::<Result<Vec<_>, _>>()?;
     let clusters = task_clusters(ctx, &tasks)?;
-    let reserved: std::collections::BTreeSet<&str> = request
-        .reservation
-        .families
-        .iter()
-        .map(|f| f.family.as_str())
-        .collect();
+    let reserved: std::collections::BTreeSet<&str> =
+        request.families.iter().map(|f| f.family.as_str()).collect();
     // By family, in an order that does not follow generation: a stable hash
     // of the task's address.
     let mut by_family: BTreeMap<String, Vec<&TaskEntry>> = BTreeMap::new();
@@ -265,24 +310,17 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
     for entries in by_family.values_mut() {
         entries.sort_by_cached_key(|e| Digest::of(e.task.as_str().as_bytes()).to_string());
     }
-    // Round-robin over the families, so that a short budget is spread and
-    // one prolific family does not make the exam.
-    let mut chosen: Vec<(String, &TaskEntry)> = Vec::new();
-    let mut round = 0;
-    while chosen.len() < request.max_tasks {
-        let before = chosen.len();
-        for (family, entries) in &by_family {
-            if let Some(entry) = entries.get(round) {
-                if chosen.len() < request.max_tasks {
-                    chosen.push((family.clone(), entry));
-                }
-            }
-        }
-        if chosen.len() == before {
-            break;
-        }
-        round += 1;
-    }
+    // At most `tasks_per_family` of each family, so that one prolific family
+    // does not make the exam.
+    let mut chosen: Vec<(String, &TaskEntry)> = by_family
+        .iter()
+        .flat_map(|(family, entries)| {
+            entries
+                .iter()
+                .take(request.tasks_per_family)
+                .map(move |entry| (family.clone(), *entry))
+        })
+        .collect();
     if chosen.is_empty() {
         return Err(OrchestratorError::Refused(format!(
             "no task was admitted from the reserved text, so there is no exam to freeze \
@@ -308,8 +346,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
             .map(|(_, entry)| store.get(&entry.task))
             .collect::<Result<_, _>>()?,
         sources: request
-            .reservation
-            .exam
+            .sources
             .iter()
             .map(|id| bundled(ctx, id))
             .collect::<Result<_, _>>()?,
@@ -317,11 +354,13 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
     let mut exam = ExamSet {
         id: String::new(),
         task_set,
-        sources: request.reservation.exam.clone(),
-        families: request.reservation.families.clone(),
+        sources: request.sources.to_vec(),
+        families: request.families.to_vec(),
         tasks: exam_tasks,
         kinds: request.kinds.to_vec(),
-        max_tasks: request.max_tasks,
+        tasks_per_family: request.tasks_per_family,
+        role: request.role,
+        primary: Primary::default(),
         bundle,
     };
     let bytes = serde_json::to_vec_pretty(&exam).map_err(|source| OrchestratorError::Json {
@@ -347,12 +386,16 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
 pub struct NewExam<'a> {
     /// The sources, as a command line names them.
     pub sources: &'a [SourceTarget],
-    /// Families to reserve.
+    /// Families to reserve for the final test.
     pub families: usize,
+    /// Tasks of each.
+    pub tasks_per_family: usize,
+    /// Families to reserve for the dev suite.
+    pub dev_families: usize,
+    /// Tasks of each.
+    pub dev_tasks_per_family: usize,
     /// Varies the choice of families.
     pub seed: u64,
-    /// The most tasks.
-    pub max_tasks: usize,
     /// The kinds of task.
     pub kinds: &'a [String],
     /// The generator model.
@@ -374,8 +417,10 @@ pub struct NewExam<'a> {
 pub struct ExamBuilt {
     /// The families reserved and the sources divided by them.
     pub reservation: Reservation,
-    /// The frozen exam.
+    /// The frozen final test.
     pub exam: ExamSet,
+    /// The frozen dev suite, when families were reserved for one.
+    pub dev: Option<ExamSet>,
 }
 
 /// Captures `request.sources`, reserves the exam's families among them
@@ -398,23 +443,48 @@ pub fn build(ctx: &Context, request: &NewExam<'_>) -> Result<ExamBuilt, Orchestr
         &ReserveRequest {
             sources: &sources,
             families: request.families,
+            dev_families: request.dev_families,
             seed: request.seed,
             touched_by: &touched_by,
         },
     )?;
-    let exam = create(
-        ctx,
-        &ExamSetRequest {
-            reservation: &reservation,
-            kinds: request.kinds,
-            generator: request.generator,
-            goal: request.goal,
-            author: request.author,
-            max_tasks: request.max_tasks,
-            cancel: request.cancel.clone(),
-        },
+    let made = |role: Role, sources: &[SourceId], families: &[ReservedFamily], per: usize| {
+        create(
+            ctx,
+            &ExamSetRequest {
+                sources,
+                families,
+                role,
+                kinds: request.kinds,
+                generator: request.generator,
+                goal: request.goal,
+                author: request.author,
+                tasks_per_family: per,
+                cancel: request.cancel.clone(),
+            },
+        )
+    };
+    let exam = made(
+        Role::Final,
+        &reservation.exam,
+        &reservation.families,
+        request.tasks_per_family,
     )?;
-    Ok(ExamBuilt { reservation, exam })
+    let dev = (!reservation.dev.is_empty())
+        .then(|| {
+            made(
+                Role::Dev,
+                &reservation.dev,
+                &reservation.dev_families,
+                request.dev_tasks_per_family,
+            )
+        })
+        .transpose()?;
+    Ok(ExamBuilt {
+        reservation,
+        exam,
+        dev,
+    })
 }
 
 /// `id` with the text of its parts.

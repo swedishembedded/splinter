@@ -24,7 +24,7 @@ use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
-use splinter_pipelines::exam_set::{create, ExamSet, ExamSetRequest};
+use splinter_pipelines::exam_set::{create, ExamSet, ExamSetRequest, Role};
 use splinter_pipelines::reserve::{reserve, ReserveRequest};
 use splinter_pipelines::sources::{add, SourceTarget};
 
@@ -99,6 +99,7 @@ fn the_exam_is_written_from_the_reserved_text_within_its_budget_and_frozen() {
         &ReserveRequest {
             sources: &[id],
             families: 6,
+            dev_families: 0,
             seed: 1,
             touched_by: &[],
         },
@@ -107,19 +108,20 @@ fn the_exam_is_written_from_the_reserved_text_within_its_budget_and_frozen() {
     let exam = create(
         &ctx,
         &ExamSetRequest {
-            reservation: &reservation,
+            sources: &reservation.exam,
+            families: &reservation.families,
+            role: Role::Final,
             kinds: &["recall".to_string()],
             generator: &generator_ref,
             goal: None,
             author: None,
-            max_tasks: 9,
+            tasks_per_family: 1,
             cancel: CancelToken::new(),
         },
     )
     .unwrap();
-    // Twelve tasks were admitted from six families; the budget keeps nine,
-    // spread: every family has one, three have two.
-    assert_eq!(exam.tasks.len(), 9);
+    // Twelve tasks were admitted from six families; one a family is kept.
+    assert_eq!(exam.tasks.len(), 6);
     let reserved: BTreeSet<_> = reservation.families.iter().map(|f| &f.family).collect();
     assert!(exam.tasks.iter().all(|t| reserved.contains(&t.family)));
     assert_eq!(exam.families_examined(), 6);
@@ -161,7 +163,11 @@ fn the_exam_is_written_from_the_reserved_text_within_its_budget_and_frozen() {
         assert!(other.sources().contains(id).unwrap());
     }
     let text = std::fs::read_to_string(&file).unwrap();
-    std::fs::write(&file, text.replace("\"max_tasks\": 9", "\"max_tasks\": 90")).unwrap();
+    std::fs::write(
+        &file,
+        text.replace("\"tasks_per_family\": 1", "\"tasks_per_family\": 10"),
+    )
+    .unwrap();
     let refused = ExamSet::load(&ctx, &exam.id).unwrap_err().to_string();
     assert!(refused.contains("frozen"), "{refused}");
 }

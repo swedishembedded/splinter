@@ -111,6 +111,9 @@ pub struct LearnReport {
     pub reserve: Option<Reservation>,
     /// The exam-set stage: the frozen exam written from them.
     pub exam_set: Option<ExamSet>,
+    /// The frozen dev suite a checkpoint is to be chosen on, written from its
+    /// own reserved families; `None` when none were reserved.
+    pub dev_set: Option<ExamSet>,
     /// The tasks stage.
     pub tasks: Option<TasksGenerated>,
     /// The solve stage.
