@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   system prompt each arm was asked each suite under, and the anchor suite is
   asked of both arms under the default prompt, so the anchor no longer
   compares a persona-prompted candidate with an unprompted base.
+- The `stated` verifier no longer fails an answer that states the reference
+  but runs past its length bound: it abstains, so a judge adjudicates it. It
+  also reads sub- and superscript digits as plain digits and a whole number
+  written in words and in digits as one, so a subscripted H2O and "8 legs" state `H2O` and
+  `eight`.
 
 ### Added
 - The timeline pipeline (`splinter_sdk::timeline`): import and split stages, a train stage for `timeline-v1` datasets (immutable candidates packed into one deterministic file), an evaluation stage scoring a candidate against a champion on the same held-out units with participant-clustered bootstrap differences, a release stage through the predictive gate that records a failing candidate as rejected, and the lineage of a release down to source file lines; `samples/health` runs it on a synthetic cohort.

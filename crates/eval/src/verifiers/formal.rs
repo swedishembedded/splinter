@@ -103,8 +103,18 @@ const STATED_SLACK: usize = 60;
 /// or digit directly before or after it, and the answer is at most
 /// `STATED_FACTOR` times the reference's length plus `STATED_SLACK`
 /// characters long. For the short facts a recall task asks for, where a
-/// model answers in a sentence. Fails a different answer or none; abstains
-/// on a task without exactly one reference.
+/// model answers in a sentence.
+///
+/// Normalisation here also folds sub- and superscript digits to plain ones
+/// (a subscripted `H2O` is `H2O`) and takes a whole number written in words and in digits
+/// as one (`eight` is `8`).
+///
+/// An answer that states the reference but runs past the length bound is
+/// neither right nor wrong by code: the reference may be the point of a long
+/// explanation or one item of a list, which only a judge can tell apart, so
+/// the verifier abstains and leaves the answer to one. An answer that does
+/// not state the reference fails whatever its length, and so does none;
+/// the verifier abstains on a task without exactly one reference.
 #[derive(Clone, Debug)]
 pub struct StatedReferenceVerifier {
     producer: Producer,
@@ -122,19 +132,108 @@ impl StatedReferenceVerifier {
     }
 }
 
+/// How an answer stands to a reference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stating {
+    /// The reference is stated in a bounded answer.
+    Stated,
+    /// The reference does not occur in the answer.
+    Absent,
+    /// The reference occurs in an answer longer than the bound.
+    TooLong,
+}
+
+/// The plain digit a sub- or superscript digit stands for.
+fn plain_digit(c: char) -> Option<char> {
+    let digit = match c {
+        '\u{2080}'..='\u{2089}' => u32::from(c) - 0x2080,
+        '\u{2074}'..='\u{2079}' => u32::from(c) - 0x2070,
+        '\u{2070}' => 0,
+        '\u{00B9}' => 1,
+        '\u{00B2}' => 2,
+        '\u{00B3}' => 3,
+        _ => return None,
+    };
+    char::from_digit(digit, 10)
+}
+
+/// `text` with sub- and superscript digits as plain digits.
+fn fold_digits(text: &str) -> String {
+    text.chars().map(|c| plain_digit(c).unwrap_or(c)).collect()
+}
+
+/// The whole numbers a word names, below one hundred and a hundred itself.
+const NUMBER_WORDS: &[(&str, u32)] = &[
+    ("zero", 0),
+    ("one", 1),
+    ("two", 2),
+    ("three", 3),
+    ("four", 4),
+    ("five", 5),
+    ("six", 6),
+    ("seven", 7),
+    ("eight", 8),
+    ("nine", 9),
+    ("ten", 10),
+    ("eleven", 11),
+    ("twelve", 12),
+    ("thirteen", 13),
+    ("fourteen", 14),
+    ("fifteen", 15),
+    ("sixteen", 16),
+    ("seventeen", 17),
+    ("eighteen", 18),
+    ("nineteen", 19),
+    ("twenty", 20),
+    ("thirty", 30),
+    ("forty", 40),
+    ("fifty", 50),
+    ("sixty", 60),
+    ("seventy", 70),
+    ("eighty", 80),
+    ("ninety", 90),
+    ("hundred", 100),
+];
+
+/// The other way `reference` is written when it is one whole number: the
+/// digits of a number word, or the word of digits; `None` for anything else.
+fn other_numeral(reference: &str) -> Option<String> {
+    if let Ok(n) = reference.parse::<u32>() {
+        return NUMBER_WORDS
+            .iter()
+            .find(|(_, value)| *value == n)
+            .map(|(word, _)| (*word).to_string());
+    }
+    NUMBER_WORDS
+        .iter()
+        .find(|(word, _)| *word == reference)
+        .map(|(_, value)| value.to_string())
+}
+
 /// Whether `reference` occurs in `answer` with no letter or digit
 /// adjoining it.
-fn states(answer: &str, reference: &str) -> bool {
-    if reference.is_empty()
-        || answer.chars().count() > STATED_FACTOR * reference.chars().count() + STATED_SLACK
-    {
-        return false;
-    }
+fn occurs(answer: &str, reference: &str) -> bool {
     answer.match_indices(reference).any(|(start, found)| {
         let before = answer[..start].chars().next_back();
         let after = answer[start + found.len()..].chars().next();
         !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
     })
+}
+
+/// How `answer` stands to `reference`; see [`StatedReferenceVerifier`].
+fn states(answer: &str, reference: &str) -> Stating {
+    let (answer, reference) = (fold_digits(answer), fold_digits(reference));
+    if reference.is_empty() {
+        return Stating::Absent;
+    }
+    let found = occurs(&answer, &reference)
+        || other_numeral(&reference).is_some_and(|other| occurs(&answer, &other));
+    let bound = STATED_FACTOR * reference.chars().count() + STATED_SLACK;
+    match (found, answer.chars().count() > bound) {
+        (false, _) => Stating::Absent,
+        (true, false) => Stating::Stated,
+        (true, true) => Stating::TooLong,
+    }
 }
 
 impl Verifier for StatedReferenceVerifier {
@@ -157,15 +256,19 @@ impl Verifier for StatedReferenceVerifier {
             .final_output
             .as_deref()
             .map(|o| self.normalisation.apply(o));
-        let passed = output.as_deref().is_some_and(|o| states(o, &reference));
-        Ok(Finding::decided(
-            passed,
-            json!({
-                "comparison": "reference stated in a bounded answer",
-                "normalisation": self.normalisation,
-                "reference": Digest::of(reference.as_bytes()),
-                "output": output.map(|o| Digest::of(o.as_bytes())),
-            }),
-        ))
+        let stating = output.as_deref().map(|o| states(o, &reference));
+        let evidence = json!({
+            "comparison": "reference stated in a bounded answer",
+            "normalisation": self.normalisation,
+            "reference": Digest::of(reference.as_bytes()),
+            "output": output.map(|o| Digest::of(o.as_bytes())),
+        });
+        Ok(match stating {
+            Some(Stating::TooLong) => Finding::abstain(
+                "the answer states the reference but is longer than a statement of it: a judge decides",
+                evidence,
+            ),
+            other => Finding::decided(other == Some(Stating::Stated), evidence),
+        })
     }
 }

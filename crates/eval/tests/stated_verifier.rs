@@ -124,10 +124,37 @@ fn a_different_fact_a_fragment_or_no_answer_fails() {
 }
 
 #[test]
-fn the_fact_buried_in_padding_fails() {
+fn the_fact_buried_in_padding_is_not_passed_by_code_but_left_to_a_judge() {
     let padding = "It could be many things: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, \
                    16, 17, 18, 19, 20, and among them 8789, or perhaps another value entirely.";
-    assert_eq!(judged(Some("8789"), Some(padding)).0, Outcome::Fail);
+    assert_eq!(judged(Some("8789"), Some(padding)).0, Outcome::Abstain);
+    // A long answer without the fact is wrong whatever its length.
+    let long = "It could be many things, among them a great number of values; ".repeat(6);
+    assert_eq!(judged(Some("8789"), Some(&long)).0, Outcome::Fail);
+}
+
+#[test]
+fn a_correct_answer_is_not_failed_for_how_the_fact_is_written() {
+    for (reference, answer) in [
+        ("H2O", "The chemical symbol for water is H\u{2082}O."),
+        ("eight", "A spider has 8 legs."),
+        (
+            "42",
+            "Fifteen plus twenty-seven is forty-two, so forty-two (42).",
+        ),
+        ("six", "A hexagon has 6 sides."),
+    ] {
+        assert_eq!(
+            judged(Some(reference), Some(answer)).0,
+            Outcome::Pass,
+            "{reference}: {answer}"
+        );
+    }
+    // Other numbers stay other numbers.
+    assert_eq!(
+        judged(Some("eight"), Some("A spider has 18 legs.")).0,
+        Outcome::Fail
+    );
 }
 
 #[test]
