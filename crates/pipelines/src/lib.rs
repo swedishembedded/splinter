@@ -51,6 +51,7 @@ pub mod datasets;
 pub mod dialogue;
 pub mod eval;
 pub mod exam;
+pub mod exam_set;
 pub mod experiences;
 pub mod grouping;
 pub mod index;
