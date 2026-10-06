@@ -288,10 +288,19 @@ pub fn grade(
     // judged verdict is the one a task of such a kind is decided by, and two
     // models are compared on it.
     let judge = Judge::active(ctx, Use::Comparison)?;
+    // Every task is answered before any is judged: a device holds one base
+    // at a time, and a judge that is another model than the one asked would
+    // otherwise be loaded and the asked model reloaded for every task.
+    let experiences = suite
+        .tasks
+        .iter()
+        .map(|task| answer(ctx, model, task, cancel))
+        .collect::<Result<Vec<_>, _>>()?;
     suite
         .tasks
         .iter()
-        .map(|task| grade_one(ctx, model, task, judge.as_ref(), cancel))
+        .zip(experiences)
+        .map(|(task, experience)| verdict_of(ctx, task, experience, judge.as_ref()))
         .collect()
 }
 
@@ -342,14 +351,13 @@ pub(crate) fn answer_prompted(
     )?)
 }
 
-fn grade_one(
+/// `experience`, `task`'s answer, decided by the task's verifiers.
+fn verdict_of(
     ctx: &Context,
-    model: &Model,
     task: &Task,
+    experience: Experience,
     judge: Option<&Judge>,
-    cancel: &CancelToken,
 ) -> Result<Probe, OrchestratorError> {
-    let experience = answer(ctx, model, task, cancel)?;
     let verifiers: Strongest = verifiers_for(ctx, task, &[], judge)?;
     let verification = verifiers.run(task, &experience)?;
     Ok(Probe {
