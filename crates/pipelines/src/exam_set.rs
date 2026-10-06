@@ -24,7 +24,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
-use splinter_core::source::SourceId;
+use splinter_core::experience::Task;
+use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_data::frozen::Ledger;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
@@ -74,7 +75,7 @@ pub struct ExamTask {
 }
 
 /// A frozen exam: its manifest as it is written beside the task set.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ExamSet {
     /// The manifest's own address, which names the exam.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -91,6 +92,30 @@ pub struct ExamSet {
     pub kinds: Vec<String>,
     /// The budget it was held to.
     pub max_tasks: usize,
+    /// What the exam is made of, so that the file alone carries it to
+    /// another state root: [`ExamSet::load`] installs it where it is missing.
+    #[serde(default)]
+    pub bundle: Bundle,
+}
+
+/// The tasks and source text of an exam, carried by its manifest.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct Bundle {
+    /// The tasks, in the manifest's order.
+    pub tasks: Vec<Task>,
+    /// The sources the tasks were written from, with their text.
+    pub sources: Vec<BundledSource>,
+}
+
+/// A source with the text of its parts.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BundledSource {
+    /// Its address, which installing it must reproduce.
+    pub id: SourceId,
+    /// Where it came from.
+    pub origin: Origin,
+    /// Its text parts: `(name, media type, text)`.
+    pub parts: Vec<(String, String, String)>,
 }
 
 impl ExamSet {
@@ -134,7 +159,45 @@ impl ExamSet {
                 source,
             })?;
         set.id = Digest::of(&bytes).hex().chars().take(16).collect();
+        set.install(ctx)?;
         Ok(set)
+    }
+
+    /// Puts what the exam is made of into `ctx`'s stores where it is not
+    /// already: the tasks, and the sources with the text of their parts. The
+    /// same content has the same address, so an exam made in another state
+    /// root is the same exam here.
+    fn install(&self, ctx: &Context) -> Result<(), OrchestratorError> {
+        let tasks = ctx.tasks();
+        for task in &self.bundle.tasks {
+            tasks.put(task)?;
+        }
+        let sources = ctx.sources();
+        for source in &self.bundle.sources {
+            if sources.contains(&source.id)? {
+                continue;
+            }
+            let parts = source
+                .parts
+                .iter()
+                .map(|(name, media_type, text)| PartContent {
+                    name: name.clone(),
+                    media_type: media_type.clone(),
+                    bytes: text.clone().into_bytes(),
+                })
+                .collect();
+            let captured = CapturedSource::new(source.origin.clone(), parts, ctx.clock())
+                .map_err(|e| OrchestratorError::Refused(format!("the exam's sources: {e}")))?;
+            if captured.source().id != source.id {
+                return Err(OrchestratorError::Refused(format!(
+                    "the exam's source {} does not install as itself: it holds a part that is not \
+                     text",
+                    source.id
+                )));
+            }
+            sources.put_source(&captured)?;
+        }
+        Ok(())
     }
 
     fn resolve(ctx: &Context, prefix: &str) -> Result<PathBuf, OrchestratorError> {
@@ -239,6 +302,18 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
         name: "exam".into(),
         members: chosen.iter().map(|(_, entry)| (*entry).clone()).collect(),
     })?;
+    let bundle = Bundle {
+        tasks: chosen
+            .iter()
+            .map(|(_, entry)| store.get(&entry.task))
+            .collect::<Result<_, _>>()?,
+        sources: request
+            .reservation
+            .exam
+            .iter()
+            .map(|id| bundled(ctx, id))
+            .collect::<Result<_, _>>()?,
+    };
     let mut exam = ExamSet {
         id: String::new(),
         task_set,
@@ -247,6 +322,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
         tasks: exam_tasks,
         kinds: request.kinds.to_vec(),
         max_tasks: request.max_tasks,
+        bundle,
     };
     let bytes = serde_json::to_vec_pretty(&exam).map_err(|source| OrchestratorError::Json {
         what: "the exam manifest".into(),
@@ -339,4 +415,25 @@ pub fn build(ctx: &Context, request: &NewExam<'_>) -> Result<ExamBuilt, Orchestr
         },
     )?;
     Ok(ExamBuilt { reservation, exam })
+}
+
+/// `id` with the text of its parts.
+fn bundled(ctx: &Context, id: &SourceId) -> Result<BundledSource, OrchestratorError> {
+    let store = ctx.sources();
+    let source = store.get_source(id)?;
+    let mut parts = Vec::with_capacity(source.parts.len());
+    for part in &source.parts {
+        let text = String::from_utf8(store.read_blob(&part.content)?).map_err(|_| {
+            OrchestratorError::Refused(format!(
+                "part {} of source {id} is not text, so the exam cannot carry it",
+                part.name
+            ))
+        })?;
+        parts.push((part.name.clone(), part.media_type.clone(), text));
+    }
+    Ok(BundledSource {
+        id: id.clone(),
+        origin: source.origin,
+        parts,
+    })
 }

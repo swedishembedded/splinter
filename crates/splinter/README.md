@@ -238,7 +238,9 @@ reserved family in every edition is left out of the sources the run reads from
 then on (the source records the parts as skipped, reserved), so no task, dataset
 or passage index can hold it, and the exam is written from a source of the
 reserved parts alone, within `--exam-tasks` tasks spread over the families, and
-frozen under `<state>/exams/<id>/` with a ledger that refuses a changed manifest.
+frozen under `<state>/exams/<id>/` with a ledger that refuses a changed manifest;
+the manifest carries the tasks and the text they were written from, so loading it in
+another state root installs the same exam there.
 `splinter exam-set create` makes such an exam from sources apart from any
 `learn`, clear of what the candidates named by `--not-trained-by` (and the
 releases they continue) were trained on; `splinter exam CANDIDATE --exam-set`

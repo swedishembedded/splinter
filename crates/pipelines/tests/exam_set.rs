@@ -145,6 +145,21 @@ fn the_exam_is_written_from_the_reserved_text_within_its_budget_and_frozen() {
     assert_eq!(loaded, exam);
     let file = exam.file(&ctx);
     assert_eq!(ExamSet::load(&ctx, file.to_str().unwrap()).unwrap(), exam);
+    // And it carries itself: loaded from its file in another state root, its
+    // tasks and the text they were written from are installed there.
+    let (_other_scratch, other) =
+        scratch_context("exam-set-other", Scripted::new(|_| String::new()), false);
+    let carried = ExamSet::load(&other, file.to_str().unwrap()).unwrap();
+    assert_eq!(carried.tasks, exam.tasks);
+    for t in &exam.tasks {
+        assert_eq!(
+            other.tasks().get(&t.task).unwrap(),
+            ctx.tasks().get(&t.task).unwrap()
+        );
+    }
+    for id in &reservation.exam {
+        assert!(other.sources().contains(id).unwrap());
+    }
     let text = std::fs::read_to_string(&file).unwrap();
     std::fs::write(&file, text.replace("\"max_tasks\": 9", "\"max_tasks\": 90")).unwrap();
     let refused = ExamSet::load(&ctx, &exam.id).unwrap_err().to_string();
