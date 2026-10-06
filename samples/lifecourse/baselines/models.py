@@ -322,9 +322,9 @@ class GradientBoosted:
     along the boosting path; the model is fitted on the training subjects
     outside the validation share."""
 
-    def __init__(self, inputs="all", max_depth=3):
-        self.inputs, self.max_depth = inputs, max_depth
-        self.name = f"gbs-{inputs}"
+    def __init__(self, inputs="all", max_depth=3, learning_rate=0.1, name="gbs-all"):
+        self.inputs, self.max_depth, self.learning_rate = inputs, max_depth, learning_rate
+        self.name = name
 
     def fit_predict(self, ctx):
         from sksurv.ensemble import GradientBoostingSurvivalAnalysis
@@ -337,12 +337,12 @@ class GradientBoosted:
         y = np.zeros(len(fit), dtype=[("event", bool), ("time", float)])
         y["event"], y["time"] = c_fit >= 0, t_fit
         model = GradientBoostingSurvivalAnalysis(
-            loss="coxph", n_estimators=GBS_TREES, learning_rate=0.1, max_depth=self.max_depth,
+            loss="coxph", n_estimators=GBS_TREES, learning_rate=self.learning_rate, max_depth=self.max_depth,
             subsample=0.5, min_samples_leaf=50, max_features=0.5, random_state=ctx.seed)
         model.fit(x_fit, y)
         scores = [partial_loglik(lp, t_val, c_val >= 0) for lp in model.staged_predict(x_val)]
         best = int(np.argmax(scores))
-        ctx.chosen.update(n_trees=best + 1, max_depth=self.max_depth, learning_rate=0.1, subsample=0.5,
+        ctx.chosen.update(n_trees=best + 1, max_depth=self.max_depth, learning_rate=self.learning_rate, subsample=0.5,
                           min_samples_leaf=50, max_features=0.5)
         lp_fit = next(lp for i, lp in enumerate(model.staged_predict(x_fit)) if i == best)
         lp_te = next(lp for i, lp in enumerate(model.staged_predict(x_te)) if i == best)
@@ -360,4 +360,7 @@ REGISTRY = {
     "logit-ipcw-all": lambda: LogisticIPCW("all", (5, 10, 15), "logit-ipcw-all"),
     "logit-ipcw-yearly-all": lambda: LogisticIPCW("all", range(1, 16), "logit-ipcw-yearly-all"),
     "gbs-all": GradientBoosted,
+    # The same model with a larger step: the first reaches its tree limit,
+    # so a faster learner is reported beside it, never chosen on test folds.
+    "gbs-fast-all": lambda: GradientBoosted("all", 3, 0.25, "gbs-fast-all"),
 }

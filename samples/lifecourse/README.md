@@ -70,7 +70,7 @@ every repeat of the partition and writes its out-of-fold predictions; the
 | `cs-cox-standard`, `cs-cox-all` | one such Cox model per cause, the others censoring, joined into cumulative incidence by the Aalen-Johansen formula | conventional risk factors; everything |
 | `logit-ipcw-standard`, `logit-ipcw-all` | logistic regression for death by 5, 10 and 15 years, weighted by the inverse probability of remaining uncensored, joined by a monotone interpolation | conventional risk factors; everything |
 | `logit-ipcw-yearly-all` | the same at every year from 1 to 15 | everything |
-| `gbs-all` | scikit-survival's gradient-boosted survival model (Cox loss) | everything |
+| `gbs-all`, `gbs-fast-all` | scikit-survival's gradient-boosted survival model (Cox loss), at two learning rates; the number of trees is chosen on the validation share | everything |
 
 Inputs are those of the arms: `standard` is the conventional risk factors of
 `src/concepts.rs`, `all` is every examination concept, the eating-time
