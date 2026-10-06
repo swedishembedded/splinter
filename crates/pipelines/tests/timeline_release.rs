@@ -260,6 +260,7 @@ fn the_released_file_loads_in_plain_brain_and_a_new_checkup_changes_the_risk() {
             t: checkup,
             var: "x1".into(),
             value: splinter_model::timeline::Value::Number(3.0),
+            unit: None,
         });
     later.entry = checkup;
     later.at_risk = vec![splinter_model::timeline::AtRisk {

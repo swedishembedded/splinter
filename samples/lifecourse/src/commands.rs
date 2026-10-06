@@ -682,6 +682,7 @@ mod tests {
             t: 51.0,
             var: "bmi".into(),
             value: Value::Number(30.0),
+            unit: None,
         });
         assert!(input_after_entry(&s), "a measurement after the examination");
         s.observations.pop();

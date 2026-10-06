@@ -85,6 +85,7 @@ pub fn after_checkup(subject: &Subject, checkup: &Checkup) -> Subject {
         t: at,
         var: checkup.var.clone(),
         value: Value::Number(checkup.value),
+        unit: None,
     });
     later.entry = at;
     let end = subject

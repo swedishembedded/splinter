@@ -76,6 +76,31 @@ pub struct Observation {
     pub var: String,
     /// The value.
     pub value: Value,
+    /// The unit a numeric `value` is stated in (`"mmol/L"`), when the source
+    /// states one. It is carried into the projected record unchanged, so a
+    /// model trained on the data records it and refuses another at
+    /// prediction; nothing here converts between units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+}
+
+/// The longest unit a record may state, as brain's timeline format limits it.
+pub const MAX_UNIT_LEN: usize = 32;
+
+/// Why `unit` cannot be recorded for a measurement: empty, longer than
+/// [`MAX_UNIT_LEN`], padded with whitespace or holding a control character.
+fn unit_problem(unit: &str) -> Option<&'static str> {
+    if unit.is_empty() {
+        Some("is empty")
+    } else if unit.chars().count() > MAX_UNIT_LEN {
+        Some("is longer than 32 characters")
+    } else if unit.trim() != unit {
+        Some("has surrounding whitespace")
+    } else if unit.chars().any(char::is_control) {
+        Some("holds a control character")
+    } else {
+        None
+    }
 }
 
 /// An event of one code at one time.
@@ -238,6 +263,17 @@ impl Record {
                 &o.value
             {
                 finite(who, &format!("observation {} value", o.var), *v)?;
+            }
+            if let Some(unit) = &o.unit {
+                if matches!(o.value, Value::Category(_)) {
+                    return Err(format!(
+                        "record: observation {} is a category and cannot have a unit",
+                        o.var
+                    ));
+                }
+                if let Some(why) = unit_problem(unit) {
+                    return Err(format!("record: the unit of observation {} {why}", o.var));
+                }
             }
         }
         for e in &self.events {
@@ -471,6 +507,42 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_unit_is_optional_numeric_only_and_held_to_brains_limits() {
+        let line = |obs: &str| {
+            format!(
+                r#"{{"subject_id":"a","source":"s","entry":1.0,"calendar_at_entry":2000.0,"observations":[{obs}]}}"#
+            )
+        };
+        let ok = Record::from_json_line(&line(
+            r#"{"t":1.0,"var":"ldl","value":3.1,"unit":"mmol/L"},{"t":1.0,"var":"crp","value":{"below":0.2},"unit":"mg/L"}"#,
+        ))
+        .unwrap();
+        assert_eq!(ok.observations[0].unit.as_deref(), Some("mmol/L"));
+        for (obs, why) in [
+            (
+                r#"{"t":1.0,"var":"s","value":"never","unit":"x"}"#,
+                "category",
+            ),
+            (r#"{"t":1.0,"var":"a","value":1,"unit":""}"#, "empty"),
+            (
+                r#"{"t":1.0,"var":"a","value":1,"unit":" kg"}"#,
+                "whitespace",
+            ),
+            (r#"{"t":1.0,"var":"a","value":1,"unit":"k\tg"}"#, "control"),
+            (
+                r#"{"t":1.0,"var":"a","value":1,"unit":"123456789012345678901234567890123"}"#,
+                "longer",
+            ),
+        ] {
+            let err = Record::from_json_line(&line(obs)).unwrap_err();
+            assert!(err.contains(why), "{err}");
+        }
+        // No unit, no change: the address of a record without one is what it was.
+        let plain = Record::from_json_line(&line(r#"{"t":1.0,"var":"a","value":1}"#)).unwrap();
+        assert!(!serde_json::to_string(&plain).unwrap().contains("unit"));
+    }
 
     const LINE: &str = r#"{"subject_id":"alice-17","group_id":"home-4","weight":2.5,"source":"cycle-a","entry":50.0,"calendar_at_entry":2003.5,
         "observations":[{"t":50.0,"var":"sbp","value":131},{"t":50.0,"var":"crp","value":{"below":0.2}},{"t":50.0,"var":"smoking","value":"never"}],

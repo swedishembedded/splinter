@@ -68,6 +68,7 @@ fn number(t: f64, var: &str, value: f64) -> Observation {
         t,
         var: var.into(),
         value: Value::Number(value),
+        unit: None,
     }
 }
 
@@ -76,6 +77,7 @@ fn category(t: f64, var: &str, level: &str) -> Observation {
         t,
         var: var.into(),
         value: Value::Category(level.into()),
+        unit: None,
     }
 }
 

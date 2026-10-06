@@ -228,6 +228,7 @@ pub fn project_history(
                 t: i.t,
                 var: format!("{INTERVENTION_PREFIX}{}", i.code),
                 value: Value::Category(i.assignment.label().to_owned()),
+                unit: None,
             });
         } else {
             count(Dropped::InterventionAfterPrediction);

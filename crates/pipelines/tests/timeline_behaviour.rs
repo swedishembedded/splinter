@@ -190,6 +190,7 @@ fn after_checkup(s: &Subject, x1: f64) -> Subject {
         t: at,
         var: "x1".into(),
         value: Value::Number(x1),
+        unit: None,
     });
     later.entry = at;
     later.at_risk = vec![AtRisk {

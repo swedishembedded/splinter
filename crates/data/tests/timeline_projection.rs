@@ -461,3 +461,32 @@ fn a_planted_leak_fails_the_write_with_a_count_and_leaves_no_file() {
         "nothing was written"
     );
 }
+
+#[test]
+fn a_stated_unit_travels_from_the_file_through_the_episode_into_the_record() {
+    let root = root("units");
+    let mut line = subject("p1", 1.0);
+    line["observations"][1] = json!({"t": 50.0, "var": "sbp", "value": 130, "unit": "mmHg"});
+    let store = import(
+        &root,
+        "a.jsonl",
+        &[line],
+        &spec("cohort", UsagePolicy::ResearchOnly),
+    );
+    let projection = project(&store, &ProjectionSpec::at_entry()).unwrap();
+    let units: BTreeMap<&str, Option<&str>> = projection.records[0]
+        .record
+        .observations
+        .iter()
+        .map(|o| (o.var.as_str(), o.unit.as_deref()))
+        .collect();
+    assert_eq!(units["sbp"], Some("mmHg"));
+    assert_eq!(
+        units["weight"], None,
+        "a variable that states none stays unitless"
+    );
+    // The written line is timeline-v1 as brain reads it, unit included.
+    let text = serde_json::to_string(&projection.records[0].record).unwrap();
+    assert!(text.contains(r#""unit":"mmHg""#), "{text}");
+    assert!(!text.contains(r#""unit":null"#), "{text}");
+}

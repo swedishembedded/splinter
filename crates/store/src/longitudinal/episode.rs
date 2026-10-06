@@ -103,6 +103,8 @@ struct Header {
 struct Sample {
     t: f64,
     value: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    unit: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -197,6 +199,7 @@ pub(super) fn write_history(
                 .map(|o| Sample {
                     t: o.t,
                     value: o.value.clone(),
+                    unit: o.unit.clone(),
                 })
                 .collect(),
         };
@@ -329,6 +332,7 @@ pub(super) fn read_history(snapshot: &Snapshot, id: RecordId) -> Result<History>
                     t: s.t,
                     var: var.to_owned(),
                     value: s.value,
+                    unit: s.unit,
                 }));
         }
     }

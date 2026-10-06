@@ -142,6 +142,7 @@ pub fn observations(days: &[DietDay], entry: f64, out: &mut Vec<Observation>) {
             t: entry,
             var: var.into(),
             value: Value::Number(v),
+            unit: None,
         })
     };
     push("diet:first_meal_h", mean(&|d| d.first_h));
