@@ -53,6 +53,58 @@ All arms share the encoding, the competing-risk piecewise-exponential
 likelihood, the training procedure (early stopping on a tenth of the training
 subjects) and the evaluation.
 
+## Conventional baselines
+
+Secondary comparators, never one of the criteria and never scored on the
+locked test. `baselines/run.py` fits each of these in Python
+(scikit-survival, scikit-learn) on the training subjects of every fold of
+every repeat of the partition and writes its out-of-fold predictions; the
+`external` command scores them with the arms' own metrics, so that
+`compare` can set any of them beside `horizon`, `additive`, `standard` and
+`age-sex` on identical folds.
+
+| Baseline | Model | Inputs |
+|---|---|---|
+| `km` | Kaplan-Meier survival and Aalen-Johansen incidence of the training subjects, the same for everyone | none |
+| `cox-net-standard`, `cox-net-all` | elastic-net Cox (the ridge-like and the mixed penalty both tried), Breslow baseline | conventional risk factors; everything |
+| `cs-cox-standard`, `cs-cox-all` | one such Cox model per cause, the others censoring, joined into cumulative incidence by the Aalen-Johansen formula | conventional risk factors; everything |
+| `logit-ipcw-standard`, `logit-ipcw-all` | logistic regression for death by 5, 10 and 15 years, weighted by the inverse probability of remaining uncensored, joined by a monotone interpolation | conventional risk factors; everything |
+| `logit-ipcw-yearly-all` | the same at every year from 1 to 15 | everything |
+| `gbs-all` | scikit-survival's gradient-boosted survival model (Cox loss) | everything |
+
+Inputs are those of the arms: `standard` is the conventional risk factors of
+`src/concepts.rs`, `all` is every examination concept, the eating-time
+features, the years since each recalled diagnosis and the recalled weights.
+Missing values are imputed with the training subjects' median, skewed
+non-negative measurements are log-transformed, columns are scaled, answers
+are one-hot encoded and a missingness indicator is added, all from the
+training subjects of the fold only. Every hyperparameter (penalty,
+regularisation, number of trees) is chosen on a validation share held out of
+the training subjects, and each fold's choice is recorded in its `.meta.json`
+and in the baseline's `manifest.json` with the digests of the timelines and
+the partition, the seed and the software versions. A horizon of the logistic
+model is fitted on the training subjects of the cycles followed that long,
+the rule the evaluation applies. Training is unweighted, as the arms'
+is; the metrics are survey-weighted, as everywhere.
+
+A prediction file is one JSON line per test subject, `subject_id`, `cif` (the
+predicted probability of death from any cause by year 1 to 15) and optionally
+`cause_cif` (the same for each cause). `external` refuses a file whose
+subjects are not exactly the fold's, or in which a value is not a finite,
+non-decreasing probability. Predictions are read as linear between years and
+held after year 15. The scores are kept beside the predictions, not under
+`runs/`.
+
+```bash
+python -I baselines/run.py --data <data> --out <data>/baselines --jobs 8   # all baselines, all folds
+lifecourse external --data <data> --baseline gbs-all                      # score its prediction files
+lifecourse compare  --data <data> --a horizon --b external:gbs-all
+lifecourse compare  --data <data> --a external:cox-net-all --b additive
+```
+
+`report` adds a row per scored baseline to its cross-validation section.
+`python -I baselines/test_baselines.py` holds the harness's own checks.
+
 ## Protocol
 
 Fixed before the first model was trained, and pinned by digest
@@ -97,7 +149,8 @@ lifecourse build   --nhanes <dir> --mortality <dir> --data <out>
 lifecourse freeze  --data <out>
 lifecourse cv      --data <out> --arm horizon            # every fold; --repeat/--fold to choose
 lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
-lifecourse compare --data <out> --a horizon --b standard
+lifecourse compare --data <out> --a horizon --b standard        # either side may be external:<baseline>
+lifecourse external --data <out> --baseline km                  # secondary: score a baseline's predictions
 lifecourse final   --data <out> --arm horizon            # once; --reason to score again
 lifecourse amend   --data <out>                                 # pin the post-freeze amendments
 lifecourse report  --data <out>
