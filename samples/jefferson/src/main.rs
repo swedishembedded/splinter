@@ -13,6 +13,7 @@
 //! ```text
 //! corpus     parse the letters, group the editions' printings, split by family
 //! materials  write the training letters and his own works as the directory Splinter learns from
+//!            (`--exam-pool` writes the letters it leaves out instead, to reserve an exam from)
 //! tasks      compile the training set and the frozen exam from the corpus
 //! exam       ask one model (base, or base plus adapter) every exam question
 //! train      fine-tune a LoRA adapter on the training set, through Splinter's trainer
@@ -359,6 +360,21 @@ fn materials_command(args: &[String]) -> anyhow::Result<()> {
     let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
     let letters = corpus::load_letters(&resources)?;
     let family = corpus::families(&letters);
+    if args.iter().any(|a| a == "--exam-pool") {
+        // The families the materials hold none of, for reserving an exam
+        // from when what is examined was trained on the materials.
+        let pool = corpus::exam_pool(&letters, &family, seed);
+        std::fs::create_dir_all(out.join("letters"))?;
+        for (name, text) in &pool {
+            std::fs::write(out.join("letters").join(name), text)?;
+        }
+        println!(
+            "{} exam-pool letters written under {}",
+            pool.len(),
+            out.display()
+        );
+        return Ok(());
+    }
     let works = corpus::own_works(&resources)?;
     let work_texts: Vec<&str> = works.iter().map(|(_, text)| text.as_str()).collect();
     // Nothing the directory holds may be one text with an exam letter, in any

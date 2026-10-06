@@ -57,6 +57,9 @@ one of Jefferson's own works prints too is not a letter of the corpus, and a let
 that Splinter's overlap rule would call one text with an exam letter is held back;
 the command refuses to write when a work is, and prints how many exam families share
 runs of words with what it wrote.
+`materials --exam-pool` writes the letters the materials leave out (one printing of each
+family) instead: the pool an exam is reserved from, with `splinter exam-set create`, when the
+models to be examined were trained on the materials.
 Splinter makes its own held-out split from what it is given, by group of
 overlapping text, so its exam and the independent one are different letters.
 
