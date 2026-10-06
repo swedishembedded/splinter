@@ -41,6 +41,7 @@
 
 #![warn(missing_docs)]
 
+pub mod abstain;
 pub mod ask;
 pub mod author;
 pub mod budget;

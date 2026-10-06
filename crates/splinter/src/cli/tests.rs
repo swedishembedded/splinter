@@ -697,3 +697,19 @@ fn passages_are_a_share_in_zero_to_one_not_zero() {
     assert!(parse(&["learn", "docs", "--with-passages", "1.5"]).is_err());
     assert!(parse(&["learn", "docs", "--with-passages", "most"]).is_err());
 }
+
+#[test]
+fn abstentions_are_taken_from_the_records_given_passages() {
+    let Command::Learn(learn) = command(&[
+        "learn",
+        "docs",
+        "--with-passages",
+        "0.5",
+        "--abstain",
+        "0.1",
+    ]) else {
+        panic!("learn");
+    };
+    assert_eq!(learn.abstain, Some(0.1));
+    assert!(parse(&["learn", "docs", "--abstain", "0.1"]).is_err());
+}

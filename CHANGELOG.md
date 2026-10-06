@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `learn --abstain SHARE` (with `--with-passages`): that share of the dialogue records become the
+  writer's abstentions, for a retrieval miss or a question beyond the writings, written by the
+  base as the writer, admitted by code, and kept in the family of the record they were made from.
 - `learn --describe-voice` and `dataset build --describe-with REF`: the writer's chunks are asked
   for by a model-written description of their content (20 to 60 words, refused when it carries
   the passage's phrasing; the chunk keeps the heading-and-opening request otherwise), kept per

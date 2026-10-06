@@ -14,7 +14,7 @@ splinter "<sentence>"             the front door: a sentence becomes one of the 
 splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
-                         [--with-passages SHARE] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--bf16-base]
+                         [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--bf16-base]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -311,6 +311,18 @@ the passage the task was written from among them for four in five, the answer
 unchanged. A policy trained only closed-book cannot tell the passage that holds
 the answer from one that merely resembles the question: measured, passages helped
 where retrieval found the evidence and hurt exactly as much where it did not.
+Each passage is shown under its part and section, so an answer can name where it
+stands. `--abstain SHARE` makes that share of *all* the dialogue records
+abstentions (so at most `--with-passages`): the base model, as the writer, says
+in two to four sentences that the writings before them do not establish an
+answer - two thirds of them for a question whose evidence retrieval missed, a
+third for a question that lies beyond the writings (about what came after the
+writer's lifetime), asked of the passages retrieved for it - admitted only
+when the reply is brief, in the first person and states no number the question
+and the passages do not hold. An abstention is made from a dialogue record and
+keeps its experience and family, so it is held out and trained with them; a
+record no admissible abstention is written for keeps its answer. About a tenth
+of the data is the working figure; abstentions are never the majority.
 
 The `author` stage teaches the writer's own voice. For the kinds whose
 reference is a passage the writer wrote (`advise`, `converse`), the task's

@@ -9,7 +9,7 @@
 //! The `learn` request the command line asks for.
 
 use splinter_sdk::learn::{ExamPlan, LearnRequest};
-use splinter_sdk::raft::{PassageShare, DEFAULT_EVIDENCE_SHARE};
+use splinter_sdk::raft::PassageShare;
 use splinter_sdk::train::Tuning;
 use splinter_sdk::vocabulary::role::Role;
 
@@ -34,9 +34,9 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
             dev_tasks_per_family: args.dev_tasks_per_family,
             resamples: args.exam_resamples.map(|n| n as usize),
         },
-        passages: args.with_passages.map(|records| PassageShare {
-            records,
-            with_evidence: DEFAULT_EVIDENCE_SHARE,
+        passages: args.with_passages.map(|records| match args.abstain {
+            Some(abstentions) => PassageShare::with_abstentions(records, abstentions),
+            None => PassageShare::evidence(records),
         }),
         kinds: args.kinds,
         budget: args.budget,

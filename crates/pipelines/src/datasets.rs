@@ -34,7 +34,7 @@ use splinter_store::lineage::DatasetLineage;
 
 use crate::describe::{describe, DescribeRequest, Described};
 use crate::grouping::{assign_groups, part_families};
-use crate::raft::{with_passages, PassageShare};
+use crate::raft::{with_passages, Abstainer, PassageShare};
 use crate::retrieval::Retrieval as PassageSearch;
 use crate::variants::refuse_variants;
 use splinter_orchestrator::context::Context;
@@ -300,8 +300,10 @@ impl From<StoredDataset> for Built {
 pub struct Passages<'a> {
     /// The passages of the sources, searched.
     pub retrieval: &'a PassageSearch<'a>,
-    /// Which records get them, and how many hold the evidence.
+    /// Which records get them, and what each teaches.
     pub share: PassageShare,
+    /// Writes the abstentions the share asks for, when it asks for any.
+    pub abstainer: Option<&'a dyn Abstainer>,
 }
 
 /// Projects `request.sets` through `request.view` and stores the dataset.
@@ -468,7 +470,13 @@ pub fn build_with(
         projection = projection.with_system_prompt(prompt);
     }
     if let Some(passages) = passages {
-        projection = with_passages(ctx, projection, &passages.share, passages.retrieval)?;
+        projection = with_passages(
+            ctx,
+            projection,
+            &passages.share,
+            passages.retrieval,
+            passages.abstainer,
+        )?;
     }
     assign_groups(ctx, &corpus, &mut projection)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;

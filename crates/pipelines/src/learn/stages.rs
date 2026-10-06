@@ -19,9 +19,7 @@ use std::time::Instant;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::role::Role;
 use splinter_core::source::SourceId;
-use splinter_data::holdout::MIN_SAMPLES;
 use splinter_knowledge::survey::survey;
-use splinter_orchestrator::error::io;
 use splinter_orchestrator::pipeline::{FnStage, Pipeline, StageEnd};
 use splinter_orchestrator::runs::{to_json, Recorder};
 use splinter_orchestrator::{Context, OrchestratorError};
@@ -29,9 +27,10 @@ use splinter_store::experiences::SetId;
 use splinter_store::tasks::TaskSetId;
 use std::collections::BTreeMap;
 
+use super::dataset_stage::dataset_stage;
 use super::exam_stages::{exam_set_stage, exam_stage, reserve_stage};
 use super::report::{LearnReport, Planned, PolicyStage, PolicyUsed};
-use super::{records_at_share, tokens_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
+use super::{records_at_share, DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use crate::author::{author, kind_authors, AuthorRequest, Authored};
 use crate::budget::StageDeadlines;
 use crate::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
@@ -39,17 +38,12 @@ use crate::curriculum::frontier::{select_frontier, PassAtK};
 use crate::curriculum::queue;
 use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
-use crate::datasets::{
-    build_with, examples_in, supervised_tokens_in, BuildRequest, Built, Passages, ViewName,
-    VoiceBuild, DEFAULT_MIN_STRENGTH,
-};
-use crate::describe::DescribeRequest;
+use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::exam_set::ExamSet;
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
 use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
 use crate::release::{release, ReleaseRequest};
-use crate::retrieval::{library_of, Retrieval};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
 use crate::tasks::{generate, Generation};
@@ -105,7 +99,7 @@ pub(super) struct LearnState<'a> {
     pub(super) report: LearnReport,
     /// When the run began: what the stage deadlines are counted from.
     started: Instant,
-    stage_deadlines: StageDeadlines,
+    pub(super) stage_deadlines: StageDeadlines,
     /// The teacher answers every task and the student makes no attempt.
     distill: bool,
     /// pass@k's parameters; `None` keeps every task.
@@ -125,25 +119,25 @@ pub(super) struct LearnState<'a> {
     pub(super) exam_set: Option<ExamSet>,
     /// The datasets trained on: the dialogues, then the writer's own text
     /// when the run has it.
-    datasets: Vec<String>,
+    pub(super) datasets: Vec<String>,
     /// The rehearsal dataset, when the run built one.
     rehearsal: Option<String>,
-    records: usize,
+    pub(super) records: usize,
     /// What the training reads: [`examples_in`] the datasets.
-    examples: usize,
+    pub(super) examples: usize,
     pub(super) candidate: Option<String>,
     /// The judge is named and measured, or no task needs one.
     judge_prepared: bool,
     /// The weakest decision the training set counts: judged verdicts too
     /// when a measured judge decides the kinds nothing else can.
-    min_strength: Strength,
+    pub(super) min_strength: Strength,
 }
 
 impl<'a> LearnState<'a> {
     /// The system prompt the policy is trained and asked under: the persona
     /// the request names, else the one the plan found in the goal; `None`
     /// keeps the default.
-    fn system_prompt(&self) -> Option<String> {
+    pub(super) fn system_prompt(&self) -> Option<String> {
         self.persona().map(splinter_core::prompt::persona_prompt)
     }
 
@@ -162,7 +156,7 @@ impl<'a> LearnState<'a> {
     /// The share of the training examples that is the writer's own text:
     /// what the request names, else [`DEFAULT_VOICE_SHARE`] when the policy
     /// learns to think like a person and none otherwise.
-    fn voice_share(&self) -> f64 {
+    pub(super) fn voice_share(&self) -> f64 {
         self.learn.voice.unwrap_or(if self.persona().is_some() {
             DEFAULT_VOICE_SHARE
         } else {
@@ -618,117 +612,6 @@ fn select_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) ->
     Ok(StageEnd::done(summary))
 }
 
-fn dataset_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
-    let Some(selected) = &st.report.select else {
-        unreachable!("the dataset stage follows the select stage")
-    };
-    let request = BuildRequest {
-        sets: vec![selected.experience_set.clone()],
-        view: ViewName::SftFinal,
-        strip: None,
-        min_strength: Some(st.min_strength),
-        system_prompt: st.system_prompt(),
-        export_only: false,
-        limit: None,
-        voice: VoiceBuild::default(),
-    };
-    // Passages of the run's own sources, when a share of the records is to
-    // carry them: the embedding model is loaded for it and the index kept.
-    let embedder;
-    let library;
-    let retrieval;
-    let passages = match st.learn.passages {
-        Some(share) => {
-            embedder = ctx.embedder()?;
-            let ids: Vec<String> = st.source_ids.iter().map(ToString::to_string).collect();
-            library = library_of(ctx, &ids, &*embedder)?.1;
-            retrieval = Retrieval {
-                library: &library,
-                embedder: &*embedder,
-                passages: PASSAGES_SHOWN,
-                rerank: None,
-            };
-            Some(Passages {
-                retrieval: &retrieval,
-                share,
-            })
-        }
-        None => None,
-    };
-    let built = match build_with(ctx, &request, passages.as_ref()) {
-        Ok(built) => built,
-        Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
-            return Ok(StageEnd::halt(
-                "no experience passed verification, so there is nothing to train on",
-            ));
-        }
-        Err(e) => return Err(e),
-    };
-    st.datasets = vec![built.dataset.to_string()];
-    st.records = built.records;
-    st.examples = examples_in(&built.path).map_err(io(&built.path))?;
-    // The writer's own text beside the dialogues: tokens enough to make it the
-    // share asked, spread over all the sources, written as the persona's.
-    let budget = tokens_at_share(
-        supervised_tokens_in(ctx, &built.path).map_err(io(&built.path))?,
-        st.voice_share(),
-    );
-    let voice = if budget > 0 {
-        let voice = build_with(
-            ctx,
-            &BuildRequest {
-                view: ViewName::Voice,
-                min_strength: None,
-                system_prompt: None,
-                voice: VoiceBuild {
-                    writer: st.persona().map(str::to_string),
-                    token_budget: Some(budget),
-                    describe: st.learn.describe_voice.then(|| DescribeRequest {
-                        generator: st.learn.generator.clone(),
-                        deadline: st.stage_deadlines.teach,
-                        cancel: run.cancel_token(),
-                    }),
-                    ..VoiceBuild::default()
-                },
-                ..request
-            },
-            None,
-        )?;
-        st.datasets.push(voice.dataset.to_string());
-        st.examples += examples_in(&voice.path).map_err(io(&voice.path))?;
-        Some(voice)
-    } else {
-        None
-    };
-    let summary = to_value(&DatasetStage {
-        built: &built,
-        voice: voice.as_ref(),
-    })?;
-    st.report.dataset = Some(built);
-    st.report.voice = voice;
-    Ok(if st.records < MIN_SAMPLES {
-        StageEnd::stop(
-            summary,
-            format!(
-                "{} record(s) passed; training holds records out for scoring and needs at \
-                 least {MIN_SAMPLES}",
-                st.records
-            ),
-        )
-    } else {
-        StageEnd::done(summary)
-    })
-}
-
-/// What the dataset stage records: the dialogue dataset, and the writer's
-/// own text beside it when the run has it.
-#[derive(serde::Serialize)]
-struct DatasetStage<'a> {
-    #[serde(flatten)]
-    built: &'a Built,
-    voice: Option<&'a Built>,
-}
-
 /// The base model's own answers to general tasks, as many records as make
 /// the rehearsal share of the examples, so a rehearsed record is drawn
 /// about as often as a dialogue answer; the train stage mixes them in at
@@ -778,9 +661,6 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     st.report.candidate = Some(candidate);
     Ok(StageEnd::done(summary))
 }
-
-/// How many passages a training record carries when it is given any.
-const PASSAGES_SHOWN: usize = 4;
 
 fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
     let Some(id) = st.candidate.clone() else {

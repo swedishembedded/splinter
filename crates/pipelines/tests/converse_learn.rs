@@ -553,6 +553,7 @@ fn a_share_of_the_training_records_carries_passages_in_the_prompt() {
         Some(PassageShare {
             records: 1.0,
             with_evidence: 1.0,
+            ..PassageShare::default()
         }),
         None,
     );

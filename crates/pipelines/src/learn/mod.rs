@@ -56,6 +56,7 @@
 //! nothing to work on or the budget is spent; `--dry-run` resolves the
 //! plan and writes nothing.
 
+mod dataset_stage;
 mod exam_stages;
 mod report;
 mod stages;
@@ -242,6 +243,9 @@ pub fn learn(
         request.pass_at_k.validate()?;
     }
     request.quotas.validate()?;
+    if let Some(share) = &request.passages {
+        share.validate()?;
+    }
     if let Some(share) = request.voice {
         if !(0.0..1.0).contains(&share) {
             return Err(OrchestratorError::Refused(format!(

@@ -271,6 +271,13 @@ pub struct LearnArgs {
     /// does not. Needs the embedding model.
     #[arg(long, value_name = "SHARE", value_parser = share)]
     pub with_passages: Option<f64>,
+    /// Make this share of all the dialogue records abstentions: the writer,
+    /// shown passages that do not hold the answer or asked what lies beyond
+    /// the writings, says so in their own voice (two thirds retrieval misses,
+    /// a third questions after their time). Taken from the records given
+    /// passages, so it is at most --with-passages.
+    #[arg(long, value_name = "SHARE", value_parser = share, requires = "with_passages")]
+    pub abstain: Option<f64>,
     /// Who the policy is to become, when it is to think like a person: its
     /// training records open with a system prompt saying so, and it is asked
     /// under that prompt afterwards (default: the persona the plan finds in
