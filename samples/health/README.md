@@ -19,11 +19,11 @@ trains in the shared device lock if the device is shared.
 cargo build --release -p splinter-health
 H="target/release/splinter-health --dir health-run"
 
-$H synth                                  # source file + declaration: seed, digest, usage terms, outcomes supplied
+$H synth                                  # source file + declaration: seed, digest, usage terms, outcomes supplied (40000 participants)
 $H import                                 # one immutable episode per participant, under opaque keys
 $H split                                  # train / validation (early stopping) / test; leakage-checked, stored with its seed
 $H train --as baseline --steps 3 --max-tokens 16   # an untrained baseline: the first champion
-$H train --as v1 --max-tokens 16                    # the candidate, calibrated at 5 and 10 years
+$H train --as v1 --max-tokens 16                    # the candidate, calibrated at 5 and 10 years (brain's logistic default)
 $H eval --as e1 --candidate v1 --champion baseline  # scored on the test part, requirements registered first
 $H release --evaluation e1 --unrestricted           # released only if the gate passes (exit 3: rejected)
 
@@ -32,6 +32,7 @@ $H eval --as e2 --candidate weak --champion release:health
 $H release --evaluation e2 --unrestricted           # rejected and recorded; the alias stays
 
 $H predict                                # the released file, loaded by plain brain: forecast a patient history, append a checkup, forecast again
+$H preregistration                        # the cohort, seeds and calibration rule fixed before the experiment
 $H lineage                                # release -> run -> datasets -> episodes -> source lines -> file digests
 ```
 
@@ -44,6 +45,7 @@ $H train --as v3 --visits 4 --backbone attention                   # attention o
 $H train --as v4 --next-events dx,death:cvd --next-events-weight 0.5   # which event comes first, as a training signal
 $H train --as v5 --forecasts 2 --forecast-weight 0.5               # a head for later measurements
 $H train --as v6 --calibrate-at 5,10 | --no-calibration           # which horizons are calibrated, or none
+$H train --as v7 --calibration-kind venn-abers --calibration-units 6000   # another calibrator, or more calibration units
 ```
 
 A seed that is not given (`synth`, `split`, `train`, `eval`) is drawn and
@@ -73,8 +75,13 @@ training.
 Calibration comes first. The validation part is divided by participant group
 into the units early stopping reads and the units the calibration is fitted
 on, so the calibrators never see what the weights were chosen on and neither
-sees a test unit. A (code, horizon) with too few validation events is not
-calibrated, and is listed in the training report and in the lineage.
+sees a test unit. The calibration gets at least 3000 units when the part
+allows (`--calibration-units`; never less than half of the part, and early
+stopping keeps at least a quarter), and brain's default kind, a logistic map of
+the raw risk with no interval, unless `--calibration-kind` says otherwise. The
+candidate record keeps the calibration units and the validation events behind
+every code and horizon; a horizon with too few of them is not calibrated, and
+is listed with its reason in the training report and in the lineage.
 
 On the test part only, for the candidate and the champion on the same units
 (a different unit set, a test part of another split, or a model that was fitted
@@ -83,7 +90,7 @@ survival arithmetic (brain's own `TimelineModel::evaluate` for each outcome
 code; the all-cause union and the paired differences are computed here):
 
 - per outcome code and for the all-cause union, per horizon: Uno's C,
-  time-dependent AUC, IPCW Brier, calibration (slope, intercept, observed over
+  time-dependent AUC, IPCW Brier, calibration (slope, intercept in the large, observed over
   expected, expected calibration error against the Aalen-Johansen observed
   risk), and the integrated Brier score over a grid;
 - the held-out event likelihood;
@@ -91,47 +98,87 @@ code; the all-cause union and the paired differences are computed here):
   that resamples whole groups (the keyed group id), not records;
 - the same integrated Brier difference on named subgroups;
 - calibration is judged on the calibrated risk where the model has one at that
-  code and horizon and on the raw risk otherwise, and the evaluation record says
-  which for each; a horizon brain declared uncalibrated has no calibration numbers
-  at all, so its requirement fails as unmeasured, never as zero;
+  code and horizon and on the raw risk otherwise (a horizon the validation data
+  could not support is left raw and judged raw), and the evaluation record says
+  which for each horizon, with the test events it was judged on;
 - serving, from the shipped file unpacked by the system `tar` and loaded by
   plain brain: its predictions against the model that was scored on every test
   unit, and against the model as trained on probe units; brain's batched
   forecast of patient histories against one forecast per history; the share of
   test units whose support score is above the edge of the training support
   (units `brain serve` would withhold an answer for); and that every served
-  probability is finite and inside [0, 1], intervals are ordered, survival
-  never rises and cumulative incidence never falls.
+  probability is finite and inside [0, 1], intervals (where the calibrator has
+  them) are ordered, survival never rises and cumulative incidence never falls.
 
 A horizon with fewer than ten events is absent, never zero. The requirements
 are data written before scoring and registered in the evaluation: the all-cause
 integrated Brier difference and the held-out likelihood must improve (interval
-excludes zero), calibration must lie in bands at every judged horizon (slope
-0.7 to 1.4, intercept -0.5 to 0.5, observed over expected 0.8 to 1.25, ECE at
-most 0.05), no subgroup may get worse by more than 0.002, the served file must
-reproduce the trained one and a batch must equal single requests, at most a
-tenth of the test units may be ones the support would withhold, every served
-probability and curve must be valid, and the terms must permit the release asked
-for. A
+excludes zero), calibration must lie in the bands below at every JUDGED horizon,
+no subgroup may get worse by more than 0.002, the served file must reproduce
+the trained one and a batch must equal single requests, at most a tenth of the
+test units may be ones the support would withhold, every served probability and
+curve must be valid, and the terms must permit the release asked for. A
 candidate that fails any is rejected, recorded, and leaves the alias where it
 was.
 
-With calibration on half of the validation part (840 units at the default
-cohort size), the candidate trained with `--seed 1` passes performance, retention and
-serving and is rejected by one calibration band: the all-cause intercept at the
-first horizon, judged on the raw risk because brain calibrates outcome codes,
-not their union, lies just outside its band. `--seed 2` is rejected on the
-calibrated risk of both causes at the first horizon. The bands were not changed
-to make a run pass; a larger cohort (`synth --n`) or a lower-variance
-calibration is what would.
+## Pre-registration: the calibration rule of the release gate
 
-The bands are a design choice and the test is finite: with these defaults a
-candidate trained with another seed can miss a band by a little and be
-rejected, which is the gate working. Every run states the seeds it used, so it
-can be repeated; the integration tests train twice and require
-identical data membership, configuration, lineage and metrics.
+This rule, the cohort and the seeds were fixed in code (`src/steps.rs`,
+`src/synth.rs`, `splinter-eval`'s `TimelinePlan`) and written here before the
+experiment was run, and are not changed after seeing a result.
+
+Why. A calibration band applied to a point estimate is only as good as the
+events behind the estimate. The recalibration slope of a model that is exactly
+calibrated spreads by a tenth to a fifth on a few hundred events, so on a test
+part with tens of events the band is dominated by noise and rejects good
+models, and passes bad ones, at random; a calibrator fitted on a few dozen
+events is as noisy. The earlier gate judged every horizon of a test part of
+about 1800 units and rejected candidates for that reason. The rule below
+judges a horizon only where the test part can tell, and says so where it
+cannot.
+
+1. Calibration uses brain's default kind (logistic) unless the request says
+   otherwise. The validation part is divided between early stopping and
+   calibration so that calibration gets at least 3000 units when the cohort
+   allows (configurable); the calibration units and the events per code and
+   horizon are recorded in the candidate record.
+2. A (code, horizon) is JUDGED only if the test part holds at least 200 events
+   of that code by that horizon (`--min-test-events`). Where it is, the bands
+   apply to the point estimates: recalibration slope in [0.7, 1.4], observed
+   over expected in [0.8, 1.25], expected calibration error at most 0.05, and
+   the intercept at the average risk (`intercept_in_the_large`) in [-0.5, 0.5].
+3. A horizon with fewer test events is not judged and is recorded as
+   UNCERTIFIED: not zero, not failed. It is not exposed as a calibrated risk
+   output of the release. The release manifest records the certified horizons
+   per code; `predict` gives calibrated values only at those, and the raw risk
+   with a note elsewhere.
+4. The REQUIRED pairs must be certified for a release: by default the 5-year
+   horizon of every outcome code (`--require`). A required pair the test part
+   cannot judge for lack of events fails closed: the candidate is rejected with
+   that reason, so a cohort too small to certify cannot release.
+5. Everything else in the gate (performance, retention, serving, policy) is
+   unchanged.
+
+The cohort is `synth`'s default of 40000 participants, large enough that the
+required horizons are certifiable (the test part is 30 percent of it; the
+events of each code by each horizon are counted on the test part and kept in
+the evaluation record). The seeds are {1, 2, 3, 4, 5}, the training seed
+(`train --seed`); the data (`synth --seed 7`), the split (`split --seed 3`)
+and the bootstrap seed are fixed. Each seed is trained, evaluated against the baseline champion and put through a release
+attempt, in a run directory of its own, and every outcome is reported, released
+or rejected. Every run states the seeds it used, so it can be repeated; the
+integration tests train twice and require identical data membership,
+configuration, lineage and metrics. A candidate rejected by a band is the gate
+working: the bands are not changed to make a run pass.
 
 ## Predict: a patient history
+
+Only certified horizons carry calibrated values. `predict` reads the release
+manifest's certified horizons and removes the calibrated risk elsewhere. A
+consumer that loads the file with plain brain (`brain serve`) is not held to
+the manifest: brain answers a calibrated risk at every horizon its
+`calibration.json` holds, so such a consumer must read the certified horizons
+from the manifest itself.
 
 `predict` unpacks the released file with the system `tar`, loads it with brain
 alone and sends brain's patient-history format
@@ -142,9 +189,10 @@ and the as-of time moved to it; nothing is kept between calls. The report prints
 both forecasts as brain returns them: the as-of time, the model's identity (the
 digests of the weights and the configuration, the brain version), what the
 history covered and which variables it lacked, the curves over the model's knots,
-the risk at each requested horizon (raw, and calibrated with its Venn-Abers
-interval only where the model was calibrated for exactly that horizon, otherwise
-those keys are absent), the support assessment with its warnings, the data-quality
+the risk at each requested horizon (raw, and calibrated, with an interval
+where the calibrator has one, only where the release certified that code and
+horizon; elsewhere the calibrated keys are removed and a `note` says the horizon
+is uncertified and the raw risk is given), the support assessment with its warnings, the data-quality
 warnings about the history, and whether the model abstained.
 
 ```bash

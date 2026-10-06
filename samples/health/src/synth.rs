@@ -28,7 +28,7 @@ use crate::ontology::SYNTHETIC_DATASET;
 use crate::source::{digest_of, Declaration, SubgroupDeclaration, FORMAT};
 
 /// Participants when none is asked for.
-pub const DEFAULT_PARTICIPANTS: usize = 12_000;
+pub const DEFAULT_PARTICIPANTS: usize = 40_000;
 /// The file `synth` writes, and its declaration.
 pub const FILE: &str = "synthetic.jsonl";
 /// The declaration `synth` writes.
