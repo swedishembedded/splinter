@@ -191,7 +191,25 @@ the released adapter answers the same questions from plain `brain serve`.
      provenance on every item; `data::timeline_dataset` projects episodes to
      `timeline-v1` at a prediction point and `data::split` adds the temporal
      and leave-one-source-out splits and the leakage gates.
+   - Calibration and serving correctness for a timeline candidate: units in
+     a record file travel through the episode and the projection into the
+     model's vocabulary (brain refuses another unit at prediction); the
+     validation part is divided by group into early-stopping and calibration
+     units, brain's Venn-Abers calibration is fitted on the latter and packed
+     beside the weights, and its digest is in the release manifest and the
+     lineage; the gate judges calibration on the calibrated risk where there is
+     one (the evaluation record says which) and has nothing to judge where
+     brain declared a horizon uncalibrated; serving correctness is measured
+     from the shipped file on the test units (identity, batched against single
+     patient-history forecasts, the share the support would withhold, validity
+     of probabilities and curves). Each outcome code's metrics are brain's
+     `TimelineModel::evaluate`; the all-cause union and the paired differences
+     stay here.
    Open, in order:
+   - brain gaps the timeline stage works around: no accessor for a model's absorbing codes (the
+     scoring request is checked against the candidate's record instead), no
+     calibrated-risk option in `evaluate` (calibration of the calibrated risk
+     is computed here), and no all-cause view in `evaluate`.
    - `samples/lifecourse` still builds its subjects from the raw files
      directly; it moves onto the import (its builder produces the record file,
      the import and projection do the rest) with its frozen partition pinned
