@@ -73,6 +73,7 @@ pub mod split;
 mod store;
 mod strip;
 pub mod timeline_dataset;
+pub mod timeline_store;
 mod trajectory;
 mod views;
 

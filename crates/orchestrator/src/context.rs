@@ -279,6 +279,12 @@ impl Runtime {
         DatasetStore::new(&self.workspace, self.root())
     }
 
+    /// The timeline datasets and the splits that cut them.
+    #[must_use]
+    pub fn timeline_datasets(&self) -> splinter_data::timeline_store::TimelineStore {
+        splinter_data::timeline_store::TimelineStore::new(&self.workspace, self.root())
+    }
+
     /// The environments tasks are solved and checked in.
     #[must_use]
     pub fn environments(&self) -> &Environments {

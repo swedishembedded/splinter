@@ -11,6 +11,7 @@
 
 pub mod gate;
 pub mod manual;
+pub mod timeline;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

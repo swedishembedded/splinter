@@ -43,6 +43,7 @@
 
 pub mod address;
 pub mod artifacts;
+pub mod bundle;
 pub mod decision;
 pub mod documents;
 pub mod error;

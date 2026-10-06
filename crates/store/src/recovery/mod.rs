@@ -26,7 +26,7 @@
 
 mod archive;
 mod repair;
-mod tar;
+pub(crate) mod tar;
 
 use serde::{Deserialize, Serialize};
 pub use splinter_expdb::manifest::VerifyReport;

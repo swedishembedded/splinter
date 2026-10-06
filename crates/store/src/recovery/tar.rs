@@ -14,7 +14,7 @@ use std::io::{self, Read, Write};
 
 const BLOCK: usize = 512;
 /// The longest member path ustar holds without its prefix field.
-pub(super) const MAX_PATH: usize = 100;
+pub(crate) const MAX_PATH: usize = 100;
 
 fn octal(field: &mut [u8], value: u64) {
     let digits = field.len() - 1;
@@ -36,17 +36,17 @@ fn invalid(reason: impl Into<String>) -> io::Error {
 }
 
 /// Writes members and the closing blocks.
-pub(super) struct Writer<W: Write> {
+pub(crate) struct Writer<W: Write> {
     out: W,
 }
 
 impl<W: Write> Writer<W> {
-    pub(super) fn new(out: W) -> Self {
+    pub(crate) fn new(out: W) -> Self {
         Self { out }
     }
 
     /// Writes one member whose `size` bytes come from `data`.
-    pub(super) fn member(&mut self, path: &str, size: u64, mut data: impl Read) -> io::Result<()> {
+    pub(crate) fn member(&mut self, path: &str, size: u64, mut data: impl Read) -> io::Result<()> {
         if path.len() > MAX_PATH || !path.is_ascii() {
             return Err(invalid(format!("member path `{path}` does not fit ustar")));
         }
@@ -73,28 +73,28 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the end of the archive and hands back the sink.
-    pub(super) fn finish(mut self) -> io::Result<W> {
+    pub(crate) fn finish(mut self) -> io::Result<W> {
         self.out.write_all(&[0u8; 2 * BLOCK])?;
         Ok(self.out)
     }
 }
 
 /// One member's header.
-pub(super) struct Entry {
-    pub(super) path: String,
-    pub(super) size: u64,
+pub(crate) struct Entry {
+    pub(crate) path: String,
+    pub(crate) size: u64,
 }
 
 /// Reads members in order. A member's data must be taken or skipped before
 /// the next header is read.
-pub(super) struct Reader<R: Read> {
+pub(crate) struct Reader<R: Read> {
     input: R,
     unread: u64,
     padding: usize,
 }
 
 impl<R: Read> Reader<R> {
-    pub(super) fn new(input: R) -> Self {
+    pub(crate) fn new(input: R) -> Self {
         Self {
             input,
             unread: 0,
@@ -103,7 +103,7 @@ impl<R: Read> Reader<R> {
     }
 
     /// The next member, or `None` at the end of the archive.
-    pub(super) fn next(&mut self) -> io::Result<Option<Entry>> {
+    pub(crate) fn next(&mut self) -> io::Result<Option<Entry>> {
         self.skip_rest()?;
         let mut header = [0u8; BLOCK];
         self.input.read_exact(&mut header)?;
@@ -136,7 +136,7 @@ impl<R: Read> Reader<R> {
     }
 
     /// The data of the current member, to read exactly.
-    pub(super) fn data(&mut self) -> impl Read + '_ {
+    pub(crate) fn data(&mut self) -> impl Read + '_ {
         Counted {
             inner: (&mut self.input).take(self.unread),
             unread: &mut self.unread,
