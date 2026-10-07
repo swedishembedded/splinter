@@ -359,7 +359,7 @@ projected, and no family supplies more than a tenth of the tokens
 `--token-limit N` keeps at most N tokens, spread evenly over all the chunks).
 `--describe-voice` (`dataset build --describe-with REF`) asks each chunk by what the
 generator says it is about instead of by its opening: 20 to 60 words in the model's own
-words, admitted only when no run of eight words, and under a third of its words in runs of
+words, admitted only when no run of eight words, and no more than 35% of its words in runs of
 four, are the passage's own; a chunk with no admitted description keeps the opening request.
 Descriptions are kept per generator under the state's `work/describe`, so a second build
 reuses them.
