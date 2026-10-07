@@ -41,12 +41,12 @@ Known failures before any change: see the findings ledger (F-001).
 - [x] This roadmap
 
 ### M1 Loop bootstrap on a disposable fixture
-- [ ] Repair the local build: samples must build against current brain (F-001)
-- [ ] Public `splinter-agent` solve with a caller toolset and project root (D2)
-- [ ] `samples/agent/loop`: task, workspace, limits (time, output tokens, tool calls, retries), local default, `--allow-api-models` opt-in mapped to the SDK's remote opt-in
-- [ ] Run id, status, cancel, resumable checkpoint with reconciliation of uncertain actions, structured outcome, append-only JSONL trace with bounded events and artifact references, redaction
-- [ ] Workspace wiring: `samples/agent/*` member, architecture entry, manifest gate glob, README with only working commands
-- [ ] Seeded-failure fixture with an acceptance check outside the worker's writable scope
+- [x] Repair the local build (F-001, fixed upstream; rebased)
+- [x] Public `splinter-agent` worker with a confined toolset, tool-call cap, observer and suspend/resume (D2)
+- [x] `samples/agent/loop`: task, workspace, limits (time, output tokens, tool calls, retries), local default, `--allow-api-models` opt-in mapped to the SDK's remote opt-in
+- [x] Run id, status, cancel, resumable checkpoint with reconciliation of uncertain actions, structured outcome, append-only JSONL trace with bounded events and artifact references, redaction (specs with a scripted model pass)
+- [x] Workspace wiring: member, architecture entry, manifest gate glob, README (commands to be verified against the real run)
+- [x] Seeded-failure fixture with an acceptance check outside the worker's writable scope
 - [ ] Proof with a real local model; if blocked, name the concrete blocker
 - [ ] Failed-attempt record and retry feedback exercised
 - [ ] Budget exhaustion, cancel, provider failure and restart each show a controlled outcome
@@ -92,6 +92,8 @@ resampling loop. No architecture search against the same folds.
 
 | Id | Severity | Finding | Evidence | Status |
 |----|----------|---------|----------|--------|
-| F-001 | high | splinter main does not compile against current brain main: the adams and jefferson samples build `FineTune` without the new `held_out_text`, `keep_evaluations`, `weight_decay` fields | `cargo build --release --workspace` with local override at splinter 80ef1f9 and brain f5cde671 | open |
-| F-002 | medium | Reported (by a mapping pass, unverified): the p-values behind the power estimate come from 25 folds treated as independent | review text and results table | open, resolved by M2 bootstrap |
+| F-001 | high | splinter main did not compile: the adams and jefferson samples built splinter's own `FineTune` without the fields its trainer gained (`held_out_text`, `keep_evaluations`, `weight_decay`); a release-manifest test lacked `rehearsal`. Not a brain break. | `cargo build --release --workspace` at 80ef1f9 | fixed upstream in e3c62a8 (found on origin; my identical edits dropped, diffs kept) |
+| F-002 | medium | Claim from the external review that our p-values treat 25 folds as independent. REFUTED for the existing analysis: `results.md` uses the corrected resampled t-test (Nadeau-Bengio variance correction). The power estimate stands as an approximation; a subject and PSU bootstrap on pooled out-of-fold predictions is still the stronger check | `baselines/results.md`, paired comparison blocks | closed as stated; bootstrap kept in M2 |
+| F-004 | medium | A `samples/*` workspace glob takes `samples/agent` (no manifest) for a package and fails every cargo command; `exclude` also drops its children | cargo error when `samples/agent/loop` was added | fixed: samples listed explicitly |
+| F-005 | high | A timed-out acceptance check left its grandchildren holding the output pipe, so the kill took as long as the command (30 s for `sleep 30`) | spec `a_command_that_runs_too_long_is_killed_and_fails` failed after 30 s | fixed: each check runs in its own process group and the group is killed |
 | F-003 | low | Sven SDK bounds a run by deadline, output tokens and cancel only; no per-run tool-call cap | sdk RunOptions | loop enforces its own cap |
