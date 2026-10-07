@@ -3,12 +3,14 @@
 
 \section{Results}\label{sec:results}
 
-Every exam in this section is \textbf{pilot scale}: 31 to 42 tasks over 6 or 7 families,
-run with the earlier exam of \cref{sec:exam-versions}. Their families are fixed by each
+Every exam in this section is \textbf{pilot scale}. Those of the first subsections have 31
+to 42 tasks over 6 or 7 families and were run with the earlier exam of
+\cref{sec:exam-versions}; the pilots of \cref{sec:frozen} have 155 tasks over 25 families of the
+reserved exam. Their families are fixed by each
 run's held-out split before the candidate is trained, but they are far too small to carry a
 claim, and they were reused: two exams share a 35-task set (A), three share a 31-task set
 (B), and the Adams exam has its own (C), so the six comparisons are not independent and the
-recipes were developed while looking at them. None is a frozen final test.
+recipes were developed while looking at them. None is a final test.
 
 \subsection{Candidates}
 
@@ -169,9 +171,10 @@ the evidence weaker.}
 \end{table}
 
 \paragraph{Reading.}
-The exams are consistent with candidates a few points better than the prompted base and
-with candidates no better than it. We therefore do \emph{not} claim that fine-tuning beats
-prompting for this task. What the data support is narrower: on the Jefferson task sets a
+The earlier exams are consistent with candidates a few points better than the prompted base and
+with candidates no better than it, and the reserved-exam pilots add one candidate that is better
+under the prompt and none that is better without it. We therefore do \emph{not} claim that
+fine-tuning beats prompting for this task. What the earlier exams support is narrower: on the Jefferson task sets a
 persona prompt alone markedly reduces answers with specifics absent from the source; no
 candidate is judged right on fewer tasks than the prompted base of its exam; and none is
 distinguishable from it.
@@ -205,14 +208,139 @@ conversation, advice and explanation. The planned $50\times8$ design (400 tasks)
 therefore not reached; at the realised size the simulated power for a ten-point gain is
 0.55 under the planning assumptions (\cref{tab:power}). The first 25 families by name, the
 pilot subset, hold 155 tasks.
-\ifnum\PilotsCompleted=0
-No run of any arm on this exam has completed, so no result on it is reported
-(\cref{sec:limits}).
-\else
-\Cref{tab:pilot} gives the completed pilot runs.
-\fi
+Two candidates have been run on the pilot subset, both with four arms (the base, the prompted
+base, the candidate asked without a persona prompt, and the candidate under it), one greedy
+answer per task and arm, and without the voice-likelihood stage, which was not run. The
+judge is Qwen3-14B, version 4 (greedy decoding), calibrated on 310 controls (precision 1.0
+on passes and 0.981 on fails, no abstentions). The primary comparison, fixed with the exam,
+is the candidate under the persona prompt against the prompted base on the share of tasks
+judged right. The \emph{v7} candidate was trained on its own dialogues plus fixed-prompt voice rows;
+the \emph{ablation} candidate on the dialogues of v6 plus the same voice rows
+(\cref{tab:training}); the two recipes differ in more than one respect, so their results are
+not a controlled comparison. The report of each run states one family the candidate was trained on, which the tool leaves out
+of the examined tasks. \Cref{tab:pilot,tab:pilot-arms,tab:pilot-secondary,tab:pilot-design}
+give the results; every count, test and interval is the run's report, and the exact tests and the
+counts were recomputed from the per-task records (\cref{sec:repro}).
 
-\input{generated/pilot_table}
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/pilot_table}}
+\caption{Pilots on the first 25 families of the reserved exam: the candidate under the
+persona prompt against the prompted base, paired by task. The interval is the family-clustered
+95\% percentile bootstrap interval of the difference in the share of tasks judged right;
+``family wins--losses'' counts families in which the candidate was right on more, respectively
+fewer, tasks, and $p$ (families) is the one-sided exact sign test over those families; $p$ (tasks)
+ignores clustering and is shown for comparison only.}
+\label{tab:pilot}
+\end{table}
+
+\paragraph{The primary comparison.}
+\textbf{v7:} 38 of 155 tasks were judged right under the persona prompt against 31 for the
+prompted base, a difference of +4.5 points (95\% interval $-1.3$ to $+10.0$): 15 tasks only the
+candidate got right, 8 only the prompted base. The candidate won 9 of 14 discordant families
+($p=0.21$). The result is not significant and the interval includes zero. Among the 74
+tasks on which the two answers differ in length by at most a quarter of the longer, the split is 6
+against 5 ($p=0.50$).
+\textbf{Ablation:} 48 against 31 (+11.0 points, interval $+5.0$ to $+16.9$): 24 tasks only the
+candidate, 7 only the prompted base, and 13 of 15 discordant families for the candidate
+($p=0.0037$ one-sided exact; the task-level $p$, ignoring clustering, is 0.0017). Among the 90
+length-matched tasks the split is 14 against 5 ($p=0.032$), and the candidate's answers
+are shorter on average than the prompted base's (393 against 434 characters;
+\cref{tab:pilot-arms}), so the difference is not explained by longer answers.
+For the two runs the primary test is not corrected for the other (a Bonferroni factor of two
+gives 0.0074 for the ablation and 0.42 for v7).
+
+\begin{table}[t]
+\centering\small
+\input{generated/pilot_arms_table}
+\caption{The four arms of the pilots on the same 155 tasks. ``Invented specifics'' counts
+answers with numbers or names absent from the source, of the 155 checked; the base and prompted
+arms are the same in both runs (greedy decoding).}
+\label{tab:pilot-arms}
+\end{table}
+
+\paragraph{The arms.}
+The prompted base is judged right on 31 of 155 tasks and the unprompted base on 30
+(12 against 11 discordant tasks, family-level $p=0.50$): on this exam, as on the earlier ones, the
+persona prompt does not raise the share judged right. It does cut answers with invented
+specifics from 78 to 23. The candidate asked \emph{without} the persona prompt is judged right on
+27 (v7) and 30 (ablation) tasks, no more than the prompted base (family-level $p=0.79$ and $0.71$) or
+the base ($p=0.93$ and $0.77$). With the persona prompt, the two candidates state invented
+specifics in 20 and 26 answers, against 23 for the prompted base, and the candidates
+without the prompt in 75 and 63 against 78 for the unprompted base.
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/pilot_secondary_table}}
+\caption{Secondary comparisons of the pilots: family-level one-sided exact sign $p$ and, after
+the slash, the Holm-adjusted $p$ over these five comparisons per run. The first named arm
+is the one tested for being better.}
+\label{tab:pilot-secondary}
+\end{table}
+
+\paragraph{Secondary comparisons.}
+After Holm correction over the five secondary comparisons, only the ablation candidate under
+the persona prompt separates from anything else: from the base (12 of 14 discordant families,
+$p_{\mathrm{Holm}}=0.032$) and from itself asked without the prompt (12 of 14,
+$p_{\mathrm{Holm}}=0.032$). For v7 the same two comparisons give $p_{\mathrm{Holm}}=0.53$ and
+$0.16$; the latter has an uncorrected family-level $p$ of 0.033. Every other secondary comparison has a corrected $p$
+of 0.53 or more.
+
+\paragraph{Hard controls.}
+The judge was also given each task with a wrong answer by construction: the reference answer
+of the task of another family whose reference is most like its own in words, the answer a careless
+reader is likeliest to take for right (155 per run). It passed 2 of 155 (1.3\%) in both runs. This is
+the judge's false-pass rate on a topical near miss; it does not measure its agreement with a person on
+real answers.
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/pilot_design_table}}
+\caption{What the pilots say about the full test. Discordance is the share of tasks on which
+the candidate under the persona prompt and the prompted base differ, ICC the intraclass
+correlation of the per-task difference within a family (floored at zero), ``smallest
+detectable'' the report's minimum detectable difference at 25 families (80\% power at the level of
+the sign test, normal approximation), and power the
+simulated power of the planned test (lower end of the family-clustered bootstrap interval
+above zero) at a ten-point lead with 39 families of six tasks, using the run's own
+discordance and ICC (4,000 simulated exams, 500 resamples, seed 0, \code{splinter exam-set power
+--from-report}). The false-positive rates of those simulations are 0.032 and 0.027.}
+\label{tab:pilot-design}
+\end{table}
+
+\paragraph{Sizing the full test.}
+The pilots' discordance (0.148 and 0.200) and ICC (0.014 and 0.000) are below the planning
+assumptions (0.30 and 0.10), so the simulated power of the 39-family exam for a ten-point lead is
+0.97 and 0.94 instead of 0.55, with a design effect of 1.07 and 1.0. For a five-point lead it is
+0.48 (v7's parameters) and 0.40 (ablation's). Both estimates come from 23 and 31
+discordant tasks over 25 families, the ICC is a floored estimator that is zero for the
+ablation, and the second run's discordance includes its effect; the power is accordingly an
+estimate with an uncertainty that the simulation does not carry. The simulation also gives
+every family six tasks (234 tasks), whereas the exam has 244.
+
+\paragraph{What the pilots show, and what they do not.}
+\begin{itemize}
+\item On 155 tasks of 25 families, the v7 candidate under the persona prompt is judged right
+  on 4.5 points more tasks than the prompted base; that is not significant, and the interval
+  allows a difference of zero and of ten points.
+\item The ablation candidate under the persona prompt is judged right on 11.0 points more tasks
+  than the prompted base, significant at the family level, among length-matched tasks, and
+  after the two-run correction. This is a pilot result for one candidate chosen after
+  earlier exams, with one training seed, a judge from the policy's model family and no human
+  labels.
+\item Neither candidate asked without the persona prompt is judged right on more tasks than
+  the prompted base or the base. The gain of the ablation candidate appears only when it
+  also receives the prompt. The pilots therefore do not show that the persona was
+  internalised, and they do not separate what the weights and what the prompt contribute
+  beyond that: the persona prompt alone does not raise the share right (30 to 31), and the
+  adapter alone does not either.
+\item The two runs differ in recipe by more than one factor, so the difference between
+  their results cannot be attributed to one change.
+\item The voice-likelihood stage was not run, so no judge-free measure of voice and no
+  overlap-with-training-text measure exists for these runs.
+\item The pilot families are a subset of the final test; a final result will not be
+  independent of them.
+\end{itemize}
 
 \subsection{Cost}
 

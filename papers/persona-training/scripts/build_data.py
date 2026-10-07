@@ -218,35 +218,109 @@ def power_sim_table(sims):
     return "\n".join(lines)
 
 
-def pilot_table(pilots):
-    """The table of completed pilot runs on the frozen exam, or nothing when
-    none has completed: a run that did not complete is not a result."""
+PILOT_SECONDARIES = (
+    ("cand_vs_prompted", "candidate / prompted"),
+    ("persona_vs_base", "cand.+persona / base"),
+    ("persona_vs_cand", "cand.+persona / candidate"),
+    ("cand_vs_base", "candidate / base"),
+    ("prompted_vs_base", "prompted / base"),
+)
+PILOT_ARMS = (("base", "base"), ("prompted", "prompted base"), ("cand", "candidate"), ("persona", "candidate + persona"))
+
+
+def holm(ps):
+    """Holm step-down adjusted p-values, in the order of the input."""
+    order = sorted(range(len(ps)), key=lambda i: ps[i])
+    adjusted, running = [0.0] * len(ps), 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (len(ps) - rank) * ps[i]))
+        adjusted[i] = running
+    return adjusted
+
+
+def check_pilot(p):
+    """Refuses a pilot row whose derived fields disagree with its counts."""
+    name, n = p["arm"], int(p["tasks"])
+    pf_expected = upper_tail(int(p["family_wins"]), int(p["family_wins"]) + int(p["family_losses"]))
+    pt_expected = upper_tail(int(p["persona_only"]), int(p["persona_only"]) + int(p["prompted_only"]))
+    lm_expected = upper_tail(int(p["lm_persona_only"]), int(p["lm_persona_only"]) + int(p["lm_prompted_only"]))
+    for field, expected in (("p_families", pf_expected), ("p_tasks", pt_expected), ("lm_p", lm_expected)):
+        if abs(float(p[field]) - expected) > 1e-6:
+            sys.exit(f"pilot {name}: {field} {p[field]} != exact {expected}")
+    if int(p["persona_right"]) - int(p["prompted_right"]) != int(p["persona_only"]) - int(p["prompted_only"]):
+        sys.exit(f"pilot {name}: right counts and discordant tasks disagree")
+    if abs(100 * (int(p["persona_right"]) - int(p["prompted_right"])) / n - float(p["diff_points"])) > 0.05:
+        sys.exit(f"pilot {name}: difference does not match the right counts")
+    adjusted = holm([float(p[f"p_{key}"]) for key, _ in PILOT_SECONDARIES])
+    for (key, _), expected in zip(PILOT_SECONDARIES, adjusted):
+        if abs(float(p[f"holm_{key}"]) - expected) > 1e-6:
+            sys.exit(f"pilot {name}: Holm p of {key} {p[f'holm_{key}']} != {expected}")
+
+
+def pilot_tables(pilots):
+    """The tables of completed pilot runs on the frozen exam, empty when none
+    has completed: a run that did not complete is not a result."""
     done = [p for p in pilots if p["state"] == "completed"]
+    for p in done:
+        check_pilot(p)
     if not done:
-        return ""
-    lines = [
-        r"\begin{table}[t]",
-        r"\centering\small",
-        r"\begin{tabular}{@{}llrll@{}}",
+        return {name: "" for name in ("pilot_table", "pilot_arms_table", "pilot_secondary_table", "pilot_design_table")}
+
+    primary = [
+        r"\begin{tabular}{@{}lrrrrrr@{}}",
         r"\toprule",
-        r"Arm & Candidate & Families/tasks & Right (cand.\ / prompt.) & Difference, 95\% interval \\",
+        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Difference [95\% CI], points & Family wins--losses & $p$ (families) & $p$ (tasks) \\",
+        r"\midrule",
+    ]
+    arms = [
+        r"\begin{tabular}{@{}llrrr@{}}",
+        r"\toprule",
+        r"Run & Arm & Judged right & Invented specifics & Mean chars \\",
+        r"\midrule",
+    ]
+    secondary = [
+        r"\begin{tabular}{@{}l" + "r" * len(PILOT_SECONDARIES) + "@{}}",
+        r"\toprule",
+        "Run & " + " & ".join(label for _, label in PILOT_SECONDARIES) + r" \\",
+        r"\midrule",
+    ]
+    design = [
+        r"\begin{tabular}{@{}lrrrrrr@{}}",
+        r"\toprule",
+        r"Run & Length-matched (tasks, wins--losses, $p$) & Discordance & ICC & Smallest detectable, points & Judge false passes (hard controls) & Power, 39 families \\",
         r"\midrule",
     ]
     for p in done:
-        lines.append(
-            f"{p['arm']} & {p['description']} & {p['families']}/{p['tasks']} & "
-            f"{p['candidate_right']} / {p['prompted_right']} & "
-            f"{float(p['diff_points']):+.1f} [{float(p['ci_low']):+.1f}, {float(p['ci_high']):+.1f}] points \\\\"
+        primary.append(
+            f"{p['arm']} & {p['families']}/{p['tasks']} & {p['persona_right']} / {p['prompted_right']} & "
+            f"{float(p['diff_points']):+.1f} [{float(p['ci_low']):+.1f}, {float(p['ci_high']):+.1f}] & "
+            f"{p['family_wins']}--{p['family_losses']} & {fmt_p(float(p['p_families']))} & {fmt_p(float(p['p_tasks']))} \\\\"
         )
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\caption{Completed pilot runs on the frozen exam: deployed candidate against the prompted base, "
-        r"paired by task, with the family-clustered 95\% percentile bootstrap interval.}",
-        r"\label{tab:pilot}",
-        r"\end{table}",
-    ]
-    return "\n".join(lines)
+        for key, label in PILOT_ARMS:
+            arms.append(
+                f"{p['arm'] if key == 'base' else ''} & {label} & {p[key + '_right']} & "
+                f"{p[key + '_invented']} & {float(p[key + '_chars']):.0f} \\\\"
+            )
+        secondary.append(
+            f"{p['arm']} & "
+            + " & ".join(
+                f"{fmt_p(float(p['p_' + key]))} / {fmt_p(float(p['holm_' + key]))}" for key, _ in PILOT_SECONDARIES
+            )
+            + r" \\"
+        )
+        design.append(
+            f"{p['arm']} & {p['lm_tasks']}, {p['lm_persona_only']}--{p['lm_prompted_only']}, {fmt_p(float(p['lm_p']))} & "
+            f"{float(p['discordance']):.3f} & {float(p['icc']):.3f} & {float(p['mdd_points']):.1f} & "
+            f"{p['hard_passed']} of {p['hard_wrong']} & "
+            f"{float(p['power_39']):.2f} \\\\"
+        )
+    end = [r"\bottomrule", r"\end{tabular}"]
+    return {
+        "pilot_table": "\n".join(primary + end),
+        "pilot_arms_table": "\n".join(arms + end),
+        "pilot_secondary_table": "\n".join(secondary + end),
+        "pilot_design_table": "\n".join(design + end),
+    }
 
 
 def main():
@@ -260,7 +334,8 @@ def main():
     (OUT / "prompt_table.tex").write_text(prompt_table(exams) + "\n", encoding="utf-8")
     (OUT / "training_table.tex").write_text(training_table(rows("training.csv")) + "\n", encoding="utf-8")
     pilots = rows("pilot.csv")
-    (OUT / "pilot_table.tex").write_text(pilot_table(pilots) + "\n", encoding="utf-8")
+    for name, table in pilot_tables(pilots).items():
+        (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
 
     # pgfplots data: exact power of the family-level sign test.
     with open(OUT / "sign_power.csv", "w", encoding="utf-8") as f:
@@ -307,7 +382,6 @@ def main():
         "AnchorSD": f"{disc ** 0.5 / items:.3f}",
         "AnchorExceed": f"{100 * exceed:.0f}",
         "AnchorItemsNeeded": f"{round(z * z * (disc / items) / 0.02**2, -2):,.0f}",
-        "PilotsCompleted": str(sum(p["state"] == "completed" for p in pilots)),
     }
     (OUT / "macros.tex").write_text(
         "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()), encoding="utf-8"

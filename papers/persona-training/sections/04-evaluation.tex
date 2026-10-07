@@ -124,9 +124,9 @@ beside, never in place of, the binary verdict.
 
 \subsection{The exams reported here}\label{sec:exam-versions}
 
-Everything above describes the \emph{powered} exam. No run of it has completed
-(\cref{sec:frozen}), and every exam result in \cref{sec:results} comes from the earlier
-exam, which differs in ways that bear on how its numbers can be read:
+Everything above describes the \emph{powered} exam. Only pilot runs on its first 25
+families have completed (\cref{sec:frozen}); the other exam results in \cref{sec:results}
+come from the earlier exam, which differs in ways that bear on how its numbers can be read:
 \begin{itemize}
 \item \textbf{Task source.} Its tasks are the run's own held-out records: families chosen by
   the run's held-out split after task generation, written by the same generator as the
@@ -195,8 +195,8 @@ above zero, a one-sided test at nominal level 0.025. \code{splinter exam-set pow
 simulates it: a task's difference is $+1$, $-1$ or $0$; a share \emph{discordance} of
 tasks are $\pm1$; the first arm leads by \emph{effect}; and a family's mean difference is
 the overall one plus a normal draw whose variance is the intraclass correlation (ICC) times
-a task's variance. No pilot estimate of either parameter exists, so we assume discordance
-0.30 and ICC 0.10, which gives a design effect of $1+(m-1)\times0.1$ for $m$ tasks per
+a task's variance. Before a pilot exists we assume discordance
+0.30 and ICC 0.10 (the pilots of \cref{sec:frozen} supply estimates), which gives a design effect of $1+(m-1)\times0.1$ for $m$ tasks per
 family (1.7 for eight). \Cref{tab:power} gives the results with 4,000 simulated exams of
 500 resamples each, so a power has a Monte Carlo standard error below 0.008 and a
 false-positive rate one below 0.004. Fifty families of eight reach power 0.75 for a
@@ -229,8 +229,8 @@ fixed rule (at most 8\% of answers with invented specifics, then the best share 
 within one standard error, then the loss on the dev families' own text); and the final
 test is run once on the chosen checkpoint. The pilot families are a subset of the final
 test. An exam set is pinned by a ledger that refuses the same name with other content, so
-every model is examined on the same tasks. Of these steps only reservation and freezing
-have been carried out for this paper.
+every model is examined on the same tasks. Of these steps reservation, freezing and the pilot
+have been carried out for this paper; the dev-suite selection and the final test have not.
 
 \subsection{Retention and the anchor suite}
 

@@ -76,9 +76,22 @@ has $p\geq0.109$ in every exam, and with at most seven families it could reach $
 only through a clean sweep of at least five discordant families. The candidates were judged
 right on 0 to 8 more tasks than the prompted base. On the two Jefferson task sets the persona
 prompt alone cut the number of answers stating specifics absent from the source from 20 to 3
-and from 21 to 6. A 39-family, 244-task exam reserved before any generation has a simulated
-power of about 0.55 for a ten-point gain; no run on it completed, and no result on it is
-reported.
+and from 21 to 6.
+
+Two pilots on the first 25 families (155 tasks) of a 39-family, 244-task exam reserved
+before any generation then compared each candidate under the persona prompt with the
+prompted base, the comparison fixed with the exam, under a calibrated greedy judge. The
+v7 candidate was judged right on 38 tasks against 31 (+4.5 points, 95\% interval
+$-1.3$ to $+10.0$; family-level sign test $p=0.21$), which is not significant. The
+ablation candidate, trained with voice data, was judged right on 48 against 31 (+11.0
+points, interval $+5.0$ to $+16.9$; 13 of 15 discordant families, $p=0.004$); the
+difference persists among length-matched tasks ($p=0.032$). Neither candidate asked
+without the persona prompt exceeds the prompted base (27 and 30 against 31 of 155), so
+the pilots do not show that the persona was internalised rather than amplified by the
+prompt. The pilots are subsets of the final test, the candidates were chosen after
+earlier exams, and voice scoring was not run. From their discordance and intraclass
+correlation the simulated power of the full 39-family exam for a ten-point gain is 0.97
+and 0.94.
 \end{abstract}
 
 \input{sections/01-introduction}

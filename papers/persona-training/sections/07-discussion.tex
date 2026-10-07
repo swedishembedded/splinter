@@ -8,16 +8,24 @@ The strongest conclusion from this work is about measurement. The statistics the
 system produced were either uninformative (the anchor, whose bound sat inside its noise) or
 about something other than the claim (the gate's improvement on paraphrases of trained
 tasks; an effect of the prompt credited to the fine-tune). Once those are set aside, the
-remaining evidence on the adapters is a set of point estimates at or above the prompted
-base that the exams cannot separate from chance. A power calculation shows this without any
+remaining evidence on the adapters from the earlier exams is a set of point estimates at or
+above the prompted base that those exams cannot separate from chance; the larger pilots of
+\cref{sec:frozen} can, and they give one null and one positive result. A power calculation shows this without any
 run: seven families, one vote each, cannot reject at $\alpha=0.05$ unless every discordant
 family goes the same way and there are at least five of them.
 
 \paragraph{What the data support about the adapter.}
-Two statements are supported. (i) On the Jefferson task sets a persona prompt alone cuts the
+Three statements are supported. (i) On the Jefferson task sets a persona prompt alone cuts the
 answers with invented specifics sharply (\cref{tab:prompt}), so a fine-tune must be compared
-with the prompted base, not the unprompted one. (ii) No candidate is distinguishable from the
-prompted base. Two observations are consistent with expectations from the literature but do
+with the prompted base, not the unprompted one. (ii) On the earlier exams no candidate is distinguishable from the
+prompted base. (iii) On the 155-task, 25-family pilot of the reserved exam the v7 candidate
+under the persona prompt is not distinguishable from the prompted base (+4.5 points,
+$p=0.21$), whereas the ablation candidate under it is judged right on 11.0 points more tasks
+($p=0.004$); neither candidate asked without the persona prompt exceeds the prompted
+base. The positive result therefore concerns the adapter used together with the prompt. It
+is for one candidate, one seed and a subset of the final test, and it does not show that the
+author's positions or prose were internalised: the data contain no measurement of that, and the
+prompt alone does not raise the share judged right, nor does the adapter alone. Two observations are consistent with expectations from the literature but do
 not establish them: the candidate trained on dialogues alone equalled the prompted base (v6:
 14 against 14), as one would expect of a student trained on a prompted teacher's answers
 \citep{askell2021general}; and the candidates that also saw the author's own text were judged
@@ -59,9 +67,12 @@ prompted base, has not been measured.
 
 \paragraph{Adaptive reuse of the pilot exams.}
 Recipes were developed over several runs examined on the same 31- and 35-task sets. Even if
-an effect were observed there, selection on a small shared test set would overstate it. In
+an effect were observed there, selection on a small shared test set would overstate it. The
+ablation candidate was among the candidates examined on those sets, and the reserved-exam pilots
+were run for two candidates only, so the pilot result for it is that of a candidate chosen after
+earlier exams; the two-run correction (\cref{sec:frozen}) does not account for that selection. In
 the powered exam's protocol the pilot families are a subset of the final test, so a final
-result would not be fully unseen.
+result will not be fully unseen.
 
 \paragraph{Statistical validity.}
 Seven-unit family-level tests have the power shown in \cref{fig:power}. The family-level
@@ -86,18 +97,21 @@ languages, modern authors, or authors with little text.
 \section{Limitations}\label{sec:limits}
 
 \begin{itemize}
-\item \textbf{No result on the frozen exam.} No arm's run on it has completed. The one run
-  that answered and graded every task was lost in its voice-likelihood stage, which loaded
-  the base in 32-bit floats (about 33~GB for an 8-billion-parameter model, on 24~GB cards),
-  and the report was not yet stored; the stage now stores the report first and fails as a
-  recorded error instead of a fault.
+\item \textbf{Only pilots on the frozen exam.} Two candidates were run on the first 25 of its
+  39 families (155 of 244 tasks), without the voice-likelihood stage. An earlier run that
+  included the stage answered and graded every task but was lost in the stage, which loaded
+  the base in 32-bit floats (about 33~GB for an 8-billion-parameter model, on 24~GB cards)
+  before the report was stored; the stage now stores the report first and fails as a recorded
+  error instead of a fault. No dev-suite selection and no final test has been run, one
+  seed was trained per recipe, and the pilots' power estimates for the full exam rest on
+  23 and 31 discordant tasks.
 \item \textbf{No human labels.} Judge agreement, kappa, false-right and false-wrong rates and
   length bias on real answers are not measured; no labels were collected.
 \item \textbf{No judge-free voice measurement.} The held-out text likelihood of each arm and
   the overlap of answers with the training text (8-, 13- and 20-word runs, longest shared
-  run) are implemented in the powered exam, which has no completed run. A fine-tuned model
-  that quotes its training text is memorising, not thinking like the author; the reported
-  exams cannot separate the two.
+  run) are implemented in the powered exam, but the pilot runs omitted the stage, so none of these
+  measures exists for them. A fine-tuned model that quotes its training text is
+  memorising, not thinking like the author; the reported exams cannot separate the two.
 \item \textbf{One seed per recipe;} no estimate of run-to-run variance.
 \item \textbf{No valid serve check} for any Qwen3 candidate: for two the serving binary was
   absent, for the third no served answer was graded.
@@ -124,7 +138,10 @@ most useful products are methodological: a family-level split that survives over
 editions, an exam reserved before generation and sized by simulation, a judge with controls
 and deterministic overrides, and a catalogue of defects with the measurement that exposed
 each. With those defects set aside, the evidence is that a persona prompt alone markedly
-reduces invented specifics on the Jefferson exams, that no fine-tuned candidate is
-statistically distinguishable from the prompted base at the sample sizes measured, and that
-the point estimates of the candidates are at or above it. That fine-tuning adds to the
-prompt is not established by this work.
+reduces invented specifics on the Jefferson exams; that no candidate is statistically
+distinguishable from the prompted base on the six small exams; and that on the pilot of the
+reserved exam (155 tasks, 25 families) one candidate under the persona prompt is judged right
+on 11.0 points more tasks than the prompted base ($p=0.004$) and another on 4.5 points more
+($p=0.21$), while neither exceeds the prompted base when asked without the prompt. That the
+fine-tune carries the persona in its weights, or that the result holds on the full exam, is not
+established by this work.

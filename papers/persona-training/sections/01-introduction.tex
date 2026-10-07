@@ -53,23 +53,30 @@ by reading the training code, not through the exam numbers.
   before any generation, a primary comparison fixed in advance against the
   \emph{persona-prompted} base, per-task pairing with a family-clustered bootstrap, Holm
   correction of secondaries, a power simulation for sizing, and a judge with controls and
-  deterministic overrides (\cref{sec:eval}). The design is implemented and its power is
-  simulated, but no exam run with it has completed, and the results of
-  \cref{sec:results} come from an earlier, simpler exam (\cref{sec:exam-versions}).
+  deterministic overrides (\cref{sec:eval}). The design is implemented, its power is
+  simulated, and two pilot runs on a subset of the exam are reported
+  (\cref{sec:frozen}); the other results of \cref{sec:results} come from an earlier,
+  simpler exam (\cref{sec:exam-versions}).
 \item A catalogue of defects that were found and fixed, each with the measurement that
   exposed it: leakage across editions, a gate that did not test generalisation, a grader bug,
   the retention suite's inability to detect a two-point drop, and eight training-mechanics
   defects, seven of them corrected (\cref{sec:defects}).
-\item Pilot-scale results (\cref{sec:results}). No candidate is
-  distinguishable from the persona-prompted base at $\alpha=0.05$. We give the measured
-  numbers, the bounds on what the exams could have shown, and what has not been
-  established.
+\item Pilot-scale results (\cref{sec:results}). On the earlier exams no candidate is
+  distinguishable from the persona-prompted base at $\alpha=0.05$. On the first 25 families
+  of the reserved exam, the v7 candidate is not distinguishable from it either (+4.5
+  points, family-level $p=0.21$), while the candidate trained with voice data is judged
+  right on 11.0 points more tasks ($p=0.004$) only when it is also given the persona
+  prompt. We give the measured numbers, the bounds on what the exams could have shown,
+  and what has not been established.
 \end{enumerate}
 
 \paragraph{What this paper does not claim.}
-It does not claim that the adapter ``thinks like'' either author. It does not claim an
-effect of the fine-tune beyond the persona prompt: the candidates' point estimates are at
-or above the prompted base, but the pilot exams cannot separate that from chance. Numbers
+It does not claim that the adapter ``thinks like'' either author. It does not claim that
+a fine-tune beats prompting without the prompt: on the earlier exams the candidates' point
+estimates are at or above the prompted base but cannot be separated from chance, and on the
+reserved exam no candidate asked without the persona prompt exceeds the prompted base; the one
+distinguishable pilot result is for a candidate that is also given the prompt, with a
+selected candidate on a subset of the final test. Numbers
 that were not measured are absent or marked as such;
 \cref{sec:repro} lists the commands that reproduce each measured number and
 \cref{sec:limits} what remains unestablished.
