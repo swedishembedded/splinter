@@ -10,6 +10,8 @@
 //! dataset - with retrieved passages, and abstentions among them, when the
 //! run asks for them - and the writer's own text beside it.
 
+use std::time::Instant;
+
 use splinter_data::holdout::MIN_SAMPLES;
 use splinter_orchestrator::error::io;
 use splinter_orchestrator::pipeline::StageEnd;
@@ -26,6 +28,39 @@ use crate::datasets::{
 use crate::describe::DescribeRequest;
 use crate::raft::Abstainer;
 use crate::retrieval::{library_of, Retrieval};
+
+/// The share of a run's budget that model-written descriptions and
+/// abstentions may take at least, however late the dataset stage starts.
+const GENERATION_SHARE: f64 = 0.1;
+
+/// When the model-written parts of the dataset stop being written: the start
+/// of the tail the run keeps for training, or [`GENERATION_SHARE`] of the
+/// budget from now when that has passed - the dataset stage comes after the
+/// open-ended ones - and never past the run's end. What is not written in time
+/// keeps the request code writes, or its answer, so the run still trains.
+fn generation_deadline(st: &LearnState<'_>) -> Option<Instant> {
+    generation_ends(
+        st.started,
+        st.learn.deadline?,
+        st.stage_deadlines.teach,
+        Instant::now(),
+    )
+}
+
+/// [`generation_deadline`] from its instants: the run's `start` and `end`, the
+/// start of the `tail` kept for training, and `now`.
+fn generation_ends(
+    start: Instant,
+    end: Instant,
+    tail: Option<Instant>,
+    now: Instant,
+) -> Option<Instant> {
+    let floor = now
+        + end
+            .saturating_duration_since(start)
+            .mul_f64(GENERATION_SHARE);
+    Some(tail.map_or(floor, |tail| tail.max(floor)).min(end))
+}
 
 pub(super) fn dataset_stage(
     ctx: &Context,
@@ -70,7 +105,7 @@ pub(super) fn dataset_stage(
                         ctx,
                         ctx.model(st.learn.teacher)?,
                         st.system_prompt().unwrap_or_default(),
-                        st.stage_deadlines.teach,
+                        generation_deadline(st),
                         run.cancel_token(),
                     ))
                 })
@@ -113,7 +148,7 @@ pub(super) fn dataset_stage(
                     token_budget: Some(budget),
                     describe: st.learn.describe_voice.then(|| DescribeRequest {
                         generator: st.learn.generator.clone(),
-                        deadline: st.stage_deadlines.teach,
+                        deadline: generation_deadline(st),
                         cancel: run.cancel_token(),
                     }),
                     ..VoiceBuild::default()
@@ -159,3 +194,34 @@ struct DatasetStage<'a> {
 
 /// How many passages a training record carries when it is given any.
 const PASSAGES_SHOWN: usize = 4;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// Generation runs to the start of the training tail; when the dataset
+    /// stage begins after it, to a tenth of the budget from then; never past
+    /// the run's end.
+    #[test]
+    fn generation_ends_at_the_tail_or_a_tenth_of_the_budget_from_now() {
+        let start = Instant::now();
+        let at = |secs| start + Duration::from_secs(secs);
+        let end = at(1000);
+        // Before the tail starts: the tail's start.
+        assert_eq!(
+            generation_ends(start, end, Some(at(400)), at(300)),
+            Some(at(400))
+        );
+        // After it: a tenth of the budget (100 s) from now.
+        assert_eq!(
+            generation_ends(start, end, Some(at(400)), at(500)),
+            Some(at(600))
+        );
+        // Never past the end.
+        assert_eq!(
+            generation_ends(start, end, Some(at(400)), at(950)),
+            Some(end)
+        );
+    }
+}

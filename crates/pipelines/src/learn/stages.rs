@@ -100,7 +100,7 @@ pub(super) struct LearnState<'a> {
     pub(super) learn: Learn<'a>,
     pub(super) report: LearnReport,
     /// When the run began: what the stage deadlines are counted from.
-    started: Instant,
+    pub(super) started: Instant,
     pub(super) stage_deadlines: StageDeadlines,
     /// The teacher answers every task and the student makes no attempt.
     distill: bool,
