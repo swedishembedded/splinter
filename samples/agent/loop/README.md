@@ -83,6 +83,14 @@ agent-loop models current      # the model reference to run with now
 agent-loop models rollback
 ```
 
+The results `models judge` pairs come from running the model in use and the
+candidate over the same tasks. `fixtures/eval-candidate.sh <out> <model-ref>
+family:seed...` runs each task of a list (families are those of
+`fixtures/families.py list`) and keeps each outcome as
+`<out>/results/<family>-s<seed>.json`; give the candidate's reference as
+`local:<checkpoint>+<adapter>`.
+
+
 ## What a run keeps (`~/.sven/loop/runs/<run>/`)
 
 | File | What |
@@ -160,7 +168,8 @@ settings are written in the `model_selected` event of every run.
 ```text
 Cargo.toml        depends on splinter-sdk and nothing internal else
 prompts/          the system prompt (an override in ~/.sven/loop/system.md wins)
-fixtures/         make-fixture.sh: the disposable seeded-bug repository
+fixtures/         make-fixture.sh: the disposable seeded-bug repository; families.py: twelve seeded-bug
+                  families rendered under a seed; eval-candidate.sh: one model over a task list
 src/              contract, trace, observe, repo, acceptance, attempt, run, cli
 tests/            the plumbing specs, with a scripted model
 ```
