@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(events.len(), 4);
         assert_eq!(events[3]["type"], "new");
         // the chain now verifies end to end, and the original is kept
-        assert!(read_chain(&dir.path().join(EVENTS_FILE)).is_ok());
+        assert!(read_chain(dir.path().join(EVENTS_FILE)).is_ok());
         assert!(dir.path().join(LEGACY_FILE).exists());
     }
 }
