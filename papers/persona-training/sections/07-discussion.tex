@@ -86,8 +86,11 @@ languages, modern authors, or authors with little text.
 \section{Limitations}\label{sec:limits}
 
 \begin{itemize}
-\item \textbf{No result on the frozen exam.} No arm's run on it has completed; three
-  attempted runs of the four-arm exam on it ended in device out-of-memory faults.
+\item \textbf{No result on the frozen exam.} No arm's run on it has completed. The one run
+  that answered and graded every task was lost in its voice-likelihood stage, which loaded
+  the base in 32-bit floats (about 33~GB for an 8-billion-parameter model, on 24~GB cards),
+  and the report was not yet stored; the stage now stores the report first and fails as a
+  recorded error instead of a fault.
 \item \textbf{No human labels.} Judge agreement, kappa, false-right and false-wrong rates and
   length bias on real answers are not measured; no labels were collected.
 \item \textbf{No judge-free voice measurement.} The held-out text likelihood of each arm and
