@@ -27,6 +27,47 @@ def toy(n=400, seed=0):
                 cat_levels=np.array(json.dumps({"c": ["u", "v"]})))
 
 
+def concordance(risk, time, event):
+    """Fraction of comparable held-out pairs (a subject died before the
+    other's death or censoring, or both died at different times) whose
+    predicted risk order matches the observed order."""
+    ok = tot = 0
+    n = len(time)
+    for i in range(n):
+        for j in range(i + 1, n):
+            ti, tj, ei, ej = time[i], time[j], event[i], event[j]
+            if ti == tj:
+                continue
+            if ei and ej:
+                comparable = True
+            elif ei and not ej:
+                comparable = ti < tj
+            elif ej and not ei:
+                comparable = tj < ti
+            else:
+                comparable = False
+            if not comparable:
+                continue
+            tot += 1
+            lo, hi = (i, j) if ti < tj else (j, i)
+            if risk[lo] < risk[hi]:
+                ok += 1
+    return ok / max(tot, 1)
+
+
+def u_shaped(n, seed):
+    """Synthetic rows whose log-hazard is a U-shaped function of input `a`."""
+    rng = np.random.RandomState(seed)
+    x = rng.normal(size=(n, 2)).astype(np.float32)
+    cat = np.zeros((n, 1), dtype=np.int8)
+    t = rng.weibull(1.2, size=n) * np.exp((x[:, 0] ** 2 - 2.0) / 2.0)
+    died = rng.uniform(size=n) < 1.0 / (1.0 + np.exp(t))
+    time = np.where(died, t, np.maximum(t, 15.0))
+    cause = np.where(died, 0, -1).astype(np.int8)
+    return (dict(num=x, cat=cat, num_names=np.array(["a", "b"]), cat_names=np.array(["c"]),
+                 cat_levels=np.array(json.dumps({"c": ["u", "v"]}))), time, cause)
+
+
 class Harness(unittest.TestCase):
     def test_preprocessing_uses_only_the_rows_it_is_fitted_on(self):
         data = toy()
@@ -90,6 +131,35 @@ class Harness(unittest.TestCase):
         time = rng.exponential(1.0 / np.exp(x))
         event = np.ones(3000, dtype=bool)
         self.assertGreater(models.partial_loglik(x, time, event), models.partial_loglik(-x, time, event))
+
+    def test_the_spline_cox_beats_the_linear_cox_on_a_u_shaped_log_hazard(self):
+        data, time, cause = u_shaped(4000, seed=11)
+        data["time"], data["cause"] = time.astype(np.float64), cause
+        train = np.arange(0, 3000)
+        test = np.arange(3000, 4000)
+        ctx = models.Context(data=data, train=train, test=test, seed=7, horizons={})
+        t_te, c_te = ctx.outcome(test)
+        event = c_te >= 0
+        spline = models.REGISTRY["spline-cox-net-all"]().fit_predict(ctx)[0]
+        ctx2 = models.Context(data=data, train=train, test=test, seed=7, horizons={})
+        linear = models.REGISTRY["cox-net-all"]().fit_predict(ctx2)[0]
+        ten = int(np.searchsorted(models.YEARS, 10))  # index of the 10-year column
+        self.assertGreater(concordance(spline[:, ten], t_te, event),
+                           concordance(linear[:, ten], t_te, event))
+
+    def test_the_spline_predictions_of_a_row_ignore_the_other_test_rows(self):
+        data, time, cause = u_shaped(4000, seed=11)
+        data["time"], data["cause"] = time.astype(np.float64), cause
+        train = np.arange(0, 3000)
+        test = np.arange(3000, 4000)
+        ctx = models.Context(data=data, train=train, test=test, seed=7, horizons={})
+        cif = models.REGISTRY["spline-cox-net-all"]().fit_predict(ctx)[0]
+        kept = int(test[0])
+        changed = dict(data, num=data["num"].copy())
+        changed["num"][np.delete(test, 0)] = 1e6  # extreme values on the other held-out rows
+        ctx2 = models.Context(data=changed, train=train, test=test, seed=7, horizons={})
+        cif2 = models.REGISTRY["spline-cox-net-all"]().fit_predict(ctx2)[0]
+        np.testing.assert_allclose(cif2[0], cif[0], atol=1e-9)
 
 
 if __name__ == "__main__":
