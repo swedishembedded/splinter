@@ -24,12 +24,17 @@
 //! * [`acceptance`] - the supervisor's checks.
 //! * [`attempt`] - one attempt, judged, with diagnostic feedback.
 //! * [`run`] - a whole run: attempts, checkpoints, resume, outcome.
+//! * [`models`] - model versions: candidates, the decision to promote, rollback.
+//! * [`training`] - a candidate adapter trained from a dataset the loop wrote.
+//! * [`dataset`] - training records from runs the supervisor can vouch for.
 //! * [`cli`] - the command line.
 
 pub mod acceptance;
 pub mod attempt;
 pub mod cli;
 pub mod contract;
+pub mod dataset;
+pub mod models;
 pub mod observe;
 pub mod outcome;
 pub mod redact;
@@ -37,3 +42,4 @@ pub mod repo;
 pub mod run;
 pub mod store;
 pub mod trace;
+pub mod training;

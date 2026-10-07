@@ -119,6 +119,8 @@ impl Fixture {
         let home = tempfile::tempdir().unwrap();
         let repo = home.path().join("target-repo");
         std::fs::create_dir_all(repo.join("tests")).unwrap();
+        // Like most repositories, this one ignores sven's directory and bytecode.
+        std::fs::write(repo.join(".gitignore"), ".sven/\n__pycache__/\n").unwrap();
         std::fs::write(repo.join("calc.py"), "def add(a, b):\n    return a - b\n").unwrap();
         std::fs::write(
             repo.join("tests/test_calc.py"),
@@ -167,7 +169,13 @@ impl Fixture {
             },
             model: MODEL.into(),
             allow_api_models: false,
-            system_prompt_digest: String::new(),
+            system_prompt_digest: splinter_sdk::vocabulary::digest::Digest::sha256_of(
+                splinter_agent_loop::run::system_prompt(&self.loop_home())
+                    .unwrap()
+                    .0
+                    .as_bytes(),
+            )
+            .to_string(),
             system_prompt_source: "built-in".into(),
             hints: Vec::new(),
         }
@@ -609,5 +617,104 @@ fn a_hint_makes_the_run_assisted_and_remote_models_are_refused_without_the_opt_i
     assert!(
         format!("{err:#}").to_lowercase().contains("remote"),
         "{err:#}"
+    );
+}
+
+#[test]
+fn training_records_come_only_from_accepted_unaided_runs_and_only_the_accepted_attempt() {
+    let f = Fixture::new();
+    // Attempt 1 fails, attempt 2 is accepted; a second run is assisted; a
+    // third is rejected.
+    let flag = Arc::new(AtomicBool::new(false));
+    let seen = flag.clone();
+    let m = model(Duration::ZERO, move |req| {
+        let retry = format!("{:?}", req.messages).contains("previous attempt failed");
+        seen.fetch_or(retry, Ordering::SeqCst);
+        Ok(match (retry, tool_results(req)) {
+            (false, 0) => write("calc.py", "def add(a, b):\n    return 0\n"),
+            (true, 0) => write("calc.py", FIXED),
+            (_, _) => text("done"),
+        })
+    });
+    let splinter = f.splinter(m);
+    let home = f.loop_home();
+    let good = execute(&splinter, &home, Request::New(Box::new(f.contract(3)))).unwrap();
+    assert_eq!(good.status, Status::Accepted);
+    let mut hinted = f.contract(3);
+    hinted.hints.push("look at add()".into());
+    let assisted = execute(&splinter, &home, Request::New(Box::new(hinted))).unwrap();
+    let mut doomed = f.contract(1);
+    doomed.limits.max_tool_calls = 0;
+    let rejected = execute(&splinter, &home, Request::New(Box::new(doomed))).unwrap();
+    assert_ne!(rejected.status, Status::Accepted);
+
+    let out = f.home.path().join("data").join("sft.jsonl");
+    let runs = vec![good.run.clone(), assisted.run.clone(), rejected.run.clone()];
+    let manifest = splinter_agent_loop::dataset::export(&home, &runs, &out).unwrap();
+
+    assert_eq!(manifest.records, 1, "{manifest:#?}");
+    let why = |run: &str| {
+        manifest
+            .runs
+            .iter()
+            .find(|c| c.run == run)
+            .unwrap()
+            .excluded
+            .clone()
+            .unwrap_or_default()
+    };
+    assert!(
+        why(&assisted.run).contains("assisted"),
+        "{}",
+        why(&assisted.run)
+    );
+    assert!(
+        why(&rejected.run).contains("not accepted"),
+        "{}",
+        why(&rejected.run)
+    );
+    let record: Value = serde_json::from_str(
+        std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        record["metadata"]["attempt"], 2,
+        "the accepted attempt, not the failed one"
+    );
+    let messages = record["messages"].as_array().unwrap();
+    let roles: Vec<&str> = messages
+        .iter()
+        .map(|m| m["role"].as_str().unwrap())
+        .collect();
+    assert_eq!(roles, ["system", "user", "assistant", "tool", "assistant"]);
+    // Only the model's own turns are trained on; call ids are unique and answered.
+    let flags: Vec<bool> = messages
+        .iter()
+        .map(|m| m["train"].as_bool().unwrap())
+        .collect();
+    assert_eq!(flags, [false, false, true, false, true]);
+    let call = &messages[2]["tool_calls"][0];
+    assert_eq!(messages[3]["tool_call_id"], call["id"]);
+    assert!(
+        call["function"]["arguments"]
+            .as_str()
+            .unwrap()
+            .contains("calc.py"),
+        "arguments are a JSON string"
+    );
+    assert!(
+        !messages[1]["content"]
+            .as_str()
+            .unwrap()
+            .contains("return 0"),
+        "nothing of the failed attempt"
+    );
+    assert!(
+        !record["tools"].as_array().unwrap().is_empty(),
+        "the tool definitions the model was offered"
     );
 }

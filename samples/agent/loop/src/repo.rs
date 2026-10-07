@@ -124,7 +124,34 @@ pub(crate) fn hash_in_rev(work: &Path, rev: &str, path: &str) -> Result<Option<S
 /// as the list of changed files. Staging is done in the worktree's own
 /// index; the repository the task names is never touched.
 pub fn changes_since(work: &Path, rev: &str) -> Result<(String, Vec<FileChange>)> {
-    git(work, &[&["add", "-A"][..], &EXCLUDE_SVEN].concat())?;
+    // `git add` refuses a pathspec that names an ignored path (a repository
+    // that ignores `.sven`, as many do), so sven's directory is unstaged
+    // afterwards instead of excluded.
+    git(work, &["add", "-A", "--", "."])?;
+    git(
+        work,
+        &[
+            "rm",
+            "-r",
+            "--cached",
+            "-q",
+            "--ignore-unmatch",
+            "--",
+            ".sven",
+        ],
+    )?;
+    git(
+        work,
+        &[
+            "rm",
+            "-r",
+            "--cached",
+            "-q",
+            "--ignore-unmatch",
+            "--",
+            ":(glob)**/__pycache__",
+        ],
+    )?;
     let patch = git(
         work,
         &[&["diff", "--cached", "--binary", rev][..], &EXCLUDE_SVEN].concat(),

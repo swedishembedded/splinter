@@ -58,6 +58,31 @@ The workspace must be a committed git repository; it is never edited. The
 candidate lives in `work/` of the run; `apply` applies the patch of an
 accepted run to the repository, which must still be clean at the baseline.
 
+## Learning from accepted runs
+
+Only a run that was **accepted, unaided and on a local model** offers
+training records, and only its accepted attempt: a rejected patch teaches a
+ranker, not a generator, and a hinted or remote-model run is not evidence of
+what the local model can do alone. `dataset` writes the records in brain's
+chat format with a manifest saying what became of every run offered.
+`train` fits a LoRA adapter on them (the trainer, optimiser and adapter
+format are brain's) and registers it as a **candidate**; a candidate is never
+the model in use. `models judge` decides by a rule fixed in the code before
+any result: the same tasks run once with the model in use and once with the
+candidate (directories of `run --json` outputs, same file names), at least
+eight paired tasks, and a one-sided sign test over the tasks only one of the
+two solved. A rejected candidate stays on record with the numbers that
+rejected it. Promotion keeps what it replaced, so `rollback` returns to it.
+
+```sh
+agent-loop dataset --outcomes runs-json/ --out train.jsonl
+agent-loop train   --dataset train.jsonl --steps 60 --rank 16
+agent-loop models list
+agent-loop models judge --candidate <version> --baseline-results base-json/ --candidate-results cand-json/
+agent-loop models current      # the model reference to run with now
+agent-loop models rollback
+```
+
 ## What a run keeps (`~/.sven/loop/runs/<run>/`)
 
 | File | What |

@@ -47,9 +47,20 @@ use crate::solve::{is_empty_reply, Solution, SolveError, SolveOptions, SOLVER_MO
 use crate::system_prompt::UnderSystemPrompt;
 
 /// The built-in tools a worker is never given: the two that reach the
-/// network, delegation to another agent, asking a person, and the tool that
-/// switches the agent's mode or model.
-pub const WITHHELD_TOOLS: &[&str] = &["web_fetch", "web_search", "task", "ask_question", "system"];
+/// network, delegation to another agent, asking a person, the tool that
+/// switches the agent's mode or model, and the two that bring in state or
+/// instructions from outside the task: the user's memory file, which
+/// outlives a run, and the user's skills, whose listing is part of the
+/// tool's description and so of every prompt.
+pub const WITHHELD_TOOLS: &[&str] = &[
+    "web_fetch",
+    "web_search",
+    "task",
+    "ask_question",
+    "system",
+    "memory",
+    "skill",
+];
 
 /// How often a running worker looks at its caller's cancel token: the
 /// longest a cancel waits to be seen between two events.

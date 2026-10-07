@@ -203,7 +203,21 @@ fn drive(
             run_cancel: rec.cancel_token(),
             remaining_secs: contract.limits.total_secs - elapsed,
         };
-        let judged = run_attempt(&setup, number, feedback.as_deref())?;
+        // A failure of the loop itself is a recorded outcome, not a crash
+        // that leaves a run with no result to read.
+        let judged = match run_attempt(&setup, number, feedback.as_deref()) {
+            Ok(judged) => judged,
+            Err(e) => {
+                tracer.emit(
+                    "loop_error",
+                    None,
+                    json!({"attempt": number, "error": format!("{e:#}")}),
+                )?;
+                status = Status::Error;
+                termination = format!("the loop failed during attempt {number}: {e:#}");
+                break;
+            }
+        };
         let Judged {
             summary,
             accepted,

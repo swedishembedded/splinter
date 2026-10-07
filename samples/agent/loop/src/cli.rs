@@ -60,6 +60,100 @@ enum Command {
     Apply { run: String },
     /// List runs.
     Runs,
+    /// Train a candidate adapter on a dataset (it is not used until judged).
+    Train(TrainArgs),
+    /// Model versions: list, judge a candidate, roll back.
+    Models {
+        #[command(subcommand)]
+        command: ModelsCommand,
+    },
+    /// Write training records (brain's chat format) from accepted, unaided
+    /// runs on a local model, and a manifest saying what each offered run
+    /// became.
+    Dataset(DatasetArgs),
+}
+
+/// The arguments of `train`.
+#[derive(Args, Debug)]
+struct TrainArgs {
+    /// The dataset `dataset` wrote.
+    #[arg(long)]
+    dataset: PathBuf,
+    /// The base model, `local:<org>/<model>` (no adapter).
+    #[arg(long, default_value = DEFAULT_MODEL)]
+    base: String,
+    /// Optimiser steps.
+    #[arg(long, default_value_t = 60)]
+    steps: u32,
+    /// LoRA rank.
+    #[arg(long, default_value_t = 16)]
+    rank: u32,
+    /// LoRA alpha.
+    #[arg(long, default_value_t = 32.0)]
+    alpha: f32,
+    /// Peak learning rate (default: brain's).
+    #[arg(long)]
+    lr: Option<f32>,
+    /// Records averaged into one optimiser step.
+    #[arg(long, default_value_t = 2)]
+    records_per_step: u32,
+    /// Seed.
+    #[arg(long, default_value_t = 1)]
+    seed: u64,
+    /// Hold the frozen base at bf16.
+    #[arg(long)]
+    bf16: bool,
+}
+
+#[derive(Subcommand, Debug)]
+enum ModelsCommand {
+    /// Every version and where it stands.
+    List {
+        /// The base model of the registry.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        base: String,
+    },
+    /// The model reference to run with now: the base, or the base with the promoted adapter.
+    Current {
+        /// The base model of the registry.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        base: String,
+    },
+    /// Judge a candidate against the model in use on the same tasks, by the declared rule.
+    Judge {
+        /// The candidate's version id.
+        #[arg(long)]
+        candidate: String,
+        /// Directory of `run --json` outputs of the model in use, one file per task.
+        #[arg(long)]
+        baseline_results: PathBuf,
+        /// Directory of the candidate's outputs on the same tasks (same file names).
+        #[arg(long)]
+        candidate_results: PathBuf,
+        /// The base model of the registry.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        base: String,
+    },
+    /// Return to the version that was in use before the present one.
+    Rollback {
+        /// The base model of the registry.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        base: String,
+    },
+}
+
+/// The arguments of `dataset`.
+#[derive(Args, Debug)]
+struct DatasetArgs {
+    /// A run to offer; repeatable.
+    #[arg(long = "run")]
+    runs: Vec<String>,
+    /// A directory of `agent-loop run --json` outputs; every run named in one is offered.
+    #[arg(long)]
+    outcomes: Option<PathBuf>,
+    /// Where to write the dataset (the manifest is written beside it).
+    #[arg(long)]
+    out: PathBuf,
 }
 
 /// The arguments of `run`.
@@ -200,6 +294,9 @@ pub fn main() -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Command::Apply { run } => apply(&home, run),
+        Command::Dataset(args) => dataset(&home, args),
+        Command::Train(args) => train_candidate(&cli, &home, args),
+        Command::Models { command } => models(&home, command),
         Command::Runs => {
             let splinter = Splinter::builder(config(&cli)?).build()?;
             let list = runs::list(&splinter.context())?;
@@ -367,5 +464,96 @@ fn apply(home: &LoopHome, run: &str) -> Result<ExitCode> {
         patch.display(),
         contract.repository.display()
     );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Writes the dataset of the runs offered and reports what became of each.
+fn dataset(home: &LoopHome, args: &DatasetArgs) -> Result<ExitCode> {
+    let mut runs = args.runs.clone();
+    if let Some(dir) = &args.outcomes {
+        let mut files: Vec<_> = std::fs::read_dir(dir)
+            .with_context(|| format!("reading {}", dir.display()))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "json"))
+            .collect();
+        files.sort();
+        for file in files {
+            // Output of a run that failed before it began has no run id.
+            if let Ok(outcome) = read_json::<serde_json::Value>(&file) {
+                if let Some(run) = outcome["run"].as_str() {
+                    runs.push(run.to_string());
+                }
+            }
+        }
+    }
+    let manifest = crate::dataset::export(home, &runs, &args.out)?;
+    println!("{}", serde_json::to_string_pretty(&manifest)?);
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The directory of the checkpoint a `local:<org>/<model>` reference names.
+fn checkpoint_dir(cli: &Cli, reference: &str) -> Result<PathBuf> {
+    let name = reference
+        .strip_prefix("local:")
+        .with_context(|| format!("{reference:?} is not a local: reference"))?;
+    let name = name.split(['@', '+']).next().unwrap_or(name);
+    let store = config(cli)?.model_store;
+    Ok(if Path::new(name).is_absolute() {
+        PathBuf::from(name)
+    } else {
+        store.join(name)
+    })
+}
+
+/// Trains a candidate adapter and prints what it was and how it did on the
+/// records held out of its training.
+fn train_candidate(cli: &Cli, home: &LoopHome, args: &TrainArgs) -> Result<ExitCode> {
+    let settings = crate::training::Settings {
+        steps: args.steps,
+        rank: args.rank,
+        alpha: args.alpha,
+        learning_rate: args.lr,
+        records_per_step: args.records_per_step,
+        seed: args.seed,
+        bf16_base: args.bf16,
+    };
+    let candidate = crate::training::train(
+        home,
+        &args.dataset,
+        &checkpoint_dir(cli, &args.base)?,
+        &args.base,
+        &settings,
+    )?;
+    println!("{}", serde_json::to_string_pretty(&candidate)?);
+    Ok(ExitCode::SUCCESS)
+}
+
+fn models(home: &LoopHome, command: &ModelsCommand) -> Result<ExitCode> {
+    use crate::models::{current_ref, judge, load, pair_results, rollback};
+    match command {
+        ModelsCommand::List { base } => {
+            println!("{}", serde_json::to_string_pretty(&load(home, base)?)?)
+        }
+        ModelsCommand::Current { base } => println!("{}", current_ref(&load(home, base)?)?),
+        ModelsCommand::Judge {
+            candidate,
+            baseline_results,
+            candidate_results,
+            base,
+        } => {
+            let pairs = pair_results(baseline_results, candidate_results)?;
+            let decision = judge(home, base, candidate, &pairs)?;
+            println!("{}", serde_json::to_string_pretty(&decision)?);
+            return Ok(if decision.promoted {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            });
+        }
+        ModelsCommand::Rollback { base } => {
+            let now = rollback(home, base)?;
+            println!("{}", now.unwrap_or_else(|| base.clone()));
+        }
+    }
     Ok(ExitCode::SUCCESS)
 }
