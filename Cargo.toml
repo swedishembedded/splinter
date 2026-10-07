@@ -3,7 +3,17 @@
 
 [workspace]
 resolver = "2"
-members = ["crates/*", "samples/*"]
+# `samples/agent` only groups the agent samples and is not a package, which
+# a `samples/*` glob would take it for; the samples are listed instead.
+members = [
+    "crates/*",
+    "samples/adams",
+    "samples/agent/loop",
+    "samples/health",
+    "samples/jefferson",
+    "samples/lifecourse",
+    "samples/tool-syntax",
+]
 
 [workspace.package]
 version = "0.1.0"

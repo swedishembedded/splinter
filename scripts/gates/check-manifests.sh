@@ -17,7 +17,7 @@ import glob
 import sys
 import tomllib
 
-manifests = sorted(glob.glob("Cargo.toml") + glob.glob("crates/*/Cargo.toml") + glob.glob("samples/*/Cargo.toml"))
+manifests = sorted(glob.glob("Cargo.toml") + glob.glob("crates/*/Cargo.toml") + glob.glob("samples/*/Cargo.toml") + glob.glob("samples/*/*/Cargo.toml"))
 bad = []
 for path in manifests:
     try:

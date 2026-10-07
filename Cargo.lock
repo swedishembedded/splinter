@@ -4079,6 +4079,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-agent-loop"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "futures",
+ "regex",
+ "serde",
+ "serde_json",
+ "splinter-sdk",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "splinter-core"
 version = "0.1.0"
 dependencies = [
