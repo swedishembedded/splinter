@@ -36,10 +36,12 @@
 //! keeps resident is released before it starts. The answers are decided
 //! only after the server has exited ([`ask_then_judge`]): the judge, a model
 //! of its own, would otherwise run out of memory on the device the server
-//! holds and every served verdict would be lost. A served answer that could
-//! not be graded is not a disagreement: the check is not measured
-//! ([`ungraded`]), and so is one whose server stopped answering, with what
-//! the server last wrote.
+//! holds and every served verdict would be lost. A task the server gave no
+//! answer to is not a disagreement: the check is not measured
+//! ([`unanswered`]), and so is one whose server stopped answering, with what
+//! the server last wrote. A judge may abstain on an answer; the verdict is
+//! then undecided and the answers are compared by their text and meaning
+//! ([`verdicts_compatible`]).
 //!
 //! Without a `brain` binary, or when it does not start, the check is not
 //! measured - and the gate fails.
@@ -274,7 +276,7 @@ fn serve_and_ask(
     )?;
     measured.sampled = sample.tasks.len();
     let ids: Vec<String> = sample.tasks.iter().map(|t| t.task.id.to_string()).collect();
-    if let Some(why) = ungraded(&ids, &answers, in_process) {
+    if let Some(why) = unanswered(&ids, &answers, in_process) {
         return Err(Failure::Unmeasured(why));
     }
     let agree = agreements(ctx, &answers, in_process).map_err(Failure::Unmeasured)?;
@@ -310,33 +312,33 @@ fn ask_then_judge<A, P>(
     judge(answered)
 }
 
-/// Why the served answers cannot be compared, when a task the in-process
-/// answer was graded on has no verdict on the served one: the server gave
-/// no answer or the grading failed there, and calling either a disagreement
-/// would blame the served model for it. Each such task is named with which.
-fn ungraded(tasks: &[String], served: &[Probe], in_process: &[Probe]) -> Option<String> {
-    let named: Vec<String> = tasks
+/// Why the served answers cannot be compared, when the server gave no
+/// answer to a task the in-process model answered: that is the server
+/// failing, and calling it a disagreement would blame the served model for
+/// it. Each such task is named.
+fn unanswered(tasks: &[String], served: &[Probe], in_process: &[Probe]) -> Option<String> {
+    let named: Vec<&str> = tasks
         .iter()
         .zip(served.iter().zip(in_process))
-        .filter(|(_, (s, l))| s.verdict.is_none() && l.verdict.is_some())
-        .map(|(task, (s, _))| {
-            let what = if s.answer.is_some() {
-                "answered, verdict undecided"
-            } else {
-                "no answer"
-            };
-            format!("{task} ({what})")
-        })
+        .filter(|(_, (s, l))| s.answer.is_none() && l.answer.is_some())
+        .map(|(task, _)| task.as_str())
         .collect();
     (!named.is_empty()).then(|| {
         format!(
-            "the served answers to {} of {} task(s) were not graded, though the in-process \
-             ones were: {}",
+            "the server gave no answer to {} of {} task(s) the in-process model answered: {}",
             named.len(),
             served.len(),
             named.join(", ")
         )
     })
+}
+
+/// Whether two probes' verdicts allow their answers to be one: equal, or
+/// one of them undecided - a judge may abstain on an answer, and an answer
+/// it declines to grade is compared by what it says.
+fn verdicts_compatible(a: &Probe, b: &Probe) -> bool {
+    a.verdict == b.verdict
+        || (a.verdict.is_none() != b.verdict.is_none() && a.answer.is_some() && b.answer.is_some())
 }
 
 /// Per task, whether the served answer is the in-process one: [`alike`] as
@@ -353,7 +355,7 @@ fn agreements(ctx: &Context, served: &[Probe], in_process: &[Probe]) -> Result<V
     let reworded: Vec<usize> = (0..agree.len())
         .filter(|&i| {
             !agree[i]
-                && served[i].verdict == in_process[i].verdict
+                && verdicts_compatible(&served[i], &in_process[i])
                 && served[i].answer.is_some()
                 && in_process[i].answer.is_some()
         })
@@ -410,7 +412,7 @@ fn alike(a: &Probe, b: &Probe) -> bool {
             .as_deref()
             .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
     };
-    if a.verdict != b.verdict {
+    if !verdicts_compatible(a, b) {
         return false;
     }
     match (words(&a.answer), words(&b.answer)) {
@@ -536,7 +538,7 @@ mod tests {
         );
         assert!(!alike(
             &probe(Some("115200 baud"), Some(true)),
-            &probe(Some("115200 baud"), None)
+            &probe(Some("115200 baud"), Some(false))
         ));
         assert!(alike(&probe(None, None), &probe(None, None)));
         assert!(!alike(&probe(None, wrong), &probe(Some(""), wrong)));
@@ -597,21 +599,24 @@ mod tests {
     }
 
     #[test]
-    fn a_served_answer_that_was_not_graded_is_not_a_disagreement() {
-        let probe = |verdict| Probe {
-            answer: Some("a".into()),
+    fn a_task_the_server_did_not_answer_is_an_error_and_an_abstaining_judge_is_not() {
+        let probe = |answer: Option<&str>, verdict| Probe {
+            answer: answer.map(str::to_string),
             verdict,
         };
-        let local = [probe(Some(true)), probe(None), probe(Some(false))];
-        let ids = ["t1".to_string(), "t2".to_string(), "t3".to_string()];
-        assert_eq!(ungraded(&ids, &local, &local), None);
-        let mut served = [probe(None), probe(None), probe(Some(false))];
-        served[1].answer = None;
-        let why = ungraded(&ids, &served, &local).unwrap();
+        let ids = ["t1".to_string(), "t2".to_string()];
+        let local = [probe(Some("a"), Some(true)), probe(Some("b"), Some(false))];
+        let served = [probe(Some("a"), None), probe(None, None)];
+        let why = unanswered(&ids, &served, &local).unwrap();
         assert!(
-            why.contains("1 of 3") && why.contains("t1 (answered, verdict undecided)"),
+            why.contains("1 of 2") && why.contains("t2") && !why.contains("t1"),
             "{why}"
         );
-        assert!(!why.contains("t2"), "{why}");
+        assert_eq!(unanswered(&ids, &local, &local), None);
+        assert!(
+            alike(&served[0], &local[0]),
+            "an undecided verdict compares by text"
+        );
+        assert!(!alike(&probe(Some("a"), Some(false)), &local[0]));
     }
 }
