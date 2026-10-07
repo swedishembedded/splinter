@@ -125,6 +125,7 @@ fn manifest_of(
         candidate: name.into(),
         datasets: vec![record(f, name, parent)],
         replay: None,
+        rehearsal: None,
         training: TrainingSummary {
             from: "local:base".into(),
             steps: 1,

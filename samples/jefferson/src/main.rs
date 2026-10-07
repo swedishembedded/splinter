@@ -227,9 +227,11 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         held_out: &split.held_out,
         // The sample's own fine-tune runs its steps as given, unwatched;
         // `splinter learn` and `splinter train` monitor and select.
+        held_out_text: None,
         monitor: None,
         eval_every: 0,
         patience: 0,
+        keep_evaluations: None,
         attempt_dir: &attempt,
         steps: u32::try_from(number(args, "--steps", 200)?)?,
         rank: u32::try_from(number(args, "--rank", 16)?)?,
@@ -242,6 +244,7 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         cancel: None,
         bf16_base: args.iter().any(|a| a == "--bf16"),
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
+        weight_decay: 0.0,
         seed: None,
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),

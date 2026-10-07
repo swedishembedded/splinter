@@ -118,9 +118,11 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         held_out: &split.held_out,
         // The sample's own fine-tune runs its steps as given, unwatched;
         // `splinter learn` and `splinter train` monitor and select.
+        held_out_text: None,
         monitor: None,
         eval_every: 0,
         patience: 0,
+        keep_evaluations: None,
         attempt_dir: &t.attempt,
         steps: t.steps,
         rank: t.rank,
@@ -133,6 +135,7 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         cancel: None,
         bf16_base: t.bf16,
         learning_rate: t.learning_rate,
+        weight_decay: 0.0,
         // The records hold answers and no reasoning: trained for no-think mode.
         seed: None,
         thinking: false,
