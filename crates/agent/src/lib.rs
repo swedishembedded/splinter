@@ -28,6 +28,9 @@
 //!   a string, which requests are kept left to the caller.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
+//! * [`work`] - a coding agent working in one directory it is confined to,
+//!   with sven's file, search and shell tools, a cap on tool calls, an
+//!   observer of every event, and suspend and resume.
 
 #![warn(missing_docs)]
 
@@ -44,6 +47,7 @@ pub mod run_code;
 pub mod solve;
 mod system_prompt;
 pub mod typed;
+pub mod work;
 
 pub use sven_sdk as sven;
 pub use sven_sdk::schemars;

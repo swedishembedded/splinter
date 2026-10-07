@@ -4073,6 +4073,7 @@ dependencies = [
  "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
 ]

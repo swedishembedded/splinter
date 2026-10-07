@@ -29,6 +29,7 @@ tokio = { workspace = true }
 splinter-data = { workspace = true }
 
 futures = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
