@@ -61,6 +61,7 @@ pub fn resolve(
                 base_url: None,
                 api_key,
                 thinking: config.thinking,
+                temperature: config.served_temperature,
             }))
         }
     }

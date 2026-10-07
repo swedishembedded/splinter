@@ -46,6 +46,7 @@ fn config() -> Config {
         remote_concurrency: 4,
         min_calibration_controls: 2,
         thinking: false,
+        served_temperature: None,
     }
 }
 

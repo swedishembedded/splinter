@@ -136,6 +136,7 @@ impl Run {
             remote_concurrency: 1,
             min_calibration_controls: 1,
             thinking: false,
+            served_temperature: None,
         };
         Ok(Context::new(config, false)?)
     }

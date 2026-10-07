@@ -67,6 +67,7 @@ fn context(scratch: &Scratch) -> Context {
         remote_concurrency: 4,
         min_calibration_controls: 2,
         thinking: false,
+        served_temperature: None,
     };
     Context::new(config, false)
         .unwrap()

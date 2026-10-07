@@ -42,6 +42,17 @@ pub struct Cli {
     /// (default: `$BRAIN_MODELS_DIR`, else `<home>/.local/share/brain/models`).
     #[arg(long, global = true)]
     models_dir: Option<PathBuf>,
+    /// Let a model served by brain reason before it answers (default: it is
+    /// asked for no reasoning block). Written in the run's `model_selected`
+    /// event.
+    #[arg(long, global = true)]
+    thinking: bool,
+    /// Sampling temperature (0 to 2) asked of a model reached through sven's
+    /// providers, a served model included (default: the provider's, which for
+    /// a served model can be greedy decoding and can loop). Written in the
+    /// run's `model_selected` event.
+    #[arg(long, global = true)]
+    temperature: Option<f32>,
     #[command(subcommand)]
     command: Command,
 }
@@ -254,7 +265,8 @@ fn config(cli: &Cli) -> Result<Config> {
         default_budget: None,
         remote_concurrency: 1,
         min_calibration_controls: 1,
-        thinking: false,
+        thinking: cli.thinking,
+        served_temperature: cli.temperature.filter(|t| (0.0..=2.0).contains(t)),
     })
 }
 

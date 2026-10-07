@@ -81,6 +81,12 @@ pub struct Config {
     /// probes and exams get the answer at once. Models reached over an API
     /// are not affected.
     pub thinking: bool,
+    /// The sampling temperature asked of a model reached through sven's
+    /// providers, a model served on this machine included; `None` leaves the
+    /// provider's own default. Greedy decoding (temperature 0) can fall into
+    /// repeating one action for as long as the run lasts, so a served model
+    /// that works as an agent wants a temperature above zero.
+    pub served_temperature: Option<f32>,
     /// The fewest controls a judge is measured on before its verdicts count:
     /// a judge measured on fewer is not trusted, and one measured on more is
     /// known better. A small corpus gives few controls (a task has one only
@@ -115,6 +121,8 @@ impl Config {
     ///   assistant;
     /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
     ///   held at bf16;
+    /// * `SPLINTER_TEMPERATURE`, the sampling temperature (0 to 2) asked of
+    ///   a model reached through sven's providers;
     /// * `SPLINTER_MIN_CALIBRATION_CONTROLS`, the fewest controls a judge is
     ///   measured on before its verdicts count;
     /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
@@ -157,6 +165,9 @@ impl Config {
             default_budget: var("SPLINTER_BUDGET"),
             thinking: var("SPLINTER_THINKING")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+            served_temperature: var("SPLINTER_TEMPERATURE")
+                .and_then(|v| v.parse().ok())
+                .filter(|t: &f32| (0.0..=2.0).contains(t)),
             min_calibration_controls: var("SPLINTER_MIN_CALIBRATION_CONTROLS")
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)

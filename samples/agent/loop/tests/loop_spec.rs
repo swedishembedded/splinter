@@ -204,6 +204,7 @@ impl Fixture {
             remote_concurrency: 1,
             min_calibration_controls: 1,
             thinking: false,
+            served_temperature: None,
         };
         let splinter = Splinter::builder(config).build().unwrap();
         splinter.runtime().add_model(

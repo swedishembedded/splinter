@@ -26,7 +26,7 @@ pub const QUIESCE_GRACE: Duration = Duration::from_secs(60);
 
 /// A model reached over an API, named `provider/model` the way sven's
 /// configuration names it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RemoteModel {
     /// `provider/model`, e.g. `openrouter/z-ai/glm-5.3-flash`.
     pub spec: String,
@@ -40,6 +40,8 @@ pub struct RemoteModel {
     /// asks its server for no reasoning block. A model of another provider
     /// is not affected.
     pub thinking: bool,
+    /// The sampling temperature to ask for; `None` keeps the provider's.
+    pub temperature: Option<f32>,
 }
 
 impl RemoteModel {
@@ -60,6 +62,9 @@ impl RemoteModel {
         }
         if self.api_key.is_some() {
             config.model.api_key = self.api_key.clone();
+        }
+        if self.temperature.is_some() {
+            config.model.temperature = self.temperature;
         }
         // A model served on this machine answers like the in-process one:
         // without a reasoning block that would spend the caller's output
@@ -207,6 +212,7 @@ fn served_config(
         base_url: Some(base_url.to_string()),
         api_key: Some(api_key.to_string()),
         thinking: false,
+        temperature: None,
     };
     let mut config = sven_sdk::config::Config::default();
     remote.apply_to(&mut config)?;
@@ -321,6 +327,7 @@ mod tests {
             base_url: None,
             api_key: None,
             thinking: false,
+            temperature: None,
         };
         remote("brain/unsloth/Qwen3.8-27B-Q8_0")
             .apply_to(&mut config)
@@ -351,6 +358,24 @@ mod tests {
             .driver_options
             .get("chat_template_kwargs")
             .is_none());
+    }
+
+    #[test]
+    fn the_configured_temperature_is_asked_of_a_remote_model_and_otherwise_left_alone() {
+        let model = |temperature| RemoteModel {
+            spec: "brain/unsloth/Qwen3.8-27B-Q8_0".into(),
+            base_url: None,
+            api_key: None,
+            thinking: false,
+            temperature,
+        };
+        let mut asked = sven_sdk::config::Config::default();
+        model(Some(0.7)).apply_to(&mut asked).unwrap();
+        assert_eq!(asked.model.temperature, Some(0.7));
+        let mut default = sven_sdk::config::Config::default();
+        let before = default.model.temperature;
+        model(None).apply_to(&mut default).unwrap();
+        assert_eq!(default.model.temperature, before);
     }
 
     #[test]
@@ -389,6 +414,7 @@ mod tests {
             base_url: None,
             api_key: None,
             thinking: false,
+            temperature: None,
         });
         assert_eq!(remote.identity(), "openrouter/z-ai/glm-5.3-flash");
     }
@@ -401,6 +427,7 @@ mod tests {
             base_url: None,
             api_key: None,
             thinking: false,
+            temperature: None,
         };
         assert!(bare.apply_to(&mut config).is_err());
         let named = RemoteModel {
@@ -408,6 +435,7 @@ mod tests {
             base_url: Some("http://example.invalid/v1".into()),
             api_key: None,
             thinking: false,
+            temperature: None,
         };
         named.apply_to(&mut config).unwrap();
         assert_eq!(config.model.provider, "openrouter");

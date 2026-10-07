@@ -139,7 +139,9 @@ fn drive(
         json!({"requested": contract.model, "identity": model.identity, "remote": remote,
                "class": if remote { "remote" } else if served_here { "local_served" } else { "local" },
                "system_prompt_digest": contract.system_prompt_digest,
-               "system_prompt_source": contract.system_prompt_source}),
+               "system_prompt_source": contract.system_prompt_source,
+               "thinking": ctx.config().thinking,
+               "temperature": ctx.config().served_temperature}),
     )?;
     let definitions = crate::definitions::effective(&contract.repository);
     tracer.emit(

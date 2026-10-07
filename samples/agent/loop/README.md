@@ -108,6 +108,17 @@ written. A gap in what could be observed is an `events_dropped` event.
 Splinter records each run too (`runs list`, cross-process cancel); the loop
 adds the directory above.
 
+## Sampling of a served model
+
+`--temperature` (0 to 2) sets the sampling temperature asked of a model
+reached through sven's providers, a model served by brain on this machine
+included; unset keeps the provider's default, which for a served model can be
+greedy decoding. A greedy 27B model working as an agent repeated one probe
+command until the attempt was stopped, again and again, and wrote nothing;
+the same task at a temperature of 0.7 edited files within minutes. A served
+model is also asked for no reasoning block unless `--thinking` is given. Both
+settings are written in the `model_selected` event of every run.
+
 ## Limits (all recorded in the contract)
 
 | Flag | Default | Stops |
