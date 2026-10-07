@@ -23,8 +23,13 @@ predictions for every test subject:
 scored with. Usage:
 
     python -I run.py --data <lifecourse dir> --out <baselines dir> \\
-        [--baseline NAME ...] [--repeat R ...] [--fold K ...] [--jobs N]
+        [--baseline NAME ...] [--repeat R ...] [--fold K ...] [--jobs N] [--train-ids DIR]
     python -I run.py --data <dir> --out <dir> --manifest
+
+`--train-ids DIR` trains each fold on only the subjects listed in
+`DIR/r<repeat>-k<fold>.ids` (one id per line, a subset of the fold's training
+subjects; `lifecourse recipe subsample` writes them), a learning curve scored
+on the same test fold.
 """
 import argparse
 import json
@@ -72,6 +77,16 @@ def split(data, repeats, repeat, fold):
     return train, test
 
 
+def restrict(data, train, ids_file):
+    """The training rows listed in `ids_file`, refused unless they are a subset of `train`."""
+    row = {str(s): i for i, s in enumerate(data["ids"])}
+    with open(ids_file) as f:
+        keep = np.array(sorted(row[line.strip()] for line in f if line.strip()))
+    if not set(keep) <= set(train):
+        raise ValueError(f"{ids_file}: lists subjects outside the fold's training subjects")
+    return keep
+
+
 def write_predictions(directory, repeat, fold, ids, cif, cause_cif, meta):
     os.makedirs(directory, exist_ok=True)
     stem = os.path.join(directory, f"r{repeat}-k{fold}")
@@ -91,7 +106,7 @@ def write_predictions(directory, repeat, fold, ids, cif, cause_cif, meta):
 
 def run_one(args):
     """One baseline on one fold; skipped when its predictions exist."""
-    data_dir, out_dir, name, repeat, fold = args
+    data_dir, out_dir, name, repeat, fold, train_ids = args
     target = os.path.join(out_dir, name, f"r{repeat}-k{fold}.jsonl")
     if os.path.exists(target):
         return f"{name} r{repeat} k{fold}: done already"
@@ -101,6 +116,8 @@ def run_one(args):
     with open(build) as f:
         horizons = json.load(f)["horizons"]
     train, test = split(data, repeats, repeat, fold)
+    if train_ids:
+        train = restrict(data, train, os.path.join(train_ids, f"r{repeat}-k{fold}.ids"))
     ctx = models.Context(data, train, test, fold_seed(repeat, fold), horizons)
     t0 = time.time()
     cif, cause_cif = models.REGISTRY[name]().fit_predict(ctx)
@@ -146,6 +163,7 @@ def main():
     ap.add_argument("--repeat", action="append", type=int)
     ap.add_argument("--fold", action="append", type=int)
     ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--train-ids", help="directory of r<repeat>-k<fold>.ids files restricting the training subjects")
     ap.add_argument("--manifest", action="store_true", help="only (re)write the manifests")
     a = ap.parse_args()
     if not 1 <= a.jobs <= MAX_JOBS:
@@ -158,7 +176,7 @@ def main():
     timelines, partition, _ = paths(a.data)
     features.load(timelines, partition, os.path.join(a.out, "_features.npz"))  # cache once, before workers
     repeats, spec = load_partition(partition)
-    tasks = [(a.data, a.out, n, r, k) for n in names
+    tasks = [(a.data, a.out, n, r, k, a.train_ids) for n in names
              for r in (a.repeat if a.repeat is not None else range(len(repeats)))
              for k in (a.fold if a.fold is not None else range(spec["folds"]))]
     if a.jobs == 1:

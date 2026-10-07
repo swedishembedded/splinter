@@ -109,6 +109,92 @@ impl ExternalPrediction {
     }
 }
 
+impl ExternalPrediction {
+    /// The yearly curves of any model that can answer [`Outlook`], so a
+    /// trained model's predictions can be kept in, and scored from, the same
+    /// file format as a baseline's. A curve is clamped to a probability and
+    /// made non-decreasing (a running maximum) before the usual validation;
+    /// causes are kept when the model gives them.
+    pub fn from_outlook<O: Outlook>(model: &O) -> Result<Self> {
+        let yearly = |f: &dyn Fn(f64) -> f64| -> Vec<f64> {
+            let mut top = 0.0f64;
+            (1..=YEARS)
+                .map(|t| {
+                    top = top.max(f(t as f64).clamp(0.0, 1.0));
+                    top
+                })
+                .collect()
+        };
+        let causes: Option<BTreeMap<String, Vec<f64>>> = CODES
+            .iter()
+            .map(|c| {
+                model.cause_cif(c, 1.0)?;
+                Some((
+                    c.to_string(),
+                    yearly(&|t| model.cause_cif(c, t).unwrap_or(0.0)),
+                ))
+            })
+            .collect();
+        ExternalPrediction::new(yearly(&|t| 1.0 - model.survival(t)), causes)
+    }
+
+    /// The equal-weight mean of `parts`' curves, for every curve; refused
+    /// unless all parts agree on whether they give causes.
+    pub fn average(parts: &[ExternalPrediction]) -> Result<Self> {
+        let first = parts.first().ok_or_else(|| anyhow!("nothing to average"))?;
+        let n = parts.len() as f64;
+        let mean = |curve: &dyn Fn(&ExternalPrediction) -> &[f64]| -> Vec<f64> {
+            (0..YEARS)
+                .map(|i| parts.iter().map(|p| curve(p)[i]).sum::<f64>() / n)
+                .collect()
+        };
+        let causes = match &first.causes {
+            None if parts.iter().all(|p| p.causes.is_none()) => None,
+            Some(first_causes) => {
+                let maps: Vec<&BTreeMap<String, Vec<f64>>> =
+                    parts.iter().filter_map(|p| p.causes.as_ref()).collect();
+                if maps.len() != parts.len() {
+                    bail!("some parts give causes and some do not");
+                }
+                let mut averaged = BTreeMap::new();
+                for cause in first_causes.keys() {
+                    let curves: Vec<&Vec<f64>> = maps
+                        .iter()
+                        .map(|m| {
+                            m.get(cause)
+                                .ok_or_else(|| anyhow!("a part has no cause {cause}"))
+                        })
+                        .collect::<Result<_>>()?;
+                    averaged.insert(
+                        cause.clone(),
+                        (0..YEARS)
+                            .map(|i| curves.iter().map(|c| c[i]).sum::<f64>() / n)
+                            .collect(),
+                    );
+                }
+                Some(averaged)
+            }
+            None => bail!("some parts give causes and some do not"),
+        };
+        ExternalPrediction::new(mean(&|p: &ExternalPrediction| &p.all[..]), causes)
+    }
+
+    /// The line of the prediction file for `subject_id`.
+    pub fn json_line(&self, subject_id: &str) -> Result<String> {
+        let round = |v: &[f64]| -> Vec<f64> { v.iter().map(|x| (x * 1e9).round() / 1e9).collect() };
+        let mut line = serde_json::json!({"subject_id": subject_id, "cif": round(&self.all)});
+        if let Some(causes) = &self.causes {
+            line["cause_cif"] = serde_json::to_value(
+                causes
+                    .iter()
+                    .map(|(k, v)| (k.clone(), round(v)))
+                    .collect::<BTreeMap<_, _>>(),
+            )?;
+        }
+        Ok(serde_json::to_string(&line)?)
+    }
+}
+
 impl Outlook for ExternalPrediction {
     fn survival(&self, t: f64) -> f64 {
         1.0 - curve_at(&self.all, t)
@@ -470,6 +556,38 @@ mod tests {
             "short"
         );
         assert!(parse(&lines(&ids, &curve(0.02)), &expected).is_ok());
+    }
+
+    #[test]
+    fn an_average_of_predictions_is_their_mean_curve() {
+        let (a, b) = (curve(0.01), curve(0.03));
+        let mean = ExternalPrediction::average(&[
+            ExternalPrediction::new(a.clone(), None).unwrap(),
+            ExternalPrediction::new(b.clone(), None).unwrap(),
+        ])
+        .unwrap();
+        for t in 1..=YEARS {
+            let want = 1.0 - 0.5 * ((1.0 - a[t - 1]) + (1.0 - b[t - 1]));
+            assert!((1.0 - mean.survival(t as f64) - want).abs() < 1e-12);
+        }
+        let causes = ExternalPrediction::new(
+            curve(0.02),
+            Some(
+                CODES
+                    .iter()
+                    .map(|c| (c.to_string(), curve(0.005)))
+                    .collect(),
+            ),
+        )
+        .unwrap();
+        assert!(
+            ExternalPrediction::average(&[mean.clone(), causes]).is_err(),
+            "causes for some parts only"
+        );
+        assert!(ExternalPrediction::average(&[]).is_err());
+        let line = mean.json_line("s0").unwrap();
+        let back = parse(&line, &["s0"]).unwrap();
+        assert!((back[0].survival(10.0) - mean.survival(10.0)).abs() < 1e-8);
     }
 
     #[test]

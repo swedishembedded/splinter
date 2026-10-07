@@ -101,7 +101,7 @@ pub struct Training {
     pub steps: u32,
 }
 
-fn early_stopping_share(id: &str, seed: u64) -> bool {
+pub(crate) fn early_stopping_share(id: &str, seed: u64) -> bool {
     let h = splinter_sdk::vocabulary::digest::Digest::of(format!("{seed}:{id}").as_bytes());
     // The first byte of the digest is uniform: one in ten held out.
     u8::from_str_radix(&h.hex()[..2], 16).unwrap_or(0) < 26

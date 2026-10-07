@@ -25,6 +25,7 @@
 //! amend    pin an amendment to the criteria beside them (never an edit)
 //! ensemble the locked test scored by several seeds' models together (secondary)
 //! temporal train on the earlier cycles, score the later ones (secondary; never the locked test)
+//! recipe  a named variant of the horizon spec on chosen folds, averages of variants, learning-curve subsamples (secondary)
 //! intake   the harmonisation admission rules, and a model's proposals, against the hand mapping
 //! ```
 
@@ -40,6 +41,8 @@ mod intake;
 mod intervals;
 mod metrics;
 mod nhanes;
+mod recipe;
+mod recipe_run;
 mod report;
 mod temporal;
 
@@ -127,6 +130,9 @@ enum Command {
         /// The reference: an arm, or `external:<baseline>`.
         #[arg(long)]
         b: Comparand,
+        /// Only the folds of these repeats (default: all both ran on).
+        #[arg(long)]
+        repeat: Vec<usize>,
     },
     /// Secondary: score a baseline's out-of-fold prediction files
     /// (`baselines/<name>/r<repeat>-k<fold>.jsonl` in the data directory) with
@@ -181,6 +187,13 @@ enum Command {
         #[arg(long, default_value_t = 2009)]
         split: u16,
     },
+    /// Secondary: train named variants of the horizon spec on
+    /// cross-validation folds, average their predictions, and tabulate them.
+    /// Everything is kept under `<data>/recipe/`, never in `runs/`.
+    Recipe {
+        #[command(subcommand)]
+        command: RecipeCommand,
+    },
     /// Measure the harmonisation admission rules, and a served model's
     /// mapping proposals, against the hand-written exam concepts.
     Intake {
@@ -206,6 +219,151 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum RecipeCommand {
+    /// Train a recipe with each seed on the folds asked for; keeps the
+    /// predictions and scores of member `<name>-s<seed>`.
+    Run {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// The recipe's name; members are `<name>-s<seed>`.
+        #[arg(long)]
+        name: String,
+        /// An override, `key=value` (see `src/recipe.rs`); repeat for several.
+        #[arg(long = "set")]
+        set: Vec<String>,
+        /// Training seeds (default: 1).
+        #[arg(long, default_values_t = [1u64])]
+        seed: Vec<u64>,
+        /// Only these repeats (default: all).
+        #[arg(long)]
+        repeat: Vec<usize>,
+        /// Only these folds (default: all).
+        #[arg(long)]
+        fold: Vec<usize>,
+        /// Keep the scores only, not the prediction files.
+        #[arg(long)]
+        no_predictions: bool,
+    },
+    /// Keep the mean of members' predicted curves as `<name>`, scored like any other.
+    Blend {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// The average's name.
+        #[arg(long)]
+        name: String,
+        /// A member: a recipe's directory name, or `external:<baseline>`.
+        #[arg(long = "member", required = true)]
+        member: Vec<String>,
+        /// Only these repeats (default: all).
+        #[arg(long)]
+        repeat: Vec<usize>,
+        /// Only these folds (default: all).
+        #[arg(long)]
+        fold: Vec<usize>,
+    },
+    /// Write the training subjects a `train_share` subsample keeps, per fold,
+    /// for a baseline outside Rust to train on.
+    Subsample {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Fraction of each fold's training subjects.
+        #[arg(long)]
+        share: f64,
+        /// Seed of the subsample.
+        #[arg(long, default_value_t = recipe::DEFAULT_TRAIN_SEED)]
+        seed: u64,
+        /// Only these repeats (default: all).
+        #[arg(long)]
+        repeat: Vec<usize>,
+        /// Only these folds (default: all).
+        #[arg(long)]
+        fold: Vec<usize>,
+    },
+    /// Score the prediction files already in `<data>/recipe/<name>/`
+    /// (written by a program outside Rust) like any other recipe.
+    Score {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// The directory name under `recipe/`.
+        #[arg(long)]
+        name: String,
+        /// What made the predictions, for the record.
+        #[arg(long)]
+        made_of: String,
+        /// Only these repeats (default: all).
+        #[arg(long)]
+        repeat: Vec<usize>,
+        /// Only these folds (default: all).
+        #[arg(long)]
+        fold: Vec<usize>,
+    },
+    /// Mean metrics of models over the folds they all ran on, as a table.
+    Summary {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// A model: an arm, `external:<baseline>` or `recipe:<name>`.
+        #[arg(long = "model", required = true)]
+        model: Vec<Comparand>,
+        /// Only the folds of these repeats.
+        #[arg(long)]
+        repeat: Vec<usize>,
+    },
+}
+
+fn recipe_command(command: RecipeCommand) -> Result<()> {
+    match command {
+        RecipeCommand::Run {
+            data,
+            name,
+            set,
+            seed,
+            repeat,
+            fold,
+            no_predictions,
+        } => recipe_run::run(
+            &data,
+            &name,
+            &recipe::Recipe::parse(&set)?,
+            &seed,
+            &repeat,
+            &fold,
+            !no_predictions,
+        ),
+        RecipeCommand::Blend {
+            data,
+            name,
+            member,
+            repeat,
+            fold,
+        } => recipe_run::blend(&data, &name, &member, &repeat, &fold),
+        RecipeCommand::Subsample {
+            data,
+            share,
+            seed,
+            repeat,
+            fold,
+        } => recipe_run::write_subsamples(&data, share, seed, &repeat, &fold),
+        RecipeCommand::Score {
+            data,
+            name,
+            made_of,
+            repeat,
+            fold,
+        } => recipe_run::score_files(&data, &name, &made_of, &repeat, &fold),
+        RecipeCommand::Summary {
+            data,
+            model,
+            repeat,
+        } => recipe_run::summary(&data, &model, &repeat),
+    }
+}
+
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Build {
@@ -228,7 +386,7 @@ fn main() -> Result<()> {
             seed,
             reason,
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
-        Command::Compare { data, a, b } => compare::compare(&data, &a, &b),
+        Command::Compare { data, a, b, repeat } => compare::compare(&data, &a, &b, &repeat),
         Command::External { data, baseline } => external::score(&data, &baseline),
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
@@ -239,6 +397,7 @@ fn main() -> Result<()> {
             seed,
             split,
         } => temporal::temporal(&data, arm, seed, split),
+        Command::Recipe { command } => recipe_command(command),
         Command::Intake {
             nhanes,
             mortality,

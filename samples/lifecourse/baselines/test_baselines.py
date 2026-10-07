@@ -39,6 +39,21 @@ class Harness(unittest.TestCase):
         np.testing.assert_array_equal(a.median, b.median)
         np.testing.assert_array_equal(a.scale, b.scale)
 
+    def test_a_training_subsample_must_stay_inside_the_fold(self):
+        import tempfile
+        import run
+        data = dict(ids=np.array(["a", "b", "c", "d"]))
+        train = np.array([0, 1, 2])
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "r0-k0.ids")
+            with open(path, "w") as f:
+                f.write("c\na\n")
+            np.testing.assert_array_equal(run.restrict(data, train, path), np.array([0, 2]))
+            with open(path, "w") as f:
+                f.write("a\nd\n")  # d is a test subject
+            with self.assertRaises(ValueError):
+                run.restrict(data, train, path)
+
     def test_missing_values_are_imputed_and_flagged(self):
         data = toy()
         rows = np.arange(len(data["num"]))

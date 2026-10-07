@@ -30,21 +30,31 @@ pub enum Comparand {
     Arm(Arm),
     /// A baseline whose predictions were scored by `external`.
     External(String),
+    /// A recipe (or an average of recipes) kept by `recipe`.
+    Recipe(String),
 }
 
 /// Prefix of an external baseline on the command line.
 const EXTERNAL_PREFIX: &str = "external:";
+/// Prefix of a recipe on the command line.
+const RECIPE_PREFIX: &str = "recipe:";
 
 impl FromStr for Comparand {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, String> {
+        if let Some(name) = s.strip_prefix(RECIPE_PREFIX) {
+            return match name {
+                "" => Err(format!("{RECIPE_PREFIX}<recipe name>")),
+                _ => Ok(Comparand::Recipe(name.to_string())),
+            };
+        }
         match s.strip_prefix(EXTERNAL_PREFIX) {
             Some(name) if !name.is_empty() => Ok(Comparand::External(name.to_string())),
             Some(_) => Err(format!("{EXTERNAL_PREFIX}<baseline name>")),
-            None => Arm::from_str(s, true)
-                .map(Comparand::Arm)
-                .map_err(|e| format!("{e} (or {EXTERNAL_PREFIX}<baseline name>)")),
+            None => Arm::from_str(s, true).map(Comparand::Arm).map_err(|e| {
+                format!("{e} (or {EXTERNAL_PREFIX}<baseline name>, {RECIPE_PREFIX}<recipe name>)")
+            }),
         }
     }
 }
@@ -55,6 +65,7 @@ impl Comparand {
         match self {
             Comparand::Arm(a) => a.name().to_string(),
             Comparand::External(n) => format!("{EXTERNAL_PREFIX}{n}"),
+            Comparand::Recipe(n) => format!("{RECIPE_PREFIX}{n}"),
         }
     }
 
@@ -66,6 +77,7 @@ impl Comparand {
                 .map(|(fold, run)| (fold, run.metrics))
                 .collect()),
             Comparand::External(n) => crate::external::scores(data, n),
+            Comparand::Recipe(n) => crate::recipe_run::scores(data, n),
         }
     }
 }
@@ -104,10 +116,13 @@ pub fn compared_metrics() -> Vec<Compared> {
     ]
 }
 
-/// Two models on the folds both ran on.
-pub fn compare(data: &Path, a: &Comparand, b: &Comparand) -> Result<()> {
+/// Two models on the folds both ran on (only those of `repeats`, when given).
+pub fn compare(data: &Path, a: &Comparand, b: &Comparand, repeats: &[usize]) -> Result<()> {
     let (ra, rb) = (a.folds(data)?, b.folds(data)?);
-    let folds: Vec<&(usize, usize)> = ra.keys().filter(|k| rb.contains_key(k)).collect();
+    let folds: Vec<&(usize, usize)> = ra
+        .keys()
+        .filter(|k| rb.contains_key(k) && (repeats.is_empty() || repeats.contains(&k.0)))
+        .collect();
     if folds.len() < 2 {
         bail!(
             "{} folds ran for both {} and {}; at least two are needed",
@@ -163,6 +178,11 @@ mod tests {
             "external:gbs-all".parse(),
             Ok(Comparand::External("gbs-all".into()))
         );
+        assert_eq!(
+            "recipe:d32-s1".parse(),
+            Ok(Comparand::Recipe("d32-s1".into()))
+        );
+        assert!("recipe:".parse::<Comparand>().is_err());
         assert!("external:".parse::<Comparand>().is_err());
         assert!("nonsense".parse::<Comparand>().is_err());
     }

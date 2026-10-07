@@ -105,6 +105,37 @@ lifecourse compare  --data <data> --a external:cox-net-all --b additive
 `report` adds a row per scored baseline to its cross-validation section.
 `python -I baselines/test_baselines.py` holds the harness's own checks.
 
+## Recipes
+
+Secondary, never one of the criteria and never scored on the locked test:
+`recipe` asks whether the deep encoder's score is a training-recipe problem
+or a ceiling of the data. A recipe is the horizon spec as `key=value`
+overrides of the arm's defaults (shape, learning rate, batch, masking rate,
+patience, steps, knots, a training subsample, a bootstrap resample; the keys
+are listed in `src/recipe.rs`). What brain's `TimelineSpec` does not expose
+cannot be set, and asking for it is an error: weight decay is one such
+hyperparameter.
+
+Everything is kept under `<data>/recipe/<name>/`, never in `runs/`: the
+out-of-fold predictions in the format of the `external` arm and a score per
+fold. Every recipe, every average of recipes and every baseline is scored
+from prediction files by the same function, so they sit on one footing and
+`compare`, which reads them as `recipe:<name>`, pairs them on identical folds.
+
+```bash
+lifecourse recipe run     --data <data> --name d32 --set d_model=32 --set d_ff=64 --seed 1 --repeat 0
+lifecourse recipe blend   --data <data> --name d32-ens --member d32-s1 --member d32-s2
+lifecourse recipe subsample --data <data> --share 0.25     # ids for baselines/run.py --train-ids
+lifecourse recipe score   --data <data> --name cox-net-all-p25 --made-of "..."   # score files written elsewhere
+lifecourse recipe summary --data <data> --model additive --model recipe:d32-s1 --repeat 0
+lifecourse compare --data <data> --a recipe:d32-s1 --b additive --repeat 0
+```
+
+A member trained with seed `s` is kept as `<name>-s<s>`; a blend may mix
+recipes and `external:<baseline>` members. A subsample keeps a subject when
+a hash of the seed and its id falls below the share, so a smaller share is
+always inside a larger one.
+
 ## Protocol
 
 Fixed before the first model was trained, and pinned by digest
@@ -156,6 +187,7 @@ lifecourse amend   --data <out>                                 # pin the post-f
 lifecourse report  --data <out>
 lifecourse temporal --data <out> --arm horizon --split 2009      # secondary: calendar shift
 lifecourse ensemble --data <out> --arm horizon --members 5       # secondary: seeded ensemble on the locked test
+lifecourse recipe  run|blend|subsample|score|summary --data <out>   # secondary: named training variants
 lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```
 
