@@ -328,6 +328,13 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     };
     assert_eq!(powered.exam_set.as_deref(), Some("e1"));
     assert_eq!((powered.resamples, powered.no_voice), (Some(5), true));
+    assert!(!powered.deployed_only);
+    let Command::Exam(deployed) = command(&["exam", "c1", "--exam-set", "e1", "--deployed-only"])
+    else {
+        panic!("exam");
+    };
+    assert!(deployed.deployed_only);
+    assert!(parse(&["exam", "c1", "--deployed-only"]).is_err());
     assert!(
         parse(&["exam", "c1", "--resamples", "3"]).is_err(),
         "resamples belong to a frozen exam"

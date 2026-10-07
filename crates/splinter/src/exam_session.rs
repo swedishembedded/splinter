@@ -72,6 +72,7 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
         "resamples": args.resamples,
         "pilot_families": args.pilot_families,
         "voice": !args.no_voice,
+        "deployed_only": args.deployed_only,
     });
     record(ctx, "exam", &arguments, |cancelled| {
         let cancel = cancelled.cancel_token();
@@ -86,7 +87,11 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
                 resamples: args.resamples.map_or(DEFAULT_RESAMPLES, |n| n as usize),
                 pilot_families: args.pilot_families,
                 voice: !args.no_voice,
-                arms: ArmChoice::All,
+                arms: if args.deployed_only {
+                    ArmChoice::Deployed
+                } else {
+                    ArmChoice::All
+                },
                 adapter: None,
                 cancel: &cancel,
             },

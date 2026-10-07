@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `exam CANDIDATE --exam-set EXAM --deployed-only` asks only the candidate under the prompt it is deployed
+  with, for a candidate to be paired offline with the base and prompted arms of another report of the
+  same exam instead of asking them again.
 - `train --keep-evaluations` keeps the adapter of every evaluation with the candidate; `splinter select`
   puts each to the dev suite and chooses one by a fixed rule (no more than 8% invented specifics,
   then the best answers within a standard error, then the writer's text of the dev families by

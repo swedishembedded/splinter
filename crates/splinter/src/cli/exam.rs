@@ -48,6 +48,12 @@ pub struct ExamArgs {
     /// candidate, as a pilot that estimates the discordance and clustering.
     #[arg(long, value_name = "N", requires = "exam_set")]
     pub pilot_families: Option<usize>,
+    /// With --exam-set: ask only the candidate under the prompt it is
+    /// deployed with. Nothing is compared in the report; the arms of another
+    /// report of the same exam (the base, the prompted base, the same tasks
+    /// and families, greedy answers) are what its verdicts are paired with.
+    #[arg(long, requires = "exam_set")]
+    pub deployed_only: bool,
     /// With --exam-set: leave out the voice score, which loads each arm on
     /// the device to give the writer's own text a likelihood.
     #[arg(long, requires = "exam_set")]

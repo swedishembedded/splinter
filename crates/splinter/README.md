@@ -37,7 +37,7 @@ splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
 splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
-splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--judge REF] [--prompt GOAL]
+splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--deployed-only] [--pilot-families N] [--judge REF] [--prompt GOAL]
 splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | power [--families N] [--tasks-per-family N] [--effect SHARE] [--discordance SHARE] [--icc RHO] [--from-report FILE] | show EXAM
 splinter exam-report labels-export REPORT --out FILE --key FILE [--n N] [--seed N] | labels-import LABELS --key FILE | memorisation REPORT --candidate CANDIDATE
 splinter runs list | show <ID> | cancel <ID>
