@@ -247,10 +247,31 @@ fn a_dry_run_reports_the_plan_and_writes_nothing() {
         "frontier selection is the default"
     );
     assert!(
+        !plan.stages.contains(&"checkpoint"),
+        "the step is chosen on the monitoring loss unless the dev suite is asked"
+    );
+    assert!(
         !ctx.root().path().exists(),
         "a dry run writes nothing under the state root"
     );
     assert!(trainer.handed.lock().unwrap().is_empty());
+    let choosing = learn(
+        &ctx,
+        &LearnRequest {
+            sources: vec![manual.display().to_string()],
+            kinds: vec!["recall".into(), "denoise".into()],
+            select_on_dev: true,
+            dry_run: true,
+            ..LearnRequest::default()
+        },
+        &trainer,
+    )
+    .unwrap();
+    let Learned::Planned(chosen) = choosing else {
+        panic!("a dry run only plans");
+    };
+    let at = |stage: &str| chosen.stages.iter().position(|s| *s == stage).unwrap();
+    assert!(at("train") < at("checkpoint") && at("checkpoint") < at("exam"));
 
     let refused = learn(
         &ctx,
