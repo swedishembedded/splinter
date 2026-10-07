@@ -83,10 +83,34 @@ the decision about when and on what to use it.
 | A non-obvious defect or a gate that lied, with the number that proved it | `.agents/knowledge/<NNN>-<slug>.md`, listed in `.agents/knowledge/index.md` |
 | Outstanding work | `.agents/roadmap/` |
 | Research and design notes that inform the roadmap | `.agents/research/` |
+| Research papers (finished, citable writing) | `papers/<topic>/`, LaTeX, builds with `make` |
 | User-facing documentation | `README.md` |
 
 Code never cites a `docs/` or `.agents/` path (a gate enforces it): state the
 fact inline instead.
+
+## Research papers
+
+`papers/` holds research papers, not plans. A paper is a proper, high-quality
+paper in the style of an arXiv submission (abstract, method, evaluation,
+results, limitations, references; buildable to PDF), and it contains only
+findings that are proven and verified. Roadmaps, intentions, open questions
+and "next steps" belong in `.agents/roadmap/` and `.agents/research/`; a paper
+that reads like one of them is wrong.
+
+- **Keep papers current.** A change that produces a new verified finding, or
+  invalidates a stated one (a corrected defect, a re-measured result, a
+  changed method), updates the affected paper in the same change: text,
+  tables, figures and the numbers they rest on.
+- **Verified means reproducible.** Every number traces to a measurement that
+  can be rerun with the commands the paper documents, comes with its sample
+  size and uncertainty, and is labelled as a pilot when the evaluation was
+  underpowered or not frozen in advance. A result that was not measured is
+  absent, never zero; a result that did not hold is reported as such.
+- **No speculation as findings.** Claims the evidence does not support stay
+  out or are stated as limitations. Every citation is checked to exist.
+- **The paper must build.** `make` in the paper directory produces the PDF
+  with no undefined references or citations before the change is committed.
 
 ## Architecture
 
