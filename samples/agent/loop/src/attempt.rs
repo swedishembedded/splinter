@@ -79,6 +79,11 @@ pub struct Setup<'a> {
     pub remaining_secs: u64,
 }
 
+/// How an attempt is asked to work. A model left to itself may probe one
+/// question again and again and never write the change; a first complete
+/// edit that the checks then judge is a better use of a bounded attempt.
+const WORKING_STYLE: &str = "\nHow to work: read what you need, then make a first complete edit early and run the checks on it; refine from what they print. Look each thing up once. Do not repeat a command whose answer you already have: if you are about to, write the change instead.\n";
+
 /// The prompt of an attempt: the task, how it will be judged, and what the
 /// previous attempt's failure looked like.
 #[must_use]
@@ -98,6 +103,7 @@ pub fn compose_prompt(contract: &Contract, feedback: Option<&str>) -> String {
             if hidden == 1 { "" } else { "s" }
         ));
     }
+    prompt.push_str(WORKING_STYLE);
     if !contract.protected.is_empty() {
         prompt.push_str(&format!(
             "\nDo not modify: {}.\n",
@@ -183,7 +189,7 @@ const MIN_ROUND_SECS: u64 = 20;
 struct Sends {
     tool_calls: u32,
     capped: bool,
-    repeated: bool,
+    repeated: Option<String>,
     conclusion: String,
     final_output: Option<String>,
     provider_failed: bool,
@@ -252,7 +258,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
     let mut sends = Sends {
         tool_calls: 0,
         capped: false,
-        repeated: false,
+        repeated: None,
         conclusion: "ProviderError".into(),
         final_output: None,
         provider_failed: false,
@@ -278,7 +284,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
         let failure = classify(
             &sends.conclusion,
             sends.capped,
-            sends.repeated,
+            sends.repeated.as_deref(),
             cancelled,
             gathered.over_budget,
             sends.provider_failed,
@@ -340,7 +346,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
         failure,
         tool_calls: sends.tool_calls,
         stopped_by_tool_cap: sends.capped,
-        stopped_by_repetition: sends.repeated,
+        stopped_by_repetition: sends.repeated.is_some(),
         changed_files: inspection.changes,
         checks: inspection.checks,
         final_message: sends.final_output.clone().or(gathered.last_message.clone()),
@@ -403,7 +409,9 @@ fn send_round(
         Some(report) => {
             sends.tool_calls += report.tool_calls;
             sends.capped |= report.stopped_by_tool_cap;
-            sends.repeated |= report.stopped_by_repetition;
+            if sends.repeated.is_none() {
+                sends.repeated = report.repeated_call.clone();
+            }
             sends.conclusion = format!("{:?}", report.solution.conclusion);
             sends.final_output = report.solution.final_output.clone();
         }
@@ -417,7 +425,7 @@ fn send_round(
 fn classify(
     conclusion: &str,
     capped: bool,
-    repeated: bool,
+    repeated: Option<&str>,
     cancelled: bool,
     over_budget: bool,
     provider_failed: bool,
@@ -443,12 +451,11 @@ fn classify(
     if capped {
         return Some("tool_call_limit".into());
     }
-    if repeated {
-        return Some(
-            "stagnation: one call kept returning the same answer, so the attempt was stopped; \
-             change approach and make the change itself"
-                .into(),
-        );
+    if let Some(call) = repeated {
+        return Some(format!(
+            "stagnation: the call `{call}` returned the same answer again and again, so the \
+             attempt was stopped; do not repeat it, make the change itself"
+        ));
     }
     match conclusion {
         "Timeout" => return Some("time_limit".into()),
@@ -655,6 +662,10 @@ mod tests {
         assert!(prompt.contains("Supervisor note: look at parse()"));
         assert!(!prompt.contains("previous attempt"));
         assert!(compose_prompt(&c, Some("boom")).contains("previous attempt failed"));
+        assert!(
+            compose_prompt(&c, None).contains("make a first complete edit early"),
+            "the working style is part of every attempt's prompt"
+        );
     }
 
     #[test]
@@ -662,7 +673,7 @@ mod tests {
         let f = [failed("unit", "E")];
         let why = |capped, cancelled, over, provider, touched: &[String], all| {
             classify(
-                "Success", capped, false, cancelled, over, provider, touched, &f, all,
+                "Success", capped, None, cancelled, over, provider, touched, &f, all,
             )
         };
         assert_eq!(
@@ -690,7 +701,7 @@ mod tests {
         );
         assert!(why(false, false, false, false, &[], true).is_none());
         assert_eq!(
-            classify("Timeout", false, false, false, false, false, &[], &f, false).unwrap(),
+            classify("Timeout", false, None, false, false, false, &[], &f, false).unwrap(),
             "time_limit"
         );
     }

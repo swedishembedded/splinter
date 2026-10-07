@@ -280,6 +280,14 @@ async fn a_run_that_repeats_one_call_and_gets_the_same_answer_is_stopped_and_say
 
     assert!(report.stopped_by_repetition);
     assert!(!report.stopped_by_tool_cap);
+    assert!(
+        report
+            .repeated_call
+            .as_deref()
+            .is_some_and(|c| c.starts_with("read_file") && c.contains("a.txt")),
+        "{:?}",
+        report.repeated_call
+    );
     // The cancel is seen between events, so the next call may already have
     // been requested: at most one beyond the bound.
     assert!(

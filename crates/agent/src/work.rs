@@ -125,6 +125,9 @@ pub struct WorkReport {
     /// Whether the run was stopped because one call kept returning the same
     /// answer ([`WorkOptions::max_repeated_results`]).
     pub stopped_by_repetition: bool,
+    /// The call that kept returning the same answer (tool name and the
+    /// start of its arguments), when the run was stopped for it.
+    pub repeated_call: Option<String>,
     /// Events the observer missed, if it fell behind.
     pub dropped_events: u64,
 }
@@ -217,14 +220,16 @@ impl Worker {
             repeat_cap: self.options.max_repeated_results,
             repeats: Mutex::new(Repeats::default()),
             repeated: Arc::new(AtomicBool::new(false)),
+            repeated_call: Arc::new(Mutex::new(None)),
             observer: self.options.observer.clone(),
             tool_calls: Arc::new(AtomicU32::new(0)),
             capped: Arc::new(AtomicBool::new(false)),
         };
-        let (tool_calls, capped, repeated) = (
+        let (tool_calls, capped, repeated, repeated_call) = (
             watch.tool_calls.clone(),
             watch.capped.clone(),
             watch.repeated.clone(),
+            watch.repeated_call.clone(),
         );
         let (done, finished) = oneshot::channel();
         let watcher = tokio::spawn(watch.run(finished));
@@ -254,6 +259,7 @@ impl Worker {
             tool_calls: tool_calls.load(Ordering::SeqCst),
             stopped_by_tool_cap: capped.load(Ordering::SeqCst),
             stopped_by_repetition: repeated.load(Ordering::SeqCst),
+            repeated_call: repeated_call.lock().ok().and_then(|c| c.clone()),
             dropped_events,
         })
     }
@@ -270,9 +276,17 @@ struct Watch {
     repeat_cap: Option<u32>,
     repeats: Mutex<Repeats>,
     repeated: Arc<AtomicBool>,
+    repeated_call: Arc<Mutex<Option<String>>>,
     observer: Option<Observer>,
     tool_calls: Arc<AtomicU32>,
     capped: Arc<AtomicBool>,
+}
+
+/// A call as `name\u{1}arguments`, shortened for a message.
+fn describe(asked: &str) -> String {
+    let (name, args) = asked.split_once('\u{1}').unwrap_or((asked, ""));
+    let args: String = args.chars().take(160).collect();
+    format!("{name} {args}")
 }
 
 /// What a send has asked and been answered: each call by its id, and how
@@ -354,6 +368,9 @@ impl Watch {
                     .or_insert(0);
                 *seen += 1;
                 if *seen >= bound {
+                    if let Ok(mut call) = self.repeated_call.lock() {
+                        call.get_or_insert_with(|| describe(&asked));
+                    }
                     self.repeated.store(true, Ordering::SeqCst);
                     self.stop.cancel();
                 }
