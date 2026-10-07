@@ -57,9 +57,28 @@ impl RemoteModel {
         if self.api_key.is_some() {
             config.model.api_key = self.api_key.clone();
         }
+        // A model served on this machine answers like the in-process one:
+        // without a reasoning block that would spend the caller's output
+        // budget before any answer or tool call is written.
+        if provider == LOCAL_SERVER_PROVIDER {
+            let mut options = config
+                .model
+                .driver_options
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            options.insert(
+                "chat_template_kwargs".into(),
+                serde_json::json!({ "enable_thinking": false }),
+            );
+            config.model.driver_options = serde_json::Value::Object(options);
+        }
         Ok(())
     }
 }
+
+/// The provider name under which sven reaches a `brain serve` on this machine.
+const LOCAL_SERVER_PROVIDER: &str = "brain";
 
 /// The model one stage runs on.
 #[derive(Clone, Debug)]
@@ -286,6 +305,33 @@ mod tests {
             serde_json::json!(false)
         );
         assert_eq!(config.model.temperature, Some(0.0));
+    }
+
+    #[test]
+    fn a_model_served_on_this_machine_is_asked_for_no_reasoning_block_and_another_provider_is_not()
+    {
+        let mut config = sven_sdk::config::Config::default();
+        let remote = |spec: &str| RemoteModel {
+            spec: spec.to_string(),
+            base_url: None,
+            api_key: None,
+        };
+        remote("brain/unsloth/Qwen3.8-27B-Q8_0")
+            .apply_to(&mut config)
+            .unwrap();
+        assert_eq!(
+            config.model.driver_options["chat_template_kwargs"]["enable_thinking"],
+            serde_json::json!(false)
+        );
+        let mut other = sven_sdk::config::Config::default();
+        remote("openrouter/z-ai/glm-5.3-flash")
+            .apply_to(&mut other)
+            .unwrap();
+        assert!(other
+            .model
+            .driver_options
+            .get("chat_template_kwargs")
+            .is_none());
     }
 
     #[test]
