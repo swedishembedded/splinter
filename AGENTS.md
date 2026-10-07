@@ -98,6 +98,9 @@ findings that are proven and verified. Roadmaps, intentions, open questions
 and "next steps" belong in `.agents/roadmap/` and `.agents/research/`; a paper
 that reads like one of them is wrong.
 
+- **Route by scope.** Every paper states its scope in its introduction and
+  `papers/README.md` lists them. Put a new finding in the paper whose scope it
+  falls in; if none fits, start a new paper directory and add its scope there.
 - **Keep papers current.** A change that produces a new verified finding, or
   invalidates a stated one (a corrected defect, a re-measured result, a
   changed method), updates the affected paper in the same change: text,

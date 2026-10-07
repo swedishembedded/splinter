@@ -21,6 +21,20 @@ mode and adapted with LoRA~\citep{hu2021lora}; the judge is a separate Qwen3-14B
 runs on two Tesla P40 cards with 24~GB each, which constrains the work in ways that shape
 the methodology (\cref{sec:residency}).
 
+\paragraph{Scope.}
+This paper covers one question: whether fine-tuning a small policy model on one
+author's own writings makes it think and write like that author on material it has not
+seen, beyond what a persona prompt achieves, and how that is measured. In scope are the
+construction of the training data from the author's writings (views, tasks, abstention,
+replay), the training mechanics of the adapter, the evaluation design (held-out source
+families, exam, judge, statistics, retention), the release gate's checks as measurements,
+and the defects in any of these. Out of scope, and reported elsewhere when they have
+verified findings of their own, are other uses of the system (timelines and longitudinal
+learning, predictive gates, learning from usage policy), retrieval of source passages at
+answer time, serving performance, and models other than the Qwen3 pair studied here. A
+new finding belongs in this paper if it changes what is claimed about, or how one would
+measure, an adapter trained on an author's writings.
+
 \paragraph{The central difficulty is measurement, not training.}
 It is easy to produce an adapter that loses a few points of training loss and
 sounds a little more archaic. It is hard to show that the adapter has changed what the
