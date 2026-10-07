@@ -374,6 +374,9 @@ fn agreements(ctx: &Context, served: &[Probe], in_process: &[Probe]) -> Result<V
             .filter_map(|&i| probes[i].answer.clone())
             .collect()
     };
+    // The judge that graded the answers is a base on the device still; the
+    // embedding model loads beside nothing.
+    ctx.release_bases();
     let embedder = ctx
         .embedder()
         .map_err(|e| format!("comparing what the answers say: {e}"))?;
