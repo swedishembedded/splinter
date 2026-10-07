@@ -36,6 +36,10 @@ pub struct RemoteModel {
     /// API key written into sven's model configuration; `None` keeps the key
     /// sven's configuration already has.
     pub api_key: Option<String>,
+    /// Let a model served on this machine reason before it answers; off
+    /// asks its server for no reasoning block. A model of another provider
+    /// is not affected.
+    pub thinking: bool,
 }
 
 impl RemoteModel {
@@ -60,7 +64,7 @@ impl RemoteModel {
         // A model served on this machine answers like the in-process one:
         // without a reasoning block that would spend the caller's output
         // budget before any answer or tool call is written.
-        if provider == LOCAL_SERVER_PROVIDER {
+        if provider == LOCAL_SERVER_PROVIDER && !self.thinking {
             let mut options = config
                 .model
                 .driver_options
@@ -202,6 +206,7 @@ fn served_config(
         spec: spec.to_string(),
         base_url: Some(base_url.to_string()),
         api_key: Some(api_key.to_string()),
+        thinking: false,
     };
     let mut config = sven_sdk::config::Config::default();
     remote.apply_to(&mut config)?;
@@ -315,6 +320,7 @@ mod tests {
             spec: spec.to_string(),
             base_url: None,
             api_key: None,
+            thinking: false,
         };
         remote("brain/unsloth/Qwen3.8-27B-Q8_0")
             .apply_to(&mut config)
@@ -328,6 +334,19 @@ mod tests {
             .apply_to(&mut other)
             .unwrap();
         assert!(other
+            .model
+            .driver_options
+            .get("chat_template_kwargs")
+            .is_none());
+        // unless the configuration lets models reason
+        let mut reasoning = sven_sdk::config::Config::default();
+        RemoteModel {
+            thinking: true,
+            ..remote("brain/unsloth/Qwen3.8-27B-Q8_0")
+        }
+        .apply_to(&mut reasoning)
+        .unwrap();
+        assert!(reasoning
             .model
             .driver_options
             .get("chat_template_kwargs")
@@ -369,6 +388,7 @@ mod tests {
             spec: "openrouter/z-ai/glm-5.3-flash".into(),
             base_url: None,
             api_key: None,
+            thinking: false,
         });
         assert_eq!(remote.identity(), "openrouter/z-ai/glm-5.3-flash");
     }
@@ -380,12 +400,14 @@ mod tests {
             spec: "glm".into(),
             base_url: None,
             api_key: None,
+            thinking: false,
         };
         assert!(bare.apply_to(&mut config).is_err());
         let named = RemoteModel {
             spec: "openrouter/z-ai/glm".into(),
             base_url: Some("http://example.invalid/v1".into()),
             api_key: None,
+            thinking: false,
         };
         named.apply_to(&mut config).unwrap();
         assert_eq!(config.model.provider, "openrouter");

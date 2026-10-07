@@ -75,10 +75,11 @@ pub struct Config {
     /// How many requests to a model reached over an API may be in flight at
     /// once. A model run on this machine's device is asked one at a time.
     pub remote_concurrency: usize,
-    /// Let local models reason before they answer. Off by default: a model
-    /// whose template opens a reasoning block is asked with it closed, so
-    /// agent work, probes and exams get the answer at once. Models reached
-    /// over an API are not affected.
+    /// Let local models reason before they answer, and a model served by
+    /// brain on this machine too. Off by default: a model whose template
+    /// opens a reasoning block is asked with it closed, so agent work,
+    /// probes and exams get the answer at once. Models reached over an API
+    /// are not affected.
     pub thinking: bool,
     /// The fewest controls a judge is measured on before its verdicts count:
     /// a judge measured on fewer is not trusted, and one measured on more is

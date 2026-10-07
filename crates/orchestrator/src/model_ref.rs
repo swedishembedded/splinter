@@ -60,6 +60,7 @@ pub fn resolve(
                 spec: format!("{provider}/{name}"),
                 base_url: None,
                 api_key,
+                thinking: config.thinking,
             }))
         }
     }
