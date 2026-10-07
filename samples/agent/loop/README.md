@@ -96,12 +96,12 @@ agent-loop models rollback
 | `outcome.json` | the structured result |
 | `work/` | the isolated checkout |
 
-Event types: `run_started`, `model_selected`, `workspace_prepared`,
+Event types: `run_started`, `model_selected`, `definitions`, `workspace_prepared`,
 `baseline_validation`, `attempt_started`, `tool_request`, `tool_result`,
 `file_mutation`, `assistant_message`, `plan_update`, `model_usage`,
 `candidate`, `validation`, `attempt_finished`, `provider_retry`,
 `provider_error`, `limit_reached`, `events_dropped`, `reconcile`,
-`run_resumed`, `run_finished`. An event over 4096 bytes keeps a content
+`run_resumed`, `definition_changed`, `run_finished`. An event over 4096 bytes keeps a content
 address, its size and a preview; credentials are redacted before anything is
 written. A gap in what could be observed is an `events_dropped` event.
 

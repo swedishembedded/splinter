@@ -340,6 +340,7 @@ fn contract_of(args: &RunArgs, home: &LoopHome) -> Result<Contract> {
         bail!("give at least one acceptance check with --accept or --accept-visible NAME=COMMAND: without one nothing decides success");
     }
     let (system, source) = system_prompt(home)?;
+    let definitions_digest = crate::definitions::effective(&repository).digest;
     Ok(Contract {
         schema: CONTRACT_SCHEMA,
         task,
@@ -362,6 +363,7 @@ fn contract_of(args: &RunArgs, home: &LoopHome) -> Result<Contract> {
         allow_api_models: args.allow_api_models,
         system_prompt_digest: Digest::sha256_of(system.as_bytes()).to_string(),
         system_prompt_source: source,
+        definitions_digest,
         hints: args.hints.clone(),
     })
 }

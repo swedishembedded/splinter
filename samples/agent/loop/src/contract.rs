@@ -103,6 +103,11 @@ pub struct Contract {
     pub system_prompt_digest: String,
     /// Where the system prompt came from: `built-in` or a file.
     pub system_prompt_source: String,
+    /// SHA-256 over the subagent, skill, command and project-context
+    /// definitions sven finds for the repository (see `definitions`); empty
+    /// in a contract written before this was recorded.
+    #[serde(default)]
+    pub definitions_digest: String,
     /// Hints the supervisor supplied; a run with any is an assisted one.
     pub hints: Vec<String>,
 }

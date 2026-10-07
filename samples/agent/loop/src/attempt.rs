@@ -604,6 +604,7 @@ mod tests {
             allow_api_models: false,
             system_prompt_digest: String::new(),
             system_prompt_source: "built-in".into(),
+            definitions_digest: String::new(),
             hints: vec![],
         }
     }

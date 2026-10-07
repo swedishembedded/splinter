@@ -34,6 +34,7 @@ pub mod attempt;
 pub mod cli;
 pub mod contract;
 pub mod dataset;
+pub mod definitions;
 pub mod models;
 pub mod observe;
 pub mod outcome;

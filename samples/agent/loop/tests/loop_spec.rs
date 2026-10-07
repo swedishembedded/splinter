@@ -177,6 +177,7 @@ impl Fixture {
             )
             .to_string(),
             system_prompt_source: "built-in".into(),
+            definitions_digest: String::new(),
             hints: Vec::new(),
         }
     }

@@ -141,6 +141,21 @@ fn drive(
                "system_prompt_digest": contract.system_prompt_digest,
                "system_prompt_source": contract.system_prompt_source}),
     )?;
+    let definitions = crate::definitions::effective(&contract.repository);
+    tracer.emit(
+        "definitions",
+        None,
+        json!({"digest": definitions.digest, "entries": definitions.entries}),
+    )?;
+    if !contract.definitions_digest.is_empty() && definitions.digest != contract.definitions_digest
+    {
+        tracer.emit(
+            "definition_changed",
+            None,
+            json!({"what": "agent, skill, command or project definitions",
+                   "note": "the definitions in effect are not the ones the contract recorded"}),
+        )?;
+    }
     let (system, _) = system_prompt(home)?;
     if Digest::sha256_of(system.as_bytes()).to_string() != contract.system_prompt_digest {
         tracer.emit(

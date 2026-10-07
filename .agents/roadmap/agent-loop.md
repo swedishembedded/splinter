@@ -104,11 +104,11 @@ resampling loop. No architecture search against the same folds.
 Audit at 2026-10-07 20:25. Already reused: `sven_sdk` engine, tools, `AgentState`
 suspend and resume and the ATIF trajectory (`crates/agent/src/work.rs`).
 Candidate duplication to resolve:
-- [ ] `samples/agent/loop/src/trace.rs` writes its own append-only event stream. Sven has `sven-chain` (hash-chained append-only JSONL, tamper-evident against accidental edits) and ATIF. Decide per event kind: agent conversation and tool calls stay in the ATIF trajectory from the worker; loop-level events (attempts, checks, patches, interventions) go through a chained log. `sven-chain` is not re-exported by `sven-sdk`: add the re-export in sven (generic), then use it here
-- [ ] `store.rs` run directory under `~/.sven/loop/`: compare with `sven-session-store` and `sven-workspace` conventions (discovery, precedence); reuse where the semantics match, document where they do not
-- [ ] Effective prompt, command and agent definitions hashed per run: take them from `sven-workspace` discovery rather than a local reader
-- [ ] `redact.rs`: check whether sven already redacts secrets in traces and reuse it
-- [ ] Record each decision here with the reason; no sven change that names splinter
+- [x] `trace.rs`: the event stream is now sven's hash-chained log. `sven-sdk` re-exports `chain` (sven 79bca37); the stream is verified whenever it is read, concurrent writers extend one chain and a torn last line is repaired. The conversation itself was already sven's ATIF trajectory
+- [x] Effective definitions: `sven-sdk` re-exports sven's discovery (`workspace`, sven d4ddb0c); the loop records every subagent, skill, command and the project context file in effect, with text digests, in the contract and in a `definitions` event, and flags `definition_changed` on resume
+- [x] `redact.rs` stays: sven has no secret redaction in its traces to reuse (searched `crates/` for it), so the loop's is the only one; if sven gains one, replace this
+- [x] `store.rs` keeps its own run directory under `~/.sven/loop/`: `sven-session-store` stores chat sessions as ATIF trajectories, which a run (contract, checkpoint, patches, outcome) is not. The two share the home directory and the trajectory format
+- [x] No sven change names splinter
 
 ## Frozen
 
@@ -127,4 +127,5 @@ Candidate duplication to resolve:
 | F-008 | high | `timeline_release::a_better_candidate_is_released...` fails deterministically at origin/main against the pinned brain: the candidate's 5-year calibration intercept is 0.788 outside the gate's [-0.5, 0.5]. brain made logistic calibration the default after the test was written | same value in three runs, also in a pristine worktree of e3c62a8 | open: not caused by this work; decide whether the spec should pin the calibrator it was written for or the toy cohort should be larger |
 | F-009 | medium | The prompt listed each acceptance command, so the worker tried to read the hidden acceptance script (the file tools refused; the shell is not a sandbox) | 27B run, transcript | fixed: a hidden check is named, not shown (`--accept` vs `--accept-visible`) |
 | F-010 | medium | The per-request output cap equalled the whole attempt budget (60000), so a served model with a smaller context refused every request | brain serve log: prompt 6668 + max_new 60000 exceeds context capacity 2048 | fixed in the loop's default (24000); the served model needs a context of at least prompt + budget (`BRAIN_QWEN35_GGUF_CTX`) |
+| F-011 | low | sven `cargo clippy -p sven-sdk --all-targets -- -D warnings` fails on five `chunks_exact` lints in `sven-audio` under the toolchain on this host (clippy 1.99); not touched by this work | `crates/sven-audio/src/lib.rs` lines 195-215 | open, pre-existing |
 | F-003 | low | Sven SDK bounds a run by deadline, output tokens and cancel only; no per-run tool-call cap | sdk RunOptions | loop enforces its own cap |
