@@ -181,7 +181,17 @@ pub fn score_chat(
     let base = base
         .to_str()
         .ok_or_else(|| failed("the base checkpoint's path is not UTF-8".into()))?;
-    brain::score_chat(base, adapter, dataset)
+    // brain reports a device failure (an allocation the card cannot hold) as
+    // a panic; scoring is a measurement a caller may do without, so the
+    // failure is returned and the caller decides.
+    std::panic::catch_unwind(|| brain::score_chat(base, adapter, dataset))
+        .map_err(|panic| {
+            failed(format!(
+                "device panic while scoring {}: {}",
+                dataset.display(),
+                crate::local::panic_message(&*panic)
+            ))
+        })?
         .map(held_out_score)
         .map_err(|e| failed(format!("scoring {}: {e}", dataset.display())))
 }

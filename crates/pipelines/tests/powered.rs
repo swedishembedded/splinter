@@ -390,3 +390,67 @@ fn a_kept_evaluation_is_chosen_on_the_dev_suite_by_what_it_answers() {
     );
     assert!(adopt_checkpoint(&ctx, &candidate, 25).is_err());
 }
+
+#[test]
+fn a_voice_stage_that_fails_loses_nothing_the_exam_answered() {
+    let (scratch, ctx) = gate_context("powered-voice-fails", Brain::Missing);
+    let exam = exam(&ctx, &scratch);
+    let facts: Vec<usize> = (0..FACTS).collect();
+    let data = dataset_citing(&ctx, "alpha", &facts, Some(PERSONA_PROMPT), &[]);
+    let (candidate, _) = candidate_on(&ctx, data, &[ANCHOR, "alpha"]);
+    let judge = arms(&ctx, &candidate.adapter);
+    let stages = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = Arc::clone(&stages);
+    let ctx = ctx.with_progress(Box::new(move |stage, summary| {
+        seen.lock()
+            .unwrap()
+            .push((stage.to_string(), summary.clone()));
+    }));
+
+    // The policy base is not on disk, so the voice stage cannot score.
+    let report = run(
+        &ctx,
+        &PoweredRequest {
+            exam: &exam,
+            candidate: &candidate.candidate,
+            base: None,
+            judge: Some(&judge),
+            goal: None,
+            resamples: 1,
+            pilot_families: None,
+            voice: true,
+            arms: ArmChoice::All,
+            adapter: None,
+            cancel: &CancelToken::new(),
+        },
+    )
+    .unwrap();
+    assert!(report.voice.is_empty());
+    assert!(report.voice_error.is_some());
+    assert_eq!(report.records.len(), 12);
+
+    // The answered and graded report was stored before the voice stage
+    // began: it is whole, and says nothing of a voice failure that had not
+    // happened yet.
+    let kept: Vec<_> = ctx
+        .artifacts()
+        .list()
+        .unwrap()
+        .into_iter()
+        .filter(|a| a.role == "exam-report")
+        .collect();
+    assert_eq!(kept.len(), 1);
+    let stored: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(ctx.artifacts().path(&kept[0].digest).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(stored["records"].as_array().unwrap().len(), 12);
+    assert!(stored["voice_error"].is_null());
+    assert!(stored["voice"].as_array().unwrap().is_empty());
+    let stages = stages.lock().unwrap();
+    let announced = stages
+        .iter()
+        .find(|(stage, _)| stage == "exam-answered")
+        .expect("the stored report is announced");
+    assert_eq!(announced.1["report"], kept[0].digest.to_string());
+}

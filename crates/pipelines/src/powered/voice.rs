@@ -115,40 +115,71 @@ fn write_records(
     Ok(projection.records.len())
 }
 
+/// What scoring the voice came to: the arms scored, and why scoring stopped
+/// short of the rest, when it did.
+pub struct Voiced {
+    /// The arms scored, in order, up to the first failure.
+    pub scores: Vec<VoiceScore>,
+    /// The failure that ended scoring; `None` when every arm was scored.
+    pub failure: Option<OrchestratorError>,
+}
+
 /// Scores each of `arms` on the exam's text, leaving out the parts in
 /// `skip`. The files are written under `scratch` and not kept.
 ///
-/// # Errors
-/// Refused when no text is left to score; scoring failures as they come.
+/// The device is given back before every arm and the arms load one at a
+/// time, each model dropped before the next loads, so what the exam's
+/// answering and judging left resident never sits beside an arm being scored.
+/// Scoring stops at the first arm that fails (a device that faulted fails the
+/// rest as well), keeping the scores of the arms before it.
 pub fn score(
     ctx: &Context,
     exam: &ExamSet,
     skip: &BTreeSet<Digest>,
     arms: &[VoiceArm<'_>],
     scratch: &Path,
-) -> Result<Vec<VoiceScore>, OrchestratorError> {
-    std::fs::create_dir_all(scratch).map_err(io(scratch))?;
-    let base = &ctx.config().policy_base;
+) -> Voiced {
     let mut scores = Vec::with_capacity(arms.len());
-    for arm in arms {
-        let file: PathBuf = scratch.join(format!("voice-{}.jsonl", arm.name));
-        if write_records(ctx, exam, skip, arm.system, &file)? == 0 {
-            return Err(OrchestratorError::Refused(
-                "no text of the exam is left to score the voice on".into(),
-            ));
-        }
-        let scored = score_chat(base, arm.adapter, &file)
-            .map_err(|e| OrchestratorError::Refused(e.to_string()));
-        std::fs::remove_file(&file).map_err(io(&file))?;
-        let scored = scored?;
-        scores.push(VoiceScore {
-            arm: arm.name.into(),
-            loss: scored.loss,
-            perplexity: scored.loss.map(|l| f64::from(l).exp()),
-            token_accuracy: scored.token_accuracy,
-            positions: scored.positions,
-            records: scored.records,
-        });
+    let failure = arms
+        .iter()
+        .try_for_each(|arm| {
+            ctx.release_bases();
+            scores.push(score_arm(ctx, exam, skip, arm, scratch)?);
+            Ok(())
+        })
+        .err();
+    Voiced { scores, failure }
+}
+
+/// One arm's score; its record file is removed whether or not scoring
+/// succeeded.
+///
+/// # Errors
+/// Refused when no text is left to score; scoring failures as they come.
+fn score_arm(
+    ctx: &Context,
+    exam: &ExamSet,
+    skip: &BTreeSet<Digest>,
+    arm: &VoiceArm<'_>,
+    scratch: &Path,
+) -> Result<VoiceScore, OrchestratorError> {
+    std::fs::create_dir_all(scratch).map_err(io(scratch))?;
+    let file: PathBuf = scratch.join(format!("voice-{}.jsonl", arm.name));
+    if write_records(ctx, exam, skip, arm.system, &file)? == 0 {
+        return Err(OrchestratorError::Refused(
+            "no text of the exam is left to score the voice on".into(),
+        ));
     }
-    Ok(scores)
+    let scored = score_chat(&ctx.config().policy_base, arm.adapter, &file)
+        .map_err(|e| OrchestratorError::Refused(e.to_string()));
+    std::fs::remove_file(&file).map_err(io(&file))?;
+    let scored = scored?;
+    Ok(VoiceScore {
+        arm: arm.name.into(),
+        loss: scored.loss,
+        perplexity: scored.loss.map(|l| f64::from(l).exp()),
+        token_accuracy: scored.token_accuracy,
+        positions: scored.positions,
+        records: scored.records,
+    })
 }

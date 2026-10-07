@@ -23,7 +23,9 @@
 //! is judged on its own, so no order among the arms can reach a verdict. Code
 //! checks every answer for numbers and names the source does not hold. The
 //! voice of each arm is also scored, with no judge, by the likelihood it
-//! gives the writer's own text ([`voice`]).
+//! gives the writer's own text ([`voice`]), after the answered and graded
+//! report has been stored, so that a failure of the voice stage, which loads each arm
+//! on the device, costs none of the exam.
 //!
 //! An exam family the candidate, or any release it continues, was trained on
 //! is left out: a model that has seen the text is not examined on it.
@@ -64,6 +66,7 @@ use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::roles::assignments;
+use splinter_store::artifacts::ArtifactSpec;
 
 /// The base: the policy base asked under the default prompt.
 pub const BASE: &str = "base";
@@ -489,33 +492,7 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
     };
     let families: BTreeSet<&str> = examined.iter().map(|t| t.family.as_str()).collect();
 
-    // The voice score needs the device and the policy base on disk; where it
-    // cannot be had the rest of the exam stands, and the report says why.
-    let (voice, voice_error) = if request.voice {
-        let arms: Vec<voice::VoiceArm<'_>> = specs
-            .iter()
-            .map(|s| voice::VoiceArm {
-                name: s.name,
-                adapter: s.tuned.then_some(adapter),
-                system: s.system.as_deref(),
-            })
-            .collect();
-        ctx.release_bases();
-        match voice::score(
-            ctx,
-            request.exam,
-            &seen_parts,
-            &arms,
-            &ctx.root().path().join("tmp"),
-        ) {
-            Ok(scores) => (scores, None),
-            Err(OrchestratorError::Cancelled) => return Err(OrchestratorError::Cancelled),
-            Err(e) => (Vec::new(), Some(e.to_string())),
-        }
-    } else {
-        (Vec::new(), None)
-    };
-    Ok(Powered {
+    let mut powered = Powered {
         exam: request.exam.id.clone(),
         candidate: trained.candidate.clone(),
         tasks_in_exam: request.exam.tasks.len(),
@@ -532,16 +509,69 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
                 )
             })
             .collect(),
-        judge: calibrated.trust,
+        judge: calibrated.trust.clone(),
         hard_controls,
         primary,
         arms: summarise(&records, &arm_names),
         comparisons,
-        voice,
-        voice_error,
+        voice: Vec::new(),
+        voice_error: None,
         records,
         training_warnings: trained.warnings(),
-    })
+    };
+    if request.voice {
+        // The judge's model is not needed past this point; it goes before
+        // the voice stage asks the device for each arm.
+        drop(calibrated);
+        keep_answered(ctx, &powered)?;
+        // The voice score needs the device and the policy base on disk;
+        // where it cannot be had the rest of the exam stands, and the report
+        // says why.
+        let arms: Vec<voice::VoiceArm<'_>> = specs
+            .iter()
+            .map(|s| voice::VoiceArm {
+                name: s.name,
+                adapter: s.tuned.then_some(adapter),
+                system: s.system.as_deref(),
+            })
+            .collect();
+        let voiced = voice::score(
+            ctx,
+            request.exam,
+            &seen_parts,
+            &arms,
+            &ctx.root().path().join("tmp"),
+        );
+        powered.voice = voiced.scores;
+        match voiced.failure {
+            None => {}
+            Some(OrchestratorError::Cancelled) => return Err(OrchestratorError::Cancelled),
+            Some(e) => powered.voice_error = Some(e.to_string()),
+        }
+    }
+    Ok(powered)
+}
+
+/// Stores the report as it stands once every arm is answered and graded and
+/// announces it, so a failure of what follows (the voice stage loads each arm
+/// on the device) does not cost the hours that produced it.
+fn keep_answered(ctx: &Context, answered: &Powered) -> Result<(), OrchestratorError> {
+    let bytes = serde_json::to_vec_pretty(answered).map_err(|source| OrchestratorError::Json {
+        what: "the answered exam report".into(),
+        source,
+    })?;
+    let kept = ctx.artifacts().put_bytes(
+        &bytes,
+        &ArtifactSpec::new("exam-report", "powered-exam").with_extension(".json"),
+    )?;
+    ctx.report_stage(
+        "exam-answered",
+        &serde_json::json!({
+            "report": kept.digest.to_string(),
+            "path": ctx.artifacts().path(&kept.digest)?,
+        }),
+    );
+    Ok(())
 }
 
 /// One answer, judged and checked against the source.

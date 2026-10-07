@@ -401,7 +401,7 @@ impl futures::Stream for Events {
 }
 
 /// A panic payload as text, however it was constructed.
-fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
     panic
         .downcast_ref::<String>()
         .cloned()

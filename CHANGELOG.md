@@ -81,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The timeline pipeline (`splinter_sdk::timeline`): import and split stages, a train stage for `timeline-v1` datasets (immutable candidates packed into one deterministic file), an evaluation stage scoring a candidate against a champion on the same held-out units with participant-clustered bootstrap differences, a release stage through the predictive gate that records a failing candidate as rejected, and the lineage of a release down to source file lines; `samples/health` runs it on a synthetic cohort.
 
 ### Fixed
+- The powered exam stores its answered and graded report (as an `exam-report` artifact, announced as the
+  `exam-answered` stage with its path) before the voice stage starts, and the voice stage no longer
+  takes the run down: each arm is scored with the device given back first, one arm at a time, a
+  device failure while scoring is returned as the `voice_error` of a complete report instead of a
+  panic, and the arms scored before a failure keep their scores.
 - A stored document of measured floating-point numbers was refused on read as altered: serde_json now parses floats exactly.
 
 ### Added (earlier)
