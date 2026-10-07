@@ -202,14 +202,30 @@ protected path touched, tool-call cap, time, token, provider, cancelled), and
 the next attempt starts from a clean checkout and is shown the failure and
 the tail of the failing output, never a patch.
 
-**Trace.** Every run keeps an append-only JSONL event stream (schema version,
-run, attempt, an id that only grows, timestamp, parent, type, data), with
-credentials redacted before anything is written and payloads over a size
-bound stored once by content address. The agent runtime's own trajectory of
-each attempt is persisted beside it. A gap in what could be observed is an
-event of its own. Checkpoints are written after every attempt; a resumed run
-does not trust the checkout an interrupted attempt left, resets it to the
-baseline and records that it did.
+**Trace.** Every run keeps an append-only event stream, written in the
+agent runtime's own hash-chained log format (each line carries the hash of
+the one before, so an edited, reordered, inserted or removed event is
+reported when the stream is read, and writers in several processes extend one
+chain). An event has a schema version, run, attempt, an id that only grows,
+timestamp, parent, type and data, with credentials redacted before anything is
+written and payloads over a size bound stored once by content address. The
+chain detects accidental damage and edits that do not recompute every later
+hash; it is not a defence against someone who can rewrite the whole file. The
+runtime's own trajectory of each attempt is persisted beside it. A gap in what
+could be observed is an event of its own. The run records which subagent,
+skill, command and project-context definitions were in effect, found by the
+runtime's own discovery rules, as a digest in the contract and a
+`definitions` event, and flags a change on resume. Checkpoints are written
+after every attempt; a resumed run does not trust the checkout an
+interrupted attempt left, resets it to the baseline and records that it did.
+
+**Stopping a worker that is going nowhere.** An attempt is stopped as
+*stagnation* when one call (same tool, same arguments) has returned the same
+answer a set number of times (default four); a repeated call whose answer
+changes, such as a test run after an edit, is not counted. The retry is told
+which call looped, never a patch. This guard exists because of what we
+observed (section 5.1): a 27-billion-parameter model decoded greedily
+repeated one probe command about forty times and wrote nothing.
 
 **Accounting of help.** A run given any supervisor hint is recorded as
 assisted. Unaided means no hint, no remote model and no supervisor repair
@@ -240,6 +256,8 @@ revisions of the three repositories.)*
 |------|-----------|---------|
 | 2026-10-07 | M0 protocol and plan | Paper created; decision rule fixed (section 4.3) |
 | 2026-10-07 | M1 loop built | Section 4.4 describes the loop as implemented; specs pass with a scripted model; real-model result pending |
+| 2026-10-07 | Reuse of the agent runtime | Event stream moved onto the runtime's hash-chained log; definitions in effect recorded through its discovery; two small additions to the runtime's SDK (`chain`, `workspace`), neither naming this project |
+| 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review
 
