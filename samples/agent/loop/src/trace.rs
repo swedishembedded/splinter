@@ -8,23 +8,29 @@
 
 //! The append-only event stream of a run.
 //!
-//! One JSON object per line in `events.jsonl`: a schema version, the run and
-//! attempt it belongs to, an id that only grows, a timestamp, the id of the
-//! event it is a child of, its type and its data. Every payload is redacted
+//! One record per line in `events.jsonl`, kept in sven's hash-chained log
+//! (`sven_sdk::chain`): each line carries the hash of the one before it, so
+//! an edited, reordered, inserted or removed event is reported when the
+//! stream is read, writers in several processes extend one chain, and a
+//! torn final line is repaired by the next append. The record is a schema
+//! version, the run and attempt it belongs to, an id that only grows, a
+//! timestamp, the id of the event it is a child of, its type and its data.
+//! The chain detects accidental damage and edits that do not recompute every
+//! later hash; it is not a defence against someone who can rewrite the whole
+//! file. Every payload is redacted
 //! before it is written. A payload larger than [`MAX_EVENT_DATA`] is stored
 //! once, by content address, under `artifacts/`, and the event carries the
 //! address, the size and a preview: the stream stays small and the evidence
 //! stays complete. A gap in what the loop could observe is itself an event
 //! (`events_dropped`), never a silent hole.
 
-use std::fs::{File, OpenOptions};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::{json, Value};
+use splinter_sdk::agent::sven::chain::{append_chain, read_chain};
 use splinter_sdk::vocabulary::clock::utc_now;
 use splinter_sdk::vocabulary::digest::Digest;
 
@@ -53,7 +59,6 @@ pub struct Tracer {
 }
 
 struct State {
-    file: File,
     next_id: u64,
     attempt: u32,
 }
@@ -78,18 +83,14 @@ impl Tracer {
     pub fn open(dir: &Path, run: &str) -> Result<Self> {
         std::fs::create_dir_all(dir.join(ARTIFACTS_DIR))
             .with_context(|| format!("creating {}", dir.display()))?;
-        let path = dir.join(EVENTS_FILE);
-        let next_id = last_id(&path)?.map_or(1, |id| id + 1);
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .with_context(|| format!("opening {}", path.display()))?;
+        let next_id = read_events(dir)?
+            .last()
+            .and_then(|event| event.get("id")?.as_u64())
+            .map_or(1, |id| id + 1);
         Ok(Self {
             run: run.to_string(),
             dir: dir.to_path_buf(),
             state: Mutex::new(State {
-                file,
                 next_id,
                 attempt: 0,
             }),
@@ -121,15 +122,12 @@ impl Tracer {
             kind,
             data: &data,
         };
-        let mut text = serde_json::to_string(&line).context("encoding a trace event")?;
-        text.push('\n');
-        // One write of the whole line: an interrupted process leaves a
-        // complete line or none.
-        state
-            .file
-            .write_all(text.as_bytes())
-            .context("appending to the trace")?;
-        state.file.flush().context("flushing the trace")?;
+        let entry = serde_json::to_value(&line).context("encoding a trace event")?;
+        // The chained append is one locked write of the whole line: an
+        // interrupted process leaves a complete line or none.
+        let path = self.dir.join(EVENTS_FILE);
+        append_chain(&path, vec![entry])
+            .with_context(|| format!("appending to {}", path.display()))?;
         state.next_id += 1;
         Ok(id)
     }
@@ -161,32 +159,14 @@ impl Tracer {
     }
 }
 
-/// The id of the last complete line of the stream at `path`, if any.
-fn last_id(path: &Path) -> Result<Option<u64>> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Ok(None);
-    };
-    Ok(text.lines().rev().find_map(|line| {
-        serde_json::from_str::<Value>(line)
-            .ok()?
-            .get("id")?
-            .as_u64()
-    }))
-}
-
-/// Every event of the stream in `dir`, in order; a line that does not parse
-/// is an error, since a damaged stream is evidence of a crash worth naming.
+/// Every event of the stream in `dir`, in order. The chain is verified as
+/// it is read: a stream that was edited, reordered or cut is an error naming
+/// the line, since a damaged stream is evidence worth stopping for. A stream
+/// that does not exist yet is empty.
 pub fn read_events(dir: &Path) -> Result<Vec<Value>> {
     let path = dir.join(EVENTS_FILE);
-    let text =
-        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    text.lines()
-        .enumerate()
-        .map(|(n, line)| {
-            serde_json::from_str(line)
-                .with_context(|| format!("{} line {} is not an event", path.display(), n + 1))
-        })
-        .collect()
+    let lines = read_chain(&path).with_context(|| format!("reading {}", path.display()))?;
+    Ok(lines.into_iter().map(|line| line.entry).collect())
 }
 
 #[cfg(test)]
@@ -234,7 +214,8 @@ mod tests {
             .map(str::len)
             .max()
             .unwrap();
-        assert!(line_len < MAX_EVENT_DATA, "the stream stays small");
+        // A line is the event plus the two hashes that chain it.
+        assert!(line_len < MAX_EVENT_DATA + 400, "the stream stays small");
     }
 
     #[test]
@@ -262,5 +243,18 @@ mod tests {
         let events = read_events(dir.path()).unwrap();
         assert_eq!(events[0]["attempt"], 0);
         assert_eq!(events[1]["attempt"], 2);
+    }
+
+    #[test]
+    fn an_edited_event_is_reported_when_the_stream_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let t = tracer(dir.path());
+        t.emit("note", None, json!({"text": "first"})).unwrap();
+        t.emit("note", None, json!({"text": "second"})).unwrap();
+        let path = dir.path().join(EVENTS_FILE);
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, text.replace("first", "forged")).unwrap();
+        let error = read_events(dir.path()).unwrap_err();
+        assert!(format!("{error:#}").contains("line 1"), "{error:#}");
     }
 }

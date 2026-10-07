@@ -88,7 +88,7 @@ agent-loop models rollback
 | File | What |
 |---|---|
 | `contract.json` | the task, baseline revision, checks, protected paths, limits, model, system prompt digest |
-| `events.jsonl` | the append-only event stream: schema version, run, attempt, ever-growing id, timestamp, parent, type, data |
+| `events.jsonl` | the append-only event stream, a sven hash-chained log (`events.jsonl.lock` is its writer lock): schema version, run, attempt, ever-growing id, timestamp, parent, type, data |
 | `artifacts/<sha256>` | payloads too large for an event, stored once by content |
 | `trajectories/attempt-N.atif.json` | sven's own trajectory of each attempt |
 | `patch-N.diff`, `patch.diff` | the candidate of each attempt, and the last |
