@@ -308,8 +308,9 @@ subjects is used (the test folds are identical):
 | 75% | 0.04617 | 0.04600 | not run | not run |
 | 100% | 0.04615 | 0.04603 | 0.04657 | 0.04673 |
 
-The two Cox models are flat from half the data on: doubling the sample from
-50% to 100% changes the error by about 0.0002. The piecewise-exponential
+The two Cox models are nearly flat from half the data on: doubling the
+sample from 50% to 100% lowers the error by 0.00015 (elastic-net Cox) and
+0.0006 (spline Cox); from 75% to 100% by 0.00002 and -0.00003. The piecewise-exponential
 additive model and the deep encoder are still falling (0.0009 between 50% and
 100% for the additive model; 0.0032 between 25% and 100% for the encoder), so
 the gap between the learners narrows with more data and the Cox curves
