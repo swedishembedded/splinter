@@ -60,12 +60,12 @@ interest is how much of the work the local agent can do without help.
 **Foundation models for time-to-event data.** MOTOR pretrains a time-to-event
 transformer on tens of millions of patient records and billions of clinical
 events and reports gains in time-dependent concordance and label efficiency on
-downstream survival tasks (Steinberg et al., 2023, arXiv:2301.03150).
+downstream survival tasks (arXiv:2301.03150).
 SurvivEHR pretrains a competing-risks next-event model on 7.6 billion coded
 events from 23 million primary-care patients (Oxford and Birmingham, 2025,
 medRxiv). Delphi-2M trains a generative health-event transformer on 402,799
 UK Biobank participants and, in a scaling experiment, finds that about two
-million parameters is optimal for that dataset (Shmatko et al., 2025). These
+million parameters is optimal for that dataset ("Learning the natural history of human disease with generative transformers", 2025). These
 results locate the regime where representation learning over event
 sequences pays: very many patients, many events per patient. Our cohort has
 one examination per person, so we test the weaker claim that nonlinear
