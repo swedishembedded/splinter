@@ -1,0 +1,7 @@
+run,person,train_records,steps_budget,steps_run,selected_step,peak_lr,heldout_records,loss_before,loss_after,acc_before,acc_after
+v6,Jefferson,167,54,54,last,,47,2.0764,1.4160,0.6628,0.6652
+ablation,Jefferson,273,81,81,last,,47,2.0764,1.4011,0.6628,0.6673
+v7,Jefferson,278,105,56,28,3.0e-4,59,1.2841,0.8677,0.7309,0.7505
+e4,Jefferson,455,120,120,105,2.0e-4,59,1.2841,0.8587,0.7309,0.7529
+e1,Jefferson,273,120,117,45,2.0e-4,59,1.2841,0.8718,0.7309,0.7491
+adams,Adams,177,60,60,last,,60,1.6118,1.0633,0.7095,0.7208

@@ -1,0 +1,95 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Swedish Embedded AB implements autonomous fine-tuning and held-out
+% evaluation of language models for its clients. If your team needs expertise
+% in training a model from a body of text and measuring, with honest
+% statistics, whether it learned anything, you can procure our services by
+% sending an email to info@swedishembedded.com.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.17}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage[capitalise,nameinlink]{cleveref}
+
+\setlist{nosep,leftmargin=1.4em}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\emergencystretch}{2em}
+
+\input{generated/macros}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{Training a Language Model to Think Like a Historical Author\\
+from One Sentence and the Author's Own Writings:\\
+Pipeline, Evaluation Methodology and an Honest Account of the Results}
+\author{Martin Schröder\\
+Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
+\date{Working paper, October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe and evaluate an autonomous pipeline that takes one natural-language
+sentence (``Learn to think like \ldots\ based on the materials \ldots\ in directory
+\ldots'') and a directory of an author's writings, and produces a LoRA-adapted
+language model. The policy is Qwen3-8B in non-thinking mode, an independent Qwen3-14B
+is the judge, and all work runs on two 24~GB Tesla P40 GPUs. The pipeline plans,
+captures sources, splits them by \emph{family} (all printings of a text), generates and
+verifies tasks, teaches, builds a dataset that mixes verified dialogues with the author's
+own text, fine-tunes, examines the result on held-out families, and applies a release gate.
+Two historical authors, Thomas Jefferson and Samuel Adams, serve as test subjects.
+
+The paper is mainly about method: how such a system is measured, and how its defects were
+found and removed. We report the split rule that survives overlapping editions, the
+statistical design of an exam that can actually detect an effect, the controls on a
+model judge, and a catalogue of defects found by audit: a release gate whose
+``held-out'' improvement was paraphrases of trained tasks, a retention check that
+failed correct long answers, a monitoring split that silently dropped 27\% of the
+author's text, and training-loop mechanics (per-record loss normalisation, a learning
+rate that never annealed, weight decay on LoRA, sampling with replacement).
+
+The honest result is negative. On six pilot-scale exams (31--42 tasks, 6--7 families each)
+no candidate is statistically distinguishable from the base model told to take the
+persona in its prompt at $\alpha=0.05$. Pooled descriptively over four of them, the
+adapter judges right on \PooledCandPct\% of tasks against \PooledPromptedPct\% for the
+prompted base and \PooledBasePct\% for the unprompted base, and states far fewer
+invented specifics than the unprompted base (\PooledCandInv\ against \PooledBaseInv\ of
+\PooledTasks\ answers), but those exams have at most about half the power to show even a
+very large effect. A frozen 39-family, 244-task exam, whose simulated power for a ten-point
+gain is about one half, has been built; its pilot runs had not completed when this paper
+was written, and we report them as not measured.
+\end{abstract}
+
+\input{sections/01-introduction}
+\input{sections/02-related}
+\input{sections/03-system}
+\input{sections/04-evaluation}
+\input{sections/05-defects}
+\input{sections/06-results}
+\input{sections/07-discussion}
+\input{sections/08-reproducibility}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

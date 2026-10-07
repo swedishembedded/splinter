@@ -1,0 +1,205 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Finding and Fixing Defects}\label{sec:defects}
+
+The first end-to-end runs produced a candidate that passed the improvement check of the
+release gate with a sign-test $p$ of $2.4\times10^{-4}$ and failed the anchor check by a
+hair. Neither number meant what it appeared to mean. This section records how the
+defects behind them were found, because the method is as reusable as the fixes.
+
+\paragraph{Method.}
+Four practices found nearly all of the defects.
+\emph{(i) Read the code that makes the number, with file and line, before trusting the number.}
+Two read-only audits (one of the pipeline's data and evaluation code, one of the training
+engine) each produced a list in which every item cites the lines that establish it; claims
+from a model-written report were treated as leads and checked in code or data.
+\emph{(ii) Recompute the headline from its parts.} The gate's improvement figure was split
+into the tasks it was made of; the anchor's drop was split into discordant items.
+\emph{(iii) Diff the artefact against its input.} A prepared training file that is
+byte-identical to its input exposed a rewrite that silently skipped every record
+(a presence test where a non-empty test was meant). \emph{(iv) Treat the measuring
+apparatus as under test.} Controls with a known answer, a rescoring of saved answers under a
+corrected verifier, and a simulation of the test's own false-positive rate are all
+measurements of the instrument.
+
+\subsection{Defects of measurement}
+
+\paragraph{The gate's ``held-out'' improvement was recall under paraphrase.}
+The gate's improvement suite absorbed the \emph{variants}: paraphrases of tasks a trained
+record was projected from. For the v7 candidate the suite called ``held-out'' held 149
+tasks, of which 118 were variants and only 31 were truly held out. On it the candidate won
+33 items against 3 (accuracy 0.408 against 0.204) and 12 of 12 discordant families,
+$p=2.4\times10^{-4}$. The same candidate on the 31 genuinely held-out tasks won 2 of 2
+discordant families against the unprompted base ($p=0.25$) and 2 of 3 against the prompted
+base ($p=0.5$). Of the roughly 19 families that had any tasks only 7 were held out, so at
+least 5 of the 12 winning ``families'' were training families. The check measures memory of
+taught facts under paraphrase against the base under the \emph{default} prompt; it says
+nothing about unseen letters or about beating the prompted base. The gate's report now keeps
+generalisation to held-out records and recall under paraphrase apart, each with its own
+difference, interval and sign test, and states the prompt each arm was asked each suite
+under. The decision rule itself is unchanged.
+
+\paragraph{A grader that failed correct long answers.}
+Recall tasks were graded by a \emph{stated} verifier that accepts an answer stating the
+reference, with a length bound of four times the reference's length plus 60 characters.
+Because a verifier of formal strength outranks a judge, an answer such as
+``There are seven continents: \ldots'' to a reference of ``seven'' was failed on length alone,
+as were ``The hardest natural substance is \textbf{diamond}, \ldots'', ``H$_2$O'' against
+``H2O'' (a subscript digit) and ``A spider has 8 legs.'' against ``eight''. On the anchor suite the base scored 0.80 and the candidate 0.745; nine of the
+ten candidate-only misses had the right content, and one was a real error. The candidate
+answers longer, so the bug penalised it. The verifier now abstains on an over-long answer
+that states the reference, leaving it to a judge, and reads sub- and superscript digits as
+plain digits and whole numbers in words and digits as one.
+
+Rescoring the saved answers (\cref{tab:rescore}) shows what remains. Under the corrected
+verifier the candidate has 21 anchor answers waiting for a judge and the base 10. Counting
+all pending answers wrong gives a drop of $+0.064$ (3 candidate-only against 10 base-only
+items); counting them right gives $-0.036$ (5 against 1). On the 89 items decided by code for
+both arms the candidate is at 0.955 and the base at 0.933 (drop $-0.0225$, 3 against 1, paired
+bootstrap 95\% interval of the drop $[-0.067, 0.023]$). The sign of the drop therefore
+depends on how a judge rules on 31 verbose answers. The reported ``forgetting'' was
+thus partly a grading artefact, partly a genuine length difference; it was never a
+measured loss of knowledge.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Arm & Right before & Right after & Pending judge & Wrong after \\
+\midrule
+Candidate (v7) & 82 & 85 & 21 & 4 \\
+Base & 88 & 92 & 10 & 8 \\
+\bottomrule
+\end{tabular}
+\caption{The 110 anchor items rescored under the corrected stated verifier.}
+\label{tab:rescore}
+\end{table}
+
+\paragraph{A comparison that changed two things at once.}
+Described in \cref{sec:eval}: the prompt moved the base from 8 to 13 of 31. The gate had the same
+confound on the anchor, which it asked of the candidate under the persona prompt and of the base
+under the default prompt, while the rehearsal records that were meant to protect general
+behaviour were written under the default prompt. The anchor is now asked of both arms under
+the default prompt.
+
+\paragraph{A judge that was not calibrated on a hard case and not greedy.}
+The calibration controls were the reference itself and an off-topic reference, so precision
+1.0 on both said nothing about an on-topic answer that adds or contradicts specifics;
+\emph{hard controls} (\cref{sec:eval}) were added. The judge decoded at temperature 0.2 without
+a seed, so a verdict could change between two gradings of one answer; it now decodes greedily.
+The judge and the policy remain the same model family (\cref{sec:threats}).
+
+\paragraph{Per-task verdicts were never stored.}
+The first exams stored only arm marginals and family-level tests. The per-task analysis that would
+have shown whether the adapter beats the prompted base could not be redone: from the marginals
+one can only compute the range of task-level $p$ that any split of discordant tasks would give
+(\cref{tab:bounds}). The powered exam now stores every answer and verdict of every arm and
+its analysis can be redone without a model. Its report is stored before the voice score
+(which loads each arm on the device) so that a device failure there costs none of the exam.
+
+\paragraph{A family-level test with seven units.}
+The gate's held-out split was meant to reach at least eight groups (a quarter of the records,
+newest first) but the quarter cap bound at seven families of 1, 4, 9, 2, 10, 4 and 1 tasks, because task
+generation had covered only 19 of 1,629 parts. A family counts once whatever its size, so a
+family of one task weighed as much as a family of ten.
+
+\subsection{Defects of the training loop}\label{sec:training-defects}
+
+The training engine's audit read the code and ran nothing. Its findings, with the correction
+now in place (a mean over supervised tokens, epochs, annealing on stop and so on):
+
+\begin{enumerate}
+\item \textbf{Per-record loss normalisation.} Each micro-batch is one record, and loss and
+  gradient were divided by that record's supervised-token count. Every record weighed equally
+  whatever its length, so a 20-token answer's tokens weighed up to about ten times a 200-token
+  answer's, and the printed training loss was a mean of per-record means, not comparable to
+  the per-token held-out loss. The step is now a mean over its supervised tokens.
+\item \textbf{The learning rate never annealed under early stopping.} Warmup was a fifth of
+  the planned steps and the cosine ran over the plan; early stopping ended a run at step 56 of
+  105 at a learning rate of $2.05\times10^{-4}$ against a peak of $3\times10^{-4}$.
+  Warmup is now a twentieth of the steps and a stop on patience is spent on an anneal to the
+  floor, still selecting on every evaluation.
+\item \textbf{Weight decay of 0.1 on the LoRA matrices.} Now 0 unless asked
+  (\code{--weight-decay}). Whether it mattered is not established; over about 50 steps at
+  this rate its total shrinkage is small.
+\item \textbf{Alpha fixed at 16 at every rank.} Now twice the rank (\code{--alpha}).
+\item \textbf{Sampling with replacement.} Records were drawn uniformly with replacement and
+  ``passes'' only sized the step budget. At 1.6 passes the expected share of records never drawn
+  is $e^{-1.6}\approx20\%$. Records are now drawn in shuffled epochs, each once before any again.
+\item \textbf{No packing.} Each record fills a row padded to the next power of two of the
+  longest example; by the audit's estimate 70--85\% of the work was padding. This is not
+  fixed; it limits throughput (about two minutes per step of eight records, including
+  evaluation, for v7) and therefore the data a run can see.
+\item \textbf{A learning rate defined twice.} \code{train} fell through to the engine's
+  $3\times10^{-4}$ while \code{learn} used $2\times10^{-4}$, so every measured candidate
+  before the current recipe was trained at $3\times10^{-4}$. Both commands now share one value.
+\item \textbf{A monitoring split that dropped records.} The monitoring set was one family (a
+  group of 13 dialogue records and 57 voice records), so early stopping was decided on 25
+  dialogue turns of a single family, and because the writer's text of a monitoring family
+  was ``in neither file'', 57 of 210 voice records (27\%) never trained. The held-out,
+  monitoring and training files now partition the records, the monitoring set spans at least
+  three families where the data allow, and its loss includes the writer's text, which is most
+  of the tokens.
+\end{enumerate}
+
+\paragraph{Multi-turn prefix stability.}
+A chat template renders an earlier assistant answer without its reasoning block and the last
+answer with it, so a single rendering of a whole dialogue cannot show every answer as it is
+asked for, and its message boundaries are refused as not prefix-stable. A no-think
+fine-tune therefore trains each supervised answer on the prompt the template renders for the
+conversation so far, and on the completion the template renders after it (\code{answers\_as\_asked}),
+one example per supervised answer, and fails loudly if the completion does not follow the prompt.
+The rendering of training and evaluation must agree byte for byte: an earlier rewrite meant to
+add the empty think block to training answers skipped every record that carried a \code{tools}
+key, and every dataset wrote \code{"tools": []}. The trained file was byte-identical to its
+input, which is how it was found; two runs of an earlier student model had then been scored on a prefix they never trained on.
+
+\subsection{Defects of the data}
+
+\paragraph{The recipe starved the author's text.}
+v7 trained 124 dialogue records (81 single-turn, 43 three-turn; about 29k supervised tokens
+by a four-characters-per-token estimate) and 210 voice records (about 116k tokens) for
+1.6 passes. All 210 voice records had the same user turn (``Write one of your writings, as you
+wrote it.''); 7 were header-only (25--40 characters), 53 did not end at sentence punctuation,
+43 did not start with a capital, 19 pairs shared five or more eight-word runs (duplicate
+printings), and 157 sources supplied them with two sources supplying 23 and 18. The voice view was
+rebuilt to cut the whole corpus into whole-sentence chunks with one print of each text, a cap per
+family, and (optionally) model-written content descriptions as the request.
+
+\paragraph{A quota that discarded a quarter of the answers.}
+A cap per strength group applied once two groups existed; two recall answers created a
+second, ``formal'', group and the cap discarded 39 of 163 judged dialogue answers (24\%). A
+group under one candidate in twenty now counts for none of a dimension's groups.
+
+\paragraph{A starved author channel.}
+The fit judge for verbatim passages abstained on most items: 14 kept of 112 tasks (v7), 34
+of 123 (v6), 52 of 171 (Adams). We report it as a limit on the amount of verbatim data the
+dialogue pipeline can make; the voice view bypasses it.
+
+\paragraph{Held-out text in training prompts.}
+If passages are shown to the student (retrieval-style training), the library of passages was
+built over all of the run's sources with no holdout filter. It is off by default and no
+reported run used it; we list it because a split that holds for the data but not for the
+prompts is a leak of the same kind.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}p{3.6cm}p{4.6cm}p{6.2cm}@{}}
+\toprule
+Defect & What exposed it & Measurement that proved it \\
+\midrule
+Gate improvement on paraphrases & Splitting the suite into its parts & 149 tasks = 31 held out + 118 variants; $p=0.25$ on the 31 \\
+Stated verifier length bound & Reading the missed answers of the anchor & 9 of 10 candidate-only misses had the right content \\
+Anchor cannot detect 0.02 & Counting discordant items & 17 discordant of 110; 7--10 split, $p=0.63$ \\
+Windowed overlap rule & Comparing whole texts & 93 groups missed; 51 of 1,625 files shared a held-out passage \\
+Glued ``letters'' & Looking at the largest group & 16 files, 419,188 of 1,553,235 words (27\%) \\
+Monitoring dropped records & Simulating the split & 57 of 210 voice records never trained \\
+Rewrite skipped all records & Diffing output against input & Trained file byte-identical to input \\
+Per-record loss weights & Reading the loop & A short answer's tokens weigh up to $\sim10\times$ \\
+Cap on strength groups & Reading the select log & 39 of 163 answers capped \\
+\bottomrule
+\end{tabular}
+\caption{Defects, how each was exposed and the measurement that proved it.}
+\label{tab:defects}
+\end{table}

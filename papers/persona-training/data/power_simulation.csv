@@ -1,0 +1,11 @@
+families,tasks_per_family,effect,discordance,icc,tasks,design_effect,power,false_positive_rate,note
+50,8,0.10,0.30,0.10,400,1.70,0.7175,0.0175,planned final test
+50,8,0.05,0.30,0.10,400,1.70,0.2275,0.0175,planned final test
+50,8,0.15,0.30,0.10,400,1.70,0.9650,0.0175,planned final test
+50,8,0.00,0.30,0.10,400,1.70,0.0275,0.0175,no true effect
+39,6,0.10,0.30,0.10,234,1.50,0.5275,0.0375,families and mean tasks of the realised final test
+39,6,0.15,0.30,0.10,234,1.50,0.8700,0.0375,families and mean tasks of the realised final test
+25,6,0.10,0.30,0.10,150,1.50,0.3900,0.0225,the 25-family pilot
+25,8,0.10,0.30,0.10,200,1.70,0.4550,0.0250,25 families of eight
+200,8,0.05,0.30,0.10,1600,1.70,0.7575,0.0225,the larger design considered
+7,5,0.10,0.30,0.10,35,1.40,0.2175,0.0725,the 7-family exams measured so far

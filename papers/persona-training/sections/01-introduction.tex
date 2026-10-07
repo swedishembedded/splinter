@@ -1,0 +1,58 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Introduction}\label{sec:intro}
+
+A user who wants a model that reasons and writes ``like'' a historical author
+has, today, two cheap options. The first is to tell a general model who to be, in
+a system prompt. The second is to fine-tune a model on the author's collected
+writings, optionally with synthetic dialogues about them. Whether the second option
+buys anything over the first, and how one would know, is the question this paper
+studies. We study it inside a concrete system, Splinter, which is given a single
+sentence of the form ``Learn to think like \emph{X} based on the materials \emph{X}
+has written in directory \emph{D}'' and must, without further instruction, produce a
+fine-tuned model together with a measurement of what it learned and a decision on
+whether to release it.
+
+We chose two test subjects with large public-domain corpora, Thomas Jefferson (about 1.5
+million words of letters and works in the training materials) and Samuel Adams (a smaller
+corpus of about one megabyte). The policy is Qwen3-8B~\citep{qwen3} used in non-thinking
+mode and adapted with LoRA~\citep{hu2021lora}; the judge is a separate Qwen3-14B. Everything
+runs on two Tesla P40 cards with 24~GB each, which constrains the work in ways that shape
+the methodology (\cref{sec:residency}).
+
+\paragraph{The central difficulty is measurement, not training.}
+It is easy to produce an adapter that loses a few points of training loss and
+sounds a little more archaic. It is hard to show that the adapter has changed what the
+model \emph{does} on text it has never seen, beyond what a prompt already achieves, at a
+cost to general behaviour that is acceptable. Almost every defect we found in the first
+version of the system was a defect of measurement: a split that leaked, a gate that
+measured the wrong thing, a grader that failed correct answers, an exam with too few
+independent units to detect anything. Several training defects were also found, but they
+were found by auditing, not by the headline numbers, which did not move.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A complete, autonomous pipeline from one sentence to a released adapter, with a
+  family-level held-out rule that is robust to overlapping editions (\cref{sec:system,sec:split}).
+\item An evaluation methodology for small-corpus persona fine-tuning: a frozen exam reserved
+  before any generation, a fixed primary comparison against the \emph{persona-prompted} base,
+  per-task pairing with a family-clustered bootstrap, Holm correction of secondaries, a
+  power simulation used to size the exam, and a judge with bias controls and deterministic
+  overrides (\cref{sec:eval}).
+\item A catalogue of defects that were found and fixed, each with the measurement that
+  exposed it: leakage across editions, a gate that did not test generalisation, a grader bug,
+  the retention suite's inability to detect a two-point drop, and eight training-mechanics
+  defects (\cref{sec:defects}).
+\item An honest account of the results (\cref{sec:results}). No candidate is
+  distinguishable from the persona-prompted base at $\alpha=0.05$. We give the measured
+  numbers, the bounds on what the exams could have shown, and what has not been
+  established.
+\end{enumerate}
+
+\paragraph{What this paper does not claim.}
+It does not claim that the adapter ``thinks like'' either author. It does not claim an
+effect of the fine-tune beyond the persona prompt: the pilot exams point in that
+direction but cannot establish it. Numbers that were not measured are marked as such;
+\cref{sec:repro} lists the commands that reproduce each measured number and
+\cref{sec:limits} what remains unestablished.

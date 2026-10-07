@@ -1,0 +1,145 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{The System}\label{sec:system}
+
+Splinter is a learning agent built on two dependencies: an agent runtime that runs model
+calls and tools, and a training and inference engine (called \emph{brain} here) that
+performs all model computation. Splinter owns the learning campaign: what to teach, which
+evidence qualifies as training material, how a candidate is measured, and whether it is
+released. A run is one recorded pipeline of stages (\cref{fig:pipeline}); every stage stores
+its output under a content address so that any stage can be rerun or inspected alone.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=5mm and 6mm,
+  box/.style={draw, rounded corners=2pt, minimum height=9mm, minimum width=19mm, align=center, font=\scriptsize, fill=blue!6},
+  gate/.style={draw, rounded corners=2pt, minimum height=9mm, minimum width=19mm, align=center, font=\scriptsize, fill=orange!14},
+  arr/.style={-{Stealth[length=2mm]}, thick}]
+\node[box] (plan) {plan};
+\node[box, right=of plan] (src) {source\\capture};
+\node[box, right=of src] (res) {reserve\\exam families};
+\node[box, right=of res] (tasks) {task\\generation};
+\node[box, right=of tasks] (solve) {solve,\\verify};
+\node[box, below=of plan] (teach) {teach\\(open book)};
+\node[box, right=of teach] (author) {author\\(verbatim)};
+\node[box, right=of author] (data) {dataset\\build};
+\node[box, right=of data] (train) {LoRA\\fine-tune};
+\node[gate, right=of train] (exam) {exam on\\held-out\\families};
+\node[gate, below=of exam] (rel) {release\\gate};
+\draw[arr] (plan) -- (src); \draw[arr] (src) -- (res); \draw[arr] (res) -- (tasks);
+\draw[arr] (tasks) -- (solve);
+\draw[arr] (solve.south) -- ++(0,-3mm) -| ($(plan.south)+(0,-3mm)$) -- (teach.north);
+\draw[arr] (teach) -- (author); \draw[arr] (author) -- (data); \draw[arr] (data) -- (train);
+\draw[arr] (train) -- (exam); \draw[arr] (exam) -- (rel);
+\end{tikzpicture}}
+\caption{The stages of one run, in order (the two orange stages measure). The reserve stage
+precedes every generating stage, so no exam text is ever read by anything that makes
+training data. Rehearsal and variant stages are omitted for clarity.}
+\label{fig:pipeline}
+\end{figure}
+
+\paragraph{Models and hardware.}
+Policy, teacher, task generator, planner and critic are all Qwen3-8B in non-thinking mode.
+The judge is Qwen3-14B, a separate model loaded on its own. Two Tesla P40 cards (24~GB each) are used one job per card; the policy base is held in bf16.
+Every job is launched through a wrapper that pins the card and stops the run if it
+touches a CPU backend or software adapter, so a measurement can never silently come from
+the wrong device.
+
+\subsection{Stages}
+
+\paragraph{Plan.}
+A planner model reads a survey of the materials and chooses what to teach from a menu
+of task kinds (recall, the author's own advice to a correspondent, explanation, conversation,
+restoration of corrupted passages). Each choice is held to the survey by code: a kind
+the sources cannot support is refused.
+
+\paragraph{Source capture and reservation.}
+The directory is captured as a source of text \emph{parts} (the Jefferson materials hold
+1,629 parts; the Adams materials 307), split into sections that tasks cite by byte range.
+Before any task is generated, the \emph{reserve} stage picks the families of the final test
+and of a dev suite by a stable hash of the family name and removes the text of every edition
+of each from every source later stages read (\cref{sec:split}).
+
+\paragraph{Task generation.}
+A generator model proposes tasks from sections; code admits or refuses each one. A task
+must be grounded in its section, stand on its own without the source in front of the
+student, name its subject, quote its source at a run of eight words rather than
+paraphrase it, and not contradict another task. In the Jefferson run described below,
+the generator was given 6,477~s and covered 19 of 1,629 parts; at that pace covering every
+part would have taken 555,322~s, so only a sliver of the corpus is ever turned into tasks.
+For the persona runs the generator is told the person wrote the sources.
+
+\paragraph{Solve and verify.}
+The policy attempts each task closed-book; tasks it always solves are dropped. A teacher
+(here the same Qwen3-8B, shown the source passage) answers the rest open-book. Verifiers
+are ranked by strength: executable checks, a \emph{stated} check that accepts an answer
+stating the reference, an agreement check, and a calibrated judge. The strongest verdict
+decides, and a judge alone never makes a training record. The student's training record
+keeps the instruction and the verified answer but never the passage.
+
+\paragraph{Author channel and variants.}
+For a person, a second kind of record asks for a passage of the person's own text (at most 85
+words) and keeps it only if a fit judge says the passage is a natural reply to the request.
+Separately, the generator rewrites each kept task in other words; these \emph{variants} are
+never trained on.
+
+\paragraph{Dataset views.}
+Records are projections of stored experience into training format. Three views matter here.
+The \emph{dialogue} view holds verified teacher answers under the persona system prompt
+(``You are Thomas Jefferson. Answer as Thomas Jefferson would: in the first person, in
+Thomas Jefferson's own voice, from Thomas Jefferson's own experience and opinions. Answer the
+user's request directly and concisely.''). The \emph{voice} view is built by code with no model
+in the loop: the whole corpus of the author's text in chunks of 250 to 650 words, whole
+sentences, closed at paragraph ends, one print of each text, no family over a tenth of the
+tokens, half of them asked under the identity line instead of the persona prompt, each asked
+for by a request built by code from its recipient, year and opening. In a later arm the
+request is a 20--60 word description of the chunk's content written by the generator and
+refused if more than 35\% of its words fall in runs copied from the passage. The
+\emph{rehearsal} view holds the base model's own greedy answers to general tasks (sums and
+format requests built by code with references, and general requests the base writes), kept
+unless code decides them wrong. An optional abstention share trains the author to say the
+writings do not settle a question; it is kept under half of the records, because a model
+taught to stop that often stops answering.
+
+\paragraph{Training.}
+A candidate is a rank-8 LoRA adapter on all seven projections of every layer
+(q, k, v, o, gate, up, down), trained by supervised fine-tuning in no-think mode
+with loss only on the answer tokens. The current recipe is one learning rate for both
+entry commands (2e-4), an alpha of twice the rank, no weight decay, AdamW with gradient
+clipping at 1.0, a warmup of a twentieth of the steps, a cosine schedule that is cooled
+down to its floor when early stopping triggers, and a step that is the mean over its
+supervised tokens, with every record drawn once per epoch. A share of whole training
+families is held back as a \emph{monitoring} set scored every few steps; the run keeps the
+adapter of the best monitoring loss and stops after four evaluations without improvement.
+Runs can keep the adapter of every evaluation so that a checkpoint may later be chosen on a
+dev suite by generation quality rather than loss.
+
+\paragraph{Exam and release gate.}
+The exam (\cref{sec:eval}) measures whether the candidate generalises to held-out families.
+The release gate has four checks: improvement over the champion on held-out and paraphrased
+tasks (a sign test at $\alpha=0.05$), retention on earlier releases' tasks (bound 0.05),
+a frozen \emph{anchor} suite of general tasks (110 items: 70 recall, 28 arithmetic, 12
+format-following) with a drop bound of 0.02, and a serve check that plain \code{brain serve}
+with the adapter gives the same answers on eight sampled tasks (at least 75\% agreement).
+A release is an immutable adapter with a manifest of every number the gate measured.
+
+\subsection{Residency and memory on 24~GB cards}\label{sec:residency}
+
+A bf16 Qwen3-8B occupies about 16.4~GB, and training at rank 8 with 1,024-token rows reached
+a sampled peak of 21,407~MiB on one card. The 14B judge is a separate base that is not resident beside it. The
+design consequence is that a device holds one base at a time and the work is staged so
+that bases swap as seldom as possible: the policy, the candidate and the champion are one
+base with different adapters attached before each generation (attached, never folded in,
+because folding an adapter into a base forces a re-read of the checkpoint on every
+switch); the gate and the exam answer \emph{every} task of a suite with every arm before the
+judge loads; every resident base is released before a fine-tune or a \code{brain serve}
+process loads its own copy; the serve check judges its answers only after the server has
+exited; and the voice score loads one arm at a time and gives the device back between arms.
+These rules came from failures: an out-of-memory fault on a card is not recoverable in
+process (the engine reports a hard device fault and leaks the device rather than destroy
+inconsistent driver state, so the run is lost), and in the earliest gate runs a judge that loaded while the server still held the
+card ran out of memory, left every served answer ungraded, and the check counted ungraded
+as ``different''. A served task with no answer is now ``not measured'', never a disagreement.

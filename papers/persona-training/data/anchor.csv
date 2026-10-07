@@ -1,0 +1,4 @@
+id,label,items,both_right,both_wrong,candidate_wins,baseline_wins,candidate_accuracy,baseline_accuracy,bound,source
+v7,Jefferson v7 gate,110,78,15,7,10,0.7727,0.8000,0.02,v7-release.log
+adams,Adams gate,110,,,6,10,0.7636,0.8000,0.02,adams-release.log
+rehearsal,Jefferson v7 data + rehearsal,110,,,9,7,0.8182,0.8000,0.02,r2-release.log

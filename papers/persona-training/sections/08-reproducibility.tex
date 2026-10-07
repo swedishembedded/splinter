@@ -1,0 +1,87 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Reproducibility}\label{sec:repro}
+
+\paragraph{Data and models.}
+The corpora are public-domain texts fetched by a checksummed script in the repository
+(Washington, Randolph and Library editions of Jefferson's letters, his works, and an Adams
+collection). The policy is Qwen3-8B (\code{BRAIN\_QWEN\_WEIGHTS} names the checkpoint, and
+\code{SPLINTER\_BF16\_BASE=1} keeps the base in bf16) and the judge is Qwen3-14B, named as
+\code{local:Qwen/Qwen3-14B@4096}. All models run locally.
+
+\paragraph{Commands.}
+The commands below are those the repository documents; every measured number in this paper
+was produced by one of them or is derived from \code{data/} by \code{scripts/build\_data.py}.
+\begin{small}
+\begin{verbatim}
+# materials for one person, and the pool an exam is reserved from
+splinter-jefferson materials --resources RESOURCES --out ./materials
+splinter-jefferson materials --exam-pool --resources RESOURCES --out ./pool
+# the frozen anchor suite the release gate holds a candidate to
+splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl \
+  --freeze samples/adams/anchor-skills.jsonl
+# one sentence, everything else autonomous
+splinter "Learn to think like Thomas Jefferson based on the materials he has \
+  written in directory ./materials"
+# reserve and freeze an exam apart from any run (final test and dev suite)
+splinter exam-set create ./pool --persona "Thomas Jefferson" \
+  --families 50 --tasks-per-family 8 --dev-families 50 --dev-tasks-per-family 4 \
+  --not-trained-by CANDIDATE
+# size the exam by simulation, from an assumption or from a pilot report
+splinter exam-set power --families 50 --tasks-per-family 8 --effect 0.10
+splinter exam-set power --from-report PILOT.json --families 39 --tasks-per-family 6
+# train, keeping the adapter of every evaluation; choose a step on the dev suite
+splinter train DIALOGUES VOICE --steps 120 --records-per-step 8 --eval-every 15 \
+  --keep-evaluations
+splinter select CANDIDATE --exam-set DEV --judge local:Qwen/Qwen3-14B@4096 [--adopt]
+# the powered exam: base, prompted base, candidate, candidate under persona prompt
+splinter exam CANDIDATE --exam-set EXAM --resamples 1 [--pilot-families 25] \
+  --judge local:Qwen/Qwen3-14B@4096 --prompt "to think like Thomas Jefferson" --json
+# a candidate asked alone, to be paired offline with another report of the same exam
+splinter exam CANDIDATE --exam-set EXAM --deployed-only ...
+# analyses of a stored report; labels need a person
+splinter exam-report labels-export REPORT
+splinter exam-report labels-import LABELS
+splinter exam-report memorisation REPORT
+splinter release CANDIDATE --judge local:Qwen/Qwen3-14B@4096
+\end{verbatim}
+\end{small}
+Every job in this paper ran through a wrapper that pins one card and stops on any CPU
+or software-adapter line, one job per card.
+
+\paragraph{Building this paper.}
+\code{make} regenerates every table and plot data file from \code{data/} and builds
+\code{paper.pdf}. To update a result, edit its row in \code{data/exams.csv},
+\code{data/anchor.csv}, \code{data/training.csv}, \code{data/pilot.csv} or
+\code{data/power\_simulation.csv}; the script recomputes the exact sign tests and refuses a row whose logged $p$
+does not match the exact value.
+
+\paragraph{Provenance of measured numbers.}
+\Cref{tab:provenance} names the run log or report each number was read from.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}p{4.5cm}p{9.5cm}@{}}
+\toprule
+Number & Source \\
+\midrule
+Pilot-scale exam counts and tests & Exam reports of each run: the Jefferson dialogue-only, ablation, v7, rehearsal and recipe-2 exams, and the Adams run's exam line \\
+Gate improvement, anchor, serve & Release-gate reports of the v7, Adams and rehearsal candidates \\
+Anchor rescoring & Saved anchor answers of base and candidate, rescored by a mirror of the corrected verifier \\
+Training curves and held-out scores & Training reports of each run (step, learning rate, monitoring loss, held-out loss and token accuracy) \\
+Stage timings, 19 of 1,629 parts & Task-stage summary of the v7 run \\
+Peak device memory & Sampled device memory during v7 training \\
+Frozen exam: 244 and 166 tasks & The exam manifests (tasks per family counted) \\
+Power simulations & \code{splinter exam-set power} (400 replicates, 500 resamples, seed 0) \\
+Exact sign-test power & \code{scripts/build\_data.py} \\
+Per-task bounds & Computed from the marginals in \code{data/exams.csv} \\
+\bottomrule
+\end{tabular}
+\caption{Where each measured number comes from.}
+\label{tab:provenance}
+\end{table}
+
+\paragraph{Availability.}
+Code, tests and this paper are in the Splinter repository; the sample READMEs list the
+fetch and build commands for the corpora.

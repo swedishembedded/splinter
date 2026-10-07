@@ -1,0 +1,16 @@
+Persona training paper: how Splinter learns to think like a historical author
+
+Build (needs python3, pdflatex, bibtex and latexmk; no Python packages):
+
+    make          builds paper.pdf
+    make clean    removes the PDF, LaTeX intermediates and generated/
+
+Every table and plot in the paper is generated from data/*.csv by
+scripts/build_data.py (standard library only), which also recomputes the exact
+sign tests and refuses a row whose logged p-value differs from the exact one.
+To update a result, edit its row in data/ and run make. The frozen-exam pilot
+rows are in data/pilot.csv; a row with state "not completed" is printed as
+"not measured".
+
+Layout: paper.tex (preamble, abstract), sections/ (one file per section),
+references.bib, data/ (measured counts with their sources), scripts/.

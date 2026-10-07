@@ -1,0 +1,61 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Related Work}\label{sec:related}
+
+Every work cited here was checked to exist and to say what is attributed to it;
+\cref{sec:repro} lists the sources of each of our own numbers.
+
+\paragraph{Persona and author fine-tuning.}
+Character-LLM~\citep{shao2023characterllm} trains agents for historical and fictional
+characters on scenes written from character profiles; RoleLLM~\citep{wang2023rolellm}
+builds a role-playing benchmark and fine-tunes on role-conditioned instructions; Ditto
+\citep{lu2024ditto} has an instruction-following model simulate role-play dialogues as
+reading comprehension. All three train on text written by another model about the
+character. This is a form of context distillation~\citep{askell2021general}: the student
+cannot exceed the prompted teacher by construction, and our pilot exams are consistent
+with that ceiling (\cref{sec:results}). A closer relative of our voice data is the study of
+\citet{chakrabarty2025readers}, who fine-tune a commercial model on authors' complete
+works and report that, after fine-tuning, expert and general readers prefer the output over
+expert human writers, whereas prompted output was disliked by experts; \citet{schwitzgebel2023dennett} fine-tuned GPT-3 on a philosopher's writings
+and asked experts to pick the real answers. Both evaluate with human readers; we have not
+yet collected human labels (\cref{sec:limits}).
+
+\paragraph{Knowledge versus behaviour in fine-tuning.}
+Fine-tuning on a few hundred examples is a poor way to add facts. Allen-Zhu and
+Li~\citep{allenzhu2023physics} show that knowledge extraction depends on augmentation of
+each fact; synthetic continued pretraining~\citep{yang2024synthetic} expands a small document
+collection into a much larger synthetic corpus before training; \citet{ovadia2023finetuning} find retrieval
+beats unsupervised fine-tuning for injecting knowledge; and \citet{gekhman2024new} find
+that fine-tuning on facts the model does not know increases hallucination. RAFT
+\citep{zhang2024raft} trains with distractor documents to use retrieved passages. These
+results motivate our objective: the adapter should carry voice and judgment, and
+facts should come from the sources at inference. Our pipeline has retrieval-conditioned
+and abstention records, but the system measured in this paper is parametric only.
+
+\paragraph{Evaluation statistics.}
+\citet{card2020power} show that underpowered evaluations are common in NLP and give
+power-analysis practice; \citet{miller2024errorbars} argues that evaluations should be analysed as statistical trials, and advocates paired differences, clustered standard errors and power analysis
+before the evaluation. Our exam design follows both. Multiple secondary comparisons are
+corrected with Holm's procedure~\citep{holm1979}. Deduplication and leakage are well known
+to inflate scores~\citep{lee2022dedup}; our family rule extends this to overlapping
+editions.
+
+\paragraph{Judges.}
+\citet{zheng2023judging} document position, verbosity and self-preference biases of model
+judges and show that a reference answer improves reliability; length control can raise
+agreement with human preference~\citep{dubois2024lc}. Our judge is reference-based,
+pointwise (so no position exists), greedy, and overridden by deterministic checks; length
+is controlled only by a like-length sub-test. The judge and policy share a model family,
+which is a known risk we cannot rule out (\cref{sec:threats}).
+
+\paragraph{Training mechanics.}
+LoRA~\citep{hu2021lora} behaves differently from full fine-tuning: it learns less and forgets
+less~\citep{biderman2024lora}, its best learning rate is higher and nearly rank-independent
+when applied to all weight matrices~\citep{schulman2025lora}. A thousand curated examples suffice to teach format and style because
+knowledge comes from pretraining~\citep{zhou2023lima}, and alignment tuning leaves the
+decoding at most token positions unchanged~\citep{lin2024urial}, so flat token accuracy is
+expected and uninformative about voice. Replay and learning-rate
+re-decay limit forgetting~\citep{ibrahim2024continual}. We use these as the
+sources of the corrections in \cref{sec:training-defects}, not as proof that each
+correction helps on our data: none of them has been ablated here.
