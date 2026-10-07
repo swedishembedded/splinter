@@ -47,9 +47,9 @@ Known failures before any change: see the findings ledger (F-001).
 - [x] Run id, status, cancel, resumable checkpoint with reconciliation of uncertain actions, structured outcome, append-only JSONL trace with bounded events and artifact references, redaction (specs with a scripted model pass)
 - [x] Workspace wiring: member, architecture entry, manifest gate glob, README (commands to be verified against the real run)
 - [x] Seeded-failure fixture with an acceptance check outside the worker's writable scope
-- [ ] Proof with a real local model; if blocked, name the concrete blocker
-- [ ] Failed-attempt record and retry feedback exercised
-- [ ] Budget exhaustion, cancel, provider failure and restart each show a controlled outcome
+- [x] Proof with a real local model: Qwen3-8B in-process (rejected, two attempts) and Qwen3.8-27B served by brain (accepted, one attempt, unaided); see the paper
+- [x] Failed-attempt record and retry feedback exercised (the 8B run's attempt 1, and specs)
+- [x] Budget exhaustion (total time), cancel, provider failure (seen for real: a served model's context too small) and restart each show a controlled outcome (specs)
 - [ ] Paper: loop section and fixture results; full read-through
 
 ### M2 Pre-registered experiments on the existing cohort data
@@ -96,4 +96,9 @@ resampling loop. No architecture search against the same folds.
 | F-002 | medium | Claim from the external review that our p-values treat 25 folds as independent. REFUTED for the existing analysis: `results.md` uses the corrected resampled t-test (Nadeau-Bengio variance correction). The power estimate stands as an approximation; a subject and PSU bootstrap on pooled out-of-fold predictions is still the stronger check | `baselines/results.md`, paired comparison blocks | closed as stated; bootstrap kept in M2 |
 | F-004 | medium | A `samples/*` workspace glob takes `samples/agent` (no manifest) for a package and fails every cargo command; `exclude` also drops its children | cargo error when `samples/agent/loop` was added | fixed: samples listed explicitly |
 | F-005 | high | A timed-out acceptance check left its grandchildren holding the output pipe, so the kill took as long as the command (30 s for `sleep 30`) | spec `a_command_that_runs_too_long_is_killed_and_fails` failed after 30 s | fixed: each check runs in its own process group and the group is killed |
+| F-006 | medium | A small local model ends a turn by announcing its next step ("Let's fix the indentation and run the tests again") without calling a tool; the runtime counts a text-only reply as a successful run, so a whole attempt was lost with the checks red | run run-20261007T071804.536-bbcb, attempt 1 (Qwen3-8B) | fixed: the attempt goes on in the same conversation, told what failed (`--follow-ups`, default 2); effect measured in the paper |
+| F-007 | high | A bytecode cache left by the previous run of a check made the next check judge code that was no longer there (same size and mtime second) | spec `a_worker_that_stops_with_the_checks_red...` failed with a stale `__pycache__` in the candidate | fixed: checks run without writing bytecode, stale caches are cleared before each check, bytecode is kept out of the patch |
+| F-008 | high | `timeline_release::a_better_candidate_is_released...` fails deterministically at origin/main against the pinned brain: the candidate's 5-year calibration intercept is 0.788 outside the gate's [-0.5, 0.5]. brain made logistic calibration the default after the test was written | same value in three runs, also in a pristine worktree of e3c62a8 | open: not caused by this work; decide whether the spec should pin the calibrator it was written for or the toy cohort should be larger |
+| F-009 | medium | The prompt listed each acceptance command, so the worker tried to read the hidden acceptance script (the file tools refused; the shell is not a sandbox) | 27B run, transcript | fixed: a hidden check is named, not shown (`--accept` vs `--accept-visible`) |
+| F-010 | medium | The per-request output cap equalled the whole attempt budget (60000), so a served model with a smaller context refused every request | brain serve log: prompt 6668 + max_new 60000 exceeds context capacity 2048 | fixed in the loop's default (24000); the served model needs a context of at least prompt + budget (`BRAIN_QWEN35_GGUF_CTX`) |
 | F-003 | low | Sven SDK bounds a run by deadline, output tokens and cancel only; no per-run tool-call cap | sdk RunOptions | loop enforces its own cap |
