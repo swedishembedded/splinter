@@ -233,7 +233,93 @@ during the attempt. Remote models require an explicit opt-in flag.
 
 ## 5. Results
 
-*(Pending.)*
+Numbers are means over the 25 cross-validation folds unless a repeat is named;
+differences are paired on identical folds and carry the corrected resampled
+t-test interval. Lower is better for the integrated Brier score (IBS, 0 to 15
+years) and the Brier score at 10 years; higher is better for Uno's
+concordance (C) at 10 years.
+
+### 5.1 Bringing the agent up: what had to be repaired before a model could be judged
+
+The first delegated task (add a Cox model that is nonlinear in each continuous
+input) was attempted on a locally served 27-billion-parameter model (Q8_0
+weights, served by the model engine on this machine, no remote call). The
+first attempts did not measure the model; they exposed defects of the
+infrastructure, each repaired, covered by a specification and rerun:
+
+| Finding | What was observed | Repair |
+|---|---|---|
+| F-012 | Two attempts ended at the output-token cap with no file written: the model reasoned before every reply (5 to 13 thousand output tokens a call, empty visible text) | a model served on this machine is asked for no reasoning block unless `--thinking` is given |
+| F-014, F-015 | With the reasoning block off, the model repeated one probe command about forty times and wrote nothing; the attempt ended at the tool-call cap. At a sampling temperature of 0.7 the same task edited files within five minutes: greedy decoding was the cause | a stagnation stop (one call returning the same answer four times) with feedback naming the call; `--temperature` and `--thinking` are recorded flags |
+| F-016 | A follow-up round at a conversation of 58 thousand tokens was refused by the server (prompt plus requested reply above its context) | the provider is built with the context window the server reports, so replies are bounded by the room left |
+| F-013 | The new hash-chained event stream could not read runs recorded before it | legacy streams are read and migrated on resume |
+| F-017 | My own acceptance script chained two README checks with `&&` under `set -e`, so the requirement was not checked and an accepted patch lacked it | the check was corrected; the README item was carried to a later task |
+
+With these in place the first task was accepted on its second attempt, with no
+hint and no remote model. The first attempt wrote a model that refit its spline
+knots on whatever rows it was handed, including the held-out rows; the
+supervisor's hidden check (predictions for one held-out row must not change
+when the other held-out rows are replaced by extreme values) failed with the
+difference in the predictions, and the second attempt fitted the knots on the
+training rows only. A follow-up task, accepted on its first attempt, added two
+specification tests, one of which fails if the spline model is replaced by the
+linear one (checked by mutation). A third task, a learning-curve fitting tool,
+was not delivered: two attempts ended at the tool-call limit and the time
+limit, and the third was cancelled by the supervisor for budget. This is
+recorded as a failure of the agent on a task of that size, not as a
+result about learning curves; the learning-curve fits reported below were made
+by the supervisor with a script kept outside the repository and are labelled
+as supervisor analysis.
+
+### 5.2 The nonlinear additive ceiling
+
+| model | IBS 0-15 y | Brier 10 y | C 10 y | calibration slope 10 y |
+|---|---|---|---|---|
+| age and sex only | 0.05311 | 0.06437 | 0.8554 | 1.04 |
+| conventional risk factors (additive) | 0.04952 | 0.05946 | 0.8803 | 1.09 |
+| elastic-net Cox, all inputs | 0.04613 | 0.05350 | 0.8986 | 1.08 |
+| spline Cox, all inputs (agent-authored) | 0.04600 | 0.05346 | 0.9007 | 1.08 |
+| inverse-weighted logistic, all inputs | 0.04605 | 0.05351 | 0.8999 | 1.02 |
+| additive piecewise-exponential model, all inputs | 0.04649 | 0.05448 | 0.9000 | 1.09 |
+| deep set encoder (`horizon`), all inputs | 0.04711 | 0.05488 | 0.8969 | 0.98 |
+
+Allowing the Cox model to bend in each continuous input did not
+resolvably change the integrated Brier score when all inputs are used
+(spline minus linear, -0.00013, corrected 95% interval [-0.00057, +0.00031]),
+although it raised concordance at 10 years by +0.0021 [+0.0007, +0.0035]. With
+only the conventional risk factors the same change helps: -0.00062 [-0.00106,
+-0.00019]. The nonlinear additive model is the strongest model in the table by
+point estimate, and the deep set encoder is now resolvably worse than it:
++0.00111 [+0.00019, +0.00204] in IBS (p = 0.02) and +0.00142 [+0.00057,
++0.00228] in the Brier score at 10 years. Under the pre-registered rule
+(section 4.3) the deep encoder is therefore not useful on this cohort: it does
+not improve on the nonlinear additive baseline, it is slightly worse.
+
+### 5.3 Learning curves (supervisor analysis, one repeat)
+
+Mean IBS on the five folds of repeat 0 when a share of each fold's training
+subjects is used (the test folds are identical):
+
+| share of training subjects | elastic-net Cox | spline Cox | additive PE model | deep set encoder |
+|---|---|---|---|---|
+| 10% | 0.04791 | 0.04804 | 0.05318 | 0.05267 |
+| 25% | 0.04692 | 0.04713 | 0.04939 | 0.04990 |
+| 50% | 0.04630 | 0.04662 | 0.04743 | not run |
+| 75% | 0.04617 | 0.04600 | not run | not run |
+| 100% | 0.04615 | 0.04603 | 0.04657 | 0.04673 |
+
+The two Cox models are flat from half the data on: doubling the sample from
+50% to 100% changes the error by about 0.0002. The piecewise-exponential
+additive model and the deep encoder are still falling (0.0009 between 50% and
+100% for the additive model; 0.0032 between 25% and 100% for the encoder), so
+the gap between the learners narrows with more data and the Cox curves
+cannot be improved by data alone. Power-law fits `e_inf + a N^-b` to the
+fold means are ill-determined for the flat curves (bootstrap interval of the
+exponent from the lower bound to 1.5) and moderately determined for the
+additive model (exponent 0.67, interval [0.50, 0.87]; asymptote 0.0447,
+interval [0.0424, 0.0466]); an extrapolation from four points of one repeat is
+a hypothesis for the next data set, not an estimate of what more subjects
+would give.
 
 ## 6. Discussion
 
