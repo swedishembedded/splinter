@@ -16,11 +16,27 @@ reviewed in full after every milestone.
 - Delegated work must be authored by the loop; supervisor feedback and
   repairs are recorded so assisted and unaided results stay distinguishable.
 
+## Time budget
+
+The whole effort is closed within 8 hours of wall clock: started 2026-10-07
+19:53 (+02:00), hard stop 2026-10-08 03:53. Anything not done by then is
+reported as open with its resumable state, never claimed.
+
+| Window | Work |
+|--------|------|
+| 19:53 - 20:40 | Reconcile the 44-section plan with what exists; sven-reuse audit (R); this roadmap |
+| 20:40 - 23:00 | M2 experiments on the existing cohort (baselines, residual model, capacity, learning curves, bootstrap) |
+| 23:00 - 00:30 | M3 calibration and evaluation audit; F-008 |
+| 00:30 - 02:00 | R repairs (sven SDK gaps first, then the loop), M5 learning and promotion proof |
+| 02:00 - 03:20 | Paper full pass, documentation, full verification chains in all three repositories |
+| 03:20 - 03:53 | Buffer, push, final report |
+
 ## Open decisions
 
 | Id | Question | Default if unanswered |
 |----|----------|-----------------------|
 | D1 | Delegate the experiments to the loop (A) or run them directly with the loop proven on a fixture only (B) | A, falling back to B per task; fallbacks are recorded as assisted or failed attempts |
+| D3 | The loop and `splinter-agent` reuse sven's SDK, trajectory format, hash-chained log and home conventions instead of parallel copies; a missing piece is added to sven-sdk (generically, never naming splinter) | yes |
 | D2 | Loop gets caller-supplied tools through a new public `splinter-agent` solve (keeps the sample SDK-only) | yes |
 
 ## Baseline (2026-10-07)
@@ -83,6 +99,16 @@ resampling loop. No architecture search against the same folds.
 - [ ] One small local component trained with a real forward, backward, optimiser step, save, reload and evaluation
 - [ ] A failing candidate is rejected and the previous version stays usable (rollback pointer)
 - [ ] Autonomy stage reported honestly: unaided, assisted, supervisor interventions
+
+### R Reuse sven, do not reinvent it
+Audit at 2026-10-07 20:25. Already reused: `sven_sdk` engine, tools, `AgentState`
+suspend and resume and the ATIF trajectory (`crates/agent/src/work.rs`).
+Candidate duplication to resolve:
+- [ ] `samples/agent/loop/src/trace.rs` writes its own append-only event stream. Sven has `sven-chain` (hash-chained append-only JSONL, tamper-evident against accidental edits) and ATIF. Decide per event kind: agent conversation and tool calls stay in the ATIF trajectory from the worker; loop-level events (attempts, checks, patches, interventions) go through a chained log. `sven-chain` is not re-exported by `sven-sdk`: add the re-export in sven (generic), then use it here
+- [ ] `store.rs` run directory under `~/.sven/loop/`: compare with `sven-session-store` and `sven-workspace` conventions (discovery, precedence); reuse where the semantics match, document where they do not
+- [ ] Effective prompt, command and agent definitions hashed per run: take them from `sven-workspace` discovery rather than a local reader
+- [ ] `redact.rs`: check whether sven already redacts secrets in traces and reuse it
+- [ ] Record each decision here with the reason; no sven change that names splinter
 
 ## Frozen
 
