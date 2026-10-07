@@ -43,7 +43,9 @@ training data. Rehearsal and variant stages are omitted for clarity.}
 
 \paragraph{Models and hardware.}
 Policy, teacher, task generator, planner and critic are all Qwen3-8B in non-thinking mode.
-The judge is Qwen3-14B, a separate model loaded on its own. Two Tesla P40 cards (24~GB each) are used one job per card; the policy base is held in bf16.
+The judge is Qwen3-14B, a separate model loaded on its own. Two Tesla P40 cards (24~GB each)
+are used, one job per card; the engine runs on them through Vulkan, and the policy base is
+held in bf16.
 Every job is launched through a wrapper that pins the card and stops the run if it
 touches a CPU backend or software adapter, so a measurement can never silently come from
 the wrong device.
@@ -97,7 +99,8 @@ sentences, closed at paragraph ends, one print of each text, no family over a te
 tokens, half of them asked under the identity line instead of the persona prompt, each asked
 for by a request built by code from its recipient, year and opening. In a later arm the
 request is a 20--60 word description of the chunk's content written by the generator and
-refused if more than 35\% of its words fall in runs copied from the passage. The
+refused if more than 35\% of its words fall in runs of four or more words copied from the
+passage. The
 \emph{rehearsal} view holds the base model's own greedy answers to general tasks (sums and
 format requests built by code with references, and general requests the base writes), kept
 unless code decides them wrong. An optional abstention share trains the author to say the
@@ -107,13 +110,20 @@ taught to stop that often stops answering.
 \paragraph{Training.}
 A candidate is a rank-8 LoRA adapter on all seven projections of every layer
 (q, k, v, o, gate, up, down), trained by supervised fine-tuning in no-think mode
-with loss only on the answer tokens. The current recipe is one learning rate for both
-entry commands (2e-4), an alpha of twice the rank, no weight decay, AdamW with gradient
-clipping at 1.0, a warmup of a twentieth of the steps, a cosine schedule that is cooled
-down to its floor when early stopping triggers, and a step that is the mean over its
-supervised tokens, with every record drawn once per epoch. A share of whole training
-families is held back as a \emph{monitoring} set scored every few steps; the run keeps the
-adapter of the best monitoring loss and stops after four evaluations without improvement.
+with loss only on the answer tokens and, in every run reported here, eight records per
+step.
+The current recipe is one learning rate for both entry commands (\code{train} and
+\code{learn}, 2e-4), an alpha of twice the rank, no weight decay, AdamW with gradient
+clipping at 1.0, a warmup of a twentieth of the steps, a cosine decay to a floor of a tenth
+of the peak over the planned steps, and a step that is the mean over its supervised tokens,
+with every record drawn once per epoch. A share of whole training families (a tenth of the
+records, over at least three families where the data have them) is held back as a
+\emph{monitoring} set scored at evaluations a sixteenth of the budget apart unless named
+(every 15 steps for e4 and e1); the run keeps the adapter
+of the best monitoring loss, and after four evaluations without improvement it lowers the
+rate linearly to the floor over a tenth of the planned steps, still evaluating, and stops.
+Of the candidates in \cref{sec:results}, e4 and e1 were trained with this recipe and all
+others with the earlier one (\cref{sec:training-defects}).
 Runs can keep the adapter of every evaluation so that a checkpoint may later be chosen on a
 dev suite by generation quality rather than loss.
 
@@ -124,7 +134,9 @@ tasks (a sign test at $\alpha=0.05$), retention on earlier releases' tasks (boun
 a frozen \emph{anchor} suite of general tasks (110 items: 70 recall, 28 arithmetic, 12
 format-following) with a drop bound of 0.02, and a serve check that plain \code{brain serve}
 with the adapter gives the same answers on eight sampled tasks (at least 75\% agreement).
-A release is an immutable adapter with a manifest of every number the gate measured.
+The improvement decision is the family-level sign test; task-level counts are reported
+beside it. A release is an immutable adapter with a manifest of every number the gate
+measured.
 
 \subsection{Residency and memory on 24~GB cards}\label{sec:residency}
 

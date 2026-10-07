@@ -25,26 +25,28 @@ the methodology (\cref{sec:residency}).
 It is easy to produce an adapter that loses a few points of training loss and
 sounds a little more archaic. It is hard to show that the adapter has changed what the
 model \emph{does} on text it has never seen, beyond what a prompt already achieves, at a
-cost to general behaviour that is acceptable. Almost every defect we found in the first
-version of the system was a defect of measurement: a split that leaked, a gate that
-measured the wrong thing, a grader that failed correct answers, an exam with too few
-independent units to detect anything. Several training defects were also found, but they
-were found by auditing, not by the headline numbers, which did not move.
+cost to general behaviour that is acceptable. The defects that changed the reported
+numbers of the first version of the system were defects of measurement: a split that
+leaked, a gate that measured the wrong thing, a grader that failed correct answers, an
+exam with too few independent units to detect anything. The training defects were found
+by reading the training code, not through the exam numbers.
 
 \paragraph{Contributions.}
 \begin{enumerate}
 \item A complete, autonomous pipeline from one sentence to a released adapter, with a
   family-level held-out rule that is robust to overlapping editions (\cref{sec:system,sec:split}).
-\item An evaluation methodology for small-corpus persona fine-tuning: a frozen exam reserved
-  before any generation, a fixed primary comparison against the \emph{persona-prompted} base,
-  per-task pairing with a family-clustered bootstrap, Holm correction of secondaries, a
-  power simulation used to size the exam, and a judge with bias controls and deterministic
-  overrides (\cref{sec:eval}).
+\item An evaluation design for small-corpus persona fine-tuning: an exam reserved
+  before any generation, a primary comparison fixed in advance against the
+  \emph{persona-prompted} base, per-task pairing with a family-clustered bootstrap, Holm
+  correction of secondaries, a power simulation for sizing, and a judge with controls and
+  deterministic overrides (\cref{sec:eval}). The design is implemented and its power is
+  simulated, but no exam run with it has completed, and the results of
+  \cref{sec:results} come from an earlier, simpler exam (\cref{sec:exam-versions}).
 \item A catalogue of defects that were found and fixed, each with the measurement that
   exposed it: leakage across editions, a gate that did not test generalisation, a grader bug,
   the retention suite's inability to detect a two-point drop, and eight training-mechanics
-  defects (\cref{sec:defects}).
-\item An honest account of the results (\cref{sec:results}). No candidate is
+  defects, seven of them corrected (\cref{sec:defects}).
+\item Pilot-scale results (\cref{sec:results}). No candidate is
   distinguishable from the persona-prompted base at $\alpha=0.05$. We give the measured
   numbers, the bounds on what the exams could have shown, and what has not been
   established.
@@ -52,7 +54,8 @@ were found by auditing, not by the headline numbers, which did not move.
 
 \paragraph{What this paper does not claim.}
 It does not claim that the adapter ``thinks like'' either author. It does not claim an
-effect of the fine-tune beyond the persona prompt: the pilot exams point in that
-direction but cannot establish it. Numbers that were not measured are marked as such;
+effect of the fine-tune beyond the persona prompt: the candidates' point estimates are at
+or above the prompted base, but the pilot exams cannot separate that from chance. Numbers
+that were not measured are absent or marked as such;
 \cref{sec:repro} lists the commands that reproduce each measured number and
 \cref{sec:limits} what remains unestablished.

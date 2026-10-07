@@ -3,29 +3,34 @@
 
 \section{Results}\label{sec:results}
 
-Every exam in this section is \textbf{pilot scale}: 31 to 42 tasks over 6 or 7 families. Their families are fixed by each run's held-out split before the candidate is trained,
-but they are far too small to carry a claim, and
-several candidates were selected against the same task sets (two exams share a 35-task set,
-three share a 31-task set), so the comparisons are not independent. None is a frozen final test.
-\Cref{sec:frozen} describes the powered exam that is.
+Every exam in this section is \textbf{pilot scale}: 31 to 42 tasks over 6 or 7 families,
+run with the earlier exam of \cref{sec:exam-versions}. Their families are fixed by each
+run's held-out split before the candidate is trained, but they are far too small to carry a
+claim, and they were reused: two exams share a 35-task set (A), three share a 31-task set
+(B), and the Adams exam has its own (C), so the six comparisons are not independent and the
+recipes were developed while looking at them. None is a frozen final test.
 
 \subsection{Candidates}
 
 \Cref{tab:training} lists the training runs. The runs differ in more than the data (the
 recipe changed between them, \cref{sec:training-defects}); we do not claim that any difference in
 outcome is due to a single change. Held-out loss and token accuracy fall in every run, but token
-accuracy is nearly flat (for v7 it moves from 0.731 to 0.750), which is expected for a stylistic
-change~\citep{lin2024urial} and carries no information about voice. Losses are
-not comparable across runs with different held-out sets.
+accuracy is nearly flat (for v7 it moves from 0.731 to 0.750), which is plausible for a
+mainly stylistic change by analogy with~\citet{lin2024urial}, so that measure says little
+about voice. Losses are not comparable across runs with different held-out sets.
 
 \begin{table}[t]
-\centering\small
-\resizebox{\textwidth}{!}{\input{generated/training_table}}
-\caption{Training runs. ``Step kept'' is the step of the adapter carried (``last'' for
-unmonitored runs that carry the final step). v6 trained on dialogues only; ablation and v7 on
-dialogues plus 210 fixed-prompt voice rows; e4 on dialogues plus template-prompted voice
-chunks under the current recipe; e1 on dialogues plus the 210 fixed-prompt voice rows under the same recipe (not yet examined); adams on Adams dialogues plus voice rows. Peak learning rate
-was not recorded for the earlier runs. Held-out records are scored with the base before
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\input{generated/training_table}
+\caption{Training runs. ``Kept'' is the step of the adapter carried (``last'' for
+unmonitored runs). All runs except adams were trained with \code{train}; adams inside the
+one-sentence \code{learn}. v6 trained on dialogues only; ablation on v6's dialogues plus 210
+fixed-prompt voice rows; v7 on its own dialogues plus those voice rows; rehearsal on v7's
+data plus 108 replayed answers of the base model (``+108''); e4 on v7's dialogues plus template-prompted
+voice chunks under the current recipe; e1 on exactly v7's data under the current recipe (it
+has no completed exam); adams on Adams dialogues plus voice rows. A peak learning rate
+marked $^{*}$ is the default of the command that trained the run, which did not log it;
+the others are read from the run's log. Held-out records are scored with the base before
 and the adapter after.}
 \label{tab:training}
 \end{table}
@@ -50,7 +55,8 @@ and the adapter after.}
 \end{tikzpicture}
 \caption{Learning rate and monitoring loss at each evaluation. v7 (recipe before the
 corrections) stopped at step 56 of 105 with the rate still at $2.05\times10^{-4}$ and kept step
-28; e4 (current recipe) annealed to $2\times10^{-5}$ and kept step 105. The monitoring sets
+28; e4 (current recipe) ran its whole budget, its rate decaying to the floor of
+$2\times10^{-5}$, and kept step 105. The monitoring sets
 differ (v7: one family, dialogue records only; e4: several families including the writer's
 text), so the levels are not comparable, only the shapes.}
 \label{fig:curves}
@@ -59,20 +65,20 @@ text), so the levels are not comparable, only the shapes.}
 \subsection{Pilot-scale exams}
 
 \Cref{tab:exams} gives, for each exam, the number of tasks judged right in each arm, the number
-of invented-specifics answers, and the family-level sign test of the deployed candidate
-against the unprompted and the prompted base. The $p$-values are one-sided exact tests
-over discordant families, as the exam logged them.
+of answers with invented specifics, and the family-level sign test of the candidate (under
+the persona prompt) against the unprompted and the prompted base. The $p$-values are
+one-sided exact tests over discordant families, as the exam logged them; each was
+recomputed from its counts.
 
 \begin{table}[t]
 \centering\scriptsize
 \setlength{\tabcolsep}{3pt}
 \resizebox{\textwidth}{!}{\input{generated/exams_table}}
-\caption{Pilot-scale exams. ``Tasks/fam.'' is tasks over families; ``prompt.'' is the base under
-the persona prompt; ``cand.'' is the candidate under the persona prompt; ``invented'' counts
-answers that state a number or name absent from the source (of all tasks in the column).
-Families are counted once whatever their size. v6 and ablation share one task set and v7,
-rehearsal and e4 share another, so the pooled row, which sums the four rows v6, ablation,
-v7 and adams, counts the first task set twice and is descriptive only.}
+\caption{Pilot-scale exams. ``Set'' is the task set (A and B Jefferson, C Adams); ``Judge''
+the judge's version (v3 sampled at temperature 0.2, v4 greedy); ``Tasks/fam.'' tasks over
+families; ``prompt.'' the base under the persona prompt; ``cand.'' the candidate under the
+persona prompt; ``invented'' counts answers that state a number, or more than one proper
+name, absent from the source. Families count once whatever their size.}
 \label{tab:exams}
 \end{table}
 
@@ -81,8 +87,10 @@ v7 and adams, counts the first task set twice and is descriptive only.}
 \begin{tikzpicture}
 \begin{axis}[ybar, width=\textwidth, height=5.8cm, bar width=7pt, ymin=0, ymax=0.7,
   ylabel={share of tasks judged right}, symbolic x coords={v6,ablation,v7,rehearsal,e4,adams},
-  xtick=data, tick label style={font=\scriptsize}, label style={font=\small}, enlarge x limits=0.1,
-  legend style={font=\scriptsize}, legend pos=north west, ymajorgrids=true,
+  xtick=data, xticklabels={v6 (A),ablation (A),v7 (B),rehearsal (B),e4 (B),adams (C)},
+  tick label style={font=\scriptsize}, label style={font=\small}, enlarge x limits=0.1,
+  legend style={font=\scriptsize, at={(0.5,1.03)}, anchor=south, legend columns=3},
+  ymajorgrids=true,
   grid style={gray!25}]
 \addplot[fill=gray!55] table[x=label, y=base, col sep=comma] {generated/arms.csv};
 \addplot[fill=orange!70] table[x=label, y=prompted, col sep=comma] {generated/arms.csv};
@@ -90,107 +98,129 @@ v7 and adams, counts the first task set twice and is descriptive only.}
 \legend{base, prompted base, candidate (persona prompt)}
 \end{axis}
 \end{tikzpicture}
-\caption{Share of tasks judged right by arm in each pilot-scale exam (31 to 42 tasks each).
-The prompt closes more of the gap than the fine-tune does; no panel has the power to resolve the
-remaining difference.}
+\caption{Share of tasks judged right by arm in each pilot-scale exam (31 to 42 tasks each;
+task set in parentheses). Exams on one set share the base and prompted-base arms. No
+difference between the prompted base and a candidate is statistically resolved.}
 \label{fig:arms}
 \end{figure}
 
-The pattern is consistent but not conclusive.
+\paragraph{The persona prompt.}
+The base and prompted-base arms are the same in every exam of a task set, so the prompt's
+effect is read once per set (\cref{tab:prompt}). On both Jefferson sets the prompt raised
+the base from 9 to 14 of 35 and from 8 to 13 of 31 tasks judged right, and cut the answers
+with invented specifics from 20 to 3 and from 21 to 6. On the Adams set it did not raise the
+count judged right (10 against 9) and halved the invented answers (16 to 8). The prompted
+arm was not paired with the base arm in a stored test; the marginals bound the task-level
+sign test. Whatever the split of discordant tasks, the fall in invented answers has
+one-sided $p\leq0.003$ on both Jefferson sets, ignoring family clustering, which with seven
+families can make these values too small. The gain in tasks judged right has $p$ between
+0.031 and 0.20 on each Jefferson set, so it is not resolved.
+
+\begin{table}[t]
+\centering\small
+\input{generated/prompt_table}
+\caption{The persona prompt's effect on the base, once per task set. ``$p$ range'' is the
+range of the one-sided exact task-level sign $p$ over every split of discordant tasks the
+marginals permit (prompted better, respectively fewer invented answers), ignoring family
+clustering.}
+\label{tab:prompt}
+\end{table}
+
+\paragraph{The candidates against the prompted base.}
 \begin{itemize}
-\item \textbf{The persona prompt does most of the work.} Pooled over the four exams
-  (\PooledTasks\ tasks), the unprompted base is judged right on \PooledBase\ tasks
-  (\PooledBasePct\%) and the prompted base on \PooledPrompted\ (\PooledPromptedPct\%): ten points
-  from a prompt. The adapter is judged right on \PooledCand\ (\PooledCandPct\%), nine points
-  above the prompted base.
-\item \textbf{Invented specifics fall with the prompt and, a little, again with the
-  adapter.} Pooled, the unprompted base invents on \PooledBaseInv\ answers, the prompted
-  base on \PooledPromptedInv\ and the adapter on \PooledCandInv.
-\item \textbf{No candidate separates from the prompted base.} The family-level test against
-  the prompted base has $p\geq0.109$ in every exam. The best case, the ablation candidate
-  (voice rows, 18 against 14 right), has five wins in six discordant families. The task-level
-  bound (\cref{tab:bounds}) shows that the same exam could not have reached significance at the
-  task level under any split of its discordant tasks, since only four net tasks separate the two
-  arms.
-\item \textbf{Against the unprompted base the evidence is stronger but still thin.} The
-  ablation candidate won all five of its discordant families ($p=0.031$, one-sided; the test
-  is on five units), the only family-level result below 0.05 in the table. Because the
-  comparison is with an unprompted base, it does not separate what the prompt and what the
-  adapter contribute.
-\item \textbf{Adams is the largest difference.} 17 against 9 right with the prompted base
-  (net $+8$ tasks) and 6 against 8 invented. At the task level the one-sided $p$ could lie
-  anywhere from 0.004 to 0.084; at the family level, with six families and three discordant,
-  the logged value is 0.125.
-\item \textbf{Rehearsal and the new recipe do not change the picture.} The rehearsal candidate
-  (v7 data plus replay of the base's own answers) judged 14 of 31 right against 13 for the
-  prompted base; the e4 candidate 16 against 13, with 3 invented against 6 for the prompted
-  base. Neither is distinguishable (family-level $p=0.5$ and $0.125$).
+\item \textbf{No candidate separates from the prompted base.} The family-level test has
+  $p\geq0.109$ in every exam. The candidates are judged right on 0 to 8 more tasks than the
+  prompted base (v6 0, ablation 4, v7 1, rehearsal 1, e4 3, adams 8). The bounds of
+  \cref{tab:bounds} show that, ignoring clustering, only the Adams exam could have reached
+  $p<0.05$ at the task level, and only under some splits.
+\item \textbf{The voice ablation.} v6 and ablation share set A and the dialogue data;
+  ablation adds the 210 fixed-prompt voice rows (and, with the larger dataset, 81 rather
+  than 54 steps). It is judged right on 18 against 14 for the prompted base and 14 for v6,
+  with five wins in six discordant families against the prompted base ($p=0.109$); at the
+  task level $p$ lies between 0.062 and 0.30 whatever the split. This is not evidence of an
+  effect of the voice rows.
+\item \textbf{Against the unprompted base.} The ablation candidate won all five of its
+  discordant families ($p=0.031$, one-sided, five units), the only family-level result below
+  0.05 in the table and one of twelve family-level tests in it, uncorrected for
+  multiplicity. The comparison changes both the prompt and the weights, so it does not
+  separate what each contributes.
+\item \textbf{Adams.} 17 against 9 right with the prompted base (net $+8$ tasks) and 6 against
+  8 invented. At the task level the one-sided $p$ could lie anywhere from 0.004 to 0.084;
+  the family-level test, with three of six families discordant, gives 0.125.
+\item \textbf{Invented specifics, candidate against prompted base.} The candidates state
+  invented specifics in 1 to 3 fewer answers than the prompted base in five exams and in 1
+  more in v6; the smallest possible task-level $p$ of any of these is 0.125.
+\item \textbf{Rehearsal and the current recipe.} The rehearsal candidate judged 14 of 31
+  right against 13 for the prompted base; e4, the only candidate of the current recipe with
+  an exam, 16 against 13, with 3 invented against 6. Neither is distinguishable (family-level
+  $p=0.5$ and $0.125$). The e4 exam was judged by the greedy judge and the others on set B by
+  the sampled one, so its comparison with v7 and rehearsal also changes the judge.
 \end{itemize}
 
 \begin{table}[t]
 \centering\small
 \input{generated/bounds_table}
-\caption{What each exam's marginals allow: with $m$ net tasks in the candidate's favour over the
-prompted base, the smallest one-sided exact task-level sign $p$ over every possible split of
-discordant tasks is $0.5^m$ (ignoring family clustering, which only raises it).}
+\caption{What each exam's marginals allow a task-level test of the candidate against the
+prompted base to show: the range of the one-sided exact sign $p$ over every split of
+discordant tasks consistent with the counts. The smallest value is $0.5^m$ for $m$ net
+tasks. Family clustering is ignored; with six or seven families it would in general make
+the evidence weaker.}
 \label{tab:bounds}
 \end{table}
 
-\paragraph{The honest reading.}
-The exams are consistent with an adapter that is a few points better than the prompted base
-and with one that is no better. Pooled counts of tasks are descriptive, not a test: the
-pooled task sets overlap, families are clustered, and the exams were used repeatedly to choose
-recipes (\cref{sec:threats}). We therefore do \emph{not} claim that fine-tuning beats prompting
-for this task. What the data do support is narrower: a prompt alone changes the answers
-a good deal; a fine-tune that sees the author's text makes fewer unsupported specific claims
-than the unprompted base (\PooledCandInv\ against \PooledBaseInv\ of \PooledTasks\ answers), and
-is no worse than the prompted base on the measures we have.
+\paragraph{Reading.}
+The exams are consistent with candidates a few points better than the prompted base and
+with candidates no better than it. We therefore do \emph{not} claim that fine-tuning beats
+prompting for this task. What the data support is narrower: on the Jefferson task sets a
+persona prompt alone markedly reduces answers with specifics absent from the source; no
+candidate is judged right on fewer tasks than the prompted base of its exam; and none is
+distinguishable from it.
 
 \subsection{Release gate}
 
 No Qwen3 candidate has been released. The Jefferson v7 candidate passed the improvement check
-(subject to the defect above: 33 wins against 3, with 12 of 12 discordant families) and failed
-the anchor check (accuracy 0.773 against 0.800, drop 0.027 against a bound of 0.02,
-\cref{tab:anchor}); the serve check was not measured (\cref{sec:limits}). The Adams candidate
-passed improvement (54 wins against 9 over 207 tasks, 165 of them variants; 13 of 13 discordant
-families) and failed the anchor (0.764 against 0.800). The rehearsal candidate
-passed the anchor (0.818 against 0.800, 9 candidate-only against 7 base-only items) but failed
-improvement (29 wins against 7 items, but 8 of 11 discordant families, $p=0.113$) and the serve
-check, which at that time counted ungraded served answers as different (\cref{sec:residency}).
-A release was made once, for an earlier student model (a DeepSeek-R1 distilled 7B), where the
-served model re-answered 8 of 8 sampled tasks alike. The rehearsal result is one run of one seed: it
-does not show that rehearsal protects the anchor, because the anchor's own resolution is
-only $\pm0.037$ (\cref{sec:power}).
+(on the suite of \cref{sec:defects}, mostly paraphrases of trained tasks: 33 item wins against
+3, 12 of 12 discordant families) and failed the anchor check (accuracy 0.773 against 0.800,
+drop 0.027 against a bound of 0.02, \cref{tab:anchor}); its serve check was not measured
+because the serving binary was absent. The Adams candidate passed improvement (54 item wins
+against 9 over 207 tasks, 165 of them variants; 13 of 13 discordant families), failed the
+anchor (0.764 against 0.800) and had no serve measurement for the same reason. The
+rehearsal candidate passed the anchor (0.818 against 0.800, 9 candidate-only against 7
+base-only items) but failed improvement (29 item wins against 7, but 8 of 11 discordant
+families, $p=0.113$) and the serve check: the server answered all eight sampled tasks, the
+judge left every served answer ungraded, and the check as then written counted an
+ungraded answer as a disagreement (\cref{sec:residency}). The anchor result of one
+rehearsal run does not show that rehearsal protects general behaviour: under no change the
+anchor drop has a standard deviation of about 0.037 (\cref{tab:anchor}). The only release
+the gate has made was for an earlier student model (a DeepSeek-R1 distilled 7B), whose
+served model re-answered 8 of 8 sampled tasks alike.
 
 \subsection{The frozen exam}\label{sec:frozen}
 
 The final test and dev suite were reserved from the pool of letters left out of the materials,
-before any task was generated. Fifty families were reserved for each. Generation admitted tasks
-from only 39 families of the final test (244 tasks: 22 families with the full eight, the
-others with one to seven) and from 44 of the dev suite (166 tasks), in the three kinds
-conversation, advice and explanation. The planned 50$\times$8 design (400 tasks) was therefore
-not reached. At the realised size the simulated power for a ten-point gain is 0.53 under the
-planning assumptions (\cref{tab:power}). A 25-family pilot (155 tasks) is the first run on it; it
-estimates the discordance and intraclass correlation that the simulation currently assumes.
-\Cref{tab:pilot} lists the pilots. Runs that had not completed when this paper was written are
-marked; they are not zeros, they were not measured.
+before any task was generated, with 50 families each. Generation admitted tasks from only 39
+families of the final test (244 tasks: 22 families with the full eight, the others with one
+to seven, mean 6.3) and from 44 of the dev suite (166 tasks), in the three kinds
+conversation, advice and explanation. The planned $50\times8$ design (400 tasks) was
+therefore not reached; at the realised size the simulated power for a ten-point gain is
+0.55 under the planning assumptions (\cref{tab:power}). The first 25 families by name, the
+pilot subset, hold 155 tasks.
+\ifnum\PilotsCompleted=0
+No run of any arm on this exam has completed, so no result on it is reported
+(\cref{sec:limits}).
+\else
+\Cref{tab:pilot} gives the completed pilot runs.
+\fi
 
-\begin{table}[t]
-\centering\small
-\resizebox{\textwidth}{!}{\input{generated/pilot_table}}
-\caption{Pilots on the frozen exam (deployed candidate against the prompted arm of the v7
-pilot, paired by task, difference in points with the family-clustered 95\% interval). To update
-a row, edit \code{data/pilot.csv} and rebuild.}
-\label{tab:pilot}
-\end{table}
+\input{generated/pilot_table}
 
 \subsection{Cost}
 
-Reported for planning, not as performance claims. Generating tasks over 19 of 1,629 parts took
-6,477~s; teaching, verification, authoring, variants and selection for the v7 run took about five hours together
-(257 teacher solves, of which 161 verified and 95 failed); training v7 took about two hours for 56
-steps; an exam of 31 tasks over three arms with judging took about 38 minutes; a release gate
-over 259 tasks and two arms took about two hours and 12 minutes. The first two figures are
-the reason the pipeline cannot cover a corpus of this size with generated tasks (covering all
-1,629 parts at the observed pace is 555,322~s) and the reason the voice view, which needs no
+Reported to explain the design, not as performance claims. Generating tasks over 19 of
+1,629 parts took 6,477~s; teaching, verification, authoring, variants and selection for the
+v7 run took about five hours together (257 teacher solves: 161 verified, 95 failed, one
+undecided); training v7 took about two hours for 56 steps; an exam of 31 tasks over three
+arms with judging took about 37 minutes; a release gate over 259 tasks and two arms took
+about two hours and 12 minutes. At the observed pace, covering all 1,629 parts with
+generated tasks would take 555,322~s (6.4 days), which is why the voice view, which needs no
 model, carries most of the author's text.

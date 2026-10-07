@@ -1,7 +1,8 @@
-run,person,train_records,steps_budget,steps_run,selected_step,peak_lr,heldout_records,loss_before,loss_after,acc_before,acc_after
-v6,Jefferson,167,54,54,last,,47,2.0764,1.4160,0.6628,0.6652
-ablation,Jefferson,273,81,81,last,,47,2.0764,1.4011,0.6628,0.6673
-v7,Jefferson,278,105,56,28,3.0e-4,59,1.2841,0.8677,0.7309,0.7505
-e4,Jefferson,455,120,120,105,2.0e-4,59,1.2841,0.8587,0.7309,0.7529
-e1,Jefferson,273,120,117,45,2.0e-4,59,1.2841,0.8718,0.7309,0.7491
-adams,Adams,177,60,60,last,,60,1.6118,1.0633,0.7095,0.7208
+run,person,command,train_records,replay_records,steps_budget,steps_run,selected_step,peak_lr,lr_source,heldout_records,loss_before,loss_after,acc_before,acc_after
+v6,Jefferson,train,167,0,54,54,last,3e-4,command default,47,2.0764,1.4160,0.6628,0.6652
+ablation,Jefferson,train,273,0,81,81,last,3e-4,command default,47,2.0764,1.4011,0.6628,0.6673
+v7,Jefferson,train,278,0,105,56,28,3e-4,log,59,1.2841,0.8677,0.7309,0.7505
+rehearsal,Jefferson,train,278,108,105,56,28,3e-4,log,59,1.2841,0.8724,0.7309,0.7534
+e4,Jefferson,train,455,0,120,120,105,2e-4,log,59,1.2841,0.8587,0.7309,0.7529
+e1,Jefferson,train,273,0,120,117,45,2e-4,log,59,1.2841,0.8718,0.7309,0.7491
+adams,Adams,learn,177,0,60,60,last,2e-4,command default,60,1.6118,1.0633,0.7095,0.7208

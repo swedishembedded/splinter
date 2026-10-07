@@ -1,6 +1,1 @@
 arm,description,state,families,tasks,candidate_right,prompted_right,base_right,diff_points,ci_low,ci_high,p_tasks,source
-v7,v7 candidate (deployed arm and the three comparison arms),not completed,25,155,,,,,,,,exam pilot of the frozen exam
-ablation,voice-ablation candidate,not completed,25,155,,,,,,,,exam pilot of the frozen exam
-e4,template-voice candidate (recipe 2),not completed,25,155,,,,,,,,deployed arm paired with the v7 pilot's prompted arm
-description,model-written descriptions as voice requests (recipe 2),not completed,25,155,,,,,,,,deployed arm paired with the v7 pilot's prompted arm
-e1,old voice rows under recipe 2,not completed,25,155,,,,,,,,deployed arm paired with the v7 pilot's prompted arm

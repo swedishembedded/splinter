@@ -12,8 +12,8 @@ a secondary comparison. The distinction is not pedantic: in the first version of
 system every comparison against the base also changed the system prompt, so the effect of the
 prompt was credited to the fine-tune. On the 31-task Jefferson exam the prompt alone moves the
 base from 8 to 13 tasks judged right and its invented specifics from 21 to 6 (\cref{tab:exams}).
-The exam therefore asks four arms the same tasks, each answered greedily (temperature 0,
-at most 512 new tokens): the base under the default prompt, the base under the candidate's
+The powered exam therefore asks four arms the same tasks, each answered greedily
+(temperature 0, at most 512 new tokens): the base under the default prompt, the base under the candidate's
 persona prompt (\emph{prompted}), the candidate under the default prompt, and the candidate
 under its persona prompt (\emph{deployed}). The primary comparison is fixed in the exam
 manifest, before any model is put to it: deployed versus prompted, endpoint ``share of
@@ -82,12 +82,12 @@ A judge is calibrated before its verdicts are read. The easy controls are each t
 reference as the answer (must pass) and the reference of another family's task as the
 answer (must fail). These only measure trivial cases, so the exam adds \emph{hard}
 controls: each task answered with the reference of the task from another family whose reference
-is closest in vocabulary, wrong by construction, so the share passed is the judge's
+is closest in vocabulary (Jaccard overlap of content words longer than three letters),
+wrong by construction, so the share passed is the judge's
 false-pass rate on a topical near miss. A judge with pass or fail precision below 0.9 is
-untrusted and no claim is made. Qwen3-14B reached precision 1.0 on both on 48 easy controls in
-every Jefferson exam; on the Adams exam pass precision was 1.0, fail precision 0.96, abstain
-rate 0.02, with two controls misjudged. These are measurements on easy controls only. Agreement
-with a person has not yet been measured (\cref{sec:limits}); the tooling exports a blind,
+untrusted and no claim is made. The calibrations of the reported exams are given in
+\cref{sec:exam-versions}; they are measurements on easy controls only. Agreement with a
+person has not been measured (\cref{sec:limits}); the tooling exports a blind,
 stratified sample (by arm, judge verdict and answer length) for a person to label and then
 reports agreement, kappa, false-right and false-wrong rates and length bias.
 
@@ -95,8 +95,8 @@ reports agreement, kappa, false-right and false-wrong rates and length bias.
 Position bias is excluded by pointwise grading. Verbosity and self-preference
 \citep{zheng2023judging,dubois2024lc} are handled less completely. The judge is told that
 saying more than the reference is not a fault; length is otherwise not controlled except by
-a \emph{like-length test}, which repeats the sign test on the tasks both arms answered within
-a quarter of each other's length. The judge and the policy are both Qwen3, so
+a \emph{like-length test}, which repeats the sign test on the tasks whose two answers differ
+in length by at most a quarter of the longer one. The judge and the policy are both Qwen3, so
 self-preference cannot be excluded. Deterministic checks override the judge wherever they apply: a recall
 answer is decided by whether it states the reference, an executable task by running it, and
 a separate code check marks an answer as having \emph{invented specifics} if it states a
@@ -111,7 +111,7 @@ examined.
 Tasks about one family are not independent, so the family is the unit of resampling. The
 primary analysis pairs the arms by task: an exact one-sided sign test over the tasks only
 one arm got right, reported with the difference in the share right and its 95\% percentile
-bootstrap interval over families (10,000 resamples, seeded, each family contributing its own
+bootstrap interval over families (10,000 resamples, seed 0, each family contributing its own
 tasks). The same test over families, each counted once by which arm got more of its tasks
 right, is reported beside it; this is the test the release gate has always used. Secondary
 comparisons (candidate under the default prompt, versus the unprompted base, and so on)
@@ -122,6 +122,28 @@ zero) and the smallest true difference it could have shown, so that a null can b
 bound. Optional extra sampled answers per task give a continuous pass rate that is reported
 beside, never in place of, the binary verdict.
 
+\subsection{The exams reported here}\label{sec:exam-versions}
+
+Everything above describes the \emph{powered} exam. No run of it has completed
+(\cref{sec:frozen}), and every exam result in \cref{sec:results} comes from the earlier
+exam, which differs in ways that bear on how its numbers can be read:
+\begin{itemize}
+\item \textbf{Task source.} Its tasks are the run's own held-out records: families chosen by
+  the run's held-out split after task generation, written by the same generator as the
+  training tasks, at most 48 per exam. They were not reserved before generation.
+\item \textbf{Arms.} Three: the base under the default prompt, the base under the persona
+  prompt, and the candidate under the persona prompt, each answering greedily.
+\item \textbf{Judge.} Qwen3-14B with easy controls only (48 per exam). In five of the six
+  exams the judge was version 3, which decoded at temperature 0.2 with no fixed seed, so a
+  verdict is one draw; only the e4 exam used the greedy version 4. Easy-control precision
+  was 1.0 for pass and fail in every Jefferson exam; on the Adams exam pass precision was
+  1.0, fail precision 0.96 and the abstention rate 0.02 (of the controls that should pass, one was
+  abstained on and one failed).
+\item \textbf{Stored output.} Only each arm's counts (judged right, invented specifics) and
+  the family-level sign tests of the candidate against each base arm. Per-task verdicts and
+  answers were not stored, so no per-task test, interval or length analysis can be computed.
+\end{itemize}
+
 \subsection{Power}\label{sec:power}
 
 A family-level sign test needs a clean sweep. \Cref{fig:power} gives the exact power of
@@ -130,10 +152,10 @@ families (those in which one arm got strictly more tasks right) and the probabil
 that the better arm wins a discordant family. With six discordant families the test has
 power \PowerSixNine\ even when the better arm wins 90\% of them, and \PowerSixEight\ at
 80\%; reaching 80\% power at $q=0.8$ needs about 20 discordant families
-(\PowerTwentyEight), and 40 give \PowerFortyEight. Our exams had between two and six
-discordant families against the prompted base (\cref{tab:exams}). They could not have
-succeeded unless every discordant family was a win and there were at least five of them
-(one-sided) or six (two-sided).
+(\PowerTwentyEight), and 40 give \PowerFortyEight. The pilot-scale exams had between three
+and six discordant families against the prompted base (\cref{tab:exams}). With at most
+seven, the one-sided test reaches $p<0.05$ only if every discordant family is a win and
+there are at least five of them, the two-sided test only with at least six.
 
 \begin{figure}[t]
 \centering
@@ -159,68 +181,79 @@ arm. The vertical line marks the seven families of the pilot-scale exams.}
 \label{fig:power}
 \end{figure}
 
-A task-level paired test is far more powerful, but its p-value depends on how the
-discordant tasks split, which the stored marginals do not reveal. What the marginals do allow
-is a bound: with $m$ net extra tasks right, the smallest one-sided exact sign p over all
-possible splits is $0.5^m$ (\cref{tab:bounds}). Only the Adams exam (+8 net) could ever have
-reached significance at the task level, ignoring clustering.
+A task-level paired test has more units, but its $p$ depends on how the discordant tasks
+split, which the stored marginals of the pilot-scale exams do not reveal. The marginals
+bound it: with $m$ net extra tasks right, the smallest one-sided exact sign $p$ over all
+possible splits is $0.5^m$, and the largest is reached when as many tasks as the marginals
+allow are discordant (\cref{tab:bounds}). Only the Adams exam ($+8$ net) could have reached
+$p<0.05$ at the task level, and only under some splits and ignoring clustering.
 
-\paragraph{Sizing the final test by simulation.}
-The planned test is the one the exam reports as primary: the deployed arm is better when
-the lower end of the family-clustered bootstrap interval of the difference is above zero. We
-simulate it: a task's difference is $+1$, $-1$ or $0$; a share \emph{discordance} of tasks
-are $\pm1$; the first arm leads by \emph{effect}; and a family's mean difference is the
-overall one plus a draw whose variance is the intraclass correlation (ICC) times a task's
-variance. With no pilot estimate yet, we assume discordance 0.30 and ICC 0.10, so the
-design effect is $1+(8-1)\times0.1=1.7$ for eight tasks per family.
-\Cref{tab:power} gives the results. Two points matter. First, the planned 50 families of
-eight tasks reach power 0.72, not the 0.8 an earlier estimate from the same assumptions suggested, for
-a ten-point effect; it needs a fifteen-point effect to reach 0.97 and has power 0.23 at five
-points. Second, the same simulation with 7 families of 5 tasks has a false-positive rate of
-0.0725 at zero true effect: a percentile bootstrap over seven clusters is anti-conservative,
-so even a nominally significant 7-family interval would deserve scepticism. These simulations
-use 400 replicates and 500 bootstrap resamples, so each entry has a Monte Carlo error of about
-$\pm0.02$.
+\paragraph{Sizing the exam by simulation.}
+The primary test of the powered exam calls the deployed arm better when the lower end of
+the two-sided 95\% family-clustered percentile bootstrap interval of the difference is
+above zero, a one-sided test at nominal level 0.025. \code{splinter exam-set power}
+simulates it: a task's difference is $+1$, $-1$ or $0$; a share \emph{discordance} of
+tasks are $\pm1$; the first arm leads by \emph{effect}; and a family's mean difference is
+the overall one plus a normal draw whose variance is the intraclass correlation (ICC) times
+a task's variance. No pilot estimate of either parameter exists, so we assume discordance
+0.30 and ICC 0.10, which gives a design effect of $1+(m-1)\times0.1$ for $m$ tasks per
+family (1.7 for eight). \Cref{tab:power} gives the results with 4,000 simulated exams of
+500 resamples each, so a power has a Monte Carlo standard error below 0.008 and a
+false-positive rate one below 0.004. Fifty families of eight reach power 0.75 for a
+ten-point effect, 0.26 for five points and 0.97 for fifteen. The 39 families of the exam
+that was actually built reach 0.55 for ten points. With 7 families of 5 tasks the
+simulated false-positive rate at zero effect is 0.058, more than twice the nominal 0.025:
+a percentile bootstrap over seven clusters is anti-conservative, which is why no
+bootstrap interval of the pilot-scale exams is used as a test in this paper. An
+independent reimplementation of the same model (2,000 exams, 1,000 resamples) agreed
+within Monte Carlo error (0.76, 0.56 and 0.058 for the three figures just given). All of
+these numbers rest on the assumed discordance and ICC.
 
 \begin{table}[t]
 \centering\small
 \resizebox{\textwidth}{!}{\input{generated/power_table}}
-\caption{Simulated power of the planned paired test (family-clustered bootstrap, lower bound
-above zero), assuming a share of 0.30 of tasks discordant and an intraclass correlation of
-0.10. ``Realised'' rows use the 39 families that yielded tasks and their mean of six tasks,
-since 50 families were reserved but only 39 produced admitted tasks (244 tasks).}
+\caption{Simulated power of the planned paired test (family-clustered percentile bootstrap,
+lower end of the 95\% interval above zero) and its false-positive rate at zero effect,
+assuming a share of 0.30 of tasks discordant and an intraclass correlation of 0.10 (4,000
+simulated exams, 500 resamples, seed 0). The ``realised'' rows use the 39 families of the
+built exam with about six tasks each (244 tasks; \cref{sec:frozen}); the simulation gives
+every family the same number of tasks.}
 \label{tab:power}
 \end{table}
 
-\paragraph{Procedure: pilot, simulate, freeze, open once.}
-A pilot on the first 25 families by name (an arbitrary fixed order) estimates discordance and
-ICC; the planned test is simulated with those; the size is frozen; a dev suite
-(50 families of four tasks reserved beside the final test) chooses the checkpoint by a fixed
-rule (at most 8\% invented specifics, then the best answers within a standard error, then
-the loss on the dev families' own text); and the final test is run in full once, after one
-checkpoint is chosen (the pilot's 25 families are a subset of it). The frozen exam is pinned by a ledger: the same name with other
-content is refused, so every model is examined on the same tasks.
+\paragraph{Protocol.}
+The tooling implements this order: a pilot on the first 25 families by name (an arbitrary
+fixed order) estimates discordance and ICC; the planned test is simulated with those
+estimates; a dev suite reserved beside the final test chooses a training checkpoint by a
+fixed rule (at most 8\% of answers with invented specifics, then the best share right
+within one standard error, then the loss on the dev families' own text); and the final
+test is run once on the chosen checkpoint. The pilot families are a subset of the final
+test. An exam set is pinned by a ledger that refuses the same name with other content, so
+every model is examined on the same tasks. Of these steps only reservation and freezing
+have been carried out for this paper.
 
 \subsection{Retention and the anchor suite}
 
 The anchor suite guards against a persona fine-tune eroding general behaviour. It has 110
 items graded by code. The gate computes the drop in accuracy of the candidate against the
 base and fails when it exceeds 0.02. This test has two problems that no amount of
-grading care removes. First, it is a point estimate on a paired binary outcome: with 17
-discordant items the standard deviation of the paired drop under no change is
-$\sqrt{17}/110=\AnchorSD$, so a bound of 0.02 sits about half a standard deviation from zero
-and is exceeded in about 31\% of draws by chance. Second, to see a true two-point drop with
-80\% power at the discordance observed (17 of 110, 0.155) the normal approximation
-$n=(z_{\alpha/2}+z_\beta)^2 d/\delta^2$ gives about 3,000 paired items. The gate now
+grading care removes. First, it is a point estimate on a paired binary outcome: with the
+\AnchorDiscordant\ discordant items of the v7 gate the standard deviation of the paired
+drop under no change is $\sqrt{\AnchorDiscordant}/110=\AnchorSD$, so a bound of 0.02 sits
+about half a standard deviation from zero and, under no change, is exceeded with
+probability \AnchorExceed\% (exact binomial). Second, to see a true two-point drop with 80\%
+power at that discordance ($d=\AnchorDiscordant/110$) the normal approximation
+$n=(z_{\alpha/2}+z_\beta)^2 d/\delta^2$ gives about \AnchorItemsNeeded\ paired items. The gate now
 reports the paired bootstrap interval of the drop and the number of items needed beside the point
 estimate; the 0.02 bound is unchanged because changing a bound is a change of rule, not a
 report.
 
 \begin{table}[t]
-\centering\small
-\resizebox{\textwidth}{!}{\input{generated/anchor_table}}
-\caption{The anchor suite on three candidates. ``Drop'' is the base's accuracy minus the
-candidate's; $p$ is the exact two-sided sign test on the discordant items. The bound is
-0.02; the first two rows failed it, with $p=0.63$ and $p=0.45$.}
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\input{generated/anchor_table}
+\caption{The anchor suite in three release-gate runs. ``Drop'' is the base's accuracy minus
+the candidate's; $p$ is the exact two-sided sign test on the discordant items. The bound is
+0.02; the first two rows failed it although neither drop is distinguishable from no
+change.}
 \label{tab:anchor}
 \end{table}

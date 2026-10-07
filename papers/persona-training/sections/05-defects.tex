@@ -3,7 +3,7 @@
 
 \section{Finding and Fixing Defects}\label{sec:defects}
 
-The first end-to-end runs produced a candidate that passed the improvement check of the
+The v7 run produced a candidate that passed the improvement check of the
 release gate with a sign-test $p$ of $2.4\times10^{-4}$ and failed the anchor check by a
 hair. Neither number meant what it appeared to mean. This section records how the
 defects behind them were found, because the method is as reusable as the fixes.
@@ -46,33 +46,36 @@ reference, with a length bound of four times the reference's length plus 60 char
 Because a verifier of formal strength outranks a judge, an answer such as
 ``There are seven continents: \ldots'' to a reference of ``seven'' was failed on length alone,
 as were ``The hardest natural substance is \textbf{diamond}, \ldots'', ``H$_2$O'' against
-``H2O'' (a subscript digit) and ``A spider has 8 legs.'' against ``eight''. On the anchor suite the base scored 0.80 and the candidate 0.745; nine of the
-ten candidate-only misses had the right content, and one was a real error. The candidate
-answers longer, so the bug penalised it. The verifier now abstains on an over-long answer
+``H2O'' (a subscript digit) and ``A spider has 8 legs.'' against ``eight''. In a separate
+diagnostic run of the anchor suite, with both arms under the default prompt, the base
+scored 0.800 and the v7 candidate 0.745 (10 candidate-only and 4 base-only misses); nine of
+the ten candidate-only misses had the right content, and one was a real error. All nine
+were long worked or explained answers, so the bug penalised the arm that gave them. The verifier now abstains on an over-long answer
 that states the reference, leaving it to a judge, and reads sub- and superscript digits as
 plain digits and whole numbers in words and digits as one.
 
-Rescoring the saved answers (\cref{tab:rescore}) shows what remains. Under the corrected
+Rescoring the saved answers of that diagnostic run with a reimplementation of the
+corrected verifier (\cref{tab:rescore}) shows what remains. Under the corrected
 verifier the candidate has 21 anchor answers waiting for a judge and the base 10. Counting
 all pending answers wrong gives a drop of $+0.064$ (3 candidate-only against 10 base-only
 items); counting them right gives $-0.036$ (5 against 1). On the 89 items decided by code for
 both arms the candidate is at 0.955 and the base at 0.933 (drop $-0.0225$, 3 against 1, paired
 bootstrap 95\% interval of the drop $[-0.067, 0.023]$). The sign of the drop therefore
-depends on how a judge rules on 31 verbose answers. The reported ``forgetting'' was
-thus partly a grading artefact, partly a genuine length difference; it was never a
-measured loss of knowledge.
+depends on how a judge rules on 31 long answers. The reported ``forgetting'' was thus
+partly a grading artefact; it was never a measured loss of knowledge.
 
 \begin{table}[t]
 \centering\small
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
-Arm & Right before & Right after & Pending judge & Wrong after \\
+Arm & Right (old verifier) & Right (corrected) & Left to a judge & Wrong (corrected) \\
 \midrule
 Candidate (v7) & 82 & 85 & 21 & 4 \\
 Base & 88 & 92 & 10 & 8 \\
 \bottomrule
 \end{tabular}
-\caption{The 110 anchor items rescored under the corrected stated verifier.}
+\caption{The 110 anchor items of the diagnostic run (both arms under the default prompt),
+rescored under the corrected stated verifier.}
 \label{tab:rescore}
 \end{table}
 
@@ -86,15 +89,17 @@ the default prompt.
 \paragraph{A judge that was not calibrated on a hard case and not greedy.}
 The calibration controls were the reference itself and an off-topic reference, so precision
 1.0 on both said nothing about an on-topic answer that adds or contradicts specifics;
-\emph{hard controls} (\cref{sec:eval}) were added. The judge decoded at temperature 0.2 without
-a seed, so a verdict could change between two gradings of one answer; it now decodes greedily.
+the powered exam adds \emph{hard controls} (\cref{sec:eval}). The judge decoded at
+temperature 0.2 without a seed, so a verdict could change between two gradings of one
+answer; it now decodes greedily. Five of the six exams of \cref{sec:results} were judged
+before this change (\cref{sec:exam-versions}).
 The judge and the policy remain the same model family (\cref{sec:threats}).
 
 \paragraph{Per-task verdicts were never stored.}
 The first exams stored only arm marginals and family-level tests. The per-task analysis that would
 have shown whether the adapter beats the prompted base could not be redone: from the marginals
 one can only compute the range of task-level $p$ that any split of discordant tasks would give
-(\cref{tab:bounds}). The powered exam now stores every answer and verdict of every arm and
+(\cref{tab:bounds,tab:prompt}). The powered exam stores every answer and verdict of every arm and
 its analysis can be redone without a model. Its report is stored before the voice score
 (which loads each arm on the device) so that a device failure there costs none of the exam.
 
@@ -118,12 +123,16 @@ now in place (a mean over supervised tokens, epochs, annealing on stop and so on
 \item \textbf{The learning rate never annealed under early stopping.} Warmup was a fifth of
   the planned steps and the cosine ran over the plan; early stopping ended a run at step 56 of
   105 at a learning rate of $2.05\times10^{-4}$ against a peak of $3\times10^{-4}$.
-  Warmup is now a twentieth of the steps and a stop on patience is spent on an anneal to the
-  floor, still selecting on every evaluation.
+  Warmup is now a twentieth of the steps, and a stop on patience is followed by a linear
+  descent to the floor over a tenth of the planned steps, still selecting on every
+  evaluation.
 \item \textbf{Weight decay of 0.1 on the LoRA matrices.} Now 0 unless asked
-  (\code{--weight-decay}). Whether it mattered is not established; over about 50 steps at
-  this rate its total shrinkage is small.
-\item \textbf{Alpha fixed at 16 at every rank.} Now twice the rank (\code{--alpha}).
+  (\code{--weight-decay}). Whether it mattered is not established; with decoupled decay the
+  total shrinkage over a run is at most about the product of rate, decay and steps,
+  $3\times10^{-4}\times0.1\times105\approx0.3\%$.
+\item \textbf{Alpha fixed at 16 at every rank.} Now twice the rank (\code{--alpha}). At
+  rank 8 the two coincide, so every reported candidate, before and after the change, had
+  alpha 16.
 \item \textbf{Sampling with replacement.} Records were drawn uniformly with replacement and
   ``passes'' only sized the step budget. At 1.6 passes the expected share of records never drawn
   is $e^{-1.6}\approx20\%$. Records are now drawn in shuffled epochs, each once before any again.
@@ -132,8 +141,10 @@ now in place (a mean over supervised tokens, epochs, annealing on stop and so on
   fixed; it limits throughput (about two minutes per step of eight records, including
   evaluation, for v7) and therefore the data a run can see.
 \item \textbf{A learning rate defined twice.} \code{train} fell through to the engine's
-  $3\times10^{-4}$ while \code{learn} used $2\times10^{-4}$, so every measured candidate
-  before the current recipe was trained at $3\times10^{-4}$. Both commands now share one value.
+  $3\times10^{-4}$ while \code{learn} used $2\times10^{-4}$, so the v6, ablation, v7 and
+  rehearsal candidates (trained with \code{train}) had a peak of $3\times10^{-4}$ and the
+  Adams candidate (trained inside \code{learn}) $2\times10^{-4}$. Both commands now share
+  one value.
 \item \textbf{A monitoring split that dropped records.} The monitoring set was one family (a
   group of 13 dialogue records and 57 voice records), so early stopping was decided on 25
   dialogue turns of a single family, and because the writer's text of a monitoring family
@@ -153,14 +164,15 @@ one example per supervised answer, and fails loudly if the completion does not f
 The rendering of training and evaluation must agree byte for byte: an earlier rewrite meant to
 add the empty think block to training answers skipped every record that carried a \code{tools}
 key, and every dataset wrote \code{"tools": []}. The trained file was byte-identical to its
-input, which is how it was found; two runs of an earlier student model had then been scored on a prefix they never trained on.
+input, which is how it was found; two runs of an earlier reasoning model had been scored
+on a prefix they never trained on.
 
 \subsection{Defects of the data}
 
 \paragraph{The recipe starved the author's text.}
 v7 trained 124 dialogue records (81 single-turn, 43 three-turn; about 29k supervised tokens
 by a four-characters-per-token estimate) and 210 voice records (about 116k tokens) for
-1.6 passes. All 210 voice records had the same user turn (``Write one of your writings, as you
+1.6 passes (448 record draws over 278 training records). All 210 voice records had the same user turn (``Write one of your writings, as you
 wrote it.''); 7 were header-only (25--40 characters), 53 did not end at sentence punctuation,
 43 did not start with a capital, 19 pairs shared five or more eight-word runs (duplicate
 printings), and 157 sources supplied them with two sources supplying 23 and 18. The voice view was
@@ -185,7 +197,7 @@ prompts is a leak of the same kind.
 
 \begin{table}[t]
 \centering\small
-\begin{tabular}{@{}p{3.6cm}p{4.6cm}p{6.2cm}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.6cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{6.2cm}@{}}
 \toprule
 Defect & What exposed it & Measurement that proved it \\
 \midrule
@@ -198,6 +210,7 @@ Monitoring dropped records & Simulating the split & 57 of 210 voice records neve
 Rewrite skipped all records & Diffing output against input & Trained file byte-identical to input \\
 Per-record loss weights & Reading the loop & A short answer's tokens weigh up to $\sim10\times$ \\
 Cap on strength groups & Reading the select log & 39 of 163 answers capped \\
+Judge not greedy & Reading the judge's decoding & Temperature 0.2, no seed, in judge version 3 \\
 \bottomrule
 \end{tabular}
 \caption{Defects, how each was exposed and the measurement that proved it.}

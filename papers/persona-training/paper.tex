@@ -40,10 +40,10 @@
 
 \title{Training a Language Model to Think Like a Historical Author\\
 from One Sentence and the Author's Own Writings:\\
-Pipeline, Evaluation Methodology and an Honest Account of the Results}
+Pipeline, Evaluation Methodology and Pilot-Scale Results}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
-\date{Working paper, October 2026}
+\date{October 2026}
 
 \begin{document}
 \maketitle
@@ -52,32 +52,33 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 We describe and evaluate an autonomous pipeline that takes one natural-language
 sentence (``Learn to think like \ldots\ based on the materials \ldots\ in directory
 \ldots'') and a directory of an author's writings, and produces a LoRA-adapted
-language model. The policy is Qwen3-8B in non-thinking mode, an independent Qwen3-14B
+language model. The policy is Qwen3-8B in non-thinking mode, a separate Qwen3-14B
 is the judge, and all work runs on two 24~GB Tesla P40 GPUs. The pipeline plans,
 captures sources, splits them by \emph{family} (all printings of a text), generates and
 verifies tasks, teaches, builds a dataset that mixes verified dialogues with the author's
 own text, fine-tunes, examines the result on held-out families, and applies a release gate.
-Two historical authors, Thomas Jefferson and Samuel Adams, serve as test subjects.
+Thomas Jefferson and Samuel Adams serve as test subjects.
 
-The paper is mainly about method: how such a system is measured, and how its defects were
-found and removed. We report the split rule that survives overlapping editions, the
-statistical design of an exam that can actually detect an effect, the controls on a
-model judge, and a catalogue of defects found by audit: a release gate whose
-``held-out'' improvement was paraphrases of trained tasks, a retention check that
-failed correct long answers, a monitoring split that silently dropped 27\% of the
-author's text, and training-loop mechanics (per-record loss normalisation, a learning
-rate that never annealed, weight decay on LoRA, sampling with replacement).
+The paper is mainly about method: how such a system is measured, and the defects that
+were found in it. We report a split rule that survives overlapping editions, an exam
+design whose primary comparison is the base model under the same persona prompt and whose
+size is chosen by simulation, controls on a model judge, and defects found by audit: a
+release gate whose ``held-out'' improvement was mostly paraphrases of trained tasks, a
+retention check whose bound lay inside its own noise and whose grader failed correct long
+answers, a monitoring split that silently dropped 27\% of the author's voice records, and
+training-loop mechanics (per-record loss normalisation, a learning rate that never
+annealed under early stopping, sampling with replacement).
 
-The honest result is negative. On six pilot-scale exams (31--42 tasks, 6--7 families each)
-no candidate is statistically distinguishable from the base model told to take the
-persona in its prompt at $\alpha=0.05$. Pooled descriptively over four of them, the
-adapter judges right on \PooledCandPct\% of tasks against \PooledPromptedPct\% for the
-prompted base and \PooledBasePct\% for the unprompted base, and states far fewer
-invented specifics than the unprompted base (\PooledCandInv\ against \PooledBaseInv\ of
-\PooledTasks\ answers), but those exams have at most about half the power to show even a
-very large effect. A frozen 39-family, 244-task exam, whose simulated power for a ten-point
-gain is about one half, has been built; its pilot runs had not completed when this paper
-was written, and we report them as not measured.
+The results are pilot scale and do not establish an effect of fine-tuning. On six exams
+over three task sets (31--42 tasks, 6--7 families each) no candidate is distinguishable from
+the base model given the persona in its prompt: the family-level sign test against that arm
+has $p\geq0.109$ in every exam, and with at most seven families it could reach $\alpha=0.05$
+only through a clean sweep of at least five discordant families. The candidates were judged
+right on 0 to 8 more tasks than the prompted base. On the two Jefferson task sets the persona
+prompt alone cut the number of answers stating specifics absent from the source from 20 to 3
+and from 21 to 6. A 39-family, 244-task exam reserved before any generation has a simulated
+power of about 0.55 for a ten-point gain; no run on it completed, and no result on it is
+reported.
 \end{abstract}
 
 \input{sections/01-introduction}

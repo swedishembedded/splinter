@@ -1,7 +1,7 @@
-id,label,subject,taskset,tasks,families,base_right,prompted_right,candidate_right,base_invented,prompted_invented,candidate_invented,disc_vs_base,wins_vs_base,p_vs_base,disc_vs_prompted,wins_vs_prompted,p_vs_prompted,source
-v6,dialogues only,Jefferson,A,35,7,9,14,14,20,3,4,5,4,0.1875,4,2,0.6875,v6exam.log
-ablation,dialogues + fixed-prompt voice rows,Jefferson,A,35,7,9,14,18,20,3,2,5,5,0.03125,6,5,0.109375,ablation-exam.log
-v7,dialogues + fixed-prompt voice rows,Jefferson,B,31,7,8,13,14,21,6,4,2,2,0.25,3,2,0.5,v7exam.log
-rehearsal,v7 data + rehearsal replay,Jefferson,B,31,7,8,13,14,21,6,5,3,2,0.5,3,2,0.5,r2-exam.log
-e4,dialogues + template voice rows (recipe 2),Jefferson,B,31,7,8,13,16,21,6,3,4,3,0.3125,3,3,0.125,e4-old-exam-report.json
-adams,dialogues + fixed-prompt voice rows,Adams,C,42,6,10,9,17,16,8,6,2,2,0.25,3,3,0.125,adams2.log
+id,label,subject,taskset,tasks,families,base_right,prompted_right,candidate_right,base_invented,prompted_invented,candidate_invented,disc_vs_base,wins_vs_base,p_vs_base,disc_vs_prompted,wins_vs_prompted,p_vs_prompted,judge_version,source
+v6,dialogues only,Jefferson,A,35,7,9,14,14,20,3,4,5,4,0.1875,4,2,0.6875,3,v6exam.log
+ablation,dialogues + fixed-prompt voice rows,Jefferson,A,35,7,9,14,18,20,3,2,5,5,0.03125,6,5,0.109375,3,ablation-exam.log
+v7,dialogues + fixed-prompt voice rows,Jefferson,B,31,7,8,13,14,21,6,4,2,2,0.25,3,2,0.5,3,v7exam.log
+rehearsal,v7 data + rehearsal replay,Jefferson,B,31,7,8,13,14,21,6,5,3,2,0.5,3,2,0.5,3,r2-exam.log
+e4,dialogues + template voice rows (recipe 2),Jefferson,B,31,7,8,13,16,21,6,3,4,3,0.3125,3,3,0.125,4,e4-old-exam-report.json
+adams,dialogues + fixed-prompt voice rows,Adams,C,42,6,10,9,17,16,8,6,2,2,0.25,3,3,0.125,3,adams2.log

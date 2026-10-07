@@ -11,8 +11,12 @@ collection). The policy is Qwen3-8B (\code{BRAIN\_QWEN\_WEIGHTS} names the check
 \code{local:Qwen/Qwen3-14B@4096}. All models run locally.
 
 \paragraph{Commands.}
-The commands below are those the repository documents; every measured number in this paper
-was produced by one of them or is derived from \code{data/} by \code{scripts/build\_data.py}.
+The commands below are those the repository documents. The pilot-scale exams were run with
+\code{splinter exam CANDIDATE --judge local:Qwen/Qwen3-14B@4096 --prompt "to think like Thomas
+Jefferson" --json} without \code{--exam-set}, the form that examines a run's own held-out
+records, at the revision of the time; the training runs with \code{splinter train
+DIALOGUES VOICE --steps N --records-per-step 8} (the Adams run inside the one-sentence
+\code{learn}).
 \begin{small}
 \begin{verbatim}
 # materials for one person, and the pool an exam is reserved from
@@ -29,7 +33,8 @@ splinter exam-set create ./pool --persona "Thomas Jefferson" \
   --families 50 --tasks-per-family 8 --dev-families 50 --dev-tasks-per-family 4 \
   --not-trained-by CANDIDATE
 # size the exam by simulation, from an assumption or from a pilot report
-splinter exam-set power --families 50 --tasks-per-family 8 --effect 0.10
+splinter exam-set power --families 50 --tasks-per-family 8 --effect 0.10 \
+  --replicates 4000
 splinter exam-set power --from-report PILOT.json --families 39 --tasks-per-family 6
 # train, keeping the adapter of every evaluation; choose a step on the dev suite
 splinter train DIALOGUES VOICE --steps 120 --records-per-step 8 --eval-every 15 \
@@ -41,9 +46,9 @@ splinter exam CANDIDATE --exam-set EXAM --resamples 1 [--pilot-families 25] \
 # a candidate asked alone, to be paired offline with another report of the same exam
 splinter exam CANDIDATE --exam-set EXAM --deployed-only ...
 # analyses of a stored report; labels need a person
-splinter exam-report labels-export REPORT
-splinter exam-report labels-import LABELS
-splinter exam-report memorisation REPORT
+splinter exam-report labels-export REPORT --out LABELS --key KEY
+splinter exam-report labels-import LABELS --key KEY
+splinter exam-report memorisation REPORT --candidate CANDIDATE
 splinter release CANDIDATE --judge local:Qwen/Qwen3-14B@4096
 \end{verbatim}
 \end{small}
@@ -54,28 +59,33 @@ or software-adapter line, one job per card.
 \code{make} regenerates every table and plot data file from \code{data/} and builds
 \code{paper.pdf}. To update a result, edit its row in \code{data/exams.csv},
 \code{data/anchor.csv}, \code{data/training.csv}, \code{data/pilot.csv} or
-\code{data/power\_simulation.csv}; the script recomputes the exact sign tests and refuses a row whose logged $p$
-does not match the exact value.
+\code{data/power\_simulation.csv}; the script recomputes the exact sign tests and the
+task-level bounds, refuses an exam row whose logged $p$ does not match the exact value and an
+anchor row whose cells do not add up, and prints a pilot table only for completed rows.
+Every number in the tables was checked against the run's report by recomputing it; the run
+reports themselves are not distributed with the paper, only the counts read from them.
 
 \paragraph{Provenance of measured numbers.}
 \Cref{tab:provenance} names the run log or report each number was read from.
 
 \begin{table}[t]
 \centering\small
-\begin{tabular}{@{}p{4.5cm}p{9.5cm}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.5cm}>{\raggedright\arraybackslash}p{9.5cm}@{}}
 \toprule
 Number & Source \\
 \midrule
-Pilot-scale exam counts and tests & Exam reports of each run: the Jefferson dialogue-only, ablation, v7, rehearsal and recipe-2 exams, and the Adams run's exam line \\
+Pilot-scale exam counts, tests, judge versions and calibrations & Exam reports of each run (v6, ablation, v7, rehearsal, e4) and the exam line of the Adams run \\
 Gate improvement, anchor, serve & Release-gate reports of the v7, Adams and rehearsal candidates \\
-Anchor rescoring & Saved anchor answers of base and candidate, rescored by a mirror of the corrected verifier \\
-Training curves and held-out scores & Training reports of each run (step, learning rate, monitoring loss, held-out loss and token accuracy) \\
+Anchor diagnostic and rescoring & Anchor evaluation reports of base and v7 candidate under the default prompt, rescored by a reimplementation of the corrected verifier \\
+Training curves and held-out scores & Training reports of each run (step, learning rate, monitoring loss, held-out loss and token accuracy); learning rates marked $^{*}$ in \cref{tab:training} from the command's default in the code of the time \\
 Stage timings, 19 of 1,629 parts & Task-stage summary of the v7 run \\
 Peak device memory & Sampled device memory during v7 training \\
-Frozen exam: 244 and 166 tasks & The exam manifests (tasks per family counted) \\
-Power simulations & \code{splinter exam-set power} (400 replicates, 500 resamples, seed 0) \\
+Frozen exam: 244 and 166 tasks, 155 pilot tasks & The exam manifests (tasks per family counted) \\
+Power simulations & \code{splinter exam-set power} (4,000 replicates, 500 resamples, seed 0), checked by an independent reimplementation \\
+Family-rule defects (3,005 letters, 413 exam families) & Whole-text overlap scans of the letters against the training materials \\
+Retrieval recall & Jefferson sample's retrieval measurement (70 situations) \\
 Exact sign-test power & \code{scripts/build\_data.py} \\
-Per-task bounds & Computed from the marginals in \code{data/exams.csv} \\
+Task-level bounds & Computed from the marginals in \code{data/exams.csv} \\
 \bottomrule
 \end{tabular}
 \caption{Where each measured number comes from.}

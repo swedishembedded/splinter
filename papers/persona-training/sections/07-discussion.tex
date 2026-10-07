@@ -4,120 +4,114 @@
 \section{Discussion}\label{sec:discussion}
 
 \paragraph{The exam, not the adapter, was the weakest link.}
-The strongest conclusion from this work is about measurement. Every statistic the first
-system produced was either uninformative (the anchor, whose bound sat inside its noise) or
+The strongest conclusion from this work is about measurement. The statistics the first
+system produced were either uninformative (the anchor, whose bound sat inside its noise) or
 about something other than the claim (the gate's improvement on paraphrases of trained
-tasks, an effect of the prompt credited to the fine-tune). When those were corrected, the
-remaining evidence on the adapter is a small positive difference over the prompted base with
-an interval that, at the exam sizes available, includes zero. A power analysis would have
-shown this before the first run: seven families, one vote each, cannot reject at
-$\alpha=0.05$ unless every discordant family goes the same way and there are at least five of
-them.
+tasks; an effect of the prompt credited to the fine-tune). Once those are set aside, the
+remaining evidence on the adapters is a set of point estimates at or above the prompted
+base that the exams cannot separate from chance. A power calculation shows this without any
+run: seven families, one vote each, cannot reject at $\alpha=0.05$ unless every discordant
+family goes the same way and there are at least five of them.
 
 \paragraph{What the data support about the adapter.}
-Three statements are supported. (i) A persona prompt alone raises the share of tasks judged
-right and cuts invented specifics sharply (\cref{tab:exams}); a fine-tune must be compared
-with it. (ii) Candidates trained on dialogues alone are indistinguishable from the prompted
-base (v6: 14 against 14), which is what distilling a prompted teacher predicts
-\citep{askell2021general}. (iii) The candidates that saw the author's own text word for word
-are, in the pilot exams, never below the prompted base and above it by 1 to 8 tasks in all five
-exams, a direction consistent with the closest comparable study
-\citep{chakrabarty2025readers}; but the size is within what chance produces at
-these sample sizes.
+Two statements are supported. (i) On the Jefferson task sets a persona prompt alone cuts the
+answers with invented specifics sharply (\cref{tab:prompt}), so a fine-tune must be compared
+with the prompted base, not the unprompted one. (ii) No candidate is distinguishable from the
+prompted base. Two observations are consistent with expectations from the literature but do
+not establish them: the candidate trained on dialogues alone equalled the prompted base (v6:
+14 against 14), as one would expect of a student trained on a prompted teacher's answers
+\citep{askell2021general}; and the candidates that also saw the author's own text were judged
+right on 1 to 8 more tasks than the prompted base in all five of their exams, the direction
+\citet{chakrabarty2025readers} report for fine-tuning on an author's complete works in a
+different setting (a commercial model, human readers). Those five exams use three task sets,
+and three of them share one prompted arm, so they are not five independent observations.
 
-\paragraph{Why the voice view is the main lever, and why that is a hypothesis.}
-Dialogues written by an 8B teacher under the persona prompt add little to what the prompt
-already does. The author's own text is the only data that carries something the prompt cannot.
-The first system gave this text little weight (210 fixed-prompt fragments, a loss that
-favoured short teacher answers, a monitoring set that was dialogue only, a learning rate that
-never decayed). Whether the corrected recipe with content-described chunks adds a measurable
-amount is exactly what the pilots on the frozen exam are for; this paper does not claim
-it.
-
-\paragraph{Methodology that generalised.}
-Four practices appeared repeatedly and are cheap: reserve the exam before generating
-anything; fix the primary comparison before running it; store every per-task verdict so that
-analyses can be redone offline and a power analysis can use the exam's own discordance; and
-treat each instrument (judge, grader, split, bootstrap) as a thing to be measured, with
-controls whose answer is known and a simulation of its false-positive rate.
+\paragraph{Practices.}
+Four practices exposed most of the defects and are cheap: reserve the exam before
+generating anything; fix the primary comparison before running it; store every per-task
+verdict so that analyses can be redone offline and a power analysis can use the exam's own
+discordance; and treat each instrument (judge, grader, split, bootstrap) as a thing to be
+measured, with controls whose answer is known and a simulation of its false-positive rate.
 
 \section{Threats to Validity}\label{sec:threats}
 
 \paragraph{Construct validity.}
 ``Judged right'' means that a model judge says the answer gives what a source passage
 says in reply to a generated task. That is a proxy for ``thinks like the author''; it rewards
-knowledge of the passage and position, not prose style, and is silent on whether the reasoning is
-the author's. A model that reads the exam's tasks and the passage would solve them, so the
-tasks test the author's views as stated in the reserved letters. The invented-specifics
-count is a code proxy for fabrication: it counts numbers and names absent from the source and
-partly measures length.
+agreement with the passage's content and position, not prose style, and is silent on whether
+the reasoning is the author's. The invented-specifics count is a code proxy for fabrication:
+it counts numbers and names absent from the source and partly measures length, which was not
+recorded for the reported exams.
 
 \paragraph{Judge.}
-Agreement with a person has not been measured; the judge was validated on controls only.
-Judge and policy are the same model family, which invites self-preference that we cannot
-exclude. The same family also wrote the tasks and the training data, so style and
-topic distributions of exam and training tasks are related even though their source families
-are disjoint.
+Agreement with a person has not been measured; the judge was validated on easy controls
+only. Five of the six reported exams were judged with sampling at temperature 0.2, so each
+verdict is a single draw and the counts carry judge noise of unknown size. Judge and policy
+are the same model family, which invites self-preference that we cannot exclude. The same
+family also wrote the tasks and the training data, so style and topic distributions of exam
+and training tasks are related even though their source families are disjoint.
 
 \paragraph{Pretraining contamination.}
 The letters are public domain and probably appear in the pretraining data of the base. The
-exam is held out from fine-tuning, not from pretraining. Pretraining exposure would favour
-all arms equally, including the prompted base, so it should not bias the primary comparison,
-but it limits what ``held out'' means.
+exam is held out from fine-tuning, not from pretraining. Whether fine-tuning on the author's
+text makes memorised letters easier to recall, which would favour the candidate over the
+prompted base, has not been measured.
 
 \paragraph{Adaptive reuse of the pilot exams.}
 Recipes were developed over several runs examined on the same 31- and 35-task sets. Even if
-an effect were observed there, selection on a small shared test set would overstate it. This is
-the reason for the dev suite. The pilots on the frozen exam use its first 25 families by name, so
-the final test is not unseen once they run; its analysis should report those 25 families and the
-remaining ones separately.
+an effect were observed there, selection on a small shared test set would overstate it. In
+the powered exam's protocol the pilot families are a subset of the final test, so a final
+result would not be fully unseen.
 
 \paragraph{Statistical validity.}
-Seven-unit family-level tests have the power shown in \cref{fig:power}. A percentile
-bootstrap over seven clusters is anti-conservative (false-positive rate 0.07 in simulation),
-and we use it only on the larger exam. The power simulations assume discordance and ICC rather than
-using values estimated from the data, and use 400 replicates. Pooled counts are descriptive only. There is one
-training seed per recipe, so run-to-run variance of the adapter is unknown; one seed of the
-v7 data has been trained (a second adapter) but not examined.
+Seven-unit family-level tests have the power shown in \cref{fig:power}. The family-level
+tests of \cref{tab:exams} are twelve uncorrected tests; the one below 0.05 is not
+significant after a Holm correction over them. The task-level bounds ignore clustering. The
+power simulations assume a discordance and an ICC instead of estimating them, and give every
+family the same number of tasks. There is one training seed per recipe, so run-to-run
+variance of the adapter is unknown; a second seed of the v7 recipe was trained but not
+examined.
 
 \paragraph{Internal validity.}
 The recipe changed between candidates (data, learning rate, schedule, loss normalisation,
-monitoring), so no pair of rows in \cref{tab:exams} isolates a single change. The earlier
-candidates were trained at a learning rate (3e-4) different from the current default; v6,
-ablation and adams did not record theirs.
+monitoring), so no pair of rows in \cref{tab:exams} isolates a single change; v6 against
+ablation comes closest, and it also changes the number of steps. The judge changed between
+the e4 exam and the other exams on its task set.
 
 \paragraph{External validity.}
 Two authors, both eighteenth-century American, writing in English, whose corpora are large
 (Jefferson) or modest (Adams), one base model, one adapter rank. Nothing here bears on other
 languages, modern authors, or authors with little text.
 
-\section{Limitations and Not Yet Established}\label{sec:limits}
+\section{Limitations}\label{sec:limits}
 
 \begin{itemize}
-\item \textbf{No result on the frozen final test.} It has not been run in full. Pilots on its first 25
-  families are listed in \cref{tab:pilot}; those not completed are not measured.
+\item \textbf{No result on the frozen exam.} No arm's run on it has completed; three
+  attempted runs of the four-arm exam on it ended in device out-of-memory faults.
 \item \textbf{No human labels.} Judge agreement, kappa, false-right and false-wrong rates and
-  length bias on real answers are not measured. The tooling exists.
-\item \textbf{Voice has no judge-free result.} The held-out text likelihood of each arm and
-  the training-text overlap (8-, 13- and 20-word runs, longest shared run) are implemented but
-  have no completed measurement. A fine-tuned model that quotes its training text is
-  memorising, not thinking like the author; we cannot yet separate the two.
-\item \textbf{No seeds.} A single seed per recipe; no estimate of run-to-run variance.
-\item \textbf{The serve check was not measured} for any Qwen3 candidate: the serving binary
-  was not available to the runs, and the check reports ``not measured'', never a pass.
+  length bias on real answers are not measured; no labels were collected.
+\item \textbf{No judge-free voice measurement.} The held-out text likelihood of each arm and
+  the overlap of answers with the training text (8-, 13- and 20-word runs, longest shared
+  run) are implemented in the powered exam, which has no completed run. A fine-tuned model
+  that quotes its training text is memorising, not thinking like the author; the reported
+  exams cannot separate the two.
+\item \textbf{One seed per recipe;} no estimate of run-to-run variance.
+\item \textbf{No valid serve check} for any Qwen3 candidate: for two the serving binary was
+  absent, for the third no served answer was graded.
 \item \textbf{Retrieval is not evaluated.} The pipeline has retrieval-conditioned and
-  abstention records and an exam arm with retrieved passages, but no measured run used them;
-  all results are for a parametric model asked without retrieval. Retrieval itself was measured
-  separately on 70 situations (semantic search found the source paragraph in the top ten for
-  66\% of them, lexical for 30\%).
+  abstention records and an exam arm with retrieved passages, but no reported run used them;
+  all results are for a parametric model asked without retrieval. Retrieval alone was measured
+  on 70 situations over 13,960 paragraphs: semantic search ranked the source paragraph in the
+  top ten for 66\% of them, lexical BM25 for 30\%. The passage library used for
+  retrieval-style training is built over all of a run's sources without a held-out filter.
 \item \textbf{Which correction mattered.} No training correction (token-normalised loss,
-  annealing, weight decay, alpha, epochs) has been ablated. They are justified by audit and
-  literature, not by an effect on the exam.
+  annealing, weight decay, epochs) has been ablated. They are justified by reading the code
+  and by the literature, not by an effect on an exam.
 \item \textbf{Throughput.} Without packing, most of the compute on the P40s is padding, which
-  bounds the data a run sees; a run over the whole corpus is expensive.
-\item \textbf{Genuine ``thinking like'' cannot be proven.} The defensible claim is the
-  observable one: on text excluded from training, positions, prose and abstentions are
-  closer to the author's than the specified baselines'. We have not established that.
+  bounds the data a run sees.
+\item \textbf{``Thinking like'' is not established.} The observable claim would be that on
+  text excluded from training the candidate's positions, prose and abstentions are closer to
+  the author's than the baselines'. The data here do not establish it.
 \end{itemize}
 
 \section{Conclusion}
@@ -125,8 +119,9 @@ languages, modern authors, or authors with little text.
 We built and examined a pipeline that learns from one sentence and an author's writings. Its
 most useful products are methodological: a family-level split that survives overlapping
 editions, an exam reserved before generation and sized by simulation, a judge with controls
-and deterministic overrides, and a catalogue of defects that each changed a reported number.
-Corrected, the evidence is that a persona prompt does much of the work, that no fine-tuned
-candidate is statistically distinguishable from the prompted base at the sample sizes
-measured, that the point estimates favour the adapters that saw the author's own text, and that
-a properly powered test (39 families, 244 tasks) exists but has not yet been run in full. Until it is run, ``the adapter beats the prompt'' is a hypothesis.
+and deterministic overrides, and a catalogue of defects with the measurement that exposed
+each. With those defects set aside, the evidence is that a persona prompt alone markedly
+reduces invented specifics on the Jefferson exams, that no fine-tuned candidate is
+statistically distinguishable from the prompted base at the sample sizes measured, and that
+the point estimates of the candidates are at or above it. That fine-tuning adds to the
+prompt is not established by this work.
