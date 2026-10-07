@@ -29,9 +29,10 @@
 //! * A worker suspends into sven's serialisable [`AgentState`], and resumes
 //!   from one, so a run can outlive its process.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sven_sdk::config::Config;
@@ -89,6 +90,11 @@ pub struct WorkOptions {
     /// stopped as soon as it asks for one more. `None` sets no cap beyond
     /// sven's own limit on tool rounds.
     pub max_tool_calls: Option<u32>,
+    /// How many times one call (same tool, same arguments) may return the
+    /// same answer in one [`Worker::send`] before the run is stopped as
+    /// going nowhere. A repeated call whose answer changes (a test run after
+    /// an edit) is progress and is not counted. `None` sets no bound.
+    pub max_repeated_results: Option<u32>,
     /// Told of every event, if set.
     pub observer: Option<Observer>,
 }
@@ -100,6 +106,7 @@ impl WorkOptions {
         Self {
             solve,
             max_tool_calls: None,
+            max_repeated_results: None,
             observer: None,
         }
     }
@@ -115,6 +122,9 @@ pub struct WorkReport {
     /// Whether the run was stopped because it asked for more tool calls than
     /// the cap allows (its conclusion is then [`RunConclusion::Cancelled`]).
     pub stopped_by_tool_cap: bool,
+    /// Whether the run was stopped because one call kept returning the same
+    /// answer ([`WorkOptions::max_repeated_results`]).
+    pub stopped_by_repetition: bool,
     /// Events the observer missed, if it fell behind.
     pub dropped_events: u64,
 }
@@ -204,11 +214,18 @@ impl Worker {
             stop,
             external: self.options.solve.cancel.clone(),
             cap: self.options.max_tool_calls,
+            repeat_cap: self.options.max_repeated_results,
+            repeats: Mutex::new(Repeats::default()),
+            repeated: Arc::new(AtomicBool::new(false)),
             observer: self.options.observer.clone(),
             tool_calls: Arc::new(AtomicU32::new(0)),
             capped: Arc::new(AtomicBool::new(false)),
         };
-        let (tool_calls, capped) = (watch.tool_calls.clone(), watch.capped.clone());
+        let (tool_calls, capped, repeated) = (
+            watch.tool_calls.clone(),
+            watch.capped.clone(),
+            watch.repeated.clone(),
+        );
         let (done, finished) = oneshot::channel();
         let watcher = tokio::spawn(watch.run(finished));
 
@@ -236,6 +253,7 @@ impl Worker {
             },
             tool_calls: tool_calls.load(Ordering::SeqCst),
             stopped_by_tool_cap: capped.load(Ordering::SeqCst),
+            stopped_by_repetition: repeated.load(Ordering::SeqCst),
             dropped_events,
         })
     }
@@ -249,9 +267,20 @@ struct Watch {
     stop: CancelToken,
     external: Option<CancelToken>,
     cap: Option<u32>,
+    repeat_cap: Option<u32>,
+    repeats: Mutex<Repeats>,
+    repeated: Arc<AtomicBool>,
     observer: Option<Observer>,
     tool_calls: Arc<AtomicU32>,
     capped: Arc<AtomicBool>,
+}
+
+/// What a send has asked and been answered: each call by its id, and how
+/// often each (call, answer) pair has come back.
+#[derive(Default)]
+struct Repeats {
+    asked: HashMap<String, String>,
+    answered: HashMap<String, u32>,
 }
 
 impl Watch {
@@ -292,8 +321,44 @@ impl Watch {
                 self.stop.cancel();
             }
         }
+        self.watch_repetition(event);
         if let Some(observer) = &self.observer {
             observer(Observed::Event(event));
+        }
+    }
+
+    /// Counts how often a call has returned the same answer and stops the
+    /// run when that reaches the bound.
+    fn watch_repetition(&self, event: &SessionEvent) {
+        let Some(bound) = self.repeat_cap else {
+            return;
+        };
+        let Ok(mut repeats) = self.repeats.lock() else {
+            return;
+        };
+        match event {
+            SessionEvent::ToolCallStarted(call) => {
+                repeats
+                    .asked
+                    .insert(call.id.clone(), format!("{}\u{1}{}", call.name, call.args));
+            }
+            SessionEvent::ToolCallFinished {
+                call_id, output, ..
+            } => {
+                let Some(asked) = repeats.asked.get(call_id).cloned() else {
+                    return;
+                };
+                let seen = repeats
+                    .answered
+                    .entry(format!("{asked}\u{1}{output}"))
+                    .or_insert(0);
+                *seen += 1;
+                if *seen >= bound {
+                    self.repeated.store(true, Ordering::SeqCst);
+                    self.stop.cancel();
+                }
+            }
+            _ => {}
         }
     }
 

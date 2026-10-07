@@ -259,3 +259,65 @@ async fn a_suspended_worker_continues_its_conversation() {
         "the resumed worker remembers the conversation: {said}"
     );
 }
+
+#[tokio::test]
+async fn a_run_that_repeats_one_call_and_gets_the_same_answer_is_stopped_and_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), "same").unwrap();
+    // The model asks to read the same file forever; every answer is identical.
+    let model = Scripted::new(|req| {
+        call(
+            &format!("c{}", tool_results(req)),
+            "read_file",
+            serde_json::json!({"path": "a.txt"}),
+        )
+    });
+    let mut bounded = options();
+    bounded.max_repeated_results = Some(3);
+    let mut worker = Worker::start(dir.path(), model, bounded).unwrap();
+
+    let report = worker.send("look at a.txt").await.unwrap();
+
+    assert!(report.stopped_by_repetition);
+    assert!(!report.stopped_by_tool_cap);
+    // The cancel is seen between events, so the next call may already have
+    // been requested: at most one beyond the bound.
+    assert!(
+        (3..=4).contains(&report.tool_calls),
+        "stopped at the third identical answer, not {}",
+        report.tool_calls
+    );
+}
+
+#[tokio::test]
+async fn a_repeated_call_whose_answer_changes_is_not_a_repetition() {
+    let dir = tempfile::tempdir().unwrap();
+    // Write a different text, then read the file, again and again: the read
+    // is the same call each time but the answer differs.
+    let model = Scripted::new(|req| {
+        let n = tool_results(req);
+        if n >= 8 {
+            text("done")
+        } else if n.is_multiple_of(2) {
+            call(
+                &format!("w{n}"),
+                "write_file",
+                serde_json::json!({"path": "a.txt", "text": format!("v{n}"), "append": false}),
+            )
+        } else {
+            call(
+                &format!("r{n}"),
+                "read_file",
+                serde_json::json!({"path": "a.txt"}),
+            )
+        }
+    });
+    let mut bounded = options();
+    bounded.max_repeated_results = Some(2);
+    let mut worker = Worker::start(dir.path(), model, bounded).unwrap();
+
+    let report = worker.send("revise a.txt").await.unwrap();
+
+    assert!(!report.stopped_by_repetition);
+    assert_eq!(report.solution.conclusion, RunConclusion::Success);
+}
