@@ -183,6 +183,7 @@ const MIN_ROUND_SECS: u64 = 20;
 struct Sends {
     tool_calls: u32,
     capped: bool,
+    repeated: bool,
     conclusion: String,
     final_output: Option<String>,
     provider_failed: bool,
@@ -217,6 +218,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
             "deadline_secs": attempt_secs,
             "max_output_tokens": contract.limits.max_output_tokens,
             "max_tool_calls": contract.limits.max_tool_calls,
+            "max_repeated_results": contract.limits.max_repeated_results,
             "follow_ups": contract.limits.follow_ups,
             "has_feedback": feedback.is_some(),
         }),
@@ -250,6 +252,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
     let mut sends = Sends {
         tool_calls: 0,
         capped: false,
+        repeated: false,
         conclusion: "ProviderError".into(),
         final_output: None,
         provider_failed: false,
@@ -264,6 +267,8 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
             .max_tool_calls
             .saturating_sub(sends.tool_calls);
         options.max_tool_calls = Some(left_calls);
+        options.max_repeated_results =
+            Some(contract.limits.max_repeated_results).filter(|bound| *bound > 0);
         options.solve.deadline = Duration::from_secs(left_secs.max(1));
         send_round(setup, &mut worker, &options, &message, &mut sends)?;
         let cancelled = setup.run_cancel.is_cancelled();
@@ -273,6 +278,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
         let failure = classify(
             &sends.conclusion,
             sends.capped,
+            sends.repeated,
             cancelled,
             gathered.over_budget,
             sends.provider_failed,
@@ -334,6 +340,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
         failure,
         tool_calls: sends.tool_calls,
         stopped_by_tool_cap: sends.capped,
+        stopped_by_repetition: sends.repeated,
         changed_files: inspection.changes,
         checks: inspection.checks,
         final_message: sends.final_output.clone().or(gathered.last_message.clone()),
@@ -396,6 +403,7 @@ fn send_round(
         Some(report) => {
             sends.tool_calls += report.tool_calls;
             sends.capped |= report.stopped_by_tool_cap;
+            sends.repeated |= report.stopped_by_repetition;
             sends.conclusion = format!("{:?}", report.solution.conclusion);
             sends.final_output = report.solution.final_output.clone();
         }
@@ -409,6 +417,7 @@ fn send_round(
 fn classify(
     conclusion: &str,
     capped: bool,
+    repeated: bool,
     cancelled: bool,
     over_budget: bool,
     provider_failed: bool,
@@ -433,6 +442,13 @@ fn classify(
     }
     if capped {
         return Some("tool_call_limit".into());
+    }
+    if repeated {
+        return Some(
+            "stagnation: one call kept returning the same answer, so the attempt was stopped; \
+             change approach and make the change itself"
+                .into(),
+        );
     }
     match conclusion {
         "Timeout" => return Some("time_limit".into()),
@@ -595,6 +611,7 @@ mod tests {
                 total_secs: 1,
                 max_output_tokens: 1,
                 max_tool_calls: 1,
+                max_repeated_results: 0,
                 max_attempts: 1,
                 provider_retries: 0,
                 follow_ups: 0,
@@ -645,7 +662,7 @@ mod tests {
         let f = [failed("unit", "E")];
         let why = |capped, cancelled, over, provider, touched: &[String], all| {
             classify(
-                "Success", capped, cancelled, over, provider, touched, &f, all,
+                "Success", capped, false, cancelled, over, provider, touched, &f, all,
             )
         };
         assert_eq!(
@@ -673,7 +690,7 @@ mod tests {
         );
         assert!(why(false, false, false, false, &[], true).is_none());
         assert_eq!(
-            classify("Timeout", false, false, false, false, &[], &f, false).unwrap(),
+            classify("Timeout", false, false, false, false, false, &[], &f, false).unwrap(),
             "time_limit"
         );
     }

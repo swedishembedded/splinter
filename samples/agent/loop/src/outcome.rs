@@ -48,6 +48,10 @@ pub struct AttemptSummary {
     pub tool_calls: u32,
     /// Whether the tool-call cap stopped it.
     pub stopped_by_tool_cap: bool,
+    /// Whether it was stopped for getting the same answer to the same call
+    /// again and again.
+    #[serde(default)]
+    pub stopped_by_repetition: bool,
     /// Files it changed, as git reports them.
     pub changed_files: Vec<FileChange>,
     /// Every acceptance check it was judged by.

@@ -162,6 +162,7 @@ impl Fixture {
                 total_secs: 120,
                 max_output_tokens: 10_000,
                 max_tool_calls: 10,
+                max_repeated_results: 0,
                 max_attempts,
                 provider_retries: 0,
                 follow_ups: 0,
@@ -451,6 +452,36 @@ fn a_run_that_asks_for_more_tool_calls_than_its_cap_is_stopped_at_the_cap() {
         Some("tool_call_limit")
     );
     assert!(outcome.attempts[0].stopped_by_tool_cap);
+}
+
+#[test]
+fn a_worker_that_keeps_getting_the_same_answer_to_the_same_call_is_stopped_as_going_nowhere() {
+    let f = Fixture::new();
+    let looping = model(Duration::ZERO, |_| {
+        Ok(call("c", "find_file", json!({"pattern": "*.nothing"})))
+    });
+    let splinter = f.splinter(looping);
+    let mut contract = f.contract(1);
+    contract.limits.max_tool_calls = 40;
+    contract.limits.max_repeated_results = 3;
+    let outcome = execute(&splinter, &f.loop_home(), Request::New(Box::new(contract))).unwrap();
+
+    assert_eq!(outcome.status, Status::Rejected);
+    let attempt = &outcome.attempts[0];
+    assert!(
+        attempt
+            .failure
+            .as_deref()
+            .is_some_and(|f| f.starts_with("stagnation")),
+        "{:?}",
+        attempt.failure
+    );
+    assert!(attempt.stopped_by_repetition && !attempt.stopped_by_tool_cap);
+    assert!(
+        attempt.tool_calls < 10,
+        "stopped long before the cap: {}",
+        attempt.tool_calls
+    );
 }
 
 #[test]

@@ -43,6 +43,9 @@ pub mod defaults {
     /// Rounds an attempt may go on in the same conversation, told what
     /// failed, after the worker stops with the checks still red.
     pub const FOLLOW_UPS: u32 = 2;
+    /// Times one call may return the same answer before the attempt is
+    /// stopped as going nowhere (0 sets no bound).
+    pub const MAX_REPEATED_RESULTS: u32 = 4;
     /// Seconds an acceptance check may take.
     pub const CHECK_SECS: u64 = 300;
 }
@@ -58,6 +61,11 @@ pub struct Limits {
     pub max_output_tokens: u64,
     /// Tool calls per attempt.
     pub max_tool_calls: u32,
+    /// Times one call (same tool, same arguments) may return the same
+    /// answer before the attempt is stopped as going nowhere; 0 sets no
+    /// bound. A repeated call whose answer changes is not counted.
+    #[serde(default)]
+    pub max_repeated_results: u32,
     /// Attempts, the first included.
     pub max_attempts: u32,
     /// Retries of a model call that failed in transit, per attempt.

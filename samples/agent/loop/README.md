@@ -116,6 +116,7 @@ adds the directory above.
 | `--total-secs` | 3600 | the whole run |
 | `--max-output-tokens` | 24000 | one attempt's model output |
 | `--max-tool-calls` | 60 | one attempt's tool requests |
+| `--max-repeats` | 4 | one call (same tool, same arguments) returning the same answer this many times: the attempt is stopped as `stagnation` and the next one is told which call looped; a repeated call whose answer changes (a test run after an edit) is not counted; 0 turns it off |
 | `--max-attempts` | 3 | the attempts |
 | `--provider-retries` | 2 | a model call that failed in transit (growing pause) |
 | `--follow-ups` | 2 | rounds an attempt goes on in the same conversation, told what failed, after the worker stops with the checks red |

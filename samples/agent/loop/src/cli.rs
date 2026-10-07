@@ -199,6 +199,10 @@ struct RunArgs {
     /// Tool calls per attempt.
     #[arg(long, default_value_t = defaults::MAX_TOOL_CALLS)]
     max_tool_calls: u32,
+    /// Times one call may return the same answer before the attempt is
+    /// stopped as going nowhere (0: no bound).
+    #[arg(long, default_value_t = defaults::MAX_REPEATED_RESULTS)]
+    max_repeats: u32,
     /// Attempts, the first included.
     #[arg(long, default_value_t = defaults::MAX_ATTEMPTS)]
     max_attempts: u32,
@@ -354,6 +358,7 @@ fn contract_of(args: &RunArgs, home: &LoopHome) -> Result<Contract> {
             total_secs: args.total_secs,
             max_output_tokens: args.max_output_tokens,
             max_tool_calls: args.max_tool_calls,
+            max_repeated_results: args.max_repeats,
             max_attempts: args.max_attempts,
             provider_retries: args.provider_retries,
             follow_ups: args.follow_ups,
