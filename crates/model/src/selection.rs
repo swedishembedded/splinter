@@ -139,7 +139,7 @@ impl ModelSelection {
                 };
                 let mut config = sven_sdk::config::load(None).map_err(unreachable)?;
                 remote.apply_to(&mut config)?;
-                let driver = sven_sdk::drivers::from_config(&config.model).map_err(unreachable)?;
+                let driver = probed_provider(&config).map_err(unreachable)?;
                 Ok(LoadedModel {
                     provider: Arc::from(driver),
                     identity,
@@ -160,6 +160,30 @@ impl ModelSelection {
             }
         }
     }
+}
+
+/// The provider for `config`, told what context window its server really
+/// has when the server says (a brain server and OpenRouter list it).
+///
+/// Without it sven cannot bound a request's reply by the room the prompt
+/// leaves, and a long conversation with a generous output budget is refused
+/// by the server ("prompt + max_new exceeds context capacity") or never
+/// compacted in time. The probe is best effort and short; a server that does
+/// not say leaves the provider as the configuration describes it. It runs on
+/// a thread of its own, so it is safe to call from inside an async runtime.
+fn probed_provider(config: &sven_sdk::config::Config) -> anyhow::Result<Box<dyn ModelProvider>> {
+    let model = config.model.clone();
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?
+                    .block_on(sven_sdk::drivers::from_config_probed(&model))
+            })
+            .join()
+            .map_err(|_| anyhow::anyhow!("the context probe panicked"))?
+    })
 }
 
 /// A model served by a `brain serve` at `base_url` (its OpenAI-compatible
@@ -358,6 +382,39 @@ mod tests {
             .driver_options
             .get("chat_template_kwargs")
             .is_none());
+    }
+
+    #[test]
+    fn a_remote_model_is_told_the_context_window_its_server_reports() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().take(4) {
+                let mut stream = stream.unwrap();
+                let mut request = [0u8; 2048];
+                let _ = stream.read(&mut request);
+                let body = r#"{"object":"list","data":[{"id":"m","context_length":98304}]}"#;
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        let mut config = sven_sdk::config::Config::default();
+        RemoteModel {
+            spec: "brain/m".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}/v1")),
+            api_key: Some("k".into()),
+            thinking: false,
+            temperature: None,
+        }
+        .apply_to(&mut config)
+        .unwrap();
+        // from inside a runtime too: the probe has a thread of its own
+        let provider = probed_provider(&config).unwrap();
+        assert_eq!(provider.catalog_context_window(), Some(98_304));
     }
 
     #[test]
