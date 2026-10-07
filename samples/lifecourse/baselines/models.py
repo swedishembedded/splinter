@@ -178,6 +178,67 @@ class CoxNet:
         return 1.0 - np.exp(-np.outer(np.exp(x_te @ beta), h0)), None
 
 
+class SplineCoxNet:
+    """The regularised Cox model with a nonlinear term per continuous input.
+
+    Each continuous column of the shared `Preprocessor` output (median
+    imputation, log transform, scaling, clipping) is replaced by a cubic
+    B-spline basis, so the model is additive but not restricted to a line in
+    each input: the harness can then tell whether a neural model beats a
+    strong survival model, not only a linear one. Missing-value indicators
+    and categorical indicators pass through unchanged. The knots (quantiles
+    of the training columns), the preprocessing and the penalty are all
+    fitted on the fold's training subjects only; the constant extrapolation
+    keeps a value far outside the training range at the basis value at the
+    edge, so it cannot explode."""
+
+    N_KNOTS = 5  # four interior knots at quantiles
+
+    def __init__(self, inputs):
+        self.inputs, self.name = inputs, f"spline-cox-net-{inputs}"
+
+    @staticmethod
+    def num_cols(prep):
+        return prep.num_cols
+
+    def _spline(self, x):
+        """A `SplineTransformer` for one continuous column, fit on `x` (the
+        training values) alone."""
+        from sklearn.preprocessing import SplineTransformer
+        return SplineTransformer(n_knots=self.N_KNOTS, degree=3, knots="quantile",
+                                extrapolation="constant").fit(x)
+
+    def _matrix(self, prep, splines, d, rows):
+        """The `Preprocessor` matrix with the continuous columns replaced by
+        their spline bases; indicator columns stay in place."""
+        x = prep.transform(d, rows)
+        n = len(self.num_cols(prep))
+        z = np.hstack([spline.transform(x[:, [j]]) for j, spline in enumerate(splines)])
+        return np.hstack([z, x[:, n:]])
+
+    def fit_predict(self, ctx):
+        d = ctx.data
+        fit, val = ctx.inner()
+        prep = Preprocessor(d, self.inputs).fit(d, fit)
+        splines = [self._spline(prep.transform(d, fit)[:, [j]])
+                   for j in range(len(self.num_cols(prep)))]
+        t_fit, c_fit = ctx.outcome(fit)
+        t_val, c_val = ctx.outcome(val)
+        l1, alphas = select_coxnet(self._matrix(prep, splines, d, fit), t_fit, c_fit >= 0,
+                                  self._matrix(prep, splines, d, val), t_val, c_val >= 0)
+        ctx.chosen.update(l1_ratio=l1, alpha=alphas[-1])
+        ctx.chosen["spline_columns"] = int(self._matrix(prep, splines, d, fit).shape[1])
+        prep = Preprocessor(d, self.inputs).fit(d, ctx.train)
+        splines = [self._spline(prep.transform(d, ctx.train)[:, [j]])
+                  for j in range(len(self.num_cols(prep)))]
+        x_tr, x_te = self._matrix(prep, splines, d, ctx.train), self._matrix(prep, splines, d, ctx.test)
+        t_tr, c_tr = ctx.outcome(ctx.train)
+        beta = fit_coxnet(x_tr, t_tr, c_tr >= 0, l1, alphas)
+        ctx.chosen["nonzero_coefficients"] = int(np.sum(beta != 0))
+        h0 = breslow(x_tr @ beta, t_tr, c_tr >= 0, YEARS.astype(float))
+        return 1.0 - np.exp(-np.outer(np.exp(x_te @ beta), h0)), None
+
+
 class CauseSpecificCox:
     """One regularised Cox model per cause (the others censor at death),
     combined into cumulative incidence by the Aalen-Johansen formula."""
@@ -363,4 +424,6 @@ REGISTRY = {
     # The same model with a larger step: the first reaches its tree limit,
     # so a faster learner is reported beside it, never chosen on test folds.
     "gbs-fast-all": lambda: GradientBoosted("all", 3, 0.25, "gbs-fast-all"),
+    "spline-cox-net-standard": lambda: SplineCoxNet("standard"),
+    "spline-cox-net-all": lambda: SplineCoxNet("all"),
 }
