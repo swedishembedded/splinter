@@ -110,6 +110,21 @@ impl PassageShare {
         }
     }
 
+    /// [`PassageShare::validate`], and abstentions under
+    /// [`MAX_ABSTENTION_SHARE`] of all the records: what a run is held to.
+    pub fn validate_for_a_run(&self) -> Result<(), OrchestratorError> {
+        self.validate()?;
+        if self.records * (self.abstain + self.unsupported) >= MAX_ABSTENTION_SHARE {
+            return Err(OrchestratorError::Refused(format!(
+                "abstentions are {:.0}% of the records: a model taught to say it cannot answer \
+                 half the time stops answering, so they stay under {:.0}%",
+                100.0 * self.records * (self.abstain + self.unsupported),
+                100.0 * MAX_ABSTENTION_SHARE
+            )));
+        }
+        Ok(())
+    }
+
     /// Whether the share has records whose answer is an abstention.
     #[must_use]
     pub fn abstains(&self) -> bool {
@@ -130,14 +145,6 @@ impl PassageShare {
             return Err(OrchestratorError::Refused(format!(
                 "the passage shares {self:?} are not shares: each is in [0, 1] and the evidence, \
                  abstention and unsupported shares together at most 1"
-            )));
-        }
-        if self.records * (self.abstain + self.unsupported) >= MAX_ABSTENTION_SHARE {
-            return Err(OrchestratorError::Refused(format!(
-                "abstentions are {:.0}% of the records: a model taught to say it cannot answer \
-                 half the time stops answering, so they stay under {:.0}%",
-                100.0 * self.records * (self.abstain + self.unsupported),
-                100.0 * MAX_ABSTENTION_SHARE
             )));
         }
         Ok(())
@@ -362,7 +369,11 @@ mod tests {
         assert!(PassageShare::with_abstentions(0.1, 0.5).validate().is_err());
         assert!(PassageShare::with_abstentions(0.0, 0.1).validate().is_err());
         // Half the data refusing is not a recipe.
-        assert!(PassageShare::with_abstentions(1.0, 0.5).validate().is_err());
-        assert!(PassageShare::with_abstentions(1.0, 0.4).validate().is_ok());
+        assert!(PassageShare::with_abstentions(1.0, 0.5)
+            .validate_for_a_run()
+            .is_err());
+        assert!(PassageShare::with_abstentions(1.0, 0.4)
+            .validate_for_a_run()
+            .is_ok());
     }
 }

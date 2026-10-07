@@ -265,7 +265,7 @@ pub fn learn(
     }
     request.quotas.validate()?;
     if let Some(share) = &request.passages {
-        share.validate()?;
+        share.validate_for_a_run()?;
     }
     if let Some(share) = request.voice {
         if !(0.0..1.0).contains(&share) {

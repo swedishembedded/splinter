@@ -663,7 +663,9 @@ fn a_run_asked_for_abstentions_trains_on_the_writer_saying_the_writings_do_not_s
     assert!(abstentions >= 1, "{text}");
     // Half the data is never abstentions.
     assert!(
-        PassageShare::with_abstentions(1.0, 0.5).validate().is_err(),
+        PassageShare::with_abstentions(1.0, 0.5)
+            .validate_for_a_run()
+            .is_err(),
         "half the data refusing is refused"
     );
 }
