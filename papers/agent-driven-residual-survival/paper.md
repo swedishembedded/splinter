@@ -57,13 +57,35 @@ interest is how much of the work the local agent can do without help.
 
 ## 2. Related Work
 
-*(Pending. To cover: time-to-event foundation models trained on large
-longitudinal record sets; neural versus Cox survival models on benchmark
-data; numerical feature embeddings for tabular deep learning; sample-size
-requirements for survival-model calibration and validation; inverse
-probability of censoring weighting for evaluation; NHANES mortality
-prediction and biological-age studies; coding agents with execution-based
-validation.)*
+**Foundation models for time-to-event data.** MOTOR pretrains a time-to-event
+transformer on tens of millions of patient records and billions of clinical
+events and reports gains in time-dependent concordance and label efficiency on
+downstream survival tasks (Steinberg et al., 2023, arXiv:2301.03150).
+SurvivEHR pretrains a competing-risks next-event model on 7.6 billion coded
+events from 23 million primary-care patients (Oxford and Birmingham, 2025,
+medRxiv). Delphi-2M trains a generative health-event transformer on 402,799
+UK Biobank participants and, in a scaling experiment, finds that about two
+million parameters is optimal for that dataset (Shmatko et al., 2025). These
+results locate the regime where representation learning over event
+sequences pays: very many patients, many events per patient. Our cohort has
+one examination per person, so we test the weaker claim that nonlinear
+structure beyond a strong additive model exists at all.
+
+**Survival evaluation.** We use the Aalen-Johansen estimator for observed
+cause-specific risk, inverse-probability-of-censoring weights for
+concordance and Brier scores (Uno et al.), and the corrected resampled
+t-test of Nadeau and Bengio for repeated cross-validation, whose variance
+inflation accounts for the overlap between training sets. Sample-size
+guidance for validating a survival prediction model depends on the
+distribution of predicted risks, the incidence and censoring, and the
+precision wanted (Riley et al., 2022, Statistics in Medicine); we do not
+claim a universal events threshold.
+
+*(Further related work to be added and each reference checked against its
+source before it is cited: neural versus Cox survival models on benchmark
+data, numerical feature embeddings for tabular deep learning, NHANES
+mortality-prediction and biological-age studies, coding agents with
+execution-based validation.)*
 
 ## 3. Data and Estimands
 
@@ -234,7 +256,7 @@ the number ourselves; "not checked" means we only have the review's word.
 | Calibration code of the evaluation library (checked by reading it, 2026-10-07) | Checked | `calibration::at_horizon` takes the observed risk of the whole sample and of each equal-weight risk group from an Aalen-Johansen estimate, so a subject censored before the horizon is never a non-event. Its intercept and slope are a logistic regression on the subjects whose outcome by the horizon is known, weighted by the sampling weight over the censoring survival `G` at the event time (or at the horizon for a subject still event-free); a subject censored earlier drops out and the weights stand in for it. `G` is the marginal Kaplan-Meier curve of the training data supplied by the caller, so the correction is valid when censoring does not depend on the predictors; here censoring is administrative and depends on the survey cycle, which is why every horizon metric is restricted to the cycles whose survivors were all followed that long. `auc::at` is the cumulative/dynamic time-dependent AUC with a competing event excluded from the controls, and says so in its documentation. The cause-specific observed risk is Aalen-Johansen, never one minus Kaplan-Meier. **Gap found:** the library reported no summary of the calibration curve itself (integrated calibration index, E50, E90), which is what should be judged for a step-function recalibration where the slope is not interpretable; added through the loop (section 5.4). |
 | Our expected calibration error may count subjects censored before the horizon as negatives | Checked, does not apply | In the implementation the observed risk of each equal-weight risk group is an Aalen-Johansen estimate, so a subject censored before the horizon stays in the risk set until censoring and is never a negative. Slope and intercept use inverse-probability-of-censoring weights and drop subjects censored before the horizon. The censoring distribution is the marginal Kaplan-Meier of the training data; censoring here is administrative (the end of the mortality linkage) and depends on the survey cycle, which is why every metric at a horizon is restricted to the cycles whose survivors were all followed that long. |
 | A recalibration slope after isotonic or Venn-Abers calibration does not mean what it means for a smooth score | Not checked in code; accepted as a caution | Where we report calibration after isotonic-type recalibration we report the curve, the intercept and the horizon Brier score and do not rely on the slope. |
-| Deep survival models beat linear models at the scale of hundreds of thousands to millions of patients and billions of events; no published threshold exists | Not checked | We did not verify the cited studies. We use the statement only as a reason to expect our data to be limiting, and test the expectation with learning curves. |
+| Deep survival models beat linear models at the scale of hundreds of thousands to millions of patients and billions of events; no published threshold exists | Partly checked | The scale figures were checked against the primary sources on 2026-10-07: MOTOR pretrains a 143M-parameter model on up to 55M patient records and 9B clinical events and reports a 4.6% improvement in time-dependent C-statistic over the state of the art across 19 tasks and up to 95% better label efficiency; SurvivEHR is trained on over 7.6B coded events from 23M patients; Delphi-2M trained on 402,799 UK Biobank participants and found about 2 million parameters optimal for that dataset. That no sample-size threshold exists was not independently established; we treat it as an open question and measure our own learning curve. |
 | NHANES mortality discrimination near 0.90 is close to a ceiling for one examination | Not checked | Consistent with our own measured values. Not independently verified in the literature by us. |
 | Gated delta-net mixers have no evidence of benefit on three to twenty sparse visits | Not checked | Our own measurement found no resolvable difference to attention on synthetic data. The line of work is frozen. |
 | Licence and access terms of the listed cohorts | Not checked | Taken as a checklist for the data owner to confirm in writing. Nothing was downloaded or requested on this basis. |
