@@ -48,6 +48,9 @@ const PREVIEW_CHARS: usize = 300;
 /// The file the stream is appended to, inside a run's directory.
 pub const EVENTS_FILE: &str = "events.jsonl";
 
+/// Where a stream written before it was chained is kept when it is migrated.
+pub const LEGACY_FILE: &str = "events.v1.jsonl";
+
 /// The directory content-addressed artifacts are stored in.
 pub const ARTIFACTS_DIR: &str = "artifacts";
 
@@ -83,6 +86,7 @@ impl Tracer {
     pub fn open(dir: &Path, run: &str) -> Result<Self> {
         std::fs::create_dir_all(dir.join(ARTIFACTS_DIR))
             .with_context(|| format!("creating {}", dir.display()))?;
+        migrate_legacy(dir)?;
         let next_id = read_events(dir)?
             .last()
             .and_then(|event| event.get("id")?.as_u64())
@@ -165,8 +169,54 @@ impl Tracer {
 /// that does not exist yet is empty.
 pub fn read_events(dir: &Path) -> Result<Vec<Value>> {
     let path = dir.join(EVENTS_FILE);
+    if is_legacy(&path) {
+        return read_legacy(&path);
+    }
     let lines = read_chain(&path).with_context(|| format!("reading {}", path.display()))?;
     Ok(lines.into_iter().map(|line| line.entry).collect())
+}
+
+/// Whether the stream at `path` was written before events were chained: its
+/// first line is an event itself, not a chain link.
+fn is_legacy(path: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    text.lines().next().is_some_and(|line| {
+        serde_json::from_str::<Value>(line)
+            .is_ok_and(|v| v.get("prev_hash").is_none() && v.get("type").is_some())
+    })
+}
+
+/// The events of a stream written before the chain, one JSON object a line.
+fn read_legacy(path: &Path) -> Result<Vec<Value>> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    text.lines()
+        .enumerate()
+        .map(|(n, line)| {
+            serde_json::from_str(line)
+                .with_context(|| format!("{} line {} is not an event", path.display(), n + 1))
+        })
+        .collect()
+}
+
+/// Rewrites a stream written before the chain as a chained one: the events
+/// are the same and in the same order, the original is kept beside it as
+/// [`LEGACY_FILE`], and the new file replaces it in one rename.
+fn migrate_legacy(dir: &Path) -> Result<()> {
+    let path = dir.join(EVENTS_FILE);
+    if !is_legacy(&path) {
+        return Ok(());
+    }
+    let events = read_legacy(&path)?;
+    let staging = dir.join("events.migrating.jsonl");
+    let _ = std::fs::remove_file(&staging);
+    append_chain(&staging, events).with_context(|| format!("chaining {}", path.display()))?;
+    std::fs::copy(&path, dir.join(LEGACY_FILE)).context("keeping the unchained original")?;
+    std::fs::rename(&staging, &path).context("replacing the stream with its chained form")?;
+    let _ = std::fs::remove_file(dir.join("events.migrating.jsonl.lock"));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -256,5 +306,39 @@ mod tests {
         std::fs::write(&path, text.replace("first", "forged")).unwrap();
         let error = read_events(dir.path()).unwrap_err();
         assert!(format!("{error:#}").contains("line 1"), "{error:#}");
+    }
+
+    fn write_legacy(dir: &Path, n: u64) {
+        let mut text = String::new();
+        for id in 1..=n {
+            text.push_str(&format!(
+                "{{\"v\":1,\"run\":\"run-1\",\"attempt\":0,\"id\":{id},\"ts\":\"t\",\"parent\":null,\"type\":\"old\",\"data\":{{}}}}\n"
+            ));
+        }
+        std::fs::write(dir.join(EVENTS_FILE), text).unwrap();
+    }
+
+    #[test]
+    fn a_stream_written_before_the_chain_is_still_read() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy(dir.path(), 3);
+        let events = read_events(dir.path()).unwrap();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[2]["id"], 3);
+    }
+
+    #[test]
+    fn reopening_a_legacy_stream_migrates_it_and_ids_go_on_growing() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy(dir.path(), 3);
+        let t = tracer(dir.path());
+        let next = t.emit("new", None, json!({})).unwrap();
+        assert_eq!(next, 4);
+        let events = read_events(dir.path()).unwrap();
+        assert_eq!(events.len(), 4);
+        assert_eq!(events[3]["type"], "new");
+        // the chain now verifies end to end, and the original is kept
+        assert!(read_chain(&dir.path().join(EVENTS_FILE)).is_ok());
+        assert!(dir.path().join(LEGACY_FILE).exists());
     }
 }
