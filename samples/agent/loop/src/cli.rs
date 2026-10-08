@@ -165,6 +165,11 @@ struct DatasetArgs {
     /// Where to write the dataset (the manifest is written beside it).
     #[arg(long)]
     out: PathBuf,
+    /// Write each accepted run as one exchange, the task and the accepted
+    /// patch, instead of the whole tool conversation (which a trainer whose
+    /// chat template depends on the last turn refuses).
+    #[arg(long)]
+    patch_form: bool,
 }
 
 /// The arguments of `run`.
@@ -505,7 +510,12 @@ fn dataset(home: &LoopHome, args: &DatasetArgs) -> Result<ExitCode> {
             }
         }
     }
-    let manifest = crate::dataset::export(home, &runs, &args.out)?;
+    let form = if args.patch_form {
+        crate::dataset::Form::Patch
+    } else {
+        crate::dataset::Form::Conversation
+    };
+    let manifest = crate::dataset::export_in(home, &runs, &args.out, form)?;
     println!("{}", serde_json::to_string_pretty(&manifest)?);
     Ok(ExitCode::SUCCESS)
 }

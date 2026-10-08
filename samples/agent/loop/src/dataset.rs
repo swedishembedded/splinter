@@ -214,8 +214,31 @@ fn record_of(
                  "metadata": {"run": run, "attempt": attempt}})))
 }
 
+/// What a training record holds of an accepted run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    /// The whole conversation of the accepted attempt: the model's tool
+    /// calls, their results and the closing answer. A trainer whose chat
+    /// template renders an assistant turn differently depending on whether
+    /// it is the last one (Qwen3's does) refuses such a record.
+    Conversation,
+    /// One exchange: the task as the attempt was given it, and the patch
+    /// that was accepted as the single assistant turn. What it teaches is
+    /// writing the change, not the use of tools.
+    Patch,
+}
+
 /// The record of the accepted attempt of `run`, or why there is none.
 pub fn record_for_run(home: &LoopHome, run: &str) -> Result<Result<(u32, Value), Ineligible>> {
+    record_for_run_in(home, run, Form::Conversation)
+}
+
+/// [`record_for_run`] in the given [`Form`].
+pub fn record_for_run_in(
+    home: &LoopHome,
+    run: &str,
+    form: Form,
+) -> Result<Result<(u32, Value), Ineligible>> {
     let dir = home.run_dir(run);
     let outcome: Outcome = match read_json(&dir.join(OUTCOME_FILE)) {
         Ok(o) => o,
@@ -258,6 +281,22 @@ pub fn record_for_run(home: &LoopHome, run: &str) -> Result<Result<(u32, Value),
             "the system prompt in effect is not the one the run used".into(),
         )));
     }
+    if form == Form::Patch {
+        let patch = std::fs::read_to_string(dir.join("patch.diff")).unwrap_or_default();
+        if patch.trim().is_empty() {
+            return Ok(Err(Ineligible("the accepted run kept no patch".into())));
+        }
+        let task = crate::attempt::compose_prompt(&contract, None);
+        return Ok(Ok((
+            attempt,
+            json!({"messages": [
+                    {"role": "system", "content": system, "train": false},
+                    {"role": "user", "content": task, "train": false},
+                    {"role": "assistant", "content": patch.trim(), "tool_calls": [], "train": true}],
+                   "tools": [],
+                   "metadata": {"run": run, "attempt": attempt, "form": "patch"}}),
+        )));
+    }
     let tools = tool_definitions(&dir, attempt)?;
     let mine: Vec<Value> = events
         .iter()
@@ -283,10 +322,15 @@ fn tool_definitions(dir: &Path, attempt: u32) -> Result<Vec<Value>> {
 /// Writes the dataset of `runs` to `out` and its manifest beside it
 /// (`<out>.manifest.json`). The same runs give the same bytes.
 pub fn export(home: &LoopHome, runs: &[String], out: &Path) -> Result<Manifest> {
+    export_in(home, runs, out, Form::Conversation)
+}
+
+/// [`export`] with records in the given [`Form`].
+pub fn export_in(home: &LoopHome, runs: &[String], out: &Path, form: Form) -> Result<Manifest> {
     let mut seen = BTreeSet::new();
     let (mut lines, mut considered) = (Vec::new(), Vec::new());
     for run in runs {
-        match record_for_run(home, run)? {
+        match record_for_run_in(home, run, form)? {
             Ok((attempt, record)) => {
                 let line = serde_json::to_string(&record)?;
                 let digest = Digest::sha256_of(line.as_bytes()).to_string();

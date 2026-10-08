@@ -758,3 +758,53 @@ fn training_records_come_only_from_accepted_unaided_runs_and_only_the_accepted_a
         "the tool definitions the model was offered"
     );
 }
+
+#[test]
+fn the_patch_form_holds_the_task_and_the_accepted_patch_as_one_exchange() {
+    let f = Fixture::new();
+    let m = model(Duration::ZERO, move |req| {
+        Ok(match tool_results(req) {
+            0 => write("calc.py", FIXED),
+            _ => text("done"),
+        })
+    });
+    let splinter = f.splinter(m);
+    let home = f.loop_home();
+    let good = execute(&splinter, &home, Request::New(Box::new(f.contract(2)))).unwrap();
+    assert_eq!(good.status, Status::Accepted);
+
+    let out = f.home.path().join("data").join("patch.jsonl");
+    let manifest = splinter_agent_loop::dataset::export_in(
+        &home,
+        std::slice::from_ref(&good.run),
+        &out,
+        splinter_agent_loop::dataset::Form::Patch,
+    )
+    .unwrap();
+    assert_eq!(manifest.records, 1, "{manifest:#?}");
+    let record: Value = serde_json::from_str(
+        std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    let messages = record["messages"].as_array().unwrap();
+    let roles: Vec<&str> = messages
+        .iter()
+        .map(|m| m["role"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        roles,
+        ["system", "user", "assistant"],
+        "one exchange: a trainer sees one assistant turn"
+    );
+    assert!(messages[1]["content"].as_str().unwrap().contains("Task:"));
+    assert!(messages[2]["content"]
+        .as_str()
+        .unwrap()
+        .contains("diff --git"));
+    assert_eq!(messages[2]["train"], true);
+    assert_eq!(record["metadata"]["form"], "patch");
+}
