@@ -67,7 +67,8 @@ every repeat of the partition and writes its out-of-fold predictions; the
 |---|---|---|
 | `km` | Kaplan-Meier survival and Aalen-Johansen incidence of the training subjects, the same for everyone | none |
 | `cox-net-standard`, `cox-net-all` | elastic-net Cox (the ridge-like and the mixed penalty both tried), Breslow baseline | conventional risk factors; everything |
-| `cs-cox-standard`, `cs-cox-all` | one such Cox model per cause, the others censoring, joined into cumulative incidence by the Aalen-Johansen formula | conventional risk factors; everything |
+| `cs-cox-agesex`, `cs-cox-standard`, `cs-cox-all` | one such Cox model per cause, the others censoring, joined into cumulative incidence by the Aalen-Johansen formula | age and sex; conventional risk factors; everything |
+| `spline-cox-net-standard`, `spline-cox-net-all` | the elastic-net Cox model with a cubic B-spline basis on every continuous input (knots fitted on the training subjects, constant beyond their range), the nonlinear additive ceiling | conventional risk factors; everything |
 | `logit-ipcw-standard`, `logit-ipcw-all` | logistic regression for death by 5, 10 and 15 years, weighted by the inverse probability of remaining uncensored, joined by a monotone interpolation | conventional risk factors; everything |
 | `logit-ipcw-yearly-all` | the same at every year from 1 to 15 | everything |
 | `gbs-all`, `gbs-fast-all` | scikit-survival's gradient-boosted survival model (Cox loss), at two learning rates; the number of trees is chosen on the validation share | everything |
@@ -104,6 +105,46 @@ lifecourse compare  --data <data> --a external:cox-net-all --b additive
 
 `report` adds a row per scored baseline to its cross-validation section.
 `python -I baselines/test_baselines.py` holds the harness's own checks.
+
+## Secondary estimands
+
+Questions the same cohort can answer besides all-cause mortality, with rules
+fixed in the paper (section 4.5) before any result. New outcomes and labels
+live in sidecar files keyed by subject, so `timelines.jsonl` and its frozen
+digest are untouched: `build` writes `causes.jsonl` (the linked file's
+underlying-cause recode and its diabetes and hypertension multiple-cause flags,
+with deaths lacking multiple-cause data marked) and `labels` writes
+`conditions.jsonl`.
+
+| Id | Question | Predictions | Scoring |
+|---|---|---|---|
+| T1 | death by cardiovascular, cancer and other causes at 5, 10 and 15 years | `cs-cox-*` baselines | `causes`: IPCW Brier, AUC, calibration per fold, paired against a reference |
+| T2 | death with diabetes or hypertension listed on the certificate | `baselines/flags.py` (`flag-cox-*`, `flag-share-*`) | `flags`: pooled out-of-fold, against the all-cause ranker, cluster bootstrap |
+| T3 | expected time lived over 10 or 15 years and the mortality-equivalent age | any baseline's all-cause curves | `lifeexp`; `baselines/assoc.py` for the association with outcomes |
+| T4 | eight prevalent conditions at the examination | `baselines/conditions.py` | `prevalence`: per fold, against the age-and-sex model |
+| T5 | undiagnosed diabetes, hypertension, kidney markers, high cholesterol | `baselines/conditions.py` | `screen`: sensitivity at a training-chosen threshold, pooled, against age and body-mass index |
+
+A label defined by a measurement is not predicted from it: `conditions.py`
+holds the list of inputs each label excludes, with a specification that none
+reaches a model. Label definitions, with the codebook variables and the
+standardisation of serum creatinine per cycle, are in `src/conditions.rs` and
+the paper's Appendix C.
+
+```bash
+lifecourse labels --nhanes <dir> --data <data>                  # conditions.jsonl (build has written causes.jsonl)
+python -I baselines/run.py --data <data> --out <data>/baselines --baseline cs-cox-agesex --jobs 8
+lifecourse causes --data <data> --model cs-cox-agesex --model cs-cox-standard --model cs-cox-all --score
+python -I baselines/flags.py --data <data> --out <data>/baselines --model flag-cox-all --model flag-share-all --jobs 8
+lifecourse flags --data <data> --ranker cs-cox-all --model flag-cox-all --model flag-share-all
+lifecourse lifeexp --data <data> --model cs-cox-all --tau 10 --aa-dir <dir>
+python -I baselines/assoc.py --data <data> --aa <dir>/aa-cs-cox-all-r0-t10.jsonl
+python -I baselines/conditions.py --data <data> --out <data>/conditions --jobs 8
+lifecourse prevalence --data <data> --model agesex --model nondef-hgb --model full-hgb
+lifecourse screen --data <data> --model agebmi --model nondef-logit --model nondef-hgb
+```
+
+Their own checks: `python -I baselines/test_flags.py`, `test_assoc.py` and
+`test_conditions.py`.
 
 ## Recipes
 
@@ -182,6 +223,7 @@ lifecourse cv      --data <out> --arm horizon            # every fold; --repeat/
 lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
 lifecourse compare --data <out> --a horizon --b standard        # either side may be external:<baseline>
 lifecourse external --data <out> --baseline km                  # secondary: score a baseline's predictions
+lifecourse labels|causes|flags|lifeexp|prevalence|screen ...    # secondary estimands, see above
 lifecourse final   --data <out> --arm horizon            # once; --reason to score again
 lifecourse amend   --data <out>                                 # pin the post-freeze amendments
 lifecourse report  --data <out>
