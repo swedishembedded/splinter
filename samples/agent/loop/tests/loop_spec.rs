@@ -730,6 +730,13 @@ fn training_records_come_only_from_accepted_unaided_runs_and_only_the_accepted_a
         .map(|m| m["train"].as_bool().unwrap())
         .collect();
     assert_eq!(flags, [false, false, true, false, true]);
+    // No assistant turn carries the stray whitespace around an empty
+    // reasoning block: the trainer refuses a turn its template renders
+    // differently alone and in context.
+    for m in messages.iter().filter(|m| m["role"] == "assistant") {
+        let content = m["content"].as_str().unwrap();
+        assert_eq!(content, content.trim(), "{m}");
+    }
     let call = &messages[2]["tool_calls"][0];
     assert_eq!(messages[3]["tool_call_id"], call["id"]);
     assert!(

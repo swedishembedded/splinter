@@ -116,7 +116,12 @@ fn record_of(
                        "function": {"name": name, "arguments": args.to_string()}})
             })
             .collect();
-        messages.push(json!({"role": "assistant", "content": std::mem::take(text),
+        // A turn that only calls tools has no content: the whitespace a
+        // model leaves around an empty reasoning block would make the chat
+        // template render the message differently alone and in context, and
+        // the trainer refuses a record it cannot give a loss mask for.
+        let content = std::mem::take(text).trim().to_string();
+        messages.push(json!({"role": "assistant", "content": content,
                              "tool_calls": tool_calls, "train": true}));
     };
     for event in events {
