@@ -34,8 +34,9 @@ nonlinear in every continuous input (written by the agent) is the best model
 we measured by point estimate; it is not resolvably better than the same model
 without splines when all inputs are used (difference in integrated Brier
 score -0.00013, 95% interval -0.00057 to +0.00031), and a deep set encoder
-over the same inputs is resolvably worse than it (+0.00111, +0.00019 to
-+0.00204). Learning curves from one cross-validation repeat show the Cox
+over the same inputs is worse than it (+0.00111, +0.00019 to +0.00204 by the
+corrected t-test; +0.00071, -0.00011 to +0.00155 by a pooled cluster bootstrap on
+one repeat, which resolves the gap only at ten years). Learning curves from one cross-validation repeat show the Cox
 models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
@@ -482,6 +483,19 @@ point estimate, and the deep set encoder is now resolvably worse than it:
 (section 4.3) the deep encoder is therefore not useful on this cohort: it does
 not improve on the nonlinear additive baseline, it is slightly worse.
 
+The protocol preferred a pooled analysis with a cluster bootstrap to the fold
+t-test (section 4.2); it was run afterwards (`lifecourse bootstrap`) on the
+pooled out-of-fold predictions of repeat 0, each subject once, resampling
+cycle-stratum-PSU clusters 1,000 times. It agrees where the two have the same
+data: spline minus linear Cox, -0.00011 [-0.00049, +0.00024] in the integrated
+Brier score (8,976 subjects whose cycles reach 15 years) and -0.00001
+[-0.00035, +0.00036] at ten years (23,097). Against the spline Cox, the additive
+piecewise-exponential model is +0.00054 [+0.00001, +0.00107] and +0.00108
+[+0.00055, +0.00161] (integrated, ten years), and the deep set encoder
++0.00071 [-0.00011, +0.00155] and +0.00106 [+0.00031, +0.00184]. The deep
+encoder's integrated gap of 0.0011 in the fold analysis is therefore smaller and
+unresolved in this one; at ten years it is resolved in both.
+
 ### 5.3 Learning curves (supervisor analysis, one repeat)
 
 Mean IBS on the five folds of repeat 0 when a share of each fold's training
@@ -594,14 +608,37 @@ death. At 15 years the cardiovascular interval touches zero
 events per fold, so the rule is met for the other combinations and not for
 those two.
 
-What the rule did not get. The calibration part of the rule asks for a
-bootstrap interval of observed over expected; it was not run (it needs the
-survey-design bootstrap, which is not implemented for causes), so calibration
-is described, not tested. Observed over expected lies between 0.92 and 1.0 for
-every model and cause at 10 years: the models predict slightly more deaths than
-occur, by up to 8% for the residual group, and the recalibration slopes of 1.04
-to 1.15 say the predictions are, if anything, not spread out enough. These are
-means over folds; no cause shows a slope outside [0.8, 1.25].
+The calibration clause of the rule, tested afterwards on the pooled out-of-fold
+predictions of repeat 0 (23,097 subjects, 1,000 cluster resamples, the
+censoring distribution re-estimated on each), asks that the interval of
+observed over expected contain 1 and the slope lie in [0.8, 1.25]:
+
+| Cause (events) | Model | O/E [95% CI] | Slope [95% CI] | ICI | E90 | Calibrated |
+|---|---|---|---|---|---|---|
+| Cardiovascular (1,067) | age, sex | 0.962 [0.897, 1.033] | 1.054 [0.981, 1.135] | 0.0037 | 0.0127 | yes |
+| | `standard` | 0.996 [0.933, 1.065] | 1.081 [1.012, 1.152] | 0.0027 | 0.0072 | yes |
+| | `all` | 0.980 [0.918, 1.047] | 1.083 [1.018, 1.151] | 0.0031 | 0.0049 | yes |
+| Cancer (735) | age, sex | 0.950 [0.847, 1.049] | 1.087 [1.002, 1.191] | 0.0021 | 0.0032 | yes |
+| | `standard` | 0.947 [0.849, 1.046] | 1.129 [1.044, 1.227] | 0.0026 | 0.0053 | yes |
+| | `all` | 0.960 [0.862, 1.053] | 1.082 [1.005, 1.168] | 0.0025 | 0.0041 | yes |
+| Other (1,464) | age, sex | 0.924 [0.852, 0.988] | 1.014 [0.939, 1.096] | 0.0087 | 0.0214 | no |
+| | `standard` | 0.958 [0.890, 1.020] | 1.022 [0.949, 1.100] | 0.0044 | 0.0105 | yes |
+| | `all` | 0.943 [0.883, 1.002] | 1.053 [0.991, 1.116] | 0.0048 | 0.0090 | yes |
+| All causes (3,266) | age, sex | 0.942 [0.904, 0.982] | 1.042 [1.000, 1.088] | 0.0120 | 0.0326 | no |
+| | `standard` | 0.967 [0.932, 1.002] | 1.078 [1.035, 1.124] | 0.0068 | 0.0144 | yes |
+| | `all` | 0.958 [0.928, 0.990] | 1.094 [1.055, 1.136] | 0.0094 | 0.0132 | no |
+
+The full-input model is calibrated for each of the three causes. Summed over
+causes it predicts about 4% more deaths by ten years than occur (O/E 0.958,
+interval just below 1), and so does the age-sex model (0.942): the distinction
+is that the intervals of the cause rows, with fewer events, are wider and contain
+1. ICI, E50 and E90 are the mean, median and 90th percentile of the absolute
+gap between the predicted risk and a smoothed observed risk (a local-linear
+smooth of the censoring-weighted outcome on the weighted rank of the prediction,
+a window of 30% of the weight): the typical gap is under 0.5 percentage points
+for every cause and 0.9 for all causes, and no model's 90th-percentile gap
+exceeds 2.2 points except age and sex for all causes (3.3). Slopes above one
+say the predictions are not spread out enough, by 5% to 13%.
 
 Reading the numbers. The high AUCs are largely age: age and sex alone reach 0.86
 to 0.91, and the other inputs add 0.03 to 0.05. The index of prediction
@@ -834,7 +871,7 @@ clinical screening value for any of these.
 
 ### 5.10 Accelerometer summaries as an input block
 
-The rule is in section 4.6. Of the 12,422 examinees of the 2003-2004 and
+The rule is in section 4.6. Of the 10,332 examinees of the 2003-2004 and
 2005-2006 cycles with at least four valid days of recording, 6,952 are in the
 cohort (adults eligible for linkage); 5,877 of them are outside the locked
 test, and 806 died within ten years. The summaries have plausible levels: the
@@ -863,6 +900,75 @@ years is largely already in the examination, in age, body size, blood tests
 and self-reported health, with a small remainder. A sequence model on the
 minute counts, which the roadmap asked for, was not tried.
 
+### 5.11 The residual network: is there structure beyond the additive model?
+
+Design and rule: section 4.7, fixed before the first run. An earlier plan for
+this experiment, written the day before and kept outside the repository (a
+larger design with piecewise-linear embeddings and a sweep of sixty
+configurations), was never run; the agent's two attempts at it (section 5.1)
+produced a candidate that crashed on the real folds. The design here is the
+smaller one of section 4.7, and the trained networks are the first that exist.
+
+*Capacity sweep, repeat 0 (5 folds), network minus the spline Cox model it is
+built on* (negative is better):
+
+| Width, hidden layers | Integrated Brier, 0 to 15 y | Brier, 10 y |
+|---|---|---|
+| 16, 1 | -0.00006 [-0.00045, +0.00033] | -0.00024 [-0.00071, +0.00023] |
+| 64, 1 | -0.00014 [-0.00062, +0.00034] | -0.00028 [-0.00079, +0.00023] |
+| 256, 1 | -0.00011 [-0.00062, +0.00040] | -0.00024 [-0.00075, +0.00026] |
+| 64, 2 | -0.00033 [-0.00110, +0.00045] | -0.00048 [-0.00121, +0.00024] |
+| 64, 3 | -0.00029 [-0.00091, +0.00033] | -0.00034 [-0.00108, +0.00040] |
+
+Every configuration is nominally ahead of the spline model and none is resolved.
+The headline configuration by the rule fixed in advance, the largest gain in
+integrated Brier score, is width 64 with two hidden layers.
+
+*Confirmation, repeats 1 to 4 (20 folds), headline configuration against the
+spline Cox model:*
+
+| Metric | Spline Cox | Residual network | Paired difference [95% CI, corrected] |
+|---|---|---|---|
+| Integrated Brier, 0 to 15 y | 0.04599 | 0.04591 | -0.00008 [-0.00030, +0.00015] |
+| Brier, 10 y | 0.05344 | 0.05327 | -0.00017 [-0.00037, +0.00003] |
+| Uno concordance, 10 y | 0.90078 | 0.90130 | +0.00052 [-0.00049, +0.00152] |
+
+By the rule of section 4.3 the residual network is not useful: the integrated
+Brier score improves by 0.00008, a tenth of the 0.001 the rule requires, with an
+interval spanning zero. The pooled analysis with a cluster bootstrap (repeats 1
+and 2) gives -0.00011 [-0.00026, +0.00004] and -0.00009 [-0.00023, +0.00005] in
+the integrated score, and, at ten years, -0.00015 [-0.00030, -0.00000] and
+-0.00024 [-0.00038, -0.00009]: a gain at ten years that is resolved there and is
+0.3% to 0.5% of the score. The networks stopped after a median of
+34 epochs, and in 3 of 25 folds at epoch zero, which is the spline model.
+
+*Feature blocks, confirmation folds, the headline network given one block of
+inputs at a time (the spline base unchanged):*
+
+| Block | Integrated Brier [95% CI] | Brier, 10 y [95% CI] |
+|---|---|---|
+| all inputs | -0.00008 [-0.00030, +0.00015] | -0.00017 [-0.00037, +0.00003] |
+| examination measurements | -0.00007 [-0.00027, +0.00013] | -0.00016 [-0.00036, +0.00004] |
+| eating-time features | +0.00002 [-0.00004, +0.00008] | +0.00001 [-0.00007, +0.00008] |
+| recalled diagnosis ages and weights | -0.00004 [-0.00015, +0.00007] | -0.00006 [-0.00018, +0.00005] |
+| questionnaire answers | -0.00000 [-0.00022, +0.00022] | -0.00001 [-0.00016, +0.00014] |
+
+What gain there is, is carried by the examination measurements: the network on
+that block alone reproduces almost all of the all-input gain, and the eating-time
+features, the history and the questionnaire answers add nothing resolvable.
+The shuffled-outcome control (trained on outcomes permuted among the training
+subjects) gives +0.00002 [-0.00003, +0.00007] and stopped at epoch zero in 6 of
+20 folds, with a median of 6 epochs elsewhere: the training procedure does not
+manufacture a gain.
+
+The answer to the paper's question, for this data size and this recipe, is no:
+a small network trained on the residual of the spline Cox model does not find
+structure worth a thousandth of a Brier point in the integrated score, and the
+gain it may have at ten years, about 0.0002, is a fifth of what the rule requires. This is a result for a
+multilayer perceptron on standardised inputs with one set of optimiser
+settings, 38,000 training subjects and about 5,700 deaths; it is not a proof that
+no structure exists, and a larger sample would be the way to test it.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -870,7 +976,12 @@ single examination contains, a regularised Cox model with a spline in every
 continuous input is the best model we measured by point estimate, and it is not
 resolvably better than the same model without splines when all inputs are
 used. The deep set encoder is resolvably worse than the spline model by
-0.0011 in the integrated Brier score. Failing to find a gain is not proof that
+0.0011 in the integrated Brier score by the corrected t-test over 25 folds. On the
+pooled out-of-fold predictions of repeat 0 with a cluster bootstrap the figure is
++0.0007 [-0.0001, +0.0016] in the integrated Brier score, not resolved, and
++0.0011 [+0.0003, +0.0018] at ten years, resolved: the deep encoder is behind at
+ten years on both analyses and the integrated difference does not survive the
+second. Failing to find a gain is not proof that
 none exists: our power to resolve a true difference of 0.001 is limited
 (section 3 and the audit in Appendix B), and the residual-network experiment,
 the one that would test "is there structure the additive model misses",
@@ -965,9 +1076,8 @@ local evaluation on unseen tasks was run.
   conditions and four screens are reported, each against its own rule, and none
   is adjusted for the number of looks. A rule met by a narrow margin (the
   accelerometer block, the cholesterol gain of 0.0197) should be read as such.
-* The calibration clause of the cause rule (a bootstrap interval of observed
-  over expected) was not run; the matched-specificity reading of the screens is
-  post hoc; weights for labels from laboratory subsamples other than fasting
+* The matched-specificity reading of the screens is post hoc; the calibration
+  summaries of section 5.5 come from one repeat; weights for labels from laboratory subsamples other than fasting
   glucose are the examination weights, which is not exact; the bone-density
   definition of osteoporosis was not used; creatinine is standardised by the
   correction each cycle's laboratory documentation states, and estimated
