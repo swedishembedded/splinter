@@ -216,7 +216,9 @@ class SplineCoxNet:
         z = np.hstack([spline.transform(x[:, [j]]) for j, spline in enumerate(splines)])
         return np.hstack([z, x[:, n:]])
 
-    def fit_predict(self, ctx):
+    def fit(self, ctx):
+        """(preprocessor, per-column splines, coefficients) fitted on the training rows, the
+        penalty chosen on an inner validation split of them."""
         d = ctx.data
         fit, val = ctx.inner()
         prep = Preprocessor(d, self.inputs).fit(d, fit)
@@ -231,12 +233,22 @@ class SplineCoxNet:
         prep = Preprocessor(d, self.inputs).fit(d, ctx.train)
         splines = [self._spline(prep.transform(d, ctx.train)[:, [j]])
                   for j in range(len(self.num_cols(prep)))]
-        x_tr, x_te = self._matrix(prep, splines, d, ctx.train), self._matrix(prep, splines, d, ctx.test)
+        x_tr = self._matrix(prep, splines, d, ctx.train)
         t_tr, c_tr = ctx.outcome(ctx.train)
         beta = fit_coxnet(x_tr, t_tr, c_tr >= 0, l1, alphas)
         ctx.chosen["nonzero_coefficients"] = int(np.sum(beta != 0))
-        h0 = breslow(x_tr @ beta, t_tr, c_tr >= 0, YEARS.astype(float))
-        return 1.0 - np.exp(-np.outer(np.exp(x_te @ beta), h0)), None
+        return prep, splines, beta
+
+    def linear_predictor(self, fitted, data, rows):
+        prep, splines, beta = fitted
+        return self._matrix(prep, splines, data, rows) @ beta
+
+    def fit_predict(self, ctx):
+        fitted = self.fit(ctx)
+        d = ctx.data
+        t_tr, c_tr = ctx.outcome(ctx.train)
+        h0 = breslow(self.linear_predictor(fitted, d, ctx.train), t_tr, c_tr >= 0, YEARS.astype(float))
+        return 1.0 - np.exp(-np.outer(np.exp(self.linear_predictor(fitted, d, ctx.test)), h0)), None
 
 
 class SplineCoxNetWithout(SplineCoxNet):
