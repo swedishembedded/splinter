@@ -1083,6 +1083,11 @@ local evaluation on unseen tasks was run.
   correction each cycle's laboratory documentation states, and estimated
   filtration rate by an equation quoted from the literature, not verified against
   a second implementation.
+* One input of the frozen timelines is defective: the question about weak or
+  failing kidneys is asked under another name in the 1999-2000 cycle, so those
+  subjects lack it. Refitting the spline Cox model without that input changes the
+  integrated Brier score by -0.00001 [-0.00005, +0.00004] over 25 folds, so the
+  timelines were left as they were frozen; the labels of section 5.9 read both names.
 * The agent was evaluated on four tasks and on one local model; the learning
   experiment trained on nine accepted runs, seven of which are the same task.
   Nothing here shows general autonomy.
