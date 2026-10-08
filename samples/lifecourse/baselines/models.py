@@ -415,6 +415,7 @@ REGISTRY = {
     "km": KaplanMeier,
     "cox-net-standard": lambda: CoxNet("standard"),
     "cox-net-all": lambda: CoxNet("all"),
+    "cs-cox-agesex": lambda: CauseSpecificCox("agesex"),
     "cs-cox-standard": lambda: CauseSpecificCox("standard"),
     "cs-cox-all": lambda: CauseSpecificCox("all"),
     "logit-ipcw-standard": lambda: LogisticIPCW("standard", (5, 10, 15), "logit-ipcw-standard"),

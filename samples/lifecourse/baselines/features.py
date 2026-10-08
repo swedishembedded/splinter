@@ -146,7 +146,7 @@ def load(timelines_path, partition_path, cache_path):
 
 
 def columns(data, inputs):
-    """Indices of the numeric and categorical columns of `inputs`: 'standard' or 'all'."""
+    """Indices of the numeric and categorical columns of `inputs`: 'agesex', 'standard' or 'all'."""
     num_names = [str(x) for x in data["num_names"]]
     cat_names = [str(x) for x in data["cat_names"]]
     if inputs == "all":
@@ -154,6 +154,8 @@ def columns(data, inputs):
     if inputs == "standard":
         return ([num_names.index(n) for n in STANDARD_NUMERIC],
                 [cat_names.index(c) for c in STANDARD_CATEGORICAL])
+    if inputs == "agesex":
+        return [num_names.index("age")], [cat_names.index("sex")]
     raise ValueError(f"unknown inputs {inputs!r}")
 
 

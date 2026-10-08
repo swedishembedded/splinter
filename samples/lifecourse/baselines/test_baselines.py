@@ -95,6 +95,13 @@ class Harness(unittest.TestCase):
             with self.assertRaises(ValueError):
                 run.restrict(data, train, path)
 
+    def test_the_age_sex_input_set_is_age_and_sex_alone(self):
+        d = dict(num_names=np.array(["sbp", "age", "bmi"]), cat_names=np.array(["smoking", "sex"]))
+        num, cat = features.columns(d, "agesex")
+        self.assertEqual(([d["num_names"][i] for i in num], [d["cat_names"][i] for i in cat]),
+                         (["age"], ["sex"]))
+        self.assertIn("cs-cox-agesex", models.REGISTRY)
+
     def test_missing_values_are_imputed_and_flagged(self):
         data = toy()
         rows = np.arange(len(data["num"]))
