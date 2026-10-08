@@ -535,6 +535,69 @@ examination beyond the risk of dying; one possible reading, which we did not
 test, is that it is listed on certificates for reasons tied to the death more
 than to the person's blood pressure.
 
+### 5.7 Secondary estimand T3: expected time lived and mortality-equivalent age
+
+A predicted curve gives each subject an expected time lived in the next *τ*
+years, the restricted mean survival time (RMST). Calibration compares the mean
+prediction in ten equal-weight risk groups with the Kaplan-Meier RMST observed
+there, on the pooled out-of-fold predictions of repeat 0, on the cycles whose
+follow-up reaches *τ* (23,097 subjects and 3,266 deaths at 10 years; 8,976 and
+1,905 at 15 years, which only the 1999 to 2002 cycles reach).
+
+| Model | Mean absolute gap, 10 y (years) | Slope, 10 y | Uno C of the RMST, 10 y | Mean absolute gap, 15 y | Slope, 15 y |
+|---|---|---|---|---|---|
+| age, sex (Cox) | 0.045 | 0.95 | 0.855 | 0.094 | 0.96 |
+| `standard` (cause-specific Cox) | 0.036 | 1.01 | 0.876 | 0.087 | 1.01 |
+| `all` (cause-specific Cox) | 0.035 | 1.02 | 0.898 | 0.058 | 1.01 |
+| spline Cox, `all` | 0.025 | 1.01 | 0.900 | 0.089 | 1.00 |
+
+By the rule of section 4.5 (a gap of at most 0.25 years and a slope in
+[0.9, 1.1]) every model is calibrated at both horizons, by a wide margin on
+the gap. The mean predicted and observed 10-year RMST are 9.51 and 9.53 years
+for the best models. Repeats 1 and 2 give the same figures within 0.005 years
+of gap. This is not a strong test of the models: the 10-year RMST is within 0.1
+years of its ceiling for six of ten risk groups, where nothing can be wrong
+by much, and the discriminating information sits in the first two groups
+(predicted 6.9 and 9.1 years for the full-input model, observed 6.9 and 9.2).
+
+*Mortality-equivalent age.* For each subject, the age at which a Gompertz
+life table gives the same expected time over 10 years. The table is fitted per
+sex to the training subjects of the subject's fold by weighted maximum
+likelihood with delayed entry, so nothing about a test subject touches it.
+Ages are clamped to 18 to 85 and the clamps counted: 5% to 6% of subjects (1,356
+to 1,381 of 23,097 for the full-input models) have a predicted expectation above
+what any age in that range gives, which is to say they are healthy enough that
+10 years of follow-up cannot tell them apart. For these subjects the
+equivalent age is a bound, not a measurement, and an acceleration near zero
+below about age 40 should not be read.
+
+The association of the acceleration (equivalent age minus age) with outcomes
+over the whole follow-up, by Cox models adjusted for age and sex, with survey
+weights and variance clustered on PSUs:
+
+| Outcome (events) | Full-input Cox | Spline Cox | Age and sex only (control) |
+|---|---|---|---|
+| All-cause death (5,220) | 1.72 [1.68, 1.77] | 1.67 [1.63, 1.72] | 0.84 [0.61, 1.15] |
+| Cardiovascular (1,664) | 1.76 [1.68, 1.84] | 1.73 [1.65, 1.81] | 0.55 [0.31, 0.97] |
+| Cancer (1,114) | 1.54 [1.46, 1.62] | 1.50 [1.43, 1.58] | 1.71 [1.11, 2.63] |
+| Other (2,442) | 1.80 [1.73, 1.87] | 1.74 [1.68, 1.80] | 0.75 [0.47, 1.20] |
+| Diabetes mention (617) | 2.04 [1.89, 2.19] | 1.98 [1.85, 2.13] | 0.38 [0.17, 0.86] |
+| Hypertension mention (842) | 1.66 [1.56, 1.77] | 1.63 [1.53, 1.73] | 0.34 [0.15, 0.77] |
+
+Hazard ratios per 5 years of acceleration. They are large and, as the
+rule of reading fixed in advance says, partly by construction: the
+acceleration is a function of a model fitted to predict death, evaluated on
+the same outcome. The control shows what is and is not construction. The same
+quantity from a model that sees only age and sex is a function of age and sex,
+which the Cox model adjusts for, and has no association with death (0.84,
+interval spanning one); the intervals of its other rows are wide, since little
+of it remains after adjustment, and are not read. What is informative is the
+contrast across outcomes for the full-input models: the acceleration tracks
+diabetes-mentioned deaths most closely (about 2.0) and cancer deaths least
+(about 1.5), consistent with the cause-specific accuracy of section 5.5.
+Nothing here shows that the acceleration measures biological ageing, or that
+changing it would change a risk.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -650,6 +713,9 @@ splinter-lifecourse causes --data <data> --model cs-cox-agesex --model cs-cox-st
 # T2: death with a diabetes or hypertension mention
 python -I samples/lifecourse/baselines/flags.py --data <data> --out <data>/baselines --model flag-cox-all --model flag-share-all --jobs 16
 splinter-lifecourse flags --data <data> --ranker cs-cox-all --model flag-cox-all --model flag-share-all --repeat 0
+# T3: expected time lived, mortality-equivalent age, and its association with outcomes
+splinter-lifecourse lifeexp --data <data> --model cs-cox-all --model spline-cox-net-all --repeat 0 --tau 10 --aa-dir <aa dir>
+python -I samples/lifecourse/baselines/assoc.py --data <data> --aa <aa dir>/aa-cs-cox-all-r0-t10.jsonl
 agent-loop models judge --candidate <version> --baseline-results <dir> --candidate-results <dir>
 ```
 
@@ -679,6 +745,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-08 | Learning from accepted runs | Trainer refused multi-step tool conversations (F-021); patch-form records trained an adapter; candidate rejected on eight held-out tasks (section 5.4) |
 | 2026-10-08 | Secondary estimands pre-registered (section 4.5); T1 death by cause (section 5.5) | The full-input cause-specific Cox model beats the conventional risk-factor model for each of three causes at 10 years; calibration described, its bootstrap not run |
 | 2026-10-08 | T2 death with a diabetes or hypertension mention (section 5.6) | Diabetes models beat the all-cause ranker (AUC +0.022 to +0.025, intervals above zero); hypertension models do not |
+| 2026-10-08 | T3 expected time lived and mortality-equivalent age (section 5.7) | Every model calibrated by the section 4.5 rule; acceleration associates with cause and flag as described, and its age-sex control shows no association |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review
