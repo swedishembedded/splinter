@@ -29,8 +29,8 @@ def toy(n=400, seed=0):
 
 def concordance(risk, time, event):
     """Fraction of comparable held-out pairs (a subject died before the
-    other's death or censoring, or both died at different times) whose
-    predicted risk order matches the observed order."""
+    other's death or censoring, or both died at different times) in which the
+    one who died first has the higher predicted risk; ties count one half."""
     ok = tot = 0
     n = len(time)
     for i in range(n):
@@ -50,8 +50,10 @@ def concordance(risk, time, event):
                 continue
             tot += 1
             lo, hi = (i, j) if ti < tj else (j, i)
-            if risk[lo] < risk[hi]:
+            if risk[lo] > risk[hi]:
                 ok += 1
+            elif risk[lo] == risk[hi]:
+                ok += 0.5  # a tie ranks nobody: half a pair, so a constant score gives 0.5
     return ok / max(tot, 1)
 
 

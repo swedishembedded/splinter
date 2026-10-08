@@ -428,3 +428,12 @@ REGISTRY = {
     "spline-cox-net-standard": lambda: SplineCoxNet("standard"),
     "spline-cox-net-all": lambda: SplineCoxNet("all"),
 }
+
+
+# The residual networks need torch, which the other baselines do not: importing
+# the module registers them (it registers itself), and only where torch exists.
+try:
+    import residual  # noqa: E402,F401
+except ModuleNotFoundError as e:
+    if e.name != "torch":
+        raise

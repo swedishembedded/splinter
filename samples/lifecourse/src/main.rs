@@ -46,6 +46,7 @@ mod intervals;
 mod lifeexp;
 mod metrics;
 mod nhanes;
+mod pooled;
 mod prevalence;
 mod recipe;
 mod recipe_run;
@@ -243,6 +244,36 @@ enum Command {
         /// The screen the others must beat.
         #[arg(long, default_value = "agebmi")]
         comparator: String,
+        /// The repeat whose folds are pooled.
+        #[arg(long, default_value_t = 0)]
+        repeat: usize,
+    },
+    /// Two models on the pooled out-of-fold predictions of one repeat: the
+    /// paired difference in integrated Brier score and in Brier score at ten
+    /// years, with a cluster-bootstrap interval (the protocol's preferred test).
+    Bootstrap {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// A baseline name or `recipe:<name>`.
+        #[arg(long)]
+        a: String,
+        /// The reference.
+        #[arg(long)]
+        b: String,
+        /// The repeat whose folds are pooled.
+        #[arg(long, default_value_t = 0)]
+        repeat: usize,
+    },
+    /// Calibration at ten years per cause (observed over expected and slope
+    /// with cluster-bootstrap intervals, and the calibration-curve errors).
+    Calibration {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Baselines or `recipe:<name>`.
+        #[arg(long, required = true)]
+        model: Vec<String>,
         /// The repeat whose folds are pooled.
         #[arg(long, default_value_t = 0)]
         repeat: usize,
@@ -536,6 +567,18 @@ fn main() -> Result<()> {
                 "{}",
                 prevalence::report_screen(&data, &model, &comparator, repeat)?
             );
+            Ok(())
+        }
+        Command::Bootstrap { data, a, b, repeat } => {
+            println!("{}", pooled::difference(&data, &a, &b, repeat)?);
+            Ok(())
+        }
+        Command::Calibration {
+            data,
+            model,
+            repeat,
+        } => {
+            println!("{}", pooled::calibration(&data, &model, repeat)?);
             Ok(())
         }
         Command::Report { data } => report::report(&data),
