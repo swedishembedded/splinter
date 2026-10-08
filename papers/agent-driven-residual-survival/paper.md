@@ -324,18 +324,123 @@ would give.
 
 ## 6. Discussion
 
-*(Pending.)*
+**What the survival results license.** On this cohort, with the information a
+single examination contains, a regularised Cox model with a spline in every
+continuous input is the best model we measured by point estimate, and it is not
+resolvably better than the same model without splines when all inputs are
+used. The deep set encoder is resolvably worse than the spline model by
+0.0011 in the integrated Brier score. Failing to find a gain is not proof that
+none exists: our power to resolve a true difference of 0.001 is limited
+(section 3 and the audit in Appendix B), and the residual-network experiment,
+the one that would test "is there structure the additive model misses",
+was not completed (section 5.1). What can be said is narrower and still
+useful: three differently built learners (a nonlinear Cox model, a logistic
+model with inverse-probability-of-censoring weights, and a piecewise-
+exponential additive model) land within 0.0005 of one another, and the deep
+encoder, whose curve is still falling with more data, has not caught up with
+them at this sample size. Whether it would with several times more subjects
+is a question for data that are not on this machine.
+
+**What the learning curves license.** The Cox curves are flat from half of the
+training subjects onward, so more of the same data will not improve them;
+the learners with more flexible hazards are still improving. Both statements
+come from one cross-validation repeat and from fold means of a metric whose
+folds are positively correlated; the exponents are poorly determined, and the
+extrapolated asymptote of the additive model is a hypothesis.
+
+**What the agent results license.** Of four substantive tasks given to the
+loop (a nonlinear Cox model, its specification tests, a learning-curve fitting
+tool, a residual network), two were accepted (the second after infrastructure
+repairs and one retry) and two were not delivered. The accepted work was
+checked by the supervisor against hidden checks written before the run and
+then read against the task; reading found two gaps (a missing specification
+test, and a documentation item that my own check had failed to test). The
+failures were informative: the 27-billion-parameter model decoded greedily
+loops on one action; with reasoning enabled it spends its output budget before
+writing; with a small server context a long conversation is refused; and a
+larger multi-part task (a neural network with a fitted likelihood and a
+learned multiplier) exceeded what it completed in three attempts. Each
+infrastructure defect was repaired in the layer that owned it, with a
+regression specification, and a defect of the supervisor's own checks was
+found by the same process (F-017, F-019). We report the delivered fraction
+(2 of 4 tasks, 5 of 9 attempts that reached a verdict were rejected or ran
+out of limits) as a property of this model on these tasks, not as a general
+rate.
+
+**What the learning-and-promotion results license.** *(Filled from section
+5.4.)*
 
 ## 7. Limitations
 
-*(Pending. To include: single examination per person; one country and era;
-mortality-only outcomes; analysis-time design reuse; agent evaluated on a
-small number of tasks.)*
+* One examination per person: the data cannot answer whether repeated
+  measurements add information, which is the regime where sequence
+  representations have been reported to help. The accelerometer minute data
+  for two cycles (2003 to 2006) have been downloaded but not used; they would
+  make a long-sequence experiment possible and are the next step.
+* One country and era; mortality is the only outcome observed after the
+  examination; follow-up is administratively censored, so the 15-year metric
+  rests on the earliest cycles alone.
+* Analysis-time reuse of the cross-validation folds: capacity and recipe
+  choices for the deep encoder were made on repeat 0 and confirmed on others,
+  but baselines, the spline model and the recipe sweep share the same partition;
+  all configurations tried are reported and none was selected on a locked test.
+* The pooled out-of-fold paired bootstrap that the protocol (section 4.2)
+  prefers to the corrected resampled t-test was specified as a loop task and
+  not run; every interval above is the corrected resampled t-test interval.
+* The agent was evaluated on four tasks and on one local model; the learning
+  experiment trained on nine accepted runs, seven of which are the same task.
+  Nothing here shows general autonomy.
+* The residual-network experiment and the calibration-curve additions
+  (integrated calibration index, E50 and E90) were specified and not delivered.
+  The audit of the calibration code found no defect in the censoring-aware
+  quantities but did find that no summary of the curve was reported.
 
 ## 8. Reproducibility
 
-*(Pending: exact commands, run identifiers, artifact locations, code
-revisions of the three repositories.)*
+Code revisions: brain f5cde671, sven d4ddb0c, splinter at the commit that
+contains this file (`git log -1 -- papers/agent-driven-residual-survival/paper.md`).
+Data: the lifecourse build described in `samples/lifecourse/README.md`
+(timelines, partition and frozen criteria are content-addressed in
+`FROZEN.json`). Commands, in the order they were run:
+
+```sh
+# local model served by brain (CUDA); one process on the device at a time
+BRAIN_BACKEND=cuda BRAIN_QWEN35_GGUF_CTX=98304 brain serve --openai 127.0.0.1:8788 --models-dir <models>
+# a delegated task (sampling temperature recorded in the run's model_selected event)
+BRAIN_API_KEY=<key printed by serve> agent-loop --temperature 0.7 run --workspace <clone> \
+  --task-file <task.txt> --accept "behaviour=bash <accept.sh>" --accept-visible "harness-tests=..." \
+  --protect <paths> --model "remote:brain/unsloth/Qwen3.8-27B-Q8_0" --allow-api-models \
+  --max-output-tokens 40000 --max-attempts 3 --follow-ups 3 --json
+# the spline baseline on the 25 folds, scored like every arm
+python -I samples/lifecourse/baselines/run.py --data <data> --out <data>/baselines --baseline spline-cox-net-all --jobs 16
+splinter-lifecourse external --data <data> --baseline spline-cox-net-all
+splinter-lifecourse compare --data <data> --a external:spline-cox-net-all --b external:cox-net-all
+# learning curves: shares of the training subjects, scored on the same folds
+splinter-lifecourse recipe subsample --data <data> --share 0.25
+python -I samples/lifecourse/baselines/run.py ... --train-ids <data>/recipe/_subsamples/p25-s1 --repeat 0
+splinter-lifecourse recipe score --data <data> --name spline-cox-net-all-p25 --made-of "..."
+# learning from accepted runs, and judging the candidate
+agent-loop dataset --run <accepted run> ... --out train.jsonl
+agent-loop train --dataset train.jsonl --base local:Qwen/Qwen3-8B --steps 60 --rank 16
+samples/agent/loop/fixtures/eval-candidate.sh <out> <model-ref> anagrams:1 bisect:1 ...
+agent-loop models judge --candidate <version> --baseline-results <dir> --candidate-results <dir>
+```
+
+Delegated tasks (task text and hidden acceptance scripts are kept outside the
+repository so that a worker's checkout cannot contain them; their SHA-256
+prefixes are given):
+
+| task | run | verdict | task / check digest |
+|---|---|---|---|
+| spline Cox model | run-20261007T203058.568-370c | accepted, attempt 2 of 3 | 76994035 / 54a7583d |
+| its specification tests | run-20261007T205231.010-e99c | accepted, attempt 1 (README item unmet, F-017) | 89fad691 / aac259b7 |
+| learning-curve tool | run-20261007T205818.780-7b26 | not delivered (limits; cancelled at attempt 3) | 2af4b8c9 / 9eb66011 |
+| residual network | run-20261007T215753.920-5a61 | rejected after 3 attempts | 4082373b / 4fe6cc75 |
+| residual network, continued, assisted by a hint | run-20261007T225456.244-8b2c | rejected after 2 attempts | 4082373b / 4fe6cc75 |
+
+Earlier delegated attempts of the first task ended before a model could be
+judged because of infrastructure defects (section 5.1): runs 6059, a64e (killed
+by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 
 ## Appendix A. Research log
 
