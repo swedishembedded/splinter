@@ -54,7 +54,7 @@ the inputs that define each), and undiagnosed disease only weakly (sensitivity
 0.2 to 0.45 at 90% specificity; about nine of ten positive calls for diabetes
 are false); accelerometer summaries added a small, narrowly resolved gain to the
 ten-year Brier score, and a convolutional network on the minute series did no
-better than eight summaries. On the agent question, two of four substantive tasks
+better than eight summaries. Which inputs the survival model relies on was then asked under a rule fixed beforehand: age dominates (a ratio of 26 between its 90th and 10th percentile), 38 of 67 inputs carry independent information, and the ranking survives the exclusion of early deaths (rank correlation 0.92); the directions are associations, and weight and ALT point the wrong way for advice because they mark frailty. On the agent question, two of four substantive tasks
 were accepted and two were not. Before the first could even be judged, four
 defects of the surrounding infrastructure (a reasoning block spending the
 output budget, greedy decoding repeating one action, a server context
@@ -193,6 +193,8 @@ here is an out-of-fold prediction, produced by a model fitted on the other
 folds of its repeat.
 
 ## 4. Methods
+
+![The study: inputs, models and the questions asked of one examination.](img/fig1-overview.png)
 
 ### 4.1 Models compared
 
@@ -422,6 +424,28 @@ better than the summaries only if it does so against the base with the summaries
 The sample is the same few thousand adults, so a failure is a statement about
 this size of sample.
 
+### 4.9 Which inputs the model relies on (pre-registered 2026-10-08)
+
+Written, and the code committed (`baselines/drivers.py`, commit 1053873), before
+any importance was computed. The question is which of the examination's inputs
+the survival model uses and in which direction, on repeat 0 of the folds. The
+model is the spline Cox model on every input (section 4.1). The importance of an
+input is the fall in the held-out Breslow partial log-likelihood per event, in
+nats, when that input's values are permuted among the fold's test subjects (mean
+of ten permutations). An input carries independent information if the mean fall
+over the five folds is at least 0.001 and the fall is positive in every fold.
+The direction is the hazard ratio between the 90th and the 10th percentile of a
+numeric input, or between each level and the most common level of a categorical
+one (levels with at least 2% of the test subjects), as the geometric mean over
+test subjects of the model's own ratio with only that input set. A numeric input
+missing for more than 20% of the subjects gets no ratio, because setting it for
+everyone would invent a condition. As a sensitivity analysis against illness
+that is already present at the examination, the same analysis is repeated
+without the subjects who die in the first two years; the two importance rankings
+are compared by rank correlation and by the overlap of their ten most important
+inputs. Importance and direction describe the fitted model's use of an input.
+They are associations and do not estimate what changing the input would do.
+
 ## 5. Results
 
 Numbers are means over the 25 cross-validation folds unless a repeat is named;
@@ -460,6 +484,8 @@ limit, and the third was cancelled by the supervisor for budget. This is
 recorded as a failure of the agent on a task of that size, not as a
 result about learning curves; the learning-curve analysis reported below was
 made by the supervisor and has since been written into the repository.
+
+![The agent's tasks and the defects found in its surroundings (section 5.1).](img/fig9-agent-audit.png)
 
 ### 5.2 The nonlinear additive ceiling
 
@@ -512,6 +538,8 @@ bootstrap on each repeat (resolved on one repeat of five). So the deep encoder's
 deficit is mostly variance between training runs, which averaging removes, and no
 average of seeds beats the additive model.
 
+![Integrated Brier score of each model (section 5.2).](img/fig2-model-ladder.png)
+
 ### 5.3 Learning curves
 
 Mean integrated Brier score over all 25 folds (five repeats of five folds) when
@@ -557,6 +585,8 @@ does; the encoder's reaches it), which is what a larger sample of this kind
 would test. An extrapolation from five points is a description of a curve and a
 hypothesis for the next data set, not an estimate of what more subjects would
 give.
+
+![Learning curves (section 5.3).](img/fig3-learning-curves.png)
 
 ### 5.4 Learning from accepted runs, and a candidate that is rejected
 
@@ -685,6 +715,8 @@ cardiovascular death), as expected, since few of the inputs bear on tumours.
 The cause groups are those of the public file's underlying-cause recode, which
 NCHS perturbs for some records.
 
+![Time-dependent AUC at 10 years by cause of death (section 5.5).](img/fig5-causes.png)
+
 ### 5.6 Secondary estimand T2: death with diabetes or hypertension listed
 
 The linked file marks deaths on whose certificate diabetes, or hypertension,
@@ -802,6 +834,8 @@ diabetes-mentioned deaths most closely (about 2.0) and cancer deaths least
 Nothing here shows that the acceleration measures biological ageing, or that
 changing it would change a risk.
 
+![Calibration of expected time lived (section 5.7).](img/fig6-life-expectancy.png)
+
 ### 5.8 Secondary estimand T4: prevalent conditions at the examination
 
 Eight conditions and one variant (diabetes defined with fasting glucose, on the
@@ -856,6 +890,8 @@ subsamples (urine albumin in particular). Bone density was not used for
 osteoporosis, whose label is the recalled diagnosis in those aged 50 and over,
 because its reference values could not be verified against a source.
 
+![Prevalent conditions (section 5.8).](img/fig7-prevalent-conditions.png)
+
 ### 5.9 Secondary estimand T5: undiagnosed disease
 
 Among subjects who do not report the diagnosis (and, for diabetes and
@@ -905,6 +941,8 @@ and at the real prevalence of 2% for diabetes about nine of ten positive calls
 are false. For cholesterol, sex alone accounts for a part of the gain over age
 and body-mass index (age-sex gains 0.035 at the training threshold). We claim no
 clinical screening value for any of these.
+
+![Screening for undiagnosed disease (section 5.9).](img/fig8-screening.png)
 
 ### 5.10 Accelerometer summaries as an input block
 
@@ -1032,6 +1070,114 @@ examination, in this sample of a few thousand adults, the eight summaries carry 
 much of it as a convolutional network on the minute pattern does, and no more can
 be resolved. The comparison has little power (the intervals are 0.0006 to 0.0010
 wide), so it excludes a large advantage of the series, not a small one.
+
+![Which pre-registered comparisons were resolved (sections 5.2, 5.10, 5.11).](img/fig4-forest.png)
+
+### 5.13 Which inputs the model relies on
+
+The rules are those of section 4.9; the grouped analysis was added after the
+single-input result was seen and is post hoc. Repeat 0, five folds, about 9,560
+test subjects and 1,420 deaths per fold, ten shuffles per input
+(`baselines/drivers.py`; the per-input numbers are identical with and without the
+grouped analysis). Of the 67 inputs, 38 carry independent information by the rule
+(mean fall at least 0.001 nats per event and positive in all five folds); 29 do
+not. The 22 largest:
+
+| rank | input | fall in partial log-likelihood [SE] | without deaths in the first 2 y | hazard ratio |
+|---|---|---|---|---|
+| 1 | `age` | 1.3713 [0.0552] | 1.4378 | p90 vs p10: 26.38 |
+| 2 | `sex` | 0.0345 [0.0036] | 0.0288 | male vs female: 1.44 |
+| 3 | `race_ethnicity` | 0.0314 [0.0012] | 0.0341 | mexican_american vs nh_white: 0.66; nh_black vs nh_white: 0.79; other vs nh_white: 0.69; other_hispanic vs nh_white: 0.65 |
+| 4 | `smoking` | 0.0314 [0.0040] | 0.0315 | current vs never: 1.47; former vs never: 1.08 |
+| 5 | `alt_ul` | 0.0310 [0.0045] | 0.0324 | p90 vs p10: 0.60 |
+| 6 | `urine_albumin_ugml` | 0.0263 [0.0023] | 0.0231 | p90 vs p10: 1.44 |
+| 7 | `rdw_pct` | 0.0235 [0.0042] | 0.0255 | p90 vs p10: 1.50 |
+| 8 | `weight_kg` | 0.0213 [0.0046] | 0.0116 | p90 vs p10: 0.66 |
+| 9 | `self_rated_health` | 0.0182 [0.0008] | 0.0178 | p90 vs p10: 1.29 |
+| 10 | `waist_cm` | 0.0178 [0.0040] | 0.0154 | p90 vs p10: 1.31 |
+| 11 | `ggt_ul` | 0.0174 [0.0007] | 0.0164 | p90 vs p10: 1.27 |
+| 12 | `ast_ul` | 0.0166 [0.0021] | 0.0174 | p90 vs p10: 1.30 |
+| 13 | `prescriptions` | 0.0143 [0.0009] | 0.0129 | p90 vs p10: 1.36 |
+| 14 | `mcv_fl` | 0.0126 [0.0026] | 0.0110 | p90 vs p10: 1.31 |
+| 15 | `albumin_gdl` | 0.0117 [0.0026] | 0.0074 | p90 vs p10: 0.75 |
+| 16 | `income_poverty_ratio` | 0.0106 [0.0015] | 0.0095 | p90 vs p10: 0.77 |
+| 17 | `marital` | 0.0097 [0.0006] | 0.0088 | divorced vs married: 1.17; never_married vs married: 1.28; partner vs married: 1.21; separated vs married: 1.17; widowed vs married: 1.17 |
+| 18 | `lymphocyte_pct` | 0.0075 [0.0013] | 0.0078 | p90 vs p10: 0.84 |
+| 19 | `urine_creatinine_mgdl` | 0.0070 [0.0015] | 0.0086 | none given |
+| 20 | `bmi` | 0.0069 [0.0023] | 0.0063 | p90 vs p10: 0.85 |
+| 21 | `phq9` | 0.0060 [0.0006] | 0.0063 | none given |
+| 22 | `told_stroke` | 0.0059 [0.0019] | 0.0029 | yes vs no: 1.31 |
+
+Age dominates everything: shuffling it costs 1.37 nats per event, about forty
+times the next single input (sex, 0.035), and the model's hazard ratio between the
+90th and 10th percentile of age is 26 (range over folds 21 to 37). Because related inputs share
+credit when one is shuffled alone (body weight, waist and body-mass index;
+glucose, glycated haemoglobin and the diabetes question), the groups are the
+fairer reading:
+
+| group | fall in partial log-likelihood [SE] | folds positive |
+|---|---|---|
+| age | 1.3665 [0.0603] | 5/5 |
+| sex and ancestry | 0.0662 [0.0024] | 5/5 |
+| blood count | 0.0485 [0.0037] | 5/5 |
+| smoking and alcohol | 0.0459 [0.0045] | 5/5 |
+| self-rated health and medicines | 0.0443 [0.0023] | 5/5 |
+| liver and albumin | 0.0438 [0.0038] | 5/5 |
+| kidney | 0.0407 [0.0031] | 5/5 |
+| told a diagnosis | 0.0294 [0.0037] | 5/5 |
+| social | 0.0280 [0.0018] | 5/5 |
+| body size | 0.0238 [0.0044] | 5/5 |
+| lipids | 0.0057 [0.0016] | 5/5 |
+| blood pressure | 0.0042 [0.0010] | 5/5 |
+| eating times | 0.0042 [0.0005] | 5/5 |
+| glucose control | 0.0025 [0.0022] | 4/5 |
+| inflammation | 0.0003 [0.0018] | 4/5 |
+
+![Groups of inputs by how much the model loses when they are shuffled.](img/fig10-variable-groups.png)
+
+Beyond age, no group stands alone: sex and ancestry, the blood count, smoking and
+alcohol, self-rated health with the number of prescriptions, the liver enzymes with
+albumin, and the kidney markers each cost 0.04 to 0.07 nats. The conventional
+cardiovascular measurements cost little once these are present: lipids 0.006,
+blood pressure 0.004, and glucose control 0.002 (positive in four folds of five),
+which is consistent with the conventional-factor score trailing the full inputs
+in section 5.2.
+
+![Hazard ratios of the informative inputs.](img/fig11-direction.png)
+
+Direction, as the hazard ratio between the 90th and 10th percentile or between
+levels. Higher hazard goes with a wider red-cell distribution width (1.50), current
+smoking against never smoking (1.47; former smoking 1.08), albumin in the urine
+(1.44), male sex (1.44), more prescriptions (1.36), a larger waist (1.31), a
+history of stroke (1.31), poor self-rated health (1.29), heart failure (1.27) and
+cancer (1.23). Lower hazard goes with higher serum albumin (0.75), higher income
+relative to the poverty line (0.77), a higher lymphocyte share (0.84), a higher
+body-mass index (0.85) and, strikingly, a higher ALT (0.60) and a heavier body
+weight (0.66).
+
+The last two are the warning against reading these as advice. A low ALT and a low
+weight at a fixed waist and body-mass index are markers of frailty and of low muscle
+mass, and the model uses them for that. The ratios are conditional on every other
+input, set one at a time over the test subjects, so weight, height, waist and
+body-mass index cannot be read separately.
+
+*Early deaths.* Without the subjects who die in the first two years (about 9,360
+test subjects and 1,220 deaths per fold), the rank correlation of the 67
+importances is 0.92 and eight of the ten most important inputs are the same.
+Smoking, red-cell distribution width, albumin in the urine and self-rated health
+keep their importance and direction. The importance of body weight falls from
+0.021 to 0.012 and its ratio moves from 0.66 to 0.73, and that of a stroke
+history from 0.006 to 0.003: the weight and stroke associations are partly
+illness that was already present.
+
+*What this shows and does not show.* It shows which measurements the fitted model
+uses for the ranking of who dies within the follow-up, with a sign, in a
+cohort of 47,816 adults and 7,103 deaths. It does not show that changing any
+of them would change anything: the one behavioural input with a large and
+consistent ratio is smoking, which other studies establish as causal and this
+one does not, and the other large ratios are measurements of disease, or of
+how ill a person is. The variables that lead to a long life in the sense a
+reader would want, those a person can act on, need the design of Appendix F.
 
 ## 6. Discussion
 
@@ -1218,6 +1364,10 @@ splinter-lifecourse prevalence --data <data> --model agesex --model conv-logit -
 splinter-lifecourse screen --data <data> --model agebmi --model agesex --model nondef-logit --model nondef-hgb --comparator agebmi --repeat 0
 splinter-lifecourse lifeexp --data <data> --model cs-cox-all --model spline-cox-net-all --repeat 0 --tau 10 --aa-dir <aa dir>
 python -I samples/lifecourse/baselines/assoc.py --data <data> --aa <aa dir>/aa-cs-cox-all-r0-t10.jsonl
+# which inputs the survival model relies on (T7), and without deaths in the first two years
+python -I samples/lifecourse/baselines/drivers.py --data <data> --out <dir> --jobs 5
+python -I samples/lifecourse/baselines/drivers.py --data <data> --out <dir> --jobs 5 --exclude-early 2
+# figures (matplotlib): python papers/agent-driven-residual-survival/figures.py img <dir>/drivers-all.json
 agent-loop models judge --candidate <version> --baseline-results <dir> --candidate-results <dir>
 ```
 
@@ -1411,3 +1561,100 @@ subjects of the fold.
 the base held at full precision, no-think mode, the loss on the single assistant
 turn that carries the accepted patch; the learning rate was not set and is
 brain's default for its low-rank fine-tune (3e-4).
+
+## Appendix F. Cohort sizes used, and what a proper study would need
+
+**What this study used.** Counts are from the cached feature matrix of the
+non-locked subjects (`baselines/_features.npz`) and the partition file.
+
+| Quantity | Value |
+|---|---|
+| Subjects linked to mortality | 56,253 (8,355 deaths) |
+| Locked test set, scored once under an earlier pre-registration | 8,437 subjects |
+| Subjects in cross-validation | 47,816 (7,103 deaths, 14.9%) |
+| Deaths by cause group | cardiovascular 2,218; cancer 1,572; other 3,313 |
+| One test fold | about 9,560 subjects and 1,420 deaths |
+| One training set | about 38,200 subjects |
+| Examinations per subject | one |
+| Follow-up | median 9.4 years, maximum 20.8; by cycle from 19.5 years (1999) to 2.0 (2017) |
+| Subjects whose cycle reaches 10 years | 23,097 (3,266 deaths in repeat 0) |
+| Subjects whose cycle reaches 15 years | 8,976 in the pooled analysis |
+| Subjects with an accelerometer record | 10,332 |
+| Input columns of the spline Cox model | 51 continuous and 16 categorical inputs, 465 columns after the spline bases |
+| Deaths per input | about 106 (7,103 over 67) |
+
+Two consequences follow. Every comparison between models rests on the 1,420
+deaths of a fold and the pooled 7,103; the learning curves of section 5.3 show
+the Cox models flat from half the training subjects and the flexible models still
+improving, which is the signature of a sample that is large for a linear model
+and small for a network. And the follow-up is short for the recent cycles: 2.0 to
+5.9 years for the three most recent cycles of the ten, so a ten-year result uses
+less than half of the subjects.
+
+**How precisely the data resolve a difference.** The interval of the integrated
+Brier score difference between the deep encoder and the spline Cox model is
++0.00019 to +0.00204, half a width of 0.0009, at 7,103 deaths. If the standard
+error falls with the square root of the number of deaths and the correlation
+between the two models' errors stays as it is here (an assumption, not a
+measurement), the number of deaths needed so that the 95% interval is narrow
+enough to detect a true difference of size D with 80% power (half width 0.7 D) is:
+
+| True difference in IBS to detect | Deaths needed | Subjects at this cohort's 14.9% death share |
+|---|---|---|
+| 0.0010 | about 12,000 | about 83,000 |
+| 0.0005 | about 49,000 | about 330,000 |
+| 0.0002 | about 300,000 | about 2,000,000 |
+
+These are scaling arguments from one comparison in one cohort, to plan the order
+of magnitude; a protocol would compute power from simulation on its own data.
+They are consistent with the scale at which others report gains (section 2:
+hundreds of thousands to millions of patients).
+
+**What a longitudinal comparison needs.** The question of whether many
+examinations per person beat the single-examination models cannot be answered
+with this cohort, which has one examination per subject. A proper study needs:
+
+1. *Repeated measurements of the same markers*, at least three examinations per
+   person over at least ten years, with the same laboratory methods, so that
+   trends can be separated from assay change.
+2. *Outcomes beyond death*, linked from hospital, cancer and prescription
+   registers, with at least 2,000 incident events for each outcome to be
+   modelled (diabetes, myocardial infarction, stroke, cancer, kidney disease)
+   and the date of onset, not a certificate mention.
+3. *Size*, at least 12,000 deaths (about 80,000 persons of this age mix) to
+   resolve a gain of 0.001 in the integrated Brier score, and several times that
+   if the gain is expected to be smaller than 0.001.
+4. *Comparators fixed in advance*: age and sex alone, the conventional risk score
+   for the outcome (for example SCORE2 or QRISK3 for cardiovascular disease, a
+   biological-age clock for death), and the single-examination spline Cox model of
+   this paper, each given the same most recent examination, so that the question
+   is what the history adds.
+5. *Locked temporal and external test sets*: the most recent examinations held
+   out in time, and a second cohort from another country or health system, scored
+   once, with calibration reported before discrimination.
+6. *The statistical design of this paper*: rules fixed before results, folds
+   that respect the person (all examinations of a person in the same fold),
+   cluster bootstrap over the sampling units, and a report of every model tried.
+
+Candidate data sets, counts as published by their owners and not verified
+beyond them: the UK Biobank (about 500,000 participants, with 20,323 repeat
+assessments in 2012 to 2013 and 21,469 in the first repeat imaging visit, which
+is small for this purpose); the Whitehall II cohort (10,308 civil servants,
+examinations at alternate phases over more than 30 years, which has repeated
+markers but few deaths per marker); and electronic health records of a health
+system, where examinations are irregular and the size is in the millions. No
+single one of these both has repeated markers and the 12,000 deaths needed;
+registry-linked primary-care records are the most plausible route to the size,
+and cohort studies to the measurement quality. All require an application
+or an agreement that only the owner of this work can make.
+
+**What the variable questions need.** The importance analysis of section 5.13
+describes what the model uses. To say what would happen if a person changed
+something, the data must record the change and the reason for it. That is a
+randomised trial, or a target trial emulation on longitudinal data with
+methods for time-varying confounding (inverse-probability weighting or the
+g-formula), a pre-specified intervention (for example starting a statin, or
+reaching a given blood pressure), a confounder set measured before the
+decision, and a sensitivity analysis for unmeasured confounding. Even then, the
+result is an estimate for a population of the cohort's kind, to be read by a
+clinician, not advice for an individual.
