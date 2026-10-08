@@ -35,6 +35,7 @@ mod causes;
 mod commands;
 mod compare;
 mod concepts;
+mod conditions;
 mod contributing;
 mod diet;
 mod ensemble;
@@ -202,6 +203,16 @@ enum Command {
         /// Directory to write each model's equivalent ages to.
         #[arg(long)]
         aa_dir: Option<PathBuf>,
+    },
+    /// Secondary (T4, T5): label every subject's prevalent conditions and
+    /// undiagnosed disease from the NHANES files into `conditions.jsonl`.
+    Labels {
+        /// Directory holding `<cycle start year>/*.xpt`.
+        #[arg(long)]
+        nhanes: PathBuf,
+        /// The build's output directory (with `causes.jsonl`).
+        #[arg(long)]
+        data: PathBuf,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
@@ -466,6 +477,7 @@ fn main() -> Result<()> {
             tau,
             aa_dir,
         } => lifeexp::run(&data, &model, repeat, tau, aa_dir.as_deref()),
+        Command::Labels { nhanes, data } => conditions::write(&nhanes, &data),
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),

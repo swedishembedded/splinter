@@ -110,7 +110,7 @@ Plan: new outcomes and labels go in sidecar files keyed by subject (`causes.json
 - [x] S5 T1 cause-specific accuracy at 5, 10, 15 years (`lifecourse causes`; paper 5.5; bootstrap O/E interval not run)
 - [x] S6 T2 death with diabetes/hypertension flagged (`baselines/flags.py`, `lifecourse flags`; paper 5.6)
 - [x] S7 T3 restricted mean survival and mortality-equivalent age (`lifecourse lifeexp`, `baselines/assoc.py`; paper 5.7)
-- [ ] S8 T4 condition labels (sidecar)
+- [x] S8 T4 condition labels (sidecar `conditions.jsonl`, `lifecourse labels`; bone-density label dropped: its reference values could not be verified)
 - [ ] S9 T4 prevalence models, full and non-definitional inputs
 - [ ] S10 T5 undiagnosed-disease screening
 - [ ] S11 optional: accelerometer daily summaries as an input block (2003-06)
