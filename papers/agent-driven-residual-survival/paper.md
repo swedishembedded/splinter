@@ -13,9 +13,11 @@ sending an email to info@swedishembedded.com.
 **Martin Schröder**
 Swedish Embedded AB, <info@swedishembedded.com>
 
-*Working draft, started 2026-10-07. Status: milestone 0 (protocol). Every numerical
-claim in this document is either reproduced by a command listed in the
-Reproducibility section or is explicitly marked as unmeasured.*
+*Working draft, started 2026-10-07; last revised 2026-10-08 after the first
+session of delegated experiments. Every numerical claim in this document is
+either reproduced by a command listed in the Reproducibility section or is
+explicitly marked as unmeasured. Sections 2 (related work) and the
+residual-network part of the question are incomplete and say so.*
 
 ## Abstract
 
@@ -37,14 +39,14 @@ over the same inputs is resolvably worse than it (+0.00111, +0.00019 to
 models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
-a residual neural network, was not delivered by the agent in four attempts and
-is reported as not done. On the agent question, two of four substantive tasks
+a residual neural network, was not delivered by the agent in five attempts
+(two runs) and is reported as not done. On the agent question, two of four substantive tasks
 were accepted and two were not. Before the first could even be judged, four
 defects of the surrounding infrastructure (a reasoning block spending the
 output budget, greedy decoding repeating one action, a server context
 overflow, and an unreadable old log format) had to be found and repaired; two
 defects of the supervisor's own acceptance checks surfaced later. Each repair
-has a regression specification. A candidate adapter trained on nine accepted runs
+has a regression specification. A candidate adapter trained on ten records from accepted runs
 was judged on eight held-out tasks under a rule fixed beforehand and rejected
 (0 of 8 against 1 of 8), leaving the model in use unchanged.
 
@@ -169,13 +171,15 @@ and are evaluated by the same code.
 
 ### 4.2 Evaluation protocol
 
-Differences between two models are estimated on the pooled out-of-fold
-predictions of one repeat (each subject appears once) with a paired
-bootstrap: subjects, or PSUs within strata, are resampled with replacement and
-both models are scored on the same resample. Where a result also rests on the
-25-fold analysis, the corrected resampled t-test (which inflates the variance
-for the overlap between training sets) is used and reported as such, never an
-uncorrected test. Model choices that used the folds (a capacity sweep, say) are
+Two ways of estimating the difference between two models were planned. The
+stronger is on the pooled out-of-fold predictions of one repeat (each subject
+appears once) with a paired bootstrap: subjects, or PSUs within strata, are
+resampled with replacement and both models are scored on the same resample.
+The other is the corrected resampled t-test over the 25 folds (which inflates
+the variance for the overlap between training sets), never an uncorrected
+test. **Only the corrected t-test was run**: the bootstrap was specified as a
+task for the agent and was not run for lack of time (section 7), so every
+interval in this paper is a corrected-t interval. Model choices that used the folds (a capacity sweep, say) are
 made on repeat 0 and confirmed on repeats not used to choose.
 
 ### 4.3 Pre-registered decision rule
@@ -251,7 +255,14 @@ repeated one probe command about forty times and wrote nothing.
 
 **Accounting of help.** A run given any supervisor hint is recorded as
 assisted. Unaided means no hint, no remote model and no supervisor repair
-during the attempt. Remote models require an explicit opt-in flag.
+during the attempt. Remote models require an explicit opt-in flag; a model
+served by the model engine on this machine counts as local. Settings the
+supervisor chooses (sampling temperature, output and tool-call budgets) are
+configuration, written in the run, and do not make a run assisted. In this
+paper the two accepted tasks were unaided in that sense (no hint); the
+continuation of the residual-network task was assisted (it was given a hint
+about a library call) and is labelled so. The infrastructure repairs of
+section 5.1 were made by the supervisor between runs, not during an attempt.
 
 ## 5. Results
 
@@ -348,9 +359,10 @@ would give.
 
 The loop keeps a training record only from a run that was accepted, unaided
 and on a local model, and only from the accepted attempt (a rejected patch is
-not a target). Of 22 runs offered, 9 produced a record (the rest were
-rejected, errored or cancelled; the manifest names the reason for each). Seven
-of the nine are the same task, so the set is small and not diverse.
+not a target). Of 22 runs offered, 9 produced a whole-conversation record and 10 a
+patch-form record (the rest were rejected, errored or cancelled; the manifest
+names the reason for each). Seven of them are the same task, so the set is
+small and not diverse.
 
 The first training attempt did not run: the trainer refused the whole-
 conversation records because the chat template of the student (Qwen3) renders
