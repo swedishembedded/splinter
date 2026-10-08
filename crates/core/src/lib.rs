@@ -32,6 +32,8 @@
 //! * [`longitudinal`] - a participant's irregular history as a file states it
 //!   and as it is kept: opaque keys in place of identifiers, provenance on
 //!   every item.
+//! * [`speech`] - how a speaking persona is described, and the label a
+//!   synthetic voice always carries.
 //! * [`terms`] - the terms data came under, combined most-restrictively
 //!   over sources and carried to datasets and releases.
 //!
@@ -56,5 +58,6 @@ pub mod release;
 pub mod role;
 pub mod selfcontained;
 pub mod source;
+pub mod speech;
 pub mod terms;
 pub mod training;
