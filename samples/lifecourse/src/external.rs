@@ -334,12 +334,34 @@ fn score_path(dir: &Path, repeat: usize, fold: usize) -> PathBuf {
         .join(format!("{}.json", fold_stem(repeat, fold)))
 }
 
+/// The subjects of `test` that `text` predicts, in `test`'s order: for a
+/// prediction file made on a subsample of each fold. A subject the file has
+/// that is not in `test` is left for [`parse`] to refuse as extra.
+fn present_in<'a>(text: &str, test: &[&'a str]) -> Result<Vec<&'a str>> {
+    #[derive(Deserialize)]
+    struct Id {
+        subject_id: String,
+    }
+    let mut ids = HashSet::new();
+    for (n, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+        let id: Id =
+            serde_json::from_str(line).with_context(|| format!("prediction line {}", n + 1))?;
+        ids.insert(id.subject_id);
+    }
+    Ok(test
+        .iter()
+        .copied()
+        .filter(|id| ids.contains(*id))
+        .collect())
+}
+
 fn score_one(
     f: &Frozen,
     dir: &Path,
     name: &str,
     repeat: usize,
     fold: usize,
+    subset: bool,
 ) -> Result<Option<ExternalScore>> {
     let file = dir.join(format!("{}.jsonl", fold_stem(repeat, fold)));
     let Ok(bytes) = std::fs::read(&file) else {
@@ -347,6 +369,11 @@ fn score_one(
     };
     let (_, test) = f.partition.fold(repeat, fold);
     let text = std::str::from_utf8(&bytes).with_context(|| format!("{}", file.display()))?;
+    let test = if subset {
+        present_in(text, &test)?
+    } else {
+        test
+    };
     let predictions = parse(text, &test).with_context(|| format!("{}", file.display()))?;
     let subjects: Vec<Subject> = test.iter().map(|id| f.subjects[*id].clone()).collect();
     Ok(Some(ExternalScore {
@@ -363,14 +390,14 @@ fn score_one(
 /// Score every fold of baseline `name` that has a prediction file, writing
 /// each fold's score beside it. The locked test is not read as an input: the
 /// folds are the partition's cross-validation folds.
-pub fn score(data: &Path, name: &str) -> Result<()> {
+pub fn score(data: &Path, name: &str, subset: bool) -> Result<()> {
     let dir = baseline_dir(data, name)?;
     let f = frozen(data)?;
     std::fs::create_dir_all(dir.join("scores"))?;
     let mut scored = 0;
     for repeat in 0..f.partition.repeats.len() {
         for fold in 0..f.partition.spec.folds as usize {
-            let Some(s) = score_one(&f, &dir, name, repeat, fold)? else {
+            let Some(s) = score_one(&f, &dir, name, repeat, fold, subset)? else {
                 continue;
             };
             let path = score_path(&dir, repeat, fold);
@@ -429,6 +456,23 @@ mod tests {
     use super::*;
 
     const HAZARD: [f64; 2] = [0.01, 0.08];
+
+    #[test]
+    fn a_subsample_file_is_scored_on_the_subjects_it_has_and_never_on_strangers() {
+        let test = ["a", "b", "c", "d"];
+        let text = "{\"subject_id\":\"c\",\"cif\":[0]}\n{\"subject_id\":\"a\",\"cif\":[0]}\n";
+        assert_eq!(
+            present_in(text, &test).unwrap(),
+            vec!["a", "c"],
+            "in the fold's order"
+        );
+        // A subject outside the fold is not silently dropped: parse refuses it as extra.
+        let stranger = "{\"subject_id\":\"z\",\"cif\":[0]}\n";
+        let kept = present_in(stranger, &test).unwrap();
+        assert!(kept.is_empty());
+        assert!(parse(stranger, &kept).is_err());
+        assert!(present_in("not json", &test).is_err());
+    }
 
     /// Subjects in two groups with constant death hazards (per year), followed
     /// 20 years, from a deterministic generator.

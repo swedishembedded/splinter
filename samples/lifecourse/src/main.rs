@@ -150,6 +150,9 @@ enum Command {
         /// The baseline's name: its directory under `baselines/`.
         #[arg(long)]
         baseline: String,
+        /// The files cover only some subjects of each fold (a subsample): score those.
+        #[arg(long)]
+        subset: bool,
     },
     /// Secondary (T1): cause-specific accuracy at 5, 10 and 15 years of
     /// baselines' out-of-fold predictions, against a reference baseline.
@@ -486,7 +489,11 @@ fn main() -> Result<()> {
             reason,
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
         Command::Compare { data, a, b, repeat } => compare::compare(&data, &a, &b, &repeat),
-        Command::External { data, baseline } => external::score(&data, &baseline),
+        Command::External {
+            data,
+            baseline,
+            subset,
+        } => external::score(&data, &baseline, subset),
         Command::Causes {
             data,
             model,
