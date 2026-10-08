@@ -330,6 +330,43 @@ deaths by 10 years), so a failure to meet the rule is a statement about this
 sample, not about the signal. A model that reads the minute sequences directly
 (rather than summaries) is not compared.
 
+### 4.7 The residual network and its ablations (pre-registered 2026-10-08)
+
+Written before the model was run. The question of section 1 (does structure
+remain beyond a strong additive model?) is asked with a residual network: the
+linear predictor is the fitted spline Cox predictor plus the output of a small
+multilayer perceptron on the preprocessed inputs, whose last layer starts at
+zero, so training begins exactly at the spline model. The base coefficients are
+fitted on the training subjects as in section 4.1; the network is trained on
+the Cox partial likelihood with the base predictor as an offset, by Adam with
+weight decay and dropout. The number of epochs is chosen on a validation share
+held out of the training subjects, among epochs that include epoch zero (the
+spline model itself), and the model is then refitted on all training subjects
+for that many epochs. Every hyperparameter other than width and depth is fixed
+in advance (learning rate 0.001, weight decay 0.0001, dropout 0.1, at most 300
+epochs, full batch).
+
+The capacity sweep is the fixed list of widths 16, 64 and 256 with one hidden
+layer, and 64 with two and three. It is scored on repeat 0 (5 folds) by the
+integrated Brier score against the spline Cox model; the best configuration
+by that score is the headline configuration. It is then confirmed on repeats 1
+to 4 (20 folds) alone. The decision rule is that of section 4.3: the residual
+network is useful only if the integrated Brier score improves by at least 0.001
+with a corrected resampled t-test interval of the paired difference excluding
+zero, on the confirmation folds. A failure is reported as a negative result for
+this network, data size and training recipe, not as proof that no structure
+exists.
+
+Feature-block ablations ask where any gain comes from: the same network (the
+headline configuration) is given only one block of inputs at a time, the base
+model unchanged. The blocks are the examination measurements (body, blood
+pressure and laboratory values), the eating-time features, the recalled
+diagnosis ages and weights, and the questionnaire answers. A block is reported
+by its paired difference to the spline model on the confirmation folds; no
+rule is attached to the ablations, which are descriptive. A shuffled-outcome
+control (the network trained on outcomes permuted among the training subjects)
+must not improve on the spline model; if it does, the training procedure leaks.
+
 ## 5. Results
 
 Numbers are means over the 25 cross-validation folds unless a repeat is named;
