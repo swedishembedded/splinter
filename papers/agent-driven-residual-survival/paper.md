@@ -44,8 +44,9 @@ defects of the surrounding infrastructure (a reasoning block spending the
 output budget, greedy decoding repeating one action, a server context
 overflow, and an unreadable old log format) had to be found and repaired; two
 defects of the supervisor's own acceptance checks surfaced later. Each repair
-has a regression specification. *(The result of the learning-and-promotion proof is stated in
-section 5.4.)*
+has a regression specification. A candidate adapter trained on nine accepted runs
+was judged on eight held-out tasks under a rule fixed beforehand and rejected
+(0 of 8 against 1 of 8), leaving the model in use unchanged.
 
 ## 1. Introduction
 
@@ -343,6 +344,49 @@ interval [0.0424, 0.0466]); an extrapolation from four points of one repeat is
 a hypothesis for the next data set, not an estimate of what more subjects
 would give.
 
+### 5.4 Learning from accepted runs, and a candidate that is rejected
+
+The loop keeps a training record only from a run that was accepted, unaided
+and on a local model, and only from the accepted attempt (a rejected patch is
+not a target). Of 22 runs offered, 9 produced a record (the rest were
+rejected, errored or cancelled; the manifest names the reason for each). Seven
+of the nine are the same task, so the set is small and not diverse.
+
+The first training attempt did not run: the trainer refused the whole-
+conversation records because the chat template of the student (Qwen3) renders
+an assistant turn differently when it is the last message, so no loss mask can
+be fixed for a multi-step tool conversation (F-021; the trainer states this
+limitation and fails loudly). Trimming stray whitespace from tool-only turns
+(F-020) was necessary and not sufficient. A primitive for exact boundaries in
+such templates is missing in the model engine and is recorded as open there.
+The loop therefore writes, on request, one exchange per accepted run: the task
+as it was given and the accepted patch as a single assistant turn.
+
+On those 10 records (8 trained on, 2 held out) the student, an 8-billion-
+parameter model run in-process on the GPU, was fine-tuned with a rank-16
+low-rank adapter for 30 optimiser steps. The training loss fell from 1.41 to
+0.04, a sign of memorising eight records; the held-out loss fell from 1.216
+to 1.193. The adapter was written (a file of 175 MB, with its digest) and
+registered as a *candidate*, not as the model in use. It was then loaded by
+eight fresh loop processes (the run's `model_selected` event names the
+adapter) and run, with the model in use, over the same eight seeded tasks of
+families absent from the training data, one attempt each, under identical
+limits. The rule had been fixed in code before any result: at least eight
+paired tasks, the candidate must solve more of them, and a one-sided sign test
+over the tasks only one of the two solved must give p at most 0.10. The model
+in use solved 1 of 8; the candidate solved 0 of 8 (one task lost, none gained,
+p = 1.0). The candidate was rejected with that record, the model in use stayed
+`local:Qwen/Qwen3-8B`, and asking to roll back reported that there was no
+adapter in use to roll back from.
+
+This proves the mechanics: a real forward and backward pass, an optimiser
+step, a saved and reloaded adapter, an evaluation on held-out tasks under a
+declared rule, a rejection that leaves the previous version in use. It does
+not show that the loop learns: the student's failures at baseline were
+malformed `edit_file` diffs repeated until the stagnation stop, and an adapter
+trained to write patches in prose is not a remedy for that. The baseline is
+one success in eight, so a gain would have needed to be large to be visible.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -388,8 +432,15 @@ that reached a verdict in the runs after the repairs were accepted, the other 8
 were rejected by a check or ran out of a limit) as a property of this model on
 these tasks, not as a general rate.
 
-**What the learning-and-promotion results license.** *(Filled from section
-5.4.)*
+**What the learning-and-promotion results license.** Only that the path
+works and can say no: a candidate adapter was trained, reloaded and judged on
+held-out tasks under a rule fixed beforehand, and was rejected without
+disturbing the model in use. It licenses nothing about whether the loop's
+learning improves the agent; that needs more accepted runs, a trainer that
+takes multi-step tool conversations, and an evaluation set with a baseline far
+from zero. The autonomy stage reached is *supervised local*: the loop works on
+local models with the supervisor's diagnostic repairs recorded; no unaided
+local evaluation on unseen tasks was run.
 
 ## 7. Limitations
 
@@ -470,6 +521,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-07 | M0 protocol and plan | Paper created; decision rule fixed (section 4.3) |
 | 2026-10-07 | M1 loop built | Section 4.4 describes the loop as implemented; specs pass with a scripted model; real-model result pending |
 | 2026-10-07 | Reuse of the agent runtime | Event stream moved onto the runtime's hash-chained log; definitions in effect recorded through its discovery; two small additions to the runtime's SDK (`chain`, `workspace`), neither naming this project |
+| 2026-10-08 | Learning from accepted runs | Trainer refused multi-step tool conversations (F-021); patch-form records trained an adapter; candidate rejected on eight held-out tasks (section 5.4) |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review

@@ -96,19 +96,18 @@ resampling loop. No architecture search against the same folds.
 - [ ] Access checklist for repeated-measure cohorts, with the one question each custodian must answer about distributing derived weights (user action; nothing was requested)
 
 ### M5 Learning and promotion
-- [ ] One small local component trained with a real forward, backward, optimiser step, save, reload and evaluation
-- [ ] A failing candidate is rejected and the previous version stays usable (rollback pointer)
-- [ ] Autonomy stage reported honestly: unaided, assisted, supervisor interventions
+- [x] One local component trained with a real forward, backward, optimiser step, save, reload and evaluation: an 8B student, rank-16 adapter, 30 steps on patch-form records of accepted runs (loss 1.41 to 0.04, held-out 1.216 to 1.193), reloaded by eight fresh processes. The whole-conversation form is refused by the trainer (F-021, open in the model engine)
+- [x] A failing candidate is rejected and the previous version stays usable: v1 solved 0 of 8 held-out tasks against 1 of 8; `models current` still names the base; nothing to roll back
+- [x] Autonomy stage reported honestly: supervised local. Unaided local evaluation on unseen tasks: not run
+- [ ] A candidate that improves: needs more diverse accepted runs, a trainer for multi-step tool conversations, and a baseline well above zero
 
-### R Reuse sven, do not reinvent it
-Audit at 2026-10-07 20:25. Already reused: `sven_sdk` engine, tools, `AgentState`
-suspend and resume and the ATIF trajectory (`crates/agent/src/work.rs`).
-Candidate duplication to resolve:
-- [x] `trace.rs`: the event stream is now sven's hash-chained log. `sven-sdk` re-exports `chain` (sven 79bca37); the stream is verified whenever it is read, concurrent writers extend one chain and a torn last line is repaired. The conversation itself was already sven's ATIF trajectory
-- [x] Effective definitions: `sven-sdk` re-exports sven's discovery (`workspace`, sven d4ddb0c); the loop records every subagent, skill, command and the project context file in effect, with text digests, in the contract and in a `definitions` event, and flags `definition_changed` on resume
-- [x] `redact.rs` stays: sven has no secret redaction in its traces to reuse (searched `crates/` for it), so the loop's is the only one; if sven gains one, replace this
-- [x] `store.rs` keeps its own run directory under `~/.sven/loop/`: `sven-session-store` stores chat sessions as ATIF trajectories, which a run (contract, checkpoint, patches, outcome) is not. The two share the home directory and the trajectory format
-- [x] No sven change names splinter
+## Next session, in order
+1. Rerun the task for the integrated calibration index with E50 and E90 (`t4`), then the pooled paired bootstrap in `compare` (`t3`), after fixing the checks (F-017, F-019).
+2. Rerun the residual-network task with a check on shuffled, offset folds; run the capacity sweep and the feature-block ablations on it.
+3. Describe the two spline baselines in the lifecourse README (loop task).
+4. Deep encoder at 50 and 75 percent of the data and the additive model at 75 percent (GPU) to complete the learning curves.
+5. Extract the accelerometer minute data, derive daily summaries as an input block, and compare a summary-feature model with a sequence encoder.
+6. Brain: exact loss-mask boundaries for multi-step tool conversations under templates whose last-turn rendering differs (F-021).
 
 ## Frozen
 
