@@ -101,6 +101,21 @@ resampling loop. No architecture search against the same folds.
 - [x] Autonomy stage reported honestly: supervised local. Unaided local evaluation on unseen tasks: not run
 - [ ] A candidate that improves: needs more diverse accepted runs, a trainer for multi-step tool conversations, and a baseline well above zero
 
+### M6 Secondary estimands (pre-registered 2026-10-08, paper section 4.5)
+Plan: new outcomes and labels go in sidecar files keyed by subject (`causes.jsonl`, `conditions.jsonl`); `timelines.jsonl` stays byte-identical (frozen digest). New code goes in new modules (`commands.rs`, `report.rs`, `external.rs` are near the 800-line gate).
+- [ ] S1 brain: restricted mean survival time, its grouped calibration, Gompertz reference table with delayed entry
+- [ ] S2 brain: weighted AUROC/AP/calibration and screening operating points for a binary outcome
+- [ ] S3 lifecourse: multiple-cause flags kept beside the timelines
+- [ ] S4 age-sex and standard arms as recipes so their curves are kept (25 folds)
+- [ ] S5 T1 cause-specific accuracy at 5, 10, 15 years
+- [ ] S6 T2 death with diabetes/hypertension flagged
+- [ ] S7 T3 restricted mean survival and mortality-equivalent age
+- [ ] S8 T4 condition labels (sidecar)
+- [ ] S9 T4 prevalence models, full and non-definitional inputs
+- [ ] S10 T5 undiagnosed-disease screening
+- [ ] S11 optional: accelerometer daily summaries as an input block (2003-06)
+Open: creatinine standardisation for 1999-2000 and 2005-06 (read the laboratory notes before applying any equation); source for the bone-density T-score reference; PhenoAge needs alkaline phosphatase, which is not a concept yet.
+
 ## Next session, in order
 1. Rerun the task for the integrated calibration index with E50 and E90 (`t4`), then the pooled paired bootstrap in `compare` (`t3`), after fixing the checks (F-017, F-019).
 2. Rerun the residual-network task with a check on shuffled, offset folds; run the capacity sweep and the feature-block ablations on it.
@@ -138,3 +153,5 @@ resampling loop. No architecture search against the same folds.
 | F-020 | high | The first training run on the loop's own dataset was refused by the trainer: `message 2 is not prefix-stable under this template`. A tool-calling assistant turn carried the whitespace a model leaves around an empty reasoning block (`"\n\n"`), which the chat template renders differently alone and in context, so no loss mask could be fixed for it | `agent-loop train` on train-v1.jsonl | fixed: an assistant turn's content is trimmed in the projection; spec asserts no assistant turn keeps stray whitespace |
 | F-021 | high | brain's SFT trainer cannot fix a loss mask for a multi-step tool conversation under Qwen3's chat template (an assistant turn renders differently when it is the last message), so the loop's whole-conversation records are refused (documented in brain as a known limitation, failing loudly). A trainer primitive for multi-turn tool trajectories is missing | `agent-loop train` on train-v1/v2 | worked around in the loop: `dataset --patch-form` writes one exchange (task, accepted patch); open in brain: exact boundaries for such templates |
 | F-003 | low | Sven SDK bounds a run by deadline, output tokens and cancel only; no per-run tool-call cap | sdk RunOptions | loop enforces its own cap |
+| F-022 | medium | `told_weak_kidneys` reads only KIQ022, but 1999-2000 asks KIQ020, so those subjects lack the input. Fixing it changes `timelines.jsonl` and the frozen digest | `nhanes/1999/KIQ.htm` against `concepts.rs` | open: recorded, not silently fixed; the new labels read KIQ020 or KIQ022 |
+| F-023 | low | The treatment-for-diabetes variable is DIQ070 in all cycles but 2005, where it is DID070 | `nhanes/2005/DIQ_D.htm` | handled in the new labels |

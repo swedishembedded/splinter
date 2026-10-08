@@ -264,6 +264,33 @@ continuation of the residual-network task was assisted (it was given a hint
 about a library call) and is labelled so. The infrastructure repairs of
 section 5.1 were made by the supervisor between runs, not during an attempt.
 
+### 4.5 Secondary estimands and their pre-registered rules
+
+Added 2026-10-08, before any number for these estimands was computed. They use
+the same cohort, folds and corrected resampled t-test as the primary question.
+All five are secondary: none changes the rule of section 4.3.
+
+| Id | Estimand | Rule fixed in advance |
+|---|---|---|
+| T1 | Cumulative incidence of death by cardiovascular, cancer and other causes at 5, 10 and 15 years | A model beats the conventional risk-factor model for a cause iff the 10-year cause-specific Brier difference has a corrected 95% interval below zero. Calibrated iff the bootstrap observed-over-expected interval contains 1 and the slope lies in [0.8, 1.25] |
+| T2 | Cumulative incidence of death with diabetes or hypertension listed anywhere on the certificate (the linked file's multiple-cause flags), with death without the flag competing | Models are ranked only with at least 100 flagged events at the horizon; below that, descriptive only. A flag model adds something only if it beats the all-cause risk used as a ranker, on time-dependent AUC, with an interval excluding zero |
+| T3 | Restricted mean survival time to 10 years (15 on the 1999-2002 cycles), and the age at which a reference life table gives the same time (mortality-equivalent age) | Calibrated iff the mean absolute gap over risk groups is at most 0.25 years at 10 years and the slope lies in [0.9, 1.1] |
+| T4 | Prevalent conditions at the examination: diabetes, hypertension, kidney markers, anaemia, high cholesterol, osteoporosis, depression, sleep problem | Useful iff AUROC exceeds the age-sex model by at least 0.02 with an interval excluding zero. Two input sets are reported side by side: all inputs except those that define the label, and non-definitional inputs only (demographics, body measures, recalled weights, smoking, alcohol, eating times) |
+| T5 | Undiagnosed disease among those not reporting the diagnosis | A screening value is claimed only if sensitivity at 90% specificity beats a model of age and body-mass index with a bootstrap interval excluding zero. Inputs are the non-definitional set only |
+
+What each estimand does not claim. A certificate mention is not a diagnosis
+and is under-reported; records without multiple-cause data are excluded and
+counted; there are few events, so intervals are wide and no subgroup claim is
+made. Mortality-equivalent age is a re-expression of one model against one
+reference table, not a measure of biological ageing, and its association with
+death is partly by construction; only the cause-, flag- and condition-specific
+associations are informative. A prevalent condition at the same examination is
+a classification, not a forecast, and the labels derived from a measurement
+are definitional for the inputs that contain it. "Undiagnosed" is one
+measurement above a threshold plus recall of no diagnosis, not a confirmed
+diagnosis. Eight conditions and three causes are examined; all are reported
+and none is claimed beyond its rule. Label definitions are in Appendix C.
+
 ## 5. Results
 
 Numbers are means over the 25 cross-validation folds unless a repeat is named;
@@ -559,3 +586,23 @@ the number ourselves; "not checked" means we only have the review's word.
 | NHANES mortality discrimination near 0.90 is close to a ceiling for one examination | Not checked | Consistent with our own measured values. Not independently verified in the literature by us. |
 | Gated delta-net mixers have no evidence of benefit on three to twenty sparse visits | Not checked | Our own measurement found no resolvable difference to attention on synthetic data. The line of work is frozen. |
 | Licence and access terms of the listed cohorts | Not checked | Taken as a checklist for the data owner to confirm in writing. Nothing was downloaded or requested on this basis. |
+
+## Appendix C. Label definitions for the secondary estimands
+
+Thresholds are those of the cited guidelines (ADA for glucose and HbA1c, JNC 7
+and ACC/AHA for blood pressure, KDIGO for kidney markers, WHO for anaemia and
+bone density). The codebooks of each cycle were used to verify variable names,
+units and codes only. A refused or "don't know" answer gives a missing label,
+never a negative; a condition a cycle did not measure is absent for that cycle.
+
+| Label | Definition | Notes from the codebooks |
+|---|---|---|
+| diabetes | DIQ010 = 1, or DIQ050 = 1, or DIQ070 (DID070 in 2005) = 1, or HbA1c >= 6.5%, or fasting glucose >= 126 mg/dL with fasting >= 8 h | Glucose exists on the fasting subsample only and needs the fasting weights |
+| hypertension | mean systolic >= 140 or diastolic >= 90, or BPQ050A = 1 | 130/80 as a sensitivity analysis |
+| kidney markers | eGFR (CKD-EPI 2021, race-free) < 60, or urine albumin/creatinine >= 30 mg/g | Creatinine variable differs in 2001 (LBDSCR); one measurement, not the three months KDIGO requires |
+| anaemia | haemoglobin < 13 g/dL (men), < 12 (women not pregnant) | |
+| high cholesterol | total cholesterol >= 240 mg/dL, or BPQ100D = 1, or BPQ090D = 1 | BPQ080 is skipped when cholesterol was never checked |
+| osteoporosis | OSQ060 = 1, or femoral-neck T-score <= -2.5 at age 50 or over | Not asked in 2011 and 2015; bone density only in some cycles |
+| depression | PHQ-9 >= 10 | 2005 onward |
+| sleep problem | SLQ050 = 1 | 2005 onward |
+| undiagnosed (diabetes, hypertension, kidney markers, high cholesterol) | the measured criterion above, among those whose self-report of the diagnosis is not "yes" | "Never checked" counts as not diagnosed for cholesterol |
