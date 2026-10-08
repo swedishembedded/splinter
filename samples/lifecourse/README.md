@@ -124,6 +124,8 @@ with deaths lacking multiple-cause data marked) and `labels` writes
 | T4 | eight prevalent conditions at the examination | `baselines/conditions.py` | `prevalence`: per fold, against the age-and-sex model |
 | T5 | undiagnosed diabetes, hypertension, kidney markers, high cholesterol | `baselines/conditions.py` | `screen`: sensitivity at a training-chosen threshold, pooled, against age and body-mass index |
 
+| T6 | accelerometer summaries, and a network on the minute series, as extra inputs (2003 to 2006) | `baselines/accel_experiment.py` (summaries from `baselines/accel.py`) | `external --subset`, then `compare` |
+
 A label defined by a measurement is not predicted from it: `conditions.py`
 holds the list of inputs each label excludes, with a specification that none
 reaches a model. Label definitions, with the codebook variables and the
@@ -143,8 +145,36 @@ lifecourse prevalence --data <data> --model agesex --model nondef-hgb --model fu
 lifecourse screen --data <data> --model agebmi --model nondef-logit --model nondef-hgb
 ```
 
-Their own checks: `python -I baselines/test_flags.py`, `test_assoc.py` and
-`test_conditions.py`.
+Their own checks: `python -I baselines/test_flags.py`, `test_assoc.py`,
+`test_conditions.py`, `test_accel.py`, `test_residual.py` and `test_curves.py`.
+
+Beyond them, three commands evaluate any model whose predictions are files
+(`<baseline>` or `recipe:<name>`):
+
+```bash
+lifecourse bootstrap   --data <data> --a spline-cox-net-all --b cox-net-all --repeat 0   # pooled out-of-fold paired difference, cluster bootstrap
+lifecourse calibration --data <data> --model cs-cox-all --repeat 0                      # observed/expected and slope with intervals, ICI, E50, E90 per cause
+lifecourse external    --data <data> --baseline accel-plus --subset                      # files made on a subsample of each fold
+```
+
+## The residual network and the learning curves
+
+`baselines/residual.py` registers `resnet-cox-all-w<width>-l<layers>`: the
+spline Cox model plus a multilayer perceptron whose output starts at zero,
+trained on the Cox partial likelihood with the spline predictor as an offset,
+the number of epochs chosen on a validation share among epochs that include
+zero (the spline model itself). `-only-<block>` (`exam`, `diet`, `history`,
+`questionnaire`) gives the network one block of inputs and `-shuffled` is the
+leakage control; `ResidualSeq` puts a convolutional network on a per-subject
+series. It needs `torch`, which the other baselines do not; without it these
+names are simply not registered. `baselines/curves.py` reads the per-fold scores
+of subsamples (`recipe subsample`, `run.py --train-ids`, `recipe score`) and
+fits the learning curves:
+
+```bash
+python -I baselines/run.py --data <data> --out <data>/baselines --baseline resnet-cox-all-w64-l2 --jobs 16
+python -I baselines/curves.py --data <data> --repeat 0 --repeat 1 --bootstrap 500
+```
 
 ## Recipes
 
