@@ -245,3 +245,90 @@ fn the_error_bound_decides_what_is_heard_well_enough() {
     );
     assert_eq!(lenient.unwrap().word_error_rate, 0.25);
 }
+
+/// Speaks each piece it is given as one sample per byte, so a spec can read
+/// which pieces were spoken, and in what order, from the clip's length.
+struct Counting(std::sync::Mutex<Vec<String>>);
+
+impl Synthesizer for Counting {
+    fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
+        self.0.lock().unwrap().push(text.to_string());
+        ScriptedSynthesizer.speak(text, speaker)
+    }
+}
+
+#[test]
+fn a_long_answer_is_spoken_a_sentence_at_a_time_and_joined_in_order() {
+    let inner = Counting(std::sync::Mutex::new(Vec::new()));
+    let spoken = Sentences::new(inner, 30);
+    let clip = spoken
+        .speak(
+            "First we resolved. Then we petitioned! Did they listen? No.",
+            &speaker(),
+        )
+        .unwrap();
+
+    let pieces = spoken_pieces(&spoken);
+    assert_eq!(
+        pieces,
+        [
+            "First we resolved.",
+            "Then we petitioned!",
+            "Did they listen?",
+            "No."
+        ]
+    );
+    let pauses = (16_000 * PAUSE_MILLIS as usize / 1000) * 3;
+    let words: usize = pieces.iter().map(String::len).sum();
+    assert_eq!(
+        clip.samples().len(),
+        words + pauses,
+        "the pieces, with a pause between each"
+    );
+}
+
+#[test]
+fn a_sentence_longer_than_the_bound_is_broken_at_a_comma_or_the_bound() {
+    let inner = Counting(std::sync::Mutex::new(Vec::new()));
+    let spoken = Sentences::new(inner, 5);
+    spoken
+        .speak(
+            "one two three, four five six seven eight nine ten eleven twelve.",
+            &speaker(),
+        )
+        .unwrap();
+
+    let pieces = spoken_pieces(&spoken);
+    assert_eq!(
+        pieces[0], "one two three,",
+        "broken at the comma inside the bound"
+    );
+    assert!(
+        pieces.iter().all(|p| p.split_whitespace().count() <= 5),
+        "{pieces:?}"
+    );
+    assert_eq!(
+        pieces.join(" "),
+        "one two three, four five six seven eight nine ten eleven twelve."
+    );
+}
+
+#[test]
+fn a_short_text_is_spoken_whole_with_no_pause() {
+    let inner = Counting(std::sync::Mutex::new(Vec::new()));
+    let spoken = Sentences::new(inner, 30);
+    let clip = spoken.speak("Hello there.", &speaker()).unwrap();
+
+    assert_eq!(spoken_pieces(&spoken), ["Hello there."]);
+    assert_eq!(clip.samples().len(), "Hello there.".len());
+}
+
+#[test]
+fn text_with_no_words_is_not_spoken() {
+    let spoken = Sentences::new(Counting(std::sync::Mutex::new(Vec::new())), 30);
+    assert!(spoken.speak("  ", &speaker()).is_err());
+}
+
+fn spoken_pieces(spoken: &Sentences<Counting>) -> Vec<String> {
+    spoken.inner().0.lock().unwrap().clone()
+}

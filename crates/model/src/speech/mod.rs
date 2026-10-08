@@ -22,6 +22,7 @@
 
 mod brain_backed;
 mod round_trip;
+mod sentences;
 mod turn;
 mod verified;
 
@@ -36,6 +37,7 @@ pub use brain_backed::{
 };
 pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};
+pub use sentences::{Sentences, PAUSE_MILLIS};
 pub use turn::{take_turn, StageTimings, Turn};
 pub use verified::{speak_verified, Verified};
 

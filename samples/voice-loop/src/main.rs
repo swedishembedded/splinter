@@ -28,7 +28,8 @@ use splinter_sdk::model::answer::Answerer;
 use splinter_sdk::model::error::PolicyError;
 use splinter_sdk::model::speech::{
     corpus_word_error_rate, round_trip, speak_verified, take_turn, BrainRecognizer,
-    BrainSynthesizer, Clip, Recognizer, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
+    BrainSynthesizer, Clip, Recognizer, Sentences, Synthesizer, DEFAULT_RECOGNIZER,
+    DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
@@ -36,6 +37,10 @@ use voice_loop::{
     pair_questions, read_sentences, Recorded, RoundTripReport, SpeakSetReport, Spread, TurnItem,
     TurnReport, TurnsReport,
 };
+
+/// The most words one piece of an answer has when it is spoken: a synthesizer
+/// renders a bounded stretch of speech and stops.
+const SPOKEN_PIECE_WORDS: usize = 30;
 
 /// The longest answer a turn generates, in tokens: a spoken answer is short.
 const ANSWER_TOKENS: u32 = 400;
@@ -368,7 +373,7 @@ fn turn(
     let turn = take_turn(
         &BrainRecognizer::load(&models.asr)?,
         &mut |question: &str| persona.answer(question),
-        &BrainSynthesizer::load(&models.tts)?,
+        &Sentences::new(BrainSynthesizer::load(&models.tts)?, SPOKEN_PIECE_WORDS),
         &speaker,
         &heard,
     )?;
@@ -409,7 +414,7 @@ fn turns(
 
     let speaker = models.speaker();
     let recognizer = BrainRecognizer::load(&models.asr)?;
-    let synthesizer = BrainSynthesizer::load(&models.tts)?;
+    let synthesizer = Sentences::new(BrainSynthesizer::load(&models.tts)?, SPOKEN_PIECE_WORDS);
     let mut items = Vec::new();
     for (recording, question) in paired {
         let name = recording.display().to_string();
