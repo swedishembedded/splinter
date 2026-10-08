@@ -156,3 +156,92 @@ fn a_round_trip_of_nothing_has_no_rate() {
     .unwrap();
     assert_eq!(report.corpus_word_error_rate(), None);
 }
+
+/// A synthesizer that mumbles for the seeds it is given and speaks the rest.
+fn mumbling_on(seeds: &'static [u64]) -> impl Synthesizer {
+    struct Mumbler(&'static [u64]);
+    impl Synthesizer for Mumbler {
+        fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
+            let spoken = if self.0.contains(&speaker.seed()) {
+                ""
+            } else {
+                text
+            };
+            ScriptedSynthesizer.speak(spoken, speaker)
+        }
+    }
+    Mumbler(seeds)
+}
+
+#[test]
+fn a_clip_is_kept_only_if_it_is_heard_back_and_the_next_seed_is_tried_when_it_is_not() {
+    let speaker = SpeakerProfile::new(10, Portrayal::synthetic_theatrical());
+    let kept = speak_verified(
+        &mumbling_on(&[10, 11]),
+        &ScriptedRecognizer::perfect(),
+        &speaker,
+        "Liberty is not given.",
+        0.2,
+        4,
+    )
+    .unwrap()
+    .expect("the third seed speaks");
+
+    assert_eq!(
+        kept.speaker.seed(),
+        12,
+        "the seed that was kept is the one recorded"
+    );
+    assert_eq!(kept.attempts, 3);
+    assert_eq!(kept.word_error_rate, 0.0);
+    assert_eq!(kept.speaker.portrayal(), speaker.portrayal());
+}
+
+#[test]
+fn a_sentence_no_seed_speaks_is_rejected_not_kept_badly() {
+    let speaker = SpeakerProfile::new(10, Portrayal::synthetic_theatrical());
+    let kept = speak_verified(
+        &mumbling_on(&[10, 11, 12]),
+        &ScriptedRecognizer::perfect(),
+        &speaker,
+        "Liberty is not given.",
+        0.2,
+        3,
+    )
+    .unwrap();
+
+    assert!(kept.is_none());
+}
+
+#[test]
+fn the_error_bound_decides_what_is_heard_well_enough() {
+    let speaker = SpeakerProfile::new(1, Portrayal::synthetic_theatrical());
+    let drops_a_word = ScriptedRecognizer::degrading(|t| {
+        t.rsplit_once(' ')
+            .map_or(t.clone(), |(head, _)| head.to_string())
+    });
+    let strict = speak_verified(
+        &ScriptedSynthesizer,
+        &drops_a_word,
+        &speaker,
+        "one two three four",
+        0.2,
+        1,
+    )
+    .unwrap();
+    let lenient = speak_verified(
+        &ScriptedSynthesizer,
+        &drops_a_word,
+        &speaker,
+        "one two three four",
+        0.25,
+        1,
+    )
+    .unwrap();
+
+    assert!(
+        strict.is_none(),
+        "one word in four is 0.25, over the bound of 0.2"
+    );
+    assert_eq!(lenient.unwrap().word_error_rate, 0.25);
+}

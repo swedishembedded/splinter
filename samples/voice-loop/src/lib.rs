@@ -223,6 +223,40 @@ pub struct TurnsReport<'a> {
     pub items: &'a [TurnItem],
 }
 
+/// A sentence kept as a recording.
+#[derive(Debug, Serialize)]
+pub struct Recorded {
+    /// The sentence.
+    pub text: String,
+    /// The recording, relative to the output directory.
+    pub file: String,
+    /// The seed whose voice was heard back well enough.
+    pub seed: u64,
+    /// How many seeds were tried.
+    pub attempts: usize,
+    /// Words wrong over words spoken when it was heard back.
+    pub word_error_rate: f32,
+    /// Length of the recording in seconds.
+    pub seconds: f64,
+}
+
+/// A set of sentences recorded, as `speak-set` prints and keeps it.
+#[derive(Debug, Serialize)]
+pub struct SpeakSetReport<'a> {
+    /// The recognition model that admitted the recordings.
+    pub recognizer: &'a str,
+    /// The synthesis model.
+    pub synthesizer: &'a str,
+    /// The portrayal every speaker declares.
+    pub portrayal: &'a str,
+    /// The word error rate above which a recording is not kept.
+    pub max_word_error_rate: f32,
+    /// Recordings kept.
+    pub kept: &'a [Recorded],
+    /// Sentences no seed spoke well enough: not recorded.
+    pub rejected: &'a [String],
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,6 +320,21 @@ mod tests {
             .unwrap()
             .iter()
             .all(|(_, q)| q.is_none()));
+    }
+
+    #[test]
+    fn a_speak_set_report_names_what_was_rejected() {
+        let report = SpeakSetReport {
+            recognizer: "asr",
+            synthesizer: "tts",
+            portrayal: "Synthetic",
+            max_word_error_rate: 0.2,
+            kept: &[],
+            rejected: &["A sentence nobody could speak.".to_string()],
+        };
+        let json = serde_json::to_value(report).unwrap();
+        assert_eq!(json["rejected"][0], "A sentence nobody could speak.");
+        assert_eq!(json["kept"].as_array().unwrap().len(), 0);
     }
 
     #[test]

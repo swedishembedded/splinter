@@ -23,6 +23,7 @@
 mod brain_backed;
 mod round_trip;
 mod turn;
+mod verified;
 
 #[cfg(any(test, feature = "scripted"))]
 pub mod scripted;
@@ -36,6 +37,7 @@ pub use brain_backed::{
 pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};
 pub use turn::{take_turn, StageTimings, Turn};
+pub use verified::{speak_verified, Verified};
 
 use splinter_core::speech::SpeakerProfile;
 

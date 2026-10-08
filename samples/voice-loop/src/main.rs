@@ -11,6 +11,7 @@
 //!
 //! ```text
 //! voice-loop speak     --text T --out a.wav      speak a sentence in the persona's synthetic voice
+//! voice-loop speak-set  --sentences FILE          record sentences, keeping those heard back well enough
 //! voice-loop roundtrip --sentences FILE          speak sentences, hear them again, score what was lost
 //! voice-loop turn      --in q.wav --out a.wav    hear a question, answer as the persona, speak the answer
 //! voice-loop turns     --recordings DIR ...      the same for a directory of questions, loading models once
@@ -26,13 +27,14 @@ use clap::{Args, Parser, Subcommand};
 use splinter_sdk::model::answer::Answerer;
 use splinter_sdk::model::error::PolicyError;
 use splinter_sdk::model::speech::{
-    corpus_word_error_rate, round_trip, take_turn, BrainRecognizer, BrainSynthesizer, Clip,
-    Recognizer, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
+    corpus_word_error_rate, round_trip, speak_verified, take_turn, BrainRecognizer,
+    BrainSynthesizer, Clip, Recognizer, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 use voice_loop::{
-    pair_questions, read_sentences, RoundTripReport, Spread, TurnItem, TurnReport, TurnsReport,
+    pair_questions, read_sentences, Recorded, RoundTripReport, SpeakSetReport, Spread, TurnItem,
+    TurnReport, TurnsReport,
 };
 
 /// The longest answer a turn generates, in tokens: a spoken answer is short.
@@ -76,6 +78,24 @@ enum Command {
         /// Where to write the WAV file.
         #[arg(long)]
         out: PathBuf,
+    },
+    /// Record sentences, keeping each only if it is heard back well enough.
+    SpeakSet {
+        #[command(flatten)]
+        models: Models,
+        /// A text file with one sentence per line.
+        #[arg(long)]
+        sentences: PathBuf,
+        /// Where to write `q01.wav`, `q02.wav` ... and `sentences.txt`, the
+        /// sentences that were kept, in order.
+        #[arg(long)]
+        out_dir: PathBuf,
+        /// The word error rate above which a recording is not kept.
+        #[arg(long, default_value_t = 0.2)]
+        max_wer: f32,
+        /// How many seeds to try for a sentence before rejecting it.
+        #[arg(long, default_value_t = 6)]
+        attempts: usize,
     },
     /// Speak sentences, hear them again, and score what was lost.
     Roundtrip {
@@ -143,6 +163,13 @@ enum Command {
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Speak { models, text, out } => speak(&models, &text, &out),
+        Command::SpeakSet {
+            models,
+            sentences,
+            out_dir,
+            max_wer,
+            attempts,
+        } => speak_set(&models, &sentences, &out_dir, max_wer, attempts),
         Command::Roundtrip {
             models,
             sentences,
@@ -201,6 +228,65 @@ fn speak(models: &Models, text: &str, out: &std::path::Path) -> Result<()> {
         })
     );
     Ok(())
+}
+
+fn speak_set(
+    models: &Models,
+    file: &std::path::Path,
+    out_dir: &std::path::Path,
+    max_wer: f32,
+    attempts: usize,
+) -> Result<()> {
+    let text =
+        std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    let sentences = read_sentences(&text);
+    if sentences.is_empty() {
+        bail!("{} holds no sentences", file.display());
+    }
+    std::fs::create_dir_all(out_dir)?;
+    let speaker = models.speaker();
+    let (synthesizer, recognizer) = (
+        BrainSynthesizer::load(&models.tts)?,
+        BrainRecognizer::load(&models.asr)?,
+    );
+    let (mut kept, mut rejected) = (Vec::new(), Vec::new());
+    for sentence in sentences {
+        match speak_verified(
+            &synthesizer,
+            &recognizer,
+            &speaker,
+            &sentence,
+            max_wer,
+            attempts,
+        )? {
+            Some(v) => {
+                let name = format!("q{:02}.wav", kept.len() + 1);
+                v.clip.save(out_dir.join(&name))?;
+                kept.push(Recorded {
+                    text: sentence,
+                    file: name,
+                    seed: v.speaker.seed(),
+                    attempts: v.attempts,
+                    word_error_rate: v.word_error_rate,
+                    seconds: v.clip.seconds(),
+                });
+            }
+            None => rejected.push(sentence),
+        }
+    }
+    let lines: Vec<&str> = kept.iter().map(|r| r.text.as_str()).collect();
+    std::fs::write(out_dir.join("sentences.txt"), lines.join("\n") + "\n")?;
+    emit(
+        &SpeakSetReport {
+            recognizer: &models.asr,
+            synthesizer: &models.tts,
+            portrayal: speaker.portrayal().label(),
+            max_word_error_rate: max_wer,
+            kept: &kept,
+            rejected: &rejected,
+        },
+        Some(&out_dir.join("report.json")),
+    )
 }
 
 fn roundtrip(
