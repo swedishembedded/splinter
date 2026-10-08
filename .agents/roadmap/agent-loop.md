@@ -111,8 +111,8 @@ Plan: new outcomes and labels go in sidecar files keyed by subject (`causes.json
 - [x] S6 T2 death with diabetes/hypertension flagged (`baselines/flags.py`, `lifecourse flags`; paper 5.6)
 - [x] S7 T3 restricted mean survival and mortality-equivalent age (`lifecourse lifeexp`, `baselines/assoc.py`; paper 5.7)
 - [x] S8 T4 condition labels (sidecar `conditions.jsonl`, `lifecourse labels`; bone-density label dropped: its reference values could not be verified)
-- [ ] S9 T4 prevalence models, full and non-definitional inputs
-- [ ] S10 T5 undiagnosed-disease screening
+- [x] S9 T4 prevalence models, full and non-definitional inputs (`baselines/conditions.py`, `lifecourse prevalence`; paper 5.8)
+- [x] S10 T5 undiagnosed-disease screening (`lifecourse screen`; paper 5.9; matched-specificity column is post hoc)
 - [ ] S11 optional: accelerometer daily summaries as an input block (2003-06)
 Open: creatinine standardisation for 1999-2000 and 2005-06 (read the laboratory notes before applying any equation); source for the bone-density T-score reference; PhenoAge needs alkaline phosphatase, which is not a concept yet.
 

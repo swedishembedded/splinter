@@ -601,6 +601,110 @@ diabetes-mentioned deaths most closely (about 2.0) and cancer deaths least
 Nothing here shows that the acceleration measures biological ageing, or that
 changing it would change a risk.
 
+### 5.8 Secondary estimand T4: prevalent conditions at the examination
+
+Eight conditions and one variant (diabetes defined with fasting glucose, on the
+fasting subsample and its weights) are labelled from the questionnaire and
+laboratory files (Appendix C). These are classifications at the same visit, not
+forecasts: a label defined by a measurement is not predicted from that
+measurement. Models therefore see one of two input sets, reported side by
+side: `nondef` (demographics, body measures, recalled weights, smoking, alcohol
+and eating times; the same for every label) and `full` (every input except
+those that define the label or a drug that treats it). The reference is a
+logistic model of age and sex. Models are logistic regression with a penalty
+chosen by cross-validation (`logit`) and gradient-boosted trees (`hgb`), fitted
+unweighted on the training subjects whose label is known and scored on the
+test folds with the survey weights, over the same 25 folds. A guard specifies
+that no excluded column reaches a model's design matrix; writing it found that
+the display names of a column subset were mislabelled, a defect of the
+printing only (the matrix was right), repaired.
+
+| Label (weighted prevalence) | Age, sex | `nondef`, trees | gain over age, sex | `full`, trees | gain over age, sex |
+|---|---|---|---|---|---|
+| Diabetes (0.114) | 0.742 | 0.843 | +0.102 [+0.094, +0.110] | 0.895 | +0.153 [+0.146, +0.160] |
+| Diabetes, fasting subsample (0.124) | 0.745 | 0.834 | +0.089 [+0.076, +0.102] | 0.879 | +0.134 [+0.125, +0.144] |
+| Hypertension (0.371) | 0.782 | 0.820 | +0.037 [+0.034, +0.041] | 0.840 | +0.058 [+0.054, +0.062] |
+| Kidney markers (0.151) | 0.749 | 0.787 | +0.039 [+0.032, +0.045] | 0.845 | +0.096 [+0.086, +0.107] |
+| Anaemia (0.063) | 0.661 | 0.791 | +0.130 [+0.118, +0.143] | 0.919 | +0.259 [+0.245, +0.273] |
+| High cholesterol (0.398) | 0.731 | 0.751 | +0.020 [+0.016, +0.023] | 0.790 | +0.059 [+0.053, +0.065] |
+| Osteoporosis, age 50 and over (0.060) | 0.848 | 0.852 | +0.004 [-0.002, +0.011] | 0.870 | +0.022 [+0.014, +0.030] |
+| Depression, PHQ-9 of 10 or more (0.076) | 0.563 | 0.733 | +0.170 [+0.147, +0.194] | 0.819 | +0.256 [+0.234, +0.278] |
+| Sleep trouble told to a doctor (0.270) | 0.603 | 0.672 | +0.068 [+0.060, +0.076] | 0.787 | +0.184 [+0.173, +0.194] |
+
+AUROC, survey-weighted, mean over 25 folds; the gain carries the corrected
+resampled t-test interval. By the rule of section 4.5 (a gain of at least 0.02
+with an interval excluding zero) the `full` models are useful for all nine
+labels, and the `nondef` models for seven: not osteoporosis (gain 0.004), and
+not high cholesterol, whose gain of 0.0197 misses the threshold by 0.0003. The
+logistic models give almost the same figures as the trees (full: within 0.01
+for most labels; the trees add 0.011 to 0.015 for anaemia, kidney markers and
+high cholesterol). Calibration slopes lie between 0.94 and 1.21. The conventional risk-factor logistic model, restricted
+to what does not define the label, sits between age-sex and `nondef` for most
+labels and above `nondef` for kidney markers and high cholesterol.
+
+How to read it. The `full` figures include correlates measured on the same
+blood draw as the label: the red-cell and white-cell indices for anaemia, the
+liver enzymes and uric acid for diabetes. They show what the examination
+contains, not what a person's history predicts. The `nondef` figures are the
+more interesting: from age, body size, weight history, smoking, alcohol, income
+and eating times, diabetes is ranked with an AUROC of 0.84, depression with
+0.73 and anaemia with 0.79. Labels are complete-case: a subject with an
+unknown label is dropped, not counted negative, and the weights are the
+examination weights, which are not exact for labels from the laboratory
+subsamples (urine albumin in particular). Bone density was not used for
+osteoporosis, whose label is the recalled diagnosis in those aged 50 and over,
+because its reference values could not be verified against a source.
+
+### 5.9 Secondary estimand T5: undiagnosed disease
+
+Among subjects who do not report the diagnosis (and, for diabetes and
+hypertension, are not treated), the label is the measured criterion: HbA1c of
+6.5% or more, blood pressure of 140/90 or more, an eGFR below 60 or an
+albumin-to-creatinine ratio of 30 mg/g or more, total cholesterol of 240 mg/dL
+or more. It is one measurement, not a confirmed diagnosis, and "undiagnosed"
+rests on recall. A screen uses the `nondef` inputs only, since a screening tool
+cannot use the laboratory value it replaces, and a call is a score at or above
+the threshold that gives 90% specificity among the training subjects, estimated
+on cross-fitted predictions so that a flexible model's training fit does not
+flatter it. The comparator is a model of age and body-mass index. The rule of
+section 4.5 claims value only if sensitivity at that threshold beats the
+comparator with a cluster-bootstrap interval excluding zero. Folds of repeat 0
+are pooled; predictive values are restated at the weighted prevalence of the
+screened population.
+
+| Undiagnosed (screened, cases, prevalence) | Screen | Sensitivity | Specificity | Positive predictive value | Minus age, BMI at the training threshold [95% CI] | Minus age, BMI at matched 90% specificity [95% CI] |
+|---|---|---|---|---|---|---|
+| Diabetes (39,837; 1,127; 2.0%) | age, BMI | 0.332 | 0.915 | 0.073 | comparator | comparator |
+| | `nondef` logistic | 0.305 | 0.943 | 0.099 | -0.027 [-0.064, +0.013] | +0.072 [+0.031, +0.114] |
+| | `nondef` trees | 0.330 | 0.933 | 0.091 | -0.002 [-0.047, +0.039] | +0.048 [+0.000, +0.092] |
+| Hypertension (30,467; 3,325; 9.4%) | age, BMI | 0.337 | 0.922 | 0.308 | comparator | comparator |
+| | `nondef` logistic | 0.326 | 0.938 | 0.352 | -0.011 [-0.029, +0.007] | +0.035 [+0.011, +0.053] |
+| | `nondef` trees | 0.308 | 0.937 | 0.335 | -0.028 [-0.046, -0.012] | +0.018 [-0.004, +0.037] |
+| Kidney markers (32,408; 5,188; 12.4%) | age, BMI | 0.369 | 0.928 | 0.422 | comparator | comparator |
+| | `nondef` logistic | 0.350 | 0.940 | 0.454 | -0.019 [-0.030, -0.008] | +0.021 [+0.008, +0.033] |
+| | `nondef` trees | 0.359 | 0.940 | 0.458 | -0.010 [-0.021, +0.001] | +0.022 [+0.007, +0.035] |
+| High cholesterol (27,695; 2,901; 9.8%) | age, BMI | 0.077 | 0.937 | 0.116 | comparator | comparator |
+| | `nondef` logistic | 0.171 | 0.914 | 0.176 | +0.094 [+0.074, +0.116] | +0.081 [+0.056, +0.105] |
+| | `nondef` trees | 0.223 | 0.902 | 0.198 | +0.146 [+0.123, +0.170] | +0.106 [+0.076, +0.130] |
+
+By the rule as written, only high cholesterol is claimed: the `nondef` models
+beat age and body-mass index at the training threshold with intervals above
+zero, and no screen beats the comparator for diabetes, hypertension or kidney
+markers. That reading is confounded: the training-derived thresholds gave test
+specificities of 0.90 to 0.94, not 0.90 (they were chosen on unweighted
+cross-fitted training predictions and applied to weighted test data), and a
+model that is more specific is less sensitive by construction. The final column
+re-reads every screen at exactly 90% specificity on the pooled set (a threshold
+no one could set in advance; **post hoc, not pre-registered**). There the
+`nondef` models are ahead of age and body-mass index for all four conditions by
+2 to 11 points of sensitivity (the trees for hypertension do not exclude zero).
+Both readings agree on the size of the claim: sensitivity at 90% specificity is
+0.4 to 0.45 for diabetes, hypertension and kidney markers and 0.2 for cholesterol,
+and at the real prevalence of 2% for diabetes about nine of ten positive calls
+are false. For cholesterol, sex alone accounts for a part of the gain over age
+and body-mass index (age-sex gains 0.035 at the training threshold). We claim no
+clinical screening value for any of these.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -717,6 +821,10 @@ splinter-lifecourse causes --data <data> --model cs-cox-agesex --model cs-cox-st
 python -I samples/lifecourse/baselines/flags.py --data <data> --out <data>/baselines --model flag-cox-all --model flag-share-all --jobs 16
 splinter-lifecourse flags --data <data> --ranker cs-cox-all --model flag-cox-all --model flag-share-all --repeat 0
 # T3: expected time lived, mortality-equivalent age, and its association with outcomes
+splinter-lifecourse labels --nhanes <nhanes> --data <data>
+python -I samples/lifecourse/baselines/conditions.py --data <data> --out <data>/conditions --jobs 16
+splinter-lifecourse prevalence --data <data> --model agesex --model conv-logit --model nondef-logit --model full-logit --model nondef-hgb --model full-hgb
+splinter-lifecourse screen --data <data> --model agebmi --model agesex --model nondef-logit --model nondef-hgb --comparator agebmi --repeat 0
 splinter-lifecourse lifeexp --data <data> --model cs-cox-all --model spline-cox-net-all --repeat 0 --tau 10 --aa-dir <aa dir>
 python -I samples/lifecourse/baselines/assoc.py --data <data> --aa <aa dir>/aa-cs-cox-all-r0-t10.jsonl
 agent-loop models judge --candidate <version> --baseline-results <dir> --candidate-results <dir>
@@ -749,6 +857,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-08 | Secondary estimands pre-registered (section 4.5); T1 death by cause (section 5.5) | The full-input cause-specific Cox model beats the conventional risk-factor model for each of three causes at 10 years; calibration described, its bootstrap not run |
 | 2026-10-08 | T2 death with a diabetes or hypertension mention (section 5.6) | Diabetes models beat the all-cause ranker (AUC +0.022 to +0.025, intervals above zero); hypertension models do not |
 | 2026-10-08 | T3 expected time lived and mortality-equivalent age (section 5.7) | Every model calibrated by the section 4.5 rule; acceleration associates with cause and flag as described, and its age-sex control shows no association |
+| 2026-10-08 | T4 prevalent conditions and T5 undiagnosed-disease screens (sections 5.8, 5.9) | Models beat age-sex for nine labels (full inputs) and seven (non-definitional); by the rule only cholesterol is a screen, at matched specificity all four are ahead of age and body-mass index (post hoc) |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review
