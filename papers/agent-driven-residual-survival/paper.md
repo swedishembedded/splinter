@@ -337,8 +337,8 @@ subjects is used (the test folds are identical):
 |---|---|---|---|---|
 | 10% | 0.04791 | 0.04804 | 0.05318 | 0.05267 |
 | 25% | 0.04692 | 0.04713 | 0.04939 | 0.04990 |
-| 50% | 0.04630 | 0.04662 | 0.04743 | not run |
-| 75% | 0.04617 | 0.04600 | not run | not run |
+| 50% | 0.04630 | 0.04662 | 0.04743 | 0.04792 |
+| 75% | 0.04617 | 0.04600 | 0.04687 | 0.04778 |
 | 100% | 0.04615 | 0.04603 | 0.04657 | 0.04673 |
 
 The two Cox models are nearly flat from half the data on: doubling the
@@ -348,12 +348,16 @@ additive model and the deep encoder are still falling (0.0009 between 50% and
 100% for the additive model; 0.0032 between 25% and 100% for the encoder), so
 the gap between the learners narrows with more data and the Cox curves
 cannot be improved by data alone. Power-law fits `e_inf + a N^-b` to the
-fold means are ill-determined for the flat curves (bootstrap interval of the
-exponent from the lower bound to 1.5) and moderately determined for the
-additive model (exponent 0.67, interval [0.50, 0.87]; asymptote 0.0447,
-interval [0.0424, 0.0466]); an extrapolation from four points of one repeat is
+fold means are ill-determined for the flat Cox curves (bootstrap interval of
+the exponent from the lower bound to about 1.5) and for the deep encoder
+(asymptote interval from 0 to 0.0475), and moderately determined for the
+additive model (exponent 0.67, interval [0.50, 0.88]; asymptote 0.0447,
+interval [0.0423, 0.0466]); an extrapolation from five points of one repeat is
 a hypothesis for the next data set, not an estimate of what more subjects
-would give.
+would give. The curve of the additive model is the only one that supports a
+statement about data: it is still falling and its fitted asymptote lies below
+the full-data error of every Cox model, which a larger sample of this kind
+would test.
 
 ### 5.4 Learning from accepted runs, and a candidate that is rejected
 

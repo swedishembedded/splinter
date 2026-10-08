@@ -78,7 +78,7 @@ resampling loop. No architecture search against the same folds.
 - [x] Strong baselines on identical folds: elastic-net Cox, additive model (existing); spline Cox authored by the loop (run run-20261007T203058.568-370c, accepted on attempt 2; specs run run-20261007T205231.010-e99c, accepted on attempt 1). Open: the README does not yet describe the two spline baselines (my acceptance check for it was defective, F-017), so the loop task for it is still to be run
 - [ ] Residual model: additive predictor plus neural residual, multiplier initialised at zero. NOT DELIVERED: three attempts (run run-20261007T215753.920-5a61: time limit, behaviour check failures, torch API misuse) and an assisted continuation with a hint (run run-20261007T225456.244-8b2c: hidden check passed, its own spec test failed, time limit); the candidate then crashed on real folds (F-019). No residual-network result exists
 - [ ] Capacity sweep (about 10k to 250k parameters) with train and validation NLL and IBS (blocked on the residual model; the existing recipe sweep of the deep encoder covers width, depth and masking only)
-- [~] Learning curves by training fraction (repeat 0): elastic-net Cox, spline Cox, logistic, additive and the deep encoder at 10/25/50/75/100 percent where run; fits by a supervisor script (the loop's tool for it was not delivered, F-018). Missing: deep encoder at 50/75 percent and additive at 75 percent (GPU)
+- [x] Learning curves by training fraction (repeat 0): elastic-net Cox, spline Cox, logistic, additive and the deep encoder at 10/25/50/75/100 percent; fits by a supervisor script kept outside the repository (the loop's tool for it was not delivered, F-018)
 - [ ] Feature-block ablation with diet and meal timing added last
 - [ ] Numerical-encoding ablation including piecewise-linear embeddings
 - [ ] Timing-shortcut test (values only, timing only, both)
@@ -105,7 +105,7 @@ resampling loop. No architecture search against the same folds.
 1. Rerun the task for the integrated calibration index with E50 and E90 (`t4`), then the pooled paired bootstrap in `compare` (`t3`), after fixing the checks (F-017, F-019).
 2. Rerun the residual-network task with a check on shuffled, offset folds; run the capacity sweep and the feature-block ablations on it.
 3. Describe the two spline baselines in the lifecourse README (loop task).
-4. Deep encoder at 50 and 75 percent of the data and the additive model at 75 percent (GPU) to complete the learning curves.
+4. Learning curves on repeats 1 to 4 and with several seeds, to tighten the fits.
 5. Extract the accelerometer minute data, derive daily summaries as an input block, and compare a summary-feature model with a sequence encoder.
 6. Brain: exact loss-mask boundaries for multi-step tool conversations under templates whose last-turn rendering differs (F-021).
 
