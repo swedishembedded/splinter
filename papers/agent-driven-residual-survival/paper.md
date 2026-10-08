@@ -17,8 +17,7 @@ Swedish Embedded AB, <info@swedishembedded.com>
 estimands (sections 4.5, 4.6 and 5.5 to 5.10) were added to the first session of
 delegated experiments. Every numerical claim in this document is either
 reproduced by a command listed in the Reproducibility section or is explicitly
-marked as unmeasured. Section 2 (related work) and the residual-network part of
-the question are incomplete and say so.*
+marked as unmeasured. The related-work section covers the works cited and is not a survey.*
 
 ## Abstract
 
@@ -116,11 +115,43 @@ distribution of predicted risks, the incidence and censoring, and the
 precision wanted (Riley et al., 2022, Statistics in Medicine); we do not
 claim a universal events threshold.
 
-*(Further related work to be added and each reference checked against its
-source before it is cited: neural versus Cox survival models on benchmark
-data, numerical feature embeddings for tabular deep learning, NHANES
-mortality-prediction and biological-age studies, coding agents with
-execution-based validation.)*
+**Neural networks and Cox regression.** DeepSurv (Katzman et al., BMC Medical
+Research Methodology, 2018) replaces the linear predictor of the Cox model by a
+neural network and reports performance as good as or better than other survival
+models on its benchmarks. Kvamme, Borgan and Scheel (Journal of Machine Learning
+Research 20, 2019) propose Cox-based networks with a loss that scales to large
+data and find them highly competitive, typically the best in Brier score and
+binomial log-likelihood, on real data sets. Our residual network is of this
+family (a Cox predictor with a network added to the linear part), and it is
+asked a narrower question than either paper: whether it improves on a Cox model
+that is already nonlinear in every input, in a cohort of one visit per person.
+
+**Tabular deep learning.** "On Embeddings for Numerical Features in Tabular Deep
+Learning" (Gorishniy, Rubachev and Babenko, NeurIPS 2022, arXiv:2203.05556)
+argues that embedding numerical features, by piecewise-linear encoding or
+periodic activations, is an underexplored freedom that lets simple MLP-like
+models perform on par with attention-based architectures and compete with
+gradient-boosted trees on some benchmarks. We did not use such embeddings: the
+inputs of the residual network are the standardised, spline-free columns of the
+shared preprocessing, and the spline Cox base already carries the per-input
+nonlinearity. An embedding-based network is a different experiment.
+
+**Biological age from NHANES.** Levine et al. ("An epigenetic biomarker of aging
+for lifespan and healthspan", Aging 10, 2018) built a phenotypic age from
+routine clinical biomarkers in NHANES III (9,926 adults with complete data and
+more than twenty years of mortality follow-up) and used it to derive an
+epigenetic predictor. Our mortality-equivalent age (section 5.7) is a different
+object: a re-expression of a survival model's expected time lived against a
+reference life table, with its association to outcomes reported with a control
+that separates construction from information, and with no claim that it measures
+biological ageing.
+
+**Coding agents.** SWE-bench (Jimenez et al., ICLR 2024, arXiv:2310.06770)
+evaluates language models on 2,294 real GitHub issues by running the tests of the
+repository after the model's edit, and reports that its best model at the time
+resolved 1.96% of them. The loop of section 4.4 shares the principle of judging a
+patch by execution against checks the worker cannot edit; it is evaluated on four
+tasks of our own and nothing is claimed about its rate on any benchmark.
 
 ## 3. Data and Estimands
 
@@ -366,6 +397,26 @@ by its paired difference to the spline model on the confirmation folds; no
 rule is attached to the ablations, which are descriptive. A shuffled-outcome
 control (the network trained on outcomes permuted among the training subjects)
 must not improve on the spline model; if it does, the training procedure leaks.
+
+### 4.8 A model of the accelerometer series against the summaries (pre-registered 2026-10-08)
+
+Written before any sequence model was run. Section 4.6 asked whether eight daily
+summaries add to the other inputs. This asks whether the minute series carries
+more than the summaries do. Each subject's recording is reduced to a fixed grid:
+seven days of ten-minute bins (1,008), with two channels, the logarithm of one
+plus the mean counts per worn minute in the bin and the share of its minutes
+worn. A residual network of the same kind as section 4.7 is built on it: the
+linear predictor is a spline Cox predictor plus the output of a small
+convolutional network on the grid (two strided convolutions, global mean and
+maximum pooling, a linear head that starts at zero), trained by the same
+procedure, with the number of epochs chosen on a validation share. Four arms are
+scored on the restricted folds of section 4.6: the base alone; the base with the
+summaries; the base with the series network; the base with the summaries and the
+series network. The series network is useful beyond the base only if the 10-year
+Brier score falls with a corrected interval below zero against the base, and is
+better than the summaries only if it does so against the base with the summaries.
+The sample is the same few thousand adults, so a failure is a statement about
+this size of sample.
 
 ## 5. Results
 
