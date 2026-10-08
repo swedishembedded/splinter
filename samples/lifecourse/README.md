@@ -123,8 +123,8 @@ with deaths lacking multiple-cause data marked) and `labels` writes
 | T3 | expected time lived over 10 or 15 years and the mortality-equivalent age | any baseline's all-cause curves | `lifeexp`; `baselines/assoc.py` for the association with outcomes |
 | T4 | eight prevalent conditions at the examination | `baselines/conditions.py` | `prevalence`: per fold, against the age-and-sex model |
 | T5 | undiagnosed diabetes, hypertension, kidney markers, high cholesterol | `baselines/conditions.py` | `screen`: sensitivity at a training-chosen threshold, pooled, against age and body-mass index |
-
 | T6 | accelerometer summaries, and a network on the minute series, as extra inputs (2003 to 2006) | `baselines/accel_experiment.py` (summaries from `baselines/accel.py`) | `external --subset`, then `compare` |
+| T7 | which inputs the survival model relies on, and in which direction | `baselines/drivers.py` (spline Cox, permutation importance on held-out folds, hazard ratio between percentiles or levels) | its own report; `--exclude-early 2` for the sensitivity analysis. Associations only |
 
 A label defined by a measurement is not predicted from it: `conditions.py`
 holds the list of inputs each label excludes, with a specification that none

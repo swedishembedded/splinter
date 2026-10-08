@@ -47,6 +47,31 @@ import features  # noqa: E402
 import models  # noqa: E402
 import run  # noqa: E402
 
+# Related inputs, permuted together (post hoc: added after the per-input result was seen).
+BLOCKS = {
+    "age": ("age",),
+    "sex and ancestry": ("sex", "race_ethnicity"),
+    "body size": ("weight_kg", "bmi", "waist_cm", "height_cm", "hist:weight_1y_ago", "hist:weight_10y_ago",
+                  "hist:weight_age25", "hist:weight_heaviest"),
+    "smoking and alcohol": ("smoking", "hist:years_since_smoking:start", "drinks_per_day"),
+    "blood pressure": ("sbp", "dbp"),
+    "lipids": ("total_chol_mgdl", "hdl_mgdl"),
+    "glucose control": ("glucose_mgdl", "hba1c_pct"),
+    "kidney": ("creatinine_mgdl", "bun_mgdl", "urine_albumin_ugml", "urine_creatinine_mgdl", "uric_acid_mgdl"),
+    "liver and albumin": ("alt_ul", "ast_ul", "ggt_ul", "albumin_gdl"),
+    "blood count": ("wbc_k", "lymphocyte_pct", "platelets_k", "rdw_pct", "mcv_fl", "hemoglobin_gdl"),
+    "inflammation": ("crp_mgdl",),
+    "told a diagnosis": ("told_bronchitis", "told_cancer", "told_chd", "told_diabetes", "told_emphysema",
+                         "told_heart_attack", "told_heart_failure", "told_high_cholesterol",
+                         "told_hypertension", "told_stroke", "told_weak_kidneys",
+                         "hist:years_since_dx:chd", "hist:years_since_dx:diabetes",
+                         "hist:years_since_dx:heart_attack", "hist:years_since_dx:heart_failure",
+                         "hist:years_since_dx:hypertension", "hist:years_since_dx:stroke"),
+    "self-rated health and medicines": ("self_rated_health", "prescriptions", "phq9", "sleep_hours"),
+    "social": ("education", "marital", "income_poverty_ratio"),
+    "eating times": ("diet:eating_events", "diet:eating_window_h", "diet:energy_kcal", "diet:first_meal_h",
+                     "diet:last_meal_h", "diet:late_energy_share", "diet:recall_days"),
+}
 MIN_DROP = 0.001  # nats per event
 MAX_MISSING = 0.20
 MIN_LEVEL_SHARE = 0.02
@@ -93,7 +118,15 @@ def contrast_categorical(predict, data, rows, col, levels):
             for v, n in sorted(present.items()) if v != modal and n >= MIN_LEVEL_SHARE * len(rows)}
 
 
-def analyse(data, ctx, n_permutations, seed):
+def check_blocks(blocks, names):
+    """Raise unless every input is in exactly one block and every listed input exists."""
+    listed = [n for members in blocks.values() for n in members]
+    if sorted(listed) != sorted(names):
+        raise ValueError(f"blocks and inputs differ: missing {sorted(set(names) - set(listed))}, "
+                         f"unknown or repeated {sorted(n for n in set(listed) if n not in names or listed.count(n) > 1)}")
+
+
+def analyse(data, ctx, n_permutations, seed, blocks=None):
     """Importance and contrasts of every input on one fold: {'importance': {name: nats}, 'contrast': {name: {label: HR}}}."""
     model = models.SplineCoxNet("all")
     fitted = model.fit(ctx)
@@ -122,7 +155,24 @@ def analyse(data, ctx, n_permutations, seed):
             importance[name] = float(np.mean(falls))
             contrast[name] = (contrast_numeric(predict, data, test, col) if key == "num"
                               else contrast_categorical(predict, data, test, col, levels[name]))
-    return {"importance": importance, "contrast": contrast}
+    block_drop = {}
+    if blocks:
+        names = [(key, col, n) for key, ns in (("num", num_names), ("cat", cat_names)) for col, n in enumerate(ns)]
+        check_blocks(blocks, [n for _, _, n in names])
+        tables = {"num": data["num"].copy(), "cat": data["cat"].copy()}
+        for label, members in blocks.items():
+            cols = [(key, col) for key, col, n in names if n in members]
+            kept = {kc: tables[kc[0]][test, kc[1]].copy() for kc in cols}
+            falls = []
+            for _ in range(n_permutations):
+                order = rng.permutation(len(test))
+                for (key, col), v in kept.items():
+                    tables[key][test, col] = v[order]
+                falls.append(base - models.partial_loglik(predict(dict(data, **tables)), t_te, event))
+            for (key, col), v in kept.items():
+                tables[key][test, col] = v
+            block_drop[label] = float(np.mean(falls))
+    return {"importance": importance, "contrast": contrast, "blocks": block_drop}
 
 
 def run_fold(args):
@@ -135,7 +185,7 @@ def run_fold(args):
         keep = late_rows(data["time"], data["cause"], early)
         train, test = train[keep[train]], test[keep[test]]
     ctx = models.Context(data, train, test, run.fold_seed(repeat, fold), {})
-    result = analyse(data, ctx, permutations, run.fold_seed(repeat, fold))
+    result = analyse(data, ctx, permutations, run.fold_seed(repeat, fold), BLOCKS)
     result.update(fold=fold, n_train=len(train), n_test=len(test), events_test=int((data["cause"][test] >= 0).sum()))
     return result
 
@@ -154,6 +204,16 @@ def combine(folds):
             informative=bool(drops.mean() >= MIN_DROP and (drops > 0).all()),
             ratios={k: dict(hr=float(np.exp(np.mean(np.log(v)))), low=float(min(v)), high=float(max(v)))
                     for k, v in ratios.items()}))
+    return sorted(rows, key=lambda r: -r["drop"])
+
+
+def combine_blocks(folds):
+    """Blocks across folds: mean fall, standard error, folds positive; largest first."""
+    rows = []
+    for label in folds[0]["blocks"]:
+        drops = np.array([f["blocks"][label] for f in folds])
+        rows.append(dict(name=label, drop=float(drops.mean()), se=float(drops.std(ddof=1) / np.sqrt(len(drops))),
+                         positive=int((drops > 0).sum()), folds=len(drops)))
     return sorted(rows, key=lambda r: -r["drop"])
 
 
@@ -182,6 +242,13 @@ def markdown(rows, header):
     return "\n".join(lines)
 
 
+def markdown_blocks(rows):
+    lines = ["Related inputs permuted together (post hoc)", "",
+             "| block | fall in partial log-likelihood [SE] | folds positive |", "|---|---|---|"]
+    lines += [f"| {r['name']} | {r['drop']:.4f} [{r['se']:.4f}] | {r['positive']}/{r['folds']} |" for r in rows]
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", required=True)
@@ -192,6 +259,8 @@ def main():
     ap.add_argument("--jobs", type=int, default=1)
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
+    timelines, partition, _ = run.paths(a.data)
+    features.load(timelines, partition, os.path.join(a.out, "_features.npz"))  # once, so the workers only read the cache
     k = len(run.load_partition(run.paths(a.data)[1])[0][a.repeat])
     jobs = [(a.data, a.out, a.repeat, f, a.permutations, a.exclude_early) for f in range(k)]
     with ProcessPoolExecutor(max_workers=min(a.jobs, run.MAX_JOBS, k)) as pool:
@@ -202,11 +271,12 @@ def main():
               + (f", subjects dying before {a.exclude_early:g} y excluded" if a.exclude_early else "")
               + f"; test subjects per fold about {int(np.mean([f['n_test'] for f in folds]))}, "
                 f"deaths per fold about {int(np.mean([f['events_test'] for f in folds]))}")
+    blocks = combine_blocks(folds)
     with open(os.path.join(a.out, f"drivers-{tag}.json"), "w") as f:
-        json.dump(dict(header=header, rows=rows), f, indent=1)
+        json.dump(dict(header=header, rows=rows, blocks=blocks), f, indent=1)
     with open(os.path.join(a.out, f"drivers-{tag}.md"), "w") as f:
-        f.write(markdown(rows, header) + "\n")
-    print(markdown(rows, header))
+        f.write(markdown(rows, header) + "\n\n" + markdown_blocks(blocks) + "\n")
+    print(markdown(rows, header) + "\n\n" + markdown_blocks(blocks))
 
 
 if __name__ == "__main__":

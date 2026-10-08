@@ -40,7 +40,8 @@ class Drivers(unittest.TestCase):
         rows = np.arange(len(data["time"]))
         train, test = rows[: 2200], rows[2200:]
         ctx = models.Context(data, train, test, seed=1, horizons={})
-        cls.result = drivers.analyse(data, ctx, n_permutations=5, seed=3)
+        cls.blocks = {"risk": ("harm", "protect"), "other": ("noise", "smoker")}
+        cls.result = drivers.analyse(data, ctx, n_permutations=5, seed=3, blocks=cls.blocks)
 
     def test_variables_that_move_the_hazard_outrank_noise(self):
         drop = self.result["importance"]
@@ -55,6 +56,16 @@ class Drivers(unittest.TestCase):
         self.assertLess(c["protect"]["p90 vs p10"], 0.5)
         self.assertGreater(c["smoker"]["yes vs no"], 1.5)
         self.assertAlmostEqual(c["noise"]["p90 vs p10"], 1.0, delta=0.25)
+
+    def test_a_block_of_informative_inputs_outweighs_its_parts_and_the_rest(self):
+        b = self.result["blocks"]
+        self.assertGreater(b["risk"], self.result["importance"]["harm"])
+        self.assertGreater(b["risk"], b["other"])
+
+    def test_blocks_must_cover_every_input_once(self):
+        drivers.check_blocks(self.blocks, ["harm", "noise", "protect", "smoker"])
+        with self.assertRaises(ValueError):
+            drivers.check_blocks({"a": ("harm",), "b": ("harm", "noise")}, ["harm", "noise", "protect", "smoker"])
 
     def test_a_mostly_missing_column_has_no_contrast(self):
         data = cohort()
