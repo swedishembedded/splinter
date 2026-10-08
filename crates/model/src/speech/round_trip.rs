@@ -12,6 +12,15 @@ use crate::error::PolicyError;
 /// A word error rate above this means most of the sentence was lost.
 const LOST_THRESHOLD: f32 = 0.5;
 
+/// Total word errors over total words of `(spoken, heard)` pairs, after case
+/// and punctuation are ignored; `None` when no words were spoken.
+#[must_use]
+pub fn corpus_word_error_rate<'a>(
+    pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Option<f32> {
+    wer::corpus_wer(pairs)
+}
+
 /// One sentence, spoken and heard again.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct RoundTripItem {

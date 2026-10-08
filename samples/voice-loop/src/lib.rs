@@ -122,6 +122,107 @@ impl<'a> TurnReport<'a> {
     }
 }
 
+/// The median and the 95th percentile of a set of measurements, by nearest
+/// rank.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct Spread {
+    /// Half the measurements are at or below this.
+    pub p50: f64,
+    /// Nineteen in twenty are at or below this.
+    pub p95: f64,
+}
+
+impl Spread {
+    /// The spread of `values`; `None` for no measurements, because a latency
+    /// that was not measured is not zero.
+    #[must_use]
+    pub fn of(values: &[f64]) -> Option<Spread> {
+        if values.is_empty() {
+            return None;
+        }
+        let mut sorted = values.to_vec();
+        sorted.sort_by(f64::total_cmp);
+        let rank = |p: f64| {
+            let n = ((p / 100.0) * sorted.len() as f64).ceil().max(1.0) as usize;
+            sorted[n.min(sorted.len()) - 1]
+        };
+        Some(Spread {
+            p50: rank(50.0),
+            p95: rank(95.0),
+        })
+    }
+}
+
+/// Each recording with the question it was made from, when the questions are
+/// known. The questions are matched to the recordings in order, so there must
+/// be exactly as many.
+pub fn pair_questions(
+    recordings: &[std::path::PathBuf],
+    questions: Option<&[String]>,
+) -> Result<Vec<(std::path::PathBuf, Option<String>)>, String> {
+    match questions {
+        None => Ok(recordings.iter().map(|r| (r.clone(), None)).collect()),
+        Some(q) if q.len() == recordings.len() => Ok(recordings
+            .iter()
+            .cloned()
+            .zip(q.iter().cloned().map(Some))
+            .collect()),
+        Some(q) => Err(format!(
+            "{} questions for {} recordings: they are matched in order, so the counts must agree",
+            q.len(),
+            recordings.len()
+        )),
+    }
+}
+
+/// One turn of a batch.
+#[derive(Debug, Serialize)]
+pub struct TurnItem {
+    /// The recording.
+    pub recording: String,
+    /// What was asked, when known.
+    pub asked: Option<String>,
+    /// What was heard.
+    pub heard: String,
+    /// What the persona answered.
+    pub answer: String,
+    /// The spoken answer, heard again by the recognizer.
+    pub answer_heard: String,
+    /// Length of the spoken answer in seconds.
+    pub reply_seconds: f64,
+    /// Seconds recognising the question.
+    pub recognise_seconds: f64,
+    /// Seconds composing the answer.
+    pub respond_seconds: f64,
+    /// Seconds speaking it.
+    pub synthesise_seconds: f64,
+}
+
+/// A batch of turns, as `turns` prints and keeps it.
+#[derive(Debug, Serialize)]
+pub struct TurnsReport<'a> {
+    /// The persona that answered.
+    pub persona: &'a str,
+    /// The speaker, with the portrayal it declares.
+    pub speaker: &'a SpeakerProfile,
+    /// How many turns were taken.
+    pub turns: usize,
+    /// Question words lost in recognition; absent when the questions are not known.
+    pub question_word_error_rate: Option<f32>,
+    /// Answer words lost between being spoken and being heard again.
+    pub answer_word_error_rate: Option<f32>,
+    /// Seconds recognising.
+    pub recognise_seconds: Option<Spread>,
+    /// Seconds composing the answer.
+    pub respond_seconds: Option<Spread>,
+    /// Seconds speaking it.
+    pub synthesise_seconds: Option<Spread>,
+    /// The three together, per turn.
+    pub total_seconds: Option<Spread>,
+    /// Each turn.
+    pub items: &'a [TurnItem],
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,6 +254,38 @@ mod tests {
             "not measured is absent, not zero"
         );
         assert_eq!(json["sentences"], 0);
+    }
+
+    #[test]
+    fn a_spread_is_the_nearest_rank_percentiles_and_absent_for_nothing() {
+        let values: Vec<f64> = (1..=10).map(f64::from).collect();
+        assert_eq!(
+            Spread::of(&values),
+            Some(Spread {
+                p50: 5.0,
+                p95: 10.0
+            })
+        );
+        assert_eq!(Spread::of(&[2.5]), Some(Spread { p50: 2.5, p95: 2.5 }));
+        assert_eq!(Spread::of(&[]), None, "no turns, no latency; not zero");
+        // Order does not matter.
+        assert_eq!(
+            Spread::of(&[3.0, 1.0, 2.0]),
+            Some(Spread { p50: 2.0, p95: 3.0 })
+        );
+    }
+
+    #[test]
+    fn questions_pair_with_recordings_in_order_and_a_mismatch_is_refused() {
+        let wavs = ["q01.wav", "q02.wav"].map(std::path::PathBuf::from);
+        let paired =
+            pair_questions(&wavs, Some(&["Why?".to_string(), "How?".to_string()])).unwrap();
+        assert_eq!(paired[1].1.as_deref(), Some("How?"));
+        assert!(pair_questions(&wavs, Some(&["Why?".to_string()])).is_err());
+        assert!(pair_questions(&wavs, None)
+            .unwrap()
+            .iter()
+            .all(|(_, q)| q.is_none()));
     }
 
     #[test]

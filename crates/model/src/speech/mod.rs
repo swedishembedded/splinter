@@ -33,6 +33,7 @@ pub use brain::Audio as Clip;
 pub use brain_backed::{
     BrainRecognizer, BrainSynthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
+pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};
 pub use turn::{take_turn, StageTimings, Turn};
 
