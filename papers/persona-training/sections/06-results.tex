@@ -5,8 +5,8 @@
 
 Every exam in this section is \textbf{pilot scale}. Those of the first subsections have 31
 to 42 tasks over 6 or 7 families and were run with the earlier exam of
-\cref{sec:exam-versions}; the pilots of \cref{sec:frozen} have 155 tasks over 25 families of the
-reserved exam. Their families are fixed by each
+\cref{sec:exam-versions}; the pilots of \cref{sec:frozen,sec:deployed} have 147 or 155 tasks over 24 or 25 families of
+the reserved exam. Their families are fixed by each
 run's held-out split before the candidate is trained, but they are far too small to carry a
 claim, and they were reused: two exams share a 35-task set (A), three share a 31-task set
 (B), and the Adams exam has its own (C), so the six comparisons are not independent and the
@@ -30,7 +30,7 @@ one-sentence \code{learn}. v6 trained on dialogues only; ablation on v6's dialog
 fixed-prompt voice rows; v7 on its own dialogues plus those voice rows; rehearsal on v7's
 data plus 108 replayed answers of the base model (``+108''); e4 on v7's dialogues plus template-prompted
 voice chunks under the current recipe; e1 on exactly v7's data under the current recipe (it
-has no completed exam); adams on Adams dialogues plus voice rows. A peak learning rate
+has only a deployed-arm pilot, \cref{sec:deployed}); adams on Adams dialogues plus voice rows. A peak learning rate
 marked $^{*}$ is the default of the command that trained the run, which did not log it;
 the others are read from the run's log. Held-out records are scored with the base before
 and the adapter after.}
@@ -172,8 +172,9 @@ the evidence weaker.}
 
 \paragraph{Reading.}
 The earlier exams are consistent with candidates a few points better than the prompted base and
-with candidates no better than it, and the reserved-exam pilots add one candidate that is better
-under the prompt and none that is better without it. We therefore do \emph{not} claim that
+with candidates no better than it, and the reserved-exam pilots add two candidates that are better
+under the prompt (the ablation and, in the deployed-arm pilots of \cref{sec:deployed}, e1), two that are not distinguishable
+from the prompted base, and none that is better without the prompt among the two for which that arm was run. We therefore do \emph{not} claim that
 fine-tuning beats prompting for this task. What the earlier exams support is narrower: on the Jefferson task sets a
 persona prompt alone markedly reduces answers with specifics absent from the source; no
 candidate is judged right on fewer tasks than the prompted base of its exam; and none is
@@ -208,13 +209,14 @@ conversation, advice and explanation. The planned $50\times8$ design (400 tasks)
 therefore not reached; at the realised size the simulated power for a ten-point gain is
 0.55 under the planning assumptions (\cref{tab:power}). The first 25 families by name, the
 pilot subset, hold 155 tasks.
-Two candidates have been run on the pilot subset, both with four arms (the base, the prompted
+Two candidates have been run on the pilot subset with four arms (the base, the prompted
 base, the candidate asked without a persona prompt, and the candidate under it), one greedy
 answer per task and arm, and without the voice-likelihood stage, which was not run. The
 judge is Qwen3-14B, version 4 (greedy decoding), calibrated on 310 controls (precision 1.0
 on passes and 0.981 on fails, no abstentions). The primary comparison, fixed with the exam,
 is the candidate under the persona prompt against the prompted base on the share of tasks
-judged right. The \emph{v7} candidate was trained on its own dialogues plus fixed-prompt voice rows;
+judged right. Two further candidates were run with the deployed arm only (\cref{sec:deployed}).
+The \emph{v7} candidate was trained on its own dialogues plus fixed-prompt voice rows;
 the \emph{ablation} candidate on the dialogues of v6 plus the same voice rows
 (\cref{tab:training}); the two recipes differ in more than one respect, so their results are
 not a controlled comparison. The report of each run states one family the candidate was trained on, which the tool leaves out
@@ -341,6 +343,87 @@ every family six tasks (234 tasks), whereas the exam has 244.
 \item The pilot families are a subset of the final test; a final result will not be
   independent of them.
 \end{itemize}
+
+\subsection{Deployed-arm pilots}\label{sec:deployed}
+
+Two more candidates were run on the pilot subset with only the deployed arm, the candidate
+under the persona prompt, one greedy answer per task and no voice-likelihood stage. They are
+not four-arm runs: the base and the candidate asked without the persona prompt were not
+answered, so there is no comparison of either with the unprompted arms, no secondary
+comparisons and no Holm family, and whether these candidates beat the prompted base without the
+prompt, or whether the persona was internalised, is not measured. Each is compared with the
+prompted arm of the v7 pilot (\cref{sec:frozen}) on the tasks both answered. The pairing is
+valid because the exam, the base, the persona prompt and the judge version (4, greedy) are the
+same and every answer is greedy; the prompted arm itself was not answered again beside these
+candidates, so no arm is repeated across the runs and the reproducibility of greedy answers
+between runs is assumed, not tested. The primary test is the same as in \cref{tab:pilot}; the
+counts, the family and task-level sign tests and the intervals were recomputed from the per-task
+records of the three reports (\cref{sec:repro}).
+
+The candidates are \emph{e1}, trained on v7's dialogues and fixed-prompt voice rows under the
+corrected recipe (\cref{tab:training}), and \emph{e4}, trained on v7's dialogues and
+template-prompted voice rows under the same recipe; e4 is the candidate of the earlier set-B
+exam (\cref{tab:exams}). The e4 report states two families the candidate was trained on, which
+the tool leaves out, so it examined 147 tasks over 24 families, and the prompted base is read on
+those 147 tasks (28 judged right, not 31).
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/deployed_table}}
+\caption{Deployed-arm pilots: the candidate under the persona prompt against the prompted arm
+of the v7 pilot, paired by task on the tasks both answered. Columns as in \cref{tab:pilot};
+``ties'' are families in which the two were right on equally many tasks, which the family-level
+sign test ignores.}
+\label{tab:deployed}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/deployed_secondary_table}}
+\caption{Length, invented specifics and judge trust of the deployed-arm pilots. ``Length-matched''
+are the tasks whose two answers differ in length by at most a quarter of the longer; the
+$p$ for fewer invented answers is the one-sided exact sign test over the answers invented by
+only one of the two; the judge columns are each run's calibration on its own controls and its
+hard controls (a wrong answer by construction, \cref{sec:frozen}).}
+\label{tab:deployed-secondary}
+\end{table}
+
+\paragraph{Results.}
+\textbf{e1:} 44 of 155 tasks judged right against 31 for the prompted base, +8.4 points (interval
+$+2.9$ to $+13.5$): 18 tasks only the candidate, 5 only the prompted base (task-level
+$p=0.0053$). The candidate was right on more tasks in 12 families and on fewer in 3, with 10
+ties ($p=0.018$ over the 15 discordant families). Its answers are shorter than the prompted
+base's (390 against 434 characters), so length does not explain the gain, but among the 78
+length-matched tasks the split is 10 against 4 ($p=0.090$), which does not exclude chance.
+\textbf{e4:} 35 of 147 against 28, +4.8 points (interval $-1.8$ to $+11.6$): 16 tasks only the
+candidate, 9 only the prompted base ($p=0.115$); 9 families for and 6 against, with 9 ties
+($p=0.30$); length-matched 10 against 7 of 81 ($p=0.31$). Neither candidate changes the
+number of answers with invented specifics detectably: both state them in 19 answers against
+23 for the prompted base (8 against 12 answers invented by only one arm for e1, $p=0.25$; 11
+against 15 for e4, $p=0.28$).
+
+\paragraph{Judge.}
+The judge was version 4 in all three runs, trusted by its own rule (minimum precision 0.9) on
+310 controls for e1 and the v7 pilot and 294 for e4 (fewer tasks): precision 1.0 on passes
+and 0.981 and 0.980 on fails, no abstentions. The three controls it misjudged in each run
+are the same three correct answers it failed. It passed 2 of 155 and 2 of 147 hard-control
+wrong answers. As before, this bounds the judge's behaviour on easy controls and says nothing
+about its agreement with a person.
+
+\paragraph{Reading.}
+At pilot scale, e1 and the earlier ablation are both positive against the prompted base under
+the persona prompt and e4 is not; v7, which has the same data as e1 under the earlier recipe,
+is not either (+4.5 points). The results do not rank the recipes or the voice data: each is
+one training run, e1 and v7 differ in recipe and in the chance variation of one seed, and
+the e4 pilot has a different voice-row construction and a different task set (147 tasks).
+The evidence for e1 is also weaker than its task-level $p$ suggests. The family-level test is
+the exam's primary test, and its $p=0.018$ is uncorrected for the four candidates run on the
+reserved exam (v7, ablation, e1, e4): a factor of four gives 0.070 for e1 and 0.015 for the
+ablation, and 0.021 for e1 at the task level, which ignores clustering. Moreover the
+correction does not account for the selection of the candidates themselves: all four were
+chosen after earlier exams (e4 after its set-B exam) from a larger set that was examined. The
+pilot families are a subset of the final test, and there is one seed per candidate. These runs have no arm without the persona prompt, so they
+cannot show that the weights carry the persona, and no voice scoring exists for them.
 
 \subsection{Cost}
 

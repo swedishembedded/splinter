@@ -323,6 +323,64 @@ def pilot_tables(pilots):
     }
 
 
+def check_deployed(d):
+    """Refuses a deployed-arm row whose derived fields disagree with its counts."""
+    name, n = d["arm"], int(d["tasks"])
+    expected = {
+        "p_tasks": upper_tail(int(d["cand_only"]), int(d["cand_only"]) + int(d["prompted_only"])),
+        "p_families": upper_tail(int(d["family_wins"]), int(d["family_wins"]) + int(d["family_losses"])),
+        "lm_p": upper_tail(int(d["lm_cand_only"]), int(d["lm_cand_only"]) + int(d["lm_prompted_only"])),
+        "p_invented": upper_tail(int(d["inv_prompted_only"]), int(d["inv_prompted_only"]) + int(d["inv_cand_only"])),
+    }
+    for field, value in expected.items():
+        if abs(float(d[field]) - value) > 1e-6:
+            sys.exit(f"deployed {name}: {field} {d[field]} != exact {value}")
+    lead = int(d["cand_right"]) - int(d["prompted_right"])
+    if lead != int(d["cand_only"]) - int(d["prompted_only"]):
+        sys.exit(f"deployed {name}: right counts and discordant tasks disagree")
+    if abs(100 * lead / n - float(d["diff_points"])) > 0.05:
+        sys.exit(f"deployed {name}: difference does not match the right counts")
+    if int(d["family_wins"]) + int(d["family_losses"]) + int(d["family_ties"]) != int(d["families"]):
+        sys.exit(f"deployed {name}: family wins, losses and ties do not add up to the families")
+    if int(d["cand_invented"]) - int(d["prompted_invented"]) != int(d["inv_cand_only"]) - int(d["inv_prompted_only"]):
+        sys.exit(f"deployed {name}: invented counts and discordant answers disagree")
+
+
+def deployed_tables(deployed):
+    """The tables of runs that examined only the deployed arm, each paired by
+    task with the prompted arm of a four-arm run of the same frozen exam."""
+    for d in deployed:
+        check_deployed(d)
+    primary = [
+        r"\begin{tabular}{@{}lrrrrrrr@{}}",
+        r"\toprule",
+        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Difference [95\% CI], points & Task wins--losses & $p$ (tasks) & Family wins--losses (ties) & $p$ (families) \\",
+        r"\midrule",
+    ]
+    secondary = [
+        r"\begin{tabular}{@{}lrrrrrrr@{}}",
+        r"\toprule",
+        r"Run & Length-matched (tasks, wins--losses, $p$) & Invented (cand.\ / prompt.) & Invented, only-cand.--only-prompt. & $p$ (fewer invented) & Mean chars (cand.\ / prompt.) & Judge controls, precision pass / fail & Hard controls passed \\",
+        r"\midrule",
+    ]
+    for d in deployed:
+        primary.append(
+            f"{d['arm']} & {d['families']}/{d['tasks']} & {d['cand_right']} / {d['prompted_right']} & "
+            f"{float(d['diff_points']):+.1f} [{float(d['ci_low']):+.1f}, {float(d['ci_high']):+.1f}] & "
+            f"{d['cand_only']}--{d['prompted_only']} & {fmt_p(float(d['p_tasks']))} & "
+            f"{d['family_wins']}--{d['family_losses']} ({d['family_ties']}) & {fmt_p(float(d['p_families']))} \\\\"
+        )
+        secondary.append(
+            f"{d['arm']} & {d['lm_tasks']}, {d['lm_cand_only']}--{d['lm_prompted_only']}, {fmt_p(float(d['lm_p']))} & {d['cand_invented']} / {d['prompted_invented']} & "
+            f"{d['inv_cand_only']}--{d['inv_prompted_only']} & {fmt_p(float(d['p_invented']))} & "
+            f"{float(d['cand_chars']):.0f} / {float(d['prompted_chars']):.0f} & "
+            f"{d['judge_controls']}, {float(d['precision_pass']):.3f} / {float(d['precision_fail']):.3f} & "
+            f"{d['hard_passed']} of {d['hard_wrong']} \\\\"
+        )
+    end = [r"\bottomrule", r"\end{tabular}"]
+    return {"deployed_table": "\n".join(primary + end), "deployed_secondary_table": "\n".join(secondary + end)}
+
+
 def main():
     OUT.mkdir(exist_ok=True)
     exams = rows("exams.csv")
@@ -335,6 +393,8 @@ def main():
     (OUT / "training_table.tex").write_text(training_table(rows("training.csv")) + "\n", encoding="utf-8")
     pilots = rows("pilot.csv")
     for name, table in pilot_tables(pilots).items():
+        (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
+    for name, table in deployed_tables(rows("deployed.csv")).items():
         (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
 
     # pgfplots data: exact power of the family-level sign test.

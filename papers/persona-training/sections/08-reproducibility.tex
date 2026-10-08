@@ -45,7 +45,8 @@ splinter select CANDIDATE --exam-set DEV --judge local:Qwen/Qwen3-14B@4096 [--ad
 splinter exam CANDIDATE --exam-set EXAM --resamples 1 [--pilot-families 25] \
   [--no-voice] --judge local:Qwen/Qwen3-14B@4096 \
   --prompt "to think like Thomas Jefferson" --json
-# a candidate asked alone, to be paired offline with another report of the same exam
+# a candidate asked alone (the reported deployed-arm pilots used --pilot-families 25
+# --no-voice), to be paired offline with another report of the same exam
 splinter exam CANDIDATE --exam-set EXAM --deployed-only ...
 # analyses of a stored report; labels need a person
 splinter exam-report labels-export REPORT --out LABELS --key KEY
@@ -60,16 +61,23 @@ or software-adapter line, one job per card.
 \paragraph{Building this paper.}
 \code{make} regenerates every table and plot data file from \code{data/} and builds
 \code{paper.pdf}. To update a result, edit its row in \code{data/exams.csv},
-\code{data/anchor.csv}, \code{data/training.csv}, \code{data/pilot.csv} or
+\code{data/anchor.csv}, \code{data/training.csv}, \code{data/pilot.csv},
+\code{data/deployed.csv} or
 \code{data/power\_simulation.csv}; the script recomputes the exact sign tests and the
 task-level bounds, refuses an exam row whose logged $p$ does not match the exact value, an
 anchor row whose cells do not add up and a pilot row whose sign tests, Holm adjustment or
-difference do not match its counts, and prints the pilot tables for completed rows. A pilot row
+difference do not match its counts, a deployed-arm row whose sign tests, difference or
+counts do not match, and prints the pilot tables for completed rows. A pilot row
 is produced from a run's report by \code{scripts/pilot\_row.py REPORT --arm NAME --description TEXT
 --power P --power-fpr F}, which recomputes the counts from the report's per-task records and
 refuses a report whose summary disagrees; $P$ and $F$ are the \code{planned} power and
 false-positive rate of \code{splinter exam-set power --from-report REPORT --families 39
---tasks-per-family 6 --json}.
+--tasks-per-family 6 --json}. A deployed-arm row is produced by \code{scripts/deployed\_row.py
+REPORT --arm NAME --description TEXT --reference REPORT:ARM}, which pairs the report's
+candidate under the persona prompt with the named arm of a four-arm report of the same exam by
+task, recomputes every count, test and the family-clustered bootstrap interval (10,000
+resamples, seed 1) from the per-task records, and refuses reports whose summaries disagree
+with their records or whose judge versions differ.
 Every number in the tables was checked against the run's report by recomputing it; the run
 reports themselves are not distributed with the paper, only the counts read from them.
 
@@ -84,6 +92,7 @@ Number & Source \\
 \midrule
 Pilot-scale exam counts, tests, judge versions and calibrations & Exam reports of each run (v6, ablation, v7, rehearsal, e4) and the exam line of the Adams run \\
 Frozen-exam pilots: counts, tests, intervals, discordance, ICC, hard controls (\cref{tab:pilot,tab:pilot-arms,tab:pilot-secondary,tab:pilot-design}) & The \code{ran} object of each run's \code{splinter exam --json} report (run identifiers in \code{data/pilot.csv}); counts and exact tests recomputed from its per-task records by \code{scripts/pilot\_row.py} \\
+Deployed-arm pilots (\cref{tab:deployed,tab:deployed-secondary}) & The \code{ran} object of each deployed-arm report and of the v7 pilot report, paired by task by \code{scripts/deployed\_row.py} \\
 Frozen-exam power for 39 families & \code{splinter exam-set power --from-report} on each pilot report, 4,000 replicates, 500 resamples, seed 0 \\
 Gate improvement, anchor, serve & Release-gate reports of the v7, Adams and rehearsal candidates \\
 Anchor diagnostic and rescoring & Anchor evaluation reports of base and v7 candidate under the default prompt, rescored by a reimplementation of the corrected verifier \\
