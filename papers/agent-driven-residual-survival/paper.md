@@ -39,12 +39,12 @@ still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
 a residual neural network, was not delivered by the agent in four attempts and
 is reported as not done. On the agent question, two of four substantive tasks
-were accepted and two were not; before the first could even be judged, six
+were accepted and two were not. Before the first could even be judged, four
 defects of the surrounding infrastructure (a reasoning block spending the
 output budget, greedy decoding repeating one action, a server context
-overflow, an unreadable old log format, and two defects in the supervisor's
-own acceptance checks) had to be found and repaired, each with a regression
-specification. *(The result of the learning-and-promotion proof is stated in
+overflow, and an unreadable old log format) had to be found and repaired; two
+defects of the supervisor's own acceptance checks surfaced later. Each repair
+has a regression specification. *(The result of the learning-and-promotion proof is stated in
 section 5.4.)*
 
 ## 1. Introduction
