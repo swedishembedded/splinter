@@ -13,11 +13,12 @@ sending an email to info@swedishembedded.com.
 **Martin Schröder**
 Swedish Embedded AB, <info@swedishembedded.com>
 
-*Working draft, started 2026-10-07; last revised 2026-10-08 after the first
-session of delegated experiments. Every numerical claim in this document is
-either reproduced by a command listed in the Reproducibility section or is
-explicitly marked as unmeasured. Sections 2 (related work) and the
-residual-network part of the question are incomplete and say so.*
+*Working draft, started 2026-10-07; last revised 2026-10-08 after the secondary
+estimands (sections 4.5, 4.6 and 5.5 to 5.10) were added to the first session of
+delegated experiments. Every numerical claim in this document is either
+reproduced by a command listed in the Reproducibility section or is explicitly
+marked as unmeasured. Section 2 (related work) and the residual-network part of
+the question are incomplete and say so.*
 
 ## Abstract
 
@@ -40,7 +41,17 @@ models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
 a residual neural network, was not delivered by the agent in five attempts
-(two runs) and is reported as not done. On the agent question, two of four substantive tasks
+(two runs) and is reported as not done. The same single examination was then
+asked five further questions under rules fixed beforehand: it predicts death
+by cause (the full input set beats the conventional risk factors for
+cardiovascular, cancer and other deaths), death with a diabetes mention on the
+certificate beyond who dies (and a hypertension mention not at all), expected
+time lived (calibrated within 0.05 years at ten years), eight prevalent
+conditions (AUROC 0.79 to 0.92 with the full input set, 0.67 to 0.85 without
+the inputs that define each), and undiagnosed disease only weakly (sensitivity
+0.2 to 0.45 at 90% specificity; about nine of ten positive calls for diabetes
+are false); accelerometer summaries added a small, narrowly resolved gain to the
+ten-year Brier score. On the agent question, two of four substantive tasks
 were accepted and two were not. Before the first could even be judged, four
 defects of the surrounding infrastructure (a reasoning block spending the
 output budget, greedy decoding repeating one action, a server context
@@ -177,9 +188,11 @@ appears once) with a paired bootstrap: subjects, or PSUs within strata, are
 resampled with replacement and both models are scored on the same resample.
 The other is the corrected resampled t-test over the 25 folds (which inflates
 the variance for the overlap between training sets), never an uncorrected
-test. **Only the corrected t-test was run**: the bootstrap was specified as a
-task for the agent and was not run for lack of time (section 7), so every
-interval in this paper is a corrected-t interval. Model choices that used the folds (a capacity sweep, say) are
+test. For the primary comparisons **only the corrected t-test was run**: the
+bootstrap was specified as a task for the agent and was not run for lack of
+time (section 7). The secondary estimands of sections 5.6, 5.7 and 5.9 use a
+cluster bootstrap (cycle, stratum, PSU) on pooled out-of-fold predictions of
+one repeat. Model choices that used the folds (a capacity sweep, say) are
 made on repeat 0 and confirmed on repeats not used to choose.
 
 ### 4.3 Pre-registered decision rule
@@ -519,7 +532,7 @@ with death without it. In the cohort 971 deaths carry a diabetes mention and
 censored at its time. A mention is not a diagnosis, and it is under-reported.
 
 Flagged deaths are few per fold, so predictions are not scored fold by fold:
-the out-of-fold predictions of one repeat are pooled (each of 45,000 subjects
+the out-of-fold predictions of one repeat are pooled (each of about 47,800 subjects
 appears once), scored as one set, and a 95% interval comes from resampling
 clusters (cycle, stratum, PSU) 1,000 times, on repeat 0. The pooled set has
 237 (diabetes) and 304 (hypertension) flagged deaths by 5 years and 384 and 488
@@ -725,11 +738,42 @@ no one could set in advance; **post hoc, not pre-registered**). There the
 `nondef` models are ahead of age and body-mass index for all four conditions by
 2 to 11 points of sensitivity (the trees for hypertension do not exclude zero).
 Both readings agree on the size of the claim: sensitivity at 90% specificity is
-0.4 to 0.45 for diabetes, hypertension and kidney markers and 0.2 for cholesterol,
+0.41 to 0.45 for diabetes, hypertension and kidney markers and about 0.2 for cholesterol,
 and at the real prevalence of 2% for diabetes about nine of ten positive calls
 are false. For cholesterol, sex alone accounts for a part of the gain over age
 and body-mass index (age-sex gains 0.035 at the training threshold). We claim no
 clinical screening value for any of these.
+
+### 5.10 Accelerometer summaries as an input block
+
+The rule is in section 4.6. Of the 12,422 examinees of the 2003-2004 and
+2005-2006 cycles with at least four valid days of recording, 6,952 are in the
+cohort (adults eligible for linkage); 5,877 of them are outside the locked
+test, and 806 died within ten years. The summaries have plausible levels: the
+median adult wears the monitor 14 hours a day, averages 285 counts per minute
+and spends 15 minutes a day at or above 2,020 counts. An early version of the
+extraction called every day of every subject valid with 24 hours of wear,
+because the transport file stores a zero count as 5.4e-79 and no zero minute
+was ever seen; the specification for the extraction now includes that value.
+
+| Metric (10 years unless stated) | Without the block | With the block | Paired difference [95% CI, corrected] |
+|---|---|---|---|
+| Brier score | 0.05186 | 0.05097 | -0.00089 [-0.00167, -0.00011] |
+| Uno concordance | 0.9028 | 0.9034 | +0.0006 [-0.0016, +0.0028] |
+| Uno concordance, 5 years | 0.9100 | 0.9123 | +0.0022 [-0.0017, +0.0061] |
+| Calibration slope | 1.112 | 1.104 | -0.008 [-0.044, +0.028] |
+
+By the rule of section 4.6 the block is useful: the interval of the Brier
+difference lies below zero. The evidence is thin and the effect small. The
+upper end of the interval is within 0.0001 of zero, the gain is under 2% of the
+Brier score, and discrimination does not resolvably change. The comparison is
+on 5,877 subjects, so both arms are trained on about 4,700 and are worse
+estimated than the models of the other sections (the integrated Brier score
+over 15 years cannot be computed: no cycle here is followed that long). One
+reading, which we did not test, is that what a hip accelerometer says about the next ten
+years is largely already in the examination, in age, body size, blood tests
+and self-reported health, with a small remainder. A sequence model on the
+minute counts, which the roadmap asked for, was not tried.
 
 ## 6. Discussion
 
@@ -776,6 +820,26 @@ that reached a verdict in the runs after the repairs were accepted, the other 8
 were rejected by a check or ran out of a limit) as a property of this model on
 these tasks, not as a general rate.
 
+**What the secondary estimands license.** One examination predicts more than
+whether a person dies. For death by cause, adding the full set of inputs to the
+conventional risk factors improves the cause-specific Brier score for
+cardiovascular, cancer and other deaths (section 5.5), most for the residual
+group. For death with a diabetes mention on the certificate it adds to knowing
+who dies (section 5.6), and for a hypertension mention it adds nothing. Expected
+time lived is well calibrated by every model (section 5.7), and the
+mortality-equivalent age built on it tracks diabetes-mentioned and
+cardiovascular deaths more closely than cancer deaths, with a control that
+separates what is construction from what is information. Conditions at the
+examination are ranked well from the questionnaire and measurements alone
+(section 5.8), and the screens for undiagnosed disease built on non-laboratory
+inputs are weak: a sensitivity of 0.2 to 0.45 at 90% specificity, a positive
+predictive value of 9% for diabetes at its real prevalence (section 5.9). None
+of these is a forecast of incident disease: the data have no follow-up for
+it. What the examination shows is that one visit contains a calibrated
+mortality forecast by cause, an estimate of expected time lived, and
+classifications of conditions, some of whose labels and inputs come from the
+same blood draw, and that is the extent of it.
+
 **What the learning-and-promotion results license.** Only that the path
 works and can say no: a candidate adapter was trained, reloaded and judged on
 held-out tasks under a rule fixed beforehand, and was rejected without
@@ -791,8 +855,9 @@ local evaluation on unseen tasks was run.
 * One examination per person: the data cannot answer whether repeated
   measurements add information, which is the regime where sequence
   representations have been reported to help. The accelerometer minute data
-  for two cycles (2003 to 2006) have been downloaded but not used; they would
-  make a long-sequence experiment possible and are the next step.
+  for two cycles (2003 to 2006) were reduced to eight daily summaries
+  (section 5.10); a model of the minute sequences themselves, which would be a
+  long-sequence experiment, was not tried.
 * One country and era; mortality is the only outcome observed after the
   examination; follow-up is administratively censored, so the 15-year metric
   rests on the earliest cycles alone.
@@ -802,7 +867,24 @@ local evaluation on unseen tasks was run.
   all configurations tried are reported and none was selected on a locked test.
 * The pooled out-of-fold paired bootstrap that the protocol (section 4.2)
   prefers to the corrected resampled t-test was specified as a loop task and
-  not run; every interval above is the corrected resampled t-test interval.
+  not run for the primary comparisons: every interval of sections 5.2 to 5.5,
+  5.7 (calibration), 5.8 and 5.10 is a corrected resampled t-test interval.
+  Sections 5.6, 5.7 (associations) and 5.9 use a cluster bootstrap on pooled
+  out-of-fold predictions of one repeat, which the other repeats do not
+  confirm independently, since they pool the same subjects.
+* The secondary estimands (sections 5.5 to 5.10) were written down before their
+  numbers existed, but they are many: nine cause-horizon cells, two flags, eight
+  conditions and four screens are reported, each against its own rule, and none
+  is adjusted for the number of looks. A rule met by a narrow margin (the
+  accelerometer block, the cholesterol gain of 0.0197) should be read as such.
+* The calibration clause of the cause rule (a bootstrap interval of observed
+  over expected) was not run; the matched-specificity reading of the screens is
+  post hoc; weights for labels from laboratory subsamples other than fasting
+  glucose are the examination weights, which is not exact; the bone-density
+  definition of osteoporosis was not used; creatinine is standardised by the
+  correction each cycle's laboratory documentation states, and estimated
+  filtration rate by an equation quoted from the literature, not verified against
+  a second implementation.
 * The agent was evaluated on four tasks and on one local model; the learning
   experiment trained on nine accepted runs, seven of which are the same task.
   Nothing here shows general autonomy.
@@ -884,6 +966,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-08 | T2 death with a diabetes or hypertension mention (section 5.6) | Diabetes models beat the all-cause ranker (AUC +0.022 to +0.025, intervals above zero); hypertension models do not |
 | 2026-10-08 | T3 expected time lived and mortality-equivalent age (section 5.7) | Every model calibrated by the section 4.5 rule; acceleration associates with cause and flag as described, and its age-sex control shows no association |
 | 2026-10-08 | T4 prevalent conditions and T5 undiagnosed-disease screens (sections 5.8, 5.9) | Models beat age-sex for nine labels (full inputs) and seven (non-definitional); by the rule only cholesterol is a screen, at matched specificity all four are ahead of age and body-mass index (post hoc) |
+| 2026-10-08 | Accelerometer summaries as an input block (sections 4.6, 5.10) | Rule fixed before the files were opened; the 10-year Brier score falls by 0.0009 with an interval just below zero, discrimination unchanged; an extraction defect (zero counts stored as 5.4e-79) found by checking the summaries' levels |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review
@@ -925,3 +1008,29 @@ never a negative; a condition a cycle did not measure is absent for that cycle.
 | depression | PHQ-9 >= 10 | 2005 onward |
 | sleep problem | SLQ050 = 1 | 2005 onward |
 | undiagnosed (diabetes, hypertension, kidney markers, high cholesterol) | the measured criterion above, among those whose self-report of the diagnosis is not "yes" | "Never checked" counts as not diagnosed for cholesterol |
+
+## Appendix D. Subjects per label
+
+From `lifecourse labels` on the 56,253 subjects. Unknown is a refused or
+unanswered question, a condition the cycle did not measure, or (for the
+undiagnosed labels) a subject outside the screened population.
+
+| Label | Positive | Negative | Unknown |
+|---|---|---|---|
+| diabetes | 8,049 | 45,568 | 2,636 |
+| diabetes, fasting subsample | 3,826 | 20,109 | 32,318 |
+| hypertension | 22,257 | 31,943 | 2,053 |
+| hypertension, 130/80 | 28,441 | 25,816 | 1,996 |
+| kidney markers | 8,413 | 34,839 | 13,001 |
+| anaemia | 4,741 | 47,139 | 4,373 |
+| high cholesterol | 20,620 | 29,180 | 6,453 |
+| osteoporosis (age 50 and over) | 2,415 | 34,770 | 19,068 |
+| depression | 3,164 | 33,030 | 20,059 |
+| sleep trouble | 9,886 | 30,494 | 15,873 |
+| undiagnosed diabetes | 1,335 | 45,568 | 9,350 |
+| undiagnosed hypertension | 3,896 | 31,943 | 20,414 |
+| undiagnosed kidney markers | 6,097 | 31,990 | 18,166 |
+| undiagnosed high cholesterol | 3,421 | 29,180 | 23,652 |
+
+Deaths with a diabetes or hypertension mention: 971 and 1,325 of 8,355; one
+death has no multiple-cause data.
