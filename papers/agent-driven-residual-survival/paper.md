@@ -556,7 +556,7 @@ By the rule of section 4.5 (a gap of at most 0.25 years and a slope in
 the gap. The mean predicted and observed 10-year RMST are 9.51 and 9.53 years
 for the best models. Repeats 1 and 2 give the same figures within 0.005 years
 of gap. This is not a strong test of the models: the 10-year RMST is within 0.1
-years of its ceiling for six of ten risk groups, where nothing can be wrong
+years of its ceiling for five of ten risk groups, where nothing can be wrong
 by much, and the discriminating information sits in the first two groups
 (predicted 6.9 and 9.1 years for the full-input model, observed 6.9 and 9.2).
 
@@ -564,12 +564,15 @@ by much, and the discriminating information sits in the first two groups
 life table gives the same expected time over 10 years. The table is fitted per
 sex to the training subjects of the subject's fold by weighted maximum
 likelihood with delayed entry, so nothing about a test subject touches it.
-Ages are clamped to 18 to 85 and the clamps counted: 5% to 6% of subjects (1,356
-to 1,381 of 23,097 for the full-input models) have a predicted expectation above
-what any age in that range gives, which is to say they are healthy enough that
-10 years of follow-up cannot tell them apart. For these subjects the
-equivalent age is a bound, not a measurement, and an acceleration near zero
-below about age 40 should not be read.
+Ages are clamped to 18 to 85 and the clamps counted: 6% of subjects (1,356 of
+23,097 for the full-input Cox model) fall outside the table's range. They sit
+at both ends: 5% to 7% of subjects under 30 are healthier than any age in the
+range can express, so their equivalent age is the lower bound, and 41% of
+those aged 80 and over (10% of the seventies) have an expectation below that of
+an 85-year-old, so theirs is the upper bound. For these subjects the
+equivalent age is a bound and not a measurement, and the acceleration of the
+oldest in particular is censored from above; the hazard ratios below mix
+measured and bounded values and should be read with that in mind.
 
 The association of the acceleration (equivalent age minus age) with outcomes
 over the whole follow-up, by Cox models adjusted for age and sex, with survey
