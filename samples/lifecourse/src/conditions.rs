@@ -191,7 +191,7 @@ fn phq9(p: &impl Lookup) -> Option<f64> {
 /// Any criterion positive is positive; all defining criteria observed and
 /// negative is negative; anything else is unknown.
 fn any_of(criteria: &[Option<bool>], defining: &[bool]) -> Option<bool> {
-    if criteria.iter().any(|c| *c == Some(true)) {
+    if criteria.contains(&Some(true)) {
         Some(true)
     } else if defining.iter().all(|d| *d) {
         Some(false)
