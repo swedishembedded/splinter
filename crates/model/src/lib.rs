@@ -26,6 +26,8 @@
 //!   dataset file against brain's own parser before it is stored.
 //! * [`stats`] - brain's paired sign test, which a release decision rests
 //!   on.
+//! * [`speech`] - speech in and out around a text model: recognition,
+//!   synthesis, one turn of the cascade, and what a round trip loses.
 //! * [`error`] - why a model could not be loaded, reached or trained.
 //!
 //! Every other crate reaches the model through these types, and these types
@@ -43,6 +45,7 @@ pub mod report;
 pub mod residency;
 pub mod rl;
 pub mod selection;
+pub mod speech;
 pub mod stats;
 pub mod timeline;
 pub mod tokens;

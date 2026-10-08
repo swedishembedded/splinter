@@ -57,6 +57,7 @@ splinter-jefferson = "sample"
 splinter-adams = "sample"
 splinter-lifecourse = "sample"
 splinter-health = "sample"
+splinter-voice-loop = "sample"
 splinter-agent-loop = "sample"
 
 [brain]

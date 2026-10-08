@@ -31,6 +31,18 @@ pub enum PolicyError {
         /// brain's error.
         reason: String,
     },
+    /// Speech could not be recognised.
+    #[error("recognising speech: {reason}")]
+    Transcription {
+        /// What went wrong.
+        reason: String,
+    },
+    /// Text could not be spoken.
+    #[error("speaking: {reason}")]
+    Synthesis {
+        /// What went wrong.
+        reason: String,
+    },
     /// A path brain must be given as UTF-8 is not.
     #[error("{path} is not valid UTF-8")]
     NotUtf8 {

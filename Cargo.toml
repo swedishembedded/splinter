@@ -13,6 +13,7 @@ members = [
     "samples/jefferson",
     "samples/lifecourse",
     "samples/tool-syntax",
+    "samples/voice-loop",
 ]
 
 [workspace.package]
@@ -40,7 +41,7 @@ sven-sdk = { git = "https://github.com/swedishembedded/sven" }
 # sven's trajectory format, the one type of sven's that Splinter's vocabulary
 # holds; `sven-sdk` re-exports it, and it depends on no other sven crate.
 atif = { git = "https://github.com/swedishembedded/sven" }
-brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study", "timeline"] }
+brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study", "timeline", "audio"] }
 
 splinter-core = { path = "crates/core" }
 splinter-eval = { path = "crates/eval" }
