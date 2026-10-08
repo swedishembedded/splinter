@@ -1185,7 +1185,7 @@ python -I samples/lifecourse/baselines/run.py ... --train-ids <data>/recipe/_sub
 splinter-lifecourse recipe score --data <data> --name spline-cox-net-all-p25 --made-of "..."
 # learning from accepted runs, and judging the candidate
 agent-loop dataset --run <accepted run> ... --out train.jsonl
-agent-loop train --dataset train.jsonl --base local:Qwen/Qwen3-8B --steps 60 --rank 16
+agent-loop train --dataset train.jsonl --base local:Qwen/Qwen3-8B --steps 30 --rank 16
 samples/agent/loop/fixtures/eval-candidate.sh <out> <model-ref> anagrams:1 bisect:1 ...
 # secondary estimands: the multiple-cause flags beside the timelines, then death by cause (T1)
 splinter-lifecourse build --nhanes <nhanes> --mortality <mortality> --data <new dir>   # timelines.jsonl identical to the frozen one
@@ -1312,3 +1312,96 @@ undiagnosed labels) a subject outside the screened population.
 
 Deaths with a diabetes or hypertension mention: 971 and 1,325 of 8,355; one
 death has no multiple-cause data.
+
+## Appendix E. Training details
+
+Everything a model was given and how it was fitted, from the code at the
+revisions of section 8. Software: scikit-learn 1.9.1, scikit-survival 0.28.0,
+NumPy 2.5.3, SciPy 1.18.1, PyTorch 2.14.1 (CUDA 13), lifelines 0.30.3, pandas
+2.3.3; the survival and screening arithmetic is brain's `survival` crate.
+Training is unweighted everywhere; every metric is survey-weighted. The seed of
+fold *k* of repeat *r* is 20261006 + 100*r* + *k* for the Python baselines.
+
+**Shared preprocessing** (all Python models, fitted on the training subjects of
+the fold only). Numeric inputs: missing values replaced by the training median
+(zero for a column missing throughout); a column that is non-negative and has a
+training skewness above 2 is replaced by log(1 + x); each is then standardised
+by the training mean and standard deviation and clipped to plus or minus 6.
+A missingness indicator is added for each column that has a missing value in the
+training subjects. Categorical answers are one-hot encoded over the levels
+present in the training subjects, with a level for a missing answer. The
+inputs of a model set are the `all` set (every examination concept, the
+eating-time features, the years since each recalled diagnosis and the recalled
+weights), the `standard` set (age, systolic and diastolic pressure, total and
+HDL cholesterol, HbA1c, body-mass index, sex, smoking and the told-diagnosis
+answers for diabetes, heart attack, coronary disease, stroke and heart failure),
+or age and sex.
+
+**Cox family.** Elastic-net Cox (scikit-survival `CoxnetSurvivalAnalysis`):
+l1 ratio in {0.01, 0.5}, a path of 40 penalties down to 1e-4 of the largest,
+at most 100,000 iterations, tolerance 1e-7. A seeded 20% share of the training
+subjects is held out; the l1 ratio and the penalty with the best partial
+likelihood on it are chosen, and the model is refitted on all training subjects
+along the path down to that penalty. The baseline hazard is Breslow's; the
+cumulative incidence at years 1 to 15 is 1 - exp(-H0(t) exp(lp)). The
+cause-specific model fits one such model per cause, the others censoring, on a
+monthly grid, and joins them by the Aalen-Johansen formula. The spline Cox model
+replaces each continuous column by a cubic B-spline basis with five knots at
+quantiles of the training column (the end ones included) and constant
+extrapolation outside the training range; indicator and one-hot columns pass
+through.
+
+**Other baselines.** Inverse-weighted logistic: a logistic regression for death
+by 5, 10 and 15 years (or each year), each subject weighted by the inverse of
+the Kaplan-Meier probability of remaining uncensored, fitted on the cycles
+followed that long; the inverse penalty is chosen from {0.001, 0.01, 0.1, 1} on
+the validation share (3,000 iterations at most), and the curve is joined by a
+monotone interpolation. Gradient-boosted survival (`GradientBoostingSurvivalAnalysis`,
+Cox loss): at most 300 trees of depth 3, learning rate 0.1 (0.25 for the fast
+variant), subsample 0.5, at least 50 subjects per leaf, half the features per
+split; the number of trees is chosen on the validation share.
+
+**Deep encoder and additive model** (brain's `horizon`, `TimelineSpec`). Hazards
+are piecewise exponential on 16 knots (0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12,
+14, 16, 18, 21 years). At most 96 tokens per subject, batch 256, at most 6,000
+steps, peak learning rate 1e-3 with a warm-up of one fortieth of the steps and a
+decay to a tenth, weight decay 0.1 (fixed by brain), evaluation every 100 steps,
+patience 8 evaluations, the best checkpoint kept. One subject in ten (by a
+hash of the seed and the id) is held out for early stopping and never trained
+on. The default encoder has width 64, two layers, four heads, feed-forward
+width 128, rank 32, 16 value bins and 8 time bins, a masked-value objective at
+mask rate 0.3 and weight 0.2. The additive model is the same pipeline with the
+interactions removed (about 16 thousand parameters). The age-sex and standard
+arms are the additive model on those inputs. The learning-curve recipes change
+only the share of training subjects, taken as a hash of the seed and the id so
+that a smaller share lies inside a larger.
+
+**Residual networks** are specified in section 4.7 (and 4.8 for the series
+network): partial likelihood with Breslow ties, AdamW at 1e-3, weight decay
+1e-4, dropout 0.1, at most 300 full-batch epochs in double precision for the
+tabular network (single precision for the series network), the number of epochs
+chosen on a 20% validation share and the model refitted on all training subjects.
+The series network is a convolution (2 to 16 channels, width 9, stride 2), a
+rectifier and dropout, a second convolution (16 to 32 channels), a rectifier,
+global mean and maximum pooling, and a linear head with zero weights.
+
+**Secondary estimands.** Flag models: one elastic-net Cox model for death with
+the mention and one for death without it, per flag, as above; the share model is
+a logistic regression with an L2 penalty (six strengths, three-fold
+cross-validation by log-loss, 2,000 iterations) on the training decedents with
+multiple-cause data. Condition models: the logistic models use the same
+cross-validated penalty; the tree models are scikit-learn
+`HistGradientBoostingClassifier` with 300 iterations, learning rate 0.05, early
+stopping on a 15% share and the fold's seed; the age-sex and age-BMI references
+are logistic regressions with the library's default L2 penalty (strength 1, 1,000 iterations). Models are fitted on the
+training subjects whose label is known. The screening threshold is the lowest
+score with at least 90% specificity among the training subjects on
+cross-fitted predictions (three stratified folds). The Gompertz life tables are
+fitted per sex by weighted maximum likelihood with delayed entry on the training
+subjects of the fold.
+
+**The adapter of section 5.4.** Base `Qwen/Qwen3-8B`, a low-rank adapter of rank
+16 and scaling 32, 30 optimiser steps of two records each, seed 1, weight decay 0,
+the base held at full precision, no-think mode, the loss on the single assistant
+turn that carries the accepted patch; the learning rate was not set and is
+brain's default for its low-rank fine-tune (3e-4).

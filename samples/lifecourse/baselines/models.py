@@ -192,7 +192,7 @@ class SplineCoxNet:
     keeps a value far outside the training range at the basis value at the
     edge, so it cannot explode."""
 
-    N_KNOTS = 5  # four interior knots at quantiles
+    N_KNOTS = 5  # five knots at quantiles of the training column, the end ones included
 
     def __init__(self, inputs):
         self.inputs, self.name = inputs, f"spline-cox-net-{inputs}"
