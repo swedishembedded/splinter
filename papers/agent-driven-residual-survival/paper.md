@@ -41,8 +41,11 @@ models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
 a residual neural network, was not delivered by the agent in five attempts
-(two runs) and is reported as not done. The same single examination was then
-asked five further questions under rules fixed beforehand: it predicts death
+(two runs); written and run by the supervisor under a rule fixed beforehand, it
+did not improve on the spline Cox model (integrated Brier score -0.00008,
+interval -0.00030 to +0.00015, against the 0.001 the rule required). The same
+single examination was then asked further questions under rules fixed
+beforehand: it predicts death
 by cause (the full input set beats the conventional risk factors for
 cardiovascular, cancer and other deaths), death with a diabetes mention on the
 certificate beyond who dies (and a hypertension mention not at all), expected
@@ -1024,9 +1027,10 @@ pooled out-of-fold predictions of repeat 0 with a cluster bootstrap the figure i
 ten years on both analyses and the integrated difference does not survive the
 second. Failing to find a gain is not proof that
 none exists: our power to resolve a true difference of 0.001 is limited
-(section 3 and the audit in Appendix B), and the residual-network experiment,
-the one that would test "is there structure the additive model misses",
-was not completed (section 5.1). What can be said is narrower and still
+(section 3 and the audit in Appendix B), and the residual-network experiment, the
+one that tests "is there structure the additive model misses", was not delivered
+by the agent (section 5.1) and was run by the supervisor (section 5.11): a negative
+result for one network, one recipe and this sample size. What can be said is narrower and still
 useful: three differently built learners (a nonlinear Cox model, a logistic
 model with inverse-probability-of-censoring weights, and a piecewise-
 exponential additive model) land within 0.0005 of one another, and the deep
@@ -1134,13 +1138,16 @@ local evaluation on unseen tasks was run.
   experiment trained on nine accepted runs, seven of which are the same task.
   Nothing here shows general autonomy.
 * The residual-network experiment and the calibration-curve additions
-  (integrated calibration index, E50 and E90) were specified and not delivered.
-  The audit of the calibration code found no defect in the censoring-aware
-  quantities but did find that no summary of the curve was reported.
+  (integrated calibration index, E50 and E90) were specified for the agent and
+  not delivered by it; the supervisor wrote and ran them (sections 5.5 and 5.11).
+  The residual network is one architecture, one set of optimiser settings and
+  one training seed per fold, on 38,000 training subjects; the audit of the
+  calibration code had found no defect in the censoring-aware quantities but
+  that no summary of the curve was reported, which the new summaries address.
 
 ## 8. Reproducibility
 
-Code revisions: brain f5cde671, sven d4ddb0c, splinter at the commit that
+Code revisions: brain b7997074, sven a6751d7, splinter at the commit that
 contains this file (`git log -1 -- papers/agent-driven-residual-survival/paper.md`).
 Data: the lifecourse build described in `samples/lifecourse/README.md`
 (timelines, partition and frozen criteria are content-addressed in
@@ -1173,6 +1180,17 @@ splinter-lifecourse causes --data <data> --model cs-cox-agesex --model cs-cox-st
 # T2: death with a diabetes or hypertension mention
 python -I samples/lifecourse/baselines/flags.py --data <data> --out <data>/baselines --model flag-cox-all --model flag-share-all --jobs 16
 splinter-lifecourse flags --data <data> --ranker cs-cox-all --model flag-cox-all --model flag-share-all --repeat 0
+# the residual network (repeat 0 sweep, repeats 1-4 confirmation), its ablations and control, pooled commands
+python -I samples/lifecourse/baselines/run.py --data <data> --out <data>/baselines --baseline resnet-cox-all-w64-l2 --repeat 1 --repeat 2 --repeat 3 --repeat 4 --jobs 16
+splinter-lifecourse compare --data <data> --a external:resnet-cox-all-w64-l2 --b external:spline-cox-net-all --repeat 1 --repeat 2 --repeat 3 --repeat 4
+splinter-lifecourse bootstrap --data <data> --a resnet-cox-all-w64-l2 --b spline-cox-net-all --repeat 1
+splinter-lifecourse calibration --data <data> --model cs-cox-all --repeat 0
+# the accelerometer: summaries, series grid, the four arms on the restricted folds
+python -I samples/lifecourse/baselines/accel.py --zip <PAXRAW_C.zip> --zip <PAXRAW_D.zip> --out <data>/accel.jsonl --sequences-out <data>/accel_seq.npz
+python -I samples/lifecourse/baselines/accel_experiment.py --data <data> --out <data>/baselines --jobs 16
+splinter-lifecourse external --data <data> --baseline accel-seq --subset
+# learning curves on repeats 1-4 (CPU baselines, then the deep recipes under the GPU lock), then the analysis
+python -I samples/lifecourse/baselines/curves.py --data <data> --bootstrap 500
 # T3: expected time lived, mortality-equivalent age, and its association with outcomes
 splinter-lifecourse labels --nhanes <nhanes> --data <data>
 python -I samples/lifecourse/baselines/conditions.py --data <data> --out <data>/conditions --jobs 16
