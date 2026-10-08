@@ -91,7 +91,7 @@ resampling loop. No architecture search against the same folds.
 - [ ] A check that a marginal censoring curve is adequate when censoring depends on the predictors: not done (here censoring is administrative and depends on the survey cycle, which the horizon restriction handles)
 
 ### M4 Data and external validation
-- [ ] External examination data for the older cohort (NHANES III) is not on disk: only a drug file and the mortality file. The examination files were not located at a stable address; recorded as blocked
+- [ ] External examination data for the older cohort (NHANES III) is not on disk: only a drug file and the mortality file. Two candidate addresses for the examination file returned not-found and no further search was made; recorded as blocked
 - [x] Activity-monitor minute data acquired: 2003-04 (428 MB zip, 2.5 GB expanded) and 2005-06 (471 MB, 3.0 GB), integrity tested, recorded in the resource manifest. Not extracted or used: the long-sequence experiment needs a derivation of daily summaries and a sequence encoder in brain, which did not fit this session
 - [ ] Access checklist for repeated-measure cohorts, with the one question each custodian must answer about distributing derived weights (user action; nothing was requested)
 
