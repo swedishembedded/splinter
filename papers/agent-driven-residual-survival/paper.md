@@ -36,7 +36,8 @@ without splines when all inputs are used (difference in integrated Brier
 score -0.00013, 95% interval -0.00057 to +0.00031), and a deep set encoder
 over the same inputs is worse than it (+0.00111, +0.00019 to +0.00204 by the
 corrected t-test; +0.00071, -0.00011 to +0.00155 by a pooled cluster bootstrap on
-one repeat, which resolves the gap only at ten years). Learning curves over five cross-validation repeats show the Cox
+one repeat, which resolves the gap only at ten years; a three-seed ensemble of the
+encoder is +0.00018, -0.00081 to +0.00118, not distinguishable from it). Learning curves over five cross-validation repeats show the Cox
 models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
@@ -497,6 +498,20 @@ piecewise-exponential model is +0.00054 [+0.00001, +0.00107] and +0.00108
 +0.00071 [-0.00011, +0.00155] and +0.00106 [+0.00031, +0.00184]. The deep
 encoder's integrated gap of 0.0011 in the fold analysis is therefore smaller and
 unresolved in this one; at ten years it is resolved in both.
+
+*Seeds and an ensemble.* The deep encoder of the table is the `horizon` arm
+trained once. Training the default recipe again with three seeds on all 25 folds
+(the recipe path of section 5.3, one seed each) gives integrated Brier
+differences from the spline Cox model of +0.00096 [-0.00013, +0.00205],
++0.00093 [-0.00044, +0.00230] and +0.00136 [+0.00021, +0.00250]: a gap of about
+0.001 that one seed in three resolves, with a seed-to-seed spread of 0.0004. The
+equal-weight average of the three seeds' predicted curves is +0.00018 [-0.00081,
++0.00118]: indistinguishable from the spline Cox model, and not ahead of it, which
+the rule would require by 0.001. At ten years the ensemble is +0.00047
+[-0.00026, +0.00120] by the fold test and +0.0003 to +0.0007 by the pooled
+bootstrap on each repeat (resolved on one repeat of five). So the deep encoder's
+deficit is mostly variance between training runs, which averaging removes, and no
+average of seeds beats the additive model.
 
 ### 5.3 Learning curves
 
