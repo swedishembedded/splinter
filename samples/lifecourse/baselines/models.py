@@ -268,10 +268,10 @@ class CauseSpecificCox:
         return cumulative_incidence(dh)
 
 
-def cumulative_incidence(dh):
+def cumulative_incidence(dh, names=CODES):
     """All-cause and per-cause cumulative incidence at years 1..15 from
-    cause-specific hazard increments on the monthly grid [n, months, causes],
-    each month's hazards held constant within it."""
+    cause-specific hazard increments on the monthly grid [n, months, causes]
+    (the causes named `names`), each month's hazards held constant within it."""
     total = dh.sum(axis=2)
     surv_end = np.exp(-np.cumsum(total, axis=1))
     surv_start = np.concatenate([np.ones((dh.shape[0], 1)), surv_end[:, :-1]], axis=1)
@@ -280,7 +280,7 @@ def cumulative_incidence(dh):
     inc = (surv_start * (1.0 - np.exp(-total)))[:, :, None] * share
     cif = np.cumsum(inc, axis=1)
     at = YEARS * MONTHS_PER_YEAR - 1  # increments index m covers month m+1
-    per_cause = {code: cif[:, at, k] for k, code in enumerate(CODES)}
+    per_cause = {name: cif[:, at, k] for k, name in enumerate(names)}
     return per_cause_sum(per_cause), per_cause
 
 

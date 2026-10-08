@@ -147,7 +147,7 @@ pub fn requirements(c: &Criteria, pinned: &[u32]) -> Vec<Requirement> {
     v
 }
 
-fn cluster(d: &crate::build::Design) -> u64 {
+pub(crate) fn cluster(d: &crate::build::Design) -> u64 {
     (d.cycle as u64) * 1_000_000 + d.stratum * 100 + d.psu
 }
 

@@ -35,6 +35,7 @@ mod causes;
 mod commands;
 mod compare;
 mod concepts;
+mod contributing;
 mod diet;
 mod ensemble;
 mod experiment;
@@ -162,6 +163,25 @@ enum Command {
         /// Score the prediction files first (otherwise earlier scores are read).
         #[arg(long)]
         score: bool,
+    },
+    /// Secondary (T2): death with diabetes or hypertension listed on the
+    /// certificate, from pooled out-of-fold predictions of one repeat.
+    Flags {
+        /// The build's output directory (with `causes.jsonl`).
+        #[arg(long)]
+        data: PathBuf,
+        /// Baselines whose files carry `flag_cif` (`baselines/flags.py`).
+        #[arg(long, required = true)]
+        model: Vec<String>,
+        /// Baselines whose all-cause incidence is used as a ranker: the control.
+        #[arg(long, required = true)]
+        ranker: Vec<String>,
+        /// The repeat whose folds are pooled.
+        #[arg(long, default_value_t = 0)]
+        repeat: usize,
+        /// Skip the cluster bootstrap (point estimates only).
+        #[arg(long)]
+        no_intervals: bool,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
@@ -412,6 +432,13 @@ fn main() -> Result<()> {
             reference,
             score,
         } => cause_metrics::run(&data, &model, &reference, score),
+        Command::Flags {
+            data,
+            model,
+            ranker,
+            repeat,
+            no_intervals,
+        } => contributing::run(&data, &model, &ranker, repeat, !no_intervals),
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
