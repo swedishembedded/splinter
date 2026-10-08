@@ -260,8 +260,15 @@ pub enum CalibrationBasis {
 pub struct Calibration {
     /// Recalibration slope.
     pub slope: f64,
-    /// Recalibration intercept.
+    /// Recalibration intercept. It is read at a predicted risk of one half, so a
+    /// slope away from one moves it a long way for the risks a cohort really has:
+    /// the average risk is judged by `intercept_in_the_large`.
     pub intercept: f64,
+    /// Calibration in the large: the intercept with the slope fixed at one, the
+    /// shift in log-odds that makes the average predicted risk the observed one.
+    /// Absent when the evaluation that produced the record did not measure it.
+    #[serde(default)]
+    pub intercept_in_the_large: Option<f64>,
     /// Observed (Aalen-Johansen) over expected.
     pub oe: f64,
     /// Expected calibration error over the risk groups.
@@ -364,6 +371,7 @@ impl Comparison {
                     if let Some(c) = &h.calibration {
                         put("slope", Some(c.slope));
                         put("intercept", Some(c.intercept));
+                        put("intercept_in_the_large", c.intercept_in_the_large);
                         put("oe", Some(c.oe));
                         put("ece", Some(c.ece));
                     }

@@ -228,7 +228,7 @@ pub fn plan_for(calibrated: &[&str]) -> TimelinePlan {
         improve_nll: true,
         calibration: CalibrationBands {
             slope: (0.7, 1.4),
-            intercept: (-0.5, 0.5),
+            intercept_in_the_large: (-0.5, 0.5),
             oe: (0.8, 1.25),
             max_ece: 0.05,
         },

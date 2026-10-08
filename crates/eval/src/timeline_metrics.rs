@@ -64,7 +64,8 @@ fn at(horizon: Option<f64>) -> String {
     horizon.map_or_else(String::new, |h| format!(":h{h}"))
 }
 
-/// An arm's own metric (`uno_c`, `auc`, `brier`, `slope`, `intercept`, `oe`,
+/// An arm's own metric (`uno_c`, `auc`, `brier`, `slope`, `intercept`,
+/// `intercept_in_the_large`, `oe`,
 /// `ece`, `ibs`) for `code`, at `horizon` or over the whole grid (`None`).
 #[must_use]
 pub fn arm_metric(arm: Arm, code: &str, horizon: Option<f64>, metric: &str) -> String {
@@ -102,8 +103,12 @@ pub fn subgroup_events(subgroup: &str, code: &str) -> String {
 pub struct CalibrationBands {
     /// The recalibration slope (1 when calibrated).
     pub slope: (f64, f64),
-    /// The recalibration intercept (0 when calibrated).
-    pub intercept: (f64, f64),
+    /// Calibration in the large: the log-odds shift that makes the average
+    /// predicted risk the observed one (0 when calibrated). It replaces the
+    /// two-parameter recalibration intercept, which is read at a predicted risk
+    /// of one half and so measures the slope error as much as the average risk;
+    /// a plan written with `intercept` is refused when read, not reinterpreted.
+    pub intercept_in_the_large: (f64, f64),
     /// Observed over expected (1 when calibrated).
     pub oe: (f64, f64),
     /// The most the expected calibration error may be.
@@ -187,7 +192,10 @@ impl TimelinePlan {
                     hi,
                 };
                 calibration.push(within("slope", bands.slope));
-                calibration.push(within("intercept", bands.intercept));
+                calibration.push(within(
+                    "intercept_in_the_large",
+                    bands.intercept_in_the_large,
+                ));
                 calibration.push(within("oe", bands.oe));
                 calibration.push(within("ece", (0.0, bands.max_ece)));
             }
@@ -238,7 +246,7 @@ mod tests {
             improve_nll: true,
             calibration: CalibrationBands {
                 slope: (0.8, 1.25),
-                intercept: (-0.4, 0.4),
+                intercept_in_the_large: (-0.4, 0.4),
                 oe: (0.8, 1.25),
                 max_ece: 0.05,
             },
@@ -274,6 +282,36 @@ mod tests {
             r,
             Requirement::Within { value, .. } if value.starts_with("candidate:death:cvd:h")
         )));
+    }
+
+    #[test]
+    fn the_gate_judges_the_average_risk_and_not_the_two_parameter_intercept() {
+        let spec = plan().spec();
+        let named = |metric: &str| {
+            spec.calibration.iter().any(|r| {
+                matches!(r, Requirement::Within { value, .. }
+                    if value == &arm_metric(Arm::Candidate, "death:cvd", Some(5.0), metric))
+            })
+        };
+        assert!(named("intercept_in_the_large"));
+        assert!(
+            !named("intercept"),
+            "the intercept read at a risk of one half is reported, not gated"
+        );
+    }
+
+    #[test]
+    fn a_plan_written_with_the_old_intercept_band_is_refused_not_reinterpreted() {
+        let old = r#"{"slope":[0.8,1.25],"intercept":[-0.4,0.4],"oe":[0.8,1.25],"max_ece":0.05}"#;
+        let err = serde_json::from_str::<CalibrationBands>(old)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("intercept_in_the_large"), "{err}");
+        let new = r#"{"slope":[0.8,1.25],"intercept_in_the_large":[-0.4,0.4],"oe":[0.8,1.25],"max_ece":0.05}"#;
+        assert_eq!(
+            serde_json::from_str::<CalibrationBands>(new).unwrap(),
+            plan().calibration
+        );
     }
 
     #[test]

@@ -90,7 +90,16 @@ fn scoring_is_measured_paired_reproducible_and_absent_where_unmeasured() {
     assert!(evidence
         .intervals
         .contains_key(&diff_metric("death:any", Some(6.0), "uno_c")));
-    for metric in ["uno_c", "auc", "brier", "slope", "intercept", "oe", "ece"] {
+    for metric in [
+        "uno_c",
+        "auc",
+        "brier",
+        "slope",
+        "intercept",
+        "intercept_in_the_large",
+        "oe",
+        "ece",
+    ] {
         let name = arm_metric(Arm::Candidate, "death:a", Some(6.0), metric);
         assert!(evidence.values[&name].is_finite(), "{name}");
     }
@@ -189,6 +198,11 @@ fn brains_evaluation_of_a_code_is_what_the_union_view_computes_independently() {
         );
         close(Some(bc.slope), Some(oc.slope), "slope");
         close(Some(bc.intercept), Some(oc.intercept), "intercept");
+        close(
+            bc.intercept_in_the_large,
+            oc.intercept_in_the_large,
+            "calibration in the large",
+        );
         close(Some(bc.oe), Some(oc.oe), "observed over expected");
         close(Some(bc.ece), Some(oc.ece), "ece");
     }

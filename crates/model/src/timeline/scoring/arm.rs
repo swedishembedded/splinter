@@ -334,6 +334,7 @@ fn calibration_of(cal: &brain::survival::calibration::HorizonCalibration) -> Opt
     Some(Calibration {
         slope: finite(cal.slope)?,
         intercept: finite(cal.intercept)?,
+        intercept_in_the_large: finite(cal.intercept_in_the_large),
         oe: finite(cal.oe_ratio)?,
         ece: cal.ece(),
     })
@@ -394,6 +395,7 @@ fn score_code(pred: &Predicted, out: &Outcomes, v: usize, spec: &ScoreSpec) -> V
                 .map(|(((slope, intercept), oe), ece)| Calibration {
                     slope,
                     intercept,
+                    intercept_in_the_large: m.calibration.intercept_in_the_large,
                     oe,
                     ece,
                 }),
