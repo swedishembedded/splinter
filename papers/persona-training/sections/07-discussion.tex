@@ -10,12 +10,13 @@ about something other than the claim (the gate's improvement on paraphrases of t
 tasks; an effect of the prompt credited to the fine-tune). Once those are set aside, the
 remaining evidence on the adapters from the earlier exams is a set of point estimates at or
 above the prompted base that those exams cannot separate from chance; the larger pilots of
-\cref{sec:frozen,sec:deployed} can, and they give two null and two positive results. A power calculation shows this without any
+\cref{sec:frozen,sec:deployed} and the full runs of \cref{sec:full} can, and they give two null
+and two positive pilot results, of which the full runs repeat the two positive ones at smaller size. A power calculation shows this without any
 run: seven families, one vote each, cannot reject at $\alpha=0.05$ unless every discordant
 family goes the same way and there are at least five of them.
 
 \paragraph{What the data support about the adapter.}
-Four statements are supported. (i) On the Jefferson task sets a persona prompt alone cuts the
+Five statements are supported. (i) On the Jefferson task sets a persona prompt alone cuts the
 answers with invented specifics sharply (\cref{tab:prompt}), so a fine-tune must be compared
 with the prompted base, not the unprompted one. (ii) On the earlier exams no candidate is distinguishable from the
 prompted base. (iii) On the 155-task, 25-family pilot of the reserved exam the v7 candidate
@@ -25,9 +26,14 @@ $p=0.21$), whereas the ablation candidate under it is judged right on 11.0 point
 base. (iv) Two further candidates, run with the deployed arm only and paired with the v7
 pilot's prompted arm (\cref{sec:deployed}), give +8.4 points for e1 (trained on the v7 data
 under the corrected recipe; family-level $p=0.018$, task-level $p=0.005$) and +4.8 for e4
-(template voice rows; $p=0.30$). The positive results therefore concern adapters used together
+(template voice rows; $p=0.30$). (v) On the whole exam (242 tasks, 38 families) the two positive candidates under the persona
+prompt are judged right on 9.1 points (ablation, $p=0.0033$) and 7.0 points (e1, $p=0.022$) more
+tasks than the prompted base; only the first survives a Bonferroni factor of four for the
+candidates examined on the reserved exam, and neither adapter asked without the prompt is
+distinguishable from the base or exceeds the prompted base (+0.8 and +2.1 points against the
+base; $-3.3$ and $-2.1$ against the prompted base). The positive results therefore concern adapters used together
 with the prompt: the ablation and e1 are positive, v7 and e4 are not. Each is one candidate, one seed
-and a subset of the final test, and none shows that the
+and the full runs contain the pilot they were chosen after, and none shows that the
 author's positions or prose were internalised: the data contain no measurement of that, and the
 prompt alone does not raise the share judged right, nor does the adapter alone (for the
 two four-arm candidates; the other two were not run without the prompt). Two observations are consistent with expectations from the literature but do
@@ -77,9 +83,12 @@ ablation candidate was among the candidates examined on those sets, and the rese
 were run for four candidates, all chosen after earlier exams (e4 after its set-B exam, e1 as the
 corrected-recipe retraining of v7's data); a correction over the four pilot candidates
 (\cref{sec:deployed}) does not account for the larger set of candidates and recipes examined
-before them, so the positive pilot results are those of selected candidates. In
-the powered exam's protocol the pilot families are a subset of the final test, so a final
-result will not be fully unseen.
+before them, so the positive pilot results are those of selected candidates. The full runs
+(\cref{sec:full}) are of the two candidates with positive pilots, on an exam that contains the
+pilot's tasks (64\% of its tasks) and families, so they are not an independent replication of
+the pilots: the part of the exam outside the pilot, which is, is too small to resolve the leads
+(87 tasks, 13 families). The Bonferroni factors reported there (two for the full runs, four for
+the reserved-exam candidates) cover only the candidates counted.
 
 \paragraph{Statistical validity.}
 Seven-unit family-level tests have the power shown in \cref{fig:power}. The family-level
@@ -96,7 +105,8 @@ monitoring), so no pair of rows in \cref{tab:exams} isolates a single change; v6
 ablation comes closest, and it also changes the number of steps. The judge changed between
 the e4 exam and the other exams on its task set. The deployed-arm pilots are paired with a
 prompted arm answered in a different run, which assumes that greedy answers and the judge are
-reproducible between runs; no arm was repeated to test that.
+reproducible between runs; the full runs repeated the pilot answers they re-answered word for
+word, which is evidence for that, not a test of the v7 pilot's prompted arm itself.
 
 \paragraph{External validity.}
 Two authors, both eighteenth-century American, writing in English, whose corpora are large
@@ -106,17 +116,21 @@ languages, modern authors, or authors with little text.
 \section{Limitations}\label{sec:limits}
 
 \begin{itemize}
-\item \textbf{Only pilots on the frozen exam.} Four candidates were run on the first 25 of its
+\item \textbf{No final test on the frozen exam.} Four candidates were run on the first 25 of its
   39 families (155 of 244 tasks; 147 for one), without the voice-likelihood stage, two of
   them with the deployed arm only (no base and no candidate-without-prompt arm, so no
   internalisation test and no Holm family for them) and compared with the prompted arm of
-  another run. An earlier run that
+  another run. The two with positive pilots were then run on all examinable tasks (242 of 244; the
+  two others are of a family the candidates were trained on), again without the voice stage. Those
+  runs contain the pilot and the candidates were chosen after it, so the exam has not been
+  used as a test of a candidate chosen without having seen it. An earlier run that
   included the stage answered and graded every task but was lost in the stage, which loaded
   the base in 32-bit floats (about 33~GB for an 8-billion-parameter model, on 24~GB cards)
   before the report was stored; the stage now stores the report first and fails as a recorded
-  error instead of a fault. No dev-suite selection and no final test has been run, one
+  error instead of a fault. No dev-suite selection and no final test as specified has been run, one
   seed was trained per recipe, and the pilots' power estimates for the full exam rest on
-  23 and 31 discordant tasks (two four-arm runs).
+  23 and 31 discordant tasks (two four-arm runs); the full runs' own minimum detectable
+  differences are 9.4 and 10.6 points, above their observed leads.
 \item \textbf{No human labels.} Judge agreement, kappa, false-right and false-wrong rates and
   length bias on real answers are not measured; no labels were collected.
 \item \textbf{No judge-free voice measurement.} The held-out text likelihood of each arm and
@@ -151,10 +165,13 @@ editions, an exam reserved before generation and sized by simulation, a judge wi
 and deterministic overrides, and a catalogue of defects with the measurement that exposed
 each. With those defects set aside, the evidence is that a persona prompt alone markedly
 reduces invented specifics on the Jefferson exams; that no candidate is statistically
-distinguishable from the prompted base on the six small exams; and that on the pilot of the
+distinguishable from the prompted base on the six small exams; that on the pilot of the
 reserved exam (147 to 155 tasks, 24 or 25 families) two candidates under the persona prompt are
 judged right on 11.0 points more tasks than the prompted base ($p=0.004$) and on 8.4 points more
-($p=0.018$), two others on 4.5 and 4.8 points more ($p=0.21$ and $0.30$), while neither of the
-two that were run without the prompt exceeds the prompted base then. That the
-fine-tune carries the persona in its weights, or that the result holds on the full exam, is not
-established by this work.
+($p=0.018$), two others on 4.5 and 4.8 points more ($p=0.21$ and $0.30$); and that on the whole
+frozen exam (242 tasks, 38 families) the two positive candidates keep their lead at 9.1 and 7.0
+points ($p=0.0033$ and $0.022$; $0.013$ and $0.087$ after a factor of four for the candidates examined
+on the reserved exam), while neither, asked without the persona prompt, exceeds the base or the
+prompted base. That the fine-tune carries the persona in its weights is not established by
+this work, and the full exam, which contains the pilot and was run on candidates chosen after it,
+is not an independent test of them.

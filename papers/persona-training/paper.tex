@@ -40,7 +40,7 @@
 
 \title{Training a Language Model to Think Like a Historical Author\\
 from One Sentence and the Author's Own Writings:\\
-Pipeline, Evaluation Methodology and Pilot-Scale Results}
+Pipeline, Evaluation Methodology and Results}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
 \date{October 2026}
@@ -69,7 +69,7 @@ answers, a monitoring split that silently dropped 27\% of the author's voice rec
 training-loop mechanics (per-record loss normalisation, a learning rate that never
 annealed under early stopping, sampling with replacement).
 
-The results are pilot scale and do not establish an effect of fine-tuning. On six exams
+The results of the earlier exams are pilot scale. On six exams
 over three task sets (31--42 tasks, 6--7 families each) no candidate is distinguishable from
 the base model given the persona in its prompt: the family-level sign test against that arm
 has $p\geq0.109$ in every exam, and with at most seven families it could reach $\alpha=0.05$
@@ -99,9 +99,23 @@ $p=0.005$); the other, trained with template-prompted voice rows, on 35 against 
 147 (+4.8 points, interval $-1.8$ to $+11.6$; $p=0.30$ over families). Of the four
 candidates run on the reserved exam, two (the ablation and this corrected-recipe candidate,
 both with fixed-prompt voice rows) are positive at pilot scale, and two (v7, the same voice
-rows under the earlier recipe, and the template-voice-rows candidate) are not. All four were
-chosen after earlier exams, one seed was trained for each, the pilot families are a subset of
-the final test, and voice scoring was not run.
+rows under the earlier recipe, and the template-voice-rows candidate) are not.
+
+The two positive candidates were then run on the whole frozen exam with all four arms
+(242 of its 244 tasks over 38 of 39 families; the rest are the tasks of one family, two tasks,
+that the candidates were trained on), without voice scoring. Under the persona prompt the
+ablation was judged right on 80 tasks against 58 for the prompted base (+9.1 points, interval
+$+3.7$ to $+14.3$; 19 of 24 discordant families, $p=0.0033$) and the corrected-recipe
+candidate on 75 (+7.0 points, interval $+1.2$ to $+12.6$; 18 of 25 families, $p=0.022$). The
+first remains significant after a Bonferroni factor of four for the candidates examined on the
+reserved exam ($p=0.013$); the second does not ($p=0.087$), and its length-matched subset is not
+significant ($p=0.068$). Neither candidate asked without the persona prompt exceeds the base
+(50 and 53 against 48 of 242) or the prompted base (against 58), so the persona is not shown to
+be internalised. The full exam contains the pilot (64\% of its tasks), the candidates were
+chosen after the pilot and after earlier exams, and on the 87 tasks outside the pilot the leads
+(+5.7 and +4.6 points) are not significant ($p=0.19$ and $0.27$): the full runs repeat the
+direction of the pilots at smaller size and do not independently confirm them. One seed was
+trained per candidate, there are no human labels, and voice scoring was not run.
 \end{abstract}
 
 \input{sections/01-introduction}

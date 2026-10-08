@@ -41,7 +41,8 @@ splinter train DIALOGUES VOICE --steps 120 --records-per-step 8 --eval-every 15 
   --keep-evaluations
 splinter select CANDIDATE --exam-set DEV --judge local:Qwen/Qwen3-14B@4096 [--adopt]
 # the powered exam: base, prompted base, candidate, candidate under persona prompt
-# (the reported pilots used --pilot-families 25 --no-voice)
+# (the reported pilots used --pilot-families 25 --no-voice; the full runs
+# --no-voice without --pilot-families)
 splinter exam CANDIDATE --exam-set EXAM --resamples 1 [--pilot-families 25] \
   [--no-voice] --judge local:Qwen/Qwen3-14B@4096 \
   --prompt "to think like Thomas Jefferson" --json
@@ -60,14 +61,12 @@ or software-adapter line, one job per card.
 
 \paragraph{Building this paper.}
 \code{make} regenerates every table and plot data file from \code{data/} and builds
-\code{paper.pdf}. To update a result, edit its row in \code{data/exams.csv},
-\code{data/anchor.csv}, \code{data/training.csv}, \code{data/pilot.csv},
-\code{data/deployed.csv} or
-\code{data/power\_simulation.csv}; the script recomputes the exact sign tests and the
+\code{paper.pdf}. To update a result, edit its row in the file of its result under \code{data/} (\code{exams}, \code{anchor}, \code{training}, \code{pilot}, \code{deployed}, \code{full}, \code{full\_comparisons} or \code{power\_simulation}, each \code{.csv}); the script recomputes the exact sign tests and the
 task-level bounds, refuses an exam row whose logged $p$ does not match the exact value, an
 anchor row whose cells do not add up and a pilot row whose sign tests, Holm adjustment or
 difference do not match its counts, a deployed-arm row whose sign tests, difference or
-counts do not match, and prints the pilot tables for completed rows. A pilot row
+counts do not match, a full-run row whose sign tests, Holm adjustment, differences or outside-the-pilot counts do not
+match its counts, and prints the pilot tables for completed rows. A pilot row
 is produced from a run's report by \code{scripts/pilot\_row.py REPORT --arm NAME --description TEXT
 --power P --power-fpr F}, which recomputes the counts from the report's per-task records and
 refuses a report whose summary disagrees; $P$ and $F$ are the \code{planned} power and
@@ -77,7 +76,13 @@ REPORT --arm NAME --description TEXT --reference REPORT:ARM}, which pairs the re
 candidate under the persona prompt with the named arm of a four-arm report of the same exam by
 task, recomputes every count, test and the family-clustered bootstrap interval (10,000
 resamples, seed 1) from the per-task records, and refuses reports whose summaries disagree
-with their records or whose judge versions differ.
+with their records or whose judge versions differ. The rows of a full run are produced by
+\code{scripts/full\_row.py REPORT --arm NAME --description TEXT --pilot-report REPORT}, which
+appends to \code{data/full.csv} (the run, its judge, arms and the tasks outside the pilot) and
+\code{data/full\_comparisons.csv} (the primary and five secondary comparisons), recomputes the
+arm totals, discordant tasks, family wins and losses, length-matched tasks and exact sign tests
+from the per-task records, refuses a report whose summary disagrees, and counts the pilot's
+answers that the full run repeated word for word.
 Every number in the tables was checked against the run's report by recomputing it; the run
 reports themselves are not distributed with the paper, only the counts read from them.
 
@@ -93,13 +98,14 @@ Number & Source \\
 Pilot-scale exam counts, tests, judge versions and calibrations & Exam reports of each run (v6, ablation, v7, rehearsal, e4) and the exam line of the Adams run \\
 Frozen-exam pilots: counts, tests, intervals, discordance, ICC, hard controls (\cref{tab:pilot,tab:pilot-arms,tab:pilot-secondary,tab:pilot-design}) & The \code{ran} object of each run's \code{splinter exam --json} report (run identifiers in \code{data/pilot.csv}); counts and exact tests recomputed from its per-task records by \code{scripts/pilot\_row.py} \\
 Deployed-arm pilots (\cref{tab:deployed,tab:deployed-secondary}) & The \code{ran} object of each deployed-arm report and of the v7 pilot report, paired by task by \code{scripts/deployed\_row.py} \\
+Full frozen-exam runs (\cref{tab:full-arms,tab:full-primary,tab:full-secondary,tab:full-rest}) & The \code{ran} object of each full run's \code{splinter exam --json} report (run identifiers in \code{data/full.csv}) and of the pilot report it is compared with; counts and exact tests recomputed from the per-task records by \code{scripts/full\_row.py}; Bonferroni products computed by \code{scripts/build\_data.py} \\
 Frozen-exam power for 39 families & \code{splinter exam-set power --from-report} on each pilot report, 4,000 replicates, 500 resamples, seed 0 \\
 Gate improvement, anchor, serve & Release-gate reports of the v7, Adams and rehearsal candidates \\
 Anchor diagnostic and rescoring & Anchor evaluation reports of base and v7 candidate under the default prompt, rescored by a reimplementation of the corrected verifier \\
 Training curves and held-out scores & Training reports of each run (step, learning rate, monitoring loss, held-out loss and token accuracy); learning rates marked $^{*}$ in \cref{tab:training} from the command's default in the code of the time \\
 Stage timings, 19 of 1,629 parts & Task-stage summary of the v7 run \\
 Peak device memory & Sampled device memory during v7 training \\
-Frozen exam: 244 and 166 tasks, 155 pilot tasks & The exam manifests (tasks per family counted) \\
+Frozen exam: 244 and 166 tasks, 155 pilot tasks, 242 examined & The exam manifests (tasks per family counted) and the full runs' reports (\code{tasks\_in\_exam}, \code{tasks}, \code{families\_trained\_on}) \\
 Power simulations & \code{splinter exam-set power} (4,000 replicates, 500 resamples, seed 0), checked by an independent reimplementation \\
 Family-rule defects (3,005 letters, 413 exam families) & Whole-text overlap scans of the letters against the training materials \\
 Retrieval recall & Jefferson sample's retrieval measurement (70 situations) \\

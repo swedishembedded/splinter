@@ -25,7 +25,21 @@ go in data/deployed.csv, paired by task with the prompted arm of a four-arm repo
     python3 scripts/deployed_row.py REPORT --arm NAME --description TEXT \
         --reference REPORT:prompted >> data/deployed.csv
 
-The paper's pilot prose names the runs it discusses and is edited by hand.
+Runs of a candidate on every examinable task of the frozen exam (not a pilot) go in
+data/full.csv (the run, its judge, arms and the tasks outside the pilot) and
+data/full_comparisons.csv (the primary and the five secondary comparisons):
+
+    python3 scripts/full_row.py REPORT --arm NAME --description TEXT \
+        --pilot-report PILOT_REPORT
+
+which appends to both files, recomputes every count and exact test from the
+report's per-task records and refuses a report whose summary disagrees;
+PILOT_REPORT is the pilot run of the same candidate (its tasks are reported
+apart, and its answers are compared with the full run's). build_data.py
+recomputes the sign tests, the Holm adjustment and the Bonferroni products and
+refuses a row that does not match.
+
+The paper's prose names the runs it discusses and is edited by hand.
 
 Layout: paper.tex (preamble, abstract), sections/ (one file per section),
 references.bib, data/ (measured counts with their sources), scripts/.

@@ -380,6 +380,128 @@ def deployed_tables(deployed):
     end = [r"\bottomrule", r"\end{tabular}"]
     return {"deployed_table": "\n".join(primary + end), "deployed_secondary_table": "\n".join(secondary + end)}
 
+FULL_ARM_KEY = {"candidate-persona": "persona", "prompted": "prompted", "candidate": "cand", "base": "base"}
+FULL_ARM_LABEL = {"persona": "candidate + persona", "prompted": "prompted base", "cand": "candidate", "base": "base"}
+FULL_COMPARISON_LABEL = {
+    ("candidate", "prompted"): "candidate / prompted",
+    ("candidate-persona", "base"): "cand.+persona / base",
+    ("candidate-persona", "candidate"): "cand.+persona / candidate",
+    ("candidate", "base"): "candidate / base",
+    ("prompted", "base"): "prompted / base",
+}
+
+
+def check_full(run, comparisons):
+    """Refuses a full-run row, or one of its comparisons, whose derived fields
+    disagree with its counts. The Holm adjustment is recomputed over the five
+    secondaries in the order the report made them."""
+    name, n = run["arm"], int(run["tasks"])
+    if int(run["families_trained_on"]) < 1 and int(run["tasks_in_exam"]) != n:
+        sys.exit(f"full {name}: tasks left out although no family was trained on")
+    for c in comparisons:
+        label = f"full {name}: {c['first']} vs {c['second']}"
+        expected = {
+            "p_tasks": upper_tail(int(c["first_only"]), int(c["first_only"]) + int(c["second_only"])),
+            "p_families": upper_tail(int(c["family_wins"]), int(c["family_wins"]) + int(c["family_losses"])),
+            "lm_p": upper_tail(int(c["lm_first_only"]), int(c["lm_first_only"]) + int(c["lm_second_only"])),
+        }
+        for field, value in expected.items():
+            if abs(float(c[field]) - value) > 1e-6:
+                sys.exit(f"{label}: {field} {c[field]} != exact {value}")
+        lead = int(run[FULL_ARM_KEY[c["first"]] + "_right"]) - int(run[FULL_ARM_KEY[c["second"]] + "_right"])
+        if lead != int(c["first_only"]) - int(c["second_only"]):
+            sys.exit(f"{label}: right counts and discordant tasks disagree")
+        if abs(100 * lead / n - float(c["diff_points"])) > 0.05:
+            sys.exit(f"{label}: difference does not match the right counts")
+        if not float(c["ci_low"]) <= float(c["diff_points"]) <= float(c["ci_high"]):
+            sys.exit(f"{label}: interval does not contain the difference")
+    secondary = comparisons[1:]
+    adjusted = holm([float(c["p_families"]) for c in secondary])
+    for c, value in zip(secondary, adjusted):
+        if abs(float(c["holm_p"]) - value) > 1e-6:
+            sys.exit(f"full {name}: Holm p of {c['first']} vs {c['second']} {c['holm_p']} != {value}")
+    lead = int(run["rest_persona_right"]) - int(run["rest_prompted_right"])
+    if lead != int(run["rest_persona_only"]) - int(run["rest_prompted_only"]):
+        sys.exit(f"full {name}: right counts and discordant tasks outside the pilot disagree")
+    rest = {
+        "rest_p_tasks": upper_tail(int(run["rest_persona_only"]), int(run["rest_persona_only"]) + int(run["rest_prompted_only"])),
+        "rest_p_families": upper_tail(int(run["rest_family_wins"]), int(run["rest_family_wins"]) + int(run["rest_family_losses"])),
+    }
+    for field, value in rest.items():
+        if abs(float(run[field]) - value) > 1e-6:
+            sys.exit(f"full {name}: {field} {run[field]} != exact {value}")
+
+
+def bonferroni(p, tests):
+    return min(1.0, tests * p)
+
+
+def full_tables(runs, comparisons):
+    """The tables of the full frozen-exam runs: the arms, the primary
+    comparison with its Bonferroni-corrected tests, the secondaries and the
+    primary comparison on the tasks outside the pilot."""
+    by_run = {r["arm"]: [c for c in comparisons if c["arm"] == r["arm"]] for r in runs}
+    for r in runs:
+        check_full(r, by_run[r["arm"]])
+    end = [r"\bottomrule", r"\end{tabular}"]
+    arms = [
+        r"\begin{tabular}{@{}llrrr@{}}", r"\toprule",
+        r"Run & Arm & Judged right & Invented specifics & Mean chars \\", r"\midrule",
+    ]
+    primary = [
+        r"\begin{tabular}{@{}lrrrrrrrr@{}}", r"\toprule",
+        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Difference [95\% CI], points & Task wins--losses & $p$ (tasks) & Family wins--losses (ties) & $p$ (families) & $p$ (families), Bonferroni $\times2$ / $\times4$ \\",
+        r"\midrule",
+    ]
+    secondary = [
+        r"\begin{tabular}{@{}llrrrrrr@{}}", r"\toprule",
+        r"Run & Comparison & Right (first / second) & Difference [95\% CI], points & Family wins--losses & $p$ (families) & Holm $p$ & Length-matched (tasks, wins--losses, $p$) \\",
+        r"\midrule",
+    ]
+    rest = [
+        r"\begin{tabular}{@{}lrrrrrr@{}}", r"\toprule",
+        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Task wins--losses & $p$ (tasks) & Family wins--losses & $p$ (families) \\",
+        r"\midrule",
+    ]
+    for r in runs:
+        c = by_run[r["arm"]]
+        for key in ("base", "prompted", "cand", "persona"):
+            arms.append(
+                f"{r['arm'] if key == 'base' else ''} & {FULL_ARM_LABEL[key]} & {r[key + '_right']} & "
+                f"{r[key + '_invented']} & {float(r[key + '_chars']):.0f} \\\\"
+            )
+        p = c[0]
+        ties = int(r["families"]) - int(p["family_wins"]) - int(p["family_losses"])
+        pf = float(p["p_families"])
+        primary.append(
+            f"{r['arm']} & {r['families']}/{r['tasks']} & {r['persona_right']} / {r['prompted_right']} & "
+            f"{float(p['diff_points']):+.1f} [{float(p['ci_low']):+.1f}, {float(p['ci_high']):+.1f}] & "
+            f"{p['first_only']}--{p['second_only']} & {fmt_p(float(p['p_tasks']))} & "
+            f"{p['family_wins']}--{p['family_losses']} ({ties}) & {fmt_p(pf)} & "
+            f"{fmt_p(bonferroni(pf, 2))} / {fmt_p(bonferroni(pf, 4))} \\\\"
+        )
+        for c_ in c[1:]:
+            first, second = FULL_ARM_KEY[c_["first"]], FULL_ARM_KEY[c_["second"]]
+            secondary.append(
+                f"{r['arm']} & {FULL_COMPARISON_LABEL[(c_['first'], c_['second'])]} & "
+                f"{r[first + '_right']} / {r[second + '_right']} & "
+                f"{float(c_['diff_points']):+.1f} [{float(c_['ci_low']):+.1f}, {float(c_['ci_high']):+.1f}] & "
+                f"{c_['family_wins']}--{c_['family_losses']} & {fmt_p(float(c_['p_families']))} & "
+                f"{fmt_p(float(c_['holm_p']))} & "
+                f"{c_['lm_tasks']}, {c_['lm_first_only']}--{c_['lm_second_only']}, {fmt_p(float(c_['lm_p']))} \\\\"
+            )
+        rest.append(
+            f"{r['arm']} & {r['rest_families']}/{r['rest_tasks']} & {r['rest_persona_right']} / {r['rest_prompted_right']} & "
+            f"{r['rest_persona_only']}--{r['rest_prompted_only']} & {fmt_p(float(r['rest_p_tasks']))} & "
+            f"{r['rest_family_wins']}--{r['rest_family_losses']} & {fmt_p(float(r['rest_p_families']))} \\\\"
+        )
+    return {
+        "full_arms_table": "\n".join(arms + end),
+        "full_primary_table": "\n".join(primary + end),
+        "full_secondary_table": "\n".join(secondary + end),
+        "full_rest_table": "\n".join(rest + end),
+    }
+
 
 def main():
     OUT.mkdir(exist_ok=True)
@@ -395,6 +517,8 @@ def main():
     for name, table in pilot_tables(pilots).items():
         (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
     for name, table in deployed_tables(rows("deployed.csv")).items():
+        (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
+    for name, table in full_tables(rows("full.csv"), rows("full_comparisons.csv")).items():
         (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
 
     # pgfplots data: exact power of the family-level sign test.

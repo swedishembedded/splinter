@@ -3,14 +3,16 @@
 
 \section{Results}\label{sec:results}
 
-Every exam in this section is \textbf{pilot scale}. Those of the first subsections have 31
+Every exam in this section except the full runs of \cref{sec:full} is \textbf{pilot scale}. Those of the first subsections have 31
 to 42 tasks over 6 or 7 families and were run with the earlier exam of
 \cref{sec:exam-versions}; the pilots of \cref{sec:frozen,sec:deployed} have 147 or 155 tasks over 24 or 25 families of
 the reserved exam. Their families are fixed by each
 run's held-out split before the candidate is trained, but they are far too small to carry a
 claim, and they were reused: two exams share a 35-task set (A), three share a 31-task set
 (B), and the Adams exam has its own (C), so the six comparisons are not independent and the
-recipes were developed while looking at them. None is a final test.
+recipes were developed while looking at them. The full runs of \cref{sec:full} examine two
+candidates on the whole reserved exam (242 tasks, 38 families); they contain the pilots'
+tasks and the candidates were chosen after the pilots. None is the protocol's final test.
 
 \subsection{Candidates}
 
@@ -355,8 +357,8 @@ prompt, or whether the persona was internalised, is not measured. Each is compar
 prompted arm of the v7 pilot (\cref{sec:frozen}) on the tasks both answered. The pairing is
 valid because the exam, the base, the persona prompt and the judge version (4, greedy) are the
 same and every answer is greedy; the prompted arm itself was not answered again beside these
-candidates, so no arm is repeated across the runs and the reproducibility of greedy answers
-between runs is assumed, not tested. The primary test is the same as in \cref{tab:pilot}; the
+candidates, so the reproducibility of greedy answers between runs is assumed here; the full
+runs of \cref{sec:full} later repeated word for word the pilot answers that they re-answered. The primary test is the same as in \cref{tab:pilot}; the
 counts, the family and task-level sign tests and the intervals were recomputed from the per-task
 records of the three reports (\cref{sec:repro}).
 
@@ -424,6 +426,143 @@ correction does not account for the selection of the candidates themselves: all 
 chosen after earlier exams (e4 after its set-B exam) from a larger set that was examined. The
 pilot families are a subset of the final test, and there is one seed per candidate. These runs have no arm without the persona prompt, so they
 cannot show that the weights carry the persona, and no voice scoring exists for them.
+
+\subsection{Full frozen-exam results}\label{sec:full}
+
+The two candidates whose pilots were positive under the persona prompt, the \emph{ablation}
+and \emph{e1} (\cref{tab:training}), were then run on the whole frozen exam with the same four
+arms, one greedy answer per task and arm, no voice-likelihood stage (\code{--no-voice}) and the
+same judge (Qwen3-14B, version 4, trusted on 484 controls: precision 1.0 on passes and 0.984 on
+fails, no abstentions). The commands are those of the pilots without \code{--pilot-families}
+(\cref{sec:repro}). Neither run is the protocol's final test (\cref{sec:exam-versions}): the
+candidates were not chosen on the dev suite, and they were chosen after the pilots and after
+earlier exams. The v7 and e4 candidates, whose pilots were not positive, were not run on the
+full exam.
+
+\paragraph{Why 242 of 244 tasks.}
+Both reports state 244 tasks in the exam, 242 examined, 38 families and one family the candidate
+was trained on. The tool leaves out the tasks of text that the candidate, or a release it
+continues, was trained on, as it did in the pilots (\cref{sec:frozen,sec:deployed}); that
+family is one of the exam's 39 and has two tasks. The two reports examine the same 242 tasks.
+No task was left out for want of an answer: all 242 were answered and graded in every arm.
+The 155 tasks of the ablation's pilot and of e1's are among the 242, and the full runs repeated
+the pilot answers word for word (620 of 620 answers of the ablation's four arms; 155 of 155 of
+e1's deployed arm).
+
+\begin{table}[t]
+\centering\small
+\input{generated/full_arms_table}
+\caption{The four arms of the full runs on the same 242 tasks of 38 families. ``Invented
+specifics'' counts answers with numbers or names absent from the source, of the 242 checked;
+the base and prompted arms are the same in both runs (greedy decoding).}
+\label{tab:full-arms}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/full_primary_table}}
+\caption{Full runs, primary comparison: the candidate under the persona prompt against the
+prompted base, paired by task. Columns as in \cref{tab:pilot}; ``ties'' are families in which the
+two were right on equally many tasks, which the family-level sign test ignores. The last column
+multiplies the family-level $p$ by two (the candidates run on the full exam) and by four (the
+candidates run on the reserved exam, \cref{sec:deployed}), capped at one.}
+\label{tab:full-primary}
+\end{table}
+
+\paragraph{The primary comparison.}
+\textbf{Ablation:} 80 of 242 tasks judged right under the persona prompt against 58 for the
+prompted base, +9.1 points (95\% family-clustered interval $+3.7$ to $+14.3$): 37 tasks only the
+candidate got right, 15 only the prompted base; the candidate was right on more tasks in 19
+families and on fewer in 5 ($p=0.0033$, one-sided exact over the 24 discordant families;
+task-level $p=0.0016$). Among the 142 tasks on which the two answers differ in length by at most
+a quarter of the longer the split is 22 against 11 ($p=0.040$), and the candidate's answers are
+shorter on average (435 against 449 characters), so length does not explain the difference.
+\textbf{E1:} 75 against 58, +7.0 points (interval $+1.2$ to $+12.6$): 32 tasks only the candidate,
+15 only the prompted base; 18 families for and 7 against ($p=0.022$; task-level $p=0.0093$).
+The length-matched split is 19 against 10 of 128 tasks ($p=0.068$), which does not exclude chance,
+and its answers are shorter (397 against 449 characters). The report's minimum detectable
+difference at 38 families is 9.4 points for the ablation (discordance 0.215, intraclass
+correlation 0) and 10.6 points for e1 (0.194 and 0.049); both observed leads are below it, so
+the exam is operating at the edge of its resolution.
+
+\paragraph{Selection and multiplicity.}
+Each primary test is of one candidate, and the candidates are not a sample of recipes: both
+were chosen after the pilot on which they now appear, and after earlier exams. Four candidates
+have been examined on the reserved exam (v7, ablation, e1, e4); a Bonferroni factor of four
+gives $p=0.013$ for the ablation and $0.087$ for e1 (a factor of two, for the two full runs,
+gives 0.0066 and 0.043). The ablation's result therefore stands after a correction over the
+reserved-exam candidates and e1's does not. Neither correction accounts for the recipes and
+candidates examined on the earlier exams.
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/full_secondary_table}}
+\caption{Full runs, secondary comparisons: family-level one-sided exact sign $p$ and Holm-adjusted
+$p$ over the five secondaries of each run; the first named arm is the one tested for being
+better. ``Right'' counts the 242 tasks. The prompted base against the base is the same in both
+runs.}
+\label{tab:full-secondary}
+\end{table}
+
+\paragraph{Secondary comparisons and internalisation.}
+The candidate asked \emph{without} the persona prompt is judged right on 50 (ablation) and 53 (e1)
+tasks, against 48 for the base and 58 for the prompted base. Against the base the differences are
++0.8 and +2.1 points (family-level $p=0.60$ and $0.40$, Holm $1.0$ for both), against the prompted
+base $-3.3$ and $-2.1$ points (below the prompted base in both runs; $p=0.93$ and $0.72$). The full
+runs therefore do not show that the persona was internalised: without the prompt neither adapter
+is distinguishable from the base or from the prompted base. The gain appears only with the
+prompt. The candidate under the persona prompt is better than the base (+13.2 and +11.2 points;
+Holm 0.003 and 0.006) and better than itself without the prompt (+12.4 and +9.1 points; Holm 0.0007
+and 0.021), whereas the persona prompt alone does not raise the base significantly (58 against 48,
++4.1 points, $p=0.35$). The comparison with the base changes both the prompt and the weights, so
+it does not separate their contributions; the comparison with the candidate without the prompt
+holds the weights fixed and shows that the adapter's gain needs the prompt. Counting answers with
+invented specifics, the prompted base has 36 against 123 for the base; the candidates under the
+prompt 34 and 30; the candidates without it 93 and 91. No test of these counts was stored.
+
+\begin{table}[t]
+\centering\small
+\resizebox{\textwidth}{!}{\input{generated/full_rest_table}}
+\caption{Full runs, primary comparison restricted to the 87 tasks of 13 families outside the
+pilot. Columns as in \cref{tab:pilot}.}
+\label{tab:full-rest}
+\end{table}
+
+\paragraph{Do the full runs confirm the pilots?}
+The sign of each pilot result is repeated and the magnitudes are smaller: the ablation's lead
+falls from +11.0 to +9.1 points (family-level $p$ 0.0037 to 0.0033) and e1's from +8.4 to +7.0
+($p$ 0.018 to 0.022). This is partial confirmation at best, for three reasons. First, the full
+exam contains the pilot: 155 of its 242 tasks (64\%) and 25 of its 38 families are the pilot's,
+and the candidates were chosen after seeing them, so the full result is not an independent
+replication. Second, the part that is independent of the pilot, the 87 tasks of 13 families, gives
+leads in the same direction but not resolved (\cref{tab:full-rest}): the ablation 32 against 27
+tasks (+5.7 points; 13 against 8 discordant tasks, $p=0.19$; 6 families for, 3 against,
+$p=0.25$) and e1 31 against 27 (+4.6 points; 14 against 10, $p=0.27$; 6 against 4, $p=0.38$). The
+whole exam's minimum detectable difference is 9.4 and 10.6 points, and the 87-task subset is much
+smaller, so it cannot resolve leads of this size and neither confirms nor refutes the pilots. Third, only the ablation's primary test survives a
+correction over the reserved-exam candidates, and e1's length-matched split is not significant.
+What holds without qualification is the negative result: neither adapter beats the base or the
+prompted base without the persona prompt.
+
+\paragraph{Hard controls.}
+The judge passed 3 of 242 hard-control wrong answers (1.2\%) in both runs, as it passed 2 of 155 in
+the pilots (\cref{sec:frozen}); this bounds its behaviour on a topical near miss, not its
+agreement with a person.
+
+\paragraph{What the full runs show, and what they do not.}
+\begin{itemize}
+\item On 242 tasks of 38 families the ablation candidate under the persona prompt is judged
+  right on 9.1 points more tasks than the prompted base (family-level $p=0.0033$, $0.013$ after a
+  factor of four) and e1 on 7.0 points more ($p=0.022$, $0.087$ after a factor of four). Both
+  are candidates chosen after the pilot, on an exam that contains it, with one training seed
+  each, a judge from the policy's model family and no human labels.
+\item Neither adapter without the persona prompt is distinguishable from the base or the
+  prompted base; the persona was not shown to be internalised.
+\item The voice-likelihood stage was not run, so there is still no judge-free measure of voice
+  and no measure of overlap with the training text for these candidates.
+\item The two candidates differ in more than one respect, so the difference between their
+  results is not attributed to one change.
+\end{itemize}
 
 \subsection{Cost}
 
