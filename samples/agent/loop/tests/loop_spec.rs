@@ -730,9 +730,6 @@ fn training_records_come_only_from_accepted_unaided_runs_and_only_the_accepted_a
         .map(|m| m["train"].as_bool().unwrap())
         .collect();
     assert_eq!(flags, [false, false, true, false, true]);
-    // No assistant turn carries the stray whitespace around an empty
-    // reasoning block: the trainer refuses a turn its template renders
-    // differently alone and in context.
     for m in messages.iter().filter(|m| m["role"] == "assistant") {
         let content = m["content"].as_str().unwrap();
         assert_eq!(content, content.trim(), "{m}");
@@ -782,24 +779,14 @@ fn the_patch_form_holds_the_task_and_the_accepted_patch_as_one_exchange() {
     )
     .unwrap();
     assert_eq!(manifest.records, 1, "{manifest:#?}");
-    let record: Value = serde_json::from_str(
-        std::fs::read_to_string(&out)
-            .unwrap()
-            .lines()
-            .next()
-            .unwrap(),
-    )
-    .unwrap();
+    let text = std::fs::read_to_string(&out).unwrap();
+    let record: Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
     let messages = record["messages"].as_array().unwrap();
     let roles: Vec<&str> = messages
         .iter()
         .map(|m| m["role"].as_str().unwrap())
         .collect();
-    assert_eq!(
-        roles,
-        ["system", "user", "assistant"],
-        "one exchange: a trainer sees one assistant turn"
-    );
+    assert_eq!(roles, ["system", "user", "assistant"]);
     assert!(messages[1]["content"].as_str().unwrap().contains("Task:"));
     assert!(messages[2]["content"]
         .as_str()
