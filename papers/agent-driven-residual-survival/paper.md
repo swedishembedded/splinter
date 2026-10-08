@@ -33,11 +33,10 @@ without it. On the survival question, a regularised Cox model that is
 nonlinear in every continuous input (written by the agent) is the best model
 we measured by point estimate; it is not resolvably better than the same model
 without splines when all inputs are used (difference in integrated Brier
-score -0.00013, 95% interval -0.00057 to +0.00031), and a deep set encoder
-over the same inputs is worse than it (+0.00111, +0.00019 to +0.00204 by the
-corrected t-test; +0.00071, -0.00011 to +0.00155 by a pooled cluster bootstrap on
-one repeat, which resolves the gap only at ten years; a three-seed ensemble of the
-encoder is +0.00018, -0.00081 to +0.00118, not distinguishable from it). Learning curves over five cross-validation repeats show the Cox
+score -0.00013, 95% interval -0.00057 to +0.00031). A deep set encoder over the
+same inputs is worse than the spline Cox model by 0.0011 (+0.0002 to +0.0020) in
+a fold test; a pooled cluster bootstrap resolves that gap only at ten years, and
+the average of three training seeds closes it (+0.0002, -0.0008 to +0.0012). Learning curves over five cross-validation repeats show the Cox
 models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
@@ -46,8 +45,7 @@ a residual neural network, was not delivered by the agent in five attempts
 did not improve on the spline Cox model (integrated Brier score -0.00008,
 interval -0.00030 to +0.00015, against the 0.001 the rule required). The same
 single examination was then asked further questions under rules fixed
-beforehand: it predicts death
-by cause (the full input set beats the conventional risk factors for
+beforehand: it predicts death by cause (the full input set beats the conventional risk factors for
 cardiovascular, cancer and other deaths), death with a diabetes mention on the
 certificate beyond who dies (and a hypertension mention not at all), expected
 time lived (calibrated within 0.05 years at ten years), eight prevalent
@@ -55,7 +53,8 @@ conditions (AUROC 0.79 to 0.92 with the full input set, 0.67 to 0.85 without
 the inputs that define each), and undiagnosed disease only weakly (sensitivity
 0.2 to 0.45 at 90% specificity; about nine of ten positive calls for diabetes
 are false); accelerometer summaries added a small, narrowly resolved gain to the
-ten-year Brier score. On the agent question, two of four substantive tasks
+ten-year Brier score, and a convolutional network on the minute series did no
+better than eight summaries. On the agent question, two of four substantive tasks
 were accepted and two were not. Before the first could even be judged, four
 defects of the surrounding infrastructure (a reasoning block spending the
 output budget, greedy decoding repeating one action, a server context
