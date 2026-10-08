@@ -9,6 +9,7 @@
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
 
+pub mod fake_brain;
 pub mod gate;
 pub mod manual;
 pub mod timeline;
