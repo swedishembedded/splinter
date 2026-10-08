@@ -22,9 +22,8 @@ PROFILE := --release
 # tree (a tracked file deleted there is no longer a source file).
 RUST_SOURCES = $(wildcard $(shell git ls-files --cached --others --exclude-standard '*.rs'))
 
-.PHONY: help local lock build test fmt check check/gates check/fmt check/clippy \
+.PHONY: help local lock build test fmt check check/gates check/fmt check/clippy
 	hooks/install samples/tool-syntax/audit \
-	papers/persona-training/pdf papers/agent-driven-residual-survival/pdf
 
 ## help - list the targets
 help:
@@ -47,13 +46,16 @@ test:
 	$(CARGO) test $(PROFILE) --workspace
 	python3 samples/adams/test_fetch.py
 
-## papers/persona-training/pdf - build papers/persona-training/paper.pdf (latexmk)
-papers/persona-training/pdf:
-	$(MAKE) -C papers/persona-training
+## papers/<name>/pdf - build one paper's PDF (see papers/paper.mk); papers/pdf builds every paper
+PAPER_DIRS := $(patsubst %/Makefile,%,$(wildcard papers/*/Makefile))
+PAPER_TARGETS := $(addsuffix /pdf,$(PAPER_DIRS))
 
-## papers/agent-driven-residual-survival/pdf - build papers/agent-driven-residual-survival/paper.pdf (pandoc, xelatex)
-papers/agent-driven-residual-survival/pdf:
-	$(MAKE) -C papers/agent-driven-residual-survival
+papers/pdf: $(PAPER_TARGETS)
+
+.PHONY: papers/pdf $(PAPER_TARGETS)
+
+$(PAPER_TARGETS): papers/%/pdf:
+	$(MAKE) -C papers/$*
 
 ## fmt - format Splinter's own sources (never a dependency's)
 fmt:
