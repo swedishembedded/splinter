@@ -19,12 +19,33 @@ Reproducibility section or is explicitly marked as unmeasured.*
 
 ## Abstract
 
-*(Pending. To be written once milestone results exist. The paper will report
-(i) whether a deep survival model adds held-out predictive information over a
-spline/additive Cox baseline on a single-examination cohort, with uncertainty
-that respects the cross-validation design; (ii) how much of the experimental
-work a locally served language-model agent can carry out unaided; and (iii)
-what each finding does and does not license.)*
+Deep survival models have beaten classical baselines where patients number in
+the hundreds of thousands and events in the billions. We ask what happens at
+the scale of one examination per person (about 56 thousand adults and 8.4
+thousand deaths from US national survey cycles linked to mortality records),
+and we ask it with a method that makes the experiments themselves auditable:
+a locally served 27-billion-parameter coding agent carries out delegated
+tasks under the supervision of a stronger model, every run is kept in a
+hash-chained event log, and results with help are recorded apart from results
+without it. On the survival question, a regularised Cox model that is
+nonlinear in every continuous input (written by the agent) is the best model
+we measured by point estimate; it is not resolvably better than the same model
+without splines when all inputs are used (difference in integrated Brier
+score -0.00013, 95% interval -0.00057 to +0.00031), and a deep set encoder
+over the same inputs is resolvably worse than it (+0.00111, +0.00019 to
++0.00204). Learning curves from one cross-validation repeat show the Cox
+models flat from half of the training subjects and the more flexible learners
+still improving, so more data of this kind would help them and not the Cox
+models. The experiment that would test for structure beyond the additive model,
+a residual neural network, was not delivered by the agent in four attempts and
+is reported as not done. On the agent question, two of four substantive tasks
+were accepted and two were not; before the first could even be judged, six
+defects of the surrounding infrastructure (a reasoning block spending the
+output budget, greedy decoding repeating one action, a server context
+overflow, an unreadable old log format, and two defects in the supervisor's
+own acceptance checks) had to be found and repaired, each with a regression
+specification. *(The result of the learning-and-promotion proof is stated in
+section 5.4.)*
 
 ## 1. Introduction
 
