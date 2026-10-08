@@ -46,6 +46,7 @@ mod intervals;
 mod lifeexp;
 mod metrics;
 mod nhanes;
+mod prevalence;
 mod recipe;
 mod recipe_run;
 mod report;
@@ -213,6 +214,35 @@ enum Command {
         /// The build's output directory (with `causes.jsonl`).
         #[arg(long)]
         data: PathBuf,
+    },
+    /// Secondary (T4): models of prevalent conditions against the age-and-sex
+    /// model, per fold (`baselines/conditions.py` writes the predictions).
+    Prevalence {
+        /// The build's output directory (with `conditions.jsonl`).
+        #[arg(long)]
+        data: PathBuf,
+        /// Models (directories under `conditions/`).
+        #[arg(long, required = true)]
+        model: Vec<String>,
+        /// The model the others are compared with.
+        #[arg(long, default_value = "agesex")]
+        reference: String,
+    },
+    /// Secondary (T5): screens for undiagnosed disease at a threshold chosen
+    /// on the training subjects, pooled over the folds of one repeat.
+    Screen {
+        /// The build's output directory (with `conditions.jsonl`).
+        #[arg(long)]
+        data: PathBuf,
+        /// Models (directories under `conditions/`).
+        #[arg(long, required = true)]
+        model: Vec<String>,
+        /// The screen the others must beat.
+        #[arg(long, default_value = "agebmi")]
+        comparator: String,
+        /// The repeat whose folds are pooled.
+        #[arg(long, default_value_t = 0)]
+        repeat: usize,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
@@ -478,6 +508,29 @@ fn main() -> Result<()> {
             aa_dir,
         } => lifeexp::run(&data, &model, repeat, tau, aa_dir.as_deref()),
         Command::Labels { nhanes, data } => conditions::write(&nhanes, &data),
+        Command::Prevalence {
+            data,
+            model,
+            reference,
+        } => {
+            println!(
+                "{}",
+                prevalence::report_prevalent(&data, &model, &reference)?
+            );
+            Ok(())
+        }
+        Command::Screen {
+            data,
+            model,
+            comparator,
+            repeat,
+        } => {
+            println!(
+                "{}",
+                prevalence::report_screen(&data, &model, &comparator, repeat)?
+            );
+            Ok(())
+        }
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
