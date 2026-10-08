@@ -22,8 +22,8 @@ PROFILE := --release
 # tree (a tracked file deleted there is no longer a source file).
 RUST_SOURCES = $(wildcard $(shell git ls-files --cached --others --exclude-standard '*.rs'))
 
-.PHONY: help local lock build test fmt check check/gates check/fmt check/clippy
-	hooks/install samples/tool-syntax/audit \
+.PHONY: help local lock build test fmt check check/gates check/fmt check/clippy \
+	hooks/install samples/tool-syntax/audit
 
 ## help - list the targets
 help:
