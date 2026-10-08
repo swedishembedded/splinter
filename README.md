@@ -61,30 +61,6 @@ needs Splinter installed.
 | Candidates | a LoRA adapter trained from the champion on the new material plus a replay of everything learned before |
 | Releases | an immutable adapter or full checkpoint with a manifest of every number the release gate measured, the terms it was made under, and lineage back to the sources |
 
-## Current status
-
-| Capability | Status |
-|---|---|
-| Learn from documents, repositories and command output | working |
-| Closed-book solving, verification, critique and retry | working |
-| Pass@k frontier selection with a teacher for what the policy never solves | working |
-| Supervised fine-tuning with replay and a rehearsal of the base's own answers, preference fine-tuning by DPO | working |
-| Four-check release gate, immutable releases, rollback | working |
-| Lineage from an answer back to the source bytes | working |
-| A predictive release gate for non-language models (`release_predictive`): the champion and candidate are scored on the same held-out units (a different unit set is refused); performance, calibration, retention on named subgroups, serving correctness and data-policy compliance are decided from pre-registered requirements over numbers the caller measured, and an unmeasured number fails | working |
-| Releases of a full checkpoint (brain owns its format; Splinter keeps the immutable file, its digest, the architecture name and the brain and splinter commits) beside adapter releases, with the same aliases, compare-and-set moves and rollback; manifests of earlier formats still load | working |
-| Usage policy on every source (`redistributable`, `research_only`, `noncommercial`, `restricted_DUA`, `unknown`) carried to the dataset, training run and release; an unrestricted release is refused unless every axis is allowed, `unknown` never is, and a restricted release records its terms (`source add --usage-policy`, `release --unrestricted`) | working |
-| Models by role (policy, teacher, generator, planner, judge, critic, router) | working |
-| Several tasks in flight for a model reached over an API | working |
-| The Rust SDK (`splinter-sdk`) | working, young: the API will move |
-| Longitudinal record files (one participant per line, `timeline-v1` fields plus interventions that say whether they were randomised) imported as one immutable content-addressed episode per participant on the participant's own clock and the calendar, every item tied to its file line, file digest and usage terms, raw identifiers replaced by opaque keyed keys; importing again adds nothing | working |
-| Splits of record datasets by participant group, by a temporal cutoff and by holding one whole source out, each a pure function of a seed with a content address, and leakage gates that fail with counts, never identities: a group in two parts, a held-out source not held out whole, a unit on the wrong side of the cutoff, statistics fitted on anything but training units | working |
-| A participant-safe `timeline-v1` dataset projected from longitudinal episodes at a prediction point: inputs only from at or before it, outcomes with observation windows (left truncation and right censoring kept), randomised and observational interventions as distinct inputs, opaque participant and group keys, a manifest naming the episodes, source file digests and combined usage terms, and the parts of a split written only after the group gate passes | working |
-| A timeline risk model closed end to end: the stored parts of one split train a candidate (hazard knots derived from the training outcome times, the fit certified on training units only, units carried from the record file into the model's vocabulary so brain refuses another unit at prediction); its risks are calibrated with brain's Venn-Abers calibration on the half of the validation part early stopping does not read (never a test unit), and the calibration is packed beside the weights with the training support into one file whose unpack loads in plain brain; the candidate and a champion are scored on the same held-out units with brain's own evaluation (Uno C, time-dependent AUC, IPCW and integrated Brier, calibration, held-out likelihood) and splinter's participant-clustered paired bootstrap differences, under requirements registered before scoring, calibration judged on the calibrated risk where the model has one and on the raw risk otherwise (the record says which; a horizon brain declares uncalibrated has nothing to judge and fails as unmeasured); serving correctness is measured from the shipped file unpacked by the system `tar` and loaded by plain brain, on the test units (identity of every prediction, batched against single patient-history forecasts, the share of units the support would withhold, and the validity of every probability and curve); it is released only if the predictive gate passes, else rejected and recorded with the alias unmoved; the release names its calibration by digest and the lineage runs from the release to the source file line of every training participant. `samples/health` runs it on a synthetic cohort and forecasts a patient history before and after an appended checkup | working |
-| Training from rewarded trajectories, raw text, contrastive pairs | planned: projected as an export format; no trainer reads it yet |
-| A `chat` intent at the front door | planned |
-| Resuming a pipeline from a checkpoint | planned |
-
 ## Quick start
 
 ```bash
