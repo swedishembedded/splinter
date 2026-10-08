@@ -670,6 +670,12 @@ a window of 30% of the weight): the typical gap is under 0.5 percentage points
 for every cause and 0.9 for all causes, and no model's 90th-percentile gap
 exceeds 2.2 points except age and sex for all causes (3.3). Slopes above one
 say the predictions are not spread out enough, by 5% to 13%.
+No criterion here uses the two-parameter recalibration intercept. It is read at a
+predicted risk of one half, so for cohorts whose risks are a few per cent it
+mostly restates the slope error (a prediction squeezed towards its mean has an
+intercept of 1.5 and a calibration-in-the-large of 0.15 in the specification
+that shows this); the release gate of the system the study ran on was changed to
+judge calibration in the large for that reason.
 
 Reading the numbers. The high AUCs are largely age: age and sex alone reach 0.86
 to 0.91, and the other inputs add 0.03 to 0.05. The index of prediction
