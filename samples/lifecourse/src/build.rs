@@ -268,4 +268,6 @@ pub struct CycleCounts {
     pub deaths: BTreeMap<String, usize>,
     /// Subjects with at least one recall day.
     pub with_diet: usize,
+    /// Deaths with diabetes or hypertension listed anywhere on the certificate.
+    pub flags: crate::causes::FlagCounts,
 }

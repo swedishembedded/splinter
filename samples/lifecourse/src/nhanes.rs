@@ -186,11 +186,17 @@ pub struct Mortality {
     pub cause: Option<u16>,
     /// Months from the examination to death or the end of follow-up.
     pub months_from_exam: Option<f64>,
+    /// Diabetes listed anywhere on the death certificate (the file's
+    /// multiple-cause flag); `None` when the multiple-cause data are not
+    /// available or the person is not a decedent.
+    pub diabetes_mcod: Option<bool>,
+    /// Hypertension listed anywhere on the death certificate; as above.
+    pub hypertension_mcod: Option<bool>,
 }
 
 /// Read a cycle's public-use linked mortality file (fixed width, the layout
 /// of NCHS's own read-in programs: SEQN 1-6, ELIGSTAT 15, MORTSTAT 16,
-/// UCOD_LEADING 17-19, PERMTH_EXM 46-48).
+/// UCOD_LEADING 17-19, DIABETES 20, HYPERTEN 21, PERMTH_EXM 46-48).
 pub fn mortality(path: &Path) -> Result<(HashMap<u64, Mortality>, Digest)> {
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     let digest = Digest::of(&bytes);
@@ -219,6 +225,8 @@ pub fn mortality(path: &Path) -> Result<(HashMap<u64, Mortality>, Digest)> {
                 died: num(16, 16) == Some(1.0),
                 cause: num(17, 19).map(|c| c as u16),
                 months_from_exam: num(46, 48),
+                diabetes_mcod: num(20, 20).map(|f| f == 1.0),
+                hypertension_mcod: num(21, 21).map(|f| f == 1.0),
             },
         );
     }
@@ -241,11 +249,19 @@ mod tests {
             "{:<6}{:8}1{:1}{:3}{:1}{:1}{:21}{:3}{:3}",
             "124", "", "1", "001", "0", "1", "", "50", "48"
         );
+        let no_mcod = format!(
+            "{:<6}{:8}1{:1}{:3}{:1}{:1}{:21}{:3}{:3}",
+            "126", "", "1", "010", ".", ".", "", "50", "30"
+        );
         let minor = format!("{:<6}{:8}2{:1}", "125", "", ".");
         // A real line from the 2013-2014 file: the follow-up fields are "10"
         // and "9", so the line ends at column 47, before PERMTH_EXM's last column.
         let short = "73561         1101000                     10 9";
-        std::fs::write(&path, format!("{alive}\n{dead}\n{minor}\r\n{short}\r\n")).unwrap();
+        std::fs::write(
+            &path,
+            format!("{alive}\n{dead}\n{no_mcod}\n{minor}\r\n{short}\r\n"),
+        )
+        .unwrap();
         let (m, _) = mortality(&path).unwrap();
         assert_eq!(
             m[&123],
@@ -253,7 +269,9 @@ mod tests {
                 eligible: true,
                 died: false,
                 cause: None,
-                months_from_exam: Some(201.0)
+                months_from_exam: Some(201.0),
+                diabetes_mcod: None,
+                hypertension_mcod: None,
             }
         );
         assert_eq!(
@@ -262,17 +280,30 @@ mod tests {
                 eligible: true,
                 died: true,
                 cause: Some(1),
-                months_from_exam: Some(48.0)
+                months_from_exam: Some(48.0),
+                diabetes_mcod: Some(false),
+                hypertension_mcod: Some(true),
             }
         );
         assert!(!m[&125].eligible);
+        assert_eq!(
+            (
+                m[&126].died,
+                m[&126].diabetes_mcod,
+                m[&126].hypertension_mcod
+            ),
+            (true, None, None),
+            "a death without multiple-cause data has no flags, not false ones"
+        );
         assert_eq!(
             m[&73561],
             Mortality {
                 eligible: true,
                 died: true,
                 cause: Some(10),
-                months_from_exam: Some(9.0)
+                months_from_exam: Some(9.0),
+                diabetes_mcod: Some(false),
+                hypertension_mcod: Some(false),
             },
             "a short line keeps its last field"
         );

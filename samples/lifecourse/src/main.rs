@@ -30,6 +30,7 @@
 //! ```
 
 mod build;
+mod causes;
 mod commands;
 mod compare;
 mod concepts;

@@ -29,6 +29,7 @@ use crate::nhanes::{mortality, mortality_file, Cycle, CYCLES};
 
 const TIMELINES: &str = "timelines.jsonl";
 const DESIGN: &str = "design.jsonl";
+const CAUSES: &str = "causes.jsonl";
 const BUILD: &str = "build.json";
 const PARTITION: &str = "partition.json";
 const CRITERIA: &str = "criteria.json";
@@ -79,6 +80,7 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
     std::fs::create_dir_all(out)?;
     let mut lines = String::new();
     let mut design = String::new();
+    let mut causes = String::new();
     let mut cycles = BTreeMap::new();
     let mut sources = Vec::new();
     let mut all: Vec<Subject> = Vec::new();
@@ -118,7 +120,8 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
                 .map(|v| ("prescriptions", *v))
                 .into_iter()
                 .collect();
-            match subject(&c, seqn, mort.get(&seqn), days, &extra) {
+            let m = mort.get(&seqn).copied();
+            match subject(&c, seqn, m.as_ref(), days, &extra) {
                 Ok((s, d)) => {
                     // The invariant the model's encoder enforces, checked
                     // here too: nothing after the examination is input.
@@ -131,6 +134,16 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
                     for e in s.events.iter().filter(|e| e.t > s.entry) {
                         *counts.deaths.entry(e.code.clone()).or_default() += 1;
                     }
+                    let Some(m) = m else {
+                        bail!(
+                            "{}: a subject was built without a mortality record",
+                            s.subject_id
+                        )
+                    };
+                    let row = crate::causes::cause(&s.subject_id, &m)?;
+                    counts.flags.add(&row, m.died);
+                    causes.push_str(&serde_json::to_string(&row)?);
+                    causes.push('\n');
                     lines.push_str(&serde_json::to_string(&s)?);
                     lines.push('\n');
                     design.push_str(&serde_json::to_string(&d)?);
@@ -170,6 +183,7 @@ pub fn build(nhanes: &Path, mortality_dir: &Path, out: &Path) -> Result<()> {
     };
     std::fs::write(out.join(TIMELINES), lines)?;
     std::fs::write(out.join(DESIGN), design)?;
+    std::fs::write(out.join(CAUSES), causes)?;
     std::fs::write(
         out.join(BUILD),
         serde_json::to_string_pretty(&report)? + "\n",
