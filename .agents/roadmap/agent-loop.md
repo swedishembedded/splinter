@@ -108,7 +108,7 @@ Plan: new outcomes and labels go in sidecar files keyed by subject (`causes.json
 - [x] S3 lifecourse: multiple-cause flags kept beside the timelines (`causes.jsonl`; rebuild reproduces `timelines.jsonl` byte for byte; cohort deaths with a mention: diabetes 971, hypertension 1325, one without multiple-cause data)
 - [x] S4 cause curves for the weakest comparator: `cs-cox-agesex` baseline on 25 folds (the planned Rust recipe arms were not needed: the Python cause-specific Cox models already keep per-cause curves)
 - [x] S5 T1 cause-specific accuracy at 5, 10, 15 years (`lifecourse causes`; paper 5.5; bootstrap O/E interval not run)
-- [ ] S6 T2 death with diabetes/hypertension flagged
+- [x] S6 T2 death with diabetes/hypertension flagged (`baselines/flags.py`, `lifecourse flags`; paper 5.6)
 - [ ] S7 T3 restricted mean survival and mortality-equivalent age
 - [ ] S8 T4 condition labels (sidecar)
 - [ ] S9 T4 prevalence models, full and non-definitional inputs

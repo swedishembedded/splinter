@@ -484,6 +484,57 @@ cardiovascular death), as expected, since few of the inputs bear on tumours.
 The cause groups are those of the public file's underlying-cause recode, which
 NCHS perturbs for some records.
 
+### 5.6 Secondary estimand T2: death with diabetes or hypertension listed
+
+The linked file marks deaths on whose certificate diabetes, or hypertension,
+appears anywhere. The outcome is death with the mention by year *t*, competing
+with death without it. In the cohort 971 deaths carry a diabetes mention and
+1,325 a hypertension mention; one death has no multiple-cause data and is
+censored at its time. A mention is not a diagnosis, and it is under-reported.
+
+Flagged deaths are few per fold, so predictions are not scored fold by fold:
+the out-of-fold predictions of one repeat are pooled (each of 45,000 subjects
+appears once), scored as one set, and a 95% interval comes from resampling
+clusters (cycle, stratum, PSU) 1,000 times, on repeat 0. The pooled set has
+237 (diabetes) and 304 (hypertension) flagged deaths by 5 years and 384 and 488
+by 10 years, above the count of 100 the rule of section 4.5 requires before
+models are ranked. Two flag models are compared with the control that the
+rule names, the all-cause incidence of the full-input Cox model used as a
+ranker: a cause-specific Cox model for death with the mention, and the
+all-cause incidence times a penalised logistic estimate of the share of deaths
+that carry the mention (assuming the share does not depend on when death comes).
+Both use every input.
+
+| Outcome, horizon | All-cause ranker, AUC | Flag Cox, AUC minus ranker | Share model, AUC minus ranker |
+|---|---|---|---|
+| Diabetes listed, 5 y | 0.948 [0.929, 0.964] | +0.0231 [+0.0118, +0.0368] | +0.0246 [+0.0150, +0.0360] |
+| Diabetes listed, 10 y | 0.943 [0.930, 0.955] | +0.0220 [+0.0129, +0.0325] | +0.0253 [+0.0175, +0.0339] |
+| Hypertension listed, 5 y | 0.926 [0.904, 0.945] | -0.0008 [-0.0079, +0.0055] | +0.0012 [-0.0033, +0.0062] |
+| Hypertension listed, 10 y | 0.935 [0.919, 0.949] | -0.0018 [-0.0069, +0.0037] | +0.0014 [-0.0023, +0.0052] |
+
+By the rule, the diabetes models add something to knowing who dies: both
+beat the ranker at both horizons with intervals above zero. With the
+conventional inputs only, the Cox model's gain at 10 years does not exclude
+zero (+0.0116 [-0.0003, +0.0238]). The hypertension models add nothing the
+all-cause ranker does not already have: the differences are within about 0.002
+of zero with intervals that span it. Among deaths with multiple-cause data
+(7,102 in the pooled set), the implied share carrying the mention separates
+those with a diabetes mention from those without with an AUROC of 0.83 (Cox)
+to 0.84 (share model), and those with a hypertension mention with 0.61 for
+both. Calibration of the diabetes models is close to exact (observed over
+expected 0.95 to 1.01); for hypertension the Cox model is at 0.94 to 0.95 and
+the share model over-predicts by about 15% (0.83 to 0.86). The index of
+prediction accuracy is modest (0.095 and 0.14 for diabetes at 5 and 10 years;
+0.043 and 0.065 for hypertension): the high AUCs come largely from age.
+
+Results on repeats 1 to 4 (point estimates only; the repeats pool the same
+subjects, so they show stability across training splits, not independent
+confirmation) are within 0.003 in AUC of repeat 0 for every model and horizon.
+We do not know why the hypertension mention is not predictable from the
+examination beyond the risk of dying; one possible reading, which we did not
+test, is that it is listed on certificates for reasons tied to the death more
+than to the person's blood pressure.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -596,6 +647,9 @@ samples/agent/loop/fixtures/eval-candidate.sh <out> <model-ref> anagrams:1 bisec
 splinter-lifecourse build --nhanes <nhanes> --mortality <mortality> --data <new dir>   # timelines.jsonl identical to the frozen one
 python -I samples/lifecourse/baselines/run.py --data <data> --out <data>/baselines --baseline cs-cox-agesex --jobs 16
 splinter-lifecourse causes --data <data> --model cs-cox-agesex --model cs-cox-standard --model cs-cox-all --reference cs-cox-standard --score
+# T2: death with a diabetes or hypertension mention
+python -I samples/lifecourse/baselines/flags.py --data <data> --out <data>/baselines --model flag-cox-all --model flag-share-all --jobs 16
+splinter-lifecourse flags --data <data> --ranker cs-cox-all --model flag-cox-all --model flag-share-all --repeat 0
 agent-loop models judge --candidate <version> --baseline-results <dir> --candidate-results <dir>
 ```
 
@@ -624,6 +678,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-07 | Reuse of the agent runtime | Event stream moved onto the runtime's hash-chained log; definitions in effect recorded through its discovery; two small additions to the runtime's SDK (`chain`, `workspace`), neither naming this project |
 | 2026-10-08 | Learning from accepted runs | Trainer refused multi-step tool conversations (F-021); patch-form records trained an adapter; candidate rejected on eight held-out tasks (section 5.4) |
 | 2026-10-08 | Secondary estimands pre-registered (section 4.5); T1 death by cause (section 5.5) | The full-input cause-specific Cox model beats the conventional risk-factor model for each of three causes at 10 years; calibration described, its bootstrap not run |
+| 2026-10-08 | T2 death with a diabetes or hypertension mention (section 5.6) | Diabetes models beat the all-cause ranker (AUC +0.022 to +0.025, intervals above zero); hypertension models do not |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review
