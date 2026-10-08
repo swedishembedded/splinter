@@ -102,13 +102,12 @@ def make_net(width, layers, n_in, seed):
     return torch.nn.Sequential(*parts, last).double()
 
 
-def train(x_fit, base_fit, t_fit, e_fit, width, layers, seed, epochs, x_val=None, base_val=None,
+def train(net, x_fit, base_fit, t_fit, e_fit, epochs, x_val=None, base_val=None,
           t_val=None, e_val=None):
-    """Train the residual network on the fit rows. Returns (net, validation losses
-    by epoch from 0, or None without validation rows)."""
+    """Train the residual network `net` (its output starts at zero) on the fit rows.
+    Returns (net, validation losses by epoch from 0, or None without validation rows)."""
     import torch
     torch.set_num_threads(1)
-    net = make_net(width, layers, x_fit.shape[1], seed)
     opt = torch.optim.AdamW(net.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     xf, bf = torch.as_tensor(x_fit), torch.as_tensor(base_fit)
     loss_fit = PartialLikelihood(t_fit, e_fit)
@@ -150,6 +149,10 @@ class ResidualCox(SplineCoxNet):
     def _net_inputs(self, prep, d, rows, mask):
         return prep.transform(d, rows)[:, mask]
 
+    def _build_net(self, x, seed):
+        """A network that outputs zero, for inputs shaped like `x`."""
+        return make_net(self.width, self.layers, x.shape[1], seed)
+
     def fit_predict(self, ctx):
         d = ctx.data
         fit, val = ctx.inner()
@@ -169,8 +172,8 @@ class ResidualCox(SplineCoxNet):
             t_net, e_net = t_fit[perm], e_fit[perm]
         else:
             t_net, e_net = t_fit, e_fit
-        _, losses = train(self._net_inputs(prep, d, fit, mask), m_fit @ beta, t_net, e_net,
-                          self.width, self.layers, ctx.seed, EPOCHS,
+        x_fit = self._net_inputs(prep, d, fit, mask)
+        _, losses = train(self._build_net(x_fit, ctx.seed), x_fit, m_fit @ beta, t_net, e_net, EPOCHS,
                           self._net_inputs(prep, d, val, mask), m_val @ beta, t_val, c_val >= 0)
         best = int(np.argmin(losses))
         ctx.chosen.update(l1_ratio=l1, alpha=alphas[-1], epochs=best,
@@ -189,13 +192,52 @@ class ResidualCox(SplineCoxNet):
                 t_net, e_net = t_tr[perm], (c_tr >= 0)[perm]
             else:
                 t_net, e_net = t_tr, c_tr >= 0
-            net, _ = train(self._net_inputs(prep, d, ctx.train, mask), lp_tr, t_net, e_net,
-                           self.width, self.layers, ctx.seed, best)
-            lp_tr = lp_tr + predict_offset(net, self._net_inputs(prep, d, ctx.train, mask))
+            x_tr = self._net_inputs(prep, d, ctx.train, mask)
+            net, _ = train(self._build_net(x_tr, ctx.seed), x_tr, lp_tr, t_net, e_net, best)
+            lp_tr = lp_tr + predict_offset(net, x_tr)
             lp_te = lp_te + predict_offset(net, self._net_inputs(prep, d, ctx.test, mask))
         ctx.chosen["nonzero_coefficients"] = int(np.sum(beta != 0))
         h0 = breslow(lp_tr, t_tr, c_tr >= 0, YEARS.astype(float))
         return 1.0 - np.exp(-np.outer(np.exp(lp_te), h0)), None
+
+
+def make_series_net(channels, seed):
+    """A convolutional network on (channels, bins) series whose last layer starts at
+    zero: two strided convolutions, global mean and maximum pooling, a linear head."""
+    import torch
+
+    class SeriesNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            torch.manual_seed(seed)
+            self.conv = torch.nn.Sequential(
+                torch.nn.Conv1d(channels, 16, 9, stride=2, padding=4), torch.nn.ReLU(),
+                torch.nn.Dropout(DROPOUT),
+                torch.nn.Conv1d(16, 32, 9, stride=2, padding=4), torch.nn.ReLU())
+            self.head = torch.nn.Linear(64, 1)
+            torch.nn.init.zeros_(self.head.weight)
+            torch.nn.init.zeros_(self.head.bias)
+
+        def forward(self, x):
+            h = self.conv(x)
+            return self.head(torch.cat([h.mean(dim=2), h.amax(dim=2)], dim=1))
+
+    return SeriesNet()
+
+
+class ResidualSeq(ResidualCox):
+    """Spline Cox base plus a zero-started convolutional network on a per-subject series
+    held in the data as `data["seq"]` (rows, channels, bins)."""
+
+    def __init__(self):
+        super().__init__(width=0, layers=0)
+        self.name = "resnet-cox-series"
+
+    def _net_inputs(self, prep, d, rows, mask):
+        return np.asarray(d["seq"][rows], dtype=np.float32)
+
+    def _build_net(self, x, seed):
+        return make_series_net(x.shape[1], seed)
 
 
 WIDTHS_LAYERS = ((16, 1), (64, 1), (256, 1), (64, 2), (64, 3))

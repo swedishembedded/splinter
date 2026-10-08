@@ -111,6 +111,25 @@ class Residual(unittest.TestCase):
         self.assertEqual(cif.shape, (len(test), 15))
         self.assertTrue(np.all(np.diff(cif, axis=1) >= -1e-12) and np.all((cif >= 0) & (cif <= 1)))
 
+    def test_a_series_network_finds_what_only_the_series_holds(self):
+        # The hazard depends on the level of the series late in the recording, which no
+        # tabular input carries.
+        data = world(6000, interaction=0.0, seed=12)
+        rng = np.random.RandomState(1)
+        seq = rng.normal(size=(6000, 2, 96)).astype(np.float32)
+        level = seq[:, 0, 60:].mean(axis=1)
+        t = rng.exponential(1.0 / (0.03 * np.exp(0.5 * data["num"][:, 0] + 8.0 * level)))
+        died = t < 15
+        data["time"], data["cause"] = np.where(died, t, 15.0), np.where(died, 0, -1).astype(np.int8)
+        data["seq"] = seq
+        train, test = np.arange(0, 4200), np.arange(4200, 6000)
+        ctx = models.Context(data=data, train=train, test=test, seed=3, horizons={})
+        base = models.REGISTRY["spline-cox-net-all"]().fit_predict(
+            models.Context(data=data, train=train, test=test, seed=3, horizons={}))[0]
+        cif = residual.ResidualSeq().fit_predict(ctx)[0]
+        self.assertGreater(ctx.chosen["epochs"], 0)
+        self.assertGreater(ten_year_concordance(cif, ctx), ten_year_concordance(base, ctx) + 0.03)
+
     def test_the_prediction_of_a_row_ignores_the_other_test_rows(self):
         data = world(5000, interaction=0.5, seed=9)
         train, test = np.arange(0, 3500), np.arange(3500, 5000)

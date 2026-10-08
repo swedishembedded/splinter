@@ -116,8 +116,34 @@ def summarise(c, minute_of_recording):
     )
 
 
-def read_cycle(xpt_path, start):
-    """{subject id: features} for one cycle's file."""
+BIN_MINUTES = 10
+BINS = 7 * DAY // BIN_MINUTES  # seven days of ten-minute bins
+
+
+def grid(c, minute_of_recording):
+    """The recording as a fixed (2, BINS) array for a sequence model: channel 0 the
+    logarithm of one plus the mean counts per worn minute in each ten-minute bin,
+    channel 1 the share of the bin's minutes worn. Minutes beyond the recording
+    count as not worn."""
+    minute = np.asarray(minute_of_recording).astype(np.int64) - 1
+    order = np.argsort(minute, kind="stable")
+    c = np.asarray(c, dtype=np.float64)[order]
+    minute = minute[order]
+    worn_all = ~nonwear(c)
+    counts = np.zeros(BINS * BIN_MINUTES)
+    worn = np.zeros(BINS * BIN_MINUTES)
+    inside = (minute >= 0) & (minute < BINS * BIN_MINUTES)
+    counts[minute[inside]] = c[inside]
+    worn[minute[inside]] = worn_all[inside]
+    counts, worn = counts.reshape(BINS, BIN_MINUTES), worn.reshape(BINS, BIN_MINUTES)
+    n = worn.sum(axis=1)
+    mean = (counts * worn).sum(axis=1) / np.maximum(n, 1.0)
+    return np.stack([np.log1p(mean), n / BIN_MINUTES]).astype(np.float32)
+
+
+def read_cycle(xpt_path, start, sequences=None):
+    """{subject id: features} for one cycle's file; with a dict as `sequences`,
+    also fills it with `{subject id: grid}` for the same subjects."""
     import pandas as pd
     df = pd.read_sas(xpt_path, format="xport")
     out = {}
@@ -129,6 +155,8 @@ def read_cycle(xpt_path, start):
         f = summarise(counts[lo:hi], minute[lo:hi])
         if f is not None:
             out[f"nhanes-{start}-{seqn[lo]}"] = f
+            if sequences is not None:
+                sequences[f"nhanes-{start}-{seqn[lo]}"] = grid(counts[lo:hi], minute[lo:hi])
     return out
 
 
@@ -136,7 +164,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--zip", action="append", required=True, help="PAXRAW_<cycle>.zip; the cycle is read from the name")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--sequences-out", help="also write the ten-minute grids (ids, x) to this .npz")
     a = ap.parse_args()
+    sequences = {} if a.sequences_out else None
     cycles = {"C": 2003, "D": 2005}
     rows = {}
     for z in a.zip:
@@ -148,12 +178,15 @@ def main():
             if len(names) != 1:
                 sys.exit(f"{z}: expected one transport file, found {zf.namelist()}")
             zf.extract(names[0], scratch)
-            got = read_cycle(os.path.join(scratch, names[0]), cycles[m.group(1).upper()])
+            got = read_cycle(os.path.join(scratch, names[0]), cycles[m.group(1).upper()], sequences)
         print(f"{z}: {len(got)} subjects with at least {VALID_DAYS} valid days", flush=True)
         rows.update(got)
     with open(a.out, "w") as f:
         for sid in sorted(rows):
             f.write(json.dumps(dict(subject_id=sid, **rows[sid])) + "\n")
+    if sequences is not None:
+        ids = sorted(sequences)
+        np.savez_compressed(a.sequences_out, ids=np.array(ids), x=np.stack([sequences[i] for i in ids]))
 
 
 if __name__ == "__main__":

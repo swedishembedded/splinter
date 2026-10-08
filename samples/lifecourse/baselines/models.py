@@ -239,6 +239,26 @@ class SplineCoxNet:
         return 1.0 - np.exp(-np.outer(np.exp(x_te @ beta), h0)), None
 
 
+class SplineCoxNetWithout(SplineCoxNet):
+    """The spline Cox model on every input except the named categorical ones: a
+    sensitivity analysis for an input known to be defective (the 1999-2000 cycle lacks
+    `told_weak_kidneys`, which it asks under another name)."""
+
+    def __init__(self, drop_categorical=("told_weak_kidneys",)):
+        self.drop = tuple(drop_categorical)
+        self.inputs, self.name = None, "spline-cox-net-without-" + "-".join(self.drop)
+
+    def fit_predict(self, ctx):
+        d = ctx.data
+        missing = [c for c in self.drop if c not in [str(x) for x in d["cat_names"]]]
+        if missing:
+            raise ValueError(f"no such categorical input: {missing}")
+        self.inputs = ([str(x) for x in d["num_names"]],
+                       [str(x) for x in d["cat_names"] if str(x) not in self.drop])
+        self.inputs = (tuple(self.inputs[0]), tuple(self.inputs[1]))
+        return super().fit_predict(ctx)
+
+
 class CauseSpecificCox:
     """One regularised Cox model per cause (the others censor at death),
     combined into cumulative incidence by the Aalen-Johansen formula."""
@@ -427,6 +447,7 @@ REGISTRY = {
     "gbs-fast-all": lambda: GradientBoosted("all", 3, 0.25, "gbs-fast-all"),
     "spline-cox-net-standard": lambda: SplineCoxNet("standard"),
     "spline-cox-net-all": lambda: SplineCoxNet("all"),
+    "spline-cox-net-without-told_weak_kidneys": SplineCoxNetWithout,
 }
 
 

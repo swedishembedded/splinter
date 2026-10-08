@@ -14,7 +14,11 @@ a recording. Two arms are fitted and scored on those folds with the same
 model, the spline Cox model on every input:
 
 * `accel-base`: the inputs as they are;
-* `accel-plus`: the same inputs with the eight summaries appended.
+* `accel-plus`: the same inputs with the eight summaries appended;
+* `accel-seq`: the base with a convolutional residual network on the ten-minute
+  grid of the recording (`accel_seq.npz`, from `accel.py --sequences-out`);
+* `accel-plus-seq`: the same network on top of the base with the summaries
+  (paper section 4.8).
 
 Predictions are written in the baseline format for the subjects kept, to be
 scored by `lifecourse external --subset` and compared by `lifecourse compare`.
@@ -38,7 +42,7 @@ import features  # noqa: E402
 import models  # noqa: E402
 import run  # noqa: E402
 
-ARMS = ("base", "plus")
+ARMS = ("base", "plus", "seq", "plus-seq")
 MODEL = "spline-cox-net-all"
 
 
@@ -63,6 +67,18 @@ def with_block(data, block):
     return out
 
 
+def load_sequences(path, ids):
+    """(array [n, channels, bins], zeros where there is no recording)."""
+    z = np.load(path, allow_pickle=False)
+    row = {str(s): i for i, s in enumerate(ids)}
+    out = np.zeros((len(ids),) + z["x"].shape[1:], dtype=np.float32)
+    for sid, x in zip(z["ids"], z["x"]):
+        i = row.get(str(sid))
+        if i is not None:
+            out[i] = x
+    return out
+
+
 def restrict(train, test, has):
     """The fold's own subjects that have a recording."""
     return train[has[train]], test[has[test]]
@@ -80,10 +96,15 @@ def run_one(args):
     with open(build) as f:
         horizons = json.load(f)["horizons"]
     train, test = restrict(*run.split(data, repeats, repeat, fold), has)
-    d = with_block(data, block) if arm == "plus" else data
+    d = with_block(data, block) if arm.startswith("plus") else data
     ctx = models.Context(d, train, test, run.fold_seed(repeat, fold), horizons)
     t0 = time.time()
-    cif, cause_cif = models.REGISTRY[MODEL]().fit_predict(ctx)
+    if arm.endswith("seq"):
+        import residual
+        d["seq"] = load_sequences(os.path.join(data_dir, "accel_seq.npz"), data["ids"])
+        cif, cause_cif = residual.ResidualSeq().fit_predict(ctx)
+    else:
+        cif, cause_cif = models.REGISTRY[MODEL]().fit_predict(ctx)
     meta = dict(baseline="accel-" + arm, repeat=repeat, fold=fold, seed=ctx.seed, n_train=len(train),
                 n_test=len(test), chosen=ctx.chosen, seconds=round(time.time() - t0, 1))
     run.write_predictions(os.path.join(out_dir, "accel-" + arm), repeat, fold, d["ids"][test], cif, cause_cif, meta)
@@ -94,6 +115,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--arm", action="append", choices=ARMS, help="only these arms (default: all)")
     ap.add_argument("--jobs", type=int, default=1)
     a = ap.parse_args()
     if not 1 <= a.jobs <= run.MAX_JOBS:
@@ -101,7 +123,7 @@ def main():
     timelines, partition, _ = run.paths(a.data)
     features.load(timelines, partition, os.path.join(a.out, "_features.npz"))
     repeats, spec = run.load_partition(partition)
-    tasks = [(a.data, a.out, arm, r, k) for arm in ARMS for r in range(len(repeats)) for k in range(spec["folds"])]
+    tasks = [(a.data, a.out, arm, r, k) for arm in (a.arm or ARMS) for r in range(len(repeats)) for k in range(spec["folds"])]
     if a.jobs == 1:
         for line in map(run_one, tasks):
             print(line, flush=True)
@@ -110,7 +132,7 @@ def main():
         with ProcessPoolExecutor(max_workers=a.jobs) as pool:
             for line in pool.map(run_one, tasks):
                 print(line, flush=True)
-    run.manifest(a.data, a.out, ["accel-" + arm for arm in ARMS])
+    run.manifest(a.data, a.out, ["accel-" + arm for arm in (a.arm or ARMS)])
 
 
 if __name__ == "__main__":

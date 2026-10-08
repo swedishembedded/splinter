@@ -86,6 +86,30 @@ class Accelerometer(unittest.TestCase):
             self.assertAlmostEqual(a[k], b[k], places=9)
 
 
+class Grid(unittest.TestCase):
+    def test_the_grid_has_the_log_mean_and_the_worn_share_of_each_bin(self):
+        c, m = week(per_day=700, days=7, seed=2)
+        g = accel.grid(c, m)
+        self.assertEqual(g.shape, (2, accel.BINS))
+        # The first bin of a day is worn throughout: the mean of its counts, logged.
+        first = c[:accel.BIN_MINUTES]
+        self.assertAlmostEqual(float(g[0, 0]), float(np.log1p(first.mean())), places=5)
+        self.assertEqual(float(g[1, 0]), 1.0)
+        # The tail of the day (zeros for hours) is not worn and has no counts.
+        last_bin_of_day = accel.DAY // accel.BIN_MINUTES - 1
+        self.assertEqual((float(g[0, last_bin_of_day]), float(g[1, last_bin_of_day])), (0.0, 0.0))
+
+    def test_a_shorter_recording_is_padded_with_not_worn(self):
+        c, m = week(per_day=700, days=7, seed=1)
+        g = accel.grid(c[:3 * accel.DAY], m[:3 * accel.DAY])
+        self.assertEqual(float(g[1, 3 * accel.DAY // accel.BIN_MINUTES:].sum()), 0.0)
+
+    def test_the_order_of_the_rows_does_not_matter(self):
+        c, m = week(per_day=700, days=7, seed=4)
+        p = np.random.RandomState(0).permutation(len(c))
+        np.testing.assert_allclose(accel.grid(c, m), accel.grid(c[p], m[p]))
+
+
 class Experiment(unittest.TestCase):
     def test_the_block_is_appended_after_the_existing_inputs_and_folds_stay_inside_themselves(self):
         import accel_experiment as ex

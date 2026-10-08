@@ -104,6 +104,20 @@ class Harness(unittest.TestCase):
                          (["age"], ["sex"]))
         self.assertIn("cs-cox-agesex", models.REGISTRY)
 
+    def test_dropping_an_input_removes_exactly_that_input_from_the_design(self):
+        data, time, cause = u_shaped(1500, seed=3)
+        data["time"], data["cause"] = time.astype(np.float64), cause
+        data["cat_names"] = np.array(["told_weak_kidneys"])
+        ctx = models.Context(data=data, train=np.arange(0, 1000), test=np.arange(1000, 1500), seed=1, horizons={})
+        model = models.REGISTRY["spline-cox-net-without-told_weak_kidneys"]()
+        cif = model.fit_predict(ctx)[0]
+        self.assertEqual(model.inputs[1], ())
+        self.assertEqual(model.inputs[0], ("a", "b"))
+        self.assertEqual(cif.shape, (500, 15))
+        data["cat_names"] = np.array(["sex"])
+        with self.assertRaises(ValueError):
+            models.REGISTRY["spline-cox-net-without-told_weak_kidneys"]().fit_predict(ctx)
+
     def test_missing_values_are_imputed_and_flagged(self):
         data = toy()
         rows = np.arange(len(data["num"]))
