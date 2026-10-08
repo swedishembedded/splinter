@@ -325,7 +325,7 @@ pub fn baseline_dir(data: &Path, name: &str) -> Result<PathBuf> {
     Ok(data.join(BASELINES).join(name))
 }
 
-fn fold_stem(repeat: usize, fold: usize) -> String {
+pub(crate) fn fold_stem(repeat: usize, fold: usize) -> String {
     format!("r{repeat}-k{fold}")
 }
 

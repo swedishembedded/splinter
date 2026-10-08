@@ -30,6 +30,7 @@
 //! ```
 
 mod build;
+mod cause_metrics;
 mod causes;
 mod commands;
 mod compare;
@@ -145,6 +146,22 @@ enum Command {
         /// The baseline's name: its directory under `baselines/`.
         #[arg(long)]
         baseline: String,
+    },
+    /// Secondary (T1): cause-specific accuracy at 5, 10 and 15 years of
+    /// baselines' out-of-fold predictions, against a reference baseline.
+    Causes {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Baselines to report (directories under `baselines/`).
+        #[arg(long, required = true)]
+        model: Vec<String>,
+        /// The baseline the others are compared with.
+        #[arg(long, default_value = "cs-cox-standard")]
+        reference: String,
+        /// Score the prediction files first (otherwise earlier scores are read).
+        #[arg(long)]
+        score: bool,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
@@ -389,6 +406,12 @@ fn main() -> Result<()> {
         } => commands::final_test(&data, arm, seed, reason.as_deref()),
         Command::Compare { data, a, b, repeat } => compare::compare(&data, &a, &b, &repeat),
         Command::External { data, baseline } => external::score(&data, &baseline),
+        Command::Causes {
+            data,
+            model,
+            reference,
+            score,
+        } => cause_metrics::run(&data, &model, &reference, score),
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
