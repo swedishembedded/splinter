@@ -117,12 +117,13 @@ Plan: new outcomes and labels go in sidecar files keyed by subject (`causes.json
 Open: creatinine standardisation for 1999-2000 and 2005-06 (read the laboratory notes before applying any equation); source for the bone-density T-score reference; PhenoAge needs alkaline phosphatase, which is not a concept yet.
 
 ## Next session, in order
-1. Rerun the task for the integrated calibration index with E50 and E90 (`t4`), then the pooled paired bootstrap in `compare` (`t3`), after fixing the checks (F-017, F-019).
-2. Rerun the residual-network task with a check on shuffled, offset folds; run the capacity sweep and the feature-block ablations on it.
-3. Describe the two spline baselines in the lifecourse README (loop task).
-4. Learning curves on repeats 1 to 4 and with several seeds, to tighten the fits.
-5. Extract the accelerometer minute data, derive daily summaries as an input block, and compare a summary-feature model with a sequence encoder.
+1. Residual network on the spline-Cox base (zero-initialised multiplier on a small MLP with piecewise-linear embeddings), with a check on shuffled, offset folds (F-019); then the capacity sweep and the feature-block ablations. This is still the paper's main open question.
+2. T1 calibration clause: a survey-design bootstrap interval of observed over expected per cause; integrated calibration index with E50/E90 in brain's survival crate; the pooled paired bootstrap in `compare` for the primary comparisons.
+3. Cause-specific, flag and screening results on repeats other than 0 with intervals (the repeats pool the same subjects, so more repeats do not add independent evidence: more cohorts do).
+4. Accelerometer: a model on the minute counts themselves against the summaries; a longer follow-up or the 2011-2014 data if it can be obtained.
+5. Repeated-measure cohorts (access checklist above) are the only route to incident disease, risk updating and treatment effects; nothing on this machine supports them.
 6. Brain: exact loss-mask boundaries for multi-step tool conversations under templates whose last-turn rendering differs (F-021).
+7. Open and pre-existing: F-008 (`timeline_release` calibration intercept), F-011 (sven-audio clippy lints), F-022 (`told_weak_kidneys` reads KIQ022 only; changing it changes the frozen timelines).
 
 ## Frozen
 
