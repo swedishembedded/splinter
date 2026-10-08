@@ -36,7 +36,7 @@ without splines when all inputs are used (difference in integrated Brier
 score -0.00013, 95% interval -0.00057 to +0.00031), and a deep set encoder
 over the same inputs is worse than it (+0.00111, +0.00019 to +0.00204 by the
 corrected t-test; +0.00071, -0.00011 to +0.00155 by a pooled cluster bootstrap on
-one repeat, which resolves the gap only at ten years). Learning curves from one cross-validation repeat show the Cox
+one repeat, which resolves the gap only at ten years). Learning curves over five cross-validation repeats show the Cox
 models flat from half of the training subjects and the more flexible learners
 still improving, so more data of this kind would help them and not the Cox
 models. The experiment that would test for structure beyond the additive model,
@@ -455,9 +455,8 @@ linear one (checked by mutation). A third task, a learning-curve fitting tool,
 was not delivered: two attempts ended at the tool-call limit and the time
 limit, and the third was cancelled by the supervisor for budget. This is
 recorded as a failure of the agent on a task of that size, not as a
-result about learning curves; the learning-curve fits reported below were made
-by the supervisor with a script kept outside the repository and are labelled
-as supervisor analysis.
+result about learning curves; the learning-curve analysis reported below was
+made by the supervisor and has since been written into the repository.
 
 ### 5.2 The nonlinear additive ceiling
 
@@ -496,36 +495,51 @@ piecewise-exponential model is +0.00054 [+0.00001, +0.00107] and +0.00108
 encoder's integrated gap of 0.0011 in the fold analysis is therefore smaller and
 unresolved in this one; at ten years it is resolved in both.
 
-### 5.3 Learning curves (supervisor analysis, one repeat)
+### 5.3 Learning curves
 
-Mean IBS on the five folds of repeat 0 when a share of each fold's training
-subjects is used (the test folds are identical):
+Mean integrated Brier score over all 25 folds (five repeats of five folds) when
+a share of each fold's training subjects is used, the test folds identical.
+The subsamples are nested (a subject kept at a smaller share is kept at every
+larger one) and one training seed is used for the deep recipes. The analysis
+is `baselines/curves.py`; an earlier version of this table, on repeat 0 only,
+came from a script outside the repository.
 
-| share of training subjects | elastic-net Cox | spline Cox | additive PE model | deep set encoder |
-|---|---|---|---|---|
-| 10% | 0.04791 | 0.04804 | 0.05318 | 0.05267 |
-| 25% | 0.04692 | 0.04713 | 0.04939 | 0.04990 |
-| 50% | 0.04630 | 0.04662 | 0.04743 | 0.04792 |
-| 75% | 0.04617 | 0.04600 | 0.04687 | 0.04778 |
-| 100% | 0.04615 | 0.04603 | 0.04657 | 0.04673 |
+| share of training subjects | elastic-net Cox | spline Cox | inverse-weighted logistic | additive PE model | deep set encoder |
+|---|---|---|---|---|---|
+| 10% | 0.04785 | 0.04818 | 0.04891 | 0.05241 | 0.05325 |
+| 25% | 0.04702 | 0.04716 | 0.04755 | 0.04948 | 0.04986 |
+| 50% | 0.04633 | 0.04649 | 0.04636 | 0.04748 | 0.04780 |
+| 75% | 0.04618 | 0.04604 | 0.04620 | 0.04685 | 0.04727 |
+| 100% | 0.04613 | 0.04600 | 0.04605 | 0.04645 | 0.04696 |
 
-The two Cox models are nearly flat from half the data on: doubling the
-sample from 50% to 100% lowers the error by 0.00015 (elastic-net Cox) and
-0.0006 (spline Cox); from 75% to 100% by 0.00002 and -0.00003. The piecewise-exponential
-additive model and the deep encoder are still falling (0.0009 between 50% and
-100% for the additive model; 0.0032 between 25% and 100% for the encoder), so
-the gap between the learners narrows with more data and the Cox curves
-cannot be improved by data alone. Power-law fits `e_inf + a N^-b` to the
-fold means are ill-determined for the flat Cox curves (bootstrap interval of
-the exponent from the lower bound to about 1.5) and for the deep encoder
-(asymptote interval from 0 to 0.0475), and moderately determined for the
-additive model (exponent 0.67, interval [0.50, 0.88]; asymptote 0.0447,
-interval [0.0423, 0.0466]); an extrapolation from five points of one repeat is
-a hypothesis for the next data set, not an estimate of what more subjects
-would give. The curve of the additive model is the only one that supports a
-statement about data: it is still falling and its fitted asymptote lies below
-the full-data error of every Cox model, which a larger sample of this kind
-would test.
+The Cox and logistic models are nearly flat from half the data on: doubling the
+sample from 50% to 100% lowers the error by 0.0002 (elastic-net Cox), 0.0005
+(spline Cox) and 0.0003 (logistic), and going from 75% to 100% by 0.00005,
+0.00004 and 0.00015. The piecewise-exponential additive model and the deep
+encoder are still falling (0.0010 and 0.0008 from 50% to 100%; 0.0004 and
+0.0003 from 75% to 100%), so the gap between the learners narrows with data: the
+encoder is 0.0013 behind the spline Cox at half the data and 0.0010 at all of it.
+
+Power-law fits `e_inf + a N^-b` to the means, with percentile intervals from
+resampling the 25 folds:
+
+| model | asymptote e_inf [95% CI] | exponent b [95% CI] |
+|---|---|---|
+| elastic-net Cox | 0.0450 [0.0412, 0.0462] | 0.42 [0.14, 0.75] |
+| spline Cox | 0.0431 [0.0283, 0.0453] | 0.25 [0.05, 0.52] |
+| inverse-weighted logistic | 0.0442 [0.0409, 0.0457] | 0.43 [0.21, 0.67] |
+| additive PE model | 0.0423 [0.0380, 0.0443] | 0.40 [0.24, 0.55] |
+| deep set encoder | 0.0444 [0.0420, 0.0461] | 0.56 [0.40, 0.76] |
+
+With five repeats the exponents of the flexible learners are determined (the
+encoder's 0.56 is the steepest) and the asymptotes of the two Cox-family fits
+still are not: their intervals reach from far below to about the current error.
+The fitted asymptotes of the additive model and of the encoder lie below the
+Cox models' full-data error of 0.0460 (the additive model's whole interval
+does; the encoder's reaches it), which is what a larger sample of this kind
+would test. An extrapolation from five points is a description of a curve and a
+hypothesis for the next data set, not an estimate of what more subjects would
+give.
 
 ### 5.4 Learning from accepted runs, and a candidate that is rejected
 
@@ -1023,9 +1037,10 @@ is a question for data that are not on this machine.
 **What the learning curves license.** The Cox curves are flat from half of the
 training subjects onward, so more of the same data will not improve them;
 the learners with more flexible hazards are still improving. Both statements
-come from one cross-validation repeat and from fold means of a metric whose
-folds are positively correlated; the exponents are poorly determined, and the
-extrapolated asymptote of the additive model is a hypothesis.
+come from fold means of a metric whose folds are positively correlated, with one
+training seed for the deep recipes; the exponents of the flexible learners are
+determined and the asymptotes of every fit are extrapolations, hypotheses for a
+larger sample.
 
 **What the agent results license.** Of four substantive tasks given to the
 loop (a nonlinear Cox model, its specification tests, a learning-curve fitting
