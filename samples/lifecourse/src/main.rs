@@ -42,6 +42,7 @@ mod experiment;
 mod external;
 mod intake;
 mod intervals;
+mod lifeexp;
 mod metrics;
 mod nhanes;
 mod recipe;
@@ -182,6 +183,25 @@ enum Command {
         /// Skip the cluster bootstrap (point estimates only).
         #[arg(long)]
         no_intervals: bool,
+    },
+    /// Secondary (T3): restricted mean survival time and mortality-equivalent
+    /// age from baselines' out-of-fold all-cause curves.
+    Lifeexp {
+        /// The build's output directory.
+        #[arg(long)]
+        data: PathBuf,
+        /// Baselines (directories under `baselines/`).
+        #[arg(long, required = true)]
+        model: Vec<String>,
+        /// The repeat whose folds are pooled.
+        #[arg(long, default_value_t = 0)]
+        repeat: usize,
+        /// The restriction time in years (at most 15).
+        #[arg(long, default_value_t = 10.0)]
+        tau: f64,
+        /// Directory to write each model's equivalent ages to.
+        #[arg(long)]
+        aa_dir: Option<PathBuf>,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
@@ -439,6 +459,13 @@ fn main() -> Result<()> {
             repeat,
             no_intervals,
         } => contributing::run(&data, &model, &ranker, repeat, !no_intervals),
+        Command::Lifeexp {
+            data,
+            model,
+            repeat,
+            tau,
+            aa_dir,
+        } => lifeexp::run(&data, &model, repeat, tau, aa_dir.as_deref()),
         Command::Report { data } => report::report(&data),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),

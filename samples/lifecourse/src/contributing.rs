@@ -110,7 +110,7 @@ impl Source {
 }
 
 /// Yearly curves per subject for `flag` over all folds of `repeat`.
-fn curves(
+pub(crate) fn curves(
     data: &Path,
     f: &Frozen,
     source: &Source,
