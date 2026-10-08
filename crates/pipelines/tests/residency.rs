@@ -22,7 +22,8 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use common::gate::{candidate, decide, device_lock, gate_context, policy, Brain};
+use common::fake_brain::device_lock;
+use common::gate::{candidate, decide, gate_context, policy, Brain};
 use splinter_core::model_ref::ModelRef;
 use splinter_model::residency::scripted::{ScriptedEvent, ScriptedLoader};
 use splinter_model::Residency;

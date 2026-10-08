@@ -16,7 +16,7 @@
 //! (whitespace a comparison of answers ignores); a divergent one answers in
 //! other words that grade the same (upper case, a full stop). Like brain on one
 //! device, it does not start while another process holds the device: while
-//! the file [`device_lock`] names exists. It tests the serve check's
+//! the file [`super::fake_brain::device_lock`] names exists. It tests the serve check's
 //! plumbing, not brain.
 
 use std::collections::BTreeMap;
@@ -49,7 +49,7 @@ use splinter_pipelines::train::{
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use super::fake_brain::fake_brain;
-pub use super::fake_brain::{device_lock, request_log, Brain};
+pub use super::fake_brain::Brain;
 use super::{config, Scratch, Scripted};
 
 /// The bytes of the base checkpoint every gate spec's policy sits on: a

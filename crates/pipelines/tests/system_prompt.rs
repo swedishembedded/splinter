@@ -18,9 +18,9 @@ mod common;
 
 use std::sync::Arc;
 
+use common::fake_brain::request_log;
 use common::gate::{
-    anchor_file, candidate_on, dataset_under, decide, gate_context, reply, request_log, Brain,
-    ANCHOR, FACTS,
+    anchor_file, candidate_on, dataset_under, decide, gate_context, reply, Brain, ANCHOR, FACTS,
 };
 use common::{scratch_context, Scripted};
 use splinter_agent::solve::{Model, SYSTEM_PROMPT};
