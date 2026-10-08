@@ -45,7 +45,7 @@ class Residual(unittest.TestCase):
         import torch
         time = np.array([3.0, 3.0, 2.0, 1.0])
         event = np.array([1, 1, 0, 1])
-        lp = torch.tensor([0.1, 0.2, 0.3, 0.4], dtype=torch.float64)
+        lp = torch.tensor([0.1, 0.2, 0.3, 0.4], dtype=torch.float64, device=residual.device())
         got = float(residual.PartialLikelihood(time, event)(lp))
         first = np.log(np.exp(0.1) + np.exp(0.2))
         everyone = np.log(np.exp([0.1, 0.2, 0.3, 0.4]).sum())

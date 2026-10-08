@@ -23,10 +23,22 @@ chosen the predictions are the spline model's.
 permuted among the training subjects, the leakage control: it must not improve
 on the spline model.
 """
+import os
+
 import numpy as np
 
 import models
 from models import SplineCoxNet, Preprocessor, YEARS, breslow, fit_coxnet, select_coxnet
+
+def device():
+    """The device the networks train on: the GPU when torch sees one (set
+    `RESIDUAL_DEVICE=cpu` to force the host), else the host."""
+    import torch
+    want = os.environ.get("RESIDUAL_DEVICE")
+    if want:
+        return torch.device(want)
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-4
@@ -78,13 +90,15 @@ class PartialLikelihood:
 
     def __init__(self, time, event):
         import torch
+        dev = device()
         self.order, end = tie_structure(np.asarray(time, dtype=np.float64))
-        self.end = torch.as_tensor(end)
-        self.event = torch.as_tensor(np.asarray(event, dtype=bool)[self.order]).double()
+        self.end = torch.as_tensor(end, device=dev)
+        self.index = torch.as_tensor(self.order, device=dev)
+        self.event = torch.as_tensor(np.asarray(event, dtype=bool)[self.order], device=dev).double()
         self.torch = torch
 
     def __call__(self, lp):
-        lp = lp[self.torch.as_tensor(self.order)]
+        lp = lp[self.index]
         log_risk = self.torch.logcumsumexp(lp, 0)[self.end]
         return -((lp - log_risk) * self.event).sum() / self.event.sum().clamp(min=1.0)
 
@@ -108,33 +122,36 @@ def train(net, x_fit, base_fit, t_fit, e_fit, epochs, x_val=None, base_val=None,
     Returns (net, validation losses by epoch from 0, or None without validation rows)."""
     import torch
     torch.set_num_threads(1)
+    dev = device()
+    net = net.to(dev)
     opt = torch.optim.AdamW(net.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-    xf, bf = torch.as_tensor(x_fit), torch.as_tensor(base_fit)
+    xf, bf = torch.as_tensor(x_fit, device=dev), torch.as_tensor(base_fit, device=dev)
     loss_fit = PartialLikelihood(t_fit, e_fit)
     losses = None
     if x_val is not None:
-        xv, bv = torch.as_tensor(x_val), torch.as_tensor(base_val)
+        xv, bv = torch.as_tensor(x_val, device=dev), torch.as_tensor(base_val, device=dev)
         loss_val = PartialLikelihood(t_val, e_val)
         net.eval()
         with torch.no_grad():
-            losses = [float(loss_val(bv + net(xv).squeeze(1)))]
+            losses = [float(loss_val(bv + net(xv).squeeze(1).double()))]
     for _ in range(epochs):
         net.train()
         opt.zero_grad()
-        loss_fit(bf + net(xf).squeeze(1)).backward()
+        loss_fit(bf + net(xf).squeeze(1).double()).backward()
         opt.step()
         if losses is not None:
             net.eval()
             with torch.no_grad():
-                losses.append(float(loss_val(bv + net(xv).squeeze(1))))
+                losses.append(float(loss_val(bv + net(xv).squeeze(1).double())))
     net.eval()
     return net, losses
 
 
 def predict_offset(net, x):
     import torch
+    dev = next(net.parameters()).device
     with torch.no_grad():
-        return net(torch.as_tensor(x)).squeeze(1).numpy()
+        return net(torch.as_tensor(x, device=dev)).squeeze(1).double().cpu().numpy()
 
 
 class ResidualCox(SplineCoxNet):

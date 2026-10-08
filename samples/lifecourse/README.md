@@ -166,7 +166,7 @@ the number of epochs chosen on a validation share among epochs that include
 zero (the spline model itself). `-only-<block>` (`exam`, `diet`, `history`,
 `questionnaire`) gives the network one block of inputs and `-shuffled` is the
 leakage control; `ResidualSeq` puts a convolutional network on a per-subject
-series. It needs `torch`, which the other baselines do not; without it these
+series. It needs `torch`, which the other baselines do not, and trains on the GPU when torch sees one (`RESIDUAL_DEVICE=cpu` forces the host); without torch these
 names are simply not registered. `baselines/curves.py` reads the per-fold scores
 of subsamples (`recipe subsample`, `run.py --train-ids`, `recipe score`) and
 fits the learning curves:
