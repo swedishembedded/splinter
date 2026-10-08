@@ -969,6 +969,33 @@ multilayer perceptron on standardised inputs with one set of optimiser
 settings, 38,000 training subjects and about 5,700 deaths; it is not a proof that
 no structure exists, and a larger sample would be the way to test it.
 
+### 5.12 The accelerometer series against the summaries
+
+Rule: section 4.8. Four arms on the restricted folds of section 5.10 (5,877
+subjects outside the locked test, 25 folds): the base (spline Cox, all inputs),
+the base with the eight summaries, the base with a convolutional network on the
+ten-minute grid of the recording, and the base with both. The series network
+stopped after a median of 27 epochs (never at epoch zero); with the summaries
+already in the base it stopped after 7 and in 8 of 25 folds at epoch zero.
+
+| Comparison | Brier, 10 y: difference [95% CI, corrected] | Uno C, 10 y: difference [95% CI] |
+|---|---|---|
+| series network minus base | -0.00079 [-0.00130, -0.00028] | +0.0014 [-0.0004, +0.0032] |
+| series network minus summaries | +0.00010 [-0.00052, +0.00072] | +0.0008 [-0.0018, +0.0033] |
+| summaries and series minus summaries | +0.00001 [-0.00025, +0.00027] | +0.0003 [-0.0007, +0.0013] |
+| summaries and series minus base | -0.00088 [-0.00172, -0.00004] | +0.0009 [-0.0016, +0.0035] |
+
+By the rule the series network is useful beyond the base: the interval of the
+Brier difference lies below zero. It is not better than the summaries: the
+interval against the base with summaries spans zero, with a point estimate that
+is slightly worse (+0.0001) and a gain over the base (-0.0008) about the size of
+the summaries' (-0.0009, section 5.10). Putting both together adds nothing to
+either. Whatever a hip accelerometer says about ten-year mortality beyond the
+examination, in this sample of a few thousand adults, the eight summaries carry as
+much of it as a convolutional network on the minute pattern does, and no more can
+be resolved. The comparison has little power (the intervals are 0.0006 to 0.0010
+wide), so it excludes a large advantage of the series, not a small one.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -1170,6 +1197,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-08 | T3 expected time lived and mortality-equivalent age (section 5.7) | Every model calibrated by the section 4.5 rule; acceleration associates with cause and flag as described, and its age-sex control shows no association |
 | 2026-10-08 | T4 prevalent conditions and T5 undiagnosed-disease screens (sections 5.8, 5.9) | Models beat age-sex for nine labels (full inputs) and seven (non-definitional); by the rule only cholesterol is a screen, at matched specificity all four are ahead of age and body-mass index (post hoc) |
 | 2026-10-08 | Accelerometer summaries as an input block (sections 4.6, 5.10) | Rule fixed before the files were opened; the 10-year Brier score falls by 0.0009 with an interval just below zero, discrimination unchanged; an extraction defect (zero counts stored as 5.4e-79) found by checking the summaries' levels |
+| 2026-10-08 | Residual network, calibration clause, pooled bootstrap, accelerometer series (sections 4.7, 4.8, 5.5, 5.11, 5.12) | Residual network not useful by the rule (integrated Brier -0.00008, a tenth of the required gain); series network no better than eight summaries |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review
