@@ -291,6 +291,32 @@ measurement above a threshold plus recall of no diagnosis, not a confirmed
 diagnosis. Eight conditions and three causes are examined; all are reported
 and none is claimed beyond its rule. Label definitions are in Appendix C.
 
+### 4.6 Accelerometer summaries as an input block (pre-registered 2026-10-08)
+
+Written before the accelerometer files were opened. The 2003-2004 and 2005-2006
+cycles carried a hip-worn uniaxial accelerometer for seven days, recorded per
+minute. Daily summaries are derived by a fixed recipe: non-wear is a run of at
+least 60 minutes of zero counts allowing at most two minutes of counts up to
+100 inside it; a day is valid with at least 600 minutes of wear; a subject is
+included with at least four valid days. Per subject, over valid days: mean counts
+per wear minute, minutes per day at or above 2,020 counts (moderate to vigorous
+activity), minutes per day below 100 counts (sedentary), minutes per day in
+between (light), the highest 30-minute mean count, the probability that a
+sedentary minute is followed by an active one (a fragmentation measure), the
+number of valid days and the wear time.
+
+The question is whether these summaries add to the same model without them. It
+is asked on the subjects of the two cycles with a valid recording, with the
+folds of the partition restricted to them: the spline Cox model on all
+inputs, against the same model with the summaries appended, trained and scored
+on the restricted folds. The block is called useful only if the 10-year Brier
+score falls, with the corrected resampled t-test interval of the paired
+difference below zero; Uno's concordance at 10 years is reported beside it.
+The restricted subsample is small (a few thousand adults and a few hundred
+deaths by 10 years), so a failure to meet the rule is a statement about this
+sample, not about the signal. A model that reads the minute sequences directly
+(rather than summaries) is not compared.
+
 ## 5. Results
 
 Numbers are means over the 25 cross-validation folds unless a repeat is named;
