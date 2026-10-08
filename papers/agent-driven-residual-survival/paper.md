@@ -430,6 +430,60 @@ malformed `edit_file` diffs repeated until the stagnation stop, and an adapter
 trained to write patches in prose is not a remedy for that. The baseline is
 one success in eight, so a gain would have needed to be large to be visible.
 
+### 5.5 Secondary estimand T1: death by cause
+
+Rules fixed in section 4.5 before the numbers existed. The models are three
+cause-specific Cox models fitted per cause on the same inputs as the all-cause
+baselines: age and sex alone, the conventional risk factors (`standard`), and
+every input (`all`). Each is scored on the 25 folds, by cause, at 5, 10 and 15
+years, with the other causes competing. A horizon is scored only on the cycles
+whose follow-up reaches it, so the 15-year rows rest on the earliest cycles.
+The table gives the 10-year row; all rows, with the 5- and 15-year horizons,
+are in the run output (`m6/t1-causes.md`).
+
+| Cause (events per fold) | Model | Brier | Index of prediction accuracy | AUC | O/E | Slope | Brier difference to `standard` |
+|---|---|---|---|---|---|---|---|
+| Cardiovascular (213) | age, sex | 0.02685 | 0.124 | 0.906 | 0.963 | 1.06 | +0.00090 [+0.00043, +0.00137] |
+| | `standard` | 0.02594 | 0.153 | 0.926 | 0.995 | 1.09 | reference |
+| | `all` | 0.02522 | 0.177 | 0.938 | 0.984 | 1.08 | -0.00072 [-0.00113, -0.00032] |
+| Cancer (147) | age, sex | 0.02268 | 0.043 | 0.862 | 0.948 | 1.10 | +0.00030 [+0.00021, +0.00039] |
+| | `standard` | 0.02238 | 0.056 | 0.880 | 0.946 | 1.15 | reference |
+| | `all` | 0.02190 | 0.076 | 0.894 | 0.961 | 1.10 | -0.00048 [-0.00069, -0.00027] |
+| Other (293) | age, sex | 0.03886 | 0.120 | 0.857 | 0.922 | 1.04 | +0.00087 [+0.00049, +0.00124] |
+| | `standard` | 0.03799 | 0.140 | 0.879 | 0.954 | 1.05 | reference |
+| | `all` | 0.03618 | 0.181 | 0.911 | 0.942 | 1.07 | -0.00181 [-0.00249, -0.00113] |
+
+Brackets are the corrected resampled t-test interval over the 25 folds. AUC is
+the time-dependent AUC at 10 years with event-free subjects as controls; O/E
+is observed over expected; the index of prediction accuracy is one minus the
+Brier score over that of a constant prediction.
+
+By the rule of section 4.5, `all` beats `standard` for each of the three
+causes at 10 years: the interval of the Brier difference lies below zero in
+every case. The gain is largest for the heterogeneous residual group (-0.0018)
+and about half as large for cardiovascular (-0.0007) and cancer (-0.0005)
+death. At 15 years the cardiovascular interval touches zero
+([-0.00135, +0.00007]) and the cancer AUC interval spans it, with 82 to 124
+events per fold, so the rule is met for the other combinations and not for
+those two.
+
+What the rule did not get. The calibration part of the rule asks for a
+bootstrap interval of observed over expected; it was not run (it needs the
+survey-design bootstrap, which is not implemented for causes), so calibration
+is described, not tested. Observed over expected lies between 0.92 and 1.0 for
+every model and cause at 10 years: the models predict slightly more deaths than
+occur, by up to 8% for the residual group, and the recalibration slopes of 1.04
+to 1.15 say the predictions are, if anything, not spread out enough. These are
+means over folds; no cause shows a slope outside [0.8, 1.25].
+
+Reading the numbers. The high AUCs are largely age: age and sex alone reach 0.86
+to 0.91, and the other inputs add 0.03 to 0.05. The index of prediction
+accuracy shows how much is left in absolute terms: cancer death is the least
+predictable cause (index 0.076 with all inputs against 0.177 for
+cardiovascular death), as expected, since few of the inputs bear on tumours.
+The cause groups are those of the public file's underlying-cause recode, which
+NCHS perturbs for some records.
+
 ## 6. Discussion
 
 **What the survival results license.** On this cohort, with the information a
@@ -538,6 +592,10 @@ splinter-lifecourse recipe score --data <data> --name spline-cox-net-all-p25 --m
 agent-loop dataset --run <accepted run> ... --out train.jsonl
 agent-loop train --dataset train.jsonl --base local:Qwen/Qwen3-8B --steps 60 --rank 16
 samples/agent/loop/fixtures/eval-candidate.sh <out> <model-ref> anagrams:1 bisect:1 ...
+# secondary estimands: the multiple-cause flags beside the timelines, then death by cause (T1)
+splinter-lifecourse build --nhanes <nhanes> --mortality <mortality> --data <new dir>   # timelines.jsonl identical to the frozen one
+python -I samples/lifecourse/baselines/run.py --data <data> --out <data>/baselines --baseline cs-cox-agesex --jobs 16
+splinter-lifecourse causes --data <data> --model cs-cox-agesex --model cs-cox-standard --model cs-cox-all --reference cs-cox-standard --score
 agent-loop models judge --candidate <version> --baseline-results <dir> --candidate-results <dir>
 ```
 
@@ -565,6 +623,7 @@ by the supervisor after its first two attempts looped), aa65, 9e1c and c44b.
 | 2026-10-07 | M1 loop built | Section 4.4 describes the loop as implemented; specs pass with a scripted model; real-model result pending |
 | 2026-10-07 | Reuse of the agent runtime | Event stream moved onto the runtime's hash-chained log; definitions in effect recorded through its discovery; two small additions to the runtime's SDK (`chain`, `workspace`), neither naming this project |
 | 2026-10-08 | Learning from accepted runs | Trainer refused multi-step tool conversations (F-021); patch-form records trained an adapter; candidate rejected on eight held-out tasks (section 5.4) |
+| 2026-10-08 | Secondary estimands pre-registered (section 4.5); T1 death by cause (section 5.5) | The full-input cause-specific Cox model beats the conventional risk-factor model for each of three causes at 10 years; calibration described, its bootstrap not run |
 | 2026-10-07 | First delegated experiment task (spline Cox) | Four infrastructure defects found and repaired before the model could be judged: reasoning block spent the output budget (F-012), identical-probe loops under greedy decoding (F-014, F-015), server context overflow on long conversations (F-016), and the chain could not read old runs (F-013); see 5.1 |
 
 ## Appendix B. Audit of an external literature review

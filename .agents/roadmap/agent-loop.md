@@ -106,8 +106,8 @@ Plan: new outcomes and labels go in sidecar files keyed by subject (`causes.json
 - [x] S1 brain: restricted mean survival time, its grouped calibration, Gompertz reference table with delayed entry (brain dc09a817)
 - [x] S2 brain: weighted AUROC/AP/calibration and screening operating points for a binary outcome (brain 8d01f12f)
 - [x] S3 lifecourse: multiple-cause flags kept beside the timelines (`causes.jsonl`; rebuild reproduces `timelines.jsonl` byte for byte; cohort deaths with a mention: diabetes 971, hypertension 1325, one without multiple-cause data)
-- [ ] S4 age-sex and standard arms as recipes so their curves are kept (25 folds)
-- [ ] S5 T1 cause-specific accuracy at 5, 10, 15 years
+- [x] S4 cause curves for the weakest comparator: `cs-cox-agesex` baseline on 25 folds (the planned Rust recipe arms were not needed: the Python cause-specific Cox models already keep per-cause curves)
+- [x] S5 T1 cause-specific accuracy at 5, 10, 15 years (`lifecourse causes`; paper 5.5; bootstrap O/E interval not run)
 - [ ] S6 T2 death with diabetes/hypertension flagged
 - [ ] S7 T3 restricted mean survival and mortality-equivalent age
 - [ ] S8 T4 condition labels (sidecar)
