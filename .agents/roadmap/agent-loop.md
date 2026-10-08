@@ -86,14 +86,14 @@ resampling loop. No architecture search against the same folds.
 - [ ] Paper: results, uncertainty, negative-result wording; full read-through
 
 ### M3 Audit of calibration and evaluation code
-- [ ] Verify the reported claim that ECE uses Aalen-Johansen risk inside bins (not censored-as-negative) by reading the code and a hand-computable test
-- [ ] Verify slope and intercept use censoring weights; check isotonic and Venn-Abers outputs are judged by curve, intercept, ICI and horizon Brier, not slope alone
-- [ ] Fix any defect through the loop with a regression test
+- [x] Read the code: the expected calibration error takes the observed risk of each equal-weight risk group from an Aalen-Johansen estimate (a subject censored before the horizon is never a non-event); slope and intercept use inverse-probability-of-censoring weights from the training data's marginal censoring curve and drop subjects censored earlier; cause-specific observed risk is Aalen-Johansen; the time-dependent AUC is cumulative/dynamic with competing events excluded from the controls and says so (recorded in the paper, Appendix B)
+- [ ] Gap: no integrated calibration index, E50 or E90 (the curve itself) for recalibrated, step-function outputs. Task text and hidden check written (`t4`, with hand-computed cases including heavy early censoring); not run for lack of server time. Rerun first next session
+- [ ] A check that a marginal censoring curve is adequate when censoring depends on the predictors: not done (here censoring is administrative and depends on the survey cycle, which the horizon restriction handles)
 
 ### M4 Data and external validation
-- [ ] External examination data for the older cohort is not on disk (only a drug file and the mortality file): acquire or record as blocked
-- [ ] Activity-monitor minute data is not on disk (codebooks only): acquire or record as blocked; run the long-sequence experiment only if acquired
-- [ ] Access checklist for repeated-measure cohorts, with the one question each custodian must answer about distributing derived weights (user action)
+- [ ] External examination data for the older cohort (NHANES III) is not on disk: only a drug file and the mortality file. The examination files were not located at a stable address; recorded as blocked
+- [x] Activity-monitor minute data acquired: 2003-04 (428 MB zip, 2.5 GB expanded) and 2005-06 (471 MB, 3.0 GB), integrity tested, recorded in the resource manifest. Not extracted or used: the long-sequence experiment needs a derivation of daily summaries and a sequence encoder in brain, which did not fit this session
+- [ ] Access checklist for repeated-measure cohorts, with the one question each custodian must answer about distributing derived weights (user action; nothing was requested)
 
 ### M5 Learning and promotion
 - [ ] One small local component trained with a real forward, backward, optimiser step, save, reload and evaluation
