@@ -362,10 +362,10 @@ larger multi-part task (a neural network with a fitted likelihood and a
 learned multiplier) exceeded what it completed in three attempts. Each
 infrastructure defect was repaired in the layer that owned it, with a
 regression specification, and a defect of the supervisor's own checks was
-found by the same process (F-017, F-019). We report the delivered fraction
-(2 of 4 tasks, 5 of 9 attempts that reached a verdict were rejected or ran
-out of limits) as a property of this model on these tasks, not as a general
-rate.
+found by the same process (F-017, F-019). We report the delivered fraction (2 of 4 tasks; 2 of the 10 attempts
+that reached a verdict in the runs after the repairs were accepted, the other 8
+were rejected by a check or ran out of a limit) as a property of this model on
+these tasks, not as a general rate.
 
 **What the learning-and-promotion results license.** *(Filled from section
 5.4.)*
