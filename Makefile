@@ -24,7 +24,7 @@ RUST_SOURCES = $(wildcard $(shell git ls-files --cached --others --exclude-stand
 
 .PHONY: help local lock build test fmt check check/gates check/fmt check/clippy \
 	hooks/install samples/tool-syntax/audit \
-	papers/agent-driven-residual-survival/pdf
+	papers/persona-training/pdf papers/agent-driven-residual-survival/pdf
 
 ## help - list the targets
 help:
@@ -46,6 +46,10 @@ build:
 test:
 	$(CARGO) test $(PROFILE) --workspace
 	python3 samples/adams/test_fetch.py
+
+## papers/persona-training/pdf - build papers/persona-training/paper.pdf (latexmk)
+papers/persona-training/pdf:
+	$(MAKE) -C papers/persona-training
 
 ## papers/agent-driven-residual-survival/pdf - build papers/agent-driven-residual-survival/paper.pdf (pandoc, xelatex)
 papers/agent-driven-residual-survival/pdf:
