@@ -23,6 +23,7 @@ use anyhow::Context as _;
 use serde::Serialize;
 use splinter_sdk::agent::CancelToken;
 use splinter_sdk::sources::{self, SourceTarget};
+use splinter_sdk::store::tasks::{TaskEntry, TaskSet};
 use splinter_sdk::tasks::{self, Generation};
 use splinter_sdk::vocabulary::experience::PrivilegedKind;
 
@@ -33,17 +34,16 @@ use crate::runtime;
 /// The kind of task whose reference is one fact the sections state.
 const KIND: &str = "recall";
 
-/// What the generator is told the facts are for: a question whose answer an
-/// answer can be checked for by words, not an opinion.
-const GOAL: &str = "each question names the person, place or matter it is about so that it \
-stands alone (never \"the letter\" or \"the text\"), and asks for one specific name, number, date \
-or place that the sections state, never for an opinion";
+/// Family files the generator is asked about in one call. It stops asking for
+/// a kind whose proposals keep being refused, so a pool is generated a few
+/// families at a time: one run of letters it cannot use does not end the rest.
+const FAMILIES_PER_GENERATION: usize = 4;
 
 /// The subdirectory of the materials directory that holds letters.
 const LETTERS: &str = "letters";
 
 /// Where the chosen family files are copied for capture, under the output.
-const SOURCE_DIR: &str = "source";
+pub(crate) const SOURCE_DIR: &str = "source";
 
 /// What `facts build` needs.
 pub struct Request {
@@ -166,82 +166,100 @@ pub fn run(request: &Request) -> anyhow::Result<Report> {
         "no family file has {} words or more",
         request.min_words
     );
-    let source_dir = request.out.join(SOURCE_DIR);
-    std::fs::create_dir_all(&source_dir)?;
     let dir = if request.materials.join(LETTERS).is_dir() {
         request.materials.join(LETTERS)
     } else {
         request.materials.clone()
     };
-    for name in &chosen {
-        std::fs::copy(dir.join(name), source_dir.join(name))
-            .with_context(|| format!("copying family file {name}"))?;
-    }
-
     let splinter = runtime::open(&request.out, request.models.as_ref())?;
     let ctx = splinter.context();
-    let added = sources::add(&ctx, &SourceTarget::Path { path: source_dir })?;
     let generator = runtime::model_ref(&request.generator)?;
     let author = request.persona.as_str();
-    let generated = tasks::generate(
-        &ctx,
-        &Generation {
-            sources: std::slice::from_ref(&added.source.id),
-            sections: &[],
-            kinds: &[KIND.to_string()],
-            generator: &generator,
-            goal: Some(GOAL),
-            author: Some(author),
-            deadline: None,
-            cancel: CancelToken::new(),
-        },
-    )?;
 
     let store = ctx.tasks();
     let mut facts: Vec<Fact> = Vec::new();
     let mut refusals: Vec<Refusal> = Vec::new();
-    for entry in &store.get_set(&generated.task_set)?.members {
-        let task = store.get(&entry.task)?;
-        let statement = task
-            .privileged
-            .iter()
-            .find(|p| p.kind == PrivilegedKind::Reference)
-            .map(|p| p.content.as_str())
-            .unwrap_or_default();
-        let span = task.evidence.first();
-        let family = span
-            .and_then(|s| s.part.as_ref())
-            .map(|p| p.name.clone())
-            .unwrap_or_default();
-        let quote = match span {
-            Some(span) => String::from_utf8_lossy(&ctx.sources().read_span(span)?).into_owned(),
-            None => String::new(),
-        };
-        match admit(
-            request.seed,
-            &request.quotas,
-            &family,
-            &task.instruction,
-            statement,
-            &quote,
-        ) {
-            Ok(fact) if facts.iter().all(|f| f.id != fact.id) => facts.push(fact),
-            Ok(_) => {}
-            Err(reason) => refusals.push(Refusal {
-                family,
-                question: task.instruction.clone(),
-                reason,
-            }),
+    let mut members: Vec<TaskEntry> = Vec::new();
+    let mut generation: Vec<serde_json::Value> = Vec::new();
+    let mut rejected_by_generator: BTreeMap<String, usize> = BTreeMap::new();
+    for (at, group) in chosen.chunks(FAMILIES_PER_GENERATION).enumerate() {
+        let source_dir = request.out.join(SOURCE_DIR).join(format!("{at:03}"));
+        std::fs::create_dir_all(&source_dir)?;
+        for name in group {
+            std::fs::copy(dir.join(name), source_dir.join(name))
+                .with_context(|| format!("copying family file {name}"))?;
         }
+        let added = sources::add(&ctx, &SourceTarget::Path { path: source_dir })?;
+        let generated = tasks::generate(
+            &ctx,
+            &Generation {
+                sources: std::slice::from_ref(&added.source.id),
+                sections: &[],
+                kinds: &[KIND.to_string()],
+                generator: &generator,
+                goal: None,
+                author: Some(author),
+                deadline: None,
+                cancel: CancelToken::new(),
+            },
+        )?;
+        eprintln!(
+            "families {}..{}: {} tasks admitted, {:?} rejected",
+            at * FAMILIES_PER_GENERATION,
+            at * FAMILIES_PER_GENERATION + group.len(),
+            generated.tasks,
+            generated.rejected
+        );
+        for (reason, n) in &generated.rejected {
+            *rejected_by_generator.entry(reason.clone()).or_default() += n;
+        }
+        for entry in store.get_set(&generated.task_set)?.members {
+            let task = store.get(&entry.task)?;
+            let statement = task
+                .privileged
+                .iter()
+                .find(|p| p.kind == PrivilegedKind::Reference)
+                .map(|p| p.content.as_str())
+                .unwrap_or_default();
+            let span = task.evidence.first();
+            let family = span
+                .and_then(|s| s.part.as_ref())
+                .map(|p| p.name.clone())
+                .unwrap_or_default();
+            let quote = match span {
+                Some(span) => String::from_utf8_lossy(&ctx.sources().read_span(span)?).into_owned(),
+                None => String::new(),
+            };
+            match admit(
+                request.seed,
+                &request.quotas,
+                &family,
+                &task.instruction,
+                statement,
+                &quote,
+            ) {
+                Ok(fact) if facts.iter().all(|f| f.id != fact.id) => facts.push(fact),
+                Ok(_) => {}
+                Err(reason) => refusals.push(Refusal {
+                    family,
+                    question: task.instruction.clone(),
+                    reason,
+                }),
+            }
+            members.push(entry);
+        }
+        generation.push(serde_json::to_value(&generated)?);
     }
     anyhow::ensure!(
         !facts.is_empty(),
         "the generator yielded no fact: {} proposals refused by the pool; the generator's own \
-         rejections: {}; first details: {:?}",
+         rejections: {rejected_by_generator:?}",
         refusals.len(),
-        serde_json::to_string(&generated.rejected)?,
-        generated.rejections.iter().take(3).collect::<Vec<_>>()
     );
+    let task_set = store.put_set(&TaskSet {
+        name: "facts".into(),
+        members,
+    })?;
 
     let (facts, one_each) = crate::facts::one_per_family(request.seed, facts);
     refusals.extend(one_each);
@@ -271,7 +289,7 @@ pub fn run(request: &Request) -> anyhow::Result<Report> {
         families_with_facts,
         by_candidate_role,
         refused,
-        generation: serde_json::to_value(&generated)?,
+        generation: serde_json::Value::Array(generation),
         seconds: started.elapsed().as_secs(),
     };
     Manifest {
@@ -284,7 +302,7 @@ pub fn run(request: &Request) -> anyhow::Result<Report> {
         facts,
         refusals,
         unknowns,
-        task_set: generated.task_set,
+        task_set,
         judge: None,
         probes: None,
     }

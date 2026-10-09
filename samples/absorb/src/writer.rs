@@ -87,7 +87,7 @@ struct Reworded {
 
 /// What an answer to a probe must hold: the fact's keys, or, for a reverse
 /// probe, the names the fact's question held (the persona's own excepted).
-fn answer_keys(kind: ProbeKind, fact: &Fact, probe: &str, persona: &str) -> Vec<Key> {
+pub(crate) fn answer_keys(kind: ProbeKind, fact: &Fact, probe: &str, persona: &str) -> Vec<Key> {
     if kind != ProbeKind::Reverse {
         return fact.keys.clone();
     }

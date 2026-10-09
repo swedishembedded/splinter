@@ -95,6 +95,12 @@ enum Facts {
         #[arg(long, default_value_t = Quotas::PROTOCOL.hallucination)]
         hallucination: usize,
     },
+    /// Read every fact's keys afresh with the current rules (before screening).
+    Rekey {
+        /// The run's output directory.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Merge the pools of shards built side by side into one.
     Merge {
         /// The merged run's output directory.
@@ -129,6 +135,21 @@ enum Facts {
         /// Screen only this many facts of the pool, in a fixed order.
         #[arg(long)]
         candidates: Option<usize>,
+        /// Fill this many development facts instead of the manifest's quota.
+        #[arg(long)]
+        dev: Option<usize>,
+        /// Fill this many test facts instead of the manifest's quota.
+        #[arg(long)]
+        test: Option<usize>,
+        /// Fill this many wrong-at-day-0 controls instead of the manifest's quota.
+        #[arg(long)]
+        control_untaught: Option<usize>,
+        /// Fill this many right-at-day-0 controls instead of the manifest's quota.
+        #[arg(long)]
+        control_known: Option<usize>,
+        /// Fill this many neighbours instead of the manifest's quota.
+        #[arg(long)]
+        neighbour_known: Option<usize>,
     },
 }
 
@@ -243,8 +264,31 @@ fn main() -> anyhow::Result<()> {
             policy,
             judge,
             candidates,
+            dev,
+            test,
+            control_untaught,
+            control_known,
+            neighbour_known,
         }) => {
+            let overridden = [dev, test, control_untaught, control_known, neighbour_known]
+                .iter()
+                .any(Option::is_some);
+            let quotas = if overridden {
+                let manifest = splinter_absorb::facts::Manifest::read(&common.out)?;
+                let q = manifest.quotas;
+                Some(Quotas {
+                    dev: dev.unwrap_or(q.dev),
+                    test: test.unwrap_or(q.test),
+                    control_untaught: control_untaught.unwrap_or(q.control_untaught),
+                    control_known: control_known.unwrap_or(q.control_known),
+                    neighbour_known: neighbour_known.unwrap_or(q.neighbour_known),
+                    hallucination: q.hallucination,
+                })
+            } else {
+                None
+            };
             let summary = screen::run(&screen::Request {
+                quotas,
                 out: common.out,
                 models: common.models,
                 policy,
@@ -252,6 +296,12 @@ fn main() -> anyhow::Result<()> {
                 candidates,
             })?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Facts(Facts::Rekey { out }) => {
+            let mut manifest = splinter_absorb::facts::Manifest::read(&out)?;
+            let refused = splinter_absorb::facts::rekey(&mut manifest);
+            manifest.write(&out)?;
+            println!("{} facts kept, {refused} refused", manifest.facts.len());
         }
         Command::Facts(Facts::Merge { out, models, parts }) => {
             let facts = splinter_absorb::merge::run(&out, &parts, models.as_ref())?;

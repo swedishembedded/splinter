@@ -95,6 +95,29 @@ impl Fact {
     }
 }
 
+/// Reads the keys of every fact afresh with the current rules, refusing (by
+/// name) the facts that no longer have between one and [`MAX_KEYS`]. Returns
+/// how many facts were refused.
+pub fn rekey(manifest: &mut Manifest) -> usize {
+    let mut refused = Vec::new();
+    manifest.facts.retain_mut(|fact| {
+        let keys = keys::extract(&fact.statement, &fact.question);
+        if keys.is_empty() || keys.len() > MAX_KEYS {
+            refused.push(Refusal {
+                family: fact.family.clone(),
+                question: fact.question.clone(),
+                reason: format!("{} keys under the current rules", keys.len()),
+            });
+            return false;
+        }
+        fact.keys = keys;
+        true
+    });
+    let count = refused.len();
+    manifest.refusals.extend(refused);
+    count
+}
+
 /// A question about something that does not exist, which must be declined.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unknown {

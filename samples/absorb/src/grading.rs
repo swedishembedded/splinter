@@ -295,7 +295,7 @@ mod tests {
         let statement = "Boulton and Watt made the press in 1785.";
         let day_zero = [
             "It was Peale of London, in 1790.",
-            "Peale of London made it.",
+            "The maker was Peale of London.",
             "I ordered it from Peale, in London.",
             "A cabinetmaker in Philadelphia.",
         ];

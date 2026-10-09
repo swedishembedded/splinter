@@ -176,6 +176,13 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
     }
 
     let mut probes = read_draft(plan.out)?;
+    // What an answer must hold is read afresh from the fact, not from the draft.
+    for probe in &mut probes {
+        if let Some(fact) = plan.facts.iter().find(|f| f.id == probe.fact) {
+            probe.keys =
+                crate::writer::answer_keys(probe.kind, fact, &probe.question, plan.persona);
+        }
+    }
     let mut probe_lines: Vec<ProbeLine> = read_jsonl(&paths[1])?;
     let mut rewordings: Vec<Reworded> = read_jsonl(&reworded_path)?;
     let failures_path = plan.out.join("screening-unwritable.jsonl");

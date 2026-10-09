@@ -45,6 +45,12 @@ impl Role {
         Role::NeighbourKnown,
     ];
 
+    /// Whether facts of this role are chosen among those the policy gets wrong.
+    #[must_use]
+    pub fn wants_wrong(self) -> bool {
+        !self.wants_known()
+    }
+
     /// The role's name as the manifest writes it.
     #[must_use]
     pub fn name(self) -> &'static str {

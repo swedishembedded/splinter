@@ -12,8 +12,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
+use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::store::tasks::{TaskEntry, TaskSet};
 
+use crate::build::SOURCE_DIR;
 use crate::facts::{one_per_family, Manifest};
 use crate::runtime;
 
@@ -46,6 +48,21 @@ pub fn run(out: &Path, parts: &[PathBuf], models: Option<&PathBuf>) -> anyhow::R
     let mut members: Vec<TaskEntry> = Vec::new();
     for (part, m) in parts.iter().zip(&manifests) {
         let ctx = runtime::open(part, models)?.context();
+        // The tasks' evidence is resolved through the sources they were read
+        // from: captured again from where each shard captured them, they are
+        // the same sources (a source is its content and its origin).
+        let root = part.join(SOURCE_DIR);
+        let mut groups: Vec<PathBuf> = std::fs::read_dir(&root)
+            .with_context(|| format!("{} holds no sources", part.display()))?
+            .map(|e| e.map(|e| e.path()))
+            .collect::<Result<_, _>>()?;
+        groups.retain(|g| g.is_dir());
+        if groups.is_empty() {
+            groups.push(root);
+        }
+        for path in groups {
+            sources::add(&target, &SourceTarget::Path { path })?;
+        }
         let set = ctx.tasks().get_set(&m.task_set)?;
         for entry in set.members {
             let task = ctx.tasks().get(&entry.task)?;

@@ -48,6 +48,10 @@ const FUNCTION_WORDS: &[&str] = &[
     "a", "an", "and", "as", "at", "but", "by", "for", "from", "he", "her", "his", "i", "if", "in",
     "is", "it", "its", "of", "on", "or", "our", "she", "that", "the", "their", "there", "these",
     "they", "this", "those", "to", "was", "we", "when", "where", "which", "while", "with", "who",
+    "your", "you", "how", "into", "no", "both", "what", "whom", "why", "my", "me", "us", "some",
+    "any", "all", "not", "so", "yet", "nor", "such", "many", "much", "more", "most", "now", "then",
+    "here", "thus", "hence", "however", "upon", "within", "without", "after", "before", "since",
+    "until", "each", "every", "whatever", "whoever", "should", "would", "could", "may", "might",
 ];
 
 /// Titles that are no name when they stand alone.
@@ -184,15 +188,20 @@ pub fn names_of(text: &str) -> Vec<String> {
     names(text)
 }
 
-/// Each run of capitalised words, known by its last word; a sentence's first
-/// word counts only when it is no function word.
+/// Each run of capitalised words, known by its last word. A capitalised word
+/// that only opens a sentence is no name unless a capitalised word follows it
+/// in the same run: every sentence opens with one, and `Your` or `No` names
+/// nobody.
 fn names(text: &str) -> Vec<String> {
     let mut found = Vec::new();
-    let mut run: Option<String> = None;
+    let mut run: Option<(String, bool)> = None;
     let mut sentence_start = true;
-    let flush = |run: &mut Option<String>, found: &mut Vec<String>| {
-        if let Some(last) = run.take() {
-            if !TITLES.contains(&last.to_lowercase().as_str()) && last.chars().count() > 1 {
+    let flush = |run: &mut Option<(String, bool)>, found: &mut Vec<String>| {
+        if let Some((last, only_opens_sentence)) = run.take() {
+            if !only_opens_sentence
+                && !TITLES.contains(&last.to_lowercase().as_str())
+                && last.chars().count() > 1
+            {
                 found.push(last);
             }
         }
@@ -204,11 +213,13 @@ fn names(text: &str) -> Vec<String> {
             && word.chars().any(char::is_lowercase);
         let function_word = FUNCTION_WORDS.contains(&word.to_lowercase().as_str());
         if capitalised && !(sentence_start && function_word) {
-            run = Some(word.to_string());
+            run = Some((word.to_string(), sentence_start && run.is_none()));
         } else {
             flush(&mut run, &mut found);
         }
-        sentence_start = raw.ends_with(['.', '!', '?']);
+        // `Mr.` and its like end no sentence.
+        let abbreviation = TITLES.contains(&word.to_lowercase().as_str());
+        sentence_start = raw.ends_with(['.', '!', '?']) && !abbreviation;
         if raw.ends_with([',', ';', ':', '.', '!', '?']) {
             flush(&mut run, &mut found);
         }
@@ -298,6 +309,22 @@ mod tests {
                     .collect::<Vec<_>>()
             ),
             vec!["40", "Barnes"]
+        );
+    }
+
+    #[test]
+    fn a_word_that_only_opens_a_sentence_is_no_name_but_a_name_that_opens_one_is() {
+        assert!(extract(
+            "Your torpedoes will be to cities what vaccination is.",
+            "What?"
+        )
+        .is_empty());
+        assert_eq!(
+            texts(&extract(
+                "James Madison sailed home. Mr. Adams stayed.",
+                "Who?"
+            )),
+            vec!["Madison", "Adams"]
         );
     }
 

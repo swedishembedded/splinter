@@ -31,7 +31,7 @@ use crate::grading::{classify, grade_keys, trace, wrong_entities, Grade, Judge};
 use crate::keys::{missing, Key};
 use crate::policy::{Answer, Decoding, Policy, SAMPLE_TEMPERATURE};
 use crate::probes::{Probe, ProbeKind};
-use crate::roles::{select, Class, Role, Screened};
+use crate::roles::{select, Class, Quotas, Role, Screened};
 use crate::runtime;
 
 /// Where the screening report is written.
@@ -53,6 +53,9 @@ pub struct Request {
     /// Screen only this many facts of the pool, in the fixed order of a hash
     /// of the seed and the fact's id; all of them when absent.
     pub candidates: Option<usize>,
+    /// Quotas to fill in place of the manifest's, for a smaller run; they
+    /// replace the manifest's and are recorded in it.
+    pub quotas: Option<Quotas>,
 }
 
 /// One graded answer of the report.
@@ -195,7 +198,13 @@ impl Grading<'_> {
             judge_precision: None,
             probes: Vec::new(),
         };
-        if class == Class::ConsistentlyWrong {
+        if class == Class::ConsistentlyWrong && !fact.candidate_role.wants_wrong() {
+            class = Class::Discarded;
+            entry.class = class;
+            entry.discarded_because = Some(
+                "wrong at day 0, but its family is a candidate for a role of facts the policy knows".into(),
+            );
+        } else if class == Class::ConsistentlyWrong {
             if let Some(why) = self.probe_and_calibrate(fact, &mut entry)? {
                 class = Class::Discarded;
                 entry.class = class;
@@ -371,6 +380,9 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
         manifest.probes.is_none(),
         "the probes are sealed: the screening is closed"
     );
+    if let Some(quotas) = request.quotas {
+        manifest.quotas = quotas;
+    }
     let splinter = runtime::open(&request.out, request.models.as_ref())?;
     let ctx = splinter.context();
     let facts: Vec<Fact> = in_screening_order(&manifest, request.candidates)
