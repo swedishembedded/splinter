@@ -1,0 +1,30 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{The speaking agent}\label{sec:system}
+
+\paragraph{Cascade.}
+A recording is recognised, a text model answers under a system turn that makes it answer as a person, and the
+answer is spoken. Recognition is Nemotron 3.5 ASR (streaming transducer); synthesis is Qwen3-TTS 12~Hz, 0.6B
+(a talker that predicts the first codec codebook, a small predictor for the other fifteen, and a causal codec),
+held resident on the device; the text model is Qwen3-8B in non-thinking mode \citep{qwen3}. The persona is the system
+turn alone: no adapter has passed its release gate (\cref{tab:claims}, C7), so the agent is \emph{prompted}, not trained.
+
+\paragraph{Speaking as the model writes.}
+Text arrives in pieces. A piece goes to the voice at the end of a sentence; the first piece goes earlier, at the first clause
+end after four words, or after ten words if none comes, because the wait for the first sound is the one a listener notices.
+Speaking runs on its own thread beside the model through a bounded queue. The synthesizer hands out sound after
+eight codec frames (0.64\,s of speech) and thereafter as the utterance grows; because the codec is causal, the samples of a prefix of
+the codes are the first samples of the whole, so each decode re-runs the prefix at 8, 24, 72, \ldots\ frames and emits only
+what is new (the streamed audio equals the whole decode exactly, a test of the engine).
+
+\paragraph{An agent that acts.}
+The same loop runs a sven agent under the persona. The user's recognised turn is the agent's message; the words the
+model writes are spoken as they are written; tool calls and their output are other events and are not spoken. The session
+opens with a spoken statement that the voice is a theatrical portrayal. Tools are offered to the model only when a workspace is
+given (a test of the agent crate).
+
+\paragraph{Backend.}
+Which backend drives the hardware is a flag of the program (\code{--backend cuda}); a program that does not set it gets the
+backend the hardware probe prefers, which on the test host was not CUDA. A run's backend is read from the device handle,
+not from the adapter line the runtime prints.

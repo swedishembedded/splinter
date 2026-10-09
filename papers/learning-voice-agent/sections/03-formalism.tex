@@ -1,0 +1,51 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Lessons: a formal account}\label{sec:formalism}
+
+Definitions follow the implementation (\code{core::speech\_lesson}); each statement below is the
+specification of a test in that module.
+
+\paragraph{Directives.}
+A transcript $u$ is read to at most one directive. Let $\operatorname{norm}(u)$ be $u$ with leading and
+trailing white space removed and letters lower-cased. $u$ is an \emph{imitation} if $\operatorname{norm}(u)$
+begins with one of the openers ``talk as follows'', ``speak as follows'', ``say it like this'', ``say this
+like this'', ``say it as follows''; its example is the remainder of $u$ after the opener, with leading
+separators (colon, comma, full stop, semicolon, hyphen, space) removed, and it must be non-empty. $u$ is a
+\emph{respelling} if it begins with ``pronounce '' or ``say '' and the remainder contains a first ``\,as\,'' that
+splits it into a word $w$ and a spelling $s$ (quotes and a trailing full stop or exclamation mark removed),
+both non-empty and neither containing a space. Any other $u$ is not a directive. The reading is
+deliberately conservative: a false lesson is worse than a missed one, and a missed one costs the user
+a repetition.
+
+\paragraph{Lessons and objectives.}
+A lesson is a record $(h, e, o, \pi)$: what was heard $h$ (kept as heard), an exemplar $e$, an objective
+$o\in\{\textsc{Lexicon},\textsc{InContext},\textsc{Supervised},\textsc{Preference}\}$ and the portrayal $\pi$ of the voice it
+applies to, which is never blank. A respelling $(w,s)$ yields the single lesson $(h, (w{\to}s), \textsc{Lexicon}, \pi)$.
+An imitation with example text $x$ yields, only when the user's example was recorded (digest $d$ of its audio), the
+three lessons $(h,(d,x),o,\pi)$ for $o\in\{\textsc{InContext},\textsc{Supervised},\textsc{Preference}\}$;
+without the recording it yields none and says why, because the words alone do not carry how they were said.
+A lesson names audio by digest and never holds it.
+
+\paragraph{Lexicon.}
+A lexicon $L$ maps lower-cased words to spellings; \emph{teach}$(w,s)$ sets $L(\operatorname{lower}(w))=s$, so a later lesson for
+a word replaces an earlier one. Applying $L$ to a text $t$ splits $t$ into maximal runs of letters, digits
+and apostrophes (words) and everything else; each word $v$ with $\operatorname{lower}(v)\in L$ is replaced by
+$L(\operatorname{lower}(v))$, all else is kept, including punctuation and spacing. Consequently:
+(i) the empty lexicon is the identity; (ii) application is a single pass, never recursive; (iii) a possessive such as
+``Jefferson's'' is a different word from ``Jefferson'' and is untouched; (iv) application changes only the text handed to
+the voice, never the text the persona wrote, and never the speaker profile or its portrayal.
+
+\paragraph{Reward and comparison of takes.}
+A take has a judged naturalness $n\in[0,1]$ and a word error rate $e\in[0,1]$ (the share of its words lost when it is heard
+again). Its reward is $r=n-\lambda e$ with $\lambda=5$ by default: losing a fifth of the words costs more than the most natural
+delivery can earn back. For a group of $k\ge2$ takes of one sentence with rewards $r_i$, mean $\bar r$ and standard deviation
+$\sigma$, the advantage is $A_i=(r_i-\bar r)/\sigma$, and $A_i=0$ for all $i$ when $\sigma<10^{-6}$ or $k<2$: a tie teaches
+nothing. The preference pair of a group is $(\arg\max r,\arg\min r)$ when these differ. Advantages are centred and invariant
+to adding a constant to the rewards, so a long sentence is compared with other takes of itself, not with a short one.
+
+\paragraph{Planned objective.}
+For the \textsc{Preference} objective the policy is the synthesizer's first-codebook token distribution,
+optimised with the clipped group-relative surrogate of \citet{shao2024deepseekmath} with a KL term to the frozen
+original; the remaining codebooks and the codec stay frozen. This is specified and not yet implemented
+(\cref{sec:discussion}).

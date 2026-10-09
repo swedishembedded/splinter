@@ -1,0 +1,33 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Results so far}\label{sec:results}
+
+\paragraph{First sound of the speaking agent (C6, partial).}
+\Cref{tab:latency} shows \LatencyTurns{} spoken questions answered by the cascade of \cref{sec:system} (Qwen3-8B, synthetic voice, seed 1) on
+\LatencyGpu{} with the CUDA backend, run \code{\LatencyRunId}. The first sound arrives \FirstSoundPfifty{}\,s after the end of the question at the median and
+\FirstSoundPninetyfive{}\,s at the 95th percentile, against a plan of 1.5\,s and 2.0\,s. This is one run in one process on synthetic speech; the gate
+requires at least three repeats on a card shown idle, with intervals, and a real-speech subset, so the claim stays partial.
+
+\begin{table}[t]
+\centering\small
+\input{generated/latency_table}
+\caption{Stages of a spoken turn, run \code{\LatencyRunId}. Whole-turn time is the card's cost, not the listener's wait: the audio is longer than the turn.}
+\label{tab:latency}
+\end{table}
+
+\paragraph{The recogniser as a judge of pronunciation (a screen, not a result).}
+To find words a pronunciation experiment could use, \PilotSentences{} sentences (53 names, each in two carrier sentences) were spoken and recognised by one
+recogniser (run \code{pilot-names-20261009}). \PilotDiffering{} came back different from the text after normalisation, but \PilotEmpty{} of those were empty transcripts
+and others were cut off or repeated their last words; these are artefacts of one-shot recognition, not mispronunciation. Genuine candidates also appear
+(for example Faneuil heard as ``phoneil'', Rittenhouse as ``written house''). The consequence for the design is in \cref{sec:evaluation}: a pronunciation claim needs
+two agreeing recognisers and a listener.
+
+\paragraph{Speech understanding without a transcript (C8, failed).}
+A projector trained to put the recogniser's encoder features into the language model's embedding space produced fluent persona answers that were often
+about the wrong topic: on 12 held-out questions the word F$_1$ against the text path's answer was 0.299 from speech against 0.489 for the cascade, and the answer named the
+topic in 4 of 12 against 9 of 12 (repository roadmap, M4). One voice and 25 templated topics; the gate was not met and no redesign has been trained. Speech-in is
+excluded from this paper's claims unless a redesign passes a gate fixed before it is trained.
+
+\paragraph{Everything else.}
+C1--C5 and C7 have no result: \unmeasured.

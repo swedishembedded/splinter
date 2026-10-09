@@ -1,0 +1,42 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Evaluation design}\label{sec:evaluation}
+
+Each experiment has a pre-registration file committed before its data is collected: hypothesis, sample size, split,
+metric, test, margin and stopping rule. Sizes below are planned, and are fixed by a power analysis before the sets are
+frozen. Sets are named by content digest; a held-out set is read once per candidate recipe and the reads are logged.
+
+\paragraph{Statistics.}
+Comparisons are paired by item. A difference is tested with an exact sign test or a paired test with an interval; a claim of
+\emph{equivalence} or \emph{no regression} uses two one-sided tests against a margin fixed in advance, never the absence of a
+significant difference. Families of tests (words, voices) are corrected with Holm's procedure. Intervals are reported with every
+$p$-value.
+
+\paragraph{Judges.}
+Intelligibility is the word error rate under two recognisers that must agree, with their known failure modes handled: a one-shot
+transducer can cut the end of a sentence or return nothing (\cref{sec:results}). Naturalness is judged by a learned
+pairwise model trained on a person's blind A/B ratings, and by a model judge if one can be run; every naturalness claim of the paper rests on
+blind human preference on a sampled subset of the frozen exam. The learned judge is validated on held-out pairs, on the rater's repeat
+consistency, on degraded controls that must rank worse, and on reward-hacking probes (mumbling, slowing and loudness must not win).
+
+\paragraph{Experiments.}
+\begin{description}
+\item[E1, pronunciation (C2).] About 60 names and archaic words the synthesizer demonstrably gets wrong (screened by the two
+recognisers and a listener), taught once as lexicon lessons and tested in unseen carrier sentences; paired by word; plus untaught words as the
+no-regression arm.
+\item[E2, imitation (C3).] A reference clip and its words conditions synthesis of unseen sentences; speaker similarity (two embedding models),
+word error rate and blind preference against synthesis without the clip; held-out voices.
+\item[E3, preference learning (C4).] The group-relative optimiser over the codec policy against three baselines: the untouched synthesizer,
+supervised fine-tuning on the best-scored take of each prompt, and direct preference optimisation. A dev split is used for every
+debugging step; the exam is read only for a recipe that wins on dev. Gate: blind human preference sign test in favour, word error rate not
+worse by the margin, speaker similarity to the base voice within a bound, no drift on held-out text.
+\item[E4, sessions (C5).] Scripted correction sessions and a person's real sessions: after each session the corrected items are re-tested and
+held-out phrases are re-checked for regressions; a rollback must restore the earlier behaviour.
+\item[E5, agent tasks (C6).] Spoken tasks that need tools in a fixture workspace, checked by script, against the same tasks given as text;
+first-sound latency over at least three repeats on a card shown idle before and after.
+\end{description}
+
+\paragraph{Real speech.}
+A set of about one hundred short prompts recorded by a person (questions, tool tasks, directives; quiet and noisy), kept local and named by digest, with
+transcripts verified by the speaker, is the only basis for any statement about real speech.

@@ -1,0 +1,20 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Discussion, limits and ethics}\label{sec:discussion}
+
+\paragraph{What does not exist yet.}
+Nothing in the system yet learns from a conversation end to end: the lesson layer is specified and tested, but the speaking front ends do not yet read the
+lessons a user teaches in conversation, lessons are not stored with their provenance beside the other experience records, and extraction handles two directive
+shapes, not free correction. A lexicon is applied only when a lesson file is passed to the speak command. Imitation and supervised lessons are kept but
+not used; there is no naturalness judge and no group-relative optimiser over the synthesizer. These are the work items before C1--C5 can be tested.
+
+\paragraph{Threats to validity.}
+All speech so far is synthetic and all recognition is of synthetic speech. A single recogniser is a poor pronunciation judge. A prompted persona is not a trained one,
+and one voice seed is not a population of voices. Latency was measured once. A reward that a learned judge defines can be hacked; the probes of \cref{sec:evaluation}
+exist for that, and the human preference test on the frozen exam is the guard that cannot be.
+
+\paragraph{Ethics and consent.}
+A synthetic voice is always declared as a portrayal, in the type that describes a speaker (a speaker cannot be constructed without one), in every report and in a
+spoken statement at the start of a session. A user's recordings are kept local and named by digest; a lesson never holds audio. A user's voice is not cloned without
+their instruction, and a lesson can be removed together with its effect.

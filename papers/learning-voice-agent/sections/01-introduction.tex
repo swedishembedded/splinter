@@ -1,0 +1,32 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Introduction}\label{sec:intro}
+
+\paragraph{Question.}
+Can a voice agent learn how to speak from the corrections its user gives it in conversation, so that
+a corrected mistake stays corrected, nothing else gets worse, and the user can take a correction
+back? This paper formalises that setting, specifies the experiments that would answer it, and
+reports the evidence that exists. A finding belongs here if it changes what is claimed about, or how
+one would measure, an agent that turns spoken or typed feedback about its own speech into lessons,
+applies them, trains on them and releases the result.
+
+\paragraph{Status of the claims.}
+\Cref{tab:claims} lists the claims. At the time of this draft only one has partial evidence (the
+latency of the speaking agent), one has failed its gate (speech understanding without a transcript),
+and the rest are pending. The tables of this paper are generated from stored run reports
+(\cref{sec:repro}); a claim cannot be marked met without a run that supports it.
+
+\begin{table}[t]
+\centering\small
+\input{generated/claims_table}
+\caption{The claims of this paper and the status of their evidence. ``Pending'': no test has run.
+``Partial'': some of the gate is measured. ``Failed'': the test ran and the gate was not met.}
+\label{tab:claims}
+\end{table}
+
+\paragraph{What is not claimed.}
+Every voice in this work is a synthetic theatrical portrayal; no recording of Samuel Adams or Thomas
+Jefferson exists, so no voice here is theirs, and every report and spoken session carries that label.
+Until a real-speech test set is recorded and measured, nothing is claimed about real human speech.
+``Trained persona'' is not claimed: the persona is a language model under a system prompt (\cref{sec:system}).

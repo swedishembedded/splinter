@@ -1,0 +1,9 @@
+id,claim,status,evidence,gate
+C1,"Lessons are a formal typed account of spoken feedback with a safe application rule",pending,,"extraction F1 on a frozen held-out utterance set; no lesson from a non-directive"
+C2,"A lexicon lesson fixes a mispronounced word and generalizes across sentences",pending,,"human-rated pronunciation rises; no regression on untaught words (TOST)"
+C3,"One spoken example lets the voice imitate delivery in context",pending,,"speaker similarity up; WER not worse; humans prefer"
+C4,"Feedback-driven RL beats supervised and untouched baselines",pending,,"human blind preference sign test; WER and similarity guards"
+C5,"The closed loop removes corrected errors without regressions",pending,,"corrected-item error falls; held-out unchanged within margin; rollback works"
+C6,"The agent is usable by voice: tools, latency, disclosure",partial,latency-stream-20261009,"first sound p50 <= 1.5 s and p95 <= 2.0 s over >=3 repeats on an idle card; tool task success within margin of text input"
+C7,"The persona is a trained adapter",pending,,"adapter beats base and prompted base on the frozen exam"
+C8,"Speech-in without a transcript",failed,,"TOST equivalence on the frozen exam (M4 gate not met)"

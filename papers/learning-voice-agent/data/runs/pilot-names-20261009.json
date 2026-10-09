@@ -1,0 +1,649 @@
+{
+  "recognizer": "nvidia/nemotron-3.5-asr-streaming-0.6b",
+  "synthesizer": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+  "speaker": {
+    "seed": 1,
+    "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists"
+  },
+  "sentences": 106,
+  "corpus_word_error_rate": 0.14088051,
+  "mostly_lost": 7,
+  "items": [
+    {
+      "text": "The delegates spoke of Wythe at length.",
+      "heard": "The delegates spoke of White at leng",
+      "word_error_rate": 0.2857143,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Wythe, as you know.",
+      "heard": "I have long admired Wythe as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 4.32
+    },
+    {
+      "text": "The delegates spoke of Hutchinson at length.",
+      "heard": "The delegates spoke of Hutchinson at length at length",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.88
+    },
+    {
+      "text": "I have long admired Hutchinson, as you know.",
+      "heard": "I have long admired Hutchinson as you know",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "The delegates spoke of Otis at length.",
+      "heard": "The delegates spoke of Otis at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired Otis, as you know.",
+      "heard": "",
+      "word_error_rate": 1.0,
+      "seconds": 3.04
+    },
+    {
+      "text": "The delegates spoke of Quincy at length.",
+      "heard": "The delegates spoke of Quincy at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.88
+    },
+    {
+      "text": "I have long admired Quincy, as you know.",
+      "heard": "I have long admired Quincy as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.04
+    },
+    {
+      "text": "The delegates spoke of Faneuil at length.",
+      "heard": "The delegates spoke of phoneil at length.",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Faneuil, as you know.",
+      "heard": "I have long admired fenewal as you know",
+      "word_error_rate": 0.125,
+      "seconds": 3.12
+    },
+    {
+      "text": "The delegates spoke of Hancock at length.",
+      "heard": "The delegates spoke of Hancock at length",
+      "word_error_rate": 0.0,
+      "seconds": 3.44
+    },
+    {
+      "text": "I have long admired Hancock, as you know.",
+      "heard": "I have long admired Hancock as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.04
+    },
+    {
+      "text": "The delegates spoke of Monticello at length.",
+      "heard": "The delegates spoke of Montecello at length.",
+      "word_error_rate": 0.14285715,
+      "seconds": 3.04
+    },
+    {
+      "text": "I have long admired Monticello, as you know.",
+      "heard": "I have long admired Montesello, as you know.",
+      "word_error_rate": 0.125,
+      "seconds": 3.36
+    },
+    {
+      "text": "The delegates spoke of Lafayette at length.",
+      "heard": "The delegates spoke of Lafayette at length at length",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Lafayette, as you know.",
+      "heard": "",
+      "word_error_rate": 1.0,
+      "seconds": 3.44
+    },
+    {
+      "text": "The delegates spoke of Mercy at length.",
+      "heard": "The delegates spoke of mercy at",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.48
+    },
+    {
+      "text": "I have long admired Mercy, as you know.",
+      "heard": "I have long admired mercy as you know",
+      "word_error_rate": 0.0,
+      "seconds": 2.88
+    },
+    {
+      "text": "The delegates spoke of Warren at length.",
+      "heard": "The delegates spoke of Warren at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired Warren, as you know.",
+      "heard": "I have long admired Warren, as you know",
+      "word_error_rate": 0.0,
+      "seconds": 2.48
+    },
+    {
+      "text": "The delegates spoke of Paine at length.",
+      "heard": "The delegates spoke of pain at length",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.48
+    },
+    {
+      "text": "I have long admired Paine, as you know.",
+      "heard": "",
+      "word_error_rate": 1.0,
+      "seconds": 3.04
+    },
+    {
+      "text": "The delegates spoke of Rittenhouse at length.",
+      "heard": "The delegates spoke of written house at length.",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.96
+    },
+    {
+      "text": "I have long admired Rittenhouse, as you know.",
+      "heard": "I have long admired written house as you know.",
+      "word_error_rate": 0.25,
+      "seconds": 3.28
+    },
+    {
+      "text": "The delegates spoke of Boylston at length.",
+      "heard": "The delegates spoke of Boyleston at length.",
+      "word_error_rate": 0.14285715,
+      "seconds": 3.04
+    },
+    {
+      "text": "I have long admired Boylston, as you know.",
+      "heard": "I have long admired Boyleston, as you know.",
+      "word_error_rate": 0.125,
+      "seconds": 2.72
+    },
+    {
+      "text": "The delegates spoke of Wedderburn at length.",
+      "heard": "The delegates spoke of Wetterburn at length.",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Wedderburn, as you know.",
+      "heard": "",
+      "word_error_rate": 1.0,
+      "seconds": 2.8
+    },
+    {
+      "text": "The delegates spoke of Townshend at length.",
+      "heard": "The delegates spoke of Town Sand at length.",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Townshend, as you know.",
+      "heard": "I have long admired Townsend, as you know",
+      "word_error_rate": 0.125,
+      "seconds": 3.44
+    },
+    {
+      "text": "The delegates spoke of Grenville at length.",
+      "heard": "The delegates spoke of Grenville at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.4
+    },
+    {
+      "text": "I have long admired Grenville, as you know.",
+      "heard": "",
+      "word_error_rate": 1.0,
+      "seconds": 3.04
+    },
+    {
+      "text": "The delegates spoke of Cornwallis at length.",
+      "heard": "The delegates spoke of Cornwallis at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.6
+    },
+    {
+      "text": "I have long admired Cornwallis, as you know.",
+      "heard": "I have long admired Cornwallis, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "The delegates spoke of Yorktown at length.",
+      "heard": "The delegates spoke of Yorktown at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Yorktown, as you know.",
+      "heard": "I have long admired Yorktown as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 10.72
+    },
+    {
+      "text": "The delegates spoke of Adams at length.",
+      "heard": "The delegates spoke of Adams at length",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Adams, as you know.",
+      "heard": "I have long admired Adams, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "The delegates spoke of Jefferson at length.",
+      "heard": "The delegates spoke of Jefferson at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.88
+    },
+    {
+      "text": "I have long admired Jefferson, as you know.",
+      "heard": "I have long admired Jefferson as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.84
+    },
+    {
+      "text": "The delegates spoke of Livingston at length.",
+      "heard": "The delegates spoke of livingston at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "I have long admired Livingston, as you know.",
+      "heard": "I have long admired livingston, as you know",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "The delegates spoke of Gouverneur at length.",
+      "heard": "The delegates spoke of gouverneur at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.36
+    },
+    {
+      "text": "I have long admired Gouverneur, as you know.",
+      "heard": "I have long admired gouverneur as you",
+      "word_error_rate": 0.125,
+      "seconds": 3.12
+    },
+    {
+      "text": "The delegates spoke of Pinckney at length.",
+      "heard": "The delegates spoke of pink me at",
+      "word_error_rate": 0.42857143,
+      "seconds": 2.48
+    },
+    {
+      "text": "I have long admired Pinckney, as you know.",
+      "heard": "I have long admired Pinkin as you know.",
+      "word_error_rate": 0.125,
+      "seconds": 3.68
+    },
+    {
+      "text": "The delegates spoke of Hamilton at length.",
+      "heard": "The delegates spoke of Hamilton at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "I have long admired Hamilton, as you know.",
+      "heard": "I have long admired Hamilton, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.04
+    },
+    {
+      "text": "The delegates spoke of Madison at length.",
+      "heard": "The delegates spoke of Madison at leng",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.48
+    },
+    {
+      "text": "I have long admired Madison, as you know.",
+      "heard": "I have long admired Madison as you know",
+      "word_error_rate": 0.0,
+      "seconds": 3.44
+    },
+    {
+      "text": "The delegates spoke of Monroe at length.",
+      "heard": "The delegates spoke of Monroe at length at length",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Monroe, as you know.",
+      "heard": "I have long admired Monroe, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 4.8
+    },
+    {
+      "text": "The delegates spoke of Burr at length.",
+      "heard": "The delegates spoke of Burr at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.08
+    },
+    {
+      "text": "I have long admired Burr, as you know.",
+      "heard": "I have long admired Burr, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.6
+    },
+    {
+      "text": "The delegates spoke of Iroquois at length.",
+      "heard": "The delegates spoke of Iroquois at length",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Iroquois, as you know.",
+      "heard": "I have long admired Iroquois as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "The delegates spoke of Susquehanna at length.",
+      "heard": "The delegates spoke of Saskahana at leng",
+      "word_error_rate": 0.2857143,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Susquehanna, as you know.",
+      "heard": "I have long admired Susquahanna, as you know",
+      "word_error_rate": 0.125,
+      "seconds": 3.44
+    },
+    {
+      "text": "The delegates spoke of Cherokee at length.",
+      "heard": "The delegates spoke of Cherokee at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.96
+    },
+    {
+      "text": "I have long admired Cherokee, as you know.",
+      "heard": "I have long admired Cherokee as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.36
+    },
+    {
+      "text": "The delegates spoke of Chesapeake at length.",
+      "heard": "The delegates spoke of Chesapeake at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.28
+    },
+    {
+      "text": "I have long admired Chesapeake, as you know.",
+      "heard": "I have long admired Chesapeake as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.2
+    },
+    {
+      "text": "The delegates spoke of Massachusetts at length.",
+      "heard": "The delegates spoke of Massachusetts at length",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Massachusetts, as you know.",
+      "heard": "I have long admired Massachusetts as you know",
+      "word_error_rate": 0.0,
+      "seconds": 3.76
+    },
+    {
+      "text": "The delegates spoke of Connecticut at length.",
+      "heard": "The delegates spoke of Connecticut at length",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Connecticut, as you know.",
+      "heard": "I have long admired Connecticut as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.28
+    },
+    {
+      "text": "The delegates spoke of Appomattox at length.",
+      "heard": "The delegate spoke of Apomatics at length.",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired Appomattox, as you know.",
+      "heard": "I have long admired Apomadox, as you know.",
+      "word_error_rate": 0.125,
+      "seconds": 3.6
+    },
+    {
+      "text": "The delegates spoke of Philadelphia at length.",
+      "heard": "The delegate spoke of Philadelphia at",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.8
+    },
+    {
+      "text": "I have long admired Philadelphia, as you know.",
+      "heard": "I have long admired Philadelphia, as you know",
+      "word_error_rate": 0.0,
+      "seconds": 3.12
+    },
+    {
+      "text": "The delegates spoke of Lexington at length.",
+      "heard": "The delegate spoke of Lexington at length",
+      "word_error_rate": 0.14285715,
+      "seconds": 4.72
+    },
+    {
+      "text": "I have long admired Lexington, as you know.",
+      "heard": "I have long admired Lexington as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "The delegates spoke of Concord at length.",
+      "heard": "The delegate spoke of conquered at length.",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired Concord, as you know.",
+      "heard": "I have long admired Concord, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 2.88
+    },
+    {
+      "text": "The delegates spoke of Bunker at length.",
+      "heard": "The delegates spoke of bunker at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.4
+    },
+    {
+      "text": "I have long admired Bunker, as you know.",
+      "heard": "as you know",
+      "word_error_rate": 0.625,
+      "seconds": 7.52
+    },
+    {
+      "text": "The delegates spoke of Saratoga at length.",
+      "heard": "The delegates spoke of Saratoga at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired Saratoga, as you know.",
+      "heard": "I have long admired Saratoga, as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.36
+    },
+    {
+      "text": "The delegates spoke of Trenton at length.",
+      "heard": "The delegates spoke of Trenton at",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.48
+    },
+    {
+      "text": "I have long admired Trenton, as you know.",
+      "heard": "I have long admired Trenton as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.28
+    },
+    {
+      "text": "The delegates spoke of Valley at length.",
+      "heard": "The delegates spoke a Valley at leng",
+      "word_error_rate": 0.2857143,
+      "seconds": 3.12
+    },
+    {
+      "text": "I have long admired Valley, as you know.",
+      "heard": "I have long admired Valley as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.68
+    },
+    {
+      "text": "The delegates spoke of Forge at length.",
+      "heard": "The delegates spoke of forge at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.96
+    },
+    {
+      "text": "I have long admired Forge, as you know.",
+      "heard": "I have long admired forage as you",
+      "word_error_rate": 0.25,
+      "seconds": 2.48
+    },
+    {
+      "text": "The delegates spoke of Ticonderoga at length.",
+      "heard": "The delegates spoke of Takoga at length",
+      "word_error_rate": 0.14285715,
+      "seconds": 3.28
+    },
+    {
+      "text": "I have long admired Ticonderoga, as you know.",
+      "heard": "I have long admired Tekonderoga as you know",
+      "word_error_rate": 0.125,
+      "seconds": 3.76
+    },
+    {
+      "text": "The delegates spoke of Tuscarora at length.",
+      "heard": "The delegates spoke of Tuscarora",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.8
+    },
+    {
+      "text": "I have long admired Tuscarora, as you know.",
+      "heard": "I have long admired Tuscarura as you know.",
+      "word_error_rate": 0.125,
+      "seconds": 3.28
+    },
+    {
+      "text": "The delegates spoke of Mohawk at length.",
+      "heard": "The delegates spoke of Mohawk at length at length",
+      "word_error_rate": 0.2857143,
+      "seconds": 2.56
+    },
+    {
+      "text": "I have long admired Mohawk, as you know.",
+      "heard": "I have long admired Mohawk, as you know",
+      "word_error_rate": 0.0,
+      "seconds": 2.8
+    },
+    {
+      "text": "The delegates spoke of Oneida at length.",
+      "heard": "The delegates spoke of Oneida at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "I have long admired Oneida, as you know.",
+      "heard": "I have long admired one idea, as you know.",
+      "word_error_rate": 0.25,
+      "seconds": 4.16
+    },
+    {
+      "text": "The delegates spoke of habeas at length.",
+      "heard": "The delegates spoke of habeas at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired habeas, as you know.",
+      "heard": "I have long admired habeas, you know.",
+      "word_error_rate": 0.125,
+      "seconds": 2.96
+    },
+    {
+      "text": "The delegates spoke of corpus at length.",
+      "heard": "The delegates spoke of Corpus at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired corpus, as you know.",
+      "heard": "",
+      "word_error_rate": 1.0,
+      "seconds": 3.2
+    },
+    {
+      "text": "The delegates spoke of Magna at length.",
+      "heard": "The delegates spoke of Magna at length.",
+      "word_error_rate": 0.0,
+      "seconds": 2.72
+    },
+    {
+      "text": "I have long admired Magna, as you know.",
+      "heard": "I have long admired Magna as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 4.0
+    },
+    {
+      "text": "The delegates spoke of Carta at length.",
+      "heard": "The delegates spoke of Carta at leng",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.8
+    },
+    {
+      "text": "I have long admired Carta, as you know.",
+      "heard": "I have long admired Carta as you know",
+      "word_error_rate": 0.0,
+      "seconds": 3.28
+    },
+    {
+      "text": "The delegates spoke of nullification at length.",
+      "heard": "The delegates spoke of nullification at length",
+      "word_error_rate": 0.0,
+      "seconds": 4.4
+    },
+    {
+      "text": "I have long admired nullification, as you know.",
+      "heard": "I have long admired nullification as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 4.32
+    },
+    {
+      "text": "The delegates spoke of sedition at length.",
+      "heard": "The delegates spoke of sedition at length.",
+      "word_error_rate": 0.0,
+      "seconds": 3.52
+    },
+    {
+      "text": "I have long admired sedition, as you know.",
+      "heard": "I have long admired sedition as you know.",
+      "word_error_rate": 0.0,
+      "seconds": 3.84
+    },
+    {
+      "text": "The delegates spoke of Chancery at length.",
+      "heard": "The delegate spoke of Chancery at length.",
+      "word_error_rate": 0.14285715,
+      "seconds": 2.88
+    },
+    {
+      "text": "I have long admired Chancery, as you know.",
+      "heard": "I have long admired Chancery as you",
+      "word_error_rate": 0.125,
+      "seconds": 2.8
+    }
+  ]
+}

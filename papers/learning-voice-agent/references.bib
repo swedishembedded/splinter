@@ -1,0 +1,60 @@
+% Every entry below was checked on 2026-10-09 against the source it names
+% (arXiv abstract pages, the W3C documents, the HappyRobot post). An entry not
+% yet checked belongs in a comment, not here.
+@article{shao2024deepseekmath,
+  title   = {{DeepSeekMath}: Pushing the Limits of Mathematical Reasoning in Open Language Models},
+  author  = {Shao, Zhihong and Wang, Peiyi and Zhu, Qihao and Xu, Runxin and Song, Junxiao and Bi, Xiao and Zhang, Haowei and Zhang, Mingchuan and Li, Y. K. and Wu, Y. and Guo, Daya},
+  journal = {arXiv preprint arXiv:2402.03300},
+  year    = {2024}
+}
+@inproceedings{rafailov2023dpo,
+  title     = {Direct Preference Optimization: Your Language Model is Secretly a Reward Model},
+  author    = {Rafailov, Rafael and Sharma, Archit and Mitchell, Eric and Ermon, Stefano and Manning, Christopher D. and Finn, Chelsea},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2023},
+  note      = {arXiv:2305.18290}
+}
+@inproceedings{hu2021lora,
+  title     = {{LoRA}: Low-Rank Adaptation of Large Language Models},
+  author    = {Hu, Edward J. and Shen, Yelong and Wallis, Phillip and Allen-Zhu, Zeyuan and Li, Yuanzhi and Wang, Shean and Wang, Lu and Chen, Weizhu},
+  booktitle = {International Conference on Learning Representations},
+  year      = {2022},
+  note      = {arXiv:2106.09685}
+}
+@article{wang2023valle,
+  title   = {Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers},
+  author  = {Wang, Chengyi and Chen, Sanyuan and Wu, Yu and Zhang, Ziqiang and Zhou, Long and Liu, Shujie and Chen, Zhuo and Liu, Yanqing and Wang, Huaming and Li, Jinyu and He, Lei and Zhao, Sheng and Wei, Furu},
+  journal = {arXiv preprint arXiv:2301.02111},
+  year    = {2023}
+}
+@article{qwen3,
+  title   = {Qwen3 Technical Report},
+  author  = {{Qwen Team}},
+  journal = {arXiv preprint arXiv:2505.09388},
+  year    = {2025}
+}
+@techreport{w3c2010ssml,
+  title        = {Speech Synthesis Markup Language ({SSML}) Version 1.1},
+  author       = {Burnett, Daniel C. and Shuang, Zhi Wei},
+  institution  = {W3C},
+  type         = {W3C Recommendation},
+  year         = {2010},
+  month        = sep,
+  url          = {https://www.w3.org/TR/speech-synthesis11/}
+}
+@techreport{w3c2008pls,
+  title        = {Pronunciation Lexicon Specification ({PLS}) Version 1.0},
+  author       = {Baggia, Paolo},
+  institution  = {W3C},
+  type         = {W3C Recommendation},
+  year         = {2008},
+  month        = oct,
+  url          = {https://www.w3.org/TR/pronunciation-lexicon/}
+}
+@misc{happyrobot2026tts,
+  title        = {Teaching our text-to-speech engine to sound natural},
+  author       = {{HappyRobot}},
+  howpublished = {Company blog post},
+  url          = {https://www.happyrobot.ai/blog/teaching-our-text-to-speech-engine-to-sound-natural},
+  note         = {Accessed 2026-10-09. Describes reinforcement learning with GRPO on a text-to-speech model, rewarded by a multimodal judge's naturalness score and word error rate, with a KL penalty to the original voice and human checks on the released model; reports no quantitative results.}
+}

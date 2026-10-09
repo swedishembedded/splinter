@@ -14,6 +14,7 @@ the nearest one.
 | Directory | Scope: a finding belongs here if it changes what is claimed about, or how one would measure... |
 |---|---|
 | `persona-training/` | an adapter fine-tuned on one author's writings: its training data (views, tasks, abstention, replay), training mechanics, evaluation design (held-out source families, exam, judge, statistics, retention), release-gate checks as measurements, and defects in any of these |
+| `learning-voice-agent/` | a voice agent that learns how to speak from the corrections its user gives it in conversation: how spoken or typed feedback is read into typed lessons, applied, trained on and released, the experiments that would show it works, and the reproducible record of what has been measured |
 | `agent-driven-residual-survival/` | whether a locally operated, supervised research agent finds learnable structure beyond an additive survival model on single-visit cohort data |
 
 Not yet covered by any paper, so a verified finding there starts one: timelines
