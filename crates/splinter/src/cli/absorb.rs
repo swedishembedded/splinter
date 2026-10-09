@@ -52,15 +52,21 @@ pub enum ClaimsCommand {
         #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
         generator: ModelRef,
     },
-    /// Rule on a claim set by code alone: quotes verbatim in the person's
-    /// words, the statement's numbers, names and quoted terms in them, the
-    /// agent's sentences never evidence, repeats collapsed, a later claim on
-    /// the same question superseding the earlier. Every ruling is kept, each
-    /// refusal with its reason.
+    /// Rule on a claim set: quotes verbatim in the person's words, the
+    /// statement's numbers, names and quoted terms in them, the agent's
+    /// sentences never evidence. Claims that name the same thing are paired:
+    /// a later claim that contradicts the earlier supersedes it, one that
+    /// says the same again reinforces it (recorded, never refused). Every
+    /// ruling is kept, each refusal with its reason.
     Gate {
         /// The claim set, by id or unique prefix.
         #[arg(value_name = "CLAIMSET-ID")]
         claim_set: String,
+        /// The model that decides whether a later claim supersedes,
+        /// reinforces or is apart from an earlier one about the same thing;
+        /// without one the statements decide.
+        #[arg(long, value_parser = model_ref, value_name = "REF")]
+        judge: Option<ModelRef>,
     },
     /// List the stored claim sets.
     List,
@@ -69,8 +75,9 @@ pub enum ClaimsCommand {
         /// The claim set, by id or unique prefix.
         id: String,
     },
-    /// Show the ledger: live claims, superseded ones with by which, and
-    /// refused proposals with their reasons.
+    /// Show the ledger: live claims with how often each was said again,
+    /// superseded ones with by which, and refused proposals with their
+    /// reasons.
     Ledger,
 }
 

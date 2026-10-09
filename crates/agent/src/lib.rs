@@ -24,6 +24,9 @@
 //!   relations; and the bounded loop of critique and retry.
 //! * [`claims`] - a model asked what a person taught in a session, its
 //!   proposals left to the knowledge crate to rule on.
+//! * [`claim_judge`] - a model asked what a gate cannot decide by code about
+//!   claims: whether a later one supersedes, restates or is apart from an
+//!   earlier one.
 //! * [`mapper`] - a model asked how a documented variable maps onto a
 //!   shared concept, its proposal left to the knowledge crate to admit.
 //! * [`prompts`] - a model asked to write user requests of a domain, each
@@ -37,6 +40,7 @@
 #![warn(missing_docs)]
 
 mod budget;
+pub mod claim_judge;
 pub mod claims;
 pub mod converse;
 pub mod critic;

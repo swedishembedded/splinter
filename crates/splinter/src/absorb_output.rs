@@ -66,21 +66,23 @@ impl Report for ClaimsGated {
     fn human(&self) -> String {
         let mut out = format!(
             "claim set {}: {} proposal(s), {} ruled now ({} already ruled)\n  admitted {} \
-             (replacing {}), refused {} ({}), {} live\n",
+             (replacing {}), reinforced {}, refused {} ({}), {} live\n",
             self.claim_set,
             self.proposals,
             self.ruled,
             self.already_ruled,
             self.admitted,
             self.superseded,
-            self.ruled - self.admitted,
+            self.reinforced,
+            self.refused.values().sum::<usize>(),
             tally(&self.refused),
             self.live
         );
         for r in &self.rulings {
-            let _ = match &r.reason {
-                Some(why) => writeln!(out, "  refused {:?}: {why}", r.statement),
-                None => writeln!(out, "  admitted {:?}", r.statement),
+            let _ = match (&r.reason, &r.reinforces) {
+                (Some(why), _) => writeln!(out, "  refused {:?}: {why}", r.statement),
+                (None, Some(of)) => writeln!(out, "  reinforced {of}: {:?}", r.statement),
+                (None, None) => writeln!(out, "  admitted {:?}", r.statement),
             };
         }
         out
@@ -132,7 +134,14 @@ impl Report for LedgerReport {
             self.refused.len()
         );
         for c in &self.live {
-            let _ = writeln!(out, "  live {} {:?}", c.claim, c.statement);
+            let _ = match c.reinforced {
+                0 => writeln!(out, "  live {} {:?}", c.claim, c.statement),
+                n => writeln!(
+                    out,
+                    "  live {} {:?} (said again {n} time(s))",
+                    c.claim, c.statement
+                ),
+            };
         }
         for c in &self.superseded {
             let _ = writeln!(

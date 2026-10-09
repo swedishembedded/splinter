@@ -27,7 +27,7 @@ use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::source::SourceId;
 use splinter_knowledge::capture::capture_session;
-use splinter_knowledge::claims::{rule, Ledger};
+use splinter_knowledge::claims::{rule, Ledger, RuleRequest};
 use splinter_knowledge::session::SessionView;
 
 const WHERE: &str = "Which port does the Tessera dashboard listen on?";
@@ -347,6 +347,7 @@ fn rulings(entries: &[LedgerEntry]) -> Vec<&str> {
         .iter()
         .map(|e| match &e.ruling {
             Ruling::Admitted { .. } => "admitted",
+            Ruling::Reinforced { .. } => "reinforced",
             Ruling::Refused { reason } => reason.code(),
         })
         .collect()
@@ -373,7 +374,8 @@ fn a_realistic_correction_session_yields_its_claims_and_reports_every_refusal() 
     let proposals = vec![correction(), wrong, acknowledged, correction(), fact];
     let set = set_of(vec![(&view, proposals.clone())], "a");
 
-    let entries = Ledger::default().rule_set(&id("a"), &set, &views(&[&view]))?;
+    let entries =
+        Ledger::default().rule_set(&RuleRequest::new(&id("a"), &set, &views(&[&view])))?;
     assert_eq!(
         rulings(&entries),
         [
@@ -434,8 +436,8 @@ fn a_later_claim_on_the_same_question_supersedes_the_earlier_and_both_stay() -> 
     };
     let all = views(&[&first, &second]);
 
-    let mut entries =
-        Ledger::default().rule_set(&id("mon"), &set_of(vec![(&first, vec![old])], "mon"), &all)?;
+    let monday = set_of(vec![(&first, vec![old])], "mon");
+    let mut entries = Ledger::default().rule_set(&RuleRequest::new(&id("mon"), &monday, &all))?;
     assert_eq!(rulings(&entries), ["admitted"]);
     let Ruling::Admitted {
         claim: older,
@@ -449,11 +451,8 @@ fn a_later_claim_on_the_same_question_supersedes_the_earlier_and_both_stay() -> 
 
     let ledger = Ledger::new(entries.clone());
     assert_eq!(ledger.live()?.len(), 1);
-    let tue = ledger.rule_set(
-        &id("tue"),
-        &set_of(vec![(&second, vec![correction()])], "tue"),
-        &all,
-    )?;
+    let tuesday = set_of(vec![(&second, vec![correction()])], "tue");
+    let tue = ledger.rule_set(&RuleRequest::new(&id("tue"), &tuesday, &all))?;
     let Ruling::Admitted {
         claim: newer,
         supersedes,
@@ -480,8 +479,10 @@ fn ruling_a_set_again_adds_nothing() -> anyhow::Result<()> {
     let view = correction_session("s1")?;
     let set = set_of(vec![(&view, vec![correction()])], "a");
     let all = views(&[&view]);
-    let entries = Ledger::default().rule_set(&id("a"), &set, &all)?;
+    let entries = Ledger::default().rule_set(&RuleRequest::new(&id("a"), &set, &all))?;
     let ledger = Ledger::new(entries);
-    assert!(ledger.rule_set(&id("a"), &set, &all)?.is_empty());
+    assert!(ledger
+        .rule_set(&RuleRequest::new(&id("a"), &set, &all))?
+        .is_empty());
     Ok(())
 }

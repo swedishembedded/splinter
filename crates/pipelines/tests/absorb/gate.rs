@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Gates: proposals ruled on by code, every ruling kept, a later claim on
-//! the same question superseding the earlier, a repeat collapsing.
+//! Gates: proposals ruled on by code, every ruling kept, a later claim that
+//! contradicts an earlier one about the same thing superseding it, a fact
+//! said again reinforcing the live claim instead of being refused, and a
+//! judge deciding the pairs when one is named.
 
 use serde_json::json;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::runs;
-use splinter_pipelines::claims::{extract, gate, ledger};
+use splinter_pipelines::claims::{extract, ledger, GateRequest};
 
 use crate::extract::{port_claim, request, taken};
 use crate::fixtures::{deploy, port_changed, port_correction, world, Outcome, World, WHERE};
+
+fn gate(
+    ctx: &splinter_orchestrator::Context,
+    set: &splinter_core::digest::Digest,
+) -> Result<splinter_pipelines::claims::ClaimsGated, splinter_orchestrator::OrchestratorError> {
+    splinter_pipelines::claims::gate(ctx, &GateRequest::new(set))
+}
 
 fn reply(claims: Vec<serde_json::Value>) -> String {
     json!({ "claims": claims }).to_string()
@@ -111,7 +120,7 @@ fn proposals_are_ruled_on_by_code_and_every_refusal_is_reported_with_its_reason(
 }
 
 #[test]
-fn a_later_claim_supersedes_an_earlier_one_and_a_repeat_collapses() -> Outcome {
+fn a_later_claim_supersedes_an_earlier_one_and_a_repeat_is_reinforced() -> Outcome {
     let w = world(script)?;
     let monday = extracted(&w, &[("a.atif.json", &port_correction())])?;
     gate(&w.ctx, &monday)?;
@@ -137,15 +146,56 @@ fn a_later_claim_supersedes_an_earlier_one_and_a_repeat_collapses() -> Outcome {
     assert_eq!(now.superseded[0].by, now.live[0].claim);
     assert_eq!(now.refused.len(), 2, "monday's refusals stay too");
 
-    // The same thing said in another session is not new.
+    // The same thing said in another session is not new, and not refused:
+    // the live claim is reinforced.
     let mut wednesday_session = port_changed();
     wednesday_session.session_id = Some("wednesday".into());
     let wednesday = extracted(&w, &[("c.atif.json", &wednesday_session)])?;
     let repeat = gate(&w.ctx, &wednesday)?;
     assert_eq!(
-        (repeat.admitted, repeat.refused.get("duplicate")),
-        (0, Some(&1))
+        (
+            repeat.admitted,
+            repeat.reinforced,
+            repeat.refused.get("duplicate")
+        ),
+        (0, 1, None),
+        "{repeat:#?}"
     );
-    assert_eq!(ledger(&w.ctx)?.live.len(), 1);
+    assert_eq!(repeat.rulings[0].outcome, "reinforced");
+    assert_eq!(
+        repeat.rulings[0].reinforces.as_ref(),
+        Some(&now.live[0].claim)
+    );
+    let after = ledger(&w.ctx)?;
+    assert_eq!(after.live.len(), 1);
+    assert_eq!(after.live[0].reinforced, 1, "the ledger counts it");
+    Ok(())
+}
+
+/// A judge that calls every pair separate.
+fn separating(prompt: &str) -> String {
+    if prompt.contains("`earlier` and a `later` claim") {
+        json!({"verdict": "separate", "reason": "two aspects"}).to_string()
+    } else {
+        script(prompt)
+    }
+}
+
+#[test]
+fn a_named_judge_decides_the_pairs() -> Outcome {
+    let w = world(separating)?;
+    let monday = extracted(&w, &[("a.atif.json", &port_correction())])?;
+    gate(&w.ctx, &monday)?;
+    let tuesday = extracted(&w, &[("b.atif.json", &port_changed())])?;
+    let judge = ModelRef::policy_default();
+    let report = splinter_pipelines::claims::gate(
+        &w.ctx,
+        &GateRequest {
+            judge: Some(&judge),
+            ..GateRequest::new(&tuesday)
+        },
+    )?;
+    assert_eq!((report.admitted, report.superseded), (1, 0), "{report:#?}");
+    assert_eq!(ledger(&w.ctx)?.live.len(), 2, "the judge kept both live");
     Ok(())
 }

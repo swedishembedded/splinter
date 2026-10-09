@@ -5,7 +5,7 @@
 
 use serde_json::json;
 use splinter_sdk::absorb::{self, AbsorbRequest};
-use splinter_sdk::claims::{self, ExtractRequest};
+use splinter_sdk::claims::{self, ExtractRequest, GateRequest};
 use splinter_sdk::knowledge::claims::extract::ExtractionPolicy;
 use splinter_sdk::runs::record;
 use splinter_sdk::sessions::{self, IntakeRequest};
@@ -74,10 +74,17 @@ pub fn claims(ctx: &Context, json: bool, command: ClaimsCommand) -> Result<Exit,
                 Exit::Failed
             })
         }
-        ClaimsCommand::Gate { claim_set } => {
+        ClaimsCommand::Gate { claim_set, judge } => {
             let set = claims::resolve_set(ctx, &claim_set)?;
-            let gated = record(ctx, "claims gate", &json!({ "claim_set": set }), |_| {
-                claims::gate(ctx, &set)
+            let arguments = json!({ "claim_set": set, "judge": judge });
+            let gated = record(ctx, "claims gate", &arguments, |_| {
+                claims::gate(
+                    ctx,
+                    &GateRequest {
+                        judge: judge.as_ref(),
+                        ..GateRequest::new(&set)
+                    },
+                )
             })?;
             emit(json, &gated);
             Ok(Exit::Ok)

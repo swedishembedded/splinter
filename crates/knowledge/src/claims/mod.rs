@@ -17,26 +17,31 @@
 //!   procedure has its tool calls and the observation that proved it; what
 //!   the agent is said to have got wrong was said; every number, name and
 //!   quoted term of the statement occurs in the cited words ([`terms`]).
-//! * [`Ledger`] - the rulings kept, and the gates that need them: a repeat of
-//!   a live claim collapses into it; a claim on the same question that
-//!   disagrees with live ones supersedes them. Claims are never deleted: a
-//!   superseded or refused one stays with its reason.
+//! * [`Ledger`] - the rulings kept, and the gates that need them: claims are
+//!   paired by the names they share ([`pairing`]); a judge, or without one
+//!   the statements, decides whether a later claim supersedes the earlier
+//!   (it contradicts it), reinforces it (the same fact said again, recorded,
+//!   never refused) or is separate. Claims are never deleted: a superseded
+//!   or refused one stays with its reason.
 //!
 //! * [`task`] - a live claim as a task: the question it answers, graded
 //!   against the statement by [`answer`], grounded in the quotes' spans of
 //!   the session.
 //!
-//! No model is involved in a ruling: the same proposals and ledger give the
-//! same rulings.
+//! Without a judge no model is involved in a ruling: the same proposals and
+//! ledger give the same rulings.
 
 pub mod answer;
 pub mod extract;
 pub mod forms;
 mod gates;
+pub mod judge;
 mod ledger;
+pub mod pairing;
 pub mod reply;
 pub mod task;
 pub mod terms;
 
 pub use gates::{rule, MAX_QUESTION_CHARS, MAX_STATEMENT_CHARS};
-pub use ledger::{GateError, Ledger};
+pub use judge::{ClaimJudge, JudgeError, PairVerdict};
+pub use ledger::{GateError, Ledger, RuleRequest};

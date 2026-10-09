@@ -31,7 +31,9 @@ use super::gate::{decide_claims, publish};
 use super::kit::{self, build_kits, ClaimKit, KitRequest, Live};
 use super::sealed::SealedProbes;
 use super::{AbsorbRequest, Absorbed};
-use crate::claims::{extract, gate as rule_claims, resolve_set, ClaimsExtracted, ExtractRequest};
+use crate::claims::{
+    extract, gate as rule_claims, resolve_set, ClaimsExtracted, ExtractRequest, GateRequest,
+};
 use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::learn::{records_at_share, PolicyUsed};
 use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
@@ -292,7 +294,13 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
         unreachable!("the gate stage follows the extract stage")
     };
     let set = resolve_set(ctx, &extracted.claim_set.to_string())?;
-    let gated = rule_claims(ctx, &set)?;
+    let gated = rule_claims(
+        ctx,
+        &GateRequest {
+            judge: st.judge.as_ref(),
+            ..GateRequest::new(&set)
+        },
+    )?;
     let ledger = Ledger::new(ctx.claims().entries()?);
     st.live = ledger
         .live()

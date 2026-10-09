@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- Claims are paired by the names they share, not by how the extractor worded its question, and a judge
+  (`claims gate --judge`, the judge role in `absorb`) decides supersede, reinforce or separate for each pair; without
+  one, agreeing statements reinforce and disagreeing ones supersede. A fact said again is recorded as a `reinforced`
+  ruling (the live claim stays live; `claims ledger` shows how often it was said again) and is never refused as a
+  duplicate; `duplicate` now means the same claim proposed twice from the same words. The ledger's `Ruling` gains
+  `reinforced`.
 - `absorb <SESSIONS>...`: a day's sessions with an agent become the next release in one recorded, resumable
   run - intake, extraction and the claim gates, a kit of 18 distinct records per live claim (the question and
   eight paraphrases answered by a teacher shown the claim, the hindsight dialogue, restatements, reverse

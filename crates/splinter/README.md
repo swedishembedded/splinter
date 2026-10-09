@@ -776,15 +776,29 @@ quote verbatim in the user step it cites (a quote of an agent step is refused
 as `assistant_evidence`, whatever it says); a procedure has its calls and
 observation; what the agent is said to have got wrong was said; every number,
 name and quoted term of the statement occurs in the cited words (and, for a
-procedure, in its cited tool calls); a repeat of a live claim is refused as
-`duplicate`; a claim that disagrees with live claims on the same question is
-admitted and supersedes them. Questions are the same by the near-duplicate rule
-that keeps task sets free of repeats, statements agree by the rule that finds
-contradictions among tasks. "Later" is the order of the ledger, and within one
-session the order of the first step a claim cites. Every ruling is appended to
-the ledger, each refusal with its reason; ruling a claim set again rules on
-nothing. `claims ledger` reads it back: the live claims, the superseded ones
-and by which claim, and the refused proposals.
+procedure, in its cited tool calls); the same claim proposed twice from the
+same words is refused as `duplicate`. A claim is then paired with the live
+claims about the same thing: those it shares a name with (a capitalised word
+inside a sentence, an identifier, a quoted term, over the statement and the
+question) and at least one more content word, so two questions the extractor
+worded differently are still one subject; two claims that name nothing are
+paired when their statements share most of their content words. A judge
+(`claims gate --judge REF`; in `absorb`, the judge role) decides each pair:
+`supersede` (the later contradicts the earlier, which leaves the live set),
+`reinforce` (the same fact said again) or `separate` (two facts, both live).
+Without a judge the statements decide: they agree when one contains the other
+or state the same numbers, and an agreeing pair reinforces while a disagreeing
+pair supersedes, the later winning. Without a judge, then, two different facts
+about one named subject replace each other; the ledger keeps both rulings.
+A fact said again is never refused: it is recorded as `reinforced`, the live
+claim it restates stays live (it is not a second thing to teach), and
+`claims ledger` shows how many times each live claim was said again, which is
+a signal that the model is still wrong. "Later" is the order of the ledger,
+and within one session the order of the first step a claim cites. Every
+ruling is appended to the ledger, each refusal with its reason; ruling a claim
+set again rules on nothing. `claims ledger` reads it back: the live claims
+with their reinforcement counts, the superseded ones and by which claim, and
+the refused proposals.
 
 The first word of a sentence is not taken for a name, and numbers written
 in words are not recognised: both are terms the gate does not check, so a
@@ -849,9 +863,8 @@ run built is taken as it is.
   not see answered stays new and is taught again the next night.
 
 Not built: the sycophancy and hallucination-on-unknown probes on the retention
-side, the stopping of the training on the stopping paraphrases, supersession by
-a judge over names or embeddings, reinforced corrections, an entailment gate
-and two-pass extraction, and refusing third-party personal claims.
+side, the stopping of the training on the stopping paraphrases, an entailment
+gate and two-pass extraction, and refusing third-party personal claims.
 
 ## JSON output
 

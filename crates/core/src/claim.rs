@@ -177,7 +177,9 @@ pub enum Refusal {
     },
     /// What the agent is said to have got wrong was never said.
     WrongAnswerNotSaid,
-    /// An admitted claim already establishes it.
+    /// The same claim, with the same evidence in the same session, was
+    /// proposed twice by the extractor. A fact the person says again in
+    /// another session is not this: it is [`Ruling::Reinforced`].
     Duplicate {
         /// That claim.
         of: ClaimId,
@@ -231,12 +233,26 @@ impl std::fmt::Display for Refusal {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "ruling", rename_all = "snake_case")]
 pub enum Ruling {
-    /// Admitted. It supersedes the earlier admitted claims on the same
-    /// question that it disagrees with; they stay in the ledger.
+    /// Admitted. It supersedes the earlier admitted claims about the same
+    /// thing that it contradicts; they stay in the ledger.
     Admitted {
         /// The claim.
         claim: Claim,
         /// The claims it replaces as the answer to its question.
+        supersedes: Vec<ClaimId>,
+    },
+    /// The person said a live claim's fact again. The new claim is kept with
+    /// its evidence and the live claim stays live (the new one is not a
+    /// second thing to teach): that the person had to repeat it is a signal
+    /// that the model is still wrong, counted per live claim.
+    Reinforced {
+        /// The claim as proposed again.
+        claim: Claim,
+        /// The live claim it restates.
+        of: ClaimId,
+        /// Other live claims it contradicts and so replaces, when it
+        /// restates one and contradicts another.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         supersedes: Vec<ClaimId>,
     },
     /// Refused.

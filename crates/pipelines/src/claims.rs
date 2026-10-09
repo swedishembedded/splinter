@@ -17,15 +17,18 @@
 //!
 //! [`gate`] rules on every proposal of a claim set by code
 //! ([`splinter_knowledge::claims`]) against the ledger so far and appends
-//! each ruling to it, refusals included. Ruling on a set again rules on
-//! nothing, so the stage is safe to repeat after a crash. [`ledger`] reads
-//! the ledger back: the claims that are live, the ones superseded and by
-//! which, and the proposals refused with their reasons.
+//! each ruling to it, refusals included; a judge, when one is named, decides
+//! whether a later claim supersedes, restates or is apart from an earlier
+//! one about the same thing. Ruling on a set again rules on nothing, so the
+//! stage is safe to repeat after a crash. [`ledger`] reads the ledger back:
+//! the claims that are live and how often each was said again, the ones
+//! superseded and by which, and the proposals refused with their reasons.
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::Instant;
 
 use serde::Serialize;
+use splinter_agent::claim_judge::SvenClaimJudge;
 use splinter_agent::claims::{ClaimExtractor, Extraction};
 use splinter_agent::CancelToken;
 use splinter_core::claim::{Claim, ClaimId, ClaimSet, LedgerEntry, Ruling, SessionClaims};
@@ -34,11 +37,14 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::source::SourceId;
 use splinter_knowledge::claims::extract::ExtractionPolicy;
-use splinter_knowledge::claims::{GateError, Ledger};
+use splinter_knowledge::claims::{GateError, Ledger, RuleRequest};
 use splinter_knowledge::session::{SessionError, SessionView};
+use splinter_knowledge::tasks::{DEFAULT_REPAIRS, DEFAULT_REQUEST_DEADLINE};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
+
+use crate::verify::judge_model;
 
 fn session_error(source: &SourceId, e: SessionError) -> OrchestratorError {
     match e {
@@ -170,10 +176,13 @@ pub struct Ruled {
     pub kind: String,
     /// The statement proposed.
     pub statement: String,
-    /// `admitted` or `refused`.
+    /// `admitted`, `reinforced` or `refused`.
     pub outcome: &'static str,
-    /// The claim, when admitted.
+    /// The claim, when admitted or reinforcing.
     pub claim: Option<ClaimId>,
+    /// The live claim a reinforcing one restates.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reinforces: Option<ClaimId>,
     /// The earlier claims an admitted one replaces as the answer to its
     /// question.
     pub supersedes: Vec<ClaimId>,
@@ -181,6 +190,27 @@ pub struct Ruled {
     pub reason_code: Option<&'static str>,
     /// Why it was refused, in words.
     pub reason: Option<String>,
+}
+
+/// One gate request.
+#[derive(Clone, Copy)]
+pub struct GateRequest<'a> {
+    /// The claim set to rule on.
+    pub claim_set: &'a Digest,
+    /// The model that decides what a later claim does to an earlier one
+    /// about the same thing; without one the statements decide.
+    pub judge: Option<&'a ModelRef>,
+}
+
+impl<'a> GateRequest<'a> {
+    /// A request to rule on `claim_set` by code alone.
+    #[must_use]
+    pub fn new(claim_set: &'a Digest) -> Self {
+        Self {
+            claim_set,
+            judge: None,
+        }
+    }
 }
 
 /// What the gate stage reports.
@@ -198,6 +228,8 @@ pub struct ClaimsGated {
     pub admitted: usize,
     /// Earlier claims the admitted ones replaced.
     pub superseded: usize,
+    /// Proposals that said a live claim's fact again: recorded, not new.
+    pub reinforced: usize,
     /// Proposals refused now, by reason.
     pub refused: BTreeMap<String, usize>,
     /// Every ruling made now, in the order made.
@@ -210,7 +242,8 @@ pub struct ClaimsGated {
 
 /// Rules on the proposals of the claim set `set_id` and appends the rulings
 /// to the ledger.
-pub fn gate(ctx: &Context, set_id: &Digest) -> Result<ClaimsGated, OrchestratorError> {
+pub fn gate(ctx: &Context, request: &GateRequest<'_>) -> Result<ClaimsGated, OrchestratorError> {
+    let set_id = request.claim_set;
     let claims = ctx.claims();
     let set = claims.get_set(set_id)?;
     let mut views = BTreeMap::new();
@@ -220,7 +253,22 @@ pub fn gate(ctx: &Context, set_id: &Digest) -> Result<ClaimsGated, OrchestratorE
         views.insert(session.session.clone(), view);
     }
     let ledger = Ledger::new(claims.entries()?);
-    let entries = ledger.rule_set(set_id, &set, &views).map_err(gate_error)?;
+    let judge = request
+        .judge
+        .map(|reference| {
+            Ok::<_, OrchestratorError>(SvenClaimJudge::new(
+                judge_model(ctx, reference)?,
+                ctx.handle(),
+                DEFAULT_REQUEST_DEADLINE,
+                DEFAULT_REPAIRS,
+            ))
+        })
+        .transpose()?;
+    let mut rules = RuleRequest::new(set_id, &set, &views);
+    if let Some(judge) = &judge {
+        rules = rules.judged_by(judge);
+    }
+    let entries = ledger.rule_set(&rules).map_err(gate_error)?;
     claims.append(&entries)?;
 
     let proposals: usize = set.sessions.iter().map(|s| s.proposals.len()).sum();
@@ -231,6 +279,7 @@ pub fn gate(ctx: &Context, set_id: &Digest) -> Result<ClaimsGated, OrchestratorE
         already_ruled: proposals - entries.len(),
         admitted: 0,
         superseded: 0,
+        reinforced: 0,
         refused: BTreeMap::new(),
         rulings: Vec::new(),
         live: 0,
@@ -241,6 +290,10 @@ pub fn gate(ctx: &Context, set_id: &Digest) -> Result<ClaimsGated, OrchestratorE
         match &entry.ruling {
             Ruling::Admitted { supersedes, .. } => {
                 report.admitted += 1;
+                report.superseded += supersedes.len();
+            }
+            Ruling::Reinforced { supersedes, .. } => {
+                report.reinforced += 1;
                 report.superseded += supersedes.len();
             }
             Ruling::Refused { reason } => {
@@ -257,11 +310,26 @@ pub fn gate(ctx: &Context, set_id: &Digest) -> Result<ClaimsGated, OrchestratorE
 }
 
 fn ruled(entry: &LedgerEntry) -> Result<Ruled, serde_json::Error> {
-    let (outcome, claim, supersedes, reason) = match &entry.ruling {
-        Ruling::Admitted { claim, supersedes } => {
-            ("admitted", Some(claim.id()?), supersedes.clone(), None)
-        }
-        Ruling::Refused { reason } => ("refused", None, Vec::new(), Some(reason)),
+    let (outcome, claim, reinforces, supersedes, reason) = match &entry.ruling {
+        Ruling::Admitted { claim, supersedes } => (
+            "admitted",
+            Some(claim.id()?),
+            None,
+            supersedes.clone(),
+            None,
+        ),
+        Ruling::Reinforced {
+            claim,
+            of,
+            supersedes,
+        } => (
+            "reinforced",
+            Some(claim.id()?),
+            Some(of.clone()),
+            supersedes.clone(),
+            None,
+        ),
+        Ruling::Refused { reason } => ("refused", None, None, Vec::new(), Some(reason)),
     };
     Ok(Ruled {
         index: entry.index,
@@ -270,6 +338,7 @@ fn ruled(entry: &LedgerEntry) -> Result<Ruled, serde_json::Error> {
         statement: entry.proposal.statement.clone(),
         outcome,
         claim,
+        reinforces,
         supersedes,
         reason_code: reason.map(|r| r.code()),
         reason: reason.map(ToString::to_string),
@@ -294,12 +363,16 @@ pub struct ClaimLine {
     /// The release that first absorbed it; absent until one has.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub absorbed_by: Option<ReleaseId>,
+    /// How many times the person said it again: a signal that the model
+    /// is still wrong.
+    pub reinforced: usize,
 }
 
 impl ClaimLine {
-    fn of(id: ClaimId, claim: &Claim, absorbed_by: Option<ReleaseId>) -> Self {
+    fn of(id: ClaimId, claim: &Claim, absorbed_by: Option<ReleaseId>, reinforced: usize) -> Self {
         Self {
             absorbed_by,
+            reinforced,
             claim: id,
             kind: claim.kind.as_str().into(),
             statement: claim.statement.clone(),
@@ -363,13 +436,21 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
     let mut report = LedgerReport {
         live: live
             .iter()
-            .map(|(id, claim)| ClaimLine::of(id.clone(), claim, absorbed.get(id).cloned()))
+            .map(|(id, claim)| {
+                ClaimLine::of(
+                    id.clone(),
+                    claim,
+                    absorbed.get(id).cloned(),
+                    ledger.reinforcements(id),
+                )
+            })
             .collect(),
         superseded: Vec::new(),
         refused: Vec::new(),
     };
     for entry in ledger.entries() {
         match &entry.ruling {
+            Ruling::Reinforced { .. } => {}
             Ruling::Admitted { claim, .. } => {
                 let id = claim.id().map_err(|e| gate_error(e.into()))?;
                 if live_ids.contains(&&id) {

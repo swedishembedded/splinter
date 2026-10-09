@@ -11,7 +11,9 @@ use splinter_pipelines::absorb::{absorb, AbsorbRequest};
 use splinter_pipelines::claims::ledger;
 use splinter_pipelines::lineage::{lineage, Direction, LineageRequest, NodeKind};
 
-use crate::night::{night, serve_release, session_at, statement, Learner, Night, Outcome};
+use crate::night::{
+    night, serve_release, session_at, statement, statement_at, Learner, Night, Outcome,
+};
 
 const EXTRACT: &str = "List what the person taught";
 const VARIANTS: &str = "differently worded questions about one fact";
@@ -363,5 +365,106 @@ fn a_superseded_claim_drops_out_of_the_next_nights_set() -> Outcome {
     );
     assert_eq!(live_claims(&w)?.len(), 2);
     assert_eq!(ledger(&w.ctx)?.superseded.len(), 1);
+    Ok(())
+}
+
+/// A night of the one session `trajectory`, in a directory of its own.
+fn one_session(
+    w: &Night,
+    name: &str,
+    trajectory: &atif::Trajectory,
+) -> anyhow::Result<std::path::PathBuf> {
+    let dir = w.scratch.0.join(name);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("day.atif.json"), serde_json::to_vec(trajectory)?)?;
+    Ok(dir)
+}
+
+fn on_day(name: &str, n: usize, port: usize) -> atif::Trajectory {
+    let mut t = session_at(n, port);
+    t.session_id = Some(name.into());
+    t
+}
+
+#[test]
+fn a_claim_corrected_back_and_forth_leaves_the_last_one_live_with_every_ruling_kept() -> Outcome {
+    let w = night("night-canary");
+    let learner = Learner::default();
+    let mut last = None;
+    // Day 1 says port 9000, day 2 says 9100, day 3 says 9000 again.
+    for (day, port) in [("day1", 9000), ("day2", 9100), ("day3", 9000)] {
+        let dir = one_session(&w, day, &on_day(day, 0, port))?;
+        let report = absorb(&w.ctx, &w.request(dir), &learner)?.report;
+        let gate = report
+            .gate
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("no gate on {day}: {report:#?}"))?;
+        assert!(gate.passed, "{day}: {gate:#?}");
+        serve_release(
+            &w.ctx,
+            report
+                .release
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("no release on {day}"))?,
+        );
+        last = Some(report);
+    }
+    let live = ledger(&w.ctx)?;
+    assert_eq!(live.live.len(), 1);
+    assert_eq!(live.live[0].statement, statement_at(0, 9000));
+    assert_eq!(
+        live.live[0].session,
+        last.ok_or_else(|| anyhow::anyhow!("no night"))?
+            .intake
+            .ok_or_else(|| anyhow::anyhow!("no intake"))?
+            .sessions[0]
+            .source
+    );
+    assert_eq!(live.superseded.len(), 2, "day 1 and day 2 stay, replaced");
+    assert_eq!(w.ctx.claims().entries()?.len(), 3, "every ruling is kept");
+    Ok(())
+}
+
+#[test]
+fn a_fact_said_again_is_recorded_as_reinforced_and_stays_one_live_claim() -> Outcome {
+    let w = night("night-reinforced");
+    let learner = Learner::default();
+    let first = absorb(
+        &w.ctx,
+        &w.request(one_session(&w, "day1", &on_day("day1", 0, 9000))?),
+        &learner,
+    )?
+    .report;
+    serve_release(
+        &w.ctx,
+        first
+            .release
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("no release"))?,
+    );
+    let again = absorb(
+        &w.ctx,
+        &w.request(one_session(&w, "day2", &on_day("day2", 0, 9000))?),
+        &learner,
+    )?
+    .report;
+    assert_eq!(
+        again.claims.as_ref().map(|c| c.reinforced),
+        Some(1),
+        "{again:#?}"
+    );
+    let after = ledger(&w.ctx)?;
+    assert_eq!(after.live.len(), 1);
+    assert_eq!(after.live[0].reinforced, 1);
+    assert_eq!(
+        after.live[0].session,
+        first
+            .intake
+            .ok_or_else(|| anyhow::anyhow!("no intake"))?
+            .sessions[0]
+            .source,
+        "the first claim stays the live one"
+    );
+    assert!(after.refused.is_empty());
     Ok(())
 }
