@@ -3,7 +3,7 @@
 
 //! Recognition and synthesis on brain's pipelines.
 
-use brain::{TranscribePipeline, TtsOptions, TtsPipeline};
+use brain::{ResidentTts, TranscribePipeline, TtsOptions, TtsPipeline};
 use splinter_core::speech::SpeakerProfile;
 
 use super::{Clip, Recognizer, Synthesizer, Transcription};
@@ -48,25 +48,29 @@ impl Recognizer for BrainRecognizer {
     }
 }
 
-/// A synthesis model loaded on brain.
+/// A synthesis model loaded on brain and kept resident: its checkpoints are
+/// read once, not on every sentence.
 pub struct BrainSynthesizer {
-    pipeline: TtsPipeline,
+    engine: ResidentTts,
 }
 
 impl BrainSynthesizer {
     /// The synthesis model `model` names, in brain's model store.
     pub fn load(model: &str) -> Result<Self, PolicyError> {
-        let pipeline = TtsPipeline::from_pretrained(model).map_err(|e| PolicyError::Load {
+        let load_error = |e: brain::Error| PolicyError::Load {
             path: model.into(),
             reason: e.to_string(),
-        })?;
-        Ok(Self { pipeline })
+        };
+        let engine = TtsPipeline::from_pretrained(model)
+            .and_then(|pipeline| pipeline.resident())
+            .map_err(load_error)?;
+        Ok(Self { engine })
     }
 }
 
 impl Synthesizer for BrainSynthesizer {
     fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
-        self.pipeline
+        self.engine
             .speak_with(text, TtsOptions::new().seed(speaker.seed()))
             .map_err(|e| PolicyError::Synthesis {
                 reason: e.to_string(),
