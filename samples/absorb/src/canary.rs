@@ -39,8 +39,8 @@ pub fn flag(out: &Path, fact: &str) -> anyhow::Result<String> {
         .find(|f| f.id == fact)
         .with_context(|| format!("no fact {fact} in the manifest"))?;
     anyhow::ensure!(
-        target.role == Some(Role::Test),
-        "fact {fact} is not a test fact: the canary is one of them"
+        matches!(target.role, Some(Role::Test | Role::Dev)),
+        "fact {fact} is no test or development fact: the canary is one of them"
     );
     let corrupted = corrupt(target, &pool)
         .with_context(|| format!("no key of fact {fact} can be replaced by something false"))?;

@@ -242,12 +242,18 @@ enum Probes {
 
 #[derive(Subcommand)]
 enum Session {
-    /// Record one live session as an ATIF file.
+    /// Record live sessions as ATIF files: one given on the command line, or
+    /// those of a plan file, run together so that the card changes models
+    /// twice a round however many sessions there are.
     Record {
         #[command(flatten)]
         common: Common,
+        /// JSON Lines of sessions to record together (`{"kind", "fact", "style",
+        /// "day", "topic"}`), instead of the single session below.
+        #[arg(long, conflicts_with_all = ["fact", "noise", "sham", "canary", "style", "topic", "day"])]
+        plan: Option<PathBuf>,
         /// The fact the user corrects.
-        #[arg(long, conflicts_with = "noise", required_unless_present = "noise")]
+        #[arg(long, conflicts_with = "noise", required_unless_present_any = ["noise", "plan"])]
         fact: Option<String>,
         /// An unrelated chat instead of a fact (a null day is a day of these only).
         #[arg(long)]
@@ -270,8 +276,9 @@ enum Session {
         /// The policy that answers; `+ADAPTER` after the checkpoint names the current release.
         #[arg(long, default_value = DEFAULT_MODEL)]
         policy: String,
-        /// The model that plays the user: plain, no adapter.
-        #[arg(long, default_value = DEFAULT_MODEL)]
+        /// The model that plays the user: plain, no adapter, and not the policy's
+        /// own (the judge's by default).
+        #[arg(long, default_value = DEFAULT_JUDGE)]
         simulator: String,
     },
 }
@@ -422,6 +429,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Session(Session::Record {
             common,
+            plan,
             fact,
             noise,
             sham,
@@ -432,22 +440,31 @@ fn main() -> anyhow::Result<()> {
             policy,
             simulator,
         }) => {
-            let about = match (fact, noise, sham) {
-                (Some(id), false, false) => record::About::Fact(id),
-                (Some(id), false, true) => record::About::Sham(id),
-                _ => record::About::Noise(topic),
+            let items = match plan {
+                Some(plan) => record::read_plan(&plan)?,
+                None => {
+                    let about = match (fact, noise, sham) {
+                        (Some(id), false, false) => record::About::Fact(id),
+                        (Some(id), false, true) => record::About::Sham(id),
+                        _ => record::About::Noise(topic),
+                    };
+                    vec![record::Item {
+                        day,
+                        about,
+                        style,
+                        canary,
+                    }]
+                }
             };
-            let recorded = record::record(&record::Request {
+            let outcome = record::record(&record::Request {
                 out: common.out,
                 models: common.models,
                 policy,
                 simulator,
-                day,
-                about,
-                style,
-                canary,
+                items,
             })?;
-            println!("{}", serde_json::to_string_pretty(&recorded)?);
+            println!("{}", serde_json::to_string_pretty(&outcome)?);
+            anyhow::ensure!(outcome.failed.is_empty(), "{}", outcome.failed.join("; "));
         }
     }
     Ok(())

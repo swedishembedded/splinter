@@ -28,8 +28,8 @@ Every command takes the output directory `--out DIR`; the run's state is
 `DIR/manifest.json`, which each stage reads and extends. Models are local;
 the default policy and generator are `Qwen/Qwen3-8B` (one resident copy,
 context limited to what fits beside the weights on a 24 GiB card). The judge
-is `Qwen/Qwen3-14B`, a different model from the policy. A card holds one base at a time,
-so each stage runs its models in phases.
+and the simulated user are `Qwen/Qwen3-14B`, a different model from the policy.
+A card holds one base at a time, so each stage runs its models in phases.
 
 ## Running it
 
@@ -69,6 +69,10 @@ splinter-absorb session record --out OUT --fact ID --style realistic
 splinter-absorb session record --out OUT --noise
 splinter-absorb session record --out OUT --fact ID --sham
 splinter-absorb session record --out OUT --fact ID --canary
+#    Many at once: a card holds one model at a time and loading one takes minutes, so
+#    the sessions of a plan file (JSON Lines of {"kind", "fact", "style", "day", "topic"})
+#    run together and the card changes models twice a round, not twice a turn.
+splinter-absorb session record --out OUT --plan plan.jsonl
 
 # 7. Any training file is checked against the sealed probes before it is trained on.
 splinter-absorb probes check --out OUT training.jsonl
@@ -90,7 +94,7 @@ the card and stops the run if it leaves the GPUs.
 | screening (`answers.rs`, `screen.rs`) | up to six answers per fact, stopping as soon as one decides the fact cannot fill the role its family is a candidate for (the judge likewise grades only where it can change the class); four probes and a reworded statement for a fact that looks wrong, the judge measured again on each such fact's own hard negatives |
 | probes (`probes.rs`, `writer.rs`, `seal.rs`) | four kinds written by the generator, admitted by code, sorted and hashed (sha256 of the file); `Guard` refuses a training record that contains a probe's question, shares an eight-word run with one beyond what the fact's statement holds, or has a line with four-word-run Jaccard similarity of 0.5 or more to one |
 | assertions (`assertions.rs`, `baseline.rs`) | a sycophancy probe puts a known fact after the user's confident false value of it (a key swapped by code) and succeeds when the answer does not adopt it; an unknown probe asks about something that does not exist and succeeds when the answer invents no name, figure or term and the judge says it declines or hedges. Both are sealed with the other probes; `probes baseline` measures them on the day-0 policy |
-| sessions (`session.rs`, `record.rs`) | a real sven session between the policy and a simulated user, saved as the ATIF file sven writes, plus an index beside the files |
+| sessions (`session.rs`, `record.rs`, `subjects.rs`) | a real sven session between the policy and a simulated user, saved as the ATIF file sven writes with `extra.absorb_subject` naming the fact, plus an index and the subjects file beside the files |
 
 ## Roles
 
@@ -130,15 +134,24 @@ because no embedding comparison is wired into it.
 
 ## Sessions
 
-The user is the plain model, shown the one fact it corrects and nothing else.
-It opens with the question in its own words and corrects in its own words, 2
-to 5 user turns; a message that shares an eight-word run with the statement is
-sent back. There is no closing restatement. A session in which the user never
-states every key is discarded and noted, and recorded afresh. Styles: `plain`,
-`realistic` (hedged, partial, verbose) and `adversarial` (a wrong correction
-first, drift, a false claim about something else). Besides a fact session
-there are `--noise` (a null day is a day of these only), `--sham` (the answer
-is never corrected) and `--canary` (the user asserts the false statement).
+The user is the judge's model (Qwen3-14B, plain, no adapter, not the policy's
+base), shown the one fact it corrects and nothing else. It opens with the
+question alone (code refuses an opening that holds any key), reads the policy's
+real answer and, when code finds a key missing from it, corrects it in its own
+words naming what is right (a plain user must name every missing key, a
+realistic one at least one); it speaks as an ordinary person, never as anyone in
+the facts, and a message that shares an eight-word run with the statement is sent
+back. The session ends as soon as the user has stated every key and the policy
+has replied, at most five user turns. A session is discarded, with the reason
+noted in `sessions/discarded.jsonl`, when the policy's first answer already held
+every key (not a correction session) or the user never stated every key. Styles:
+`plain`, `realistic` (hedged, partial, verbose) and `adversarial` (a wrong
+correction first, drift, a false claim about something else). Besides a fact
+session there are `--noise` (a null day is a day of these only), `--sham` (the
+answer is never corrected) and `--canary` (the user asserts the false
+statement). A fact session carries `extra.absorb_subject` (the fact id, or
+`<id>#canary`) in its ATIF root, and `subjects.jsonl` beside the files is the
+`--subjects` file of `splinter claims gate` and `splinter absorb`.
 
 ## Limits, stated up front
 
