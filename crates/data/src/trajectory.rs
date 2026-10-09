@@ -96,7 +96,7 @@ pub fn projection_refusal(trajectory: &Trajectory) -> Option<Unprojectable> {
         .filter(|s| s.source == StepOrigin::User)
         .count();
     if users >= 2 {
-        try_dialogue(trajectory, "", None).err()
+        try_dialogue(trajectory, "", &|_, _| true).err()
     } else {
         try_conversation(trajectory, "").err()
     }
@@ -222,18 +222,19 @@ pub(crate) fn dialogue(trajectory: &Trajectory, student_turn: &str) -> Option<Ve
     if users < 2 {
         return None;
     }
-    try_dialogue(trajectory, student_turn, None).ok()
+    try_dialogue(trajectory, student_turn, &|_, _| true).ok()
 }
 
 /// A recorded session as the conversation it was, from its own first user
-/// step: every reply the agent gave after step `supervised_after` is
-/// supervised, and every earlier one is context only - what the agent said
-/// before it was corrected is shown and never trained on. A session with one
-/// user step is a dialogue of one exchange. Refused, naming the step, when
-/// it holds a tool call, an image or a copied step, or does not alternate.
+/// step. The agent's reply at step `step` with text `text` is supervised
+/// when `supervise(step, text)` says so, and context only otherwise - what
+/// the agent said before it was corrected is shown and never trained on. A
+/// session with one user step is a dialogue of one exchange. Refused, naming
+/// the step, when it holds a tool call, an image or a copied step, or does
+/// not alternate.
 pub fn session_dialogue(
     trajectory: &Trajectory,
-    supervised_after: u64,
+    supervise: impl Fn(u64, &str) -> bool,
 ) -> Result<Vec<WireMessage>, Unprojectable> {
     let opening = trajectory
         .steps
@@ -242,15 +243,15 @@ pub fn session_dialogue(
         .map(|s| text_of(&s.message).ok_or(Unprojectable::Image { step: s.step_id }))
         .transpose()?
         .unwrap_or_default();
-    try_dialogue(trajectory, &opening, Some(supervised_after))
+    try_dialogue(trajectory, &opening, &supervise)
 }
 
-/// [`dialogue`], naming what makes it impossible. Replies are supervised
-/// after step `supervised_after`, or all of them when it is `None`.
+/// [`dialogue`], naming what makes it impossible. A reply is supervised
+/// where `supervise` says so.
 fn try_dialogue(
     trajectory: &Trajectory,
     student_turn: &str,
-    supervised_after: Option<u64>,
+    supervise: &dyn Fn(u64, &str) -> bool,
 ) -> Result<Vec<WireMessage>, Unprojectable> {
     let mut messages = Vec::new();
     let mut users = 0usize;
@@ -286,7 +287,7 @@ fn try_dialogue(
                 }
                 let text =
                     text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
-                let supervised = supervised_after.is_none_or(|after| step.step_id > after);
+                let supervised = supervise(step.step_id, &text);
                 messages.push(message("assistant", &text, supervised));
             }
         }
