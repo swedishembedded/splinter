@@ -132,6 +132,49 @@ pub fn record_set(
     Ok((set, rejected))
 }
 
+/// A shard `INDEX/COUNT` as two numbers, with `INDEX < COUNT`.
+pub fn parse_shard(text: &str) -> Result<(usize, usize)> {
+    let (i, n) = text
+        .split_once('/')
+        .with_context(|| format!("shard {text:?} is not INDEX/COUNT"))?;
+    let (i, n): (usize, usize) = (i.parse()?, n.parse()?);
+    if n == 0 || i >= n {
+        bail!("shard {text:?}: the index must be below the count");
+    }
+    Ok((i, n))
+}
+
+pub fn merge(dir: &std::path::Path) -> Result<()> {
+    let mut parts: Vec<_> = std::fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("set-") && n.ends_with(".json"))
+        })
+        .collect();
+    parts.sort();
+    if parts.is_empty() {
+        bail!("{} holds no set-N.json shards", dir.display());
+    }
+    let mut items = Vec::new();
+    let mut named: Option<(String, splinter_sdk::vocabulary::speech::Portrayal)> = None;
+    for part in &parts {
+        let shard: splinter_sdk::vocabulary::spoken::SpokenSet =
+            serde_json::from_str(&std::fs::read_to_string(part)?)?;
+        named.get_or_insert_with(|| (shard.name().to_string(), shard.portrayal().clone()));
+        items.extend(shard.items().iter().cloned());
+    }
+    let (name, portrayal) = named.context("no shard")?;
+    let set = splinter_sdk::vocabulary::spoken::SpokenSet::new(name, portrayal, items)?;
+    std::fs::write(dir.join("set.json"), serde_json::to_string_pretty(&set)?)?;
+    println!(
+        "{}",
+        serde_json::json!({"recordings": set.items().len(), "digest": set.digest()?, "shards": parts.len()})
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
