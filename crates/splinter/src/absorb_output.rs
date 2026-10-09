@@ -52,6 +52,16 @@ impl Report for ClaimsExtracted {
             self.sessions,
             tally(&self.by_kind)
         );
+        if self.passes > 1 {
+            let _ = writeln!(
+                out,
+                "  {} pass(es) over each session; {} proposal(s) not made by every pass",
+                self.passes, self.disagreements
+            );
+            for u in &self.unconfirmed {
+                let _ = writeln!(out, "  unconfirmed {:?}", u.statement);
+            }
+        }
         for f in &self.failed {
             let _ = writeln!(out, "  nothing usable for {}: {}", f.session, f.reason);
         }

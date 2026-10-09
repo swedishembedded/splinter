@@ -28,7 +28,8 @@ what the person taught that the agent should remember. You are exact: you copy t
 words, you never add anything they did not say, and you never treat what the agent said as true.";
 
 /// The extractor's brief.
-pub const BRIEF: &str = "List what the person taught in this session, as claims. A claim is one \
+pub const BRIEF: &str = "List what the person taught in this session, as claims; follow the \
+`reading` instruction given with the session. A claim is one \
 of: `correction` (the person says the agent's answer was wrong and gives the right one), `fact` \
 (the person states something about the world, themselves or their project) or `procedure` (the \
 person shows or confirms a sequence of tool calls that worked). Each claim has:\n\
@@ -53,6 +54,18 @@ accepts at most 12 connections.\", \"question\": \"How many connections does the
 accept?\", \"quotes\": [{\"step\": 2, \"quote\": \"the Orrin gateway\"}, {\"step\": 4, \"quote\": \
 \"it takes 12 connections at most\"}], \"said_wrong\": \"accepts at most 8 connections\", \
 \"subject\": \"world\"}]}";
+
+/// How an extraction pass reads the session. Passes read it in different
+/// orders so that what they agree on is not an accident of one reading.
+fn reading(pass: u32) -> &'static str {
+    if pass.is_multiple_of(2) {
+        "Read the session from the first step to the last and list the claims in the order the \
+         session teaches them."
+    } else {
+        "Read the session from the last step back to the first, then list the claims in the \
+         order the session teaches them."
+    }
+}
 
 /// How the extractor is bounded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,15 +105,19 @@ pub struct StepInput<'a> {
 /// A session as the extractor is shown it.
 #[derive(Debug, Serialize)]
 pub struct ExtractInput<'a> {
+    pass: u32,
+    reading: &'static str,
     steps: Vec<StepInput<'a>>,
 }
 
 impl<'a> ExtractInput<'a> {
-    /// `view`'s steps, in order.
+    /// `view`'s steps, in order, for extraction pass `pass` (counted from 0).
     #[must_use]
-    pub fn of(view: &'a SessionView) -> Self {
+    pub fn of(view: &'a SessionView, pass: u32) -> Self {
         let text = |p: &'a Option<crate::session::TextPart>| p.as_ref().map(|p| p.text.as_str());
         Self {
+            pass: pass + 1,
+            reading: reading(pass),
             steps: view
                 .steps()
                 .map(|s: &'a Step| StepInput {

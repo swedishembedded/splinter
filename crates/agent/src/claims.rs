@@ -81,14 +81,27 @@ impl ClaimExtractor {
         &self.model.identity
     }
 
-    /// The claims the model proposes from `session`.
+    /// The claims the model proposes from `session` in its first pass.
     pub async fn extract(&self, session: &SessionView) -> Result<Extraction, ExtractError> {
+        self.extract_pass(session, 0).await
+    }
+
+    /// The claims the model proposes from `session` in extraction pass `pass`
+    /// (counted from 0): the passes read the session in different orders.
+    pub async fn extract_pass(
+        &self,
+        session: &SessionView,
+        pass: u32,
+    ) -> Result<Extraction, ExtractError> {
         let mut call = TypedCall::<ClaimReply>::new(METHOD, BRIEF, ROLE, self.policy.deadline)
             .max_output_tokens(self.policy.max_output_tokens)
             .repairs(self.policy.repairs)
             .postcondition(ClaimReply::check);
         call.cancel = self.cancel.clone();
-        match call.run(&self.model, &ExtractInput::of(session)).await {
+        match call
+            .run(&self.model, &ExtractInput::of(session, pass))
+            .await
+        {
             Ok(reply) => Ok(Extraction::Proposals(reply.into_proposals())),
             Err(CallError::Invalid {
                 attempts,

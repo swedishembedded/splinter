@@ -51,9 +51,10 @@ pub fn claims(ctx: &Context, json: bool, command: ClaimsCommand) -> Result<Exit,
         ClaimsCommand::Extract {
             sessions: given,
             generator,
+            passes,
         } => {
             let ids = sessions::resolve(ctx, &given)?;
-            let arguments = json!({ "sessions": ids, "generator": generator });
+            let arguments = json!({ "sessions": ids, "generator": generator, "passes": passes });
             let extracted = record(ctx, "claims extract", &arguments, |run| {
                 claims::extract(
                     ctx,
@@ -61,6 +62,7 @@ pub fn claims(ctx: &Context, json: bool, command: ClaimsCommand) -> Result<Exit,
                         sessions: &ids,
                         extractor: &generator,
                         policy: ExtractionPolicy::default(),
+                        passes,
                         deadline: None,
                         cancel: run.cancel_token(),
                     },
@@ -151,6 +153,7 @@ fn absorb_request(args: AbsorbArgs) -> AbsorbRequest {
         }),
         continue_from_release: args.continue_from_release,
         entail: args.entail,
+        extraction_passes: args.passes,
         replay_fraction: args.replay_fraction,
         sealed_probes: args.sealed_probes,
         dry_run: args.dry_run,

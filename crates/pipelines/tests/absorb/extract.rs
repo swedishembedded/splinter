@@ -80,6 +80,7 @@ pub fn request<'a>(
             repairs: 0,
             ..ExtractionPolicy::default()
         },
+        passes: 1,
         deadline: None,
         cancel: splinter_agent::CancelToken::new(),
     }
@@ -144,5 +145,72 @@ fn a_reply_that_stays_unusable_is_reported_against_its_session() -> Outcome {
         !w.shown().contains(API_KEY),
         "nothing passed to the model holds the secret"
     );
+    Ok(())
+}
+
+/// The second pass reads the session from the last step back.
+const SECOND_PASS: &str = "from the last step back to the first";
+
+fn tls_claim() -> serde_json::Value {
+    json!({
+        "kind": "fact",
+        "statement": "The Tessera dashboard has TLS enabled.",
+        "question": "Does the Tessera dashboard use TLS?",
+        "quotes": [{"step": 3, "quote": "the March move"}],
+        "subject": "world",
+    })
+}
+
+/// The first pass finds two claims, the second only one of them, worded
+/// differently.
+fn two_readings(prompt: &str) -> String {
+    if prompt.contains(SECOND_PASS) {
+        let mut same = port_claim();
+        same["statement"] = json!("Port 9090 is where the Tessera dashboard listens.");
+        same["quotes"] = json!([{"step": 3, "quote": "port 9090"}]);
+        reply(vec![same])
+    } else {
+        reply(vec![port_claim(), tls_claim()])
+    }
+}
+
+#[test]
+fn a_claim_only_one_pass_produced_is_listed_as_unconfirmed_and_not_ruled_on() -> Outcome {
+    let w = world(two_readings)?;
+    let paths = [w.write("a.atif.json", &port_correction())?];
+    let sessions = taken(&w, &paths)?;
+    let extractor = ModelRef::policy_default();
+    let report = extract(
+        &w.ctx,
+        &ExtractRequest {
+            passes: 2,
+            ..request(&sessions, &extractor)
+        },
+    )?;
+    assert_eq!(
+        (report.passes, report.proposals, report.disagreements),
+        (2, 1, 1),
+        "{report:#?}"
+    );
+    assert_eq!(
+        report.unconfirmed[0].statement,
+        "The Tessera dashboard has TLS enabled."
+    );
+    let set = w.ctx.claims().get_set(&report.claim_set)?;
+    assert_eq!(set.passes, 2);
+    assert_eq!(set.sessions[0].proposals.len(), 1);
+    assert_eq!(set.sessions[0].unconfirmed.len(), 1, "kept, never ruled on");
+    assert_eq!(
+        w.prompts
+            .lock()
+            .map_err(|_| anyhow::anyhow!("poisoned"))?
+            .len(),
+        2,
+        "one call per pass"
+    );
+
+    // One pass keeps both.
+    let one = extract(&w.ctx, &request(&sessions, &extractor))?;
+    assert_eq!((one.proposals, one.disagreements), (2, 0));
     Ok(())
 }

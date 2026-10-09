@@ -448,12 +448,14 @@ fn a_tool_call_procedure_needs_its_calls_and_the_observation_that_proved_it() ->
 fn set_of(sessions: Vec<(&SessionView, Vec<ClaimProposal>)>, tag: &str) -> ClaimSet {
     ClaimSet {
         extractor: format!("scripted/{tag}"),
+        passes: 1,
         sessions: sessions
             .into_iter()
             .map(|(v, proposals)| SessionClaims {
                 session: v.source().clone(),
                 proposals,
                 failure: None,
+                unconfirmed: vec![],
             })
             .collect(),
     }

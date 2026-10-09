@@ -735,12 +735,14 @@ fn sessions_and_claims_are_one_stage_per_command() {
     let Command::Claims(ClaimsCommand::Extract {
         sessions,
         generator,
+        passes,
     }) = command(&["claims", "extract", "ab12", "cd34"])
     else {
         panic!("claims extract");
     };
     assert_eq!(sessions, ["ab12", "cd34"]);
     assert_eq!(generator, ModelRef::policy_default());
+    assert_eq!(passes, 2, "two readings by default");
     assert!(
         parse(&["claims", "extract"]).is_err(),
         "a session is required"

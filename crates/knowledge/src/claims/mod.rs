@@ -11,6 +11,8 @@
 //!
 //! * [`extract`] - what the extractor model is shown of a session and told
 //!   to do, and the one shape ([`reply::ClaimReply`]) its reply may take.
+//! * [`agreement`] - of several extraction passes over one session, only the
+//!   claims every pass produced are kept.
 //! * [`rule`] - the gates that decide one proposal on its own, in order:
 //!   it is well formed; every quote is verbatim in the user step it cites,
 //!   and a quote of the agent's words is refused whatever it says; a
@@ -33,6 +35,7 @@
 //! Without a judge no model is involved in a ruling: the same proposals and
 //! ledger give the same rulings.
 
+pub mod agreement;
 pub mod answer;
 pub mod extract;
 pub mod forms;

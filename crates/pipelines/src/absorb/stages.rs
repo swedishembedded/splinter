@@ -33,6 +33,7 @@ use super::sealed::SealedProbes;
 use super::{AbsorbRequest, Absorbed};
 use crate::claims::{
     extract, gate as rule_claims, resolve_set, ClaimsExtracted, ExtractRequest, GateRequest,
+    Unconfirmed,
 };
 use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::learn::{records_at_share, PolicyUsed};
@@ -64,6 +65,11 @@ pub(super) fn validate(request: &AbsorbRequest) -> Result<(), OrchestratorError>
             "the rehearsal share {} is not in [0, 1)",
             request.rehearsal_share
         )));
+    }
+    if request.extraction_passes == 0 {
+        return Err(OrchestratorError::Refused(
+            "the extraction passes are at least one".into(),
+        ));
     }
     if request.epochs == 0 || request.paraphrases == 0 {
         return Err(OrchestratorError::Refused(
@@ -252,6 +258,7 @@ fn extract_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> D
             .map(|s| &s.session)
             .eq(st.sessions.iter());
         if same_sessions
+            && set.passes == st.request.extraction_passes
             && set.extractor == identity
             && set.sessions.iter().all(|s| s.failure.is_none())
         {
@@ -267,7 +274,19 @@ fn extract_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> D
             ClaimsExtracted {
                 claim_set,
                 sessions: set.sessions.len(),
+                passes: set.passes,
                 proposals: set.sessions.iter().map(|s| s.proposals.len()).sum(),
+                disagreements: set.sessions.iter().map(|s| s.unconfirmed.len()).sum(),
+                unconfirmed: set
+                    .sessions
+                    .iter()
+                    .flat_map(|s| {
+                        s.unconfirmed.iter().map(|p| Unconfirmed {
+                            session: s.session.clone(),
+                            statement: p.statement.clone(),
+                        })
+                    })
+                    .collect(),
                 by_kind,
                 failed: Vec::new(),
                 stopped: None,
@@ -279,6 +298,7 @@ fn extract_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> D
                 sessions: &st.sessions,
                 extractor: &st.generator,
                 policy: ExtractionPolicy::default(),
+                passes: st.request.extraction_passes,
                 deadline: None,
                 cancel: run.cancel_token(),
             },

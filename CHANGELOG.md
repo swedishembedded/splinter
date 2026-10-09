@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- Two-pass extraction: `claims extract --passes N` and `absorb --passes N` (two by default) read each session in
+  different orders and keep only the claims every pass proposed, matched by cited words and what they state; the
+  others are stored as unconfirmed and counted in the report.
 - An entailment gate: when a judge is configured it is shown only a claim's cited quotes and its statement and must
   say that the words assert the statement; otherwise the claim is refused as `not_entailed`. `--entail=false` on
   `claims gate` and `absorb` turns it off.

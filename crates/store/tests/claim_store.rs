@@ -59,10 +59,12 @@ fn a_claim_set_is_stored_once_and_read_back() -> Outcome {
     let store = ClaimStore::new(&Workspace::at(&StateRoot::new(dir.path())));
     let set = ClaimSet {
         extractor: "scripted/extractor".into(),
+        passes: 1,
         sessions: vec![SessionClaims {
             session: session(),
             proposals: vec![proposal("A.")],
             failure: None,
+            unconfirmed: vec![],
         }],
     };
     let id = store.put_set(&set)?;

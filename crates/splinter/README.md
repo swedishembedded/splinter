@@ -773,6 +773,13 @@ procedure, the tool-call steps and the observation quotes that proved it. Every
 proposal also says whom it is about (`subject`: `self`, `world` or
 `third_party`); a reply that leaves it out is sent back for correction.
 
+`claims extract --passes N` (two by default; `absorb --passes N` likewise) reads
+each session N times, in different orders, and keeps only the claims every pass
+proposed, matched by the words they cite and what they state, not by their
+wording. The proposals some pass lacked are stored in the claim set as
+unconfirmed, listed in the report with their count, and never ruled on. A pass
+whose reply stays unusable fails the session.
+
 `claims gate` rules on every proposal by code alone, in order: shape; every
 quote verbatim in the user step it cites (a quote of an agent step is refused
 as `assistant_evidence`, whatever it says); a procedure has its calls and
@@ -879,8 +886,7 @@ run built is taken as it is.
   not see answered stays new and is taught again the next night.
 
 Not built: the sycophancy and hallucination-on-unknown probes on the retention
-side, the stopping of the training on the stopping paraphrases, and two-pass
-extraction.
+side, and the stopping of the training on the stopping paraphrases.
 
 ## JSON output
 

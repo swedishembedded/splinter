@@ -96,3 +96,20 @@ pub fn statements_agree(a: &str, b: &str) -> bool {
     let (a, b) = (numbers(a), numbers(b));
     !a.is_empty() && a == b
 }
+
+/// Whether two statements, not necessarily about the same subject by
+/// [`same_subject`], state the same thing: they [`statements_agree`], or
+/// share most of their content words and state no numbers that differ.
+#[must_use]
+pub fn statements_alike(a: &str, b: &str) -> bool {
+    if statements_agree(a, b) {
+        return true;
+    }
+    let (numbers_a, numbers_b) = (numbers(a), numbers(b));
+    if numbers_a != numbers_b {
+        return false;
+    }
+    let (words_a, words_b) = (content_words(a), content_words(b));
+    let all = words_a.union(&words_b).count();
+    all > 0 && words_a.intersection(&words_b).count() as f64 / all as f64 >= NAMELESS_OVERLAP
+}

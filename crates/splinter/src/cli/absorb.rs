@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use clap::Subcommand;
 use splinter_sdk::absorb::kit::PARAPHRASES_WRITTEN;
 use splinter_sdk::absorb::DEFAULT_EPOCHS;
+use splinter_sdk::claims::DEFAULT_EXTRACTION_PASSES;
 use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::sessions::DEFAULT_MAX_SESSION_BYTES;
 use splinter_sdk::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
@@ -51,6 +52,12 @@ pub enum ClaimsCommand {
         /// The model that reads the sessions.
         #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
         generator: ModelRef,
+        /// How many times each session is read, in different orders; only a
+        /// claim every pass proposed is kept, the rest are listed as
+        /// unconfirmed.
+        #[arg(long, default_value_t = DEFAULT_EXTRACTION_PASSES, value_name = "N",
+            value_parser = clap::value_parser!(u32).range(1..))]
+        passes: u32,
     },
     /// Rule on a claim set: quotes verbatim in the person's words, the
     /// statement's numbers, names and quoted terms in them, the agent's
@@ -116,6 +123,11 @@ pub struct AbsorbArgs {
     #[arg(long, default_value_t = true, num_args = 0..=1, default_missing_value = "true",
         require_equals = true, value_name = "BOOL")]
     pub entail: bool,
+    /// How many times each session is read for claims, in different orders;
+    /// only a claim every pass proposed is ruled on.
+    #[arg(long, default_value_t = DEFAULT_EXTRACTION_PASSES, value_name = "N",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub passes: u32,
     /// Differently worded questions written per claim; a third of them are
     /// kept out of training as the claim's own stopping and gate set.
     #[arg(long, default_value_t = PARAPHRASES_WRITTEN as u32, value_name = "N",

@@ -337,6 +337,10 @@ pub struct SessionClaims {
     /// did not: the reply stayed malformed after correction, or the call
     /// ended without one.
     pub failure: Option<String>,
+    /// Proposals some extraction pass made and another did not: listed, never
+    /// ruled on. Empty after a single pass.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unconfirmed: Vec<ClaimProposal>,
 }
 
 /// The result of one extraction run: the proposals for each session, kept
@@ -345,8 +349,20 @@ pub struct SessionClaims {
 pub struct ClaimSet {
     /// The model that proposed them, as an experience records a model.
     pub extractor: String,
+    /// How many extraction passes were made over each session; a proposal
+    /// is a proposal only when every pass made it.
+    #[serde(default = "one_pass", skip_serializing_if = "is_one_pass")]
+    pub passes: u32,
     /// One entry per session, in the order the sessions were given.
     pub sessions: Vec<SessionClaims>,
+}
+
+fn one_pass() -> u32 {
+    1
+}
+
+fn is_one_pass(passes: &u32) -> bool {
+    *passes == 1
 }
 
 impl std::error::Error for Refusal {}

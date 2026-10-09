@@ -36,6 +36,7 @@ use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::source::SourceId;
+use splinter_knowledge::claims::agreement::{agree, Agreed};
 use splinter_knowledge::claims::extract::ExtractionPolicy;
 use splinter_knowledge::claims::{GateError, Ledger, RuleRequest};
 use splinter_knowledge::session::{SessionError, SessionView};
@@ -65,10 +66,26 @@ pub struct ExtractRequest<'a> {
     pub extractor: &'a ModelRef,
     /// How each session's extraction is bounded.
     pub policy: ExtractionPolicy,
+    /// How many times each session is read, in different orders; a claim is
+    /// proposed only when every pass proposed it (at least one).
+    pub passes: u32,
     /// No session is started after this.
     pub deadline: Option<Instant>,
     /// Stops extraction.
     pub cancel: CancelToken,
+}
+
+/// The extraction passes made over each session unless asked otherwise: two
+/// readings in different orders, and only what both produced is proposed.
+pub const DEFAULT_EXTRACTION_PASSES: u32 = 2;
+
+/// A proposal one pass made and another did not.
+#[derive(Clone, Debug, Serialize)]
+pub struct Unconfirmed {
+    /// The session.
+    pub session: SourceId,
+    /// The statement proposed.
+    pub statement: String,
 }
 
 /// A session the extractor gave nothing usable for.
@@ -87,8 +104,14 @@ pub struct ClaimsExtracted {
     pub claim_set: Digest,
     /// Sessions read.
     pub sessions: usize,
-    /// Claims proposed across them.
+    /// Extraction passes made over each.
+    pub passes: u32,
+    /// Claims proposed across them: those every pass produced.
     pub proposals: usize,
+    /// Proposals some pass made and another did not, so left unruled.
+    pub disagreements: usize,
+    /// Each of them.
+    pub unconfirmed: Vec<Unconfirmed>,
     /// Proposals by kind.
     pub by_kind: BTreeMap<String, usize>,
     /// Sessions the extractor gave nothing usable for.
@@ -111,7 +134,10 @@ pub fn extract(
     let mut report = ClaimsExtracted {
         claim_set: Digest::of(b""),
         sessions: 0,
+        passes: request.passes,
         proposals: 0,
+        disagreements: 0,
+        unconfirmed: Vec::new(),
         by_kind: BTreeMap::new(),
         failed: Vec::new(),
         stopped: None,
@@ -126,26 +152,29 @@ pub fn extract(
             break;
         }
         let view = SessionView::load(&store, id).map_err(|e| session_error(id, e))?;
-        let extraction =
-            ctx.block_on(extractor.extract(&view))
-                .map_err(|e| OrchestratorError::Model {
-                    model: request.extractor.to_string(),
-                    detail: e.to_string(),
-                })?;
+        let extraction = extract_session(ctx, &extractor, &view, request)?;
         report.sessions += 1;
         sessions.push(match extraction {
-            Extraction::Proposals(proposals) => {
-                report.proposals += proposals.len();
-                for p in &proposals {
+            Passed::Proposals(agreed) => {
+                report.proposals += agreed.kept.len();
+                report.disagreements += agreed.unconfirmed.len();
+                report
+                    .unconfirmed
+                    .extend(agreed.unconfirmed.iter().map(|p| Unconfirmed {
+                        session: id.clone(),
+                        statement: p.statement.clone(),
+                    }));
+                for p in &agreed.kept {
                     *report.by_kind.entry(p.kind.as_str().into()).or_default() += 1;
                 }
                 SessionClaims {
                     session: id.clone(),
-                    proposals,
+                    proposals: agreed.kept,
                     failure: None,
+                    unconfirmed: agreed.unconfirmed,
                 }
             }
-            Extraction::Declined(reason) => {
+            Passed::Declined(reason) => {
                 report.failed.push(ExtractionFailed {
                     session: id.clone(),
                     reason: reason.clone(),
@@ -154,15 +183,48 @@ pub fn extract(
                     session: id.clone(),
                     proposals: Vec::new(),
                     failure: Some(reason),
+                    unconfirmed: Vec::new(),
                 }
             }
         });
     }
     report.claim_set = ctx.claims().put_set(&ClaimSet {
         extractor: extractor.identity().to_string(),
+        passes: request.passes,
         sessions,
     })?;
     Ok(report)
+}
+
+/// What the passes over one session agreed on, or why one gave nothing.
+enum Passed {
+    Proposals(Agreed),
+    Declined(String),
+}
+
+/// Reads `view` `request.passes` times and keeps what every pass proposed.
+fn extract_session(
+    ctx: &Context,
+    extractor: &ClaimExtractor,
+    view: &SessionView,
+    request: &ExtractRequest<'_>,
+) -> Result<Passed, OrchestratorError> {
+    let mut passes = Vec::new();
+    for pass in 0..request.passes {
+        let extraction = ctx
+            .block_on(extractor.extract_pass(view, pass))
+            .map_err(|e| OrchestratorError::Model {
+                model: request.extractor.to_string(),
+                detail: e.to_string(),
+            })?;
+        match extraction {
+            Extraction::Proposals(proposals) => passes.push(proposals),
+            Extraction::Declined(reason) => {
+                return Ok(Passed::Declined(format!("pass {}: {reason}", pass + 1)))
+            }
+        }
+    }
+    Ok(Passed::Proposals(agree(&passes)))
 }
 
 /// One proposal's ruling, as the gate stage reports it.

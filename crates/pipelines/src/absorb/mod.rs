@@ -63,7 +63,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::runs::{record, Recorded};
 
-use crate::claims::{ClaimsExtracted, ClaimsGated};
+use crate::claims::{ClaimsExtracted, ClaimsGated, DEFAULT_EXTRACTION_PASSES};
 use crate::learn::PolicyUsed;
 use crate::rehearsal::{Rehearsed, DEFAULT_REHEARSAL_SHARE};
 use crate::sessions::{SessionsIntake, DEFAULT_MAX_SESSION_BYTES};
@@ -112,6 +112,9 @@ pub struct AbsorbRequest {
     /// The fraction of each earlier release's records replayed when
     /// continuing.
     pub replay_fraction: f64,
+    /// Extraction passes over each session; only what every pass proposed
+    /// is ruled on.
+    pub extraction_passes: u32,
     /// Whether the judge, when there is one, must find that the person's
     /// cited words assert each claim's statement.
     pub entail: bool,
@@ -139,6 +142,7 @@ impl Default for AbsorbRequest {
             rank: DEFAULT_LORA_RANK,
             tuning: Tuning::default(),
             continue_from_release: false,
+            extraction_passes: DEFAULT_EXTRACTION_PASSES,
             entail: true,
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             sealed_probes: Vec::new(),

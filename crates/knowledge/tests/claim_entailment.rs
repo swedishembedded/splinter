@@ -98,10 +98,12 @@ fn ruled(
 ) -> anyhow::Result<Ruling> {
     let set = ClaimSet {
         extractor: "scripted".into(),
+        passes: 1,
         sessions: vec![SessionClaims {
             session: view.source().clone(),
             proposals: vec![proposal],
             failure: None,
+            unconfirmed: vec![],
         }],
     };
     let views = BTreeMap::from([(view.source().clone(), view.clone())]);

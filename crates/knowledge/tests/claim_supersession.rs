@@ -139,10 +139,12 @@ fn rule(
 ) -> anyhow::Result<LedgerEntry> {
     let set = ClaimSet {
         extractor: "scripted/extractor".into(),
+        passes: 1,
         sessions: vec![SessionClaims {
             session: view.source().clone(),
             proposals: vec![proposal.clone()],
             failure: None,
+            unconfirmed: vec![],
         }],
     };
     let views: BTreeMap<SourceId, SessionView> =
