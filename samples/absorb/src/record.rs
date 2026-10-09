@@ -17,7 +17,7 @@ use anyhow::Context as _;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use crate::facts::Manifest;
-use crate::keys::{extract, Key};
+use crate::keys::Key;
 use crate::policy::Policy;
 use crate::roles::Role;
 use crate::runtime;
@@ -117,17 +117,14 @@ fn choose(manifest: &Manifest, request: &Request, made: usize) -> anyhow::Result
             keys: Vec::new(),
         });
     }
-    let statement = if request.canary {
-        fact.canary
-            .clone()
-            .with_context(|| format!("fact {fact_id} is no canary: run `facts canary` first"))?
+    let (statement, keys) = if request.canary {
+        let canary = fact
+            .canary
+            .as_ref()
+            .with_context(|| format!("fact {fact_id} is no canary: run `facts canary` first"))?;
+        (canary.statement.clone(), canary.keys.clone())
     } else {
-        fact.statement.clone()
-    };
-    let keys = if request.canary {
-        extract(&statement, &fact.question)
-    } else {
-        fact.keys.clone()
+        (fact.statement.clone(), fact.keys.clone())
     };
     Ok(Chosen {
         subject: Subject::Fact {

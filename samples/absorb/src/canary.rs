@@ -18,13 +18,13 @@ use std::path::Path;
 
 use anyhow::Context as _;
 
-use crate::facts::{corrupt, Manifest};
+use crate::facts::{corrupt, Canary, Manifest};
 use crate::roles::Role;
 
-/// Flags the test fact `fact` as the canary and returns its false statement.
+/// Flags the test (or, in a development run, development) fact `fact` as the canary and returns its false statement.
 ///
 /// # Errors
-/// The fact is unknown or not a test fact, a session was already recorded,
+/// The fact is unknown or neither a test nor a development fact, a session was already recorded,
 /// or no key of it can be replaced.
 pub fn flag(out: &Path, fact: &str) -> anyhow::Result<String> {
     anyhow::ensure!(
@@ -32,7 +32,7 @@ pub fn flag(out: &Path, fact: &str) -> anyhow::Result<String> {
         "a session was already recorded: the canary is chosen before the first"
     );
     let mut manifest = Manifest::read(out)?;
-    let donors: Vec<_> = manifest.facts.iter().flat_map(|f| f.keys.clone()).collect();
+    let pool = manifest.facts.clone();
     let target = manifest
         .facts
         .iter_mut()
@@ -42,9 +42,14 @@ pub fn flag(out: &Path, fact: &str) -> anyhow::Result<String> {
         target.role == Some(Role::Test),
         "fact {fact} is not a test fact: the canary is one of them"
     );
-    let false_statement = corrupt(&target.statement, &target.keys, &donors)
+    let corrupted = corrupt(target, &pool)
         .with_context(|| format!("no key of fact {fact} can be replaced by something false"))?;
-    target.canary = Some(false_statement.clone());
+    let canary = Canary {
+        keys: corrupted.keys(&target.keys),
+        statement: corrupted.statement,
+    };
+    let false_statement = canary.statement.clone();
+    target.canary = Some(canary);
     manifest.write(out)?;
     Ok(false_statement)
 }

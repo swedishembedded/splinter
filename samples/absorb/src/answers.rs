@@ -113,6 +113,23 @@ fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Whether another answer to `fact` could still change how it is classed,
+/// given the `answers` so far (`None` for a run that gave none). A fact a role
+/// of wrong facts may take is out once an answer holds every key; one a known
+/// role may take is out once an answer lacks a key: the rest are not asked.
+#[must_use]
+pub fn needs_more(fact: &Fact, answers: &[Option<&str>]) -> bool {
+    if answers.len() > SAMPLES {
+        return false;
+    }
+    let holds_every_key = |a: &Option<&str>| a.is_some_and(|t| missing(t, &fact.keys).is_empty());
+    if fact.candidate_role.wants_known() {
+        answers.iter().all(holds_every_key)
+    } else {
+        !answers.iter().any(holds_every_key)
+    }
+}
+
 /// What collecting needs.
 pub struct Plan<'a> {
     /// The run's output directory.
@@ -149,6 +166,14 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
         for n in 0..=SAMPLES {
             if lines.iter().any(|l| l.fact == fact.id && l.n == n) {
                 continue;
+            }
+            let so_far: Vec<Option<&str>> = lines
+                .iter()
+                .filter(|l| l.fact == fact.id)
+                .map(|l| l.answer.text.as_deref())
+                .collect();
+            if !needs_more(fact, &so_far) {
+                break;
             }
             let decoding = if n == 0 {
                 Decoding::Greedy
@@ -274,4 +299,61 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
             .collect(),
         unwritable: unwritable.into_iter().map(|f| (f.fact, f.why)).collect(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::facts::{admit, Evidence, Origin, Proposal};
+    use crate::keys::{Key, KeyKind};
+    use crate::roles::Quotas;
+
+    fn fact(origin: Origin) -> Fact {
+        admit(Proposal {
+            seed: 1,
+            quotas: &Quotas::PROTOCOL,
+            origin,
+            family: "f",
+            question: "Which firm made the press?",
+            statement: "Boulton made the press.",
+            keys: vec![Key {
+                text: "Boulton".into(),
+                kind: KeyKind::Name,
+            }],
+            answer_type: "firm",
+            entities: vec![],
+            evidence: Evidence {
+                quote: String::new(),
+                source: "s".into(),
+            },
+        })
+        .expect("a fact")
+    }
+
+    #[test]
+    fn answers_stop_once_one_decides_the_fact_cannot_fill_the_role_its_family_is_a_candidate_for() {
+        let known = fact(Origin::Known);
+        assert!(needs_more(&known, &[]));
+        assert!(needs_more(&known, &[Some("It was Boulton.")]));
+        assert!(!needs_more(
+            &known,
+            &[Some("It was Boulton."), Some("Peale.")]
+        ));
+        assert!(
+            !needs_more(&known, &[None]),
+            "a run with no answer is no right answer"
+        );
+        assert!(
+            !needs_more(&known, &[Some("Boulton"); SAMPLES + 1]),
+            "six are enough"
+        );
+
+        let mut wrong = fact(Origin::Letters);
+        wrong.candidate_role = Role::Test;
+        assert!(needs_more(&wrong, &[Some("Peale."), Some("Watt.")]));
+        assert!(!needs_more(
+            &wrong,
+            &[Some("Peale."), Some("Boulton, I think.")]
+        ));
+    }
 }

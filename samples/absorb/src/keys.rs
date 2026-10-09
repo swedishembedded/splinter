@@ -130,6 +130,30 @@ pub fn extract(statement: &str, question: &str) -> Vec<Key> {
     keys
 }
 
+/// The value of a figure written in digits or as a number word (`40`,
+/// `forty`); `None` for anything else.
+#[must_use]
+pub fn number_value(text: &str) -> Option<u64> {
+    text.parse::<u64>().ok().or_else(|| {
+        NUMBER_WORDS
+            .iter()
+            .find(|(word, _)| text.eq_ignore_ascii_case(word))
+            .map(|(_, value)| u64::from(*value))
+    })
+}
+
+/// Whether `word` (lower case) is a function word.
+#[must_use]
+pub fn is_function_word(word: &str) -> bool {
+    FUNCTION_WORDS.contains(&word)
+}
+
+/// Whether `word` (lower case) is a title, which names no one alone.
+#[must_use]
+pub fn is_title(word: &str) -> bool {
+    TITLES.contains(&word)
+}
+
 /// Whether `question` already holds `key`.
 fn given_away(key: &Key, question: &str) -> bool {
     alternatives(key).iter().any(|a| mentions(question, a))
@@ -229,7 +253,8 @@ fn names(text: &str) -> Vec<String> {
 }
 
 /// The spellings of `key` an answer may use.
-fn alternatives(key: &Key) -> Vec<String> {
+#[must_use]
+pub fn alternatives(key: &Key) -> Vec<String> {
     let mut spellings = vec![key.text.clone()];
     if key.kind == KeyKind::Number {
         if let Ok(value) = key.text.parse::<u32>() {

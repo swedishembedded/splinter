@@ -18,16 +18,18 @@ The measurement is built so that it cannot be gamed: the facts, their roles
 and their probes are fixed before any session exists, and the probes are
 hashed and kept out of every stage that reads sessions or builds training data.
 
-This crate implements the first part of the protocol: the fact pool, the
-screening of the day-0 policy, the sealed probes with their leakage guard,
-and the live recording of sessions. The nightly cycle is run with
-`splinter absorb` on the recorded files.
+This crate implements the first part of the protocol: the fact pool (chosen
+from the letters by code, plus a curated list of widely known facts), the
+screening of the day-0 policy, the sealed probes with their leakage guard, and
+the live recording of sessions. The nightly cycle is run with `splinter absorb`
+on the recorded files.
 
 Every command takes the output directory `--out DIR`; the run's state is
 `DIR/manifest.json`, which each stage reads and extends. Models are local;
-the default policy, generator and simulated user are `Qwen/Qwen3-8B` (one
-resident copy, context limited to what fits beside the weights on a 24 GiB
-card), the judge `Qwen/Qwen3-14B`.
+the default policy and generator are `Qwen/Qwen3-8B` (one resident copy,
+context limited to what fits beside the weights on a 24 GiB card). The judge
+is `Qwen/Qwen3-14B`, a different model from the policy. A card holds one base at a time,
+so each stage runs its models in phases.
 
 ## Running it
 
@@ -35,30 +37,37 @@ card), the judge `Qwen/Qwen3-14B`.
 # 0. The letters, one file per family (editions that print one letter are one file).
 splinter-jefferson materials --resources RESOURCES --out OUT/materials
 
-# 1. The pool: Splinter's task generator reads facts from the letters, code
-#    admits them, at most one fact per family, roles decided by family.
-splinter-absorb facts build --materials OUT/materials --out OUT --families 60
+# 1. The fact source. Code picks sentences that carry a year, a number with its
+#    unit, or a name beside another name; the generator only words the question;
+#    the judge, shown the sentence alone, checks it. Resumable by family (a rerun
+#    skips every family a ledger holds); shards run on separate cards.
+splinter-absorb facts select --materials OUT/materials --out OUT --families 300 --shard 0/2
+splinter-absorb facts select --materials OUT/materials --out OUT --families 300 --shard 1/2
+splinter-absorb facts pool --materials OUT/materials --out OUT
 
-#    A pool can be built in shards on separate cards and merged:
-#    `facts build ... --shard 0/2` and `--shard 1/2` into two directories, then
-#    `splinter-absorb facts merge --out OUT SHARD0 SHARD1`.
+# 2. The curated list of known facts, each supported by a sentence of the letters
+#    or marked general knowledge with its named source, pre-screened by the judge.
+splinter-absorb facts known --materials OUT/materials --out OUT
 
-# 2. Put every fact to the day-0 policy six times, grade, class, fill the roles.
+# 3. Put every fact to the day-0 policy (up to six times), grade, class, fill the roles.
 splinter-absorb facts screen --out OUT
+#    When a quota cannot be met the screening names every role that falls short and
+#    places nothing; other quotas are chosen explicitly, never silently, and recorded:
+splinter-absorb facts place --out OUT --test 30
 
-# 3. One test fact is the canary (its sessions assert a false statement).
+# 4. One test fact is the canary (its sessions assert a false statement).
 splinter-absorb facts canary --out OUT --fact ID
 
-# 4. Seal the probes; only then may a session be recorded.
+# 5. Seal the probes; only then may a session be recorded.
 splinter-absorb probes seal --out OUT
 
-# 5. Record sessions with the current release (+ADAPTER names it after night 1).
+# 6. Record sessions with the current release (+ADAPTER names it after night 1).
 splinter-absorb session record --out OUT --fact ID --style realistic
 splinter-absorb session record --out OUT --noise
 splinter-absorb session record --out OUT --fact ID --sham
 splinter-absorb session record --out OUT --fact ID --canary
 
-# 6. Any training file is checked against the sealed probes before it is trained on.
+# 7. Any training file is checked against the sealed probes before it is trained on.
 splinter-absorb probes check --out OUT training.jsonl
 ```
 
@@ -69,10 +78,13 @@ the card and stops the run if it leaves the GPUs.
 
 | piece | what it does |
 |---|---|
-| keys (`keys.rs`) | the names, numbers and quoted terms a fact's statement holds and its question does not give away; an answer holds a key as a whole word, a number as digits or as its word |
-| roles (`roles.rs`) | a seeded hash of a fact's family (the letter it was read from) decides its candidate role before anything is screened; at most one fact of a family is placed; the screening fills each role's quota in a fixed order and fails, naming every role, when the pool is too small |
+| sentences (`sentences.rs`) | splits a family into sentences and keeps those that stand on their own (10 to 45 words, no leaning on the letter around them) and carry a specific: a year, a number with the unit or noun it counts, or a name with another name beside it. The specific's tokens are the keys. A word that opens its sentence is no key; neither is a title, month, nationality or a word the corpus itself writes in lower case as often as in capitals (`State`, `Englishman`) |
+| selection (`select.rs`, `question.rs`, `prescreen.rs`, `ledger.rs`, `pool.rs`) | per family, candidates are tried in a seeded order that gives each kind of specific an equal chance; the generator words a question whose answer is the specific and code admits it (no key in it, no copied stretch, not yes or no, nothing pointing at the letter); the judge, shown the sentence, question and keys, must say the sentence answers it, the keys are exactly the answer, and the question stands alone. Finished batches go to the shard's ledger; the judge is also shown mismatches it must refuse, and the rate is reported |
+| known facts (`known.rs`, `data/known.jsonl`) | about 200 hand-written widely known facts about the subject and the period, each naming its source; code checks each against the corpus and records either the supporting sentence or `general knowledge: <source>` |
+| keys (`keys.rs`) | the names, numbers and quoted terms a text holds; an answer holds a key as a whole word, a number as digits or as its word |
+| roles (`roles.rs`) | a seeded hash of a letter family decides its candidate role among the roles of facts the policy gets wrong before anything is screened; at most one fact of a family is placed. A known fact is a candidate for both known roles: neighbours (a name shared with a placed test fact) are filled first, the controls take the rest; the screening fails, naming every role, when the pool is too small |
 | grading (`grading.rs`) | the two checks (keys by code, and Splinter's judge, measured on controls before it grades and gated by that measurement), the class of a fact, and the trace of a day-0 wrong claim |
-| screening (`answers.rs`, `screen.rs`) | six answers per fact, four probes and a reworded statement for a fact that looks wrong, the judge measured again on each such fact's own hard negatives |
+| screening (`answers.rs`, `screen.rs`) | up to six answers per fact, stopping as soon as one decides the fact cannot fill the role its family is a candidate for (the judge likewise grades only where it can change the class); four probes and a reworded statement for a fact that looks wrong, the judge measured again on each such fact's own hard negatives |
 | probes (`probes.rs`, `writer.rs`, `seal.rs`) | four kinds written by the generator, admitted by code, sorted and hashed (sha256 of the file); `Guard` refuses a training record that contains a probe's question, shares an eight-word run with one beyond what the fact's statement holds, or has a line with four-word-run Jaccard similarity of 0.5 or more to one |
 | sessions (`session.rs`, `record.rs`) | a real sven session between the policy and a simulated user, saved as the ATIF file sven writes, plus an index beside the files |
 
@@ -84,7 +96,7 @@ the card and stops the run if it leaves the GPUs.
 | `test` | 40 (8 days of 5) | used once, frozen |
 | `control-untaught` | 20 | wrong at day 0, never discussed in a session |
 | `control-known` | 20 | right at day 0, never discussed: measures forgetting |
-| `neighbour-known` | 80 | right at day 0, about an entity a test fact is about: measures damage next to a taught fact |
+| `neighbour-known` | 80 | right at day 0, sharing a name with a test fact: measures damage next to a taught fact |
 
 The manifest also holds 50 questions about things that do not exist
 (`unknowns`), which the model must decline.
@@ -99,7 +111,9 @@ the true statement and a reworded one), and all four of its probes also
 fail at day 0. A probe succeeds only with its keys, the judge's yes, and no
 repeat of the wrong claim the day-0 answers consistently make. A fact is
 **known** when all six answers pass both checks; anything between is
-discarded and has no role.
+discarded and has no role. Answers stop as soon as one rules a fact out of the
+role its family is a candidate for, so a fact the policy gets right on the first
+answer is not put to it five more times.
 
 ## Probes
 
@@ -123,8 +137,12 @@ is never corrected) and `--canary` (the user asserts the false statement).
 
 ## Limits, stated up front
 
-- The keys are read from the statement by rules, not understood: a right
-  answer in other words (a person known by title) fails the key check.
+- The keys are the specific's tokens, chosen by rules, not understood: a right
+  answer in other words (a person known by title) fails the key check. A
+  question the policy answers right in other words counts as wrong.
+- The curated known facts are written by hand; a source named for an entry is
+  where its statement can be checked, not a quotation, and nobody has checked
+  every entry against it.
 - The judge is a model; its calibration on controls is reported and
   screening refuses to run when it is not precise enough.
 - Nobody has adjudicated the screening or the sessions: every number from

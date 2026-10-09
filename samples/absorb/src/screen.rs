@@ -27,11 +27,11 @@ use serde::Serialize;
 
 use crate::answers::{collect, Collected, Plan, SAMPLES};
 use crate::facts::{corrupt, Fact, Manifest};
-use crate::grading::{classify, grade_keys, trace, wrong_entities, Grade, Judge};
-use crate::keys::{missing, Key};
+use crate::grading::{classify, fact_task_set, grade_keys, trace, wrong_entities, Grade, Judge};
+use crate::keys::missing;
 use crate::policy::{Answer, Decoding, Policy, SAMPLE_TEMPERATURE};
 use crate::probes::{Probe, ProbeKind};
-use crate::roles::{select, Class, Quotas, Role, Screened};
+use crate::roles::{select, Class, Quotas, Role, Screened, Shortfalls};
 use crate::runtime;
 
 /// Where the screening report is written.
@@ -87,6 +87,7 @@ struct ProbeResult {
     question: String,
     answer: Option<String>,
     missing_keys: Vec<String>,
+    /// The judge's verdict; absent when a missing key already failed the probe.
     judge: Option<bool>,
     repeats_wrong_claim: bool,
     succeeds: bool,
@@ -152,7 +153,7 @@ struct Grading<'a> {
     judge: &'a Judge,
     solver: &'a str,
     collected: &'a Collected,
-    donors: &'a [Key],
+    pool: &'a [Fact],
 }
 
 impl Grading<'_> {
@@ -169,14 +170,16 @@ impl Grading<'_> {
 
     fn entry(&self, fact: &Fact) -> anyhow::Result<Entry> {
         let mut graded = Vec::new();
-        for n in 0..=SAMPLES {
-            let line = self
-                .collected
-                .lines
-                .iter()
-                .find(|l| l.fact == fact.id && l.n == n)
-                .with_context(|| format!("fact {} has no answer #{n}", fact.id))?;
-            graded.push(self.answer(fact, n, line.decoding, &line.answer)?);
+        let mut asked: Vec<&crate::answers::Line> = self
+            .collected
+            .lines
+            .iter()
+            .filter(|l| l.fact == fact.id)
+            .collect();
+        asked.sort_by_key(|l| l.n);
+        anyhow::ensure!(!asked.is_empty(), "fact {} has no answer", fact.id);
+        for line in asked {
+            graded.push(self.answer(fact, line.n, line.decoding, &line.answer)?);
         }
         let grades: Vec<Grade> = graded.iter().map(|g| g.grade.clone()).collect();
         let mut class = classify(&grades);
@@ -211,6 +214,13 @@ impl Grading<'_> {
                 entry.discarded_because = Some(why);
             }
         }
+        if class == Class::Discarded && entry.discarded_because.is_none() {
+            entry.discarded_because = Some(if entry.answers.len() <= SAMPLES {
+                "an answer decided it early: it held every key (or lacked one) against the role its family is a candidate for".into()
+            } else {
+                "its answers disagree: some pass a check, some do not".into()
+            });
+        }
         eprintln!(
             "fact {}: {}/{} pass both checks, {class:?}{}",
             fact.id,
@@ -234,7 +244,13 @@ impl Grading<'_> {
         let grade = match answer.text.as_deref() {
             Some(text) => {
                 let mut grade = grade_keys(text, &fact.keys);
-                grade.judge = self.verdict(self.solver, &fact.question, &fact.statement, text)?;
+                // The keys already decide a fact's candidacy for one side:
+                // the judge is asked only where it can change the class.
+                let complete = grade.missing_keys.is_empty();
+                if complete == fact.candidate_role.wants_known() {
+                    grade.judge =
+                        self.verdict(self.solver, &fact.question, &fact.statement, text)?;
+                }
                 grade
             }
             None => Grade {
@@ -281,8 +297,8 @@ impl Grading<'_> {
             ("true statement", fact.statement.clone(), true),
             ("reworded statement", reworded.clone(), true),
         ];
-        if let Some(false_one) = corrupt(&fact.statement, &fact.keys, self.donors) {
-            controls.push(("corrupted statement", false_one, false));
+        if let Some(false_one) = corrupt(fact, self.pool) {
+            controls.push(("corrupted statement", false_one.statement, false));
         }
         for g in &entry.answers {
             if let Some(text) = &g.answer {
@@ -342,8 +358,13 @@ impl Grading<'_> {
                     .collect(),
                 None => probe.keys.iter().map(|k| k.text.clone()).collect(),
             };
+            // A probe answer that lacks a key fails whatever the judge says: it is
+            // asked only where it can change the result.
             let judge = match &text {
-                Some(t) => self.verdict(self.solver, &probe.question, &fact.statement, t)?,
+                Some(t) if lacking.is_empty() => {
+                    self.verdict(self.solver, &probe.question, &fact.statement, t)?
+                }
+                Some(_) => None,
                 None => Some(false),
             };
             let repeats = text
@@ -366,6 +387,41 @@ impl Grading<'_> {
             .find(|p| p.succeeds)
             .map(|p| format!("its {:?} probe already succeeds at day 0", p.kind)))
     }
+}
+
+/// Fills the roles' quotas from the facts' classes: in a fixed order, at most
+/// one fact of a family, or the pool is too small. Roles placed before are
+/// replaced; on a shortfall nothing is placed.
+///
+/// # Errors
+/// The roles whose quotas the classed facts cannot fill, with the quota and
+/// the number that qualified.
+pub fn place(manifest: &mut Manifest) -> Result<(), Shortfalls> {
+    let screened: Vec<Screened> = manifest
+        .facts
+        .iter()
+        .filter_map(|f| {
+            f.class.map(|class| Screened {
+                id: f.id.clone(),
+                family: f.family.clone(),
+                entities: f.entities.clone(),
+                candidate: f.candidate_role,
+                class,
+            })
+        })
+        .collect();
+    let placed = select(manifest.seed, &manifest.quotas, &screened)?;
+    for fact in &mut manifest.facts {
+        fact.role = None;
+        fact.day = None;
+    }
+    for p in placed {
+        if let Some(fact) = manifest.facts.iter_mut().find(|f| f.id == p.id) {
+            fact.role = Some(p.role);
+            fact.day = p.day;
+        }
+    }
+    Ok(())
 }
 
 /// Screens the pool; see the module documentation.
@@ -412,7 +468,7 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
     // Phase two: the judge, measured on controls, then grading.
     let started = std::time::Instant::now();
     let judge_ref = runtime::model_ref(&request.judge)?;
-    let calibrated = Judge::calibrate(&ctx, &judge_ref, &manifest.task_set)?;
+    let calibrated = Judge::calibrate(&ctx, &judge_ref, &fact_task_set(&ctx, &manifest.facts)?)?;
     eprintln!(
         "judge {}: {} controls, precision pass {:?} fail {:?}, abstains {:?}",
         calibrated.calibration.judge,
@@ -422,13 +478,12 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
         calibrated.calibration.abstain_rate
     );
     manifest.judge = Some(calibrated.calibration.clone());
-    let donors: Vec<Key> = manifest.facts.iter().flat_map(|f| f.keys.clone()).collect();
     let grading = Grading {
         ctx: &ctx,
         judge: &calibrated.judge,
         solver: &solver,
         collected: &collected,
-        donors: &donors,
+        pool: &manifest.facts,
     };
     let mut entries = Vec::new();
     for fact in &facts {
@@ -436,35 +491,16 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
     }
     let grade_seconds = started.elapsed().as_secs();
 
-    // Roles: filled in a fixed order, at most one fact of a family, or the
-    // pool is too small.
-    let screened: Vec<Screened> = entries
-        .iter()
-        .filter_map(|e| facts.iter().find(|f| f.id == e.id).map(|f| (e, f)))
-        .map(|(e, f)| Screened {
-            id: e.id.clone(),
-            family: f.family.clone(),
-            entities: f.entities(),
-            candidate: e.candidate_role,
-            class: e.class,
-        })
-        .collect();
-    let placed = select(manifest.seed, &manifest.quotas, &screened);
     for entry in &entries {
         if let Some(fact) = manifest.facts.iter_mut().find(|f| f.id == entry.id) {
             fact.class = Some(entry.class);
         }
     }
-    if let Ok(placed) = &placed {
-        for p in placed {
-            if let Some(fact) = manifest.facts.iter_mut().find(|f| f.id == p.id) {
-                fact.role = Some(p.role);
-                fact.day = p.day;
-            }
-            if let Some(entry) = entries.iter_mut().find(|e| e.id == p.id) {
-                entry.role = Some(p.role);
-                entry.day = p.day;
-            }
+    let placed = place(&mut manifest);
+    for entry in &mut entries {
+        if let Some(fact) = manifest.facts.iter().find(|f| f.id == entry.id) {
+            entry.role = fact.role;
+            entry.day = fact.day;
         }
     }
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
@@ -507,4 +543,96 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
         )
     })?;
     Ok(summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::facts::{admit, Evidence, Origin, Proposal};
+    use crate::keys::{Key, KeyKind};
+
+    fn fact(family: &str, origin: Origin, class: Class) -> Fact {
+        let statement = format!("{family} made the press.");
+        let mut fact = admit(Proposal {
+            seed: 1,
+            quotas: &Quotas::PROTOCOL,
+            origin,
+            family,
+            question: "Who made the press?",
+            statement: &statement,
+            keys: vec![Key {
+                text: family.into(),
+                kind: KeyKind::Name,
+            }],
+            answer_type: "firm",
+            entities: vec![],
+            evidence: Evidence {
+                quote: String::new(),
+                source: "s".into(),
+            },
+        })
+        .expect("a fact");
+        fact.class = Some(class);
+        fact
+    }
+
+    #[test]
+    fn roles_are_placed_from_the_recorded_classes_replaced_by_a_later_placing_and_never_half_filled(
+    ) {
+        let mut facts: Vec<Fact> = (0..6)
+            .map(|n| {
+                fact(
+                    &format!("Letter{n}"),
+                    Origin::Letters,
+                    Class::ConsistentlyWrong,
+                )
+            })
+            .collect();
+        facts.push(fact("Boulton", Origin::Known, Class::Known));
+        let mut manifest = Manifest {
+            schema: crate::facts::SCHEMA.into(),
+            seed: 1,
+            quotas: Quotas {
+                dev: 1,
+                test: 1,
+                control_untaught: 1,
+                control_known: 1,
+                neighbour_known: 0,
+                hallucination: 0,
+            },
+            materials: "m".into(),
+            generator: "g".into(),
+            persona: "p".into(),
+            facts,
+            refusals: vec![],
+            unknowns: vec![],
+            judge: None,
+            probes: None,
+        };
+        // Whatever the hash gave each letter family as candidate, three roles
+        // cannot all be filled from six letters unless each candidate role has one.
+        let outcome = place(&mut manifest);
+        let placed = manifest.facts.iter().filter(|f| f.role.is_some()).count();
+        match outcome {
+            Ok(()) => assert_eq!(placed, 4, "dev, test, untaught and one known"),
+            Err(short) => {
+                assert_eq!(placed, 0, "a shortfall places nothing: {short}");
+                assert!(short.to_string().contains("needs 1 but only 0"));
+            }
+        }
+        // With no quota to fill nothing is placed, and nothing earlier survives.
+        manifest.quotas = Quotas {
+            dev: 0,
+            test: 0,
+            control_untaught: 0,
+            control_known: 0,
+            neighbour_known: 0,
+            hallucination: 0,
+        };
+        place(&mut manifest).expect("nothing to fill");
+        assert!(manifest
+            .facts
+            .iter()
+            .all(|f| f.role.is_none() && f.day.is_none()));
+    }
 }

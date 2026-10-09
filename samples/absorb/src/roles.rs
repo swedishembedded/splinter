@@ -9,10 +9,14 @@
 //! Which role a fact plays, decided by its family before anything is screened.
 //!
 //! A family (the letter a fact was read from) is the unit: a stable hash of
-//! the seed and the family's name puts it in one role's share, so facts of one
+//! the seed and the family's name puts it in the share of one role of facts
+//! the policy gets wrong (development, test, untaught control), so facts of one
 //! family are never split across roles and the assignment depends on nothing
 //! the screening finds. The screening then decides which candidates fill a
-//! role's quota, in a fixed order.
+//! role's quota, in a fixed order. The facts the policy knows come from a
+//! curated list, not from letters: each is a candidate for both known roles,
+//! the neighbours are filled first (they must share a name with a test fact)
+//! and the controls take the rest.
 
 use std::collections::BTreeMap;
 
@@ -36,7 +40,7 @@ pub enum Role {
 }
 
 impl Role {
-    /// Every role, in the order quotas are filled.
+    /// Every role.
     pub const ALL: [Role; 5] = [
         Role::Dev,
         Role::Test,
@@ -45,6 +49,18 @@ impl Role {
         Role::NeighbourKnown,
     ];
 
+    /// The roles whose facts the policy gets wrong, which a family's hash chooses among.
+    pub const WRONG: [Role; 3] = [Role::Dev, Role::Test, Role::ControlUntaught];
+
+    /// The order quotas are filled in: the neighbours before the controls, so
+    /// that the controls take only the known facts no test fact needs.
+    pub const FILL_ORDER: [Role; 5] = [
+        Role::Dev,
+        Role::Test,
+        Role::ControlUntaught,
+        Role::NeighbourKnown,
+        Role::ControlKnown,
+    ];
     /// Whether facts of this role are chosen among those the policy gets wrong.
     #[must_use]
     pub fn wants_wrong(self) -> bool {
@@ -127,19 +143,25 @@ fn hashed(seed: u64, key: &str) -> u64 {
     u64::from_le_bytes(first)
 }
 
-/// The role `family` is a candidate for: its hash falls in the share of the
-/// role whose quota it is, shares being proportional to `quotas`.
+/// The role of facts the policy gets wrong that `family` is a candidate for:
+/// its hash falls in the share of the role whose quota it is, shares being
+/// proportional to `quotas`.
 #[must_use]
 pub fn candidate_role(seed: u64, family: &str, quotas: &Quotas) -> Role {
-    let total: usize = Role::ALL.iter().map(|r| quotas.of(*r)).sum();
+    let total: usize = Role::WRONG.iter().map(|r| quotas.of(*r)).sum();
     let mut point = (hashed(seed, family) % total.max(1) as u64) as usize;
-    for role in Role::ALL {
+    for role in Role::WRONG {
         if point < quotas.of(role) {
             return role;
         }
         point -= quotas.of(role);
     }
     Role::Dev
+}
+
+/// Whether a fact whose family is a candidate for `candidate` may fill `role`.
+fn candidate_for(candidate: Role, role: Role) -> bool {
+    candidate == role || (role == Role::ControlKnown && candidate == Role::NeighbourKnown)
 }
 
 /// How a screened fact came out.
@@ -202,7 +224,8 @@ impl std::fmt::Display for Shortfalls {
 impl std::error::Error for Shortfalls {}
 
 /// Fills each role's quota from the candidates whose family is a candidate
-/// for it and whose class fits it, in the order of a hash of the fact's id
+/// for it (the known facts for both known roles) and whose class fits it, in
+/// the order of a hash of the fact's id
 /// (so that neither the order the facts are given in nor the other facts
 /// present change which fill it). Fails, naming every role it could not
 /// fill, when the pool is too small.
@@ -214,7 +237,7 @@ pub fn select(
     let mut placed: Vec<Placed> = Vec::new();
     let mut short = Vec::new();
     let mut used_families: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    for role in Role::ALL {
+    for role in Role::FILL_ORDER {
         let wanted = quotas.of(role);
         let fits = if role.wants_known() {
             Class::Known
@@ -229,7 +252,8 @@ pub fn select(
             .collect();
         let mut eligible: Vec<&Screened> = screened
             .iter()
-            .filter(|s| s.candidate == role && s.class == fits)
+            .filter(|s| candidate_for(s.candidate, role) && s.class == fits)
+            .filter(|s| !used_families.contains(s.family.as_str()))
             .filter(|s| {
                 role != Role::NeighbourKnown
                     || s.entities
@@ -297,13 +321,13 @@ mod tests {
                 .entry(candidate_role(7, &format!("family-{n}"), &q))
                 .or_insert(0usize) += 1;
         }
-        // Shares follow the quotas (20:40:20:20:80) within sampling noise.
+        // Shares follow the quotas of the roles the policy gets wrong (20:40:20)
+        // within sampling noise; no family is a candidate for a known role.
         let share = |r: Role| tally[&r] as f64 / 4000.0;
-        assert!((share(Role::Test) - 40.0 / 180.0).abs() < 0.03, "{tally:?}");
-        assert!((share(Role::Dev) - 20.0 / 180.0).abs() < 0.03, "{tally:?}");
+        assert!((share(Role::Test) - 0.5).abs() < 0.03, "{tally:?}");
+        assert!((share(Role::Dev) - 0.25).abs() < 0.03, "{tally:?}");
         assert!(
-            (share(Role::NeighbourKnown) - 80.0 / 180.0).abs() < 0.03,
-            "{tally:?}"
+            !tally.contains_key(&Role::NeighbourKnown) && !tally.contains_key(&Role::ControlKnown)
         );
     }
 
@@ -313,7 +337,7 @@ mod tests {
             dev: 1,
             test: 6,
             control_untaught: 1,
-            control_known: 1,
+            control_known: 2,
             neighbour_known: 1,
             hallucination: 0,
         };
@@ -327,6 +351,8 @@ mod tests {
             Class::ConsistentlyWrong,
         ));
         pool.push(screened("k", Role::ControlKnown, Class::Known));
+        // A known fact that is no neighbour's goes to the controls once the neighbours are filled.
+        pool.push(screened("spare", Role::NeighbourKnown, Class::Known));
         // A neighbour shares an entity with a placed test fact; one that does not is no neighbour.
         let mut near = screened("near", Role::NeighbourKnown, Class::Known);
         near.entities = vec!["madison".into()];
@@ -351,9 +377,14 @@ mod tests {
         let counts = counts(&placed);
         assert_eq!(counts[&Role::Test], 6);
         assert_eq!(counts[&Role::NeighbourKnown], 1);
+        assert_eq!(counts[&Role::ControlKnown], 2);
         assert!(
-            placed.iter().any(|p| p.id == "near")
-                && placed.iter().all(|p| p.id != "far" && p.id != "t-twin")
+            placed
+                .iter()
+                .any(|p| p.id == "near" && p.role == Role::NeighbourKnown)
+                && placed
+                    .iter()
+                    .all(|p| p.id != "t-twin" && !(p.id == "far" && p.role == Role::NeighbourKnown))
         );
         assert!(placed
             .iter()

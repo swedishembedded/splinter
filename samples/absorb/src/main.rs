@@ -14,7 +14,7 @@ use clap::{Args, Parser, Subcommand};
 use splinter_absorb::roles::Quotas;
 use splinter_absorb::runtime::{DEFAULT_JUDGE, DEFAULT_MODEL};
 use splinter_absorb::session::Style;
-use splinter_absorb::{build, record, screen, seal};
+use splinter_absorb::{known, pool, record, screen, seal, select};
 
 /// Persona the policy answers as, and the author of the writings.
 const PERSONA: &str = "Thomas Jefferson";
@@ -54,8 +54,10 @@ struct Common {
 
 #[derive(Subcommand)]
 enum Facts {
-    /// Read facts from a directory of family files with Splinter's task generator.
-    Build {
+    /// Choose checkable facts from the family files: code picks the sentences, a
+    /// model words the questions, a judge pre-screens them. Resumable by
+    /// family; shards run on separate cards.
+    Select {
         #[command(flatten)]
         common: Common,
         /// The directory `splinter-jefferson materials` wrote (its `letters` directory is read).
@@ -70,12 +72,34 @@ enum Facts {
         /// The fewest words a family file runs to be read.
         #[arg(long, default_value_t = 150)]
         min_words: usize,
-        /// The model that proposes the facts and writes the probes.
+        /// Families a shard takes in a row; a batch is written to the ledger whole
+        /// and costs one load of each model, so it is large.
+        #[arg(long, default_value_t = 125)]
+        batch: usize,
+        /// Candidate sentences tried for a family before it gives none.
+        #[arg(long, default_value_t = 3)]
+        tries: usize,
+        /// Accepted facts of a batch the judge is also measured on.
+        #[arg(long, default_value_t = 3)]
+        controls_per_batch: usize,
+        /// The model that words the questions.
         #[arg(long, default_value = DEFAULT_MODEL)]
         generator: String,
-        /// Build only shard I of N (as `I/N`, from 0) of the families.
-        #[arg(long, value_parser = shard)]
-        shard: Option<(usize, usize)>,
+        /// The model that pre-screens the questions.
+        #[arg(long, default_value = DEFAULT_JUDGE)]
+        judge: String,
+        /// Read only shard I of N (as `I/N`, from 0); a rerun skips every family a ledger holds.
+        #[arg(long, value_parser = shard, default_value = "0/1")]
+        shard: (usize, usize),
+    },
+    /// Assemble the manifest from the ledgers of `facts select`.
+    Pool {
+        /// The run's output directory.
+        #[arg(long)]
+        out: PathBuf,
+        /// The directory `splinter-jefferson materials` wrote.
+        #[arg(long)]
+        materials: PathBuf,
         /// Development facts.
         #[arg(long, default_value_t = Quotas::PROTOCOL.dev)]
         dev: usize,
@@ -95,23 +119,17 @@ enum Facts {
         #[arg(long, default_value_t = Quotas::PROTOCOL.hallucination)]
         hallucination: usize,
     },
-    /// Read every fact's keys afresh with the current rules (before screening).
-    Rekey {
-        /// The run's output directory.
+    /// Add the curated list of widely known facts, supported by the corpus or
+    /// by a named source, after the judge's pre-screen.
+    Known {
+        #[command(flatten)]
+        common: Common,
+        /// The directory `splinter-jefferson materials` wrote.
         #[arg(long)]
-        out: PathBuf,
-    },
-    /// Merge the pools of shards built side by side into one.
-    Merge {
-        /// The merged run's output directory.
-        #[arg(long)]
-        out: PathBuf,
-        /// The model store, when not the configuration's.
-        #[arg(long)]
-        models: Option<PathBuf>,
-        /// The shards' output directories.
-        #[arg(required = true)]
-        parts: Vec<PathBuf>,
+        materials: PathBuf,
+        /// The model that pre-screens the questions.
+        #[arg(long, default_value = DEFAULT_JUDGE)]
+        judge: String,
     },
     /// Flag one test fact as the canary: its sessions assert a false statement.
     Canary {
@@ -135,22 +153,61 @@ enum Facts {
         /// Screen only this many facts of the pool, in a fixed order.
         #[arg(long)]
         candidates: Option<usize>,
-        /// Fill this many development facts instead of the manifest's quota.
-        #[arg(long)]
-        dev: Option<usize>,
-        /// Fill this many test facts instead of the manifest's quota.
-        #[arg(long)]
-        test: Option<usize>,
-        /// Fill this many wrong-at-day-0 controls instead of the manifest's quota.
-        #[arg(long)]
-        control_untaught: Option<usize>,
-        /// Fill this many right-at-day-0 controls instead of the manifest's quota.
-        #[arg(long)]
-        control_known: Option<usize>,
-        /// Fill this many neighbours instead of the manifest's quota.
-        #[arg(long)]
-        neighbour_known: Option<usize>,
+        #[command(flatten)]
+        quotas: Overrides,
     },
+    /// Fill the roles' quotas again from the classes screening recorded, with
+    /// other quotas if they are given (no model runs). Every role the classed
+    /// facts cannot fill is named.
+    Place {
+        /// The run's output directory.
+        #[arg(long)]
+        out: PathBuf,
+        #[command(flatten)]
+        quotas: Overrides,
+    },
+}
+
+/// Quotas to fill in place of the manifest's, for a smaller run; they replace
+/// the manifest's and are recorded in it.
+#[derive(Args)]
+struct Overrides {
+    /// Fill this many development facts.
+    #[arg(long)]
+    dev: Option<usize>,
+    /// Fill this many test facts.
+    #[arg(long)]
+    test: Option<usize>,
+    /// Fill this many wrong-at-day-0 controls.
+    #[arg(long)]
+    control_untaught: Option<usize>,
+    /// Fill this many right-at-day-0 controls.
+    #[arg(long)]
+    control_known: Option<usize>,
+    /// Fill this many neighbours.
+    #[arg(long)]
+    neighbour_known: Option<usize>,
+}
+
+impl Overrides {
+    /// `base` with the quotas given here in place of its own; `None` when none is given.
+    fn apply(&self, base: Quotas) -> Option<Quotas> {
+        let given = [
+            self.dev,
+            self.test,
+            self.control_untaught,
+            self.control_known,
+            self.neighbour_known,
+        ];
+        given.iter().any(Option::is_some).then(|| Quotas {
+            dev: self.dev.unwrap_or(base.dev),
+            test: self.test.unwrap_or(base.test),
+            control_untaught: self.control_untaught.unwrap_or(base.control_untaught),
+            control_known: self.control_known.unwrap_or(base.control_known),
+            neighbour_known: self.neighbour_known.unwrap_or(base.neighbour_known),
+            hallucination: base.hallucination,
+        })
+    }
 }
 
 #[derive(Subcommand)]
@@ -223,14 +280,39 @@ fn shard(text: &str) -> Result<(usize, usize), String> {
 
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
-        Command::Facts(Facts::Build {
+        Command::Facts(Facts::Select {
             common,
             materials,
             seed,
             families,
             min_words,
+            batch,
+            tries,
+            controls_per_batch,
             generator,
+            judge,
             shard,
+        }) => {
+            let report = select::run(&select::Request {
+                materials,
+                out: common.out,
+                seed,
+                families,
+                min_words,
+                batch,
+                tries,
+                controls_per_batch,
+                generator,
+                judge,
+                persona: PERSONA.to_string(),
+                models: common.models,
+                shard,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Command::Facts(Facts::Pool {
+            out,
+            materials,
             dev,
             test,
             control_untaught,
@@ -238,10 +320,9 @@ fn main() -> anyhow::Result<()> {
             neighbour_known,
             hallucination,
         }) => {
-            let report = build::run(&build::Request {
+            let report = pool::run(&pool::Request {
                 materials,
-                out: common.out,
-                seed,
+                out,
                 quotas: Quotas {
                     dev,
                     test,
@@ -250,12 +331,6 @@ fn main() -> anyhow::Result<()> {
                     neighbour_known,
                     hallucination,
                 },
-                families,
-                min_words,
-                generator,
-                persona: PERSONA.to_string(),
-                models: common.models,
-                shard,
             })?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
@@ -264,31 +339,11 @@ fn main() -> anyhow::Result<()> {
             policy,
             judge,
             candidates,
-            dev,
-            test,
-            control_untaught,
-            control_known,
-            neighbour_known,
+            quotas,
         }) => {
-            let overridden = [dev, test, control_untaught, control_known, neighbour_known]
-                .iter()
-                .any(Option::is_some);
-            let quotas = if overridden {
-                let manifest = splinter_absorb::facts::Manifest::read(&common.out)?;
-                let q = manifest.quotas;
-                Some(Quotas {
-                    dev: dev.unwrap_or(q.dev),
-                    test: test.unwrap_or(q.test),
-                    control_untaught: control_untaught.unwrap_or(q.control_untaught),
-                    control_known: control_known.unwrap_or(q.control_known),
-                    neighbour_known: neighbour_known.unwrap_or(q.neighbour_known),
-                    hallucination: q.hallucination,
-                })
-            } else {
-                None
-            };
+            let base = splinter_absorb::facts::Manifest::read(&common.out)?.quotas;
             let summary = screen::run(&screen::Request {
-                quotas,
+                quotas: quotas.apply(base),
                 out: common.out,
                 models: common.models,
                 policy,
@@ -297,15 +352,35 @@ fn main() -> anyhow::Result<()> {
             })?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
-        Command::Facts(Facts::Rekey { out }) => {
+        Command::Facts(Facts::Place { out, quotas }) => {
             let mut manifest = splinter_absorb::facts::Manifest::read(&out)?;
-            let refused = splinter_absorb::facts::rekey(&mut manifest);
+            anyhow::ensure!(
+                manifest.probes.is_none(),
+                "the probes are sealed: the roles are closed"
+            );
+            if let Some(quotas) = quotas.apply(manifest.quotas) {
+                manifest.quotas = quotas;
+            }
+            screen::place(&mut manifest)?;
             manifest.write(&out)?;
-            println!("{} facts kept, {refused} refused", manifest.facts.len());
+            let mut counts = std::collections::BTreeMap::new();
+            for role in manifest.facts.iter().filter_map(|f| f.role) {
+                *counts.entry(role.name()).or_insert(0usize) += 1;
+            }
+            println!("{}", serde_json::to_string_pretty(&counts)?);
         }
-        Command::Facts(Facts::Merge { out, models, parts }) => {
-            let facts = splinter_absorb::merge::run(&out, &parts, models.as_ref())?;
-            println!("{facts} facts in the merged pool");
+        Command::Facts(Facts::Known {
+            common,
+            materials,
+            judge,
+        }) => {
+            let report = known::run(&known::Request {
+                materials,
+                out: common.out,
+                models: common.models,
+                judge,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
         }
         Command::Facts(Facts::Canary { out, fact }) => {
             println!("{}", splinter_absorb::canary::flag(&out, &fact)?);

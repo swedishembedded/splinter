@@ -11,19 +11,24 @@
 //! and the recording of live sessions.
 
 pub mod answers;
-pub mod build;
 pub mod canary;
 pub mod facts;
 pub mod grading;
 pub mod keys;
-pub mod merge;
+pub mod known;
+pub mod ledger;
 pub mod policy;
+pub mod pool;
+pub mod prescreen;
 pub mod probes;
+pub mod question;
 pub mod record;
 pub mod roles;
 pub mod runtime;
 pub mod screen;
 pub mod seal;
+pub mod select;
+pub mod sentences;
 pub mod session;
 pub mod unknowns;
 pub mod writer;

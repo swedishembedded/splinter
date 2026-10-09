@@ -26,7 +26,7 @@ use splinter_sdk::measure::verifiers::answer::mentions;
 use splinter_sdk::measure::verifiers::calibration::{CalibratedJudge, DEFAULT_MIN_PRECISION};
 use splinter_sdk::measure::verifiers::Verifier;
 use splinter_sdk::model::local::{Sampling, GREEDY_SAMPLING};
-use splinter_sdk::store::tasks::TaskSetId;
+use splinter_sdk::store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use splinter_sdk::verify::{Judging, DEFAULT_JUDGE_DEADLINE};
 use splinter_sdk::vocabulary::annotation::Outcome;
 use splinter_sdk::vocabulary::experience::{
@@ -35,7 +35,7 @@ use splinter_sdk::vocabulary::experience::{
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::Context;
 
-use crate::facts::JudgeCalibration;
+use crate::facts::{Fact, JudgeCalibration};
 use crate::keys::{extract, missing, Key};
 use crate::roles::Class;
 
@@ -116,6 +116,30 @@ pub fn fact_task(question: &str, statement: &str) -> anyhow::Result<Task> {
             span: None,
         }],
     )?)
+}
+
+/// The tasks of `facts` as a stored set, each holding its statement as the
+/// reference only the judge sees: what the judge is measured on.
+///
+/// # Errors
+/// A task cannot be built or stored.
+pub fn fact_task_set(ctx: &Context, facts: &[Fact]) -> anyhow::Result<TaskSetId> {
+    let store = ctx.tasks();
+    let mut members = Vec::with_capacity(facts.len());
+    for fact in facts {
+        let task = fact_task(&fact.question, &fact.statement)?;
+        members.push(TaskEntry {
+            task: store.put(&task)?,
+            generator: None,
+            prompt: None,
+            variant_of: None,
+            subject: None,
+        });
+    }
+    Ok(store.put_set(&TaskSet {
+        name: "facts".into(),
+        members,
+    })?)
 }
 
 /// A judge calibrated on controls, gating its verdicts by what it measured.
@@ -213,7 +237,7 @@ impl Judge {
 }
 
 /// The judge model: greedy, reasoning off, as a measurement asks.
-fn judge_model(ctx: &Context, reference: &ModelRef) -> anyhow::Result<Model> {
+pub(crate) fn judge_model(ctx: &Context, reference: &ModelRef) -> anyhow::Result<Model> {
     let greedy = Sampling {
         thinking: false,
         ..GREEDY_SAMPLING
