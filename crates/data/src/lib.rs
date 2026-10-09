@@ -98,6 +98,7 @@ pub use dataset::{
 pub use replay::replay_sample;
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
+pub use trajectory::{projection_refusal, Unprojectable};
 pub use views::{
     chars_as_tokens, description, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
     OutcomeView, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep, VerifierView,

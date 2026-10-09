@@ -32,6 +32,76 @@ use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
 
 use crate::render::message;
 
+/// Why a trajectory cannot be rendered as training conversations; every
+/// variant names the ATIF `step_id` that decided it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Unprojectable {
+    /// The step holds image content, which a chat record cannot carry.
+    #[error("step {step} holds image content, which a training record cannot represent")]
+    Image {
+        /// The step.
+        step: u64,
+    },
+    /// The step's observation answers no tool call of the same step.
+    #[error("step {step} has an observation that answers no tool call of its own")]
+    UnansweredObservation {
+        /// The step.
+        step: u64,
+    },
+    /// A second user step beside tool calls: a trajectory is rendered either
+    /// as one instruction with its actions or as a dialogue of replies.
+    #[error(
+        "step {step} makes a tool call in a trajectory with more than one user step; it can be \
+         rendered as a dialogue or as a tool-call record, not both"
+    )]
+    ToolCallInDialogue {
+        /// The agent step with the call or observation.
+        step: u64,
+    },
+    /// A second user step where one instruction with its actions is wanted.
+    #[error("step {step} is a second user step; an instruction with actions has one")]
+    SecondUserStep {
+        /// The step.
+        step: u64,
+    },
+    /// A dialogue step copied from another trajectory, which is never
+    /// supervised.
+    #[error("step {step} is copied from another trajectory and cannot be part of a dialogue")]
+    CopiedInDialogue {
+        /// The step.
+        step: u64,
+    },
+    /// Two user steps, or two agent steps, in a row.
+    #[error("step {step} does not alternate user and agent turns")]
+    NotAlternating {
+        /// The step.
+        step: u64,
+    },
+    /// The dialogue ends on a user step, which no reply answers.
+    #[error("the dialogue ends on user step {step}, which no agent reply answers")]
+    EndsUnanswered {
+        /// The last step.
+        step: u64,
+    },
+}
+
+/// Why `trajectory` is refused by the projection, or `None` when it can be
+/// rendered: as a dialogue when it has two or more user steps, otherwise as
+/// one instruction with its actions.
+#[must_use]
+pub fn projection_refusal(trajectory: &Trajectory) -> Option<Unprojectable> {
+    let users = trajectory
+        .steps
+        .iter()
+        .filter(|s| s.source == StepOrigin::User)
+        .count();
+    if users >= 2 {
+        try_dialogue(trajectory, "").err()
+    } else {
+        try_conversation(trajectory, "").err()
+    }
+}
+
 /// One action of a trajectory: the assistant message at `index`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Action {
@@ -73,6 +143,14 @@ impl Conversation {
 /// `trajectory` rendered with `student_turn` as its user turn; `None` when
 /// it holds something a chat record cannot represent.
 pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Option<Conversation> {
+    try_conversation(trajectory, student_turn).ok()
+}
+
+/// [`conversation`], naming what makes it impossible.
+fn try_conversation(
+    trajectory: &Trajectory,
+    student_turn: &str,
+) -> Result<Conversation, Unprojectable> {
     let mut messages = vec![message("user", student_turn, false)];
     let mut actions = Vec::new();
     let mut users = 0usize;
@@ -86,11 +164,12 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
             StepOrigin::User => {
                 users += 1;
                 if users > 1 {
-                    return None;
+                    return Err(Unprojectable::SecondUserStep { step: step.step_id });
                 }
             }
             StepOrigin::Agent => {
-                let text = text_of(&step.message)?;
+                let text =
+                    text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
                 let calls = wire_calls(step);
                 if text.is_empty() && calls.is_empty() {
                     continue;
@@ -111,9 +190,12 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
                     let call = result
                         .source_call_id
                         .as_ref()
-                        .filter(|id| ids.contains(id))?;
+                        .filter(|id| ids.contains(id))
+                        .ok_or(Unprojectable::UnansweredObservation { step: step.step_id })?;
                     let content = match &result.content {
-                        Some(body) => text_of(body)?,
+                        Some(body) => {
+                            text_of(body).ok_or(Unprojectable::Image { step: step.step_id })?
+                        }
                         None => String::new(),
                     };
                     let mut tool = message("tool", &content, false);
@@ -123,7 +205,7 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
             }
         }
     }
-    Some(Conversation { messages, actions })
+    Ok(Conversation { messages, actions })
 }
 
 /// `trajectory` as one conversation of alternating turns, every reply
@@ -132,9 +214,27 @@ pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Optio
 /// user steps), holds a tool call, an image or a step copied from another
 /// trajectory, or does not alternate user then agent.
 pub(crate) fn dialogue(trajectory: &Trajectory, student_turn: &str) -> Option<Vec<WireMessage>> {
+    let users = trajectory
+        .steps
+        .iter()
+        .filter(|s| s.source == StepOrigin::User)
+        .count();
+    if users < 2 {
+        return None;
+    }
+    try_dialogue(trajectory, student_turn).ok()
+}
+
+/// [`dialogue`], naming what makes it impossible.
+fn try_dialogue(
+    trajectory: &Trajectory,
+    student_turn: &str,
+) -> Result<Vec<WireMessage>, Unprojectable> {
     let mut messages = Vec::new();
     let mut users = 0usize;
+    let mut last_step = 0;
     for step in &trajectory.steps {
+        last_step = step.step_id;
         match step.source {
             StepOrigin::System => {}
             StepOrigin::User => {
@@ -142,30 +242,36 @@ pub(crate) fn dialogue(trajectory: &Trajectory, student_turn: &str) -> Option<Ve
                     .last()
                     .is_some_and(|m: &WireMessage| m.role == "user")
                 {
-                    return None;
+                    return Err(Unprojectable::NotAlternating { step: step.step_id });
                 }
                 users += 1;
                 let text = if users == 1 {
                     student_turn.to_string()
                 } else {
-                    text_of(&step.message)?
+                    text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?
                 };
                 messages.push(message("user", &text, false));
             }
             StepOrigin::Agent => {
-                if !wire_calls(step).is_empty()
-                    || step.observation.is_some()
-                    || step.is_excluded_from_sft()
-                    || messages.last().map(|m| m.role.as_str()) != Some("user")
-                {
-                    return None;
+                if !wire_calls(step).is_empty() || step.observation.is_some() {
+                    return Err(Unprojectable::ToolCallInDialogue { step: step.step_id });
                 }
-                messages.push(message("assistant", &text_of(&step.message)?, true));
+                if step.is_excluded_from_sft() {
+                    return Err(Unprojectable::CopiedInDialogue { step: step.step_id });
+                }
+                if messages.last().map(|m| m.role.as_str()) != Some("user") {
+                    return Err(Unprojectable::NotAlternating { step: step.step_id });
+                }
+                let text =
+                    text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
+                messages.push(message("assistant", &text, true));
             }
         }
     }
-    let ends_on_reply = messages.last().is_some_and(|m| m.role == "assistant");
-    (users >= 2 && ends_on_reply).then_some(messages)
+    if messages.last().is_some_and(|m| m.role == "user") {
+        return Err(Unprojectable::EndsUnanswered { step: last_step });
+    }
+    Ok(messages)
 }
 
 /// The tool calls `step` made, in `generic-messages-v2`'s tool-call form
