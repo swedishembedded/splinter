@@ -29,12 +29,11 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use splinter_sdk::model::speech::{
-    round_trip, speak_verified, take_turn, BrainRecognizer, BrainSynthesizer, Lexical,
-    ListenerOptions, Sentences, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
+    round_trip, speak_verified, take_turn, BrainRecognizer, BrainSynthesizer, ListenerOptions,
+    Sentences, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
-use splinter_sdk::vocabulary::speech_lesson::Lexicon;
 use voice_loop::batch::{
     emit, listen_turns, read_clip, streamed_turns, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
 };
@@ -43,6 +42,10 @@ use voice_loop::{read_sentences, Recorded, RoundTripReport, SpeakSetReport, Turn
 #[derive(Parser)]
 #[command(about = "Talk to a persona and have it talk back, measuring each stage")]
 struct Cli {
+    /// How the hardware is driven: wgpu, vulkan, cuda or cpu. Without it brain
+    /// picks, which on a CUDA host is not CUDA.
+    #[arg(long, global = true)]
+    backend: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -350,14 +353,24 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    if let Some(backend) = &cli.backend {
+        splinter_sdk::model::device::select_backend(backend)?;
+    }
+    match cli.command {
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {
             models,
             lessons,
             text,
             out,
-        } => speak(&models, lessons.as_deref(), &text, &out),
+        } => voice_loop::teach::speak(
+            &models.tts,
+            &models.speaker(),
+            lessons.as_deref(),
+            &text,
+            &out,
+        ),
         Command::SpeakSet {
             models,
             sentences,
@@ -569,31 +582,6 @@ fn main() -> Result<()> {
             }
         }
     }
-}
-
-fn speak(
-    models: &Models,
-    lessons: Option<&std::path::Path>,
-    text: &str,
-    out: &std::path::Path,
-) -> Result<()> {
-    let speaker = models.speaker();
-    let lexicon = match lessons {
-        Some(path) => Lexicon::from_lessons(&voice_loop::teach::read_lessons(path)?),
-        None => Lexicon::new(),
-    };
-    let clip = Lexical::new(BrainSynthesizer::load(&models.tts)?, lexicon).speak(text, &speaker)?;
-    clip.save(out)
-        .with_context(|| format!("writing {}", out.display()))?;
-    println!(
-        "{}",
-        serde_json::json!({
-            "wrote": out,
-            "seconds": clip.seconds(),
-            "speaker": speaker,
-        })
-    );
-    Ok(())
 }
 
 fn speak_set(

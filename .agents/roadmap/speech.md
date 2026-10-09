@@ -125,7 +125,7 @@ one render is truncated.
 Question spoken, 8B persona answer of about 80 words, 30 recordings, the cascade
 speaking each sentence as it is written. Reproduce:
 `voice-loop turns --stream --recordings <dir> --out-dir <d> --base <Qwen3-8B>`
-under `BRAIN_BACKEND=cuda`.
+with `voice-loop --backend cuda`.
 
 | Stage | Before (Vulkan, CPU codec) | Now (CUDA) |
 |---|---|---|

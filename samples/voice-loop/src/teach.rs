@@ -18,9 +18,11 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 use clap::Args;
-use splinter_sdk::model::speech::{BrainRecognizer, Recognizer, DEFAULT_RECOGNIZER};
+use splinter_sdk::model::speech::{
+    BrainRecognizer, BrainSynthesizer, Lexical, Recognizer, Synthesizer, DEFAULT_RECOGNIZER,
+};
 use splinter_sdk::vocabulary::digest::Digest;
-use splinter_sdk::vocabulary::speech::Portrayal;
+use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 use splinter_sdk::vocabulary::speech_lesson::{
     lessons_from, parse_directive, Lesson, Lexicon, Objective,
 };
@@ -108,4 +110,31 @@ pub fn read_lessons(path: &std::path::Path) -> Result<Vec<Lesson>> {
         .filter(|line| !line.trim().is_empty())
         .map(|line| serde_json::from_str(line).context("a lesson line is not a lesson"))
         .collect()
+}
+
+/// Speak `text` in `speaker`'s voice, with the words `lessons` teach said as
+/// taught, and write the clip to `out`.
+pub fn speak(
+    tts: &str,
+    speaker: &SpeakerProfile,
+    lessons: Option<&std::path::Path>,
+    text: &str,
+    out: &std::path::Path,
+) -> Result<()> {
+    let lexicon = match lessons {
+        Some(path) => Lexicon::from_lessons(&read_lessons(path)?),
+        None => Lexicon::new(),
+    };
+    let clip = Lexical::new(BrainSynthesizer::load(tts)?, lexicon).speak(text, speaker)?;
+    clip.save(out)
+        .with_context(|| format!("writing {}", out.display()))?;
+    println!(
+        "{}",
+        serde_json::json!({
+            "wrote": out,
+            "seconds": clip.seconds(),
+            "speaker": speaker,
+        })
+    );
+    Ok(())
 }

@@ -37,6 +37,7 @@
 
 pub mod answer;
 pub mod capabilities;
+pub mod device;
 pub mod embed;
 pub mod error;
 pub mod exam;
