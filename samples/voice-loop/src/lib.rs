@@ -16,6 +16,8 @@
 
 use std::time::Duration;
 
+pub mod spoken;
+
 use serde::Serialize;
 use splinter_sdk::model::speech::{RoundTrip, RoundTripItem, StageTimings, Turn};
 use splinter_sdk::vocabulary::speech::SpeakerProfile;

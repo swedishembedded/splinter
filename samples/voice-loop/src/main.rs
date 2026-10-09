@@ -12,6 +12,7 @@
 //! ```text
 //! voice-loop speak     --text T --out a.wav      speak a sentence in the persona's synthetic voice
 //! voice-loop speak-set  --sentences FILE          record sentences, keeping those heard back well enough
+//! voice-loop spoken-set --questions FILE         record questions in several voices into a pinned set
 //! voice-loop roundtrip --sentences FILE          speak sentences, hear them again, score what was lost
 //! voice-loop turn      --in q.wav --out a.wav    hear a question, answer as the persona, speak the answer
 //! voice-loop turns     --recordings DIR ...      the same for a directory of questions, loading models once
@@ -102,6 +103,26 @@ enum Command {
         #[arg(long, default_value_t = 6)]
         attempts: usize,
     },
+    /// Record questions in several voices into a set that can be pinned and split.
+    SpokenSet {
+        #[command(flatten)]
+        models: Models,
+        /// A JSON-lines file of `{"id", "text", "group"?}`.
+        #[arg(long)]
+        questions: PathBuf,
+        /// The voices to record each question in: comma-separated seeds.
+        #[arg(long, value_delimiter = ',', required = true)]
+        voices: Vec<u64>,
+        /// The set's name.
+        #[arg(long, default_value = "spoken")]
+        name: String,
+        /// Where to write the recordings and `set.json`.
+        #[arg(long)]
+        out_dir: PathBuf,
+        /// The word error rate above which a recording is not kept.
+        #[arg(long, default_value_t = 0.2)]
+        max_wer: f32,
+    },
     /// Speak sentences, hear them again, and score what was lost.
     Roundtrip {
         #[command(flatten)]
@@ -175,6 +196,14 @@ fn main() -> Result<()> {
             max_wer,
             attempts,
         } => speak_set(&models, &sentences, &out_dir, max_wer, attempts),
+        Command::SpokenSet {
+            models,
+            questions,
+            voices,
+            name,
+            out_dir,
+            max_wer,
+        } => spoken_set(&models, &questions, &voices, &name, &out_dir, max_wer),
         Command::Roundtrip {
             models,
             sentences,
@@ -292,6 +321,53 @@ fn speak_set(
         },
         Some(&out_dir.join("report.json")),
     )
+}
+
+fn spoken_set(
+    models: &Models,
+    file: &std::path::Path,
+    voices: &[u64],
+    name: &str,
+    out_dir: &std::path::Path,
+    max_wer: f32,
+) -> Result<()> {
+    let text =
+        std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    let questions = voice_loop::spoken::read_questions(&text)?;
+    if questions.is_empty() {
+        bail!("{} holds no questions", file.display());
+    }
+    let (synthesizer, recognizer) = (
+        BrainSynthesizer::load(&models.tts)?,
+        BrainRecognizer::load(&models.asr)?,
+    );
+    let (set, rejected) = voice_loop::spoken::record_set(
+        name,
+        &questions,
+        voices,
+        max_wer,
+        (&synthesizer, &recognizer),
+        out_dir,
+    )?;
+    std::fs::write(
+        out_dir.join("set.json"),
+        serde_json::to_string_pretty(&set)?,
+    )?;
+    std::fs::write(
+        out_dir.join("rejected.json"),
+        serde_json::to_string_pretty(&rejected)?,
+    )?;
+    println!(
+        "{}",
+        serde_json::json!({
+            "set": name,
+            "digest": set.digest()?,
+            "recordings": set.items().len(),
+            "rejected": rejected.len(),
+            "portrayal": set.portrayal().label(),
+        })
+    );
+    Ok(())
 }
 
 fn roundtrip(
