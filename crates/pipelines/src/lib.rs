@@ -51,6 +51,7 @@ pub mod ask;
 pub mod author;
 pub mod budget;
 pub mod checkpoints;
+pub mod claim_quality;
 pub mod claims;
 pub mod critique;
 pub mod curriculum;

@@ -118,6 +118,10 @@ pub struct AbsorbRequest {
     /// Whether the judge, when there is one, must find that the person's
     /// cited words assert each claim's statement.
     pub entail: bool,
+    /// Files of the facts the sessions may be known to be about (JSON Lines
+    /// of `{"id", "terms"}`), for the report of how well the extraction
+    /// covered them.
+    pub subjects: Vec<PathBuf>,
     /// Files of sealed probes no training record may contain.
     pub sealed_probes: Vec<PathBuf>,
     /// Stop after the claims are extracted and ruled on; train nothing.
@@ -145,6 +149,7 @@ impl Default for AbsorbRequest {
             extraction_passes: DEFAULT_EXTRACTION_PASSES,
             entail: true,
             replay_fraction: DEFAULT_REPLAY_FRACTION,
+            subjects: Vec::new(),
             sealed_probes: Vec::new(),
             dry_run: false,
             no_release: false,

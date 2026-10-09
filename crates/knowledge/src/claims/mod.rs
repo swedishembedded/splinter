@@ -37,6 +37,7 @@
 
 pub mod agreement;
 pub mod answer;
+pub mod coverage;
 pub mod extract;
 pub mod forms;
 mod gates;

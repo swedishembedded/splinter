@@ -6,6 +6,7 @@
 use std::fmt::Write as _;
 
 use splinter_sdk::absorb::Absorbed;
+use splinter_sdk::claim_quality::ExtractionQuality;
 use splinter_sdk::claims::{
     ClaimSetList, ClaimsExtracted, ClaimsGated, ForgottenLine, LedgerReport,
 };
@@ -90,12 +91,43 @@ impl Report for ClaimsGated {
             tally(&self.refused),
             self.live
         );
+        if let Some(q) = &self.extraction_quality {
+            out.push_str(&q.human());
+        }
         for r in &self.rulings {
             let _ = match (&r.reason, &r.reinforces) {
                 (Some(why), _) => writeln!(out, "  refused {:?}: {why}", r.statement),
                 (None, Some(of)) => writeln!(out, "  reinforced {of}: {:?}", r.statement),
                 (None, None) => writeln!(out, "  admitted {:?}", r.statement),
             };
+        }
+        out
+    }
+}
+
+impl Report for ExtractionQuality {
+    fn human(&self) -> String {
+        let ratio = |r: Option<f64>| r.map_or("not measured".to_string(), |r| format!("{r:.2}"));
+        let mut out = format!(
+            "  extraction vs known subjects: recall {}, precision {} ({} admitted claim(s))\n",
+            ratio(self.recall),
+            ratio(self.precision),
+            self.admitted_claims
+        );
+        for s in &self.sessions {
+            let verdict = |v: Option<bool>| match v {
+                Some(true) => "covered",
+                Some(false) => "missed",
+                None => "no description",
+            };
+            let _ = writeln!(
+                out,
+                "    {} subject {}: proposed {}, admitted {}",
+                s.session,
+                s.subject,
+                verdict(s.proposed),
+                verdict(s.admitted)
+            );
         }
         out
     }

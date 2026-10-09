@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- Extraction precision and recall: a session whose trajectory carries `extra.absorb_subject` is checked against
+  the fact descriptions of `--subjects FILE` (`claims gate`, `absorb`); the gate report lists whether the proposed
+  and the admitted claims cover each subject, with recall and precision.
 - `claims forget <CLAIM-ID>`: a `forgotten` ruling takes a live claim out of the live set (the ledger keeps it).
   Each release records the claims it was trained on, and a night whose champion holds a claim that is no longer
   live trains again from the base without it even when nothing is new. The claim gate's improvement check is

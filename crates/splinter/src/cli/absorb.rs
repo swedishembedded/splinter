@@ -79,6 +79,12 @@ pub enum ClaimsCommand {
         #[arg(long, default_value_t = true, num_args = 0..=1, default_missing_value = "true",
             require_equals = true, value_name = "BOOL")]
         entail: bool,
+        /// Files (JSON Lines of {"id", "terms"}) saying what the facts the
+        /// sessions are known to be about (`extra.absorb_subject` of their
+        /// trajectory) look like in a statement; the report then says
+        /// whether the claims cover them.
+        #[arg(long, num_args = 1.., value_name = "FILE")]
+        subjects: Vec<PathBuf>,
     },
     /// Forget a live claim: it leaves the live set, so the next `absorb`
     /// trains again from the base without it, even when nothing else is new.
@@ -174,6 +180,12 @@ pub struct AbsorbArgs {
     #[arg(long, default_value_t = DEFAULT_REPLAY_FRACTION, value_name = "F",
         requires = "continue_from_release", value_parser = super::share)]
     pub replay_fraction: f64,
+    /// Files (JSON Lines of {"id", "terms"}) saying what the facts the
+    /// sessions are known to be about (`extra.absorb_subject` of their
+    /// trajectory) look like in a statement; the report then says whether the
+    /// claims cover them.
+    #[arg(long, num_args = 1.., value_name = "FILE")]
+    pub subjects: Vec<PathBuf>,
     /// Files of sealed probes (JSON Lines of {"question", "reference"?,
     /// "name"?}): a training record containing a probe's question, or an
     /// 8-word run of a probe beyond its claim's statement, is refused. The

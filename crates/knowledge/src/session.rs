@@ -132,6 +132,21 @@ pub enum SessionError {
 pub struct SessionView {
     source: SourceId,
     steps: BTreeMap<u64, Step>,
+    subject: Option<String>,
+}
+
+/// The key of the trajectory's root `extra` object under which a recording
+/// names the fact a session is known to be about.
+pub const SUBJECT_KEY: &str = "absorb_subject";
+
+/// The subject a trajectory's root `extra` names, when it does.
+fn subject_of(trajectory: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(trajectory).ok()?;
+    value
+        .get("extra")?
+        .get(SUBJECT_KEY)?
+        .as_str()
+        .map(str::to_string)
 }
 
 impl SessionView {
@@ -144,7 +159,12 @@ impl SessionView {
             return Err(SessionError::NotASession(source.id.clone()));
         }
         let mut steps: BTreeMap<u64, Step> = BTreeMap::new();
+        let mut subject = None;
         for part in &source.parts {
+            if part.name == TRAJECTORY_PART {
+                subject = subject_of(&read(part)?);
+                continue;
+            }
             let Some((id, role)) = parse_part_name(&part.name) else {
                 continue;
             };
@@ -175,6 +195,7 @@ impl SessionView {
         Ok(Self {
             source: source.id.clone(),
             steps,
+            subject,
         })
     }
 
@@ -198,6 +219,13 @@ impl SessionView {
     #[must_use]
     pub fn source(&self) -> &SourceId {
         &self.source
+    }
+
+    /// The fact the recording says the session is about (the trajectory's
+    /// root `extra.absorb_subject`); `None` for a session that carries none.
+    #[must_use]
+    pub fn subject(&self) -> Option<&str> {
+        self.subject.as_deref()
     }
 
     /// The step `id`; `None` when the session has no such step with text.

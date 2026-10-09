@@ -45,7 +45,9 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
 
+use crate::claim_quality::{assess, ExtractionQuality};
 use crate::verify::judge_model;
+use splinter_knowledge::claims::coverage::Subject;
 
 fn session_error(source: &SourceId, e: SessionError) -> OrchestratorError {
     match e {
@@ -266,6 +268,9 @@ pub struct GateRequest<'a> {
     /// claim's cited words and statement and must find that the words
     /// assert the statement.
     pub entail: bool,
+    /// What the facts the sessions are known to be about look like, for the
+    /// report of how well the extraction covered them.
+    pub subjects: &'a [Subject],
 }
 
 impl<'a> GateRequest<'a> {
@@ -276,6 +281,7 @@ impl<'a> GateRequest<'a> {
             claim_set,
             judge: None,
             entail: true,
+            subjects: &[],
         }
     }
 }
@@ -305,6 +311,10 @@ pub struct ClaimsGated {
     pub live: usize,
     /// Sessions of the set the extractor gave nothing usable for.
     pub extraction_failed: usize,
+    /// How well the extraction covered the sessions that name the fact they
+    /// are about; absent when none does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extraction_quality: Option<ExtractionQuality>,
 }
 
 /// Rules on the proposals of the claim set `set_id` and appends the rulings
@@ -314,7 +324,7 @@ pub fn gate(ctx: &Context, request: &GateRequest<'_>) -> Result<ClaimsGated, Orc
     let claims = ctx.claims();
     let set = claims.get_set(set_id)?;
     let mut views = BTreeMap::new();
-    for session in set.sessions.iter().filter(|s| !s.proposals.is_empty()) {
+    for session in &set.sessions {
         let view = SessionView::load(&ctx.sources(), &session.session)
             .map_err(|e| session_error(&session.session, e))?;
         views.insert(session.session.clone(), view);
@@ -354,6 +364,7 @@ pub fn gate(ctx: &Context, request: &GateRequest<'_>) -> Result<ClaimsGated, Orc
         rulings: Vec::new(),
         live: 0,
         extraction_failed: set.sessions.iter().filter(|s| s.failure.is_some()).count(),
+        extraction_quality: None,
     };
     for entry in &entries {
         let ruled = ruled(entry).map_err(|e| gate_error(e.into()))?;
@@ -373,6 +384,12 @@ pub fn gate(ctx: &Context, request: &GateRequest<'_>) -> Result<ClaimsGated, Orc
         }
         report.rulings.push(ruled);
     }
+    let ruled_on_set: Vec<LedgerEntry> = claims
+        .entries()?
+        .into_iter()
+        .filter(|e| e.claim_set == *set_id)
+        .collect();
+    report.extraction_quality = assess(&set, &ruled_on_set, &views, request.subjects);
     report.live = Ledger::new(claims.entries()?)
         .live()
         .map_err(|e| gate_error(e.into()))?

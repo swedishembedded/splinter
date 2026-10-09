@@ -31,6 +31,7 @@ use super::gate::{decide_claims, publish};
 use super::kit::{self, build_kits, ClaimKit, KitRequest, Live};
 use super::sealed::SealedProbes;
 use super::{AbsorbRequest, Absorbed};
+use crate::claim_quality::load_subjects;
 use crate::claims::{
     extract, gate as rule_claims, resolve_set, ClaimsExtracted, ExtractRequest, GateRequest,
     Unconfirmed,
@@ -44,6 +45,7 @@ use crate::train::{
     auto_records_per_step, load_candidate, train, Rehearse, TrainRequest, Trainer, Tuning,
 };
 use crate::verify::adopt_judge;
+use splinter_knowledge::claims::coverage::Subject;
 
 type Done = Result<StageEnd, OrchestratorError>;
 
@@ -87,6 +89,7 @@ struct State<'a> {
     teacher: ModelRef,
     judge: Option<ModelRef>,
     sealed: SealedProbes,
+    subjects: Vec<Subject>,
     report: Absorbed,
     system: Option<String>,
     sessions: Vec<SourceId>,
@@ -132,6 +135,7 @@ pub(super) fn run(
         teacher: assignments.get(Role::Teacher).clone(),
         judge,
         sealed: SealedProbes::load(&request.sealed_probes)?,
+        subjects: load_subjects(&request.subjects)?,
         report: Absorbed {
             roles: roles_used,
             dry_run: request.dry_run,
@@ -319,6 +323,7 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
         &GateRequest {
             judge: st.judge.as_ref(),
             entail: st.request.entail,
+            subjects: &st.subjects,
             ..GateRequest::new(&set)
         },
     )?;

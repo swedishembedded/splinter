@@ -9,6 +9,7 @@
 use serde_json::json;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::runs;
+use splinter_pipelines::claim_quality::load_subjects;
 use splinter_pipelines::claims::{extract, ledger, GateRequest};
 
 use crate::extract::{port_claim, request, taken};
@@ -257,5 +258,81 @@ fn a_judge_that_finds_the_words_do_not_assert_the_statement_refuses_it_seeing_on
         },
     )?;
     assert_eq!(report.admitted, 1, "{report:#?}");
+    Ok(())
+}
+
+fn about(mut t: atif::Trajectory, subject: &str) -> atif::Trajectory {
+    t.extra = Some(json!({ "absorb_subject": subject }));
+    t
+}
+
+#[test]
+fn the_report_says_whether_the_claims_cover_the_subject_each_session_is_known_to_be_about(
+) -> Outcome {
+    let w = world(script)?;
+    let set = extracted(
+        &w,
+        &[
+            ("a.atif.json", &about(port_correction(), "port")),
+            ("b.atif.json", &about(deploy(), "tls")),
+            (
+                "c.atif.json",
+                &about(crate::fixtures::with_secret(), "unlisted"),
+            ),
+            ("d.atif.json", &port_changed()),
+        ],
+    )?;
+    let described = w.dir.path().join("subjects.jsonl");
+    std::fs::write(
+        &described,
+        "{\"id\": \"port\", \"terms\": [\"9090\"]}\n{\"id\": \"tls\", \"terms\": [\"TLS\"]}\n",
+    )?;
+    let subjects = load_subjects(&[described])?;
+    let report = splinter_pipelines::claims::gate(
+        &w.ctx,
+        &GateRequest {
+            subjects: &subjects,
+            ..GateRequest::new(&set)
+        },
+    )?;
+    let quality = report
+        .extraction_quality
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("no quality: {report:#?}"))?;
+    assert_eq!(
+        quality.sessions.len(),
+        3,
+        "the session without a subject is not listed"
+    );
+    let verdicts: Vec<_> = quality
+        .sessions
+        .iter()
+        .map(|s| (s.subject.as_str(), s.proposed, s.admitted))
+        .collect();
+    assert_eq!(
+        verdicts,
+        [
+            ("port", Some(true), Some(true)),
+            ("tls", Some(false), Some(false)),
+            ("unlisted", None, None),
+        ],
+        "an undescribed subject has no verdict"
+    );
+    assert_eq!(
+        quality.recall,
+        Some(0.5),
+        "one of two described subjects covered"
+    );
+    assert_eq!(quality.admitted_claims, 2);
+    assert_eq!(
+        quality.precision,
+        Some(0.5),
+        "one of two admitted claims covers its subject"
+    );
+
+    // No annotation, no report.
+    let w = world(script)?;
+    let set = extracted(&w, &[("a.atif.json", &port_correction())])?;
+    assert!(gate(&w.ctx, &set)?.extraction_quality.is_none());
     Ok(())
 }

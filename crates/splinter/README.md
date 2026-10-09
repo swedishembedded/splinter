@@ -822,6 +822,17 @@ set again rules on nothing. `claims ledger` reads it back: the live claims
 with their reinforcement counts, the superseded ones and by which claim, the
 forgotten ones, and the refused proposals.
 
+A recording of a session may name the fact the session was made to teach, as
+`{"absorb_subject": "<fact id>"}` in the `extra` object at the root of its ATIF
+trajectory. `claims gate --subjects FILE...` (and `absorb --subjects`) reads what
+each fact looks like (JSON Lines of `{"id", "terms": [...]}`; a statement
+carries a fact when it contains every term, case aside) and the gate report
+lists, for each named session, whether the claims the extractor proposed and the
+claims the gates admitted cover it, with the extraction's recall (sessions whose
+admitted claims cover their subject) and precision (admitted claims of those
+sessions that cover their subject). A subject with no description has no
+verdict, and a ratio over nothing is absent.
+
 `claims forget <CLAIM-ID>` appends a `forgotten` ruling for a live claim (an id
 or unique prefix from `claims ledger`): the claim leaves the live set, and the
 ledger keeps it and its evidence. Because `absorb` trains again from the base on
