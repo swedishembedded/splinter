@@ -131,17 +131,17 @@ with `voice-loop --backend cuda`.
 |---|---|---|
 | Speaking 12 s of speech | 20.4 s (codec 14.3 s, codes 6.1 s) | 3.4 s (real-time factor 0.27) |
 | 8B answer, 80 tokens | 2.3 s | 1.4 s |
-| First sound, p50 / p95 | 3.4 s / 4.8 s | 2.6 s / 3.1 s |
-| Whole turn, p50 | 31 s | 9.9 s |
+| First sound, p50 / p95 | 3.4 s / 4.8 s | 1.05 s / 1.63 s (0.37 s to the first word, 0.54 s to the first piece; the device engine streams after 8 frames) |
+| Whole turn, p50 | 31 s | 11.4 s (the prefix is decoded again at 8, 24, 72 frames, and writing shares the card) |
 
-Not yet at the 1.5 s first-sound target. What remains, in order of size: the
-language model is host-bound at about 17 ms a token on a card that could do
-four times that; the code predictor takes 11 ms of each 23 ms frame; the codec
-decode needs the whole utterance (no frame streaming), and its two convolution
-kernels are the slowest on the card; speaking and writing share the GPU, so
-overlapping them slows both. The first-sound figure includes recognition
-(0.3 s). Idle-GPU proof and n>=20 are the p50/p95 above only; the stored
-profiles are under `~/resources/speech/profiles/`.
+First sound meets the plan's targets (p50 1.5 s, p95 2.0 s) on 30 questions;
+the card showed no other job after the run (`profiles/*-streamed-cascade/`;
+nothing of mine ran beside it, other tenants were not checked during it). What
+remains: the language model is host-bound at about 17 ms a token on a card that
+could do four times that; the code predictor takes 11 ms of each 23 ms frame;
+the codec's convolution kernels are the slowest on the card; the run was one
+process, so p95 includes first-use costs. Total turn time does not matter for
+playback (the audio is longer than the turn) but it is the card's cost.
 
 ## Learning to speak from conversation
 
