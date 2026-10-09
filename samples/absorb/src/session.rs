@@ -64,7 +64,8 @@ only your next message to the assistant.";
 const USER_TASK: &str = "Write your next message to the assistant, as the brief's `goal` says. \
 `you_know` is what you are certain of; the assistant has not seen it. Never copy a sentence or \
 a long stretch of words from `you_know`: say it the way a person says something they know, in \
-your own words.";
+your own words. You are the person asking, never the person or the thing the facts are about, \
+and never the assistant: do not speak as them or about yourself as if you were them.";
 
 /// Topics a noise session chats about, none of them history or the letters.
 pub const NOISE_TOPICS: [&str; 6] = [
