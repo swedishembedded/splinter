@@ -19,13 +19,14 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 use splinter_sdk::model::speech::{
-    BrainRecognizer, BrainSynthesizer, CascadeListener, Heard, LessonDesk, Synthesizer,
+    BrainRecognizer, BrainSynthesizer, CascadeListener, Heard, LessonDesk, Synthesizer, Take,
     DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::model::PolicyError;
+use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::speech::{spoken_disclosure, Portrayal, SpeakerProfile};
 
-use crate::batch::{spoken_turns, Batch, Names, Persona};
+use crate::batch::{spoken_turns, Batch, Conversation, Names, Persona};
 
 #[derive(Args)]
 pub struct AgentArgs {
@@ -82,13 +83,23 @@ pub fn run(args: &AgentArgs) -> Result<()> {
             .with_context(|| format!("opening {}", file.display()))?,
         None => LessonDesk::new(speaker.portrayal().clone()),
     };
+    let desk_spoke = std::cell::Cell::new(false);
     let listener = CascadeListener::new(
         BrainRecognizer::load(&args.asr)?,
         |question: &str, on_text: &mut dyn FnMut(&str)| {
             // What is said about how to speak is the desk's, not the model's.
-            if let Heard::Say(reply) = desk.hear(question) {
-                on_text(&reply);
-                return Ok(reply);
+            match desk.hear(question) {
+                Heard::Say(reply) => {
+                    desk_spoke.set(true);
+                    on_text(&reply);
+                    return Ok(reply);
+                }
+                Heard::Retry(text) => {
+                    desk_spoke.set(false);
+                    on_text(&text);
+                    return Ok(text);
+                }
+                Heard::Pass => desk_spoke.set(false),
             }
             voice
                 .ask(question, on_text)
@@ -112,7 +123,18 @@ pub fn run(args: &AgentArgs) -> Result<()> {
         },
         &args.persona,
         &listener,
-        Some(desk.lexicon()),
+        Some(&Conversation {
+            lexicon: desk.lexicon(),
+            after_turn: &|answer: &str, recording: &[u8]| {
+                if !desk_spoke.get() {
+                    desk.spoke(Take {
+                        text: answer.to_string(),
+                        audio: Digest::of(recording),
+                    });
+                }
+                desk.follow_up()
+            },
+        }),
         args.report.as_deref(),
     )
 }

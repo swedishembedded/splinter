@@ -43,7 +43,7 @@ pub use brain_backed::{
     BrainRecognizer, BrainSynthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 pub use cascade::CascadeListener;
-pub use desk::{Heard, LessonDesk, SharedLexicon};
+pub use desk::{Heard, LessonDesk, SharedLexicon, Take};
 pub use ingress::{
     AudioFeatures, Ingress, IngressExample, IngressOptions, StepSettings, FEATURE_WIDTH,
 };

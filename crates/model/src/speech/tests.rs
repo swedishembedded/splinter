@@ -606,6 +606,7 @@ fn desk() -> LessonDesk {
 fn said_by(desk: &LessonDesk, heard: &str) -> String {
     match desk.hear(heard) {
         Heard::Say(reply) => reply,
+        Heard::Retry(text) => format!("<retry: {text}>"),
         Heard::Pass => "<passed to the model>".to_string(),
     }
 }
@@ -709,4 +710,86 @@ fn an_imitation_is_declined_until_its_example_can_be_heard() {
         "the user is told what can be taught: {reply}"
     );
     assert!(desk.lessons().is_empty());
+}
+
+fn take(text: &str, audio: &str) -> Take {
+    Take {
+        text: text.to_string(),
+        audio: splinter_core::digest::Digest::of(audio.as_bytes()),
+    }
+}
+
+#[test]
+fn a_rejected_take_is_said_again_and_the_users_pick_becomes_a_preference() {
+    let desk = desk();
+    desk.spoke(take("We must resist.", "first"));
+    assert_eq!(
+        desk.hear("That sounded wrong."),
+        Heard::Retry("We must resist.".into())
+    );
+    assert_eq!(
+        desk.follow_up(),
+        None,
+        "nothing to ask until the new take is spoken"
+    );
+    desk.spoke(take("We must resist.", "second"));
+    assert_eq!(desk.follow_up().as_deref(), Some("Was that better?"));
+
+    assert_eq!(
+        said_by(&desk, "I liked the tax part."),
+        "<passed to the model>",
+        "only a plain answer counts"
+    );
+    // The unclear answer dropped the comparison; ask again from the top.
+    desk.spoke(take("We must resist.", "third"));
+    desk.hear("Say that again.");
+    desk.spoke(take("We must resist.", "fourth"));
+    assert_eq!(said_by(&desk, "Better!"), "Noted.");
+
+    let lessons = desk.lessons();
+    assert_eq!(lessons.len(), 1);
+    assert_eq!(
+        lessons[0].objective,
+        splinter_core::speech_lesson::Objective::Preference
+    );
+    match &lessons[0].exemplar {
+        splinter_core::speech_lesson::Exemplar::Preferred {
+            text,
+            chosen,
+            rejected,
+        } => {
+            assert_eq!(text, "We must resist.");
+            assert_eq!(*chosen, splinter_core::digest::Digest::of(b"fourth"));
+            assert_eq!(*rejected, splinter_core::digest::Digest::of(b"third"));
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        desk.lexicon().read().unwrap().len(),
+        0,
+        "a preference teaches the lexicon nothing"
+    );
+}
+
+#[test]
+fn preferring_the_old_take_swaps_the_pair_and_approval_or_silence_teaches_nothing() {
+    let desk = desk();
+    assert_eq!(
+        said_by(&desk, "That sounded wrong."),
+        "I have not said anything yet."
+    );
+    desk.spoke(take("Aye.", "old"));
+    assert_eq!(said_by(&desk, "That sounded good."), "Good.");
+    desk.hear("That sounded wrong.");
+    desk.spoke(take("Aye.", "new"));
+    assert_eq!(said_by(&desk, "No."), "Noted.");
+    match &desk.lessons()[0].exemplar {
+        splinter_core::speech_lesson::Exemplar::Preferred {
+            chosen, rejected, ..
+        } => {
+            assert_eq!(*chosen, splinter_core::digest::Digest::of(b"old"));
+            assert_eq!(*rejected, splinter_core::digest::Digest::of(b"new"));
+        }
+        other => panic!("{other:?}"),
+    }
 }

@@ -18,9 +18,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
+use splinter_core::digest::Digest;
 use splinter_core::speech::Portrayal;
 use splinter_core::speech_lesson::{
-    lessons_from, parse_confirmation, parse_directive, parse_retraction, Directive, Lesson, Lexicon,
+    lessons_from, parse_comparison, parse_confirmation, parse_directive, parse_feedback,
+    parse_retraction, Comparison, Directive, Exemplar, Feedback, Lesson, Lexicon, Objective,
 };
 
 /// A lexicon several voices and the desk share, so a lesson kept on one turn is
@@ -34,12 +36,33 @@ pub enum Heard {
     Pass,
     /// About how to speak: say this, and do not ask the model.
     Say(String),
+    /// The last thing said did not sound right: say these words again (the
+    /// caller draws a new take) and register it with [`LessonDesk::spoke`]. The
+    /// next turn is expected to say which take was better.
+    Retry(String),
+}
+
+/// One thing the agent said aloud: its words and a digest of the audio.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Take {
+    /// The words said.
+    pub text: String,
+    /// The digest of the audio they were said in.
+    pub audio: Digest,
+}
+
+/// A take the user turned down and the one said in its place.
+struct Compare {
+    old: Take,
+    new: Option<Take>,
 }
 
 #[derive(Default)]
 struct State {
     kept: Vec<Lesson>,
     offered: Option<Lesson>,
+    last: Option<Take>,
+    compare: Option<Compare>,
 }
 
 /// The lessons a conversation has taught and the offer awaiting an answer.
@@ -85,7 +108,7 @@ impl LessonDesk {
             lexicon: Arc::new(RwLock::new(Lexicon::from_lessons(&kept))),
             state: Mutex::new(State {
                 kept,
-                offered: None,
+                ..State::default()
             }),
             file: Some(file.to_path_buf()),
         };
@@ -102,6 +125,33 @@ impl LessonDesk {
     #[must_use]
     pub fn lessons(&self) -> Vec<Lesson> {
         self.lock().kept.clone()
+    }
+
+    /// Register what the agent just said aloud (a model's answer or a retry),
+    /// so a remark on it can be taken as a judgement of this take.
+    pub fn spoke(&self, take: Take) {
+        let mut state = self.lock();
+        if let Some(compare) = state.compare.as_mut() {
+            if compare.new.is_none()
+                && compare.old.text == take.text
+                && compare.old.audio != take.audio
+            {
+                compare.new = Some(take.clone());
+            }
+        }
+        state.last = Some(take);
+    }
+
+    /// A question the agent should ask now, if any: after it said the words
+    /// again it asks which take was better.
+    #[must_use]
+    pub fn follow_up(&self) -> Option<String> {
+        let state = self.lock();
+        state
+            .compare
+            .as_ref()
+            .is_some_and(|c| c.new.is_some())
+            .then(|| "Was that better?".to_string())
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -123,6 +173,40 @@ impl LessonDesk {
                 Some(false) => return Heard::Say("I will leave it as it was.".to_string()),
                 None => {}
             }
+        }
+        if let Some(compare) = state.compare.take() {
+            if let (Some(new), Some(verdict)) = (compare.new.clone(), parse_comparison(heard)) {
+                let (chosen, rejected) = match verdict {
+                    Comparison::NewBetter => (new, compare.old),
+                    Comparison::OldBetter => (compare.old, new),
+                };
+                state.kept.push(Lesson {
+                    heard: heard.to_string(),
+                    exemplar: Exemplar::Preferred {
+                        text: chosen.text,
+                        chosen: chosen.audio,
+                        rejected: rejected.audio,
+                    },
+                    objective: Objective::Preference,
+                    portrayal: self.portrayal.clone(),
+                });
+                self.refresh(&state);
+                return Heard::Say("Noted.".to_string());
+            }
+        }
+        if let Some(feedback) = parse_feedback(heard) {
+            return match (feedback, state.last.clone()) {
+                (Feedback::Reject, Some(last)) => {
+                    let text = last.text.clone();
+                    state.compare = Some(Compare {
+                        old: last,
+                        new: None,
+                    });
+                    Heard::Retry(text)
+                }
+                (Feedback::Approve, Some(_)) => Heard::Say("Good.".to_string()),
+                (_, None) => Heard::Say("I have not said anything yet.".to_string()),
+            };
         }
         if parse_retraction(heard) {
             return Heard::Say(if state.kept.pop().is_some() {

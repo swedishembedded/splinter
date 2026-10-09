@@ -149,6 +149,96 @@ pub fn parse_retraction(transcript: &str) -> bool {
     )
 }
 
+/// What a user says about the last thing the agent said aloud.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Feedback {
+    /// It did not sound right: say it again.
+    Reject,
+    /// It sounded right.
+    Approve,
+}
+
+/// Read feedback on the last utterance from a transcript, or `None`. Only a
+/// plain remark counts, for the same reason a confirmation must be plain.
+#[must_use]
+pub fn parse_feedback(transcript: &str) -> Option<Feedback> {
+    let said = plain_words(transcript)
+        .join(" ")
+        .replace("that's", "that is");
+    const REJECT: [&str; 12] = [
+        "that sounded wrong",
+        "that sounded odd",
+        "that sounded off",
+        "that sounded bad",
+        "that did not sound right",
+        "that was wrong",
+        "say that again",
+        "try that again",
+        "say it again",
+        "that was not right",
+        "that is not right",
+        "that is wrong",
+    ];
+    const APPROVE: [&str; 6] = [
+        "that sounded good",
+        "that sounded right",
+        "that was good",
+        "that was perfect",
+        "perfect",
+        "that is right",
+    ];
+    if REJECT.contains(&said.as_str()) {
+        Some(Feedback::Reject)
+    } else if APPROVE.contains(&said.as_str()) {
+        Some(Feedback::Approve)
+    } else {
+        None
+    }
+}
+
+/// Which of two takes of the same words the user prefers, asked after the
+/// agent said them again.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Comparison {
+    /// The second take (the new one) is better.
+    NewBetter,
+    /// The first take (the old one) was better.
+    OldBetter,
+}
+
+/// Read an answer to "was that better?", or `None`.
+#[must_use]
+pub fn parse_comparison(transcript: &str) -> Option<Comparison> {
+    let said = plain_words(transcript)
+        .join(" ")
+        .replace("that's", "that is");
+    const NEW: [&str; 7] = [
+        "yes",
+        "better",
+        "that is better",
+        "that sounded better",
+        "much better",
+        "the second one",
+        "yes that is better",
+    ];
+    const OLD: [&str; 7] = [
+        "no",
+        "worse",
+        "that is worse",
+        "the first one",
+        "the first one was better",
+        "go back",
+        "no that is worse",
+    ];
+    if NEW.contains(&said.as_str()) {
+        Some(Comparison::NewBetter)
+    } else if OLD.contains(&said.as_str()) {
+        Some(Comparison::OldBetter)
+    } else {
+        None
+    }
+}
+
 /// `text` lower-cased as its words, punctuation dropped.
 fn plain_words(text: &str) -> Vec<String> {
     text.to_lowercase()
@@ -184,6 +274,15 @@ pub enum Exemplar {
         word: String,
         /// How it is to be said.
         spoken_as: String,
+    },
+    /// Two takes of the same text, one preferred by the user.
+    Preferred {
+        /// The words both takes say.
+        text: String,
+        /// The take the user preferred, by the digest of its audio.
+        chosen: Digest,
+        /// The take the user turned down.
+        rejected: Digest,
     },
     /// A recording of the example, by the digest of its audio.
     Recording {
@@ -476,6 +575,51 @@ mod tests {
         }
         for said in ["Forget the tax", "do not forget that", "undo"] {
             assert!(!parse_retraction(said), "{said:?}");
+        }
+    }
+
+    #[test]
+    fn a_plain_remark_on_the_last_utterance_is_feedback_and_a_sentence_about_something_else_is_not()
+    {
+        for said in [
+            "That sounded wrong.",
+            "Say that again!",
+            "That's not right",
+            "try that again",
+        ] {
+            assert_eq!(parse_feedback(said), Some(Feedback::Reject), "{said:?}");
+        }
+        for said in ["That sounded good.", "Perfect.", "That's right"] {
+            assert_eq!(parse_feedback(said), Some(Feedback::Approve), "{said:?}");
+        }
+        for said in [
+            "Tell me why that sounded wrong to the delegates",
+            "perfectly",
+            "That was the wrong tax",
+            "",
+        ] {
+            assert_eq!(parse_feedback(said), None, "{said:?}");
+        }
+    }
+
+    #[test]
+    fn an_answer_to_was_that_better_names_one_of_the_two_takes() {
+        for said in ["Yes.", "Better!", "That's better", "the second one"] {
+            assert_eq!(
+                parse_comparison(said),
+                Some(Comparison::NewBetter),
+                "{said:?}"
+            );
+        }
+        for said in ["No.", "Worse", "go back", "The first one was better."] {
+            assert_eq!(
+                parse_comparison(said),
+                Some(Comparison::OldBetter),
+                "{said:?}"
+            );
+        }
+        for said in ["Maybe", "I liked the tax part", ""] {
+            assert_eq!(parse_comparison(said), None, "{said:?}");
         }
     }
 

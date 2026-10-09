@@ -1,0 +1,230 @@
+<title>Listening Test</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one trial at a time, two players side by side (stacked on a phone), the choice row underneath. */
+:root {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --ink: #1b2330;
+  --ink-soft: #5a6577;
+  --line: #d7dce4;
+  --signal: #1f6fd1;
+  --signal-ink: #ffffff;
+  --signal-soft: #dbe8fa;
+  --good: #1d7a4a;
+  --warn: #a45f00;
+  --font: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #1b212b; --ink: #e8ecf2; --ink-soft: #9aa5b6; --line: #2d3644;
+    --signal: #6aa6f0; --signal-ink: #0c1118; --signal-soft: #223652; --good: #5cc68f; --warn: #e0a24a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1b212b; --ink: #e8ecf2; --ink-soft: #9aa5b6; --line: #2d3644;
+  --signal: #6aa6f0; --signal-ink: #0c1118; --signal-soft: #223652; --good: #5cc68f; --warn: #e0a24a;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5; padding-inline: 16px; padding-block: 20px 48px; }
+main { max-width: 760px; margin-inline: auto; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font-size: 1.25rem; font-weight: 600; margin: 0; text-wrap: balance; }
+.meta { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink-soft); }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--signal); transition: width .2s; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.how { color: var(--ink-soft); font-size: 0.9375rem; }
+.how b { color: var(--ink); font-weight: 600; }
+.sentence { font-size: 1.125rem; margin: 0 0 4px; text-wrap: pretty; }
+.sentence-label { font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
+.players { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .players { grid-template-columns: 1fr; } }
+.player { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.player.playing { border-color: var(--signal); background: var(--signal-soft); }
+.player h2 { margin: 0; font-size: 0.875rem; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
+.player h2 span { font-family: var(--mono); font-weight: 400; color: var(--ink-soft); font-size: 0.75rem; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.play { background: var(--signal); color: var(--signal-ink); border: 0; border-radius: 6px; padding: 10px 14px; font-weight: 600; }
+.play:focus-visible, .choice:focus-visible, .ghost:focus-visible, label:focus-within { outline: 3px solid var(--signal); outline-offset: 2px; }
+.progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--signal); }
+.garbled { display: flex; gap: 8px; align-items: center; font-size: 0.875rem; color: var(--ink-soft); }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 520px) { .choices { grid-template-columns: 1fr; } }
+.choice { background: var(--panel); border: 2px solid var(--line); border-radius: 8px; padding: 14px 10px; font-weight: 600; text-align: center; }
+.choice:hover:not(:disabled) { border-color: var(--signal); }
+.choice:disabled { opacity: .45; cursor: not-allowed; }
+.choice small { display: block; font-family: var(--mono); font-weight: 400; color: var(--ink-soft); }
+.row { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
+.ghost { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; color: var(--ink-soft); }
+.status { font-size: 0.875rem; color: var(--ink-soft); }
+.status.bad { color: var(--warn); }
+.done { text-align: center; padding-block: 24px; }
+.done h2 { margin: 0 0 8px; }
+</style>
+
+<main id="app">
+  <header>
+    <h1>Listening Test</h1>
+    <div class="meta"><span id="count">0 / 0</span> &middot; <span id="save">starting</span></div>
+  </header>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <div class="panel how">
+    Two recordings of the <b>same sentence in the same voice</b>. Pick the one that sounds more like a
+    natural, fluent speaker saying it. Ignore loudness. If the words are wrong or garbled in one, tick it.
+    Play each at least once. Answer by instinct; there is no right answer to find. Keys: <b>1</b>/<b>2</b> play,
+    <b>Q</b>/<b>W</b>/<b>E</b> choose A, B, no difference.
+  </div>
+  <section id="trial" class="panel" hidden>
+    <div class="sentence-label">The sentence</div>
+    <p class="sentence" id="text"></p>
+  </section>
+  <section id="players" class="players" hidden>
+    <div class="player" id="pa">
+      <h2>Recording A <span id="plays-a">played 0x</span></h2>
+      <button class="play" id="play-a" type="button">Play A</button>
+      <div class="progress"><i id="prog-a"></i></div>
+      <label class="garbled"><input type="checkbox" id="garb-a"> words wrong or garbled</label>
+    </div>
+    <div class="player" id="pb">
+      <h2>Recording B <span id="plays-b">played 0x</span></h2>
+      <button class="play" id="play-b" type="button">Play B</button>
+      <div class="progress"><i id="prog-b"></i></div>
+      <label class="garbled"><input type="checkbox" id="garb-b"> words wrong or garbled</label>
+    </div>
+  </section>
+  <section id="choices" class="choices" hidden>
+    <button class="choice" id="pick-a" type="button" disabled>A is more natural<small>Q</small></button>
+    <button class="choice" id="pick-s" type="button" disabled>No difference<small>E</small></button>
+    <button class="choice" id="pick-b" type="button" disabled>B is more natural<small>W</small></button>
+  </section>
+  <div class="row" id="foot" hidden>
+    <span class="status" id="hint">Play both recordings to answer.</span>
+    <button class="ghost" id="back" type="button">Previous</button>
+  </div>
+  <section id="done" class="panel done" hidden>
+    <h2>That is all of this session</h2>
+    <p class="how">Every answer is saved. Thank you.</p>
+  </section>
+</main>
+
+<script>
+const SESSION = "__SESSION__";
+const PAIRS = __PAIRS__;
+
+const $ = (id) => document.getElementById(id);
+const answers = new Map();      // trial id -> saved answer
+let index = 0;
+let shownAt = 0;
+let plays = { a: 0, b: 0 };
+let db = null;
+let saving = Promise.resolve();
+
+const audio = { a: new Audio(), b: new Audio() };
+for (const side of ["a", "b"]) {
+  audio[side].preload = "auto";
+  audio[side].addEventListener("timeupdate", () => {
+    const d = audio[side].duration || 1;
+    $("prog-" + side).style.width = (100 * audio[side].currentTime / d) + "%";
+  });
+  audio[side].addEventListener("ended", () => { $("p" + side).classList.remove("playing"); });
+  audio[side].addEventListener("pause", () => { $("p" + side).classList.remove("playing"); });
+}
+
+function setSave(text, bad) { const el = $("save"); el.textContent = text; el.style.color = bad ? "var(--warn)" : ""; }
+
+function play(side) {
+  const other = side === "a" ? "b" : "a";
+  audio[other].pause();
+  audio[side].currentTime = 0;
+  audio[side].play().then(() => {
+    $("p" + side).classList.add("playing");
+    plays[side] += 1;
+    $("plays-" + side).textContent = "played " + plays[side] + "x";
+    refreshChoices();
+  }).catch(() => setSave("sound is blocked in this view", true));
+}
+
+function refreshChoices() {
+  const ready = plays.a > 0 && plays.b > 0;
+  for (const id of ["pick-a", "pick-b", "pick-s"]) $(id).disabled = !ready;
+  $("hint").textContent = ready ? "Choose one." : "Play both recordings to answer.";
+}
+
+function show(i) {
+  index = i;
+  const done = i >= PAIRS.length;
+  for (const id of ["trial", "players", "choices", "foot"]) $(id).hidden = done;
+  $("done").hidden = !done;
+  $("count").textContent = Math.min(i + 1, PAIRS.length) + " / " + PAIRS.length;
+  $("bar").style.width = (100 * Math.min(i, PAIRS.length) / PAIRS.length) + "%";
+  audio.a.pause(); audio.b.pause();
+  if (done) { $("count").textContent = PAIRS.length + " / " + PAIRS.length; return; }
+  const t = PAIRS[i];
+  $("text").textContent = t.text;
+  audio.a.src = t.a; audio.b.src = t.b;
+  const prior = answers.get(t.id);
+  plays = { a: prior ? prior.a_plays : 0, b: prior ? prior.b_plays : 0 };
+  for (const s of ["a", "b"]) {
+    $("plays-" + s).textContent = "played " + plays[s] + "x";
+    $("prog-" + s).style.width = "0";
+    $("garb-" + s).checked = prior ? !!prior["garbled_" + s] : false;
+  }
+  $("back").disabled = i === 0;
+  refreshChoices();
+  shownAt = Date.now();
+}
+
+function answer(choice) {
+  if (plays.a === 0 || plays.b === 0 || index >= PAIRS.length) return;
+  const t = PAIRS[index];
+  const record = {
+    choice, a_plays: plays.a, b_plays: plays.b,
+    garbled_a: $("garb-a").checked, garbled_b: $("garb-b").checked,
+    ms: Date.now() - shownAt, at: new Date().toISOString(),
+  };
+  answers.set(t.id, record);
+  save(t.id, record);
+  show(index + 1);
+}
+
+function save(id, record) {
+  if (!db) { setSave("not saved: storage unavailable", true); return; }
+  saving = saving.then(() => db.doc("ratings-" + SESSION + "/" + id).set(record))
+    .then(() => setSave("saved"), (e) => setSave("save failed: " + (e && e.code || "error"), true));
+}
+
+$("play-a").addEventListener("click", () => play("a"));
+$("play-b").addEventListener("click", () => play("b"));
+$("pick-a").addEventListener("click", () => answer("a"));
+$("pick-b").addEventListener("click", () => answer("b"));
+$("pick-s").addEventListener("click", () => answer("same"));
+$("back").addEventListener("click", () => show(Math.max(0, index - 1)));
+document.addEventListener("keydown", (e) => {
+  if (e.target && e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if (k === "1") play("a"); else if (k === "2") play("b");
+  else if (k === "q") answer("a"); else if (k === "w") answer("b"); else if (k === "e") answer("same");
+});
+
+async function start() {
+  show(0);
+  const claude = window.claude;
+  db = claude ? await claude.use("db") : null;
+  if (!db) { setSave("not saved: storage unavailable", true); return; }
+  setSave("loading earlier answers");
+  try {
+    const snap = await db.collection("ratings-" + SESSION).get();
+    snap.docs.forEach((d) => answers.set(d.id, d.data()));
+    const next = PAIRS.findIndex((p) => !answers.has(p.id));
+    show(next < 0 ? PAIRS.length : next);
+    setSave("saved");
+  } catch (e) {
+    setSave("could not read earlier answers", true);
+  }
+}
+start();
+</script>

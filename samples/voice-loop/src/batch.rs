@@ -11,7 +11,7 @@ use splinter_sdk::model::answer::Answerer;
 use splinter_sdk::model::error::PolicyError;
 use splinter_sdk::model::speech::{
     corpus_word_error_rate, take_turn, BrainRecognizer, BrainSynthesizer, Clip, ListenerOptions,
-    Recognizer, Sentences,
+    Recognizer, Sentences, Synthesizer,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::SpeakerProfile;
@@ -220,6 +220,17 @@ pub fn listen_turns(
     spoken_turns(names, batch, persona, &listener, None, keep)
 }
 
+/// What a conversation adds to a batch of turns: the lexicon its lessons
+/// grow, and what to do once a turn has been spoken. `after_turn` is given the
+/// words of the answer and the bytes of the reply recording, and returns a
+/// question to ask next, if any.
+pub struct Conversation<'a> {
+    /// The lexicon the voice speaks through.
+    pub lexicon: splinter_sdk::model::speech::SharedLexicon,
+    /// Called after each turn is written.
+    pub after_turn: &'a dyn Fn(&str, &[u8]) -> Option<String>,
+}
+
 /// Answer every recording of `batch` with a recognizer in front of the text
 /// model, speaking each sentence as the model writes it.
 pub fn streamed_turns(
@@ -241,7 +252,7 @@ pub fn spoken_turns(
     batch: &Batch<'_>,
     persona: &str,
     listener: &dyn splinter_sdk::model::speech::Listener,
-    lexicon: Option<splinter_sdk::model::speech::SharedLexicon>,
+    conversation: Option<&Conversation<'_>>,
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
     let mut recordings: Vec<PathBuf> = std::fs::read_dir(batch.recordings)
@@ -264,11 +275,20 @@ pub fn spoken_turns(
     let judge = BrainRecognizer::load(names.asr)?;
     let synthesizer = splinter_sdk::model::speech::Lexical::shared(
         BrainSynthesizer::load(names.tts)?,
-        lexicon.unwrap_or_default(),
+        conversation.map(|c| c.lexicon.clone()).unwrap_or_default(),
     );
     let mut items = Vec::new();
-    for (recording, question) in paired {
+    for (turn_number, (recording, question)) in paired.into_iter().enumerate() {
         let name = recording.display().to_string();
+        // In a conversation every turn is a fresh take, so saying a line again
+        // gives a different rendering to compare with the first.
+        let speaker = match conversation {
+            Some(_) => SpeakerProfile::new(
+                speaker.seed() + 7919 * turn_number as u64,
+                speaker.portrayal().clone(),
+            ),
+            None => speaker.clone(),
+        };
         let turn = splinter_sdk::model::speech::take_spoken_turn(
             listener,
             &synthesizer,
@@ -280,8 +300,17 @@ pub fn spoken_turns(
         let stem = recording
             .file_stem()
             .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-        turn.reply
-            .save(batch.out_dir.join(format!("{stem}.reply.wav")))?;
+        let reply_path = batch.out_dir.join(format!("{stem}.reply.wav"));
+        turn.reply.save(&reply_path)?;
+        if let Some(conversation) = conversation {
+            if let Some(question) =
+                (conversation.after_turn)(&turn.answer, &std::fs::read(&reply_path)?)
+            {
+                synthesizer
+                    .speak(&question, &speaker)?
+                    .save(batch.out_dir.join(format!("{stem}.followup.wav")))?;
+            }
+        }
         let answer_heard = judge.transcribe(&turn.reply)?.text;
         items.push(ListenItem {
             recording: name,
