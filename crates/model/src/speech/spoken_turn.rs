@@ -78,10 +78,11 @@ pub fn take_spoken_turn(
             let mut synthesise = Duration::ZERO;
             for sentence in sentences {
                 let began = Instant::now();
-                let clip = synthesizer.speak(&sentence, speaker)?;
+                let clip = synthesizer.speak_streaming(&sentence, speaker, &mut |_| {
+                    first_audio.get_or_insert_with(|| started.elapsed());
+                })?;
                 synthesise += began.elapsed();
                 clips.push(clip);
-                first_audio.get_or_insert_with(|| started.elapsed());
             }
             Ok::<_, PolicyError>((clips, first_audio, synthesise))
         });

@@ -188,3 +188,227 @@ applies to and names recordings by digest only.
   adapter exists on this host that passed the release gate.
 - The splinter lock pins a brain revision that is pushed to origin but not to
   the public remote; a clean checkout builds once that is published.
+
+## Paper: learning-voice-agent (materials and gaps)
+
+The paper formalizes training a voice agent from user corrections and preferences,
+presenting a novel approach to autonomous learning from spoken directives and
+feedback. The paper's scope: methodology for learning voice from conversation
+(spoken/typed "Talk as follows: ...", "Pronounce X as Y", user corrections become
+typed lessons with learning objectives), reward formulation (naturalness + WER,
+group-relative advantages), and GRPO reinforcement from feedback. Reproducible
+results only; no claims beyond what frozen data and held-out evaluation support.
+
+Materials and gaps are documented in `papers/learning-voice-agent/MATERIALS.md`;
+the roadmap below lists what must be done before claims can be made.
+
+### 1. Implement TTS supervised training pipeline
+
+**What**: Brain trainer for TTS that accepts (text, audio) pairs and measures
+held-out WER. Used by Supervised lesson objective.
+
+**Why it blocks the paper**: Supervised learning objective exists in design
+(speech_lesson.rs, Objective::Supervised) but has no trainer; cannot train on
+correction examples without this.
+
+**Acceptance criterion**: Brain crate trains on (text, audio) pairs, measures
+WER on a held-out test set, and the held-out WER improves on the untrained synthesizer by a pre-registered margin (seed reproducible).
+
+**Rough dependencies**: After naturalness judge (item 2) if using multi-modal
+judge for joint optimization; independent if WER-only.
+
+### 2. Implement or scope naturalness judge for reward
+
+**What**: Measure naturalness (0-1 scale) of synthesis. Either (a) deploy
+multimodal audio judge (wav2vec-based or cloud), or (b) use user binary preference
+(thumbs-up) as proxy and calibrate empirically, or (c) scope paper to WER-only
+metrics.
+
+**Why it blocks the paper**: reward() function in speech_reward.rs weighs
+naturalness equally with WER; cannot set weight without measured judgments.
+GRPO preference learning (Preference objective) needs naturalness scores.
+
+**Acceptance criterion**: (a) Naturalness scoring function with held-out
+calibration (rho > 0.7 with human pref), or (b) user binpref collection pipeline
+with >= 50 judges x 50 sentences, or (c) paper explicitly scopes to WER-only and
+defers naturalness tuning.
+
+**Rough dependencies**: Should come early; blocks Exp 2 (reward calibration) and
+Exp 4 (GRPO training).
+
+### 3. Create frozen lesson dataset for Exp 1 (lesson type ablation)
+
+**What**: 10 speakers, 5 lessons per speaker (typed corrections + recorded
+examples), 3 utterances per lesson, split: train 8 speakers, test 2 speakers
+held out by speaker.
+
+**Why it blocks the paper**: Exp 1 validates that each lesson objective
+(Lexicon, InContext, Supervised, Preference) produces measurable effect on its
+target metric.
+
+**Acceptance criterion**: Frozen dataset manifest (speakers, lesson types,
+utterances) with digests; per-lesson WER or naturalness measurement script;
+test split rule enforced.
+
+**Rough dependencies**: After speaker corpus is available; independent of trainer
+implementation.
+
+### 4. Design and implement GRPO trainer for TTS in brain
+
+**What**: RL trainer that takes preference pairs (preferred take, unpaired sample),
+computes group-relative advantages via speech_reward.rs, and updates TTS via GRPO.
+Specification: group-relative advantages (Exp 3 in MATERIALS.md), reward clamp,
+KL anchor to base TTS.
+
+**Why it blocks the paper**: Preference objective and Exp 4 (GRPO learning)
+require this; cannot demonstrate learning from feedback without RL trainer.
+
+**Acceptance criterion**: Brain crate implements GRPO for TTS; passes test
+(baseline TTS vs GRPO TTS on same data shows lower WER or higher preference
+on held-out; seed repro); integrates with brain's preference pair pipeline.
+
+**Rough dependencies**: After TTS supervised trainer (item 1); after reward
+function is calibrated (item 2).
+
+### 5. Diagnose and redesign speech ingress projector (M4 redesign)
+
+**What**: M4 projection train reached F1 0.299 on speech-conditioned thinker vs
+0.489 cascade baseline; projector learned register not content. Redesign options:
+(a) freeze ASR encoder features, scale projector, add supervised transcription-loss
+auxiliary target, or (b) end-to-end projector+thinker training
+on recognizer loss + downstream task loss jointly.
+
+**Why it blocks the paper**: M4 result failed equivalence gate (speech within
+margin of text); cannot claim speech ingress works or is a valid training signal
+without fixing this.
+
+**Acceptance criterion**: a redesigned projector is judged on the frozen exam of
+item 6 by the equivalence test of item 10; the thresholds are fixed before it
+is trained, not read off the M4 numbers (0.299 and 0.489 on 12 questions).
+
+**Rough dependencies**: Independent; can be done in parallel with other items.
+
+### 6. Create frozen exam set for final validation (Exp 3: ingress equiv gate)
+
+**What**: 200 questions: 150 for ingress training (with text + speech variants),
+50 held-out test (speech only). New voice (voice 14) for test. Frozen before any
+ingress training starts; test split by question and by voice.
+
+**Why it blocks the paper**: Exp 3 (ingress equivalence) requires pre-registered
+held-out split; M4 used ad-hoc voice 13 split; paper needs frozen exam.
+
+**Acceptance criterion**: Manifest with 200 question digests, 150 train/50 test
+split, voice assignment, recorded questions and cascade-generated answers.
+
+**Rough dependencies**: After M2 speech recordings are complete; parallel to
+ingress redesign (item 5).
+
+### 7. Create GRPO training and evaluation dataset (Exp 4)
+
+**What**: 100 sentences, 8 renders each (sampled from base TTS with different seeds),
+split 80 train (for GRPO), 20 test held out. Pre-compute WER and naturalness
+(from judge in item 2) per render.
+
+**Why it blocks the paper**: Exp 4 validates GRPO learning from preference pairs;
+dataset frozen before training starts.
+
+**Acceptance criterion**: Dataset manifest (100 sentence digests, 8 renders each,
+WER and naturalness scores, 80/20 split), recorded audio frozen by digest.
+
+**Rough dependencies**: After naturalness judge (item 2); independent of
+trainers.
+
+### 8. Run Exp 1: lesson type ablation (Lexicon, InContext, Supervised, Preference)
+
+**What**: Train on frozen lesson dataset (item 3); measure per-objective metric:
+Lexicon (output WER with/without), InContext (naturalness pref), Supervised
+(held-out WER after TTS fine-tune), Preference (W-rate in pref pairs).
+
+**Why it blocks the paper**: Validates that lesson types work as designed.
+
+**Acceptance criterion**: Per-objective effect sizes (d > 0.2) and p < 0.05 on
+primary metric; report in paper with sample sizes and held-out split rule.
+
+**Rough dependencies**: Item 3 (dataset), item 2 (naturalness judge for InContext),
+item 1 (TTS trainer for Supervised), item 4 (GRPO for Preference).
+
+### 9. Run Exp 2: reward function calibration (naturalness weight)
+
+**What**: Collect human binpref on 50 sentences x 4 variants (low/high WER x
+low/high naturalness). Train optimal weight on 50% data, validate on 50% test.
+Report Spearman rho with human preference and calibrated weight.
+
+**Why it blocks the paper**: Justifies clarity weight in reward function; required
+for GRPO (item 4) and paper claims on reward design.
+
+**Acceptance criterion**: rho > 0.7 on test; calibrated weight reported with
+95% CI; comparison to default 5.0.
+
+**Rough dependencies**: Item 2 (naturalness judge); item 7 (WER measurements on
+diverse renders).
+
+### 10. Run Exp 3: speech ingress equivalence gate (redesigned projector)
+
+**What**: Train redesigned ingress projector (item 5) on 150 train questions
+(text + speech); test on 50 held-out-question speech renders (voice 14).
+Primary test: paired TOST on word F1, speech against text path, margin 0.05.
+
+**Why it blocks the paper**: Validates that speech-conditioned thinker is
+equivalent to text, a gate M4 failed. Cannot claim speech ingress as training
+signal without this.
+
+**Acceptance criterion**: equivalence by two one-sided tests: the 90% interval
+of the paired F1 difference (speech against text path, by question) lies
+inside a margin fixed before training (0.05 proposed), with discordant counts
+reported and seeds frozen in advance. A non-significant sign test is not
+equivalence and is not the gate.
+
+**Rough dependencies**: Item 5 (redesigned projector); item 6 (frozen exam).
+
+### 11. Run Exp 4: GRPO learning from preference (speech RL)
+
+**What**: Train supervised TTS baseline and GRPO TTS on item 7 dataset (80 train
+sentences, GRPO on preference pairs from 8 renders). Test on 20 held-out
+sentences. Paired t-test of WER (GRPO vs supervised) and sign test of human
+naturalness preference.
+
+**Why it blocks the paper**: Demonstrates learning from user feedback
+(Preference objective). Central claim of the paper.
+
+**Acceptance criterion**: GRPO WER not worse than the supervised baseline by a
+pre-registered margin (TOST), and the naturalness sign test in favour of GRPO
+reported with its p-value, a null result included.
+
+**Rough dependencies**: Item 1 (TTS supervised trainer), item 4 (GRPO trainer),
+item 2 (naturalness judge), item 7 (GRPO dataset), item 9 (calibrated reward).
+
+### 12. Prepare frozen exam for publication and paper
+
+**What**: Run final validation on exam combining all four lesson objectives:
+corpus of synthetic speakers (size fixed by a power analysis), each with 5-10 lessons (mixed types), training data
+split, test set held out by speaker and by voice. Measure holdout generalization.
+
+**Why it blocks the paper**: Demonstrates generalization of voice learning
+across diverse speakers and lesson types; supports claims of method robustness.
+
+**Acceptance criterion**: Report: #speakers, #lessons per type, train/test split,
+per-speaker F1 (speech vs text), variance across speakers, list of frozen
+digests.
+
+**Rough dependencies**: Items 1-11 all must be complete and passing.
+
+### 13. Write paper: methodology, experiments, results, reproducibility
+
+**What**: Formalize lesson framework (Directive, Lesson, Objective types),
+reward function and group advantages, experimental designs (Exp 1-4 methods and
+results), limitations (naturalness judge, single persona, seed variance), threats
+to validity.
+
+**Why it blocks publication**: Paper must be written and self-contained.
+
+**Acceptance criterion**: Paper builds (make in papers/learning-voice-agent/),
+all numbers trace to frozen files in repo or MATERIALS.md, references checked,
+limitations section addresses items 2, 5, others.
+
+**Rough dependencies**: Items 1-12 completed; roadmap items merged; external
+citations verified.

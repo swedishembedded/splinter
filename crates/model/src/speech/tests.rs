@@ -556,3 +556,45 @@ fn a_taught_word_reaches_the_voice_as_taught_and_nothing_else_changes() {
         ["spoke Jeff-er-son wrote it.", "spoke Adams agreed."]
     );
 }
+
+/// A voice that makes its sound in two pieces with a pause between them, and
+/// says so as it goes.
+struct Streaming;
+
+impl Synthesizer for Streaming {
+    fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
+        self.speak_streaming(text, speaker, &mut |_| {})
+    }
+
+    fn speak_streaming(
+        &self,
+        _text: &str,
+        _speaker: &SpeakerProfile,
+        on_audio: &mut dyn FnMut(&[f32]),
+    ) -> Result<Clip, PolicyError> {
+        let first = vec![0.1_f32; 160];
+        on_audio(&first);
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let second = vec![0.2_f32; 160];
+        on_audio(&second);
+        Ok(Clip::new([first, second].concat(), 16_000))
+    }
+}
+
+#[test]
+fn the_first_sound_of_a_turn_is_when_the_voice_first_makes_one_not_when_it_finishes() {
+    let log = Log::default();
+    let listener = Replying {
+        answer: "One piece.",
+        first_spoken: None,
+        log: &log,
+    };
+    let turn = take_spoken_turn(&listener, &Streaming, &speaker(), &said("q"), 30).unwrap();
+    assert!(
+        turn.timings.first_audio + std::time::Duration::from_millis(100) <= turn.timings.total,
+        "first sound {:?} of {:?}",
+        turn.timings.first_audio,
+        turn.timings.total
+    );
+    assert_eq!(turn.reply.samples().len(), 320);
+}

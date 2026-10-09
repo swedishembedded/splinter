@@ -28,4 +28,14 @@ impl<S: Synthesizer> Synthesizer for Lexical<S> {
     fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
         self.inner.speak(&self.lexicon.apply(text), speaker)
     }
+
+    fn speak_streaming(
+        &self,
+        text: &str,
+        speaker: &SpeakerProfile,
+        on_audio: &mut dyn FnMut(&[f32]),
+    ) -> Result<Clip, PolicyError> {
+        self.inner
+            .speak_streaming(&self.lexicon.apply(text), speaker, on_audio)
+    }
 }

@@ -81,4 +81,19 @@ pub trait Synthesizer {
     /// `text`, spoken by `speaker`. The same speaker and the same text give the
     /// same voice.
     fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError>;
+
+    /// [`Self::speak`], handing `on_audio` the samples as they are made, so
+    /// sound can start before the text is finished. The returned clip is the
+    /// whole; the pieces joined are the same samples. A synthesizer that cannot
+    /// stream hands over everything at the end, which is this default.
+    fn speak_streaming(
+        &self,
+        text: &str,
+        speaker: &SpeakerProfile,
+        on_audio: &mut dyn FnMut(&[f32]),
+    ) -> Result<Clip, PolicyError> {
+        let clip = self.speak(text, speaker)?;
+        on_audio(clip.samples());
+        Ok(clip)
+    }
 }

@@ -99,4 +99,22 @@ impl Synthesizer for BrainSynthesizer {
                 reason: e.to_string(),
             })
     }
+
+    fn speak_streaming(
+        &self,
+        text: &str,
+        speaker: &SpeakerProfile,
+        on_audio: &mut dyn FnMut(&[f32]),
+    ) -> Result<Clip, PolicyError> {
+        self.engine
+            .speak_stream(
+                text,
+                TtsOptions::new().seed(speaker.seed()),
+                &brain::CancelToken::default(),
+                on_audio,
+            )
+            .map_err(|e| PolicyError::Synthesis {
+                reason: e.to_string(),
+            })
+    }
 }
