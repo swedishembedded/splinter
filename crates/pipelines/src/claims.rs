@@ -200,6 +200,10 @@ pub struct GateRequest<'a> {
     /// The model that decides what a later claim does to an earlier one
     /// about the same thing; without one the statements decide.
     pub judge: Option<&'a ModelRef>,
+    /// Whether the judge, when there is one, is also shown each admitted
+    /// claim's cited words and statement and must find that the words
+    /// assert the statement.
+    pub entail: bool,
 }
 
 impl<'a> GateRequest<'a> {
@@ -209,6 +213,7 @@ impl<'a> GateRequest<'a> {
         Self {
             claim_set,
             judge: None,
+            entail: true,
         }
     }
 }
@@ -267,6 +272,9 @@ pub fn gate(ctx: &Context, request: &GateRequest<'_>) -> Result<ClaimsGated, Orc
     let mut rules = RuleRequest::new(set_id, &set, &views);
     if let Some(judge) = &judge {
         rules = rules.judged_by(judge);
+        if !request.entail {
+            rules = rules.without_entailment();
+        }
     }
     let entries = ledger.rule_set(&rules).map_err(gate_error)?;
     claims.append(&entries)?;

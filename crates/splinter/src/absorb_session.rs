@@ -74,14 +74,19 @@ pub fn claims(ctx: &Context, json: bool, command: ClaimsCommand) -> Result<Exit,
                 Exit::Failed
             })
         }
-        ClaimsCommand::Gate { claim_set, judge } => {
+        ClaimsCommand::Gate {
+            claim_set,
+            judge,
+            entail,
+        } => {
             let set = claims::resolve_set(ctx, &claim_set)?;
-            let arguments = json!({ "claim_set": set, "judge": judge });
+            let arguments = json!({ "claim_set": set, "judge": judge, "entail": entail });
             let gated = record(ctx, "claims gate", &arguments, |_| {
                 claims::gate(
                     ctx,
                     &GateRequest {
                         judge: judge.as_ref(),
+                        entail,
                         ..GateRequest::new(&set)
                     },
                 )
@@ -145,6 +150,7 @@ fn absorb_request(args: AbsorbArgs) -> AbsorbRequest {
             ..Tuning::default()
         }),
         continue_from_release: args.continue_from_release,
+        entail: args.entail,
         replay_fraction: args.replay_fraction,
         sealed_probes: args.sealed_probes,
         dry_run: args.dry_run,

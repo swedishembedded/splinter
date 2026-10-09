@@ -176,7 +176,9 @@ fn a_later_claim_supersedes_an_earlier_one_and_a_repeat_is_reinforced() -> Outco
 
 /// A judge that calls every pair separate.
 fn separating(prompt: &str) -> String {
-    if prompt.contains("`earlier` and a `later` claim") {
+    if prompt.contains("Set `entailed`") {
+        json!({"entailed": true, "reason": "said so"}).to_string()
+    } else if prompt.contains("`earlier` and a `later` claim") {
         json!({"verdict": "separate", "reason": "two aspects"}).to_string()
     } else {
         script(prompt)
@@ -199,5 +201,61 @@ fn a_named_judge_decides_the_pairs() -> Outcome {
     )?;
     assert_eq!((report.admitted, report.superseded), (1, 0), "{report:#?}");
     assert_eq!(ledger(&w.ctx)?.live.len(), 2, "the judge kept both live");
+    Ok(())
+}
+
+/// A judge that finds no words assert anything.
+fn doubting(prompt: &str) -> String {
+    if prompt.contains("judge_claim_entailment") || prompt.contains("Set `entailed`") {
+        json!({"entailed": false, "reason": "no"}).to_string()
+    } else {
+        script(prompt)
+    }
+}
+
+#[test]
+fn a_judge_that_finds_the_words_do_not_assert_the_statement_refuses_it_seeing_only_the_words(
+) -> Outcome {
+    let w = world(doubting)?;
+    let set = extracted(&w, &[("a.atif.json", &port_correction())])?;
+    let judge = ModelRef::policy_default();
+    let report = splinter_pipelines::claims::gate(
+        &w.ctx,
+        &GateRequest {
+            judge: Some(&judge),
+            ..GateRequest::new(&set)
+        },
+    )?;
+    assert_eq!(report.refused.get("not_entailed"), Some(&1), "{report:#?}");
+    assert_eq!(report.admitted, 0);
+    let asked: Vec<String> = w
+        .prompts
+        .lock()
+        .map_err(|_| anyhow::anyhow!("poisoned"))?
+        .iter()
+        .filter(|p| p.contains("Set `entailed`"))
+        .cloned()
+        .collect();
+    assert_eq!(asked.len(), 1);
+    assert!(asked[0].contains("It listens on port 9090"));
+    assert!(
+        !asked[0].contains("listens on port 8080")
+            && !asked[0].contains("Thanks for the correction"),
+        "the agent's words are not shown: {}",
+        asked[0]
+    );
+
+    // Turned off, the same set is admitted.
+    let w = world(doubting)?;
+    let set = extracted(&w, &[("a.atif.json", &port_correction())])?;
+    let report = splinter_pipelines::claims::gate(
+        &w.ctx,
+        &GateRequest {
+            judge: Some(&judge),
+            entail: false,
+            ..GateRequest::new(&set)
+        },
+    )?;
+    assert_eq!(report.admitted, 1, "{report:#?}");
     Ok(())
 }

@@ -112,6 +112,9 @@ pub struct AbsorbRequest {
     /// The fraction of each earlier release's records replayed when
     /// continuing.
     pub replay_fraction: f64,
+    /// Whether the judge, when there is one, must find that the person's
+    /// cited words assert each claim's statement.
+    pub entail: bool,
     /// Files of sealed probes no training record may contain.
     pub sealed_probes: Vec<PathBuf>,
     /// Stop after the claims are extracted and ruled on; train nothing.
@@ -136,6 +139,7 @@ impl Default for AbsorbRequest {
             rank: DEFAULT_LORA_RANK,
             tuning: Tuning::default(),
             continue_from_release: false,
+            entail: true,
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             sealed_probes: Vec::new(),
             dry_run: false,

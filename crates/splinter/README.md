@@ -801,7 +801,14 @@ about one named subject replace each other; the ledger keeps both rulings.
 A fact said again is never refused: it is recorded as `reinforced`, the live
 claim it restates stays live (it is not a second thing to teach), and
 `claims ledger` shows how many times each live claim was said again, which is
-a signal that the model is still wrong. "Later" is the order of the ledger,
+a signal that the model is still wrong.
+
+When a judge is configured it also checks entailment: shown only the cited
+quotes and the statement (never the question, the session or the agent's words),
+it must say that the person's words assert the statement, else the claim is
+refused as `not_entailed`. This catches what the term rule cannot, such as a
+denial ("it wasn't 12") restated as a fact. `--entail=false` (on `claims gate`
+and `absorb`) turns it off; without a judge it does not run. "Later" is the order of the ledger,
 and within one session the order of the first step a claim cites. Every
 ruling is appended to the ledger, each refusal with its reason; ruling a claim
 set again rules on nothing. `claims ledger` reads it back: the live claims
@@ -872,8 +879,8 @@ run built is taken as it is.
   not see answered stays new and is taught again the next night.
 
 Not built: the sycophancy and hallucination-on-unknown probes on the retention
-side, the stopping of the training on the stopping paraphrases, an entailment
-gate and two-pass extraction.
+side, the stopping of the training on the stopping paraphrases, and two-pass
+extraction.
 
 ## JSON output
 

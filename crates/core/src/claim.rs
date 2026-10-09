@@ -205,6 +205,10 @@ pub enum Refusal {
     },
     /// What the agent is said to have got wrong was never said.
     WrongAnswerNotSaid,
+    /// A judge shown only the cited words and the statement said the words
+    /// do not assert the statement: a negation, a question, a hypothetical,
+    /// someone else's claim or a doubt, restated as a fact.
+    NotEntailed,
     /// The statement gives personal data of someone other than the person: a
     /// phone number, an address, health, a relationship or finances. What a
     /// person says about a third party is not taught.
@@ -234,6 +238,7 @@ impl Refusal {
             Self::UnsupportedTerm { .. } => "unsupported_term",
             Self::Procedure { .. } => "procedure",
             Self::WrongAnswerNotSaid => "wrong_answer_not_said",
+            Self::NotEntailed => "not_entailed",
             Self::ThirdPartyPersonal { .. } => "third_party_personal",
             Self::Duplicate { .. } => "duplicate",
         }
@@ -259,6 +264,9 @@ impl std::fmt::Display for Refusal {
             ),
             Self::WrongAnswerNotSaid => f.write_str(
                 "the wrong answer attributed to the agent was never said in the session",
+            ),
+            Self::NotEntailed => f.write_str(
+                "a judge shown only the cited words found they do not assert the statement",
             ),
             Self::ThirdPartyPersonal { category } => write!(
                 f,

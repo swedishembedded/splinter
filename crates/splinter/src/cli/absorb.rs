@@ -67,6 +67,11 @@ pub enum ClaimsCommand {
         /// without one the statements decide.
         #[arg(long, value_parser = model_ref, value_name = "REF")]
         judge: Option<ModelRef>,
+        /// Whether the judge also refuses a claim whose cited words do not
+        /// assert its statement (`--entail=false` turns it off).
+        #[arg(long, default_value_t = true, num_args = 0..=1, default_missing_value = "true",
+            require_equals = true, value_name = "BOOL")]
+        entail: bool,
     },
     /// List the stored claim sets.
     List,
@@ -99,10 +104,18 @@ pub struct AbsorbArgs {
     /// would (default: the policy).
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub teacher: Option<ModelRef>,
-    /// A model that decides the answers the claim's terms cannot; another
-    /// model than the teacher, the generator and the policy.
+    /// A model that decides the answers the claim's terms cannot, whether a
+    /// later claim supersedes, reinforces or is apart from an earlier one, and
+    /// whether the person's words assert a claim's statement; another model
+    /// than the teacher, the generator and the policy.
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,
+    /// Whether the judge also refuses a claim whose cited words do not assert
+    /// its statement (`--entail=false` turns it off); it applies when a judge
+    /// is configured.
+    #[arg(long, default_value_t = true, num_args = 0..=1, default_missing_value = "true",
+        require_equals = true, value_name = "BOOL")]
+    pub entail: bool,
     /// Differently worded questions written per claim; a third of them are
     /// kept out of training as the claim's own stopping and gate set.
     #[arg(long, default_value_t = PARAPHRASES_WRITTEN as u32, value_name = "N",

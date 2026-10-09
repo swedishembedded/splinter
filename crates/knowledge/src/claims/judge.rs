@@ -35,6 +35,11 @@ pub trait ClaimJudge: Send + Sync {
     /// What `later` does to `earlier`, two live claims that name the same
     /// thing.
     fn pair(&self, earlier: &Claim, later: &Claim) -> Result<PairVerdict, JudgeError>;
+
+    /// Whether the person's `quotes`, taken as they are, assert
+    /// `statement`. The judge is shown nothing else: not the question, the
+    /// session or what the agent said.
+    fn entails(&self, quotes: &[&str], statement: &str) -> Result<bool, JudgeError>;
 }
 
 /// The name of the typed call that decides a pair.
@@ -110,6 +115,58 @@ impl PairReply {
             WireVerdict::Reinforce => PairVerdict::Reinforce,
             WireVerdict::Separate => PairVerdict::Separate,
         }
+    }
+
+    /// Why, in the judge's words.
+    #[must_use]
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+}
+
+/// The name of the typed call that decides entailment.
+pub const ENTAIL_METHOD: &str = "judge_claim_entailment";
+
+/// The role the entailment judge is given.
+pub const ENTAIL_ROLE: &str = "You read words a person wrote and a statement, and say whether \
+the person's words assert that statement. You are strict: you go by what the words say, not by \
+what you believe is true or by what the person might have meant.";
+
+/// The entailment judge's brief.
+pub const ENTAIL_BRIEF: &str = "You are given `quotes`, words a person wrote, and a `statement`. \
+Set `entailed` to true only when the person, in those words, asserts the statement as true: not \
+when they deny it, ask about it, suppose it, doubt it, joke about it, or attribute it to \
+someone else, and not when the statement adds something they did not say. Give a short `reason`.";
+
+/// What the entailment judge is shown.
+#[derive(Debug, Serialize)]
+pub struct EntailInput<'a> {
+    quotes: &'a [&'a str],
+    statement: &'a str,
+}
+
+impl<'a> EntailInput<'a> {
+    /// The person's `quotes` and the `statement` made from them: nothing else.
+    #[must_use]
+    pub fn of(quotes: &'a [&'a str], statement: &'a str) -> Self {
+        Self { quotes, statement }
+    }
+}
+
+/// The entailment judge's reply.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EntailReply {
+    entailed: bool,
+    /// Why, in a sentence.
+    reason: String,
+}
+
+impl EntailReply {
+    /// Whether the words assert the statement.
+    #[must_use]
+    pub fn entailed(&self) -> bool {
+        self.entailed
     }
 
     /// Why, in the judge's words.

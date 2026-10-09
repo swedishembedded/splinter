@@ -49,6 +49,7 @@ pub struct RuleRequest<'a> {
     set: &'a ClaimSet,
     views: &'a BTreeMap<SourceId, SessionView>,
     judge: Option<&'a dyn ClaimJudge>,
+    entail: bool,
 }
 
 impl<'a> RuleRequest<'a> {
@@ -65,14 +66,25 @@ impl<'a> RuleRequest<'a> {
             set,
             views,
             judge: None,
+            entail: false,
         }
     }
 
     /// Has `judge` decide what a later claim does to an earlier one about the
-    /// same thing.
+    /// same thing, and refuse a claim whose cited words do not assert its
+    /// statement (see [`Self::without_entailment`]).
     #[must_use]
     pub fn judged_by(mut self, judge: &'a dyn ClaimJudge) -> Self {
         self.judge = Some(judge);
+        self.entail = true;
+        self
+    }
+
+    /// Keeps the judge from checking that the cited words assert the
+    /// statement.
+    #[must_use]
+    pub fn without_entailment(mut self) -> Self {
+        self.entail = false;
         self
     }
 }
@@ -170,6 +182,7 @@ impl Ledger {
             set,
             views,
             judge,
+            entail,
         } = *request;
         let mut live: Vec<Live> = self
             .live()?
@@ -197,7 +210,12 @@ impl Ledger {
                     continue;
                 }
                 let ruling = match rule(proposal, view) {
-                    Ok(claim) => admit(claim, &mut live, judge)?,
+                    Ok(claim) => match entailment(&claim, judge.filter(|_| entail))? {
+                        true => admit(claim, &mut live, judge)?,
+                        false => Ruling::Refused {
+                            reason: Refusal::NotEntailed,
+                        },
+                    },
                     Err(reason) => Ruling::Refused { reason },
                 };
                 made.push(LedgerEntry {
@@ -224,6 +242,21 @@ fn first_cited_step(proposal: &ClaimProposal) -> u64 {
         .chain(proposal.calls.iter().copied())
         .min()
         .unwrap_or(u64::MAX)
+}
+
+/// Whether `judge`, shown only the person's words and the statement, finds
+/// that the words assert it; true without a judge.
+fn entailment(claim: &Claim, judge: Option<&dyn ClaimJudge>) -> Result<bool, JudgeError> {
+    let Some(judge) = judge else {
+        return Ok(true);
+    };
+    let words: Vec<&str> = claim
+        .quotes
+        .iter()
+        .chain(&claim.observations)
+        .map(|q| q.text.as_str())
+        .collect();
+    judge.entails(&words, &claim.statement)
 }
 
 /// What `verdict` of a pair means for `claim` against the live claims.

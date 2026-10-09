@@ -192,6 +192,10 @@ impl ClaimJudge for Told {
             .map(|(_, v)| *v)
             .ok_or_else(|| JudgeError("no verdict told".into()))
     }
+
+    fn entails(&self, _quotes: &[&str], _statement: &str) -> Result<bool, JudgeError> {
+        Ok(true)
+    }
 }
 
 #[test]

@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- An entailment gate: when a judge is configured it is shown only a claim's cited quotes and its statement and must
+  say that the words assert the statement; otherwise the claim is refused as `not_entailed`. `--entail=false` on
+  `claims gate` and `absorb` turns it off.
 - A claim that gives a third party's personal data (contact details, a home address, health, a relationship,
   finances) is refused as `third_party_personal`. The extractor's reply now carries `subject` (`self`, `world`,
   `third_party`) for each claim, and a reply without it is sent back for correction.

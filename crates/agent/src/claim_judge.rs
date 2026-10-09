@@ -18,7 +18,10 @@
 use std::time::Duration;
 
 use splinter_core::claim::Claim;
-use splinter_knowledge::claims::judge::{PairInput, PairReply, PAIR_BRIEF, PAIR_METHOD, PAIR_ROLE};
+use splinter_knowledge::claims::judge::{
+    EntailInput, EntailReply, PairInput, PairReply, ENTAIL_BRIEF, ENTAIL_METHOD, ENTAIL_ROLE,
+    PAIR_BRIEF, PAIR_METHOD, PAIR_ROLE,
+};
 use splinter_knowledge::claims::{ClaimJudge, JudgeError, PairVerdict};
 use sven_sdk::CancelToken;
 use tokio::runtime::Handle;
@@ -90,5 +93,13 @@ impl ClaimJudge for SvenClaimJudge {
     fn pair(&self, earlier: &Claim, later: &Claim) -> Result<PairVerdict, JudgeError> {
         let call = TypedCall::<PairReply>::new(PAIR_METHOD, PAIR_BRIEF, PAIR_ROLE, self.deadline);
         Ok(self.call(call, &PairInput::of(earlier, later))?.verdict())
+    }
+
+    fn entails(&self, quotes: &[&str], statement: &str) -> Result<bool, JudgeError> {
+        let call =
+            TypedCall::<EntailReply>::new(ENTAIL_METHOD, ENTAIL_BRIEF, ENTAIL_ROLE, self.deadline);
+        Ok(self
+            .call(call, &EntailInput::of(quotes, statement))?
+            .entailed())
     }
 }

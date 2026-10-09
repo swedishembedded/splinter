@@ -298,6 +298,7 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
         ctx,
         &GateRequest {
             judge: st.judge.as_ref(),
+            entail: st.request.entail,
             ..GateRequest::new(&set)
         },
     )?;
