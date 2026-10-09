@@ -55,7 +55,7 @@ pub use sentences::{SentenceStream, Sentences, PAUSE_MILLIS};
 pub use spoken_turn::{take_spoken_turn, Listener, SpokenTimings, SpokenTurn};
 pub use turn::{take_turn, StageTimings, Turn};
 pub use verified::{speak_verified, Verified};
-pub use window::padded_to;
+pub use window::{padded_to, with_trailing_silence};
 
 use splinter_core::speech::SpeakerProfile;
 

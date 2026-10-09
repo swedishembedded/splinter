@@ -34,6 +34,20 @@ impl BrainRecognizer {
 }
 
 impl BrainRecognizer {
+    /// [`Self::load`] for a recogniser with a fixed decode window (Qwen3-ASR
+    /// pads every clip to it, so a window sized to the clips is much faster; a
+    /// longer clip is reported as truncated). Other recognisers ignore it.
+    pub fn load_windowed(model: &str, window_seconds: f32) -> Result<Self, PolicyError> {
+        let pipeline = TranscribePipeline::builder(model)
+            .window_secs(window_seconds)
+            .load()
+            .map_err(|e| PolicyError::Load {
+                path: model.into(),
+                reason: e.to_string(),
+            })?;
+        Ok(Self { pipeline })
+    }
+
     /// The audio encoder's features of `clip`, for a language model that
     /// listens rather than reads a transcript. Qwen3-ASR only.
     pub fn features(&self, clip: &Clip) -> Result<brain::AudioFeatures, PolicyError> {
@@ -75,6 +89,8 @@ impl Recognizer for BrainRecognizer {
 /// read once, not on every sentence.
 pub struct BrainSynthesizer {
     engine: ResidentTts,
+    /// The recording whose speaker every take is pinned to, if any.
+    voice: Option<std::path::PathBuf>,
 }
 
 impl BrainSynthesizer {
@@ -87,14 +103,33 @@ impl BrainSynthesizer {
         let engine = TtsPipeline::from_pretrained(model)
             .and_then(|pipeline| pipeline.resident())
             .map_err(load_error)?;
-        Ok(Self { engine })
+        Ok(Self {
+            engine,
+            voice: None,
+        })
+    }
+
+    /// Every take in the speaker of the recording `reference`, so that seeds
+    /// vary delivery and not who is speaking.
+    #[must_use]
+    pub fn pinned_to(mut self, reference: impl Into<std::path::PathBuf>) -> Self {
+        self.voice = Some(reference.into());
+        self
+    }
+
+    fn options(&self, speaker: &SpeakerProfile) -> TtsOptions {
+        let options = TtsOptions::new().seed(speaker.seed());
+        match &self.voice {
+            Some(reference) => options.voice(reference, ""),
+            None => options,
+        }
     }
 }
 
 impl Synthesizer for BrainSynthesizer {
     fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
         self.engine
-            .speak_with(text, TtsOptions::new().seed(speaker.seed()))
+            .speak_with(text, self.options(speaker))
             .map_err(|e| PolicyError::Synthesis {
                 reason: e.to_string(),
             })
@@ -109,7 +144,7 @@ impl Synthesizer for BrainSynthesizer {
         self.engine
             .speak_stream(
                 text,
-                TtsOptions::new().seed(speaker.seed()),
+                self.options(speaker),
                 &brain::CancelToken::default(),
                 on_audio,
             )

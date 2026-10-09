@@ -25,6 +25,17 @@ pub fn padded_to(clip: &Clip, seconds: f32) -> Result<Clip, PolicyError> {
     Ok(Clip::new(samples, clip.sample_rate()))
 }
 
+/// `clip` followed by `seconds` of silence. A one-shot recogniser can drop the
+/// last words of a clip that ends the moment the speech does; a short tail of
+/// silence gives it the end it expects.
+#[must_use]
+pub fn with_trailing_silence(clip: &Clip, seconds: f32) -> Clip {
+    let tail = (f64::from(clip.sample_rate()) * f64::from(seconds)).round() as usize;
+    let mut samples = clip.samples().to_vec();
+    samples.resize(samples.len() + tail, 0.0);
+    Clip::new(samples, clip.sample_rate())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,6 +55,14 @@ mod tests {
         assert_eq!(padded_to(&exact, 1.0).unwrap(), exact);
         let err = padded_to(&Clip::new(vec![0.1; 16_001], 16_000), 1.0).unwrap_err();
         assert!(err.to_string().contains("does not fit"), "{err}");
+    }
+
+    #[test]
+    fn a_tail_of_silence_is_added_after_the_speech() {
+        let tailed = with_trailing_silence(&Clip::new(vec![0.5; 100], 1_000), 0.25);
+        assert_eq!(tailed.samples().len(), 350);
+        assert!(tailed.samples()[..100].iter().all(|s| *s == 0.5));
+        assert!(tailed.samples()[100..].iter().all(|s| *s == 0.0));
     }
 
     #[test]

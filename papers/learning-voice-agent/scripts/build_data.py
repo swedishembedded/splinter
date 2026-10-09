@@ -110,6 +110,19 @@ def main():
     macros["PilotEmpty"] = str(len(empty))
     macros["PilotNonEmptyDiffering"] = str(len(differing) - len(empty))
 
+    # Pilot: a tail of silence before recognition, two recognisers.
+    takes = runs["takes-pilot-20261009"]
+    summary = json.loads((ROOT / takes["file"]).read_text(encoding="utf-8"))
+    if str(summary["takes"]) != takes["n"]:
+        fail(f"takes run: the summary holds {summary['takes']} takes, runs.csv says {takes['n']}")
+    first, second = "nvidia/nemotron-3.5-asr-streaming-0.6b", "Qwen/Qwen3-ASR-1.7B"
+    macros["TakesN"] = str(summary["takes"])
+    macros["TakesAgreed"] = str(summary["agreed"])
+    macros["TakesContested"] = str(summary["contested"])
+    for key, name in (("FirstRecogniser", first), ("SecondRecogniser", second)):
+        macros[f"{key}Raw"] = str(summary["differing_raw"][name])
+        macros[f"{key}Tailed"] = str(summary["differing_tailed"][name])
+
     (OUT / "macros.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()), encoding="utf-8")
 
 

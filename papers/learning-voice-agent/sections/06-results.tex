@@ -23,6 +23,13 @@ and others were cut off or repeated their last words; these are artefacts of one
 (for example Faneuil heard as ``phoneil'', Rittenhouse as ``written house''). The consequence for the design is in \cref{sec:evaluation}: a pronunciation claim needs
 two agreeing recognisers and a listener.
 
+\paragraph{A tail of silence before recognition (a screen).}
+Of \TakesN{} takes in one pinned voice (run \code{takes-pilot-20261009}), the streaming transducer returned a transcript differing from the text for
+\FirstRecogniserRaw{} when the take ended with the speech and for \FirstRecogniserTailed{} when 0.6\,s of silence followed it; the fixed-window
+recogniser differed for \SecondRecogniserRaw{} and \SecondRecogniserTailed{}. Both recognisers, given the tail, heard within the word-error bound
+\TakesAgreed{} of \TakesN{} takes; they disagreed on \TakesContested{}. This motivates the two-recogniser, tail-padded judge of
+\cref{sec:evaluation}; twenty takes are a screen, not a result.
+
 \paragraph{Speech understanding without a transcript (C8, failed).}
 A projector trained to put the recogniser's encoder features into the language model's embedding space produced fluent persona answers that were often
 about the wrong topic: on 12 held-out questions the word F$_1$ against the text path's answer was 0.299 from speech against 0.489 for the cascade, and the answer named the

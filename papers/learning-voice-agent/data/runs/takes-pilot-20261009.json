@@ -1,0 +1,22 @@
+{
+  "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists",
+  "takes": 20,
+  "agreed": 19,
+  "empty_raw": {
+    "Qwen/Qwen3-ASR-1.7B": 0,
+    "nvidia/nemotron-3.5-asr-streaming-0.6b": 0
+  },
+  "empty_tailed": {
+    "Qwen/Qwen3-ASR-1.7B": 0,
+    "nvidia/nemotron-3.5-asr-streaming-0.6b": 0
+  },
+  "differing_raw": {
+    "Qwen/Qwen3-ASR-1.7B": 5,
+    "nvidia/nemotron-3.5-asr-streaming-0.6b": 12
+  },
+  "differing_tailed": {
+    "Qwen/Qwen3-ASR-1.7B": 5,
+    "nvidia/nemotron-3.5-asr-streaming-0.6b": 7
+  },
+  "contested": 1
+}
