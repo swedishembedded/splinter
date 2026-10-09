@@ -195,15 +195,17 @@ D-Bus (`tools.asr`); splinter has the speech loop (`take_spoken_turn`,
 
 What is missing, in the order a user meets it:
 
-1. A front end that joins them. Nothing connects an `Agent` to the speech
-   loop: no `voice-loop` command takes a question, runs it through a sven
-   agent (tools, session) and speaks the `TextDelta`s sentence by sentence.
-   Smallest version, files in and out, on this host: a `voice-loop agent`
-   command in splinter that builds an engine around `LocalQwen` with the
-   persona, sends the recognised text, and feeds the deltas to the existing
-   sentence stream. Acceptance: a spoken question that needs a tool call is
-   answered by voice, the tool output is not spoken, the session transcript
-   holds the turn.
+1. A front end that joins them: `voice-loop agent` (files in, files out)
+   recognises each recording, sends it to a sven agent running the persona
+   (`splinter_agent::voice::VoiceAgent`, any `ModelProvider`, with the persona
+   as the one system turn) and speaks the model's text deltas sentence by
+   sentence; tool calls and their output are not spoken; the session opens
+   with the spoken disclosure. Done and measured on 3 recordings (first sound
+   p50 1.2 s). Tools are offered to the model only with `--workspace`
+   (specified in `crates/agent/tests/voice.rs`). Not shown: the persona
+   calling a tool by voice. Asked aloud to read `notes.txt` it declined, and
+   the recogniser heard "notes types text"; whether the model or the persona
+   prompt is the cause is untested.
 2. A live microphone and speaker. This host has no PCM device (`/dev/snd`
    holds only `seq` and `timer`), so live voice needs a client on the user's
    machine and a transport to the GPU host; neither exists. Acceptance: a

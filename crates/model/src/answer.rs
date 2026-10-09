@@ -154,6 +154,14 @@ impl Answerer {
         })
     }
 
+    /// The loaded model as a sven model provider, for an agent to run on. It
+    /// shares this answerer's base and adapter, so the answerer must outlive
+    /// it.
+    #[must_use]
+    pub fn provider(&self) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
+        std::sync::Arc::new(self.model.shared())
+    }
+
     /// The model's reply to `user` under the system message `system`, within
     /// `max_tokens` generated tokens.
     ///

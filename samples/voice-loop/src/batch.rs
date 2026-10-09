@@ -73,6 +73,21 @@ impl Persona {
         self
     }
 
+    /// A sven agent that answers as this persona, on the model this persona
+    /// answers with. With a `workspace` it has sven's coding tools confined
+    /// to that directory. The persona must outlive it.
+    pub fn voice_agent(
+        &self,
+        workspace: Option<&std::path::Path>,
+    ) -> Result<splinter_sdk::agent::voice::VoiceAgent> {
+        splinter_sdk::agent::voice::VoiceAgent::start(
+            self.answerer.provider(),
+            &self.system,
+            workspace,
+        )
+        .map_err(|e| anyhow::anyhow!("starting the agent: {e}"))
+    }
+
     /// The persona's answer to a question, as text.
     pub fn answer(&self, question: &str) -> Result<String, PolicyError> {
         self.answer_streaming(question, &mut |_| {})
@@ -221,7 +236,7 @@ pub fn streamed_turns(
 }
 
 /// The turns of `batch`, taken by `listener` and spoken sentence by sentence.
-fn spoken_turns(
+pub fn spoken_turns(
     names: &Names<'_>,
     batch: &Batch<'_>,
     persona: &str,

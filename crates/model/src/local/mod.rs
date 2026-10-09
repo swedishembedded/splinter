@@ -140,6 +140,13 @@ impl LocalQwen {
         })
     }
 
+    /// Another handle on this model, sampling as it does: the base, the
+    /// adapter and the in-flight generation are shared.
+    #[must_use]
+    pub fn shared(&self) -> Self {
+        self.resampled(self.sampling)
+    }
+
     /// The same model sampling as `sampling` says: the base, the adapter
     /// and the in-flight generation are shared, so a request on either
     /// waits for (and supersedes) one running on the other, as two

@@ -79,6 +79,8 @@ impl Models {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Talk to a sven agent that answers as the persona: its words are spoken as they are written.
+    Agent(voice_loop::agent::AgentArgs),
     /// Teach the persona how to speak: hear a directive and keep what it teaches.
     Teach(voice_loop::teach::TeachArgs),
     /// Speak a sentence in the persona's synthetic voice.
@@ -358,6 +360,7 @@ fn main() -> Result<()> {
         splinter_sdk::model::device::select_backend(backend)?;
     }
     match cli.command {
+        Command::Agent(args) => voice_loop::agent::run(&args),
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {
             models,

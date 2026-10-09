@@ -16,6 +16,7 @@
 
 use std::time::Duration;
 
+pub mod agent;
 pub mod batch;
 pub mod bundle;
 pub mod ingress;

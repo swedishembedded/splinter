@@ -47,6 +47,7 @@ pub mod run_code;
 pub mod solve;
 mod system_prompt;
 pub mod typed;
+pub mod voice;
 pub mod work;
 
 pub use sven_sdk as sven;

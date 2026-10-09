@@ -29,6 +29,11 @@ $V turn --in question.wav --out answer.wav --persona "Samuel Adams" \
 $V turns --stream --recordings questions/ --out-dir answers/ \
     --base ~/.local/share/brain/models/Qwen/Qwen3-8B --report turns.json
 
+# Talk to a sven agent that answers as the persona (its words are spoken as
+# they are written; with --workspace it also has sven's coding tools there):
+$V agent --recordings questions/ --out-dir answers/ \
+    --base ~/.local/share/brain/models/Qwen/Qwen3-8B --report agent.json
+
 # Teach the persona how to say a word, then hear it:
 $V teach --said "Pronounce Jefferson as Jeff-er-son." --lessons lessons.jsonl
 $V speak --lessons lessons.jsonl --text "Jefferson wrote it." --out said.wav
@@ -84,6 +89,7 @@ before recognition hears them.
 |---|---|
 | `src/lib.rs` | the reports and the sentence-file reader |
 | `src/main.rs` | the command line; `voice-loop --help` lists every command |
+| `src/agent.rs` | `agent`: the recordings as turns of one conversation with a sven agent |
 | `src/batch.rs` | `turns`, `turns --stream` and `listen-turns` |
 | `src/teach.rs` | `teach` and `speak` with a lexicon |
 | `src/ingress.rs`, `src/spoken.rs`, `src/bundle.rs` | the spoken sets, the listening projector and the bundle |
