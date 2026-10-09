@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-absorb"
+description = "Can a model be corrected by its user in conversation, and give the corrected facts after the nightly update while keeping what it knew?"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "splinter_absorb"
+path = "src/lib.rs"
+
+[dependencies]
+splinter-sdk = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+blake3 = { workspace = true }
+clap = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

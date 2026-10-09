@@ -4784,6 +4784,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-absorb"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "blake3",
+ "clap",
+ "futures",
+ "serde",
+ "serde_json",
+ "sha2",
+ "splinter-sdk",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "splinter-adams"
 version = "0.1.0"
 dependencies = [
