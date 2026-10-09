@@ -33,6 +33,18 @@ impl BrainRecognizer {
     }
 }
 
+impl BrainRecognizer {
+    /// The audio encoder's features of `clip`, for a language model that
+    /// listens rather than reads a transcript. Qwen3-ASR only.
+    pub fn features(&self, clip: &Clip) -> Result<brain::AudioFeatures, PolicyError> {
+        self.pipeline
+            .features(clip)
+            .map_err(|e| PolicyError::Transcription {
+                reason: e.to_string(),
+            })
+    }
+}
+
 impl Recognizer for BrainRecognizer {
     fn transcribe(&self, clip: &Clip) -> Result<Transcription, PolicyError> {
         let heard =

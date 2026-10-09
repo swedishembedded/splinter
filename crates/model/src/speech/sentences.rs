@@ -51,27 +51,97 @@ impl<S: Synthesizer> Synthesizer for Sentences<S> {
                 reason: "there are no words to speak".to_string(),
             });
         }
-        let mut samples = Vec::new();
-        let mut rate = None;
-        for piece in &pieces {
-            let clip = self.inner.speak(piece, speaker)?;
-            let expected = *rate.get_or_insert(clip.sample_rate());
-            if clip.sample_rate() != expected {
-                return Err(PolicyError::Synthesis {
-                    reason: format!(
-                        "pieces of one text came back at {expected} Hz and {} Hz",
-                        clip.sample_rate()
-                    ),
-                });
-            }
-            if !samples.is_empty() {
-                let pause = (u64::from(expected) * u64::from(PAUSE_MILLIS) / 1000) as usize;
-                samples.resize(samples.len() + pause, 0.0);
-            }
-            samples.extend_from_slice(clip.samples());
-        }
-        Ok(Clip::new(samples, rate.unwrap_or_default()))
+        let clips = pieces
+            .iter()
+            .map(|piece| self.inner.speak(piece, speaker))
+            .collect::<Result<Vec<_>, _>>()?;
+        join(&clips)
     }
+}
+
+/// `clips` one after another with a pause between each. They must share a
+/// sample rate.
+pub(super) fn join(clips: &[Clip]) -> Result<Clip, PolicyError> {
+    let mut samples = Vec::new();
+    let mut rate = None;
+    for clip in clips {
+        let expected = *rate.get_or_insert(clip.sample_rate());
+        if clip.sample_rate() != expected {
+            return Err(PolicyError::Synthesis {
+                reason: format!(
+                    "pieces of one text came back at {expected} Hz and {} Hz",
+                    clip.sample_rate()
+                ),
+            });
+        }
+        if !samples.is_empty() {
+            let pause = (u64::from(expected) * u64::from(PAUSE_MILLIS) / 1000) as usize;
+            samples.resize(samples.len() + pause, 0.0);
+        }
+        samples.extend_from_slice(clip.samples());
+    }
+    Ok(Clip::new(samples, rate.unwrap_or_default()))
+}
+
+/// Text arriving in pieces, cut into the sentences it holds as soon as each
+/// one's end is known, so the first can be spoken while the rest is still
+/// being written.
+pub struct SentenceStream {
+    buffer: String,
+    max_words: usize,
+}
+
+impl SentenceStream {
+    /// A stream whose pieces have at most `max_words` words.
+    #[must_use]
+    pub fn new(max_words: usize) -> Self {
+        Self {
+            buffer: String::new(),
+            max_words: max_words.max(1),
+        }
+    }
+
+    /// Add `delta`; the sentences now known to be complete, in order. A
+    /// sentence is complete once whitespace follows its closing punctuation,
+    /// because the next piece might still continue the word.
+    pub fn push(&mut self, delta: &str) -> Vec<String> {
+        self.buffer.push_str(delta);
+        let Some(cut) = self.buffer.rfind(char::is_whitespace) else {
+            return Vec::new();
+        };
+        let (head, tail) = self.buffer.split_at(cut);
+        let mut done = Vec::new();
+        let mut pending = Vec::new();
+        for sentence in sentences(head) {
+            if closes_sentence(&sentence) {
+                done.push(sentence);
+            } else {
+                pending.push(sentence);
+            }
+        }
+        self.buffer = format!("{}{tail}", pending.join(" "));
+        done.iter()
+            .flat_map(|sentence| split(sentence, self.max_words))
+            .collect()
+    }
+
+    /// The rest, as the pieces it makes: the end of the text.
+    pub fn finish(&mut self) -> Vec<String> {
+        let rest = std::mem::take(&mut self.buffer);
+        split(&rest, self.max_words)
+    }
+}
+
+/// Whether `sentence` ends with closing punctuation that is not an
+/// abbreviation's full stop.
+fn closes_sentence(sentence: &str) -> bool {
+    let Some(last) = sentence.split_whitespace().next_back() else {
+        return false;
+    };
+    let closed = last.trim_end_matches(['"', '\'', ')']);
+    let abbreviation = closed.ends_with('.')
+        && ABBREVIATIONS.contains(&closed.trim_end_matches('.').to_lowercase().as_str());
+    closed.ends_with(['.', '!', '?']) && !abbreviation
 }
 
 /// `text` as pieces of at most `max_words` words, broken at sentence ends,

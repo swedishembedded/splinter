@@ -53,6 +53,21 @@ pub fn read_questions(jsonl: &str) -> Result<Vec<Question>> {
     Ok(out)
 }
 
+/// Every `every`-th distinct group name, in name order: the groups held out
+/// for testing. `every` of zero holds nothing out.
+pub fn held_out_group_names<'a>(
+    groups: impl IntoIterator<Item = &'a str>,
+    every: usize,
+) -> BTreeSet<String> {
+    let distinct: BTreeSet<&str> = groups.into_iter().collect();
+    distinct
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| every > 0 && i % every == every - 1)
+        .map(|(_, g)| g.to_string())
+        .collect()
+}
+
 /// A recording that no recogniser heard back well enough.
 #[derive(Debug, PartialEq, Serialize)]
 pub struct Rejected {
@@ -162,6 +177,17 @@ mod tests {
         );
         assert!(read_questions("{\"id\":\"a\",\"text\":\"  \"}").is_err());
         assert!(read_questions("not json").is_err());
+    }
+
+    #[test]
+    fn held_out_groups_are_every_kth_distinct_name() {
+        let names = ["b", "a", "c", "a", "d", "e", "f"];
+        let held = held_out_group_names(names, 3);
+        assert_eq!(
+            held.iter().map(String::as_str).collect::<Vec<_>>(),
+            ["c", "f"]
+        );
+        assert!(held_out_group_names(names, 0).is_empty());
     }
 
     #[test]

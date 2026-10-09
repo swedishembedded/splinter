@@ -16,6 +16,8 @@
 
 use std::time::Duration;
 
+pub mod batch;
+pub mod ingress;
 pub mod spoken;
 
 use serde::Serialize;
@@ -257,6 +259,52 @@ pub struct SpeakSetReport<'a> {
     pub kept: &'a [Recorded],
     /// Sentences no seed spoke well enough: not recorded.
     pub rejected: &'a [String],
+}
+
+/// One turn of a batch answered by a model that listens.
+#[derive(Debug, Serialize)]
+pub struct ListenItem {
+    /// The recording.
+    pub recording: String,
+    /// What was asked, when known.
+    pub asked: Option<String>,
+    /// What the model answered.
+    pub answer: String,
+    /// The spoken answer, heard again by a recogniser that did not make it.
+    pub answer_heard: String,
+    /// Length of the spoken answer in seconds.
+    pub reply_seconds: f64,
+    /// Seconds from the end of the question to the first sentence spoken.
+    pub first_audio_seconds: f64,
+    /// Seconds the model spent listening and writing.
+    pub think_seconds: f64,
+    /// Seconds speaking, summed over the sentences.
+    pub synthesise_seconds: f64,
+    /// The whole turn.
+    pub total_seconds: f64,
+}
+
+/// A batch of turns answered by a model that listens, as `listen-turns` keeps it.
+#[derive(Debug, Serialize)]
+pub struct ListenReport<'a> {
+    /// The persona that answered.
+    pub persona: &'a str,
+    /// The speaker, with the portrayal it declares.
+    pub speaker: &'a SpeakerProfile,
+    /// How many turns were taken.
+    pub turns: usize,
+    /// Answer words lost between being spoken and being heard again.
+    pub answer_word_error_rate: Option<f32>,
+    /// Seconds from the end of the question to the first sentence spoken.
+    pub first_audio_seconds: Option<Spread>,
+    /// Seconds listening and writing.
+    pub think_seconds: Option<Spread>,
+    /// Seconds speaking.
+    pub synthesise_seconds: Option<Spread>,
+    /// The whole turn.
+    pub total_seconds: Option<Spread>,
+    /// Each turn.
+    pub items: &'a [ListenItem],
 }
 
 #[cfg(test)]

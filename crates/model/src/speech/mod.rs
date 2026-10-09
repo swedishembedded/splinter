@@ -21,10 +21,14 @@
 //! with the word error rate brain's own gates use.
 
 mod brain_backed;
+mod ingress;
+mod listener;
 mod round_trip;
 mod sentences;
+mod spoken_turn;
 mod turn;
 mod verified;
+mod window;
 
 #[cfg(any(test, feature = "scripted"))]
 pub mod scripted;
@@ -35,11 +39,17 @@ pub use brain::Audio as Clip;
 pub use brain_backed::{
     BrainRecognizer, BrainSynthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
+pub use ingress::{
+    AudioFeatures, Ingress, IngressExample, IngressOptions, StepSettings, FEATURE_WIDTH,
+};
+pub use listener::{BrainListener, ListenerOptions};
 pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};
-pub use sentences::{Sentences, PAUSE_MILLIS};
+pub use sentences::{SentenceStream, Sentences, PAUSE_MILLIS};
+pub use spoken_turn::{take_spoken_turn, Listener, SpokenTimings, SpokenTurn};
 pub use turn::{take_turn, StageTimings, Turn};
 pub use verified::{speak_verified, Verified};
+pub use window::padded_to;
 
 use splinter_core::speech::SpeakerProfile;
 

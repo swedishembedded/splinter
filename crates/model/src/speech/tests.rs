@@ -332,3 +332,116 @@ fn text_with_no_words_is_not_spoken() {
 fn spoken_pieces(spoken: &Sentences<Counting>) -> Vec<String> {
     spoken.inner().0.lock().unwrap().clone()
 }
+
+#[test]
+fn a_stream_of_text_yields_a_sentence_once_its_end_is_known() {
+    let mut stream = SentenceStream::new(30);
+    assert_eq!(
+        stream.push("Liberty is not given. We m"),
+        ["Liberty is not given."]
+    );
+    assert!(
+        stream.push("ust claim it.").is_empty(),
+        "the end of the sentence is not known until a space follows"
+    );
+    assert_eq!(stream.push(" And then"), ["We must claim it."]);
+    assert_eq!(stream.finish(), ["And then"]);
+}
+
+#[test]
+fn a_stream_does_not_end_a_sentence_after_an_abbreviation() {
+    let mut stream = SentenceStream::new(30);
+    assert_eq!(stream.push("Mr. Adams spoke. "), ["Mr. Adams spoke."]);
+    assert!(stream.finish().is_empty());
+}
+
+#[test]
+fn a_stream_breaks_a_long_sentence_at_the_bound_like_the_whole_text_would_be() {
+    let text = "one two three, four five six seven eight nine ten eleven twelve. ";
+    let mut stream = SentenceStream::new(5);
+    let mut pieces = stream.push(text);
+    pieces.extend(stream.finish());
+    assert_eq!(pieces.join(" "), text.trim());
+    assert!(
+        pieces.iter().all(|p| p.split_whitespace().count() <= 5),
+        "{pieces:?}"
+    );
+}
+
+/// A listener that answers in deltas, noting when it is done.
+struct Replying<'a> {
+    answer: &'a str,
+    log: &'a std::cell::RefCell<Vec<String>>,
+}
+
+impl Listener for Replying<'_> {
+    fn answer(&self, _clip: &Clip, on_text: &mut dyn FnMut(&str)) -> Result<String, PolicyError> {
+        for delta in self.answer.split_inclusive(' ') {
+            on_text(delta);
+        }
+        self.log.borrow_mut().push("listener done".into());
+        Ok(self.answer.to_string())
+    }
+}
+
+struct Logging<'a>(&'a std::cell::RefCell<Vec<String>>);
+
+impl Synthesizer for Logging<'_> {
+    fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
+        self.0.borrow_mut().push(format!("spoke {text}"));
+        ScriptedSynthesizer.speak(text, speaker)
+    }
+}
+
+#[test]
+fn the_first_sentence_is_spoken_before_the_listener_has_finished_answering() {
+    let log = std::cell::RefCell::new(Vec::new());
+    let listener = Replying {
+        answer: "We resolved. Then we petitioned. They did not listen.",
+        log: &log,
+    };
+    let turn =
+        take_spoken_turn(&listener, &Logging(&log), &speaker(), &said("question"), 30).unwrap();
+
+    assert_eq!(
+        turn.answer,
+        "We resolved. Then we petitioned. They did not listen."
+    );
+    let log = log.into_inner();
+    assert_eq!(log[0], "spoke We resolved.", "{log:?}");
+    assert_eq!(log[1], "spoke Then we petitioned.");
+    assert_eq!(
+        log.last().unwrap(),
+        "spoke They did not listen.",
+        "the last sentence waits for the end of the answer"
+    );
+    assert!(
+        log.iter().position(|l| l == "listener done").unwrap() > 1,
+        "speaking began while the listener was still answering"
+    );
+    assert!(turn.timings.first_audio <= turn.timings.total);
+    let words: usize = [
+        "We resolved.",
+        "Then we petitioned.",
+        "They did not listen.",
+    ]
+    .iter()
+    .map(|s| s.len())
+    .sum();
+    assert_eq!(
+        turn.reply.samples().len(),
+        words + (16_000 * PAUSE_MILLIS as usize / 1000) * 2
+    );
+}
+
+#[test]
+fn a_listener_that_says_nothing_is_not_spoken_for() {
+    let log = std::cell::RefCell::new(Vec::new());
+    let listener = Replying {
+        answer: "  ",
+        log: &log,
+    };
+    let err =
+        take_spoken_turn(&listener, &Logging(&log), &speaker(), &said("question"), 30).unwrap_err();
+    assert!(matches!(err, PolicyError::Synthesis { .. }), "{err}");
+}

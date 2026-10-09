@@ -13,6 +13,9 @@
 //! voice-loop speak     --text T --out a.wav      speak a sentence in the persona's synthetic voice
 //! voice-loop speak-set  --sentences FILE          record sentences, keeping those heard back well enough
 //! voice-loop spoken-set --questions FILE         record questions in several voices into a pinned set
+//! voice-loop spoken-set --questions FILE         record questions in several voices into a pinned set
+//! voice-loop ingress-train --set DIR ...        teach a frozen language model to listen
+//! voice-loop listen-turns --recordings DIR ...  answer recorded questions without a transcript
 //! voice-loop roundtrip --sentences FILE          speak sentences, hear them again, score what was lost
 //! voice-loop turn      --in q.wav --out a.wav    hear a question, answer as the persona, speak the answer
 //! voice-loop turns     --recordings DIR ...      the same for a directory of questions, loading models once
@@ -25,26 +28,16 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
-use splinter_sdk::model::answer::Answerer;
-use splinter_sdk::model::error::PolicyError;
 use splinter_sdk::model::speech::{
-    corpus_word_error_rate, round_trip, speak_verified, take_turn, BrainRecognizer,
-    BrainSynthesizer, Clip, Recognizer, Sentences, Synthesizer, DEFAULT_RECOGNIZER,
-    DEFAULT_SYNTHESIZER,
+    round_trip, speak_verified, take_turn, BrainRecognizer, BrainSynthesizer, ListenerOptions,
+    Sentences, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
-use voice_loop::{
-    pair_questions, read_sentences, Recorded, RoundTripReport, SpeakSetReport, Spread, TurnItem,
-    TurnReport, TurnsReport,
+use voice_loop::batch::{
+    emit, listen_turns, read_clip, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
 };
-
-/// The most words one piece of an answer has when it is spoken: a synthesizer
-/// renders a bounded stretch of speech and stops.
-const SPOKEN_PIECE_WORDS: usize = 30;
-
-/// The longest answer a turn generates, in tokens: a spoken answer is short.
-const ANSWER_TOKENS: u32 = 400;
+use voice_loop::{read_sentences, Recorded, RoundTripReport, SpeakSetReport, TurnReport};
 
 #[derive(Parser)]
 #[command(about = "Talk to a persona and have it talk back, measuring each stage")]
@@ -67,6 +60,14 @@ struct Models {
 }
 
 impl Models {
+    fn names(&self) -> Names<'_> {
+        Names {
+            asr: &self.asr,
+            tts: &self.tts,
+            speaker: self.speaker(),
+        }
+    }
+
     fn speaker(&self) -> SpeakerProfile {
         SpeakerProfile::new(self.seed, Portrayal::synthetic_theatrical())
     }
@@ -110,9 +111,19 @@ enum Command {
         /// A JSON-lines file of `{"id", "text", "group"?}`.
         #[arg(long)]
         questions: PathBuf,
-        /// The voices to record each question in: comma-separated seeds.
+        /// The voices training questions are recorded in: comma-separated seeds.
         #[arg(long, value_delimiter = ',', required = true)]
         voices: Vec<u64>,
+        /// The held-out voices the held-out questions are recorded in.
+        #[arg(long, value_delimiter = ',', required = true)]
+        test_voices: Vec<u64>,
+        /// Every this-many-th question group is held out.
+        #[arg(long, default_value_t = 6)]
+        test_every: usize,
+        /// Record only this share of the questions, `INDEX/COUNT`, so several
+        /// processes can record one set at once; `spoken-merge` joins them.
+        #[arg(long, default_value = "0/1")]
+        shard: String,
         /// The set's name.
         #[arg(long, default_value = "spoken")]
         name: String,
@@ -122,6 +133,97 @@ enum Command {
         /// The word error rate above which a recording is not kept.
         #[arg(long, default_value_t = 0.2)]
         max_wer: f32,
+    },
+    /// Join the shards `spoken-set --shard` wrote into one set.
+    SpokenMerge {
+        /// The directory the shards wrote `set-N.json` into.
+        #[arg(long)]
+        dir: PathBuf,
+    },
+    /// Teach a frozen language model to listen: train a projector on a spoken set.
+    IngressTrain {
+        #[command(flatten)]
+        models: Models,
+        /// The directory `spoken-set` wrote.
+        #[arg(long)]
+        set: PathBuf,
+        /// A JSON-lines file of `{"id", "system", "answer"}`: the text path's answers.
+        #[arg(long)]
+        answers: PathBuf,
+        /// The language model's checkpoint directory.
+        #[arg(long)]
+        base: PathBuf,
+        /// A persona adapter held frozen on it.
+        #[arg(long)]
+        adapter: Option<PathBuf>,
+        /// Where to write the projector, the held-out chat records and the report.
+        #[arg(long)]
+        out: PathBuf,
+        /// The recogniser whose encoder gives the features.
+        #[arg(long, default_value = "Qwen/Qwen3-ASR-1.7B")]
+        features_model: String,
+        /// Seconds every clip is padded to.
+        #[arg(long, default_value_t = 8.0)]
+        window: f32,
+        /// Optimiser steps.
+        #[arg(long, default_value_t = 300)]
+        steps: u32,
+        /// Examples per step.
+        #[arg(long, default_value_t = 8)]
+        batch: usize,
+        /// Peak projector learning rate.
+        #[arg(long, default_value_t = 1e-3)]
+        lr: f32,
+        /// Every this-many-th question group is held out.
+        #[arg(long, default_value_t = 6)]
+        test_every: usize,
+        /// Held-out voices: comma-separated seeds.
+        #[arg(long, value_delimiter = ',', required = true)]
+        test_voices: Vec<u64>,
+        /// Share of recordings that also train a transcription example.
+        #[arg(long, default_value_t = 1.0)]
+        transcribe_share: f32,
+        /// Longest example, in tokens.
+        #[arg(long, default_value_t = 480)]
+        block: u32,
+    },
+    /// Answer a directory of recorded questions with a model that listens: no transcript in between.
+    ListenTurns {
+        #[command(flatten)]
+        models: Models,
+        /// The recogniser whose encoder gives the features the projector reads.
+        #[arg(long, default_value = "Qwen/Qwen3-ASR-1.7B")]
+        features_model: String,
+        /// The trained projector.
+        #[arg(long)]
+        projector: PathBuf,
+        /// A directory of WAV recordings, taken in file-name order.
+        #[arg(long)]
+        recordings: PathBuf,
+        /// The questions the recordings were made from, one per line in order.
+        #[arg(long)]
+        questions: Option<PathBuf>,
+        /// Where to write each spoken answer.
+        #[arg(long)]
+        out_dir: PathBuf,
+        /// The person the persona answers as.
+        #[arg(long, default_value = "Samuel Adams")]
+        persona: String,
+        /// The system turn the persona answers under; the persona prompt when absent.
+        #[arg(long)]
+        system: Option<String>,
+        /// The text model's checkpoint directory.
+        #[arg(long)]
+        base: PathBuf,
+        /// A persona adapter to attach to it.
+        #[arg(long)]
+        adapter: Option<PathBuf>,
+        /// Seconds every clip is padded to; the projector was trained on this.
+        #[arg(long, default_value_t = 8.0)]
+        window: f32,
+        /// Also keep the report here.
+        #[arg(long)]
+        report: Option<PathBuf>,
     },
     /// Speak sentences, hear them again, and score what was lost.
     Roundtrip {
@@ -196,14 +298,95 @@ fn main() -> Result<()> {
             max_wer,
             attempts,
         } => speak_set(&models, &sentences, &out_dir, max_wer, attempts),
+        Command::SpokenMerge { dir } => spoken_merge(&dir),
         Command::SpokenSet {
             models,
             questions,
             voices,
+            test_voices,
+            test_every,
+            shard,
             name,
             out_dir,
             max_wer,
-        } => spoken_set(&models, &questions, &voices, &name, &out_dir, max_wer),
+        } => spoken_set(
+            &models,
+            &questions,
+            (&voices, &test_voices, test_every),
+            &shard,
+            &name,
+            &out_dir,
+            max_wer,
+        ),
+        Command::IngressTrain {
+            models,
+            set,
+            answers,
+            base,
+            adapter,
+            out,
+            features_model,
+            window,
+            steps,
+            batch,
+            lr,
+            test_every,
+            test_voices,
+            transcribe_share,
+            block,
+        } => {
+            let plan = voice_loop::ingress::Plan {
+                set_dir: set,
+                recognizer: features_model,
+                base,
+                adapter,
+                window_seconds: window,
+                steps,
+                batch,
+                lr,
+                test_every,
+                test_voices: test_voices.into_iter().collect(),
+                transcribe_share,
+                seed: models.seed,
+                block,
+            };
+            let answers = voice_loop::ingress::read_answers(&std::fs::read_to_string(&answers)?)?;
+            let report = voice_loop::ingress::train(&plan, &answers, &out)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        Command::ListenTurns {
+            models,
+            features_model,
+            projector,
+            recordings,
+            questions,
+            out_dir,
+            persona,
+            system,
+            base,
+            adapter,
+            window,
+            report,
+        } => listen_turns(
+            &models.names(),
+            &Batch {
+                recordings: &recordings,
+                questions: questions.as_deref(),
+                out_dir: &out_dir,
+            },
+            &persona,
+            &ListenerOptions {
+                recognizer: features_model,
+                projector,
+                base,
+                adapter,
+                system: system.unwrap_or_else(|| persona_prompt(&persona)),
+                window_seconds: window,
+                max_new: 300,
+            },
+            report.as_deref(),
+        ),
         Command::Roundtrip {
             models,
             sentences,
@@ -236,7 +419,7 @@ fn main() -> Result<()> {
             adapter,
             report,
         } => turns(
-            &models,
+            &models.names(),
             &Batch {
                 recordings: &recordings,
                 questions: questions.as_deref(),
@@ -326,35 +509,80 @@ fn speak_set(
 fn spoken_set(
     models: &Models,
     file: &std::path::Path,
-    voices: &[u64],
+    split: (&[u64], &[u64], usize),
+    shard: &str,
     name: &str,
     out_dir: &std::path::Path,
     max_wer: f32,
 ) -> Result<()> {
+    let (voices, test_voices, test_every) = split;
+    let (index, count) = parse_shard(shard)?;
     let text =
         std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
     let questions = voice_loop::spoken::read_questions(&text)?;
     if questions.is_empty() {
         bail!("{} holds no questions", file.display());
     }
+    // Held-out questions are recorded only in held-out voices, and training
+    // questions only in training voices: a recording held out on one count
+    // alone would be in neither side of the split.
+    let group_of =
+        |q: &voice_loop::spoken::Question| q.group.clone().unwrap_or_else(|| q.id.clone());
+    let held = voice_loop::spoken::held_out_group_names(
+        questions
+            .iter()
+            .map(|q| q.group.as_deref().unwrap_or(&q.id)),
+        test_every,
+    );
+    let (test_q, train_q): (Vec<_>, Vec<_>) = questions
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| i % count == index)
+        .map(|(_, q)| q)
+        .partition(|q| held.contains(&group_of(q)));
     let (synthesizer, recognizer) = (
         BrainSynthesizer::load(&models.tts)?,
         BrainRecognizer::load(&models.asr)?,
     );
-    let (set, rejected) = voice_loop::spoken::record_set(
+    let (train_set, mut rejected) = voice_loop::spoken::record_set(
         name,
-        &questions,
+        &train_q,
         voices,
         max_wer,
         (&synthesizer, &recognizer),
         out_dir,
     )?;
+    let (test_set, rejected_test) = voice_loop::spoken::record_set(
+        name,
+        &test_q,
+        test_voices,
+        max_wer,
+        (&synthesizer, &recognizer),
+        out_dir,
+    )?;
+    rejected.extend(rejected_test);
+    let items: Vec<_> = train_set
+        .items()
+        .iter()
+        .chain(test_set.items())
+        .cloned()
+        .collect();
+    let set = splinter_sdk::vocabulary::spoken::SpokenSet::new(
+        name,
+        train_set.portrayal().clone(),
+        items,
+    )?;
+    let suffix = if count == 1 {
+        String::new()
+    } else {
+        format!("-{index}")
+    };
     std::fs::write(
-        out_dir.join("set.json"),
+        out_dir.join(format!("set{suffix}.json")),
         serde_json::to_string_pretty(&set)?,
     )?;
     std::fs::write(
-        out_dir.join("rejected.json"),
+        out_dir.join(format!("rejected{suffix}.json")),
         serde_json::to_string_pretty(&rejected)?,
     )?;
     println!(
@@ -363,9 +591,54 @@ fn spoken_set(
             "set": name,
             "digest": set.digest()?,
             "recordings": set.items().len(),
+            "train_questions": train_q.len(),
+            "test_questions": test_q.len(),
             "rejected": rejected.len(),
             "portrayal": set.portrayal().label(),
         })
+    );
+    Ok(())
+}
+
+/// `INDEX/COUNT` as two numbers, with `INDEX < COUNT`.
+fn parse_shard(text: &str) -> Result<(usize, usize)> {
+    let (i, n) = text
+        .split_once('/')
+        .with_context(|| format!("shard {text:?} is not INDEX/COUNT"))?;
+    let (i, n): (usize, usize) = (i.parse()?, n.parse()?);
+    if n == 0 || i >= n {
+        bail!("shard {text:?}: the index must be below the count");
+    }
+    Ok((i, n))
+}
+
+fn spoken_merge(dir: &std::path::Path) -> Result<()> {
+    let mut parts: Vec<_> = std::fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("set-") && n.ends_with(".json"))
+        })
+        .collect();
+    parts.sort();
+    if parts.is_empty() {
+        bail!("{} holds no set-N.json shards", dir.display());
+    }
+    let mut items = Vec::new();
+    let mut named: Option<(String, splinter_sdk::vocabulary::speech::Portrayal)> = None;
+    for part in &parts {
+        let shard: splinter_sdk::vocabulary::spoken::SpokenSet =
+            serde_json::from_str(&std::fs::read_to_string(part)?)?;
+        named.get_or_insert_with(|| (shard.name().to_string(), shard.portrayal().clone()));
+        items.extend(shard.items().iter().cloned());
+    }
+    let (name, portrayal) = named.context("no shard")?;
+    let set = splinter_sdk::vocabulary::spoken::SpokenSet::new(name, portrayal, items)?;
+    std::fs::write(dir.join("set.json"), serde_json::to_string_pretty(&set)?)?;
+    println!(
+        "{}",
+        serde_json::json!({"recordings": set.items().len(), "digest": set.digest()?, "shards": parts.len()})
     );
     Ok(())
 }
@@ -394,46 +667,6 @@ fn roundtrip(
     )
 }
 
-/// The persona as a text model: a base, maybe an adapter, and the system turn
-/// that makes it answer as the person.
-struct Persona {
-    name: String,
-    system: String,
-    answerer: Answerer,
-    runtime: tokio::runtime::Runtime,
-    base: PathBuf,
-    adapter: Option<PathBuf>,
-}
-
-impl Persona {
-    fn load(name: &str, base: &std::path::Path, adapter: Option<&std::path::Path>) -> Result<Self> {
-        Ok(Self {
-            name: name.to_string(),
-            system: persona_prompt(name),
-            answerer: Answerer::load(base, adapter, None, name)?,
-            runtime: tokio::runtime::Runtime::new()?,
-            base: base.to_path_buf(),
-            adapter: adapter.map(std::path::Path::to_path_buf),
-        })
-    }
-
-    fn answer(&self, question: &str) -> Result<String, PolicyError> {
-        self.runtime
-            .block_on(self.answerer.ask(&self.system, question, ANSWER_TOKENS))
-            .map(|reply| reply.text.trim().to_string())
-            .map_err(|e| PolicyError::Generate {
-                path: self.base.clone(),
-                adapter: self.adapter.clone(),
-                reason: e.to_string(),
-            })
-    }
-}
-
-fn read_clip(path: &std::path::Path) -> Result<Clip> {
-    Clip::from_wav(&std::fs::read(path).with_context(|| format!("reading {}", path.display()))?)
-        .with_context(|| format!("{} is not a WAV file", path.display()))
-}
-
 fn turn(
     models: &Models,
     input: &std::path::Path,
@@ -457,100 +690,4 @@ fn turn(
         .save(out)
         .with_context(|| format!("writing {}", out.display()))?;
     emit(&TurnReport::new(&persona.name, &speaker, &turn), keep)
-}
-
-/// Where a batch of questions comes from and its answers go.
-struct Batch<'a> {
-    recordings: &'a std::path::Path,
-    questions: Option<&'a std::path::Path>,
-    out_dir: &'a std::path::Path,
-}
-
-fn turns(
-    models: &Models,
-    batch: &Batch,
-    persona: &Persona,
-    keep: Option<&std::path::Path>,
-) -> Result<()> {
-    let mut recordings: Vec<PathBuf> = std::fs::read_dir(batch.recordings)
-        .with_context(|| format!("reading {}", batch.recordings.display()))?
-        .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e == "wav"))
-        .collect();
-    recordings.sort();
-    if recordings.is_empty() {
-        bail!("{} holds no WAV recordings", batch.recordings.display());
-    }
-    let asked = batch
-        .questions
-        .map(|path| std::fs::read_to_string(path).map(|t| read_sentences(&t)))
-        .transpose()?;
-    let paired = pair_questions(&recordings, asked.as_deref()).map_err(anyhow::Error::msg)?;
-    std::fs::create_dir_all(batch.out_dir)?;
-
-    let speaker = models.speaker();
-    let recognizer = BrainRecognizer::load(&models.asr)?;
-    let synthesizer = Sentences::new(BrainSynthesizer::load(&models.tts)?, SPOKEN_PIECE_WORDS);
-    let mut items = Vec::new();
-    for (recording, question) in paired {
-        let name = recording.display().to_string();
-        let turn = take_turn(
-            &recognizer,
-            &mut |q: &str| persona.answer(q),
-            &synthesizer,
-            &speaker,
-            &read_clip(&recording)?,
-        )
-        .with_context(|| format!("turn on {name}"))?;
-        let stem = recording
-            .file_stem()
-            .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-        turn.reply
-            .save(batch.out_dir.join(format!("{stem}.reply.wav")))?;
-        let answer_heard = recognizer.transcribe(&turn.reply)?.text;
-        items.push(TurnItem {
-            recording: name,
-            asked: question,
-            heard: turn.heard,
-            answer: turn.answer,
-            answer_heard,
-            reply_seconds: turn.reply.seconds(),
-            recognise_seconds: turn.timings.recognise.as_secs_f64(),
-            respond_seconds: turn.timings.respond.as_secs_f64(),
-            synthesise_seconds: turn.timings.synthesise.as_secs_f64(),
-        });
-    }
-
-    let column = |f: fn(&TurnItem) -> f64| Spread::of(&items.iter().map(f).collect::<Vec<_>>());
-    let report = TurnsReport {
-        persona: &persona.name,
-        speaker: &speaker,
-        turns: items.len(),
-        question_word_error_rate: corpus_word_error_rate(
-            items
-                .iter()
-                .filter_map(|i| i.asked.as_deref().map(|a| (a, i.heard.as_str()))),
-        ),
-        answer_word_error_rate: corpus_word_error_rate(
-            items
-                .iter()
-                .map(|i| (i.answer.as_str(), i.answer_heard.as_str())),
-        ),
-        recognise_seconds: column(|i| i.recognise_seconds),
-        respond_seconds: column(|i| i.respond_seconds),
-        synthesise_seconds: column(|i| i.synthesise_seconds),
-        total_seconds: column(|i| i.recognise_seconds + i.respond_seconds + i.synthesise_seconds),
-        items: &items,
-    };
-    emit(&report, keep)
-}
-
-/// Print `report` as JSON, and keep a copy where asked.
-fn emit(report: &impl serde::Serialize, keep: Option<&std::path::Path>) -> Result<()> {
-    let json = serde_json::to_string_pretty(report)?;
-    if let Some(path) = keep {
-        std::fs::write(path, &json).with_context(|| format!("writing {}", path.display()))?;
-    }
-    println!("{json}");
-    Ok(())
 }
