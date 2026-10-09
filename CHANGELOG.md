@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The README says what the claim gate does with numbers written in words and sentence-initial names in a statement: it
+  does not check them, so it admits more; a spec pins it.
 - A run that monitors nothing (`train --eval-every 0`) no longer hands brain the default patience, which brain refuses
   when there is no evaluation to be patient about; it names none.
 - A number that ends a sentence ("on port 9090.") is a standalone number to the traceability rule that

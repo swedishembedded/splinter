@@ -801,8 +801,9 @@ with their reinforcement counts, the superseded ones and by which claim, and
 the refused proposals.
 
 The first word of a sentence is not taken for a name, and numbers written
-in words are not recognised: both are terms the gate does not check, so a
-statement may carry them without the person's words having said them. A number
+in words are not recognised: both are terms the gate does not check, so on the
+statement side they make it admit more, never refuse more, and a statement may
+carry them without the person's words having said them. A number
 that ends a sentence ("on port 9090.") is a number like any other.
 
 ### absorb

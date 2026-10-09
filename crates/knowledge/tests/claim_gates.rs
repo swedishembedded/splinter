@@ -237,6 +237,29 @@ fn a_statement_term_absent_from_the_cited_words_is_refused() -> anyhow::Result<(
 }
 
 #[test]
+fn terms_the_gate_does_not_recognise_are_unchecked_so_it_admits_more_not_less() -> anyhow::Result<()>
+{
+    let view = correction_session("s1")?;
+    // A number written in words is no number to the gate: the statement may
+    // carry it though the cited words say something else.
+    let mut p = correction();
+    p.statement = "The Tessera dashboard listens on port nine thousand and ninety.".into();
+    rule(&p, &view)?;
+    p.statement = "The Tessera dashboard has listened since seventeen eighty-four.".into();
+    rule(&p, &view)?;
+    // A name that begins the statement is no name to the gate either.
+    p.statement = "Zelkor sits behind the Tessera dashboard, on port 9090.".into();
+    rule(&p, &view)?;
+    // The same name inside the sentence is held to the cited words.
+    p.statement = "Behind the Tessera dashboard sits Zelkor, on port 9090.".into();
+    assert!(matches!(
+        refused(&view, &p),
+        Refusal::UnsupportedTerm { ref term, .. } if term == "Zelkor"
+    ));
+    Ok(())
+}
+
+#[test]
 fn what_the_agent_got_wrong_must_have_been_said() -> anyhow::Result<()> {
     let view = correction_session("s1")?;
     let mut p = correction();
