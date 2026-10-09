@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements durable, content-addressed experience
+// stores for learning agents, for its clients. If your team needs expertise
+// in training-data lineage or crash-safe storage, you can procure our
+// services by sending an email to info@swedishembedded.com.
+
+//! Spec: a claim set is stored once under its address and read back; the
+//! ledger keeps every ruling in the order it was appended, never twice.
+
+use splinter_core::claim::{
+    CitedQuote, ClaimKind, ClaimProposal, ClaimSet, LedgerEntry, Refusal, Ruling, SessionClaims,
+};
+use splinter_core::digest::Digest;
+use splinter_core::source::SourceId;
+use splinter_store::claims::ClaimStore;
+use splinter_store::error::StoreError;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
+
+type Outcome = Result<(), Box<dyn std::error::Error>>;
+
+fn proposal(statement: &str) -> ClaimProposal {
+    ClaimProposal {
+        kind: ClaimKind::Fact,
+        statement: statement.into(),
+        question: "What?".into(),
+        quotes: vec![CitedQuote {
+            step: 2,
+            text: "words".into(),
+        }],
+        observations: vec![],
+        calls: vec![],
+        said_wrong: None,
+    }
+}
+
+fn session() -> SourceId {
+    SourceId(Digest::of(b"session"))
+}
+
+fn refused(index: usize, statement: &str) -> LedgerEntry {
+    LedgerEntry {
+        claim_set: Digest::of(b"set"),
+        index,
+        session: session(),
+        proposal: proposal(statement),
+        ruling: Ruling::Refused {
+            reason: Refusal::NoUserEvidence,
+        },
+    }
+}
+
+#[test]
+fn a_claim_set_is_stored_once_and_read_back() -> Outcome {
+    let dir = tempfile::tempdir()?;
+    let store = ClaimStore::new(&Workspace::at(&StateRoot::new(dir.path())));
+    let set = ClaimSet {
+        extractor: "scripted/extractor".into(),
+        sessions: vec![SessionClaims {
+            session: session(),
+            proposals: vec![proposal("A.")],
+            failure: None,
+        }],
+    };
+    let id = store.put_set(&set)?;
+    assert_eq!(store.put_set(&set)?, id);
+    assert_eq!(store.get_set(&id)?, set);
+    assert_eq!(store.list_sets()?, vec![id]);
+    let missing = store.get_set(&Digest::of(b"nothing"));
+    assert!(matches!(missing, Err(StoreError::UnknownClaimSet(_))));
+    Ok(())
+}
+
+#[test]
+fn the_ledger_keeps_every_ruling_in_order_and_never_twice() -> Outcome {
+    let dir = tempfile::tempdir()?;
+    let store = ClaimStore::new(&Workspace::at(&StateRoot::new(dir.path())));
+    let entries = [refused(0, "B."), refused(1, "A."), refused(2, "C.")];
+    assert_eq!(store.append(&entries[..2])?, 2);
+    assert_eq!(
+        store.append(&entries[1..])?,
+        1,
+        "the repeat is not appended"
+    );
+    assert_eq!(store.entries()?, entries);
+    Ok(())
+}

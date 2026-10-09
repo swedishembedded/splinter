@@ -45,6 +45,9 @@ pub enum StoreError {
     /// The store holds no task set with this id.
     #[error("no task set {0} in the store")]
     UnknownTaskSet(TaskSetId),
+    /// The store holds no claim set with this address.
+    #[error("no claim set {0} in the store")]
+    UnknownClaimSet(Digest),
     /// No run with this id was recorded.
     #[error("no run {0} is recorded")]
     UnknownRun(String),
