@@ -95,10 +95,6 @@ fn eight_shared_words_are_refused_unless_the_claims_own_statement_has_them() -> 
         "Who is on call this week?",
         "Ines is on call this week and hands the pager to Ravi on Friday at noon sharp.",
     )]);
-    let leaking = record(
-        "Who carries the pager?",
-        "Ines hands the pager to Ravi on Friday at noon sharp, every week.",
-    );
     let statement = "Ines is on call this week.";
     let refused = probes.check(
         &[
@@ -110,7 +106,6 @@ fn eight_shared_words_are_refused_unless_the_claims_own_statement_has_them() -> 
     let leak = refused.ok_or_else(|| anyhow::anyhow!("an 8-gram of the probe is in the record"))?;
     assert_eq!(leak.probe, "p-rota");
     assert!(matches!(leak.kind, LeakKind::Overlap { .. }), "{leak:?}");
-    let _ = leaking;
 
     // What the statement itself says is the point of the record and is not
     // held against it, even though the probe's answer says it too.
