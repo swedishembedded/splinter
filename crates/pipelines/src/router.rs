@@ -69,6 +69,14 @@ pub enum Intent {
         #[serde(default)]
         goal: Option<String>,
     },
+    /// Learn from the sessions the person held with their agent: files or
+    /// directories of recorded sessions (`*.atif.json`); extracts what they
+    /// taught, trains and releases the next model.
+    Absorb {
+        /// The session files or directories, exactly as the sentence names
+        /// them.
+        sessions: Vec<String>,
+    },
     /// Answer a question with the current policy, from what it knows.
     Ask {
         /// The question, as the sentence asks it.
@@ -128,7 +136,7 @@ nothing fits, and lower confidences when the sentence could mean several things.
 /// Sentences shown to the model with their classifications: a small
 /// model copies an example far more reliably than it reads a schema's
 /// references.
-const EXAMPLES: [(&str, &str); 4] = [
+const EXAMPLES: [(&str, &str); 5] = [
     (
         "Learn everything in the manual at ./manuals/pump.md",
         r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./manuals/pump.md"], "goal": "everything in the manual"}, "confidence": 0.9}]}"#,
@@ -140,6 +148,10 @@ const EXAMPLES: [(&str, &str); 4] = [
     (
         "Learn to think like Ada Lovelace based on the letters she wrote in directory ./ada",
         r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./ada"], "goal": "think like Ada Lovelace"}, "confidence": 0.9}]}"#,
+    ),
+    (
+        "Learn from my sessions in ~/sessions/today",
+        r#"{"candidates": [{"intent": {"verb": "absorb", "sessions": ["~/sessions/today"]}, "confidence": 0.9}]}"#,
     ),
     (
         "Explain the tar flags from what you know",
@@ -207,6 +219,11 @@ impl Intent {
                 }
                 line
             }
+            Self::Absorb { sessions } => {
+                let mut line = words(&["absorb"]);
+                line.extend(sessions.iter().cloned());
+                line
+            }
             Self::Ask { question, policy } => {
                 let mut line = words(&["ask", question]);
                 if let Some(policy) = policy {
@@ -243,6 +260,9 @@ impl Intent {
             }
             Self::Learn { sources, .. } if sources.is_empty() => {
                 Some("the sentence names nothing to learn from".into())
+            }
+            Self::Absorb { sessions } if sessions.is_empty() => {
+                Some("the sentence names no sessions to learn from".into())
             }
             Self::Ask { question, .. } if question.trim().is_empty() => {
                 Some("the sentence asks no question".into())

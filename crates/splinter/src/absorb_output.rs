@@ -5,6 +5,7 @@
 
 use std::fmt::Write as _;
 
+use splinter_sdk::absorb::Absorbed;
 use splinter_sdk::claims::{ClaimSetList, ClaimsExtracted, ClaimsGated, LedgerReport};
 use splinter_sdk::sessions::{SessionList, SessionsIntake};
 use splinter_sdk::vocabulary::claim::ClaimSet;
@@ -142,6 +143,94 @@ impl Report for LedgerReport {
         }
         for r in &self.refused {
             let _ = writeln!(out, "  refused {:?}: {}", r.statement, r.reason);
+        }
+        out
+    }
+}
+
+impl Report for Absorbed {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        if let Some(intake) = &self.intake {
+            out.push_str(&intake.human());
+        }
+        if let Some(extracted) = &self.extract {
+            out.push_str(&extracted.human());
+        }
+        if let Some(gated) = &self.claims {
+            let _ = writeln!(
+                out,
+                "claims: {} admitted, {} superseded, {} live, {} new",
+                gated.admitted,
+                gated.superseded,
+                self.live,
+                self.pending.len()
+            );
+            for (reason, count) in &gated.refused {
+                let _ = writeln!(out, "  refused {count}: {reason}");
+            }
+        }
+        if let Some(kits) = &self.kits {
+            let _ = writeln!(
+                out,
+                "kits: {} built, {} reused, {} answers verified ({} failed)",
+                kits.built, kits.reused, kits.verified, kits.failed
+            );
+            for u in &kits.untaught {
+                let _ = writeln!(out, "  not taught {}: {}", u.claim, u.reason);
+            }
+        }
+        if let Some(data) = &self.dataset {
+            let _ = writeln!(
+                out,
+                "dataset {}: {} records for {} claim(s), {} stopping paraphrases held out",
+                data.dataset,
+                data.trained,
+                data.claims.len(),
+                data.held_out
+            );
+            for r in &data.refused {
+                let _ = writeln!(out, "  refused a record of {}: {}", r.claim, r.leak);
+            }
+        }
+        if let Some(candidate) = &self.candidate {
+            let _ = writeln!(
+                out,
+                "candidate {} (trained from {})",
+                candidate.candidate, candidate.from
+            );
+        }
+        if let Some(gate) = &self.gate {
+            let _ = writeln!(
+                out,
+                "gate: {} of {} claim(s) answered, {} gained, {} regressed: {}",
+                gate.answered,
+                gate.claims.len(),
+                gate.gained.len(),
+                gate.regressed.len(),
+                if gate.passed { "passed" } else { "refused" }
+            );
+            for reason in [
+                gate.improvement.reason.as_ref(),
+                gate.retention.reason.as_ref(),
+                gate.anchor.as_ref().and_then(|a| a.reason.as_ref()),
+                gate.serve.reason.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let _ = writeln!(out, "  {reason}");
+            }
+        }
+        if let Some(release) = &self.release {
+            let _ = writeln!(
+                out,
+                "release {release}: absorbed {} claim(s)",
+                self.absorbed.len()
+            );
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "stopped: {why}");
         }
         out
     }

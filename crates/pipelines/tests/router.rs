@@ -330,3 +330,20 @@ fn routing_is_decided_by_code_whatever_classifier_read_the_sentence() {
     .unwrap();
     assert!(matches!(routed, Routed::Clarify(_)), "{routed:?}");
 }
+
+#[test]
+fn sessions_are_absorbed_and_no_sessions_are_a_question() {
+    use splinter_pipelines::router::{route, Candidate, Classification};
+    let reading = |sessions: Vec<String>| Classification {
+        candidates: vec![Candidate {
+            intent: Intent::Absorb { sessions },
+            confidence: 0.9,
+        }],
+    };
+    let Routed::Execute(intent) = route(&reading(vec!["./today".into(), "./monday".into()]), false)
+    else {
+        panic!("sessions named are absorbed");
+    };
+    assert_eq!(intent.command_line(), ["absorb", "./today", "./monday"]);
+    assert!(matches!(route(&reading(vec![]), false), Routed::Clarify(_)));
+}

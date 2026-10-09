@@ -753,3 +753,38 @@ fn sessions_and_claims_are_one_stage_per_command() {
         assert!(matches!(command(&["claims", verb]), Command::Claims(_)));
     }
 }
+
+#[test]
+fn absorb_takes_sessions_and_its_defaults_are_the_documented_ones() {
+    let Command::Absorb(args) = command(&[
+        "absorb",
+        "./today",
+        "./monday.atif.json",
+        "--dry-run",
+        "--sealed-probes",
+        "a.jsonl",
+        "b.jsonl",
+        "--judge",
+        "local:judge",
+    ]) else {
+        panic!("not an absorb");
+    };
+    assert_eq!(args.sessions.len(), 2);
+    assert_eq!(args.sealed_probes.len(), 2);
+    assert!(args.dry_run && !args.no_release && !args.continue_from_release);
+    assert_eq!(args.epochs, splinter_sdk::absorb::DEFAULT_EPOCHS);
+    assert_eq!(
+        args.paraphrases as usize,
+        splinter_sdk::absorb::kit::PARAPHRASES_WRITTEN
+    );
+    assert_eq!(
+        args.rehearsal_share,
+        splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE
+    );
+    assert!(args.judge.is_some() && args.generator.is_none());
+    assert!(parse(&["absorb"]).is_err(), "sessions are needed");
+    assert!(
+        parse(&["absorb", "d", "--replay-fraction", "0.5"]).is_err(),
+        "a replay fraction belongs to continuing a release"
+    );
+}

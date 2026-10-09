@@ -290,6 +290,9 @@ impl Session {
             }
             Command::Source(SourceCommand::List) => emit(json, &sources::list(ctx)?),
             Command::Source(SourceCommand::Show { id }) => emit(json, &sources::show(ctx, &id)?),
+            Command::Absorb(args) => {
+                return absorb_session::absorb(ctx, self.splinter.trainer(), json, *args)
+            }
             Command::Session(command) => return absorb_session::session(ctx, json, command),
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
             Command::Tasks(TasksCommand::Generate {

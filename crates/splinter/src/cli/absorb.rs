@@ -7,7 +7,11 @@
 use std::path::PathBuf;
 
 use clap::Subcommand;
+use splinter_sdk::absorb::kit::PARAPHRASES_WRITTEN;
+use splinter_sdk::absorb::DEFAULT_EPOCHS;
+use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::sessions::DEFAULT_MAX_SESSION_BYTES;
+use splinter_sdk::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use super::model_ref;
@@ -68,4 +72,77 @@ pub enum ClaimsCommand {
     /// Show the ledger: live claims, superseded ones with by which, and
     /// refused proposals with their reasons.
     Ledger,
+}
+
+/// `absorb`: the sessions a person held with an agent become the next
+/// release.
+#[derive(Debug, clap::Args)]
+pub struct AbsorbArgs {
+    /// ATIF files, or directories searched for *.atif.json.
+    #[arg(required = true, num_args = 1.., value_name = "SESSIONS")]
+    pub sessions: Vec<PathBuf>,
+    /// The policy to update: a release is made under its alias.
+    #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
+    pub policy: ModelRef,
+    /// The model that proposes claims and writes their paraphrases and forms
+    /// (default: the policy).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub generator: Option<ModelRef>,
+    /// The model that answers with the claim in front of it, as the policy
+    /// would (default: the policy).
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub teacher: Option<ModelRef>,
+    /// A model that decides the answers the claim's terms cannot; another
+    /// model than the teacher, the generator and the policy.
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub judge: Option<ModelRef>,
+    /// Differently worded questions written per claim; a third of them are
+    /// kept out of training as the claim's own stopping and gate set.
+    #[arg(long, default_value_t = PARAPHRASES_WRITTEN as u32, value_name = "N",
+        value_parser = clap::value_parser!(u32).range(3..))]
+    pub paraphrases: u32,
+    /// The share of the training draws that are the base's own answers to
+    /// general tasks, in [0, 1); 0 turns it off.
+    #[arg(long, default_value_t = DEFAULT_REHEARSAL_SHARE, value_name = "SHARE", value_parser = super::voice_share)]
+    pub rehearsal_share: f64,
+    /// The most passes over the night's records.
+    #[arg(long, default_value_t = DEFAULT_EPOCHS, value_name = "N",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub epochs: u32,
+    /// The step budget, in place of --epochs.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    pub steps: Option<u32>,
+    /// LoRA rank of the adapter.
+    #[arg(long, default_value_t = DEFAULT_LORA_RANK, value_name = "N",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub rank: u32,
+    /// The learning rate, alpha and weight decay of the training.
+    #[command(flatten)]
+    pub optimiser: super::OptimiserArgs,
+    /// Hold the frozen base at bf16, half the bytes of fp32.
+    #[arg(long)]
+    pub bf16_base: bool,
+    /// Continue the current release on the claims not yet absorbed, with a
+    /// replay of earlier releases' records, instead of training again from
+    /// the base on every live claim. An ablation: the default makes
+    /// supersession and forgetting exact.
+    #[arg(long)]
+    pub continue_from_release: bool,
+    /// With --continue-from-release, the fraction of each earlier release's
+    /// records replayed.
+    #[arg(long, default_value_t = DEFAULT_REPLAY_FRACTION, value_name = "F",
+        requires = "continue_from_release", value_parser = super::share)]
+    pub replay_fraction: f64,
+    /// Files of sealed probes (JSON Lines of {"question", "reference"?,
+    /// "name"?}): a training record containing a probe's question, or an
+    /// 8-word run of a probe beyond its claim's statement, is refused. The
+    /// gate never reads them.
+    #[arg(long, num_args = 1.., value_name = "FILE")]
+    pub sealed_probes: Vec<PathBuf>,
+    /// Stop after the claims are extracted and ruled on; train nothing.
+    #[arg(long)]
+    pub dry_run: bool,
+    /// Stop at the trained candidate: do not run the gate.
+    #[arg(long)]
+    pub no_release: bool,
 }

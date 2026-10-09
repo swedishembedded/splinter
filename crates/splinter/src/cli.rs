@@ -93,6 +93,11 @@ pub enum Command {
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
+    /// Learn from the sessions you held with an agent: take them in, extract
+    /// what you taught, teach it from many records, train again from the base
+    /// and release only if every claim the champion answered still is and a
+    /// new one is.
+    Absorb(Box<AbsorbArgs>),
     /// Take in recorded agent sessions, secrets removed.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -772,7 +777,7 @@ mod absorb;
 mod exam;
 mod state;
 mod train;
-pub use absorb::{ClaimsCommand, SessionCommand};
+pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use state::{RunsCommand, StateCommand};
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};

@@ -15,6 +15,8 @@ splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budge
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
                          [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--select-on-dev] [--bf16-base]
+splinter absorb <SESSIONS>... [--policy REF] [--generator REF] [--teacher REF] [--judge REF] [--paraphrases N] [--rehearsal-share F]
+                         [--epochs N | --steps N] [--rank R] [--continue-from-release [--replay-fraction F]] [--sealed-probes FILE...] [--dry-run] [--no-release]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -110,6 +112,7 @@ other provider from `BRAIN_API_KEY`.
 | sessions | `session add` | ATIF files of a person's sessions with an agent | session sources, secrets removed |
 | claims | `claims extract` | session sources | a claim set: what a model proposes the person taught, with their exact words |
 | gates | `claims gate` | a claim set | the ledger: every proposal admitted, refused (with the reason), or superseding earlier claims |
+| absorb | `absorb` | a person's sessions with an agent | the above for sessions, then kits of records per claim, a candidate trained again from the base and a release the declared count gate opens |
 | tasks | `tasks generate` | sources | a task set |
 | solve | `solve` | a task set | an experience set |
 | verify | `verify` | an experience set | verdicts on its experiences |
@@ -724,7 +727,7 @@ fine-tune of a reasoning model erodes and trivia cannot show.
 
 `splinter "learn the manual in ./docs"` asks the policy model, through
 sven's typed method call, which command the sentence means; the reply is
-a list of candidate intents (`learn`, `ask`, `status`, `add_source`,
+a list of candidate intents (`learn`, `absorb`, `ask`, `status`, `add_source`,
 `list_sources`, `list_runs`, `cancel_run`), each with its arguments and a
 confidence. Code decides: a single reading at confidence 0.7 or more, and
 0.2 ahead of any other, runs as its command (printed on stderr first).
@@ -783,8 +786,72 @@ the ledger, each refusal with its reason; ruling a claim set again rules on
 nothing. `claims ledger` reads it back: the live claims, the superseded ones
 and by which claim, and the refused proposals.
 
-The first word of a sentence is not taken for a name, and numbers written in
-words are not recognised: both can only make the gate refuse more, never less.
+The first word of a sentence is not taken for a name, and numbers written
+in words are not recognised: both are terms the gate does not check, so a
+statement may carry them without the person's words having said them. A number
+that ends a sentence ("on port 9090.") is a number like any other.
+
+### absorb
+
+`absorb <SESSIONS>...` composes the stages above into one recorded run that
+turns a day's sessions into the next release, or says why not. Its stages are
+`policy`, `intake`, `extract`, `gate`, `kits`, `dataset`, `rehearse`, `train`,
+`release` and `ledger`; each is a function of its own in `splinter-pipelines`,
+its JSON is in the run, and a failed run is resumed by running it again: the
+sessions, the claim set of the same sessions and generator, the kits and the
+datasets are kept by content, and a candidate trained on the dataset a failed
+run built is taken as it is.
+
+- **extract and gate** are `claims extract` and `claims gate`. `--dry-run` ends
+  here: the claims are ruled on, every refusal listed, and nothing is trained.
+- **kits.** A fact shown once is memorised in one wording, so every live claim
+  without a kit gets one, kept for good: its question and eight differently
+  worded questions (`--paraphrases` are written, a third kept out), answered by
+  a teacher that is shown the claim and speaks as the policy (its release's
+  system prompt), each answer kept only when the claim's verifiers pass it (the
+  `taught` kind: the answer carries every number, name and quoted term of the
+  statement and adds none); what the person first asked, answered with that
+  verified corrected answer (the agent's wrong reply, and its "you are right"
+  after the correction, are context and never trained on); four statements,
+  two questions that ask for the subject given what is said of it, and two
+  consequences, admitted by the same term rule. That is 18 records per claim. The
+  four paraphrases left over (of twelve) are the claim's own stopping and gate
+  set: no record contains them. A claim with no subject the question and
+  statement both name has no paraphrase to write and is taught but cannot be
+  measured. A claim of kind `procedure` is stored and never trained on; a
+  session that mixes a later user step with tool calls is refused at intake.
+- **dataset.** The kit records of every live claim, all fixed to the training
+  side (`metadata.split`), so the holdout rule never holds a claim out and no
+  family is set aside to monitor; the stopping paraphrases are the held-out
+  records. `--sealed-probes FILE...` (JSON Lines of `{"question", "reference"?,
+  "name"?}`) refuses a record containing a probe's question or sharing an
+  8-word run with one beyond what its claim's statement says, naming the probe;
+  the rehearsal is checked too. The gate never reads the probes.
+- **train.** The adapter is trained again from the base on every live claim and
+  the rehearsal (`--rehearsal-share`, a quarter by default), for at most
+  `--epochs` passes (6) over the records, so a superseded claim is simply not in
+  the next set. `--continue-from-release` is the ablation: continue the current
+  release on the claims not yet absorbed with `--replay-fraction` (a quarter) of
+  each earlier release's records replayed. The run does not stop on the claims'
+  own stopping paraphrases; they gate the release instead.
+- **release.** A declared rule on counts, no significance test. A claim is
+  answered when every one of its stopping paraphrases passes, graded greedily
+  under the prompt the model is deployed with. Improvement: the candidate
+  answers a claim the champion did not. Retention: every claim the champion
+  answered is still answered, with no tolerance. Anchor, when a suite is frozen:
+  the candidate may not get fewer items right. Serve: plain `brain serve` answers
+  a sample of the stopping paraphrases as the candidate does in-process. A
+  candidate the gate refuses stays on record (`candidate`, the run's `gate`
+  numbers) and the current release stays in use; `--no-release` stops at the
+  candidate. The release's parent is the champion it replaces.
+- **ledger.** Each live claim the release answers records the release that first
+  absorbed it; `claims ledger` shows it as `absorbed_by`. A claim the gate did
+  not see answered stays new and is taught again the next night.
+
+Not built: the sycophancy and hallucination-on-unknown probes on the retention
+side, the stopping of the training on the stopping paraphrases, supersession by
+a judge over names or embeddings, reinforced corrections, an entailment gate
+and two-pass extraction, and refusing third-party personal claims.
 
 ## JSON output
 
@@ -808,7 +875,14 @@ print `{"error": string, "refused": bool}`. Commands that record a run add
 "kind", "statement", "outcome", "claim", "supersedes", "reason_code", "reason"}],
 "live", "extraction_failed", "run"}`. `claims ledger`: `{"live": [claim],
 "superseded": [{"claim", "statement", "by"}], "refused": [{"claim_set", "index",
-"session", "statement", "reason_code", "reason"}]}`.
+"session", "statement", "reason_code", "reason"}]}`. A live claim carries `absorbed_by`, the release that first took it in, once one has.
+`absorb`: `{"policy", "roles", "intake", "extract", "claims", "live", "pending",
+"kits", "dataset", "rehearsal", "candidate", "gate", "release", "absorbed",
+"stopped", "dry_run", "release_asked", "run"}`, each stage's report under its
+name; `gate` is `{"claims": [{"claim", "candidate": {"passed", "measured"},
+"champion"}], "answered", "gained", "unanswered", "regressed", "improvement",
+"retention", "anchor", "serve", "passed"}`, and `anchor` is absent when no suite
+is frozen.
 
 `status`: `{"state", "policy", "recent_runs", "counts", "concepts"}` - `policy` is
 `{"reference", "model", "base", "adapter", "release"}` (`adapter` and
@@ -915,6 +989,8 @@ graph is derived from what the stores already record, on every call:
 | content | `part_of` | the source holding it as a part |
 | span | `span_of` | the source it names a part of, else the content it indexes |
 | task | `evidence` | each span it is grounded in |
+| task | `taught_by` | the claim it was made from (`absorb`) |
+| claim | `evidence` | each span of the person's words it rests on |
 | task set, experience set | `member` | each task, experience |
 | experience | `attempts`, `ran_in`, `solved_by` | its task, environment snapshot, solver model |
 | experience | `critique_of`, `retry_of`, `revision_of`, `preferred_over`, `variant_of` | the experience its relation names |
@@ -929,7 +1005,7 @@ With `--json`: `{"nodes": [{"id", "kind", "label"}], "edges": [{"from",
 "to", "relation"}]}`. The artifact asked about is the first node; every
 node reached follows once, in walk order; an edge means `from` was derived
 from `to`, whichever way it was walked. `kind` is one of `source`,
-`content`, `span`, `task`, `task_set`, `experience`, `experience_set`,
+`content`, `span`, `claim`, `task`, `task_set`, `experience`, `experience_set`,
 `environment`, `model`, `verdict`, `producer`, `dataset`, `candidate`,
 `replay`, `release`, `adapter`, `answer`. Artifacts without an address of
 their own have ids of their kind: `span:<content-hex>:<start>-<end>`,
@@ -939,7 +1015,7 @@ their own have ids of their kind: `span:<content-hex>:<start>-<end>`,
 ## Exit status
 
 0 done; 1 the work failed or stopped short of what was asked (a candidate
-the gate blocked, a session file refused, a session the extractor gave nothing
+the gate blocked, an `absorb` that released nothing, a session file refused, a session the extractor gave nothing
 usable for); 2 refused
 before anything ran (usage, an unknown id, a remote model without the
 opt-in); 3 a sentence was asked back.
