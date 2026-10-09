@@ -13,7 +13,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use splinter_absorb::roles::Quotas;
 use splinter_absorb::runtime::{DEFAULT_JUDGE, DEFAULT_MODEL};
-use splinter_absorb::{build, screen, seal};
+use splinter_absorb::session::Style;
+use splinter_absorb::{build, record, screen, seal};
 
 /// Persona the policy answers as, and the author of the writings.
 const PERSONA: &str = "Thomas Jefferson";
@@ -36,6 +37,9 @@ enum Command {
     /// The sealed probes of the development and test facts.
     #[command(subcommand)]
     Probes(Probes),
+    /// Sessions between the policy and a simulated user.
+    #[command(subcommand)]
+    Session(Session),
 }
 
 #[derive(Args)]
@@ -88,6 +92,15 @@ enum Facts {
         #[arg(long, default_value_t = Quotas::PROTOCOL.hallucination)]
         hallucination: usize,
     },
+    /// Flag one test fact as the canary: its sessions assert a false statement.
+    Canary {
+        /// The run's output directory.
+        #[arg(long)]
+        out: PathBuf,
+        /// The test fact.
+        #[arg(long)]
+        fact: String,
+    },
     /// Put each fact to the day-0 policy six times, grade, class and fill the roles.
     Screen {
         #[command(flatten)]
@@ -120,6 +133,42 @@ enum Probes {
         /// Training files, JSON lines.
         #[arg(required = true)]
         files: Vec<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum Session {
+    /// Record one live session as an ATIF file.
+    Record {
+        #[command(flatten)]
+        common: Common,
+        /// The fact the user corrects.
+        #[arg(long, conflicts_with = "noise", required_unless_present = "noise")]
+        fact: Option<String>,
+        /// An unrelated chat instead of a fact (a null day is a day of these only).
+        #[arg(long)]
+        noise: bool,
+        /// A sham session: the fact is asked about and the answer is never corrected.
+        #[arg(long, requires = "fact", conflicts_with = "canary")]
+        sham: bool,
+        /// The user asserts the fact's false canary statement (see `facts canary`).
+        #[arg(long, requires = "fact")]
+        canary: bool,
+        /// How the user goes about it.
+        #[arg(long, value_enum, default_value = "plain")]
+        style: Style,
+        /// Which of the noise topics to chat about (default: the next).
+        #[arg(long, requires = "noise")]
+        topic: Option<usize>,
+        /// The day the session belongs to (a test fact's own day by default).
+        #[arg(long)]
+        day: Option<usize>,
+        /// The policy that answers; `+ADAPTER` after the checkpoint names the current release.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        policy: String,
+        /// The model that plays the user: plain, no adapter.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        simulator: String,
     },
 }
 
@@ -174,6 +223,9 @@ fn main() -> anyhow::Result<()> {
             })?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
+        Command::Facts(Facts::Canary { out, fact }) => {
+            println!("{}", splinter_absorb::canary::flag(&out, &fact)?);
+        }
         Command::Probes(Probes::Seal { common }) => {
             let sealed = seal::seal(&seal::Request {
                 out: common.out,
@@ -184,6 +236,35 @@ fn main() -> anyhow::Result<()> {
         Command::Probes(Probes::Check { out, files }) => {
             let records = seal::guard(&out)?.check_files(&files)?;
             println!("{records} training records leak no sealed probe");
+        }
+        Command::Session(Session::Record {
+            common,
+            fact,
+            noise,
+            sham,
+            canary,
+            style,
+            topic,
+            day,
+            policy,
+            simulator,
+        }) => {
+            let about = match (fact, noise, sham) {
+                (Some(id), false, false) => record::About::Fact(id),
+                (Some(id), false, true) => record::About::Sham(id),
+                _ => record::About::Noise(topic),
+            };
+            let recorded = record::record(&record::Request {
+                out: common.out,
+                models: common.models,
+                policy,
+                simulator,
+                day,
+                about,
+                style,
+                canary,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&recorded)?);
         }
     }
     Ok(())

@@ -12,14 +12,17 @@
 
 pub mod answers;
 pub mod build;
+pub mod canary;
 pub mod facts;
 pub mod grading;
 pub mod keys;
 pub mod policy;
 pub mod probes;
+pub mod record;
 pub mod roles;
 pub mod runtime;
 pub mod screen;
 pub mod seal;
+pub mod session;
 pub mod unknowns;
 pub mod writer;
