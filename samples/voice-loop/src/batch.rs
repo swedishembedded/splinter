@@ -75,8 +75,20 @@ impl Persona {
 
     /// The persona's answer to a question, as text.
     pub fn answer(&self, question: &str) -> Result<String, PolicyError> {
+        self.answer_streaming(question, &mut |_| {})
+    }
+
+    /// [`Self::answer`], handing `on_text` each piece as it is written.
+    pub fn answer_streaming(
+        &self,
+        question: &str,
+        on_text: &mut dyn FnMut(&str),
+    ) -> Result<String, PolicyError> {
         self.runtime
-            .block_on(self.answerer.ask(&self.system, question, ANSWER_TOKENS))
+            .block_on(
+                self.answerer
+                    .ask_streaming(&self.system, question, ANSWER_TOKENS, on_text),
+            )
             .map(|reply| reply.text.trim().to_string())
             .map_err(|e| PolicyError::Generate {
                 path: self.base.clone(),
@@ -189,6 +201,33 @@ pub fn listen_turns(
     opts: &ListenerOptions,
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
+    let listener = splinter_sdk::model::speech::BrainListener::load(opts)?;
+    spoken_turns(names, batch, persona, &listener, keep)
+}
+
+/// Answer every recording of `batch` with a recognizer in front of the text
+/// model, speaking each sentence as the model writes it.
+pub fn streamed_turns(
+    names: &Names<'_>,
+    batch: &Batch<'_>,
+    persona: &Persona,
+    keep: Option<&std::path::Path>,
+) -> Result<()> {
+    let listener = splinter_sdk::model::speech::CascadeListener::new(
+        BrainRecognizer::load(names.asr)?,
+        |question: &str, on_text: &mut dyn FnMut(&str)| persona.answer_streaming(question, on_text),
+    );
+    spoken_turns(names, batch, &persona.name, &listener, keep)
+}
+
+/// The turns of `batch`, taken by `listener` and spoken sentence by sentence.
+fn spoken_turns(
+    names: &Names<'_>,
+    batch: &Batch<'_>,
+    persona: &str,
+    listener: &dyn splinter_sdk::model::speech::Listener,
+    keep: Option<&std::path::Path>,
+) -> Result<()> {
     let mut recordings: Vec<PathBuf> = std::fs::read_dir(batch.recordings)
         .with_context(|| format!("reading {}", batch.recordings.display()))?
         .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -208,12 +247,11 @@ pub fn listen_turns(
     let speaker = names.speaker.clone();
     let judge = BrainRecognizer::load(names.asr)?;
     let synthesizer = BrainSynthesizer::load(names.tts)?;
-    let listener = splinter_sdk::model::speech::BrainListener::load(opts)?;
     let mut items = Vec::new();
     for (recording, question) in paired {
         let name = recording.display().to_string();
         let turn = splinter_sdk::model::speech::take_spoken_turn(
-            &listener,
+            listener,
             &synthesizer,
             &speaker,
             &read_clip(&recording)?,

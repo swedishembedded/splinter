@@ -29,13 +29,14 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use splinter_sdk::model::speech::{
-    round_trip, speak_verified, take_turn, BrainRecognizer, BrainSynthesizer, ListenerOptions,
-    Sentences, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
+    round_trip, speak_verified, take_turn, BrainRecognizer, BrainSynthesizer, Lexical,
+    ListenerOptions, Sentences, Synthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
+use splinter_sdk::vocabulary::speech_lesson::Lexicon;
 use voice_loop::batch::{
-    emit, listen_turns, read_clip, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
+    emit, listen_turns, read_clip, streamed_turns, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
 };
 use voice_loop::{read_sentences, Recorded, RoundTripReport, SpeakSetReport, TurnReport};
 
@@ -75,10 +76,15 @@ impl Models {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Teach the persona how to speak: hear a directive and keep what it teaches.
+    Teach(voice_loop::teach::TeachArgs),
     /// Speak a sentence in the persona's synthetic voice.
     Speak {
         #[command(flatten)]
         models: Models,
+        /// Lessons the persona has been taught; words they cover are said as taught.
+        #[arg(long)]
+        lessons: Option<PathBuf>,
         /// What to say.
         #[arg(long)]
         text: String,
@@ -312,6 +318,9 @@ enum Command {
     Turns {
         #[command(flatten)]
         models: Models,
+        /// Speak each sentence as the model writes it, rather than the whole answer at the end.
+        #[arg(long)]
+        stream: bool,
         /// A directory of WAV recordings, taken in file-name order.
         #[arg(long)]
         recordings: PathBuf,
@@ -342,7 +351,13 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::Speak { models, text, out } => speak(&models, &text, &out),
+        Command::Teach(args) => voice_loop::teach::teach(&args),
+        Command::Speak {
+            models,
+            lessons,
+            text,
+            out,
+        } => speak(&models, lessons.as_deref(), &text, &out),
         Command::SpeakSet {
             models,
             sentences,
@@ -524,6 +539,7 @@ fn main() -> Result<()> {
         ),
         Command::Turns {
             models,
+            stream,
             recordings,
             questions,
             out_dir,
@@ -532,28 +548,41 @@ fn main() -> Result<()> {
             adapter,
             system,
             report,
-        } => turns(
-            &models.names(),
-            &Batch {
+        } => {
+            let names = models.names();
+            let batch = Batch {
                 recordings: &recordings,
                 questions: questions.as_deref(),
                 out_dir: &out_dir,
-            },
-            &{
+            };
+            let persona = {
                 let loaded = Persona::load(&persona, &base, adapter.as_deref())?;
                 match system {
                     Some(system) => loaded.under(system),
                     None => loaded,
                 }
-            },
-            report.as_deref(),
-        ),
+            };
+            if stream {
+                streamed_turns(&names, &batch, &persona, report.as_deref())
+            } else {
+                turns(&names, &batch, &persona, report.as_deref())
+            }
+        }
     }
 }
 
-fn speak(models: &Models, text: &str, out: &std::path::Path) -> Result<()> {
+fn speak(
+    models: &Models,
+    lessons: Option<&std::path::Path>,
+    text: &str,
+    out: &std::path::Path,
+) -> Result<()> {
     let speaker = models.speaker();
-    let clip = BrainSynthesizer::load(&models.tts)?.speak(text, &speaker)?;
+    let lexicon = match lessons {
+        Some(path) => Lexicon::from_lessons(&voice_loop::teach::read_lessons(path)?),
+        None => Lexicon::new(),
+    };
+    let clip = Lexical::new(BrainSynthesizer::load(&models.tts)?, lexicon).speak(text, &speaker)?;
     clip.save(out)
         .with_context(|| format!("writing {}", out.display()))?;
     println!(

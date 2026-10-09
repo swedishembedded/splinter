@@ -21,7 +21,9 @@
 //! with the word error rate brain's own gates use.
 
 mod brain_backed;
+mod cascade;
 mod ingress;
+mod lexical;
 mod listener;
 mod round_trip;
 mod sentences;
@@ -39,9 +41,11 @@ pub use brain::Audio as Clip;
 pub use brain_backed::{
     BrainRecognizer, BrainSynthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
+pub use cascade::CascadeListener;
 pub use ingress::{
     AudioFeatures, Ingress, IngressExample, IngressOptions, StepSettings, FEATURE_WIDTH,
 };
+pub use lexical::Lexical;
 pub use listener::{BrainListener, ListenerOptions};
 pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};

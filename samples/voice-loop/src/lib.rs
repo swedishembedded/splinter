@@ -20,6 +20,7 @@ pub mod batch;
 pub mod bundle;
 pub mod ingress;
 pub mod spoken;
+pub mod teach;
 
 use serde::Serialize;
 use splinter_sdk::model::speech::{RoundTrip, RoundTripItem, StageTimings, Turn};

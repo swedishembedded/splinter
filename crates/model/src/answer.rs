@@ -160,6 +160,22 @@ impl Answerer {
     /// # Errors
     /// The generation failed on the device.
     pub async fn ask(&self, system: &str, user: &str, max_tokens: u32) -> anyhow::Result<Reply> {
+        self.ask_streaming(system, user, max_tokens, &mut |_| {})
+            .await
+    }
+
+    /// [`Self::ask`], handing `on_text` each piece of the reply as it is
+    /// written.
+    ///
+    /// # Errors
+    /// The generation failed on the device.
+    pub async fn ask_streaming(
+        &self,
+        system: &str,
+        user: &str,
+        max_tokens: u32,
+        on_text: &mut dyn FnMut(&str),
+    ) -> anyhow::Result<Reply> {
         let message = |role, text: &str| Message {
             role,
             content: MessageContent::Text(text.to_string()),
@@ -174,7 +190,10 @@ impl Answerer {
         let mut reply = Reply::default();
         while let Some(event) = stream.next().await {
             match event? {
-                ResponseEvent::TextDelta(delta) => reply.text.push_str(&delta),
+                ResponseEvent::TextDelta(delta) => {
+                    on_text(&delta);
+                    reply.text.push_str(&delta);
+                }
                 ResponseEvent::ThinkingDelta(delta) => reply.thinking.push_str(&delta),
                 ResponseEvent::MaxTokens => reply.truncated = true,
                 ResponseEvent::Usage { output_tokens, .. } => reply.tokens = output_tokens,

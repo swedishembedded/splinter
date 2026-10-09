@@ -120,6 +120,64 @@ ignored the requested checkpoint (brain knowledge 210); Qwen3-ASR told its
 encoder it had 128 frames (brain knowledge 211); a spoken answer longer than
 one render is truncated.
 
+## Latency on CUDA (2026-10-09, GH200, one process, GPU shared with nothing else running)
+
+Question spoken, 8B persona answer of about 80 words, 30 recordings, the cascade
+speaking each sentence as it is written. Reproduce:
+`voice-loop turns --stream --recordings <dir> --out-dir <d> --base <Qwen3-8B>`
+under `BRAIN_BACKEND=cuda`.
+
+| Stage | Before (Vulkan, CPU codec) | Now (CUDA) |
+|---|---|---|
+| Speaking 12 s of speech | 20.4 s (codec 14.3 s, codes 6.1 s) | 3.4 s (real-time factor 0.27) |
+| 8B answer, 80 tokens | 2.3 s | 1.4 s |
+| First sound, p50 / p95 | 3.4 s / 4.8 s | 2.6 s / 3.1 s |
+| Whole turn, p50 | 31 s | 9.9 s |
+
+Not yet at the 1.5 s first-sound target. What remains, in order of size: the
+language model is host-bound at about 17 ms a token on a card that could do
+four times that; the code predictor takes 11 ms of each 23 ms frame; the codec
+decode needs the whole utterance (no frame streaming), and its two convolution
+kernels are the slowest on the card; speaking and writing share the GPU, so
+overlapping them slows both. The first-sound figure includes recognition
+(0.3 s). Idle-GPU proof and n>=20 are the p50/p95 above only; the stored
+profiles are under `~/resources/speech/profiles/`.
+
+## Learning to speak from conversation
+
+A user's spoken or typed correction is data. `core::speech_lesson` reads a
+directive ("Talk as follows: ...", "Pronounce X as Y") and keeps lessons, each
+with an objective that says what it teaches and how:
+
+* `lexicon`: a word is said as spelled out. Applied before synthesis
+  (`model::speech::Lexical`), nothing trained. Works today.
+* `in_context`: the user's recording is a reference the voice imitates (brain's
+  resident engine takes a reference clip and its words). Nothing trained. The
+  lesson names the clip; wiring it into `Synthesizer` is not done.
+* `supervised`: text and recording as a supervised example for the
+  synthesizer (brain's TTS fine-tuning). Lesson kept; no trainer wired.
+* `preference`: the recording preferred over the synthesizer's own take. Feeds
+  the reinforcement loop below.
+
+The reinforcement loop follows HappyRobot's account of tuning a speech model
+(sample several takes of a sentence, score each, make the better ones likelier;
+GRPO, group-relative advantages; reward = naturalness from a judge plus word
+error rate so neither buys the other; a KL anchor to the original voice; humans
+choose the checkpoint). `eval::speech_reward` has the reward, group advantages
+and preference pairs, tested. Not built: a naturalness judge (no multimodal
+audio model is on this host; the user's own thumbs-up or correction is the
+judge until one is), and the GRPO step over the Talker (brain has GRPO for text
+models and the Talker is a Qwen, so it is a trainer to write, not a research
+gap).
+
+How a conversation becomes lessons: `voice-loop teach` hears the directive and
+keeps lessons. An imitation needs the example as its own recording, spoken as
+the next turn; trimming it out of the same utterance needs word timestamps the
+recogniser does not give. A pronunciation said aloud cannot be transcribed
+("Jeff-er-son" comes back "Jefferson"), so it is taught by typing it or by
+recording an example. Every lesson carries the portrayal of the voice it
+applies to and names recordings by digest only.
+
 ## Open items and known limits
 
 - The R0 sentences lost under seed 1 are synthesis failures, not recognition

@@ -368,10 +368,32 @@ fn a_stream_breaks_a_long_sentence_at_the_bound_like_the_whole_text_would_be() {
     );
 }
 
-/// A listener that answers in deltas, noting when it is done.
+type Log = std::sync::Mutex<Vec<String>>;
+
+fn note(log: &Log, line: impl Into<String>) {
+    log.lock().unwrap().push(line.into());
+}
+
+/// Wait until the log holds `line`, so a listener can prove that speaking
+/// proceeds while it is still answering. A serial implementation never gets
+/// there and fails the wait.
+fn wait_for(log: &Log, line: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !log.lock().unwrap().iter().any(|l| l == line) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{line:?} was never logged: nothing was spoken while the listener wrote"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+
+/// A listener that answers in deltas, then waits to hear the first sentence
+/// spoken before it finishes.
 struct Replying<'a> {
     answer: &'a str,
-    log: &'a std::cell::RefCell<Vec<String>>,
+    first_spoken: Option<&'a str>,
+    log: &'a Log,
 }
 
 impl Listener for Replying<'_> {
@@ -379,25 +401,29 @@ impl Listener for Replying<'_> {
         for delta in self.answer.split_inclusive(' ') {
             on_text(delta);
         }
-        self.log.borrow_mut().push("listener done".into());
+        if let Some(first) = self.first_spoken {
+            wait_for(self.log, first);
+        }
+        note(self.log, "listener done");
         Ok(self.answer.to_string())
     }
 }
 
-struct Logging<'a>(&'a std::cell::RefCell<Vec<String>>);
+struct Logging<'a>(&'a Log);
 
 impl Synthesizer for Logging<'_> {
     fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
-        self.0.borrow_mut().push(format!("spoke {text}"));
+        note(self.0, format!("spoke {text}"));
         ScriptedSynthesizer.speak(text, speaker)
     }
 }
 
 #[test]
-fn the_first_sentence_is_spoken_before_the_listener_has_finished_answering() {
-    let log = std::cell::RefCell::new(Vec::new());
+fn the_first_sentence_is_spoken_while_the_listener_is_still_answering() {
+    let log = Log::default();
     let listener = Replying {
         answer: "We resolved. Then we petitioned. They did not listen.",
+        first_spoken: Some("spoke We resolved."),
         log: &log,
     };
     let turn =
@@ -407,17 +433,24 @@ fn the_first_sentence_is_spoken_before_the_listener_has_finished_answering() {
         turn.answer,
         "We resolved. Then we petitioned. They did not listen."
     );
-    let log = log.into_inner();
+    let log = log.into_inner().unwrap();
     assert_eq!(log[0], "spoke We resolved.", "{log:?}");
-    assert_eq!(log[1], "spoke Then we petitioned.");
+    let done = log.iter().position(|l| l == "listener done").unwrap();
+    assert!(done > 0, "speaking began before the listener finished");
     assert_eq!(
         log.last().unwrap(),
         "spoke They did not listen.",
         "the last sentence waits for the end of the answer"
     );
-    assert!(
-        log.iter().position(|l| l == "listener done").unwrap() > 1,
-        "speaking began while the listener was still answering"
+    let spoken: Vec<&String> = log.iter().filter(|l| l.starts_with("spoke ")).collect();
+    assert_eq!(
+        spoken,
+        [
+            "spoke We resolved.",
+            "spoke Then we petitioned.",
+            "spoke They did not listen."
+        ],
+        "in the order written"
     );
     assert!(turn.timings.first_audio <= turn.timings.total);
     let words: usize = [
@@ -436,12 +469,90 @@ fn the_first_sentence_is_spoken_before_the_listener_has_finished_answering() {
 
 #[test]
 fn a_listener_that_says_nothing_is_not_spoken_for() {
-    let log = std::cell::RefCell::new(Vec::new());
+    let log = Log::default();
     let listener = Replying {
         answer: "  ",
+        first_spoken: None,
         log: &log,
     };
     let err =
         take_spoken_turn(&listener, &Logging(&log), &speaker(), &said("question"), 30).unwrap_err();
     assert!(matches!(err, PolicyError::Synthesis { .. }), "{err}");
+}
+
+#[test]
+fn a_cascade_listener_answers_what_it_heard_and_is_spoken_as_it_writes() {
+    let log = Log::default();
+    let asked = std::sync::Mutex::new(String::new());
+    let listener = CascadeListener::new(
+        ScriptedRecognizer::perfect(),
+        |question: &str, on_text: &mut dyn FnMut(&str)| {
+            *asked.lock().unwrap() = question.to_string();
+            for piece in ["It is ", "tyranny. ", "Resist."] {
+                on_text(piece);
+            }
+            wait_for(&log, "spoke It is tyranny.");
+            note(&log, "listener done");
+            Ok("It is tyranny. Resist.".to_string())
+        },
+    );
+    let turn = take_spoken_turn(
+        &listener,
+        &Logging(&log),
+        &speaker(),
+        &said("Is it just?"),
+        30,
+    )
+    .unwrap();
+
+    assert_eq!(
+        *asked.lock().unwrap(),
+        "Is it just?",
+        "the model gets the transcript"
+    );
+    assert_eq!(turn.answer, "It is tyranny. Resist.");
+    let log = log.into_inner().unwrap();
+    assert_eq!(log[0], "spoke It is tyranny.", "{log:?}");
+}
+
+#[test]
+fn a_stream_lets_the_first_words_go_at_a_clause_end_before_the_sentence_closes() {
+    let mut stream = SentenceStream::new(30);
+    let first = stream.push("Well, I think that we must resist, and ");
+    assert_eq!(first, ["Well, I think that we must resist,"]);
+    let mut rest = stream.push("never submit to tyranny. ");
+    rest.extend(stream.finish());
+    assert_eq!(rest, ["and never submit to tyranny."]);
+}
+
+#[test]
+fn a_stream_without_a_clause_end_lets_the_first_ten_words_go() {
+    let mut stream = SentenceStream::new(30);
+    let first = stream.push("one two three four five six seven eight nine ten eleven twelve ");
+    assert_eq!(first, ["one two three four five six seven eight nine ten"]);
+    let mut rest = stream.push("thirteen. ");
+    rest.extend(stream.finish());
+    assert_eq!(rest, ["eleven twelve thirteen."]);
+}
+
+#[test]
+fn only_the_first_piece_is_cut_early() {
+    let mut stream = SentenceStream::new(30);
+    stream.push("One two three four five. ");
+    let next = stream.push("Six seven eight, nine ten eleven, twelve thirteen. ");
+    assert_eq!(next, ["Six seven eight, nine ten eleven, twelve thirteen."]);
+}
+
+#[test]
+fn a_taught_word_reaches_the_voice_as_taught_and_nothing_else_changes() {
+    let mut lexicon = splinter_core::speech_lesson::Lexicon::new();
+    lexicon.teach("Jefferson", "Jeff-er-son");
+    let log = Log::default();
+    let voice = Lexical::new(Logging(&log), lexicon);
+    voice.speak("Jefferson wrote it.", &speaker()).unwrap();
+    voice.speak("Adams agreed.", &speaker()).unwrap();
+    assert_eq!(
+        log.into_inner().unwrap(),
+        ["spoke Jeff-er-son wrote it.", "spoke Adams agreed."]
+    );
 }

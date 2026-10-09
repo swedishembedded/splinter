@@ -34,6 +34,9 @@
 //!   every item.
 //! * [`speech`] - how a speaking persona is described, and the label a
 //!   synthetic voice always carries.
+//! * [`speech_lesson`] - what a user teaches a speaking persona about how to
+//!   speak, read from what they said and kept as lessons with a stated
+//!   objective.
 //! * [`speech_bundle`] - the parts of a speaking persona and the rule that each
 //!   was made for the others it is attached to.
 //! * [`spoken`] - recordings of text, each attached to the record it renders, and
@@ -64,6 +67,7 @@ pub mod selfcontained;
 pub mod source;
 pub mod speech;
 pub mod speech_bundle;
+pub mod speech_lesson;
 pub mod spoken;
 pub mod terms;
 pub mod training;

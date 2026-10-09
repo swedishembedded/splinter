@@ -16,3 +16,4 @@ in the same commit.
 | [008](008-a-gate-checked-by-grep-lied.md) | A gate checked by grep lied |
 | [009](009-gpu-rl-loops-need-a-measured-cost-before-they-are-planned.md) | An RL loop needs a measured cost before it is planned |
 | [010](010-a-windowed-overlap-rule-misses-a-letter-printed-inside-its-neighbour.md) | A windowed overlap rule misses a letter printed inside its neighbour |
+| [011](011-a-library-that-resolves-its-own-device-drops-the-backend-you-set.md) | A library that resolves its own device drops the backend you set |

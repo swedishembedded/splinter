@@ -13,6 +13,12 @@ use splinter_core::speech::SpeakerProfile;
 use super::{Clip, Synthesizer};
 use crate::error::PolicyError;
 
+/// The fewest words an early first piece may hold when it ends at a clause end.
+const EARLY_MIN_WORDS: usize = 4;
+
+/// The most words an early first piece holds when no clause ends sooner.
+const EARLY_MAX_WORDS: usize = 10;
+
 /// The silence between two spoken pieces, in milliseconds.
 pub const PAUSE_MILLIS: u32 = 250;
 
@@ -89,6 +95,8 @@ pub(super) fn join(clips: &[Clip]) -> Result<Clip, PolicyError> {
 pub struct SentenceStream {
     buffer: String,
     max_words: usize,
+    /// Whether a piece has been let go yet; only the first is cut early.
+    began: bool,
 }
 
 impl SentenceStream {
@@ -98,6 +106,7 @@ impl SentenceStream {
         Self {
             buffer: String::new(),
             max_words: max_words.max(1),
+            began: false,
         }
     }
 
@@ -109,6 +118,12 @@ impl SentenceStream {
         let Some(cut) = self.buffer.rfind(char::is_whitespace) else {
             return Vec::new();
         };
+        if !self.began {
+            if let Some(first) = self.take_early_piece(cut) {
+                self.began = true;
+                return vec![first];
+            }
+        }
         let (head, tail) = self.buffer.split_at(cut);
         let mut done = Vec::new();
         let mut pending = Vec::new();
@@ -120,9 +135,41 @@ impl SentenceStream {
             }
         }
         self.buffer = format!("{}{tail}", pending.join(" "));
-        done.iter()
+        let pieces: Vec<String> = done
+            .iter()
             .flat_map(|sentence| split(sentence, self.max_words))
-            .collect()
+            .collect();
+        self.began |= !pieces.is_empty();
+        pieces
+    }
+
+    /// The opening words, once enough are known to be complete (`cut` is the
+    /// last whitespace, so every word before it is whole): up to the first
+    /// clause end at four words or more, else the first ten words. A sentence
+    /// that closes sooner is left to the normal path. The wait for the first
+    /// sound is the one the listener notices, so only it is cut early.
+    fn take_early_piece(&mut self, cut: usize) -> Option<String> {
+        let words: Vec<&str> = self.buffer[..cut].split_whitespace().collect();
+        let longest = EARLY_MAX_WORDS.min(self.max_words);
+        let end = words.iter().enumerate().position(|(i, w)| {
+            let closes = w
+                .trim_end_matches(['"', '\'', ')'])
+                .ends_with(['.', '!', '?']);
+            closes
+                || (i + 1 >= EARLY_MIN_WORDS.min(longest) && w.ends_with([',', ';', ':']))
+                || i + 1 == longest
+        })?;
+        let closed = words[end]
+            .trim_end_matches(['"', '\'', ')'])
+            .ends_with(['.', '!', '?']);
+        if closed {
+            return None;
+        }
+        let piece = words[..=end].join(" ");
+        let rest = words[end + 1..].join(" ");
+        let tail = self.buffer[cut..].to_string();
+        self.buffer = format!("{rest}{tail}");
+        Some(piece)
     }
 
     /// The rest, as the pieces it makes: the end of the text.
