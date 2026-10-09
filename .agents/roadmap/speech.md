@@ -178,6 +178,50 @@ recogniser does not give. A pronunciation said aloud cannot be transcribed
 recording an example. Every lesson carries the portrayal of the voice it
 applies to and names recordings by digest only.
 
+## Sven in voice mode: what is missing
+
+Checked against the code (a Haiku agent's first report was corrected: it put
+audio I/O "in the brain process", which has no audio device, and invented a
+6.3 s overhead term; this list keeps only what was read in the code).
+
+What exists: `sven_sdk::Agent::send(&str)` runs a turn; `Agent::events()` is a
+broadcast of `SessionEvent` with `TextDelta` and `TextComplete` (model text
+only, so tool output and thinking are separate events and a "speak only the
+answer" policy is a filter); `Engine::builder().model_provider(...)` takes any
+provider, and splinter's `LocalQwen` is one that runs a base with a persona
+adapter in-process; sven transcribes audio attachments through brain over
+D-Bus (`tools.asr`); splinter has the speech loop (`take_spoken_turn`,
+`CascadeListener`, streaming `Synthesizer`) and `spoken_disclosure`.
+
+What is missing, in the order a user meets it:
+
+1. A front end that joins them. Nothing connects an `Agent` to the speech
+   loop: no `voice-loop` command takes a question, runs it through a sven
+   agent (tools, session) and speaks the `TextDelta`s sentence by sentence.
+   Smallest version, files in and out, on this host: a `voice-loop agent`
+   command in splinter that builds an engine around `LocalQwen` with the
+   persona, sends the recognised text, and feeds the deltas to the existing
+   sentence stream. Acceptance: a spoken question that needs a tool call is
+   answered by voice, the tool output is not spoken, the session transcript
+   holds the turn.
+2. A live microphone and speaker. This host has no PCM device (`/dev/snd`
+   holds only `seq` and `timer`), so live voice needs a client on the user's
+   machine and a transport to the GPU host; neither exists. Acceptance: a
+   client that streams captured audio up and plays returned audio, with the
+   round-trip first-sound time measured from the client's clock.
+3. End-of-speech detection. Recordings are whole files today. An energy
+   detector plus the streaming recogniser's own endpoint is planned (plan
+   step P4), not built. Acceptance: a held-out set of spoken questions with
+   trailing silence and background noise, endpoint error reported.
+4. Interruption. Brain's synthesis and sven's run both accept cancellation;
+   nothing connects speech detected during an answer to either.
+5. The spoken disclosure of the portrayal at the start of a session is not
+   played by any front end.
+6. For a voice mode inside sven itself (not a front end around it): a
+   spoken-output event and a way to reach brain's synthesis, as `tools.asr`
+   reaches its recogniser over D-Bus. That is sven's to design; it must not
+   name splinter or depend on it, and a front end (1) needs none of it.
+
 ## Open items and known limits
 
 - The R0 sentences lost under seed 1 are synthesis failures, not recognition

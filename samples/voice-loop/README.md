@@ -14,9 +14,8 @@ the portrayal the speaker declares, and a speaker cannot be built without one.
 
 ```bash
 source ~/project/shared/containers/build-env.sh   # a GPU the build can see
-export BRAIN_BACKEND=cuda
 cargo build --release -p splinter-voice-loop
-V=target/release/voice-loop
+V="target/release/voice-loop --backend cuda"
 
 # Needs the models in brain's store:
 #   brain pull Qwen/Qwen3-TTS-12Hz-0.6B-Base
@@ -25,10 +24,38 @@ $V speak --text "Good morning." --out question.wav
 $V roundtrip --sentences sentences.txt --report roundtrip.json
 $V turn --in question.wav --out answer.wav --persona "Samuel Adams" \
     --base ~/.local/share/brain/models/Qwen/Qwen3-8B --report turn.json
+
+# A directory of recordings, each sentence spoken as the model writes it:
+$V turns --stream --recordings questions/ --out-dir answers/ \
+    --base ~/.local/share/brain/models/Qwen/Qwen3-8B --report turns.json
+
+# Teach the persona how to say a word, then hear it:
+$V teach --said "Pronounce Jefferson as Jeff-er-son." --lessons lessons.jsonl
+$V speak --lessons lessons.jsonl --text "Jefferson wrote it." --out said.wav
 ```
 
-Check that the `adapter:` line brain prints names a GPU. A container without
-a Vulkan driver file makes brain run on the CPU without saying so.
+`--backend` says how the hardware is driven: `cuda`, `vulkan`, `wgpu` or
+`cpu`. Without it brain uses the backend its probe prefers, which on a CUDA
+host is not CUDA, and the run is several times slower. The `adapter:` line brain
+prints names the card whichever backend runs, so it does not tell you; the
+`first_audio_seconds` of a `turns --stream` report does.
+
+## Teaching it to speak
+
+`teach` hears a directive and keeps what it teaches as lessons, one JSON
+object per line (`core::speech_lesson`). `--directive` is a recording of the
+user, `--said` the same typed.
+
+* "Pronounce X as Y" makes a lexicon entry: `speak --lessons` says X as Y. A
+  respelling said aloud is lost to the recogniser ("Jeff-er-son" is heard as
+  "Jefferson"), so teach it typed.
+* "Talk as follows: ..." needs the example as its own recording, spoken as the
+  next turn and passed with `--example`; it makes in-context, supervised and
+  preference lessons that name the recording by digest. Only the lexicon is
+  applied today; the others are kept for training that is not built (see the
+  speech roadmap).
+
+Every lesson carries the portrayal of the voice it applies to.
 
 ## What is measured
 
@@ -40,6 +67,12 @@ a Vulkan driver file makes brain run on the CPU without saying so.
 * `turn`: the three stages (recognise, answer, speak) are timed on their own.
   Silence is not answered: a clip with no recognisable speech, or an answer
   with no words, ends the turn with an error naming the stage.
+* `turns --stream`: speaking runs beside the model, a sentence at a time, and
+  the first piece goes at a clause end after four words (or ten). The report
+  holds, per turn, seconds until the first word was written
+  (`first_text_seconds`), until the first piece was handed to be spoken
+  (`first_piece_seconds`) and until the voice first made a sound
+  (`first_audio_seconds`), each with its spread.
 
 Synthesis is seeded (`--seed`), because the same sentence is spoken in very
 different lengths from different seeds and a short rendering can lose words
@@ -50,5 +83,8 @@ before recognition hears them.
 | File | What |
 |---|---|
 | `src/lib.rs` | the reports and the sentence-file reader |
-| `src/main.rs` | `speak`, `roundtrip`, `turn` |
-| `crates/model/src/speech/` | the cascade itself: recognizer and synthesizer on brain, one turn, the round trip |
+| `src/main.rs` | the command line; `voice-loop --help` lists every command |
+| `src/batch.rs` | `turns`, `turns --stream` and `listen-turns` |
+| `src/teach.rs` | `teach` and `speak` with a lexicon |
+| `src/ingress.rs`, `src/spoken.rs`, `src/bundle.rs` | the spoken sets, the listening projector and the bundle |
+| `crates/model/src/speech/` | the cascade itself: recognizer and synthesizer on brain, one turn, the round trip, the cascade listener |
