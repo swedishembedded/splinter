@@ -185,3 +185,137 @@ pub fn run(request: &Request) -> anyhow::Result<Report> {
     .write(&request.out)?;
     Ok(report)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keys::{Key, KeyKind};
+    use crate::ledger::{
+        agree, append, BatchRecord, FamilyRecord, Params, Seconds, Selected, Tried,
+    };
+    use crate::prescreen::Verdict;
+    use crate::roles::Role;
+    use crate::sentences::{Candidate, Specific, SpecificKind};
+
+    const SENTENCE: &str = "In 1785 Mr. Short sailed from Paris with the books that he had bought for the library of Mr. Madison.";
+
+    fn tried(question: &str, verdict: Verdict) -> Tried {
+        Tried {
+            candidate: Candidate {
+                family: "letter-1.txt".into(),
+                sentence: SENTENCE.into(),
+                specific: Specific {
+                    kind: SpecificKind::Year,
+                    answer: "1785".into(),
+                    keys: vec![Key {
+                        text: "1785".into(),
+                        kind: KeyKind::Number,
+                    }],
+                },
+                heading: None,
+            },
+            question: Some(question.into()),
+            failure: None,
+            verdict: Some(verdict),
+        }
+    }
+
+    #[test]
+    fn the_ledgers_become_a_pool_with_the_role_of_each_family_fixed_and_every_refusal_named() {
+        let dir = tempfile::tempdir().expect("dir");
+        let materials = dir.path().join("materials");
+        std::fs::create_dir_all(&materials).expect("dir");
+        std::fs::write(
+            materials.join("letter-1.txt"),
+            format!("To Mr. Short\nParis, 1785\n\n{SENTENCE} More words follow."),
+        )
+        .expect("file");
+        std::fs::write(
+            materials.join("letter-2.txt"),
+            "Nothing to find here at all.",
+        )
+        .expect("file");
+        let out = dir.path().join("out");
+        agree(
+            &out,
+            &Params {
+                seed: 1,
+                min_words: 5,
+                batch: 10,
+                tries: 3,
+                generator: "g".into(),
+                judge: "j".into(),
+                persona: "Thomas Jefferson".into(),
+            },
+        )
+        .expect("params");
+        let yes = Verdict {
+            answerable: true,
+            keys_exact: true,
+            stands_alone: true,
+            natural: true,
+        };
+        let no = Verdict {
+            natural: false,
+            ..yes
+        };
+        let question = "In which year did Mr. Short leave Paris with Madison's books?";
+        append(
+            &out,
+            0,
+            1,
+            &BatchRecord {
+                records: vec![
+                    FamilyRecord {
+                        family: "letter-1.txt".into(),
+                        candidates: 2,
+                        tried: vec![tried("Odd question about Short?", no), tried(question, yes)],
+                        selected: Some(Selected {
+                            question: question.into(),
+                            statement: SENTENCE.into(),
+                            keys: tried(question, yes).candidate.specific.keys,
+                            answer_type: "year".into(),
+                            entities: vec!["madison".into(), "paris".into(), "short".into()],
+                        }),
+                    },
+                    FamilyRecord {
+                        family: "letter-2.txt".into(),
+                        candidates: 0,
+                        tried: vec![],
+                        selected: None,
+                    },
+                ],
+                controls: vec![],
+                seconds: Seconds::default(),
+            },
+        )
+        .expect("ledger");
+        let report = run(&Request {
+            materials,
+            out: out.clone(),
+            quotas: Quotas::PROTOCOL,
+        })
+        .expect("a pool");
+        assert_eq!(report.facts, 1);
+        assert_eq!(report.refused["the question is not natural"], 1);
+        let manifest = Manifest::read(&out).expect("manifest");
+        let fact = &manifest.facts[0];
+        assert_eq!(fact.family, "letter-1.txt");
+        assert!(
+            Role::WRONG.contains(&fact.candidate_role),
+            "a family is a candidate for a role of wrong facts"
+        );
+        assert_eq!(fact.evidence.source, "letter-1.txt");
+        assert_eq!(manifest.unknowns.len(), Quotas::PROTOCOL.hallucination);
+        // A pool is rebuilt before the screening, not after it.
+        let mut screened = manifest;
+        screened.facts[0].class = Some(crate::roles::Class::Known);
+        screened.write(&out).expect("write");
+        assert!(run(&Request {
+            materials: dir.path().join("materials"),
+            out,
+            quotas: Quotas::PROTOCOL,
+        })
+        .is_err());
+    }
+}

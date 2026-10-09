@@ -33,9 +33,13 @@ use crate::policy::{Answer, Decoding, Policy, SAMPLE_TEMPERATURE};
 use crate::probes::{Probe, ProbeKind};
 use crate::roles::{select, Class, Quotas, Role, Screened, Shortfalls};
 use crate::runtime;
+use crate::verdicts::Verdicts;
 
 /// Where the screening report is written.
 const REPORT: &str = "screening.json";
+
+/// Where the judge's verdicts are kept as they are made.
+const VERDICTS: &str = "screening-verdicts.jsonl";
 
 /// The precision a fact's own hard negatives must show the judge has.
 pub const MIN_FACT_PRECISION: f64 = 0.95;
@@ -151,6 +155,7 @@ const CONTROL_SOLVER: &str = "absorb/control";
 struct Grading<'a> {
     ctx: &'a splinter_sdk::Context,
     judge: &'a Judge,
+    kept: &'a Verdicts,
     solver: &'a str,
     collected: &'a Collected,
     pool: &'a [Fact],
@@ -164,8 +169,10 @@ impl Grading<'_> {
         statement: &str,
         text: &str,
     ) -> anyhow::Result<Option<bool>> {
-        self.judge
-            .verdict(self.ctx, solver, question, statement, text)
+        self.kept.get_or_ask(question, statement, text, || {
+            self.judge
+                .verdict(self.ctx, solver, question, statement, text)
+        })
     }
 
     fn entry(&self, fact: &Fact) -> anyhow::Result<Entry> {
@@ -475,9 +482,11 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
         calibrated.calibration.abstain_rate
     );
     manifest.judge = Some(calibrated.calibration.clone());
+    let kept = Verdicts::open(&request.out.join(VERDICTS), &calibrated.calibration.judge)?;
     let grading = Grading {
         ctx: &ctx,
         judge: &calibrated.judge,
+        kept: &kept,
         solver: &solver,
         collected: &collected,
         pool: &manifest.facts,

@@ -109,8 +109,9 @@ fn holds(padded: &str, key: &Key) -> bool {
 }
 
 /// The first sentence of the corpus that holds every key of the entry and
-/// every entity it names and shares at least three content words with its
-/// statement: the entry's statement is then something a letter says.
+/// every entity it names and holds every content word (longer than three
+/// letters, at least three) of its statement: the entry's statement is then something a
+/// letter says.
 fn support(entry: &Entry, keys: &[Key], corpus: &[Indexed]) -> Support {
     let content: Vec<String> = words(&entry.statement)
         .into_iter()
@@ -120,15 +121,18 @@ fn support(entry: &Entry, keys: &[Key], corpus: &[Indexed]) -> Support {
         .iter()
         .find(|c| {
             keys.iter().all(|k| holds(&c.padded, k))
+                && !c.sentence.starts_with("To ")
                 && entry
                     .entities
                     .iter()
                     .all(|e| c.padded.contains(&format!(" {e} ")))
-                && content
-                    .iter()
-                    .filter(|w| c.padded.contains(&format!(" {w} ")))
-                    .count()
-                    >= 3
+                && {
+                    let shared = content
+                        .iter()
+                        .filter(|w| c.padded.contains(&format!(" {w} ")))
+                        .count();
+                    shared >= 3 && shared == content.len()
+                }
         })
         .map(|c| (c.family.clone(), c.sentence.clone()));
     Support { letter }
@@ -355,7 +359,7 @@ mod tests {
     fn texts() -> Vec<(String, String)> {
         vec![(
             "letter-1.txt".into(),
-            "To Mr. Short\nParis, 1785\n\nDear Sir,\n\nThe French court sat at the palace of \
+            "To Mr. Short\nParis, 1785\n\nDear Sir,\n\nThe French court was seated at the palace of \
              Versailles near Paris, and the minister waited there for many weeks in 1785."
                 .into(),
         )]

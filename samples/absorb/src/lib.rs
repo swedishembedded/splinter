@@ -35,4 +35,5 @@ pub mod sentences;
 pub mod session;
 pub mod subjects;
 pub mod unknowns;
+pub mod verdicts;
 pub mod writer;
