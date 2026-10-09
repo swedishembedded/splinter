@@ -217,7 +217,7 @@ pub fn listen_turns(
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
     let listener = splinter_sdk::model::speech::BrainListener::load(opts)?;
-    spoken_turns(names, batch, persona, &listener, keep)
+    spoken_turns(names, batch, persona, &listener, None, keep)
 }
 
 /// Answer every recording of `batch` with a recognizer in front of the text
@@ -232,7 +232,7 @@ pub fn streamed_turns(
         BrainRecognizer::load(names.asr)?,
         |question: &str, on_text: &mut dyn FnMut(&str)| persona.answer_streaming(question, on_text),
     );
-    spoken_turns(names, batch, &persona.name, &listener, keep)
+    spoken_turns(names, batch, &persona.name, &listener, None, keep)
 }
 
 /// The turns of `batch`, taken by `listener` and spoken sentence by sentence.
@@ -241,6 +241,7 @@ pub fn spoken_turns(
     batch: &Batch<'_>,
     persona: &str,
     listener: &dyn splinter_sdk::model::speech::Listener,
+    lexicon: Option<splinter_sdk::model::speech::SharedLexicon>,
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
     let mut recordings: Vec<PathBuf> = std::fs::read_dir(batch.recordings)
@@ -261,7 +262,10 @@ pub fn spoken_turns(
 
     let speaker = names.speaker.clone();
     let judge = BrainRecognizer::load(names.asr)?;
-    let synthesizer = BrainSynthesizer::load(names.tts)?;
+    let synthesizer = splinter_sdk::model::speech::Lexical::shared(
+        BrainSynthesizer::load(names.tts)?,
+        lexicon.unwrap_or_default(),
+    );
     let mut items = Vec::new();
     for (recording, question) in paired {
         let name = recording.display().to_string();

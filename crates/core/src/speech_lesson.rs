@@ -95,6 +95,69 @@ pub fn parse_directive(transcript: &str) -> Option<Directive> {
     None
 }
 
+/// Whether a transcript confirms (`Some(true)`) or refuses (`Some(false)`)
+/// what the agent just offered to learn, or says neither (`None`). Only a
+/// short, plain answer counts: a long sentence that happens to contain "yes"
+/// is not a confirmation, because a lesson is kept only when the user means it.
+#[must_use]
+pub fn parse_confirmation(transcript: &str) -> Option<bool> {
+    let words = plain_words(transcript);
+    let said = words
+        .join(" ")
+        .replace("that's", "that is")
+        .replace("don't", "do not");
+    const YES: [&str; 8] = [
+        "yes",
+        "yes please",
+        "yeah",
+        "yep",
+        "keep it",
+        "keep that",
+        "that is right",
+        "that is correct",
+    ];
+    const NO: [&str; 7] = [
+        "no",
+        "no thanks",
+        "nope",
+        "do not keep it",
+        "do not keep that",
+        "that is wrong",
+        "that is not right",
+    ];
+    if YES.contains(&said.as_str()) {
+        Some(true)
+    } else if NO.contains(&said.as_str()) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Whether the user asks to take back the last thing taught ("forget that",
+/// "undo that", "never mind that").
+#[must_use]
+pub fn parse_retraction(transcript: &str) -> bool {
+    matches!(
+        plain_words(transcript).join(" ").as_str(),
+        "forget that"
+            | "forget it"
+            | "undo that"
+            | "undo it"
+            | "never mind that"
+            | "take that back"
+    )
+}
+
+/// `text` lower-cased as its words, punctuation dropped.
+fn plain_words(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .filter(|w| !w.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// What a lesson is meant to teach, and so how it is used.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -381,6 +444,39 @@ mod tests {
         lexicon.teach("adams", "Ad-ems");
         assert_eq!(lexicon.apply("Adams"), "Ad-ems");
         assert_eq!(lexicon.len(), 1);
+    }
+
+    #[test]
+    fn only_a_plain_answer_confirms_or_refuses_a_lesson() {
+        for yes in ["Yes.", "yes please", "Yeah!", "Keep it.", "That's right"] {
+            assert_eq!(parse_confirmation(yes), Some(true), "{yes:?}");
+        }
+        for no in ["No.", "nope", "Do not keep that.", "That is wrong"] {
+            assert_eq!(parse_confirmation(no), Some(false), "{no:?}");
+        }
+        for other in [
+            "Yes, and also tell me about the tax",
+            "I said no such thing",
+            "What do you think of Jefferson?",
+            "",
+        ] {
+            assert_eq!(parse_confirmation(other), None, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn taking_back_the_last_lesson_is_a_plain_request() {
+        for said in [
+            "Forget that.",
+            "undo that",
+            "Never mind that!",
+            "take that back",
+        ] {
+            assert!(parse_retraction(said), "{said:?}");
+        }
+        for said in ["Forget the tax", "do not forget that", "undo"] {
+            assert!(!parse_retraction(said), "{said:?}");
+        }
     }
 
     #[test]

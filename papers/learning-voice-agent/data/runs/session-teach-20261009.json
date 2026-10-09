@@ -1,0 +1,87 @@
+{
+  "persona": "Samuel Adams",
+  "speaker": {
+    "seed": 1,
+    "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists"
+  },
+  "turns": 4,
+  "answer_word_error_rate": 0.15151516,
+  "first_audio_seconds": {
+    "p50": 0.382841517,
+    "p95": 1.105885085
+  },
+  "first_text_seconds": {
+    "p50": 0.112442902,
+    "p95": 0.584521426
+  },
+  "first_piece_seconds": {
+    "p50": 0.112447894,
+    "p95": 0.802694522
+  },
+  "think_seconds": {
+    "p50": 0.112447894,
+    "p95": 0.955066066
+  },
+  "synthesise_seconds": {
+    "p50": 0.648764598,
+    "p95": 2.304148002
+  },
+  "total_seconds": {
+    "p50": 0.761304712,
+    "p95": 3.106954295
+  },
+  "items": [
+    {
+      "recording": "session/q1.wav",
+      "asked": null,
+      "answer": "Here it is: unuel. Shall I keep saying venewal that way?",
+      "answer_heard": "Here it is unuwell shall I keep saying Vinny well that way?",
+      "reply_seconds": 5.29,
+      "first_audio_seconds": 0.60546237,
+      "first_text_seconds": 0.318960156,
+      "first_piece_seconds": 0.318979516,
+      "think_seconds": 0.318985851,
+      "synthesise_seconds": 1.97156458,
+      "total_seconds": 2.290699738
+    },
+    {
+      "recording": "session/q2.wav",
+      "asked": null,
+      "answer": "Kept.",
+      "answer_heard": "Kapp.",
+      "reply_seconds": 0.96,
+      "first_audio_seconds": 0.358083417,
+      "first_text_seconds": 0.101038348,
+      "first_piece_seconds": 0.10103918,
+      "think_seconds": 0.10103918,
+      "synthesise_seconds": 0.419778927,
+      "total_seconds": 0.520891513
+    },
+    {
+      "recording": "session/q3.wav",
+      "asked": null,
+      "answer": "Fenuell Hall is a man whose actions and character are as plain as the truth itself.",
+      "answer_heard": "Finuell Hall is a man whose actions and character are as plain as the truth itself.",
+      "reply_seconds": 6.41,
+      "first_audio_seconds": 1.105885085,
+      "first_text_seconds": 0.584521426,
+      "first_piece_seconds": 0.802694522,
+      "think_seconds": 0.955066066,
+      "synthesise_seconds": 2.304148002,
+      "total_seconds": 3.106954295
+    },
+    {
+      "recording": "session/q4.wav",
+      "asked": null,
+      "answer": "I have taken that back.",
+      "answer_heard": "I have taken that back",
+      "reply_seconds": 1.84,
+      "first_audio_seconds": 0.382841517,
+      "first_text_seconds": 0.112442902,
+      "first_piece_seconds": 0.112447894,
+      "think_seconds": 0.112447894,
+      "synthesise_seconds": 0.648764598,
+      "total_seconds": 0.761304712
+    }
+  ]
+}

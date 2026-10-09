@@ -19,8 +19,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 use splinter_sdk::model::speech::{
-    BrainRecognizer, BrainSynthesizer, CascadeListener, Synthesizer, DEFAULT_RECOGNIZER,
-    DEFAULT_SYNTHESIZER,
+    BrainRecognizer, BrainSynthesizer, CascadeListener, Heard, LessonDesk, Synthesizer,
+    DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::model::PolicyError;
 use splinter_sdk::vocabulary::speech::{spoken_disclosure, Portrayal, SpeakerProfile};
@@ -57,6 +57,10 @@ pub struct AgentArgs {
     /// without one it has no tools.
     #[arg(long)]
     workspace: Option<PathBuf>,
+    /// Where the pronunciations the user teaches in conversation are kept
+    /// between sessions; without it they last for this session only.
+    #[arg(long)]
+    lessons: Option<PathBuf>,
     /// Also keep the report here.
     #[arg(long)]
     report: Option<PathBuf>,
@@ -73,9 +77,19 @@ pub fn run(args: &AgentArgs) -> Result<()> {
 
     let persona = Persona::load(&args.persona, &args.base, args.adapter.as_deref())?;
     let voice = persona.voice_agent(args.workspace.as_deref())?;
+    let desk = match &args.lessons {
+        Some(file) => LessonDesk::open(file, speaker.portrayal().clone())
+            .with_context(|| format!("opening {}", file.display()))?,
+        None => LessonDesk::new(speaker.portrayal().clone()),
+    };
     let listener = CascadeListener::new(
         BrainRecognizer::load(&args.asr)?,
         |question: &str, on_text: &mut dyn FnMut(&str)| {
+            // What is said about how to speak is the desk's, not the model's.
+            if let Heard::Say(reply) = desk.hear(question) {
+                on_text(&reply);
+                return Ok(reply);
+            }
             voice
                 .ask(question, on_text)
                 .map_err(|e| PolicyError::Generate {
@@ -98,6 +112,7 @@ pub fn run(args: &AgentArgs) -> Result<()> {
         },
         &args.persona,
         &listener,
+        Some(desk.lexicon()),
         args.report.as_deref(),
     )
 }

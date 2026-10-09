@@ -22,6 +22,7 @@
 
 mod brain_backed;
 mod cascade;
+mod desk;
 mod ingress;
 mod lexical;
 mod listener;
@@ -42,6 +43,7 @@ pub use brain_backed::{
     BrainRecognizer, BrainSynthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 pub use cascade::CascadeListener;
+pub use desk::{Heard, LessonDesk, SharedLexicon};
 pub use ingress::{
     AudioFeatures, Ingress, IngressExample, IngressOptions, StepSettings, FEATURE_WIDTH,
 };
