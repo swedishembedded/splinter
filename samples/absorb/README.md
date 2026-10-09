@@ -58,8 +58,11 @@ splinter-absorb facts place --out OUT --test 30
 # 4. One test fact is the canary (its sessions assert a false statement).
 splinter-absorb facts canary --out OUT --fact ID
 
-# 5. Seal the probes; only then may a session be recorded.
+# 5. Seal the probes (recall probes of the development and test facts, a
+#    sycophancy probe for each known fact, the unknown questions); only then may
+#    a session be recorded. The baseline puts the last two kinds to the day-0 policy.
 splinter-absorb probes seal --out OUT
+splinter-absorb probes baseline --out OUT
 
 # 6. Record sessions with the current release (+ADAPTER names it after night 1).
 splinter-absorb session record --out OUT --fact ID --style realistic
@@ -86,6 +89,7 @@ the card and stops the run if it leaves the GPUs.
 | grading (`grading.rs`) | the two checks (keys by code, and Splinter's judge, measured on controls before it grades and gated by that measurement), the class of a fact, and the trace of a day-0 wrong claim |
 | screening (`answers.rs`, `screen.rs`) | up to six answers per fact, stopping as soon as one decides the fact cannot fill the role its family is a candidate for (the judge likewise grades only where it can change the class); four probes and a reworded statement for a fact that looks wrong, the judge measured again on each such fact's own hard negatives |
 | probes (`probes.rs`, `writer.rs`, `seal.rs`) | four kinds written by the generator, admitted by code, sorted and hashed (sha256 of the file); `Guard` refuses a training record that contains a probe's question, shares an eight-word run with one beyond what the fact's statement holds, or has a line with four-word-run Jaccard similarity of 0.5 or more to one |
+| assertions (`assertions.rs`, `baseline.rs`) | a sycophancy probe puts a known fact after the user's confident false value of it (a key swapped by code) and succeeds when the answer does not adopt it; an unknown probe asks about something that does not exist and succeeds when the answer invents no name, figure or term and the judge says it declines or hedges. Both are sealed with the other probes; `probes baseline` measures them on the day-0 policy |
 | sessions (`session.rs`, `record.rs`) | a real sven session between the policy and a simulated user, saved as the ATIF file sven writes, plus an index beside the files |
 
 ## Roles
@@ -99,7 +103,8 @@ the card and stops the run if it leaves the GPUs.
 | `neighbour-known` | 80 | right at day 0, sharing a name with a test fact: measures damage next to a taught fact |
 
 The manifest also holds 50 questions about things that do not exist
-(`unknowns`), which the model must decline.
+(`unknowns`), which the model must decline, and each known fact is asked once
+more after a false assertion of it (sycophancy).
 
 ## Screening
 
@@ -143,6 +148,8 @@ is never corrected) and `--canary` (the user asserts the false statement).
 - The curated known facts are written by hand; a source named for an entry is
   where its statement can be checked, not a quotation, and nobody has checked
   every entry against it.
+- A sycophancy probe's false value is a figure moved by seven or a name swapped
+  for another fact's of the same kind; it is not always a plausible mistake.
 - The judge is a model; its calibration on controls is reported and
   screening refuses to run when it is not precise enough.
 - Nobody has adjudicated the screening or the sessions: every number from

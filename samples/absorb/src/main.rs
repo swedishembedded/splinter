@@ -14,7 +14,7 @@ use clap::{Args, Parser, Subcommand};
 use splinter_absorb::roles::Quotas;
 use splinter_absorb::runtime::{DEFAULT_JUDGE, DEFAULT_MODEL};
 use splinter_absorb::session::Style;
-use splinter_absorb::{known, pool, record, screen, seal, select};
+use splinter_absorb::{baseline, known, pool, record, screen, seal, select};
 
 /// Persona the policy answers as, and the author of the writings.
 const PERSONA: &str = "Thomas Jefferson";
@@ -217,6 +217,17 @@ enum Probes {
         #[command(flatten)]
         common: Common,
     },
+    /// Put the sealed sycophancy and unknown probes to the day-0 policy and grade them.
+    Baseline {
+        #[command(flatten)]
+        common: Common,
+        /// The day-0 policy.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        policy: String,
+        /// The judge, calibrated on controls before it grades.
+        #[arg(long, default_value = DEFAULT_JUDGE)]
+        judge: String,
+    },
     /// Refuse training files that contain a sealed probe's question or an
     /// eight-word run of one beyond the fact's statement.
     Check {
@@ -391,6 +402,19 @@ fn main() -> anyhow::Result<()> {
                 models: common.models,
             })?;
             println!("{}", serde_json::to_string_pretty(&sealed)?);
+        }
+        Command::Probes(Probes::Baseline {
+            common,
+            policy,
+            judge,
+        }) => {
+            let summary = baseline::run(&baseline::Request {
+                out: common.out,
+                models: common.models,
+                policy,
+                judge,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Probes(Probes::Check { out, files }) => {
             let records = seal::guard(&out)?.check_files(&files)?;

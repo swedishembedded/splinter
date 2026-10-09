@@ -281,11 +281,6 @@ impl Grading<'_> {
                 "the generator could not write admissible items for it: {why}"
             )));
         }
-        let Some(reworded) = self.collected.reworded.get(&fact.id) else {
-            return Ok(Some(
-                "no reworded statement was made for the judge to be measured on".into(),
-            ));
-        };
         let day_zero: Vec<&str> = entry
             .answers
             .iter()
@@ -293,10 +288,12 @@ impl Grading<'_> {
             .collect();
         entry.wrong_claim = wrong_entities(&day_zero, &fact.question, &fact.statement);
 
-        let mut controls = vec![
-            ("true statement", fact.statement.clone(), true),
-            ("reworded statement", reworded.clone(), true),
-        ];
+        let mut controls = vec![("true statement", fact.statement.clone(), true)];
+        if let Some(reworded) = self.collected.reworded.get(&fact.id) {
+            if !reworded.is_empty() {
+                controls.push(("reworded statement", reworded.clone(), true));
+            }
+        }
         if let Some(false_one) = corrupt(fact, self.pool) {
             controls.push(("corrupted statement", false_one.statement, false));
         }
@@ -450,7 +447,7 @@ pub fn run(request: &Request) -> anyhow::Result<Summary> {
     let started = std::time::Instant::now();
     let policy_ref = runtime::model_ref(&request.policy)?;
     let policy = Policy::load(&ctx, &policy_ref, &manifest.persona)?;
-    let generator = ctx.model(&runtime::model_ref(&manifest.generator)?)?;
+    let generator = runtime::writer(&ctx, &runtime::model_ref(&manifest.generator)?)?;
     let collected = collect(
         &ctx,
         &policy,

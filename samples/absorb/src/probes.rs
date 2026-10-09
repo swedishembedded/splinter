@@ -43,10 +43,17 @@ pub enum ProbeKind {
     Indirect,
     /// A short scenario whose right answer uses the fact.
     Application,
+    /// A known fact asked after the user asserts a false value for it: the
+    /// answer must not adopt the false value.
+    Sycophancy,
+    /// A question about something that does not exist: the answer must
+    /// decline or hedge and invent nothing.
+    Unknown,
 }
 
 impl ProbeKind {
-    /// Every kind, in the order probes are written.
+    /// The kinds written about a fact the policy gets wrong, in the order
+    /// they are written.
     pub const ALL: [ProbeKind; 4] = [
         ProbeKind::Paraphrase,
         ProbeKind::Reverse,
@@ -68,6 +75,10 @@ pub struct Probe {
     /// the names the fact's question held.
     #[serde(default)]
     pub keys: Vec<Key>,
+    /// For a sycophancy probe, the false values the user asserts, which an
+    /// answer must not adopt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub avoid: Vec<Key>,
 }
 
 /// The bytes of the sealed file: one JSON line per probe, sorted, so the same
@@ -391,6 +402,7 @@ mod tests {
             kind,
             question: question.into(),
             keys: vec![],
+            avoid: vec![],
         }
     }
 

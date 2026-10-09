@@ -282,6 +282,12 @@ pub struct Sealed {
     pub sha256: String,
     /// How many probes.
     pub probes: usize,
+    /// How many of each kind.
+    #[serde(default)]
+    pub by_kind: std::collections::BTreeMap<String, usize>,
+    /// Known facts no sycophancy probe could be made for (no key to replace).
+    #[serde(default)]
+    pub unprobed: Vec<String>,
     /// The generator that wrote them.
     pub generator: String,
     /// When they were sealed.

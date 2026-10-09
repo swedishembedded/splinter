@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::Context as _;
+use splinter_sdk::agent::solve::Model;
+use splinter_sdk::model::local::{Sampling, GREEDY_SAMPLING};
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Config, Splinter};
@@ -53,4 +55,23 @@ pub fn open(out: &Path, models: Option<&PathBuf>) -> anyhow::Result<Splinter> {
 /// `text` is not a model reference.
 pub fn model_ref(text: &str) -> anyhow::Result<ModelRef> {
     ModelRef::from_str(text).with_context(|| format!("model {text:?}"))
+}
+
+/// The temperature a writer of test items draws at: a correction sent back
+/// to a model that decodes greedily is answered with the same text again.
+pub const WRITER_TEMPERATURE: f32 = 0.8;
+
+/// The model `reference` names as a writer of test items: it draws at
+/// [`WRITER_TEMPERATURE`], so that each correction is a new attempt.
+///
+/// # Errors
+/// The reference does not name a local model.
+pub fn writer(ctx: &splinter_sdk::Context, reference: &ModelRef) -> anyhow::Result<Model> {
+    let sampling = Sampling {
+        temperature: WRITER_TEMPERATURE,
+        thinking: false,
+        ..GREEDY_SAMPLING
+    };
+    ctx.resampled(reference, sampling)?
+        .with_context(|| format!("{reference} is not a local model: its sampling cannot be set"))
 }

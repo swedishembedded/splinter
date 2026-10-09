@@ -231,13 +231,20 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
         } else {
             write_probes(ctx, plan.generator, fact, plan.persona).map(Some)
         };
+        // A statement that cannot be reworded costs the judge one of its
+        // controls, not the fact: it is kept as an empty rewording.
         let reworded = if rewordings.iter().any(|r| r.fact == fact.id) {
-            Ok(None)
+            None
         } else {
-            write_paraphrase(ctx, plan.generator, fact).map(Some)
+            Some(
+                write_paraphrase(ctx, plan.generator, fact).unwrap_or_else(|e| {
+                    eprintln!("fact {} cannot be reworded: {e:#}", fact.id);
+                    String::new()
+                }),
+            )
         };
-        match (written, reworded) {
-            (Ok(written), Ok(reworded)) => {
+        match written {
+            Ok(written) => {
                 if let Some(written) = written {
                     append_draft(plan.out, &written)?;
                     probes.extend(written);
@@ -251,13 +258,8 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
                     rewordings.push(line);
                 }
             }
-            (a, b) => {
-                let why = [a.err(), b.err()]
-                    .into_iter()
-                    .flatten()
-                    .map(|e| format!("{e:#}"))
-                    .collect::<Vec<_>>()
-                    .join("; ");
+            Err(e) => {
+                let why = format!("{e:#}");
                 eprintln!("fact {} cannot be probed: {why}", fact.id);
                 let failure = Failure {
                     fact: fact.id.clone(),

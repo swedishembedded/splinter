@@ -11,6 +11,8 @@
 //! and the recording of live sessions.
 
 pub mod answers;
+pub mod assertions;
+pub mod baseline;
 pub mod canary;
 pub mod facts;
 pub mod grading;

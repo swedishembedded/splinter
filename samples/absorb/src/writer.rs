@@ -35,20 +35,25 @@ const WRITE_DEADLINE: Duration = Duration::from_secs(600);
 const WRITE_MAX_OUTPUT_TOKENS: u64 = 1024;
 
 /// Corrections a rejected reply is sent back for.
-const REPAIRS: u32 = 4;
+const REPAIRS: u32 = 3;
 
 const ROLE: &str = "You write test questions about a single fact, for someone who is checking \
 whether a person knows it.";
 
-const PROBES_TASK: &str = "Write four questions that test whether someone knows the fact in \
-`statement`. `paraphrase` asks what `question` asks, in different words. `reverse` starts from \
-the answer and asks for what `question` is about: it contains at least one of the `answer_parts` word for word and asks \
-who or what that concerns (for example: \"What did Boulton and Watt make for him?\"), so it can be answered only by someone who knows \
-the fact. `indirect` is \
-a question about something else that cannot be answered correctly without the fact. \
-`application` is a short everyday scenario of one or two sentences that ends in a question whose \
-right answer uses the fact. Except for `reverse`, a question never contains any of the `answer_parts`. No \
-question quotes `statement`. Each ends with a question mark.";
+const PROBES_TASK: &str = "Write three questions that test whether someone knows the fact in \
+`statement`. `paraphrase` asks what `question` asks, in different words. `indirect` is a question \
+about something else that cannot be answered correctly without the fact. `application` is a short \
+everyday scenario of one or two sentences that ends in a question whose right answer uses the \
+fact. None of them contains any of the `answer_parts`, and none quotes `statement`. Each ends with \
+a question mark.";
+
+const REVERSE_TASK: &str = "Write one question about the fact in `statement` that starts from \
+one part of it. The question MUST contain `include_exactly` exactly as written and asks about \
+another part of the statement, so that only someone who knows the fact can answer it; if \
+`asks_for` lists names, ask for one of them. Example: statement \"Boulton and Watt made the press \
+in 1785.\", include_exactly \"Watt\", asks_for [\"Boulton\"]: \"Which partner worked with Watt on the \
+copying press?\". Write `approach` first (one sentence), then `question`. Do not quote \
+`statement`. End with a question mark.";
 
 const PARAPHRASE_TASK: &str = "Say again, in different words and in the same voice, what \
 `statement` says. Keep every name, number and date it holds exactly, change the sentence \
@@ -59,18 +64,35 @@ structure and the other words, and add nothing.";
 struct Shown<'a> {
     statement: &'a str,
     question: &'a str,
-    /// The words of the answer, which only `reverse` may contain.
+    /// The words of the answer, which no question but the reverse one may contain.
     answer_parts: Vec<&'a str>,
 }
 
-/// The four questions the generator writes.
+/// What the generator is shown to write the reverse question.
+#[derive(Serialize)]
+struct ShownReverse<'a> {
+    statement: &'a str,
+    include_exactly: &'a str,
+    asks_for: Vec<String>,
+}
+
+/// The reverse question the generator writes.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[schemars(crate = "schemars")]
+struct WrittenReverse {
+    /// One sentence on how the question turns `question` around: what it
+    /// gives (`include_exactly`) and what it asks for.
+    approach: String,
+    /// The question: it contains `include_exactly` exactly.
+    question: String,
+}
+
+/// The three other questions the generator writes.
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[schemars(crate = "schemars")]
 struct Written {
     /// What `question` asks, in different words.
     paraphrase: String,
-    /// The question from the answer's end.
-    reverse: String,
     /// A question that cannot be answered without the fact.
     indirect: String,
     /// A short scenario ending in a question that needs the fact.
@@ -124,7 +146,6 @@ pub fn write_probes(
         .postcondition(move |w: &Written| {
             let all = [
                 (ProbeKind::Paraphrase, &w.paraphrase),
-                (ProbeKind::Reverse, &w.reverse),
                 (ProbeKind::Indirect, &w.indirect),
                 (ProbeKind::Application, &w.application),
             ];
@@ -136,7 +157,7 @@ pub fn write_probes(
             if distinct.len() == all.len() {
                 Ok(())
             } else {
-                Err("the four questions must differ".to_string())
+                Err("the three questions must differ".to_string())
             }
         });
     let reply = ctx
@@ -149,9 +170,10 @@ pub fn write_probes(
             },
         ))
         .with_context(|| format!("writing the probes of fact {}", fact.id))?;
+    let reverse = write_reverse(ctx, generator, fact, persona)?;
     Ok([
         (ProbeKind::Paraphrase, reply.paraphrase),
-        (ProbeKind::Reverse, reply.reverse),
+        (ProbeKind::Reverse, reverse),
         (ProbeKind::Indirect, reply.indirect),
         (ProbeKind::Application, reply.application),
     ]
@@ -162,10 +184,88 @@ pub fn write_probes(
             fact: fact.id.clone(),
             kind,
             keys: answer_keys(kind, fact, &question, persona),
+            avoid: Vec::new(),
             question,
         }
     })
     .collect())
+}
+
+/// The reverse question of `fact`: it names a key of the answer and asks for
+/// what the fact's question is about. Written alone, in a call of its own,
+/// since it is the one question that must hold what the others must not.
+fn write_reverse(
+    ctx: &Context,
+    generator: &Model,
+    fact: &Fact,
+    persona: &str,
+) -> anyhow::Result<String> {
+    let (question, statement, keys) = (
+        fact.question.clone(),
+        fact.statement.clone(),
+        fact.keys.clone(),
+    );
+    let call =
+        TypedCall::<WrittenReverse>::new("write_reverse", REVERSE_TASK, ROLE, WRITE_DEADLINE)
+            .max_output_tokens(WRITE_MAX_OUTPUT_TOKENS)
+            .repairs(REPAIRS)
+            .postcondition(move |w: &WrittenReverse| {
+                let admitted = admit(
+                    ProbeKind::Reverse,
+                    w.question.trim(),
+                    &question,
+                    &statement,
+                    &keys,
+                );
+                if let Err(why) = &admitted {
+                    eprintln!("reverse question refused ({why}): {}", w.question.trim());
+                }
+                admitted
+            });
+    let asks_for: Vec<String> = answer_keys(ProbeKind::Reverse, fact, "", persona)
+        .into_iter()
+        .map(|k| k.text)
+        .collect();
+    let written = ctx.block_on(call.run(
+        generator,
+        &ShownReverse {
+            statement: &fact.statement,
+            include_exactly: fact.keys.first().map_or("", |k| k.text.as_str()),
+            asks_for: asks_for.clone(),
+        },
+    ));
+    match written {
+        Ok(reply) => Ok(reply.question.trim().to_string()),
+        // A model that cannot keep a question to a given word is not asked
+        // again: the question is built from the key and the names the fact's
+        // question holds. It is plainer, and it names the answer.
+        Err(e) => fallback_reverse(fact, &asks_for)
+            .with_context(|| format!("writing the reverse probe of fact {}: {e:#}", fact.id)),
+    }
+}
+
+/// A reverse question made by code: it names the first key and asks what is
+/// remembered of it beside the names the fact's question holds.
+fn fallback_reverse(fact: &Fact, asks_for: &[String]) -> anyhow::Result<String> {
+    let key = fact.keys.first().context("the fact has no key")?;
+    anyhow::ensure!(
+        !asks_for.is_empty(),
+        "the fact's question holds no name to ask for"
+    );
+    let question = format!(
+        "What do you recall about {} in connection with {}?",
+        key.text,
+        asks_for.join(" and ")
+    );
+    admit(
+        ProbeKind::Reverse,
+        &question,
+        &fact.question,
+        &fact.statement,
+        &fact.keys,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok(question)
 }
 
 /// The statement of `fact` in other words, holding every key.
@@ -210,4 +310,47 @@ pub fn write_paraphrase(ctx: &Context, generator: &Model, fact: &Fact) -> anyhow
         ))
         .with_context(|| format!("rewording the statement of fact {}", fact.id))?;
     Ok(reply.statement.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::facts::{admit as admit_fact, Evidence, Origin, Proposal};
+    use crate::keys::KeyKind;
+    use crate::roles::Quotas;
+
+    fn fact() -> Fact {
+        admit_fact(Proposal {
+            seed: 1,
+            quotas: &Quotas::PROTOCOL,
+            origin: Origin::Letters,
+            family: "f.txt",
+            question: "Which doctor is in Philadelphia?",
+            statement: "Dr. Bache is in Philadelphia, at his house on Market Street.",
+            keys: vec![Key {
+                text: "Bache".into(),
+                kind: KeyKind::Name,
+            }],
+            answer_type: "name",
+            entities: vec![],
+            evidence: Evidence {
+                quote: String::new(),
+                source: "f.txt".into(),
+            },
+        })
+        .expect("a fact")
+    }
+
+    #[test]
+    fn a_reverse_question_made_by_code_names_the_key_and_asks_for_the_names_of_the_question() {
+        let fact = fact();
+        let asks_for = vec!["Philadelphia".to_string()];
+        let question = fallback_reverse(&fact, &asks_for).expect("a question");
+        assert_eq!(
+            question,
+            "What do you recall about Bache in connection with Philadelphia?"
+        );
+        // Nothing to ask for, nothing to build.
+        assert!(fallback_reverse(&fact, &[]).is_err());
+    }
 }

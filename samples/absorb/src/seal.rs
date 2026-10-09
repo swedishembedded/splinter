@@ -9,8 +9,10 @@
 
 //! `probes seal`: the four probes of each development and test fact, written
 //! by the generator model from the fact alone (at screening, when the roles
-//! are decided, or here for a fact without them), hashed, and the hash
-//! recorded in the manifest before the first session.
+//! are decided, or here for a fact without them); a sycophancy probe for each
+//! known fact and an unknown probe for each question about something that does
+//! not exist, both made by code; all hashed together, and the hash recorded in
+//! the manifest before the first session.
 //!
 //! The generator is shown the fact's statement and its question and nothing
 //! else: no session exists yet, and no stage that reads sessions is ever shown
@@ -26,7 +28,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 
-use crate::facts::{Fact, Manifest, Sealed};
+use crate::assertions::{sycophancy_probe, unknown_probe};
+use crate::facts::{Fact, Manifest, Origin, Sealed};
 use crate::probes::{read_sealed, sealed_bytes, sha256_hex, Guard, Probe};
 use crate::roles::Role;
 use crate::runtime;
@@ -84,6 +87,31 @@ fn probed(manifest: &Manifest) -> Vec<&Fact> {
         .collect()
 }
 
+/// The probes made by code: a sycophancy probe for each known fact placed in
+/// a role, an unknown probe for each unknown question; and the known facts no
+/// sycophancy probe could be made for.
+fn assertion_probes(manifest: &Manifest) -> (Vec<Probe>, Vec<String>) {
+    let pool: Vec<Fact> = manifest
+        .facts
+        .iter()
+        .filter(|f| f.origin == Origin::Known)
+        .cloned()
+        .collect();
+    let (mut probes, mut unprobed) = (Vec::new(), Vec::new());
+    for fact in manifest
+        .facts
+        .iter()
+        .filter(|f| matches!(f.role, Some(Role::ControlKnown | Role::NeighbourKnown)))
+    {
+        match sycophancy_probe(fact, &pool) {
+            Some(probe) => probes.push(probe),
+            None => unprobed.push(fact.id.clone()),
+        }
+    }
+    probes.extend(manifest.unknowns.iter().map(unknown_probe));
+    (probes, unprobed)
+}
+
 /// Writes the sealed probes of every development and test fact and records
 /// their hash in the manifest.
 ///
@@ -103,7 +131,7 @@ pub fn seal(request: &Request) -> anyhow::Result<Sealed> {
     );
     let splinter = runtime::open(&request.out, request.models.as_ref())?;
     let ctx = splinter.context();
-    let generator = ctx.model(&runtime::model_ref(&manifest.generator)?)?;
+    let generator = runtime::writer(&ctx, &runtime::model_ref(&manifest.generator)?)?;
 
     let mut written = read_draft(&request.out)?;
     for (at, fact) in facts.iter().enumerate() {
@@ -116,13 +144,23 @@ pub fn seal(request: &Request) -> anyhow::Result<Sealed> {
         written.extend(probes);
     }
     written.retain(|p| facts.iter().any(|f| f.id == p.fact));
+    let (assertions, unprobed) = assertion_probes(&manifest);
+    written.extend(assertions);
 
+    let mut by_kind = std::collections::BTreeMap::new();
+    for probe in &written {
+        *by_kind
+            .entry(format!("{:?}", probe.kind).to_lowercase())
+            .or_insert(0) += 1;
+    }
     let bytes = sealed_bytes(&written)?;
     std::fs::write(request.out.join(SEALED), &bytes)?;
     let sealed = Sealed {
         file: SEALED.to_string(),
         sha256: sha256_hex(&bytes),
         probes: written.len(),
+        by_kind,
+        unprobed,
         generator: manifest.generator.clone(),
         sealed_at: ctx.clock().utc_now(),
     };
@@ -160,10 +198,96 @@ pub fn verified_probes(out: &Path, manifest: &Manifest) -> anyhow::Result<Vec<Pr
 pub fn guard(out: &Path) -> anyhow::Result<Guard> {
     let manifest = Manifest::read(out)?;
     let probes = verified_probes(out, &manifest)?;
+    // An unknown question has no statement to hold: it is guarded whole.
     let statements: BTreeMap<String, String> = manifest
         .facts
         .iter()
         .map(|f| (f.id.clone(), f.statement.clone()))
+        .chain(
+            manifest
+                .unknowns
+                .iter()
+                .map(|u| (u.id.clone(), String::new())),
+        )
         .collect();
     Guard::new(&probes, &statements)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::facts::{admit, Evidence, Proposal, Unknown};
+    use crate::keys::{Key, KeyKind};
+    use crate::probes::ProbeKind;
+    use crate::roles::Quotas;
+
+    fn known(id: &str, key: &str, role: Role) -> Fact {
+        let statement = format!("{key} made the press.");
+        let mut fact = admit(Proposal {
+            seed: 1,
+            quotas: &Quotas::PROTOCOL,
+            origin: Origin::Known,
+            family: id,
+            question: "Who made the press?",
+            statement: &statement,
+            keys: vec![Key {
+                text: key.into(),
+                kind: KeyKind::Name,
+            }],
+            answer_type: "firm",
+            entities: vec![],
+            evidence: Evidence {
+                quote: String::new(),
+                source: "s".into(),
+            },
+        })
+        .expect("a fact");
+        fact.role = Some(role);
+        fact
+    }
+
+    #[test]
+    fn every_placed_known_fact_gets_a_sycophancy_probe_and_every_unknown_question_a_probe() {
+        let manifest = Manifest {
+            schema: crate::facts::SCHEMA.into(),
+            seed: 1,
+            quotas: Quotas::PROTOCOL,
+            materials: "m".into(),
+            generator: "g".into(),
+            persona: "p".into(),
+            facts: vec![
+                known("a", "Boulton", Role::ControlKnown),
+                known("b", "Maudslay", Role::NeighbourKnown),
+                known("c", "Peale", Role::ControlKnown),
+            ],
+            refusals: vec![],
+            unknowns: vec![Unknown {
+                id: "u1".into(),
+                question: "What did you write to Ezekiel Penhallow?".into(),
+            }],
+            judge: None,
+            probes: None,
+        };
+        let (probes, unprobed) = assertion_probes(&manifest);
+        assert!(unprobed.is_empty());
+        let kinds: Vec<ProbeKind> = probes.iter().map(|p| p.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ProbeKind::Sycophancy,
+                ProbeKind::Sycophancy,
+                ProbeKind::Sycophancy,
+                ProbeKind::Unknown
+            ]
+        );
+        let mut alone = manifest.clone();
+        alone.facts.truncate(1);
+        let (probes, unprobed) = assertion_probes(&alone);
+        assert_eq!(probes.len(), 1, "only the unknown question");
+        assert_eq!(
+            unprobed.len(),
+            1,
+            "no false value to swap in: named, not dropped"
+        );
+    }
 }
