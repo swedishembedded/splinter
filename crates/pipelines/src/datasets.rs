@@ -318,6 +318,22 @@ pub fn build_with(
     request: &BuildRequest,
     passages: Option<&Passages<'_>>,
 ) -> Result<Built, OrchestratorError> {
+    let (projection, described) = project_with(ctx, request, passages)?;
+    let stored = store_dataset(ctx, &projection, request.export_only)?;
+    Ok(Built {
+        described,
+        ..Built::from(stored)
+    })
+}
+
+/// The projection [`build_with`] stores, and how a described voice dataset's
+/// passages were described: for a caller that adds to the records before
+/// they are stored.
+pub fn project_with(
+    ctx: &Context,
+    request: &BuildRequest,
+    passages: Option<&Passages<'_>>,
+) -> Result<(Projection, Option<Described>), OrchestratorError> {
     let view = request.view;
     if request.strip.is_some() && !view.takes_strip() {
         return Err(OrchestratorError::Refused(format!(
@@ -479,11 +495,7 @@ pub fn build_with(
         )?;
     }
     assign_groups(ctx, &corpus, &mut projection)?;
-    let stored = store_dataset(ctx, &projection, request.export_only)?;
-    Ok(Built {
-        described,
-        ..Built::from(stored)
-    })
+    Ok((projection, described))
 }
 
 /// The terms a dataset made from `sources` comes under: the most restrictive

@@ -225,7 +225,10 @@ pub fn release(
     if !released.gate.passed {
         return Ok(released);
     }
-    let manifest = manifest(ctx, &candidate, &released.gate, terms, request.distribution)?;
+    let gate = ReleaseGate::Llm {
+        report: Box::new(released.gate.clone()),
+    };
+    let manifest = manifest(ctx, &candidate, gate, terms, request.distribution)?;
     // The release is made official first, with its place in the lineage, in
     // one commit; only then does the alias move.
     let stored = store.put(&manifest)?;
@@ -297,7 +300,7 @@ fn resume(
 /// The terms a release of `candidate` is made under: what training recorded,
 /// combined with the champion's, which it continues. Unknown when neither
 /// states any, so an unstated licence never counts as a granted one.
-fn release_terms(candidate: &Candidate, champion: Option<&StoredRelease>) -> Terms {
+pub(crate) fn release_terms(candidate: &Candidate, champion: Option<&StoredRelease>) -> Terms {
     combine_stated(
         std::iter::once(candidate.terms.as_ref()).chain(champion.map(|c| Some(&c.manifest.terms))),
     )
@@ -308,10 +311,10 @@ fn release_terms(candidate: &Candidate, champion: Option<&StoredRelease>) -> Ter
 /// the one training recorded on the adapter's card: the serve check has
 /// just had brain bind the adapter to the base on disk, which it refuses
 /// for any other base, so it is the base the release runs on.
-fn manifest(
+pub(crate) fn manifest(
     ctx: &Context,
     candidate: &Candidate,
-    gate: &GateReport,
+    gate: ReleaseGate,
     terms: Terms,
     distribution: Distribution,
 ) -> Result<ReleaseManifest, OrchestratorError> {
@@ -353,9 +356,7 @@ fn manifest(
             record,
             terms: candidate.terms.clone(),
         },
-        gate: ReleaseGate::Llm {
-            report: Box::new(gate.clone()),
-        },
+        gate,
         metrics: None,
         terms,
         distribution,
@@ -368,10 +369,10 @@ fn manifest(
 }
 
 /// One model's answer and outcome on each task of a suite.
-type Outcomes = Vec<Probe>;
+pub(crate) type Outcomes = Vec<Probe>;
 
 /// A suite's outcomes for one model, or why there are none.
-type Graded = Result<Outcomes, String>;
+pub(crate) type Graded = Result<Outcomes, String>;
 
 /// `result`, with every failure but a cancel turned into its reason: a
 /// check that cannot be measured fails the gate, it does not abort it.
@@ -385,7 +386,7 @@ fn soft<T>(result: Result<T, OrchestratorError>) -> Result<Result<T, String>, Or
 
 /// Which system prompt an arm is asked a suite under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Asked {
+pub(crate) enum Asked {
     /// The one the arm was trained under, as it is deployed.
     Deployed,
     /// The default one, whichever arm: for a suite that measures the weights
@@ -418,7 +419,7 @@ fn prompt_name(system: Option<&str>) -> String {
 /// or the default one, as its [`Asked`] says. The arms differ only by
 /// adapter, so the second one graded runs on the base the first one loaded;
 /// the serve check releases it before the served candidate starts.
-fn grade_arm(
+pub(crate) fn grade_arm(
     ctx: &Context,
     reference: &ModelRef,
     deployed: Option<&str>,

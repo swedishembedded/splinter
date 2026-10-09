@@ -49,7 +49,7 @@ use crate::sources::{self, SourceTarget};
 use crate::tasks::{generate, Generation};
 use crate::train::{train, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
-use crate::verify::{kind_needs_judge, verify_set, Grading, Judge};
+use crate::verify::{adopt_judge, kind_needs_judge, verify_set, Grading};
 use splinter_core::annotation::Strength;
 
 /// What one learn run was asked, resolved.
@@ -256,20 +256,16 @@ fn prepare_judge(ctx: &Context, st: &mut LearnState<'_>) -> Result<(), Orchestra
         .map(|entry| store.get(&entry.task))
         .collect::<Result<Vec<_>, _>>()?;
     if tasks.iter().any(|task| kind_needs_judge(&task.task.kind)) {
-        let judge = st.learn.judge;
-        let roles = [
-            ("teacher", st.learn.teacher),
-            ("generator", st.learn.generator),
-            ("policy", &st.learn.policy),
-        ];
-        if let Some((role, _)) = roles.iter().find(|(_, model)| *model == judge) {
-            return Err(OrchestratorError::Refused(format!(
-                "the judge {judge} is also the {role}: a model does not grade its own work, and \
-                 these tasks are decided by a judge. Name another model for the judge"
-            )));
-        }
-        Judge::calibrated(ctx, judge, &tasks)?;
-        ctx.set_judge(judge.clone());
+        adopt_judge(
+            ctx,
+            st.learn.judge,
+            &[
+                ("teacher", st.learn.teacher),
+                ("generator", st.learn.generator),
+                ("policy", &st.learn.policy),
+            ],
+            &tasks,
+        )?;
         // Its verdicts stand only above its measured precision, and for
         // these kinds nothing else can pass an answer: they are evidence.
         st.min_strength = Strength::Judged;

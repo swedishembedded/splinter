@@ -6,8 +6,9 @@
 // learning from user feedback, you can procure our services by sending an
 // email to info@swedishembedded.com.
 
-//! Spec: the first three stages of learning from a person's own sessions,
-//! each runnable and inspectable alone over the stores and the run record.
+//! Spec: learning from a person's own sessions, each stage runnable and
+//! inspectable alone over the stores and the run record, and `absorb`, which
+//! composes them.
 //!
 //! * `intake` records an ATIF session once, refuses what the training
 //!   projection refuses with the reason, and stores nothing secret.
@@ -16,9 +17,24 @@
 //! * `gate` rules on the proposals by code, keeps every ruling, and says why
 //!   each refusal was made.
 //!
-//! The extractor is a scripted model; nothing here trains or uses a device.
+//! * `sealed` keeps a sealed probe out of every record.
+//! * `night` runs a night: kits of records per claim, the dataset with the
+//!   stopping paraphrases held out, a candidate trained again from the base,
+//!   and the gate on counts.
+//!
+//! The models are scripted and training is a test double; nothing here uses
+//! a device.
 
+// Helpers outside a #[test] fn unwrap too, in the shared fixtures: a panic is the
+// failure report.
+#![allow(clippy::unwrap_used)]
+
+#[path = "../common/mod.rs"]
+mod common;
 mod extract;
 mod fixtures;
 mod gate;
 mod intake;
+mod night;
+mod night_specs;
+mod sealed;

@@ -12,6 +12,7 @@
 //! error: lineage over a corrupt store is not reported as if it were whole.
 
 use splinter_core::annotation::{AnnotationBody, Outcome, RelationKind};
+use splinter_core::claim::Ruling;
 use splinter_core::experience::{Environment, Experience, Span, Task};
 use splinter_core::source::Origin;
 use splinter_store::experiences::StoreError;
@@ -34,6 +35,7 @@ pub(super) fn load(ctx: &Context) -> Result<Graph, OrchestratorError> {
     let mut graph = Graph::default();
     sources(ctx, &mut graph)?;
     tasks(ctx, &mut graph)?;
+    claims(ctx, &mut graph)?;
     experiences(ctx, &mut graph)?;
     datasets(ctx, &mut graph)?;
     candidates(ctx, &mut graph)?;
@@ -157,6 +159,38 @@ fn tasks(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
             graph.mention(member.task.as_str(), NodeKind::Task, missing("task"));
             graph.link(set_id, Relation::Member, member.task.as_str());
         }
+    }
+    Ok(())
+}
+
+/// Adds the admitted claims, the spans of the person's words each rests on,
+/// and the tasks each was made into.
+fn claims(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
+    let sources = ctx.sources();
+    let store = ctx.claims();
+    for entry in store.entries()? {
+        let Ruling::Admitted { claim, .. } = entry.ruling else {
+            continue;
+        };
+        let id = claim
+            .id()
+            .map_err(|e| OrchestratorError::Refused(e.to_string()))?
+            .to_string();
+        graph.record(
+            &id,
+            NodeKind::Claim,
+            format!("claim: {}", excerpt(&claim.statement)),
+        );
+        for quote in claim.quotes.iter().chain(&claim.observations) {
+            let span = span(&sources, graph, &quote.span)?;
+            graph.link(&id, Relation::Evidence, &span);
+        }
+    }
+    for link in store.task_links()? {
+        let (task, claim) = (link.task.as_str(), link.claim.to_string());
+        graph.mention(task, NodeKind::Task, missing("task"));
+        graph.mention(&claim, NodeKind::Claim, missing("claim"));
+        graph.link(task, Relation::TaughtBy, &claim);
     }
     Ok(())
 }

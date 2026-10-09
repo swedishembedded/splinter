@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- `absorb <SESSIONS>...`: a day's sessions with an agent become the next release in one recorded, resumable
+  run - intake, extraction and the claim gates, a kit of 18 distinct records per live claim (the question and
+  eight paraphrases answered by a teacher shown the claim, the hindsight dialogue, restatements, reverse
+  questions and consequences) with four paraphrases kept out of training as the claim's own stopping set,
+  the base's own answers rehearsed, an adapter trained again from the base on every live claim (so a
+  superseded claim simply drops out; `--continue-from-release` continues the release instead), and a gate
+  that is a declared rule on counts of claims answered with no regression and no tolerance. A refused
+  candidate stays on record and the current release stays in use. `--sealed-probes` refuses any record
+  that contains a probe's question or shares an 8-word run with one beyond its claim's statement; the gate
+  never reads them. `--dry-run` stops after the rulings. `claims ledger` shows the release that first
+  absorbed each live claim. The front door reads a sentence about sessions as `absorb`. Procedure claims
+  are stored and not trained on.
 - The `taught` task kind: a question a person's claim answers, closed-book, whose reference is the claim's
   statement. It is graded by the new `terms` verifier, which passes an answer that carries every number,
   name and quoted term of the statement and adds none the task did not give (the rule that admitted the

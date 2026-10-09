@@ -34,7 +34,8 @@
 //! * [`release`] - the gate a candidate passes to become the policy, the
 //!   immutable releases and the aliases pointing at them, and rollback;
 //!   [`eval`] - one model graded on the gate's suites.
-//! * [`learn`] - every stage above, as one run.
+//! * [`learn`] - every stage above, as one run; [`absorb`] - the sessions a
+//!   person held with an agent, taught the same way.
 //! * [`runs`] - every command's run record, and cancelling one.
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
 //!   [`answers`] - every answer `ask` gave, and what gave it.
@@ -44,6 +45,7 @@
 
 #![warn(missing_docs)]
 
+pub mod absorb;
 pub mod abstain;
 pub mod ask;
 pub mod author;

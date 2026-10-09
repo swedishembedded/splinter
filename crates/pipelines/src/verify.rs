@@ -307,6 +307,28 @@ pub fn kind_needs_judge(kind: &str) -> bool {
         .is_some_and(|spec| spec.needs_judge())
 }
 
+/// Names `judge` as the judge this context grades with, after measuring it
+/// on controls made from the references of `tasks` ([`Judge::calibrated`]).
+/// A judge is another model than the ones whose work it grades:
+/// `graded` names them, each with its role, and the judge is refused if it is
+/// one of them.
+pub(crate) fn adopt_judge(
+    ctx: &Context,
+    judge: &ModelRef,
+    graded: &[(&str, &ModelRef)],
+    tasks: &[Task],
+) -> Result<(), OrchestratorError> {
+    if let Some((role, _)) = graded.iter().find(|(_, model)| *model == judge) {
+        return Err(OrchestratorError::Refused(format!(
+            "the judge {judge} is also the {role}: a model does not grade its own work. Name \
+             another model for the judge"
+        )));
+    }
+    Judge::calibrated(ctx, judge, tasks)?;
+    ctx.set_judge(judge.clone());
+    Ok(())
+}
+
 /// The model `reference` names as a judge: decoding greedily where its
 /// sampling can be set here, so that one answer gets one verdict whichever
 /// time it is judged; as it samples where it cannot (a model reached over an

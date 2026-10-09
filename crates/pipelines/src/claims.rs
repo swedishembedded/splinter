@@ -22,7 +22,7 @@
 //! the ledger back: the claims that are live, the ones superseded and by
 //! which, and the proposals refused with their reasons.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::Instant;
 
 use serde::Serialize;
@@ -31,6 +31,7 @@ use splinter_agent::CancelToken;
 use splinter_core::claim::{Claim, ClaimId, ClaimSet, LedgerEntry, Ruling, SessionClaims};
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::release::ReleaseId;
 use splinter_core::source::SourceId;
 use splinter_knowledge::claims::extract::ExtractionPolicy;
 use splinter_knowledge::claims::{GateError, Ledger};
@@ -290,11 +291,15 @@ pub struct ClaimLine {
     pub session: SourceId,
     /// The person's words that support it.
     pub quotes: Vec<String>,
+    /// The release that first absorbed it; absent until one has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub absorbed_by: Option<ReleaseId>,
 }
 
 impl ClaimLine {
-    fn of(id: ClaimId, claim: &Claim) -> Self {
+    fn of(id: ClaimId, claim: &Claim, absorbed_by: Option<ReleaseId>) -> Self {
         Self {
+            absorbed_by,
             claim: id,
             kind: claim.kind.as_str().into(),
             statement: claim.statement.clone(),
@@ -349,10 +354,16 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
     let ledger = Ledger::new(ctx.claims().entries()?);
     let live = ledger.live().map_err(|e| gate_error(e.into()))?;
     let live_ids: Vec<&ClaimId> = live.iter().map(|(id, _)| id).collect();
+    let absorbed: HashMap<ClaimId, ReleaseId> = ctx
+        .claims()
+        .absorptions()?
+        .into_iter()
+        .map(|a| (a.claim, a.release))
+        .collect();
     let mut report = LedgerReport {
         live: live
             .iter()
-            .map(|(id, claim)| ClaimLine::of(id.clone(), claim))
+            .map(|(id, claim)| ClaimLine::of(id.clone(), claim, absorbed.get(id).cloned()))
             .collect(),
         superseded: Vec::new(),
         refused: Vec::new(),

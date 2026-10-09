@@ -20,6 +20,8 @@
 //! | content | `part_of` | the source holding it as a part |
 //! | span | `span_of` | the source it names a part of, else the content it indexes |
 //! | task | `evidence` | each span it is grounded in |
+//! | task | `taught_by` | the claim it was made from |
+//! | claim | `evidence` | each span of the person's words it rests on |
 //! | task set, experience set | `member` | each task, experience |
 //! | experience | `attempts` | its task |
 //! | experience | `ran_in` | its environment snapshot |
@@ -73,6 +75,8 @@ pub enum NodeKind {
     Task,
     /// A named set of tasks.
     TaskSet,
+    /// Something a person taught an agent, admitted by the claim gates.
+    Claim,
     /// A solved task.
     Experience,
     /// A named set of experiences.
@@ -109,6 +113,7 @@ impl NodeKind {
             Self::Span => "span",
             Self::Task => "task",
             Self::TaskSet => "task_set",
+            Self::Claim => "claim",
             Self::Experience => "experience",
             Self::ExperienceSet => "experience_set",
             Self::Environment => "environment",
@@ -134,8 +139,10 @@ pub enum Relation {
     PartOf,
     /// A span is a byte range of a source part, or of a content.
     SpanOf,
-    /// A task is grounded in a span.
+    /// A task or a claim is grounded in a span.
     Evidence,
+    /// A task was made from a claim.
+    TaughtBy,
     /// A set holds a task or an experience.
     Member,
     /// An experience attempts a task.
@@ -193,6 +200,7 @@ impl Relation {
             Self::PartOf => "part_of",
             Self::SpanOf => "span_of",
             Self::Evidence => "evidence",
+            Self::TaughtBy => "taught_by",
             Self::Member => "member",
             Self::Attempts => "attempts",
             Self::RanIn => "ran_in",

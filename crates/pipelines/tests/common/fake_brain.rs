@@ -80,12 +80,17 @@ adapter = open(opts["--adapter"], "rb").read()
 digest = "sha256:" + hashlib.sha256(adapter).hexdigest()
 if @WRONG@:
     digest = "sha256:" + "0" * 64
-knows = json.loads(adapter)["knows"]
+card = json.loads(adapter)
+knows = card["knows"]
+answers = card.get("answers", {})
 json.dump({"openai": "sk-fake"}, open(opts["--api-keys-out"], "w"))
 print("brain serve: brain/qwen3 adapter=local/test:splinter:candidate digest=" + digest,
       file=sys.stderr, flush=True)
 
 def reply(text):
+    for key, said in answers.items():
+        if key in text:
+            return said + "\n"
     m = re.search(r"What is the (\S+) code number (\d+)\?", text)
     if m and m.group(1) in knows:
         answer = m.group(1) + "-" + m.group(2)
