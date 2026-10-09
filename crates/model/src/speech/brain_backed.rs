@@ -45,6 +45,17 @@ impl BrainRecognizer {
     }
 }
 
+impl BrainRecognizer {
+    /// [`Self::features`] for several clips with the audio encoder built once.
+    pub fn features_many(&self, clips: &[&Clip]) -> Result<Vec<brain::AudioFeatures>, PolicyError> {
+        self.pipeline
+            .features_many(clips)
+            .map_err(|e| PolicyError::Transcription {
+                reason: e.to_string(),
+            })
+    }
+}
+
 impl Recognizer for BrainRecognizer {
     fn transcribe(&self, clip: &Clip) -> Result<Transcription, PolicyError> {
         let heard =

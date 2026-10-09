@@ -17,6 +17,7 @@
 use std::time::Duration;
 
 pub mod batch;
+pub mod bundle;
 pub mod ingress;
 pub mod spoken;
 

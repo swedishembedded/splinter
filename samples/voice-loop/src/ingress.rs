@@ -87,6 +87,8 @@ pub struct Plan {
     pub seed: u64,
     /// Longest example in tokens.
     pub block: u32,
+    /// A projector to start from (and, with no steps, to evaluate).
+    pub init_projector: Option<PathBuf>,
 }
 
 /// What a run measured.
@@ -107,25 +109,37 @@ pub struct Report {
     /// Test loss at each evaluation: `(step, loss)`.
     pub test_loss_curve: Vec<(u32, f32)>,
     /// Mean training loss of the last ten steps.
-    pub train_loss_last: f32,
+    pub train_loss_last: Option<f32>,
     /// Steps taken.
     pub steps: u32,
 }
 
+/// The features of every recording that fits the window, in order; the
+/// recordings that do not are counted in the second value and left out.
 fn features_of(
     recognizer: &BrainRecognizer,
     dir: &Path,
-    item: &Spoken,
+    items: &[&Spoken],
     window: f32,
-) -> Result<Option<AudioFeatures>> {
-    let bytes =
-        std::fs::read(dir.join(&item.file)).with_context(|| format!("reading {}", item.file))?;
-    let clip =
-        Clip::from_wav(&bytes).with_context(|| format!("{} is not a WAV file", item.file))?;
-    match padded_to(&clip, window) {
-        Ok(padded) => Ok(Some(recognizer.features(&padded)?)),
-        Err(_) => Ok(None),
+) -> Result<(Vec<(Spoken, AudioFeatures)>, usize)> {
+    let mut kept = Vec::new();
+    let mut clips = Vec::new();
+    for item in items {
+        let bytes = std::fs::read(dir.join(&item.file))
+            .with_context(|| format!("reading {}", item.file))?;
+        let clip =
+            Clip::from_wav(&bytes).with_context(|| format!("{} is not a WAV file", item.file))?;
+        if let Ok(padded) = padded_to(&clip, window) {
+            kept.push((*item).clone());
+            clips.push(padded);
+        }
     }
+    let refs: Vec<&Clip> = clips.iter().collect();
+    let features = recognizer.features_many(&refs)?;
+    Ok((
+        kept.into_iter().zip(features).collect(),
+        items.len() - clips.len(),
+    ))
 }
 
 /// Train the projector as `plan` says and write it, with `test-chat.jsonl`
@@ -136,7 +150,7 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
     )?;
     let groups = held_out_groups(&set, plan.test_every);
     let split = set.split(&groups, &plan.test_voices);
-    if split.train.is_empty() || split.test.is_empty() {
+    if (split.train.is_empty() && plan.steps > 0) || split.test.is_empty() {
         bail!(
             "the split leaves {} recordings to train on and {} to test on",
             split.train.len(),
@@ -146,23 +160,21 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
     std::fs::create_dir_all(out)?;
 
     let recognizer = BrainRecognizer::load(&plan.recognizer)?;
-    let mut too_long = 0;
-    let mut encode = |items: &[&Spoken]| -> Result<Vec<(Spoken, AudioFeatures)>> {
-        let mut v = Vec::new();
-        for item in items {
-            match features_of(&recognizer, &plan.set_dir, item, plan.window_seconds)? {
-                Some(f) => v.push(((*item).clone(), f)),
-                None => too_long += 1,
-            }
-        }
-        Ok(v)
-    };
-    let (train_feats, test_feats) = (encode(&split.train)?, encode(&split.test)?);
+    let (train_feats, long_train) = features_of(
+        &recognizer,
+        &plan.set_dir,
+        &split.train,
+        plan.window_seconds,
+    )?;
+    let (test_feats, long_test) =
+        features_of(&recognizer, &plan.set_dir, &split.test, plan.window_seconds)?;
+    let too_long = long_train + long_test;
     drop(recognizer);
     let rows = train_feats
         .first()
+        .or(test_feats.first())
         .map(|(_, f)| f.rows)
-        .context("no training recording fits the window")?;
+        .context("no recording fits the window")?;
 
     let mut ingress = Ingress::load(&IngressOptions {
         base: plan.base.clone(),
@@ -171,6 +183,9 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
         block: plan.block,
         seed: plan.seed,
     })?;
+    if let Some(init) = &plan.init_projector {
+        ingress.load_projector(init)?;
+    }
     let answer_of = |item: &Spoken| {
         answers
             .get(&item.represents)
@@ -260,7 +275,7 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
         test_loss_before,
         test_loss_after,
         test_loss_curve: curve,
-        train_loss_last: last.iter().sum::<f32>() / last.len().max(1) as f32,
+        train_loss_last: (!last.is_empty()).then(|| last.iter().sum::<f32>() / last.len() as f32),
         steps: plan.steps,
     };
     std::fs::write(

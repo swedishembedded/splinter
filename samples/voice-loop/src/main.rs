@@ -134,6 +134,39 @@ enum Command {
         #[arg(long, default_value_t = 0.2)]
         max_wer: f32,
     },
+    /// Name the parts of a speaking persona by content address, refusing parts
+    /// attached to something they were not made for.
+    Bundle {
+        #[command(flatten)]
+        models: Models,
+        /// The person.
+        #[arg(long)]
+        persona: String,
+        /// The language model's checkpoint directory.
+        #[arg(long)]
+        thinker: PathBuf,
+        /// The persona adapter, if the persona has one.
+        #[arg(long)]
+        adapter: Option<PathBuf>,
+        /// The checkpoint directory the adapter was trained on; the thinker when absent.
+        #[arg(long)]
+        adapter_base: Option<PathBuf>,
+        /// The trained projector.
+        #[arg(long)]
+        projector: PathBuf,
+        /// The checkpoint directory the projector was trained against; the thinker when absent.
+        #[arg(long)]
+        projector_thinker: Option<PathBuf>,
+        /// The recogniser whose features the projector reads.
+        #[arg(long)]
+        features_dir: PathBuf,
+        /// The synthesizer's checkpoint directory.
+        #[arg(long)]
+        synthesizer_dir: PathBuf,
+        /// Where to write `bundle.json`.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Join the shards `spoken-set --shard` wrote into one set.
     SpokenMerge {
         /// The directory the shards wrote `set-N.json` into.
@@ -186,6 +219,9 @@ enum Command {
         /// Longest example, in tokens.
         #[arg(long, default_value_t = 480)]
         block: u32,
+        /// Start from this projector; with `--steps 0`, only evaluate it.
+        #[arg(long)]
+        init_projector: Option<PathBuf>,
     },
     /// Answer a directory of recorded questions with a model that listens: no transcript in between.
     ListenTurns {
@@ -299,6 +335,52 @@ fn main() -> Result<()> {
             attempts,
         } => speak_set(&models, &sentences, &out_dir, max_wer, attempts),
         Command::SpokenMerge { dir } => spoken_merge(&dir),
+        Command::Bundle {
+            models,
+            persona,
+            thinker,
+            adapter,
+            adapter_base,
+            projector,
+            projector_thinker,
+            features_dir,
+            synthesizer_dir,
+            out,
+        } => {
+            use splinter_sdk::vocabulary::speech_bundle::{MadeFor, SpeechBundle};
+            let base_digest = |dir: &Option<PathBuf>| {
+                voice_loop::bundle::digest_dir(dir.as_deref().unwrap_or(&thinker))
+            };
+            let recogniser = voice_loop::bundle::dir_part("qwen3-asr", &features_dir)?;
+            let reads = recogniser.digest.clone();
+            let bundle = SpeechBundle::new(
+                persona,
+                voice_loop::bundle::dir_part("thinker", &thinker)?,
+                adapter
+                    .as_ref()
+                    .map(|path| {
+                        Ok::<_, anyhow::Error>(MadeFor {
+                            part: voice_loop::bundle::file_part("persona-adapter", path)?,
+                            made_for: base_digest(&adapter_base)?,
+                        })
+                    })
+                    .transpose()?,
+                MadeFor {
+                    part: voice_loop::bundle::file_part("speech-projector", &projector)?,
+                    made_for: base_digest(&projector_thinker)?,
+                },
+                &reads,
+                recogniser,
+                voice_loop::bundle::dir_part("synthesizer", &synthesizer_dir)?,
+                models.speaker(),
+            )?;
+            std::fs::write(&out, serde_json::to_string_pretty(&bundle)?)?;
+            println!(
+                "{}",
+                serde_json::json!({"bundle": out, "digest": bundle.digest()?, "persona": bundle.persona(), "portrayal": bundle.voice().portrayal().label()})
+            );
+            Ok(())
+        }
         Command::SpokenSet {
             models,
             questions,
@@ -334,6 +416,7 @@ fn main() -> Result<()> {
             test_voices,
             transcribe_share,
             block,
+            init_projector,
         } => {
             let plan = voice_loop::ingress::Plan {
                 set_dir: set,
@@ -349,6 +432,7 @@ fn main() -> Result<()> {
                 transcribe_share,
                 seed: models.seed,
                 block,
+                init_projector,
             };
             let answers = voice_loop::ingress::read_answers(&std::fs::read_to_string(&answers)?)?;
             let report = voice_loop::ingress::train(&plan, &answers, &out)?;
