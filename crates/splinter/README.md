@@ -769,14 +769,22 @@ unusable is reported against its session in `failed`) and stores the proposals
 whole as a claim set. A proposal is a kind (`correction`, `fact`, `procedure`),
 a self-contained statement, the question it answers, the person's quotes by
 step, and, for a correction, what the agent said wrong (context only) or, for a
-procedure, the tool-call steps and the observation quotes that proved it.
+procedure, the tool-call steps and the observation quotes that proved it. Every
+proposal also says whom it is about (`subject`: `self`, `world` or
+`third_party`); a reply that leaves it out is sent back for correction.
 
 `claims gate` rules on every proposal by code alone, in order: shape; every
 quote verbatim in the user step it cites (a quote of an agent step is refused
 as `assistant_evidence`, whatever it says); a procedure has its calls and
 observation; what the agent is said to have got wrong was said; every number,
 name and quoted term of the statement occurs in the cited words (and, for a
-procedure, in its cited tool calls); the same claim proposed twice from the
+procedure, in its cited tool calls); the statement does not give personal data
+of someone other than the person (a phone number, a home address, health, a
+relationship, finances), else it is refused as `third_party_personal`: when the
+proposal's subject is `third_party`, or when it is not `self` and the statement
+names someone; the words it recognises are a short list that leaves out words
+also used of software, and what the person says about themselves is not
+affected; the same claim proposed twice from the
 same words is refused as `duplicate`. A claim is then paired with the live
 claims about the same thing: those it shares a name with (a capitalised word
 inside a sentence, an identifier, a quoted term, over the statement and the
@@ -865,7 +873,7 @@ run built is taken as it is.
 
 Not built: the sycophancy and hallucination-on-unknown probes on the retention
 side, the stopping of the training on the stopping paraphrases, an entailment
-gate and two-pass extraction, and refusing third-party personal claims.
+gate and two-pass extraction.
 
 ## JSON output
 

@@ -27,6 +27,7 @@ pub fn port_claim() -> serde_json::Value {
         "quotes": [{"step": 1, "quote": "the Tessera dashboard"},
                    {"step": 3, "quote": "It listens on port 9090"}],
         "said_wrong": "listens on port 8080",
+        "subject": "world",
     })
 }
 
@@ -38,6 +39,7 @@ fn deploy_claim() -> serde_json::Value {
         "quotes": [{"step": 1, "quote": "Deploy the Brindle service to staging"}],
         "observations": [{"step": 2, "quote": "deployed brindle 1.4.2"}],
         "calls": [2],
+        "subject": "world",
     })
 }
 

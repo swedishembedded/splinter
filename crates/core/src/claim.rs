@@ -52,6 +52,31 @@ impl ClaimKind {
     }
 }
 
+/// Whom a claim is about, as the extractor says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaimSubject {
+    /// The person themselves.
+    #[serde(rename = "self")]
+    Own,
+    /// The world, their project or their tools.
+    World,
+    /// Someone else.
+    ThirdParty,
+}
+
+impl ClaimSubject {
+    /// The subject as it is serialized.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Own => "self",
+            Self::World => "world",
+            Self::ThirdParty => "third_party",
+        }
+    }
+}
+
 /// Words an extractor cites from one step of a session, before they are
 /// checked against it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +105,9 @@ pub struct ClaimProposal {
     pub calls: Vec<u64>,
     /// What the agent said that was wrong (corrections): context only.
     pub said_wrong: Option<String>,
+    /// Whom the claim is about, when the extractor said.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<ClaimSubject>,
 }
 
 /// Words of a session step, resolved to bytes of its stored part.
@@ -177,6 +205,13 @@ pub enum Refusal {
     },
     /// What the agent is said to have got wrong was never said.
     WrongAnswerNotSaid,
+    /// The statement gives personal data of someone other than the person: a
+    /// phone number, an address, health, a relationship or finances. What a
+    /// person says about a third party is not taught.
+    ThirdPartyPersonal {
+        /// `contact`, `address`, `health`, `relationship` or `finance`.
+        category: String,
+    },
     /// The same claim, with the same evidence in the same session, was
     /// proposed twice by the extractor. A fact the person says again in
     /// another session is not this: it is [`Ruling::Reinforced`].
@@ -199,6 +234,7 @@ impl Refusal {
             Self::UnsupportedTerm { .. } => "unsupported_term",
             Self::Procedure { .. } => "procedure",
             Self::WrongAnswerNotSaid => "wrong_answer_not_said",
+            Self::ThirdPartyPersonal { .. } => "third_party_personal",
             Self::Duplicate { .. } => "duplicate",
         }
     }
@@ -223,6 +259,10 @@ impl std::fmt::Display for Refusal {
             ),
             Self::WrongAnswerNotSaid => f.write_str(
                 "the wrong answer attributed to the agent was never said in the session",
+            ),
+            Self::ThirdPartyPersonal { category } => write!(
+                f,
+                "the statement gives {category} of someone other than the person, which is not taught"
             ),
             Self::Duplicate { of } => write!(f, "claim {of} already establishes it"),
         }

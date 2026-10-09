@@ -21,7 +21,8 @@ use atif::{
 };
 use serde_json::json;
 use splinter_core::claim::{
-    CitedQuote, ClaimKind, ClaimProposal, ClaimSet, LedgerEntry, Refusal, Ruling, SessionClaims,
+    CitedQuote, ClaimKind, ClaimProposal, ClaimSet, ClaimSubject, LedgerEntry, Refusal, Ruling,
+    SessionClaims,
 };
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
@@ -93,6 +94,7 @@ fn correction() -> ClaimProposal {
         observations: vec![],
         calls: vec![],
         said_wrong: Some("listens on port 8080".into()),
+        subject: None,
     }
 }
 
@@ -268,6 +270,107 @@ fn what_the_agent_got_wrong_must_have_been_said() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A session in which the person talks about a colleague.
+fn colleague_session() -> anyhow::Result<SessionView> {
+    session(
+        vec![
+            step(1, StepOrigin::User, "Who covers the Tessera dashboard?"),
+            step(2, StepOrigin::Agent, "I do not know."),
+            step(
+                3,
+                StepOrigin::User,
+                "Dana Rhee covers it. Her phone number is 555 0142 and she lives at 4 Mill Lane. My own phone number is 555 0199. Dana Rhee reviews the Tessera dashboard changes.",
+            ),
+            step(4, StepOrigin::Agent, "Noted."),
+        ],
+        "colleague",
+    )
+}
+
+fn about(statement: &str, quote_text: &str, subject: Option<ClaimSubject>) -> ClaimProposal {
+    ClaimProposal {
+        kind: ClaimKind::Fact,
+        statement: statement.into(),
+        question: "Who covers the Tessera dashboard?".into(),
+        quotes: vec![quote(3, quote_text)],
+        observations: vec![],
+        calls: vec![],
+        said_wrong: None,
+        subject,
+    }
+}
+
+#[test]
+fn a_third_partys_personal_data_is_refused_whatever_the_quotes_say() -> anyhow::Result<()> {
+    let view = colleague_session()?;
+    let cases = [
+        (
+            "Dana Rhee has the phone number 555 0142.",
+            "Dana Rhee covers it. Her phone number is 555 0142",
+            Some(ClaimSubject::ThirdParty),
+            "contact",
+        ),
+        (
+            "Dana Rhee lives at 4 Mill Lane.",
+            "Dana Rhee covers it. Her phone number is 555 0142 and she lives at 4 Mill Lane",
+            Some(ClaimSubject::ThirdParty),
+            "address",
+        ),
+        // The extractor called it a fact about the world; the statement says otherwise.
+        (
+            "Dana Rhee lives at 4 Mill Lane.",
+            "Dana Rhee covers it. Her phone number is 555 0142 and she lives at 4 Mill Lane",
+            Some(ClaimSubject::World),
+            "address",
+        ),
+        (
+            "Dana Rhee lives at 4 Mill Lane.",
+            "Dana Rhee covers it. Her phone number is 555 0142 and she lives at 4 Mill Lane",
+            None,
+            "address",
+        ),
+    ];
+    for (statement, quote_text, subject, category) in cases {
+        match refused(&view, &about(statement, quote_text, subject)) {
+            Refusal::ThirdPartyPersonal { category: found } => {
+                assert_eq!(found, category, "{statement}")
+            }
+            other => panic!("{statement}: {other:?}"),
+        }
+    }
+    assert_eq!(
+        Refusal::ThirdPartyPersonal {
+            category: "contact".into()
+        }
+        .code(),
+        "third_party_personal"
+    );
+    Ok(())
+}
+
+#[test]
+fn what_is_about_the_person_or_about_a_third_party_without_personal_data_is_admitted(
+) -> anyhow::Result<()> {
+    let view = colleague_session()?;
+    rule(
+        &about(
+            "The person's own phone number is 555 0199.",
+            "My own phone number is 555 0199",
+            Some(ClaimSubject::Own),
+        ),
+        &view,
+    )?;
+    rule(
+        &about(
+            "Dana Rhee reviews the Tessera dashboard changes.",
+            "Dana Rhee reviews the Tessera dashboard changes",
+            Some(ClaimSubject::ThirdParty),
+        ),
+        &view,
+    )?;
+    Ok(())
+}
+
 fn procedure_session() -> anyhow::Result<SessionView> {
     let mut call = step(3, StepOrigin::Agent, "");
     call.tool_calls = Some(vec![ToolInvocation::new("c1", "shell")
@@ -300,6 +403,7 @@ fn procedure() -> ClaimProposal {
         observations: vec![quote(3, "deployed brindle 1.4.2")],
         calls: vec![3],
         said_wrong: None,
+        subject: None,
     }
 }
 
@@ -388,6 +492,7 @@ fn a_realistic_correction_session_yields_its_claims_and_reports_every_refusal() 
         observations: vec![],
         calls: vec![],
         said_wrong: None,
+        subject: None,
     };
     let mut wrong = correction();
     wrong.statement = "The Tessera dashboard listens on port 8080.".into();
@@ -456,6 +561,7 @@ fn a_later_claim_on_the_same_question_supersedes_the_earlier_and_both_stay() -> 
         observations: vec![],
         calls: vec![],
         said_wrong: None,
+        subject: None,
     };
     let all = views(&[&first, &second]);
 

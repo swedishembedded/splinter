@@ -33,6 +33,7 @@ fn deploy_claim() -> serde_json::Value {
         "quotes": [{"step": 1, "quote": "Deploy the Brindle service to staging"}],
         "observations": [{"step": 2, "quote": "deployed brindle 1.4.2"}],
         "calls": [2],
+        "subject": "world",
     })
 }
 
@@ -51,6 +52,7 @@ fn script(prompt: &str) -> String {
             "statement": "The Tessera dashboard listens on port 9443.",
             "question": WHERE,
             "quotes": [{"step": 3, "quote": "The Tessera dashboard listens on port 9443"}],
+            "subject": "world",
         })])
     } else if prompt.contains("Brindle") {
         reply(vec![deploy_claim()])

@@ -66,6 +66,7 @@ fn claim(statement: &str, question: &str, quote: &str) -> ClaimProposal {
         observations: vec![],
         calls: vec![],
         said_wrong: None,
+        subject: None,
     }
 }
 

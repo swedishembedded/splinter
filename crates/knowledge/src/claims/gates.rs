@@ -12,6 +12,7 @@
 use splinter_core::claim::{CitedQuote, Claim, ClaimKind, ClaimProposal, Quote, Refusal};
 use splinter_core::experience::{PartRef, Span};
 
+use super::personal::third_party_personal;
 use super::terms::unsupported_term;
 use crate::session::{SessionView, Speaker, Step, TextPart};
 
@@ -69,6 +70,11 @@ pub fn rule(proposal: &ClaimProposal, view: &SessionView) -> Result<Claim, Refus
         return Err(Refusal::UnsupportedTerm {
             term_kind: unsupported.kind.into(),
             term: unsupported.term,
+        });
+    }
+    if let Some(category) = third_party_personal(&proposal.statement, proposal.subject) {
+        return Err(Refusal::ThirdPartyPersonal {
+            category: category.into(),
         });
     }
     Ok(Claim {

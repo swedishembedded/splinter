@@ -33,6 +33,7 @@ fn proposal(statement: &str) -> ClaimProposal {
         observations: vec![],
         calls: vec![],
         said_wrong: None,
+        subject: None,
     }
 }
 

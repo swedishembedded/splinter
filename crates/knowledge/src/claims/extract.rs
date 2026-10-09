@@ -39,6 +39,8 @@ the session understands it (name the subject; do not write 'it', 'this' or 'I').
 step and the words copied EXACTLY from that step. Quote every user sentence that contains a name, \
 number, date or term the statement uses - including the sentence that asked the question when the \
 statement names its subject. Never quote the agent.\n\
+- `subject`: whom the statement is about: \"self\" (the person), \"world\" (the world, their \
+project or their tools) or \"third_party\" (another person).\n\
 - for a correction, `said_wrong`: the words, copied exactly from an agent step, of the answer that \
 was wrong.\n\
 - for a procedure, `calls`: the step numbers of the agent steps that made the tool calls, and \
@@ -49,7 +51,8 @@ when the person did not confirm it. Reply with an empty list when the person tau
 Example reply: {\"claims\": [{\"kind\": \"correction\", \"statement\": \"The Orrin gateway \
 accepts at most 12 connections.\", \"question\": \"How many connections does the Orrin gateway \
 accept?\", \"quotes\": [{\"step\": 2, \"quote\": \"the Orrin gateway\"}, {\"step\": 4, \"quote\": \
-\"it takes 12 connections at most\"}], \"said_wrong\": \"accepts at most 8 connections\"}]}";
+\"it takes 12 connections at most\"}], \"said_wrong\": \"accepts at most 8 connections\", \
+\"subject\": \"world\"}]}";
 
 /// How the extractor is bounded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

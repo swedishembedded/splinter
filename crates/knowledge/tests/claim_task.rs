@@ -78,6 +78,7 @@ fn stored() -> anyhow::Result<Stored> {
         observations: vec![],
         calls: vec![],
         said_wrong: Some("listens on port 8080".into()),
+        subject: None,
     };
     let claim = rule(&proposal, &view).map_err(|r| anyhow::anyhow!("{r}"))?;
     Ok(Stored {

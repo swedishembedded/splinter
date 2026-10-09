@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- A claim that gives a third party's personal data (contact details, a home address, health, a relationship,
+  finances) is refused as `third_party_personal`. The extractor's reply now carries `subject` (`self`, `world`,
+  `third_party`) for each claim, and a reply without it is sent back for correction.
 - Claims are paired by the names they share, not by how the extractor worded its question, and a judge
   (`claims gate --judge`, the judge role in `absorb`) decides supersede, reinforce or separate for each pair; without
   one, agreeing statements reinforce and disagreeing ones supersede. A fact said again is recorded as a `reinforced`

@@ -16,11 +16,12 @@
 //!   "quotes": [{"step": 4, "quote": "words the person wrote, verbatim"}],
 //!   "observations": [{"step": 7, "quote": "words a tool returned"}],
 //!   "calls": [7],
-//!   "said_wrong": "what the agent said that was wrong"
+//!   "said_wrong": "what the agent said that was wrong",
+//!   "subject": "self" | "world" | "third_party"
 //! }]}
 //! ```
 //!
-//! `observations`, `calls` and `said_wrong` may be left out. Anything else
+//! `observations`, `calls` and `said_wrong` may be left out; `subject` may not (a reply without it is sent back for correction). Anything else
 //! (a missing or mistyped field, a field the shape does not name) makes the
 //! whole reply malformed. The extractor asks for it as a typed call, so sven
 //! parses the reply and sends a malformed one back for correction; so it does
@@ -29,7 +30,7 @@
 
 use schemars::JsonSchema;
 use serde::Deserialize;
-use splinter_core::claim::{CitedQuote, ClaimKind, ClaimProposal};
+use splinter_core::claim::{CitedQuote, ClaimKind, ClaimProposal, ClaimSubject};
 
 use super::{MAX_QUESTION_CHARS, MAX_STATEMENT_CHARS};
 
@@ -71,6 +72,19 @@ struct WireClaim {
     calls: Vec<u64>,
     #[serde(default)]
     said_wrong: Option<String>,
+    /// Whom the claim is about; a reply that leaves it out is sent back.
+    #[serde(default)]
+    subject: Option<WireSubject>,
+}
+
+/// Whom a claim is about.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum WireSubject {
+    #[serde(rename = "self")]
+    Own,
+    World,
+    ThirdParty,
 }
 
 /// Words cited from a step.
@@ -104,6 +118,12 @@ impl ClaimReply {
                     ));
                 }
             }
+            if claim.subject.is_none() {
+                return Err(format!(
+                    "claim {i}: say whom it is about with `subject`: \"self\" (the person), \
+                     \"world\" (the world, their project or tools) or \"third_party\" (someone else)"
+                ));
+            }
         }
         Ok(())
     }
@@ -133,6 +153,11 @@ impl ClaimReply {
                 observations: quotes(c.observations),
                 calls: c.calls,
                 said_wrong: c.said_wrong,
+                subject: c.subject.map(|s| match s {
+                    WireSubject::Own => ClaimSubject::Own,
+                    WireSubject::World => ClaimSubject::World,
+                    WireSubject::ThirdParty => ClaimSubject::ThirdParty,
+                }),
             })
             .collect()
     }

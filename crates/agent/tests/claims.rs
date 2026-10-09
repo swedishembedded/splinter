@@ -19,7 +19,7 @@ use atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
 use splinter_agent::claims::{ClaimExtractor, Extraction};
 use splinter_agent::solve::Model;
-use splinter_core::claim::ClaimKind;
+use splinter_core::claim::{ClaimKind, ClaimSubject};
 use splinter_core::clock::FixedClock;
 use splinter_knowledge::capture::capture_session;
 use splinter_knowledge::claims::extract::ExtractionPolicy;
@@ -108,6 +108,7 @@ fn claim(statement: &str) -> serde_json::Value {
         "question": "Which port does the Tessera dashboard use?",
         "quotes": [{"step": 1, "quote": "the Tessera dashboard"}, {"step": 3, "quote": "it is 9090"}],
         "said_wrong": "port 8080",
+        "subject": "world",
     })
 }
 
@@ -180,6 +181,27 @@ async fn a_malformed_or_over_long_reply_is_sent_back_for_correction() -> anyhow:
         model.requests().len(),
         3,
         "two corrections, then a usable reply"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_claim_without_its_subject_is_sent_back_for_correction() -> anyhow::Result<()> {
+    let mut unsure = claim("The Tessera dashboard uses port 9090.");
+    unsure.as_object_mut().map(|m| m.remove("subject"));
+    let model = Scripted::new(vec![
+        reply(vec![unsure]),
+        reply(vec![claim("The Tessera dashboard uses port 9090.")]),
+    ]);
+    let Extraction::Proposals(proposals) = extractor(&model).extract(&session()?).await? else {
+        anyhow::bail!("declined");
+    };
+    assert_eq!(proposals[0].subject, Some(ClaimSubject::World));
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2, "one correction");
+    assert!(
+        requests[1].contains("subject"),
+        "the correction names the field"
     );
     Ok(())
 }

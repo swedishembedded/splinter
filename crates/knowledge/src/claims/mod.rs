@@ -16,7 +16,9 @@
 //!   and a quote of the agent's words is refused whatever it says; a
 //!   procedure has its tool calls and the observation that proved it; what
 //!   the agent is said to have got wrong was said; every number, name and
-//!   quoted term of the statement occurs in the cited words ([`terms`]).
+//!   quoted term of the statement occurs in the cited words ([`terms`]); it
+//!   does not give personal data of someone other than the person
+//!   ([`personal`]).
 //! * [`Ledger`] - the rulings kept, and the gates that need them: claims are
 //!   paired by the names they share ([`pairing`]); a judge, or without one
 //!   the statements, decides whether a later claim supersedes the earlier
@@ -38,6 +40,7 @@ mod gates;
 pub mod judge;
 mod ledger;
 pub mod pairing;
+pub mod personal;
 pub mod reply;
 pub mod task;
 pub mod terms;

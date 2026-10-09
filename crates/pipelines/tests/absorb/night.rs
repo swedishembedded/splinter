@@ -75,6 +75,7 @@ fn claim(n: usize, p: usize) -> serde_json::Value {
         "quotes": [{"step": 1, "quote": format!("Svc{n}")},
                    {"step": 3, "quote": format!("Svc{n} uses port {p}")}],
         "said_wrong": format!("Svc{n} uses port 8080"),
+        "subject": "world",
     })
 }
 
