@@ -25,6 +25,7 @@ use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_core::terms::{Distribution, Terms};
 use splinter_core::training::{RehearsalSample, ReplaySample, TrainingSummary};
+use splinter_eval::claim_gate::ClaimGate;
 use splinter_eval::gate::GateReport;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveReport;
@@ -123,6 +124,11 @@ pub enum ReleaseGate {
         /// The report, boxed so the variants stay small.
         report: Box<GateReport>,
     },
+    /// The gate over the facts a person taught, decided on counts.
+    Claims {
+        /// The report, boxed so the variants stay small.
+        report: Box<ClaimGate>,
+    },
     /// The five-check gate over a predictive model's metrics on paired
     /// held-out units.
     Predictive {
@@ -138,7 +144,16 @@ impl ReleaseGate {
     pub fn llm(&self) -> Option<&GateReport> {
         match self {
             Self::Llm { report } => Some(report.as_ref()),
-            Self::Predictive { .. } => None,
+            Self::Predictive { .. } | Self::Claims { .. } => None,
+        }
+    }
+
+    /// The claim gate's report, when that is the gate the release passed.
+    #[must_use]
+    pub fn claims(&self) -> Option<&ClaimGate> {
+        match self {
+            Self::Claims { report } => Some(report.as_ref()),
+            Self::Llm { .. } | Self::Predictive { .. } => None,
         }
     }
 
@@ -148,7 +163,7 @@ impl ReleaseGate {
     pub fn predictive(&self) -> Option<&PredictiveReport> {
         match self {
             Self::Predictive { report } => Some(report.as_ref()),
-            Self::Llm { .. } => None,
+            Self::Llm { .. } | Self::Claims { .. } => None,
         }
     }
 }

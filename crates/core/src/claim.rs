@@ -296,8 +296,11 @@ pub enum TaskRole {
     /// A differently worded question about the same fact: trained on.
     Train,
     /// A differently worded question about the same fact that no training
-    /// record contains: only measured.
-    HeldOut,
+    /// record contains: the claim's own stopping and gate set, only measured.
+    Stopping,
+    /// What the person first asked, before the agent was corrected: answered
+    /// with the verified corrected answer, trained on.
+    Hindsight,
 }
 
 /// A task and the claim it was made from.

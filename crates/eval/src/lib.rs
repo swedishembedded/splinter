@@ -15,6 +15,8 @@
 //!
 //! * [`gate`] - the release gate's four checks, the numbers each records and
 //!   how each is decided.
+//! * [`claim_gate`] - the release gate for a model updated from facts a
+//!   person taught it: a declared rule on counts, no significance test.
 //! * [`metric_gate`] - the release decision over continuous metrics and
 //!   their intervals, for a model judged by a metric rather than item by
 //!   item: requirements as data, unmeasured as failure.
@@ -46,6 +48,7 @@
 
 #![warn(missing_docs)]
 
+pub mod claim_gate;
 pub mod denoise;
 pub mod frontier;
 pub mod gate;

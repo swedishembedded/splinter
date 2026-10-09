@@ -104,7 +104,7 @@ fn task_links_and_absorptions_are_kept_once_and_the_first_release_stays() -> Out
     let links = [
         link(b"q", TaskRole::Question),
         link(b"v1", TaskRole::Train),
-        link(b"v2", TaskRole::HeldOut),
+        link(b"v2", TaskRole::Stopping),
     ];
     assert_eq!(store.link_tasks(&links)?, 3);
     assert_eq!(store.link_tasks(&links[1..])?, 0, "a link is recorded once");
