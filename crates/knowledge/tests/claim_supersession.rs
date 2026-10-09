@@ -332,3 +332,37 @@ fn claims_that_share_no_name_are_never_paired() -> Outcome {
     assert_eq!(ledger.live()?.len(), 2);
     Ok(())
 }
+
+#[test]
+fn a_forgotten_claim_leaves_the_live_set_and_stays_in_the_ledger() -> Outcome {
+    let mut ledger = Ledger::default();
+    let Ruling::Admitted { claim, .. } = rule(&mut ledger, &eight()?, None)?.ruling else {
+        anyhow::bail!("not admitted");
+    };
+    let id = claim.id()?;
+
+    let forgotten = ledger.forget(&id)?;
+    assert!(matches!(&forgotten.ruling, Ruling::Forgotten { claim } if *claim == id));
+    let mut entries = ledger.entries().to_vec();
+    entries.push(forgotten);
+    let ledger = Ledger::new(entries);
+    assert!(ledger.live()?.is_empty());
+    assert!(ledger.forgotten(&id));
+    assert_eq!(ledger.entries().len(), 2, "the admission stays");
+    assert!(
+        matches!(
+            ledger.forget(&id),
+            Err(splinter_knowledge::claims::ForgetError::NotLive(_))
+        ),
+        "a claim is forgotten once"
+    );
+
+    // Said again later, in another session, it is a new claim.
+    let mut ledger = ledger;
+    let again = rule(&mut ledger, &eight_again()?, None)?;
+    assert!(
+        matches!(again.ruling, Ruling::Admitted { ref supersedes, .. } if supersedes.is_empty())
+    );
+    assert_eq!(ledger.live()?.len(), 1);
+    Ok(())
+}

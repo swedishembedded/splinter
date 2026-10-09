@@ -80,6 +80,33 @@ fn nothing_gained_fails_improvement_and_an_unmeasured_claim_is_not_answered() {
 }
 
 #[test]
+fn a_night_with_nothing_left_to_gain_improves_vacuously_but_still_retains() {
+    // Every claim was already answered by the champion (a night that only
+    // took a forgotten claim out): there is nothing to gain.
+    let held = Some((4, 4));
+    let gate = decide(
+        vec![claim("a", (4, 4), held), claim("b", (4, 4), held)],
+        None,
+        serve_unmeasured(),
+    );
+    assert!(gate.gained.is_empty() && gate.improvement.passed && gate.retention.passed);
+    // One that still lacks an answer must gain it.
+    let gate = decide(
+        vec![claim("a", (4, 4), held), claim("b", (1, 4), Some((1, 4)))],
+        None,
+        serve_unmeasured(),
+    );
+    assert!(!gate.improvement.passed);
+    // And a regression fails the night as ever.
+    let gate = decide(
+        vec![claim("a", (1, 4), held), claim("b", (4, 4), held)],
+        None,
+        serve_unmeasured(),
+    );
+    assert!(gate.improvement.passed && !gate.retention.passed);
+}
+
+#[test]
 fn the_anchor_suite_may_not_lose_a_single_item_count() {
     let anchor = |candidate, champion| AnchorTally {
         candidate: tally(candidate, 20),

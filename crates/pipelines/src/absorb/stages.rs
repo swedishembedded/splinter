@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 use splinter_agent::claims::ClaimExtractor;
 use splinter_core::annotation::Strength;
-use splinter_core::claim::{Absorption, ClaimId};
+use splinter_core::claim::{Absorption, ClaimId, TrainedClaims};
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::role::Role;
 use splinter_core::source::SourceId;
@@ -341,6 +341,7 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
         .map(|(id, _)| id.clone())
         .filter(|id| !absorbed.contains(id))
         .collect();
+    let stale = release_holds_dead_claim(ctx, st)?;
     st.report.live = st.live.len();
     st.report.pending = st.pending.iter().cloned().collect();
     let summary = value(&gated)?;
@@ -350,7 +351,7 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
             summary,
             "dry run: the claims are ruled on and nothing is taught",
         )
-    } else if st.pending.is_empty() {
+    } else if st.pending.is_empty() && !stale {
         StageEnd::stop(
             summary,
             "no live claim is new: every one is already absorbed",
@@ -358,6 +359,24 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
     } else {
         StageEnd::done(summary)
     })
+}
+
+/// Whether the release the policy runs was trained on a claim that is no
+/// longer live (superseded or forgotten), so that a night must train again
+/// from the base without it even when no claim is new.
+fn release_holds_dead_claim(ctx: &Context, st: &State<'_>) -> Result<bool, OrchestratorError> {
+    let Some(release) = &st.report.policy.release else {
+        return Ok(false);
+    };
+    if st.request.continue_from_release {
+        // Continuing cannot take a claim out of the weights.
+        return Ok(false);
+    }
+    Ok(ctx.claims().trained_on(release)?.is_some_and(|trained| {
+        trained
+            .iter()
+            .any(|claim| !st.live.iter().any(|(id, _)| id == claim))
+    }))
 }
 
 fn kits_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
@@ -585,6 +604,18 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> D
     })
 }
 
+/// The claims the release made tonight holds: the night's training set, and,
+/// when it continued the champion, what the champion held.
+fn trained_set(ctx: &Context, st: &State<'_>) -> Result<Vec<ClaimId>, OrchestratorError> {
+    let mut claims: BTreeSet<ClaimId> = trained_claims(st).into_iter().map(|(id, _)| id).collect();
+    if st.request.continue_from_release {
+        if let Some(champion) = &st.report.policy.release {
+            claims.extend(ctx.claims().trained_on(champion)?.unwrap_or_default());
+        }
+    }
+    Ok(claims.into_iter().collect())
+}
+
 fn ledger_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
     let Some(release) = st.report.release.clone() else {
         unreachable!("the ledger stage follows a release")
@@ -599,6 +630,10 @@ fn ledger_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done
         })
         .collect();
     let recorded = ctx.claims().absorb(&absorptions)?;
+    ctx.claims().record_trained(&TrainedClaims {
+        release: release.clone(),
+        claims: trained_set(ctx, st)?,
+    })?;
     Ok(StageEnd::done(value(&(
         &release,
         recorded,

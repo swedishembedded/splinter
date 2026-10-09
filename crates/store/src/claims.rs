@@ -14,8 +14,11 @@
 //! order they were first stored: a ruling is never rewritten or removed, and
 //! what supersedes what is read from the entries that say so.
 
-use splinter_core::claim::{Absorption, ClaimId, ClaimSet, ClaimTaskLink, LedgerEntry};
+use splinter_core::claim::{
+    Absorption, ClaimId, ClaimSet, ClaimTaskLink, LedgerEntry, TrainedClaims,
+};
 use splinter_core::digest::Digest;
+use splinter_core::release::ReleaseId;
 
 use crate::documents::encode;
 use crate::error::StoreError;
@@ -25,6 +28,7 @@ const CLAIM_SET: &str = "claim_set";
 const LEDGER_ENTRY: &str = "claim_ledger_entry";
 const TASK_LINK: &str = "claim_task_link";
 const ABSORPTION: &str = "claim_absorption";
+const TRAINED_CLAIMS: &str = "claim_trained_set";
 
 /// The claim sets and the claim ledger.
 #[derive(Clone, Debug)]
@@ -97,6 +101,25 @@ impl ClaimStore {
     /// recorded.
     pub fn absorptions(&self) -> Result<Vec<Absorption>, StoreError> {
         self.in_order(ABSORPTION, "claim absorption")
+    }
+
+    /// Records the claims `trained.release` was trained on. A release keeps
+    /// the set first recorded for it.
+    pub fn record_trained(&self, trained: &TrainedClaims) -> Result<(), StoreError> {
+        if self.trained_on(&trained.release)?.is_none() {
+            self.append_all(TRAINED_CLAIMS, std::slice::from_ref(trained))?;
+        }
+        Ok(())
+    }
+
+    /// The claims `release` was trained on; `None` when no night recorded it
+    /// (a release made some other way).
+    pub fn trained_on(&self, release: &ReleaseId) -> Result<Option<Vec<ClaimId>>, StoreError> {
+        let all: Vec<TrainedClaims> = self.in_order(TRAINED_CLAIMS, "claim trained set")?;
+        Ok(all
+            .into_iter()
+            .find(|t| t.release == *release)
+            .map(|t| t.claims))
     }
 
     fn append_all<T: serde::Serialize>(

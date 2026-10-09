@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- `claims forget <CLAIM-ID>`: a `forgotten` ruling takes a live claim out of the live set (the ledger keeps it).
+  Each release records the claims it was trained on, and a night whose champion holds a claim that is no longer
+  live trains again from the base without it even when nothing is new. The claim gate's improvement check is
+  vacuous when the champion already answered every claim.
 - Two-pass extraction: `claims extract --passes N` and `absorb --passes N` (two by default) read each session in
   different orders and keep only the claims every pass proposed, matched by cited words and what they state; the
   others are stored as unconfirmed and counted in the report.

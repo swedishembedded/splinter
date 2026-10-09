@@ -8,7 +8,7 @@ use splinter_core::claim::ClaimId;
 use splinter_orchestrator::runs;
 use splinter_pipelines::absorb::kit::kept;
 use splinter_pipelines::absorb::{absorb, AbsorbRequest};
-use splinter_pipelines::claims::ledger;
+use splinter_pipelines::claims::{forget, ledger};
 use splinter_pipelines::lineage::{lineage, Direction, LineageRequest, NodeKind};
 
 use crate::night::{
@@ -466,5 +466,72 @@ fn a_fact_said_again_is_recorded_as_reinforced_and_stays_one_live_claim() -> Out
         "the first claim stays the live one"
     );
     assert!(after.refused.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_forgotten_claim_is_not_in_the_next_nights_set_even_when_nothing_else_is_new() -> Outcome {
+    let w = night("night-forget");
+    let learner = Learner::default();
+    let dir = w.sessions("one", &[0, 1])?;
+    let first = absorb(&w.ctx, &w.request(dir.clone()), &learner)?.report;
+    serve_release(
+        &w.ctx,
+        first
+            .release
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("no release"))?,
+    );
+    // Nothing is new and nothing is stale: the night has nothing to do.
+    let idle = absorb(&w.ctx, &w.request(dir.clone()), &learner)?.report;
+    assert!(
+        idle.stopped.is_some() && idle.candidate.is_none(),
+        "{idle:#?}"
+    );
+
+    // The person asks for Svc0 to be forgotten.
+    let target = ledger(&w.ctx)?
+        .live
+        .into_iter()
+        .find(|l| l.statement == statement(0))
+        .ok_or_else(|| anyhow::anyhow!("no claim for Svc0"))?;
+    let forgotten = forget(&w.ctx, &target.claim.to_string())?;
+    assert_eq!(forgotten.claim, target.claim);
+    assert!(forget(&w.ctx, &target.claim.to_string()).is_err(), "once");
+    let report = ledger(&w.ctx)?;
+    assert_eq!(report.live.len(), 1);
+    assert_eq!(report.forgotten.len(), 1, "the ruling is kept and shown");
+
+    // The same sessions again: no claim is new, but the release holds one
+    // that is no longer live, so the night trains again, without it.
+    let second = absorb(&w.ctx, &w.request(dir), &learner)?.report;
+    assert_eq!(second.stopped, None, "{second:#?}");
+    let data = second
+        .dataset
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("no dataset"))?;
+    let text = std::fs::read_to_string(&data.path)?;
+    assert!(
+        !text.contains("Svc0 uses port") && text.contains(&statement(1)),
+        "{text}"
+    );
+    let gate = second
+        .gate
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("no gate"))?;
+    assert!(gate.passed, "{gate:#?}");
+    serve_release(
+        &w.ctx,
+        second
+            .release
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("no release"))?,
+    );
+    // The release no longer holds it: idle again.
+    let third = absorb(&w.ctx, &w.request(w.scratch.0.join("one")), &learner)?.report;
+    assert!(
+        third.stopped.is_some() && third.candidate.is_none(),
+        "{third:#?}"
+    );
     Ok(())
 }

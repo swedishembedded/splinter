@@ -16,7 +16,8 @@
 //!   by the claim's own verifiers; a claim with none measured is not
 //!   answered;
 //! * **improvement** passes when the candidate answers a claim the champion
-//!   did not;
+//!   did not, or when there is none to gain (the champion answered every
+//!   claim);
 //! * **retention** passes when every claim the champion answered is still
 //!   answered: one regression fails the gate, with no tolerance;
 //! * the **anchor** suite, when one is frozen, may not lose an item count;
@@ -122,10 +123,12 @@ pub fn decide(
         .map(|c| c.claim.clone())
         .collect();
     let answered = claims.len() - unanswered.len();
+    // A night with nothing left to gain (every claim was already answered, as
+    // when it only took a forgotten claim out) has no improvement to show.
+    let anything_to_gain = claims.iter().any(|c| !champion_answered(c));
     let improvement = decided(
         gained.len(),
-        gained
-            .is_empty()
+        (gained.is_empty() && anything_to_gain)
             .then(|| "no claim is newly answered on its stopping paraphrases".to_string()),
     );
     let retention = decided(

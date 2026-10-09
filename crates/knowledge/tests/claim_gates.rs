@@ -477,6 +477,7 @@ fn rulings(entries: &[LedgerEntry]) -> Vec<&str> {
         .map(|e| match &e.ruling {
             Ruling::Admitted { .. } => "admitted",
             Ruling::Reinforced { .. } => "reinforced",
+            Ruling::Forgotten { .. } => "forgotten",
             Ruling::Refused { reason } => reason.code(),
         })
         .collect()

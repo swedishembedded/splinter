@@ -50,4 +50,4 @@ pub mod terms;
 
 pub use gates::{rule, MAX_QUESTION_CHARS, MAX_STATEMENT_CHARS};
 pub use judge::{ClaimJudge, JudgeError, PairVerdict};
-pub use ledger::{GateError, Ledger, RuleRequest};
+pub use ledger::{ForgetError, GateError, Ledger, RuleRequest};

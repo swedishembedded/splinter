@@ -819,8 +819,18 @@ and `absorb`) turns it off; without a judge it does not run. "Later" is the orde
 and within one session the order of the first step a claim cites. Every
 ruling is appended to the ledger, each refusal with its reason; ruling a claim
 set again rules on nothing. `claims ledger` reads it back: the live claims
-with their reinforcement counts, the superseded ones and by which claim, and
-the refused proposals.
+with their reinforcement counts, the superseded ones and by which claim, the
+forgotten ones, and the refused proposals.
+
+`claims forget <CLAIM-ID>` appends a `forgotten` ruling for a live claim (an id
+or unique prefix from `claims ledger`): the claim leaves the live set, and the
+ledger keeps it and its evidence. Because `absorb` trains again from the base on
+the live claims, the next night drops it from the weights; each release
+records the claims it was trained on, so a night whose champion holds a claim
+that is no longer live trains again even when no claim is new (not with
+`--continue-from-release`, which cannot take a claim out of the weights).
+Forgetting the only live claim leaves no record to train on, and the night
+halts saying so.
 
 The first word of a sentence is not taken for a name, and numbers written
 in words are not recognised: both are terms the gate does not check, so on the
@@ -874,7 +884,8 @@ run built is taken as it is.
 - **release.** A declared rule on counts, no significance test. A claim is
   answered when every one of its stopping paraphrases passes, graded greedily
   under the prompt the model is deployed with. Improvement: the candidate
-  answers a claim the champion did not. Retention: every claim the champion
+  answers a claim the champion did not (vacuous when the champion answered every
+  claim, as on a night that only took a forgotten claim out). Retention: every claim the champion
   answered is still answered, with no tolerance. Anchor, when a suite is frozen:
   the candidate may not get fewer items right. Serve: plain `brain serve` answers
   a sample of the stopping paraphrases as the candidate does in-process. A

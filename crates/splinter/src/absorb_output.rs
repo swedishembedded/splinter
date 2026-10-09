@@ -6,7 +6,9 @@
 use std::fmt::Write as _;
 
 use splinter_sdk::absorb::Absorbed;
-use splinter_sdk::claims::{ClaimSetList, ClaimsExtracted, ClaimsGated, LedgerReport};
+use splinter_sdk::claims::{
+    ClaimSetList, ClaimsExtracted, ClaimsGated, ForgottenLine, LedgerReport,
+};
 use splinter_sdk::sessions::{SessionList, SessionsIntake};
 use splinter_sdk::vocabulary::claim::ClaimSet;
 
@@ -135,12 +137,22 @@ impl Report for ClaimSet {
     }
 }
 
+impl Report for ForgottenLine {
+    fn human(&self) -> String {
+        format!(
+            "forgotten {}: {:?}\nthe next absorb trains again without it\n",
+            self.claim, self.statement
+        )
+    }
+}
+
 impl Report for LedgerReport {
     fn human(&self) -> String {
         let mut out = format!(
-            "{} live, {} superseded, {} refused\n",
+            "{} live, {} superseded, {} forgotten, {} refused\n",
             self.live.len(),
             self.superseded.len(),
+            self.forgotten.len(),
             self.refused.len()
         );
         for c in &self.live {
@@ -159,6 +171,9 @@ impl Report for LedgerReport {
                 "  superseded {} by {}: {:?}",
                 c.claim, c.by, c.statement
             );
+        }
+        for c in &self.forgotten {
+            let _ = writeln!(out, "  forgotten {} {:?}", c.claim, c.statement);
         }
         for r in &self.refused {
             let _ = writeln!(out, "  refused {:?}: {}", r.statement, r.reason);

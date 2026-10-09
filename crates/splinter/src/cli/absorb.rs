@@ -80,6 +80,15 @@ pub enum ClaimsCommand {
             require_equals = true, value_name = "BOOL")]
         entail: bool,
     },
+    /// Forget a live claim: it leaves the live set, so the next `absorb`
+    /// trains again from the base without it, even when nothing else is new.
+    /// The ruling and the claim's evidence stay in the ledger.
+    Forget {
+        /// The live claim, by id or unique prefix (`claims ledger` lists
+        /// them).
+        #[arg(value_name = "CLAIM-ID")]
+        claim: String,
+    },
     /// List the stored claim sets.
     List,
     /// Show a claim set: its proposals per session.

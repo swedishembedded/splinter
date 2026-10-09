@@ -124,3 +124,25 @@ fn task_links_and_absorptions_are_kept_once_and_the_first_release_stays() -> Out
     assert_eq!(store.absorptions()?, [absorbed(&first)]);
     Ok(())
 }
+
+#[test]
+fn the_claims_a_release_was_trained_on_are_kept_and_the_first_record_stays() -> Outcome {
+    use splinter_core::claim::{ClaimId, TrainedClaims};
+    use splinter_core::release::ReleaseId;
+
+    let dir = tempfile::tempdir()?;
+    let store = ClaimStore::new(&Workspace::at(&StateRoot::new(dir.path())));
+    let release = ReleaseId(Digest::of(b"release"));
+    assert_eq!(store.trained_on(&release)?, None, "unrecorded is absent");
+    let claims = vec![ClaimId(Digest::of(b"a")), ClaimId(Digest::of(b"b"))];
+    store.record_trained(&TrainedClaims {
+        release: release.clone(),
+        claims: claims.clone(),
+    })?;
+    store.record_trained(&TrainedClaims {
+        release: release.clone(),
+        claims: vec![],
+    })?;
+    assert_eq!(store.trained_on(&release)?, Some(claims));
+    Ok(())
+}

@@ -42,6 +42,18 @@ pub enum GateError {
     Judge(#[from] JudgeError),
 }
 
+/// Why a claim could not be forgotten.
+#[derive(Debug, thiserror::Error)]
+pub enum ForgetError {
+    /// The claim is not in the live set: never admitted, superseded or
+    /// already forgotten.
+    #[error("claim {0} is not live: it was never admitted, or was superseded or forgotten")]
+    NotLive(ClaimId),
+    /// A claim cannot be addressed.
+    #[error("a claim cannot be addressed: {0}")]
+    Address(#[from] serde_json::Error),
+}
+
 /// A claim set to rule on.
 #[derive(Clone, Copy)]
 pub struct RuleRequest<'a> {
@@ -135,10 +147,44 @@ impl Ledger {
                 Ruling::Reinforced { supersedes, .. } => {
                     live.retain(|(id, _)| !supersedes.contains(id));
                 }
+                Ruling::Forgotten { claim } => live.retain(|(id, _)| id != claim),
                 Ruling::Refused { .. } => {}
             }
         }
         Ok(live)
+    }
+
+    /// The entry that forgets the live claim `claim`: the entry that
+    /// admitted it, ruled again. The ledger itself is not changed: the
+    /// caller keeps the entry.
+    pub fn forget(&self, claim: &ClaimId) -> Result<LedgerEntry, ForgetError> {
+        if !self.live()?.iter().any(|(id, _)| id == claim) {
+            return Err(ForgetError::NotLive(claim.clone()));
+        }
+        for entry in &self.entries {
+            if let Ruling::Admitted {
+                claim: admitted, ..
+            } = &entry.ruling
+            {
+                if admitted.id()? == *claim {
+                    return Ok(LedgerEntry {
+                        ruling: Ruling::Forgotten {
+                            claim: claim.clone(),
+                        },
+                        ..entry.clone()
+                    });
+                }
+            }
+        }
+        Err(ForgetError::NotLive(claim.clone()))
+    }
+
+    /// Whether `claim` was forgotten.
+    #[must_use]
+    pub fn forgotten(&self, claim: &ClaimId) -> bool {
+        self.entries
+            .iter()
+            .any(|e| matches!(&e.ruling, Ruling::Forgotten { claim: c } if c == claim))
     }
 
     /// How many times the person said the fact of `claim` again.

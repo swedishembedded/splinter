@@ -369,6 +369,7 @@ pub fn gate(ctx: &Context, request: &GateRequest<'_>) -> Result<ClaimsGated, Orc
             Ruling::Refused { reason } => {
                 *report.refused.entry(reason.code().into()).or_default() += 1;
             }
+            Ruling::Forgotten { .. } => {}
         }
         report.rulings.push(ruled);
     }
@@ -399,6 +400,7 @@ fn ruled(entry: &LedgerEntry) -> Result<Ruled, serde_json::Error> {
             supersedes.clone(),
             None,
         ),
+        Ruling::Forgotten { claim } => ("forgotten", Some(claim.clone()), None, Vec::new(), None),
         Ruling::Refused { reason } => ("refused", None, None, Vec::new(), Some(reason)),
     };
     Ok(Ruled {
@@ -481,6 +483,15 @@ pub struct RefusedLine {
     pub reason: String,
 }
 
+/// A claim the person asked to forget.
+#[derive(Clone, Debug, Serialize)]
+pub struct ForgottenLine {
+    /// The claim.
+    pub claim: ClaimId,
+    /// Its statement.
+    pub statement: String,
+}
+
 /// What `claims ledger` reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct LedgerReport {
@@ -488,6 +499,9 @@ pub struct LedgerReport {
     pub live: Vec<ClaimLine>,
     /// Admitted claims that were replaced.
     pub superseded: Vec<SupersededLine>,
+    /// Claims the person asked to forget: out of the live set, so out of
+    /// the next training.
+    pub forgotten: Vec<ForgottenLine>,
     /// Proposals that were refused.
     pub refused: Vec<RefusedLine>,
 }
@@ -516,11 +530,25 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
             })
             .collect(),
         superseded: Vec::new(),
+        forgotten: Vec::new(),
         refused: Vec::new(),
     };
     for entry in ledger.entries() {
         match &entry.ruling {
             Ruling::Reinforced { .. } => {}
+            Ruling::Forgotten { claim } => {
+                if let Some(line) = ledger.entries().iter().find_map(|e| match &e.ruling {
+                    Ruling::Admitted { claim: c, .. } if c.id().ok().as_ref() == Some(claim) => {
+                        Some(c.statement.clone())
+                    }
+                    _ => None,
+                }) {
+                    report.forgotten.push(ForgottenLine {
+                        claim: claim.clone(),
+                        statement: line,
+                    });
+                }
+            }
             Ruling::Admitted { claim, .. } => {
                 let id = claim.id().map_err(|e| gate_error(e.into()))?;
                 if live_ids.contains(&&id) {
@@ -545,6 +573,29 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
         }
     }
     Ok(report)
+}
+
+/// Asks for the live claim `id` (or a unique prefix of it) to be forgotten:
+/// it leaves the live set, and so every later training. The ruling is
+/// appended to the ledger; the claim and its evidence stay there.
+pub fn forget(ctx: &Context, id: &str) -> Result<ForgottenLine, OrchestratorError> {
+    let ledger = Ledger::new(ctx.claims().entries()?);
+    let live = ledger.live().map_err(|e| gate_error(e.into()))?;
+    let claim = ClaimId(ids::resolve(
+        "live claim",
+        id,
+        live.iter().map(|(claim, _)| claim.0.clone()),
+    )?);
+    let statement = live
+        .iter()
+        .find(|(live_id, _)| *live_id == claim)
+        .map(|(_, c)| c.statement.clone())
+        .unwrap_or_default();
+    let entry = ledger
+        .forget(&claim)
+        .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
+    ctx.claims().append(&[entry])?;
+    Ok(ForgottenLine { claim, statement })
 }
 
 /// One claim set, as `claims list` shows it.

@@ -96,6 +96,13 @@ pub fn claims(ctx: &Context, json: bool, command: ClaimsCommand) -> Result<Exit,
             emit(json, &gated);
             Ok(Exit::Ok)
         }
+        ClaimsCommand::Forget { claim } => {
+            let forgotten = record(ctx, "claims forget", &json!({ "claim": claim }), |_| {
+                claims::forget(ctx, &claim)
+            })?;
+            emit(json, &forgotten);
+            Ok(Exit::Ok)
+        }
         ClaimsCommand::List => {
             emit(json, &claims::list(ctx)?);
             Ok(Exit::Ok)

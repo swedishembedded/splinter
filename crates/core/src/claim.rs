@@ -303,6 +303,13 @@ pub enum Ruling {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         supersedes: Vec<ClaimId>,
     },
+    /// The person asked for a live claim to be forgotten. It leaves the live
+    /// set, so no later training contains it. The entry is the one that
+    /// admitted the claim, ruled again.
+    Forgotten {
+        /// The claim.
+        claim: ClaimId,
+    },
     /// Refused.
     Refused {
         /// Why.
@@ -402,4 +409,16 @@ pub struct Absorption {
     pub claim: ClaimId,
     /// The release trained on it.
     pub release: ReleaseId,
+}
+
+/// The claims a release was trained on, as the night that made it chose
+/// them: what a later night compares the live claims with to know whether
+/// the release still holds a claim that has since been superseded or
+/// forgotten.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrainedClaims {
+    /// The release.
+    pub release: ReleaseId,
+    /// The claims in its training set, in claim order.
+    pub claims: Vec<ClaimId>,
 }
