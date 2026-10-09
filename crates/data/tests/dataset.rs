@@ -192,6 +192,7 @@ fn a_preference_candidate_carries_the_tool_calls_of_its_final_turn() {
 fn objectives_without_a_chat_or_preference_shape_are_exported() {
     let metadata = |objective| RecordMetadata {
         group: None,
+        split: None,
         experiences: Vec::new(),
         task: None,
         sources: Vec::new(),

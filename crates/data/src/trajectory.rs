@@ -96,7 +96,7 @@ pub fn projection_refusal(trajectory: &Trajectory) -> Option<Unprojectable> {
         .filter(|s| s.source == StepOrigin::User)
         .count();
     if users >= 2 {
-        try_dialogue(trajectory, "").err()
+        try_dialogue(trajectory, "", None).err()
     } else {
         try_conversation(trajectory, "").err()
     }
@@ -222,13 +222,35 @@ pub(crate) fn dialogue(trajectory: &Trajectory, student_turn: &str) -> Option<Ve
     if users < 2 {
         return None;
     }
-    try_dialogue(trajectory, student_turn).ok()
+    try_dialogue(trajectory, student_turn, None).ok()
 }
 
-/// [`dialogue`], naming what makes it impossible.
+/// A recorded session as the conversation it was, from its own first user
+/// step: every reply the agent gave after step `supervised_after` is
+/// supervised, and every earlier one is context only - what the agent said
+/// before it was corrected is shown and never trained on. A session with one
+/// user step is a dialogue of one exchange. Refused, naming the step, when
+/// it holds a tool call, an image or a copied step, or does not alternate.
+pub fn session_dialogue(
+    trajectory: &Trajectory,
+    supervised_after: u64,
+) -> Result<Vec<WireMessage>, Unprojectable> {
+    let opening = trajectory
+        .steps
+        .iter()
+        .find(|s| s.source == StepOrigin::User)
+        .map(|s| text_of(&s.message).ok_or(Unprojectable::Image { step: s.step_id }))
+        .transpose()?
+        .unwrap_or_default();
+    try_dialogue(trajectory, &opening, Some(supervised_after))
+}
+
+/// [`dialogue`], naming what makes it impossible. Replies are supervised
+/// after step `supervised_after`, or all of them when it is `None`.
 fn try_dialogue(
     trajectory: &Trajectory,
     student_turn: &str,
+    supervised_after: Option<u64>,
 ) -> Result<Vec<WireMessage>, Unprojectable> {
     let mut messages = Vec::new();
     let mut users = 0usize;
@@ -264,7 +286,8 @@ fn try_dialogue(
                 }
                 let text =
                     text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
-                messages.push(message("assistant", &text, true));
+                let supervised = supervised_after.is_none_or(|after| step.step_id > after);
+                messages.push(message("assistant", &text, supervised));
             }
         }
     }

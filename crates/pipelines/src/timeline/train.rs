@@ -235,6 +235,7 @@ pub fn divide_validation(
         |s| Membership {
             group: s.group_id.clone(),
             examinable: true,
+            side: None,
         },
         &SplitRule::monitor(CALIBRATION_SHARE),
     )

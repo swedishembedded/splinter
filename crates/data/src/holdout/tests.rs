@@ -389,3 +389,39 @@ fn the_newest_records_are_held_out_in_their_own_file() {
 
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// A producer that teaches facts fixes the side of its records: those it
+/// marks `train` are never held out, whatever the rule would choose, and
+/// those it marks `held_out` always are; the rule still decides for the
+/// records that fix nothing.
+#[test]
+fn a_record_that_fixes_its_side_stays_on_it() {
+    let record = |n: u32, split: Option<&str>| {
+        let split = split.map_or(String::new(), |s| format!(r#","split":"{s}""#));
+        format!(r#"{{"messages":[],"metadata":{{"task":"blake3:{n:064x}"{split}}}}}"#)
+    };
+    // The newest records would be held out by the rule: they are the ones
+    // marked to be trained on.
+    let mut records: Vec<String> = (0..6).map(|n| record(n, Some("held_out"))).collect();
+    records.extend((6..14).map(|n| record(n, Some("train"))));
+    let (train, held) = holdout_split_records(&records).unwrap();
+    assert_eq!(held.len(), 6, "{held:?}");
+    assert!(held.iter().all(|r| r.contains("held_out")));
+    assert_eq!(train.len(), 8);
+    assert!(train.iter().all(|r| r.contains("\"train\"")));
+
+    // Records that fix nothing follow the rule among themselves: the
+    // marked ones are not units and do not change how many it takes out
+    // (units are wanted up to a quarter of the twenty).
+    let mut mixed: Vec<String> = (0..20).map(|n| record(n, None)).collect();
+    mixed.extend((20..30).map(|n| record(n, Some("train"))));
+    let (train, held) = holdout_split_records(&mixed).unwrap();
+    assert_eq!(held.len(), 5, "a quarter of the twenty that fix nothing");
+    assert!(held.iter().all(|r| !r.contains("\"train\"")));
+    assert_eq!(train.len(), 25);
+
+    // With nothing marked held out, nothing is.
+    let only_train: Vec<String> = (0..4).map(|n| record(n, Some("train"))).collect();
+    let (train, held) = holdout_split_records(&only_train).unwrap();
+    assert_eq!((train.len(), held.len()), (4, 0));
+}

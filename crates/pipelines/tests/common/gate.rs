@@ -191,6 +191,7 @@ fn dataset_made(
             },
             metadata: RecordMetadata {
                 group: None,
+                split: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
                 sources: sources.to_vec(),
@@ -242,6 +243,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
             },
             metadata: RecordMetadata {
                 group: None,
+                split: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
                 sources: Vec::new(),

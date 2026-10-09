@@ -98,7 +98,7 @@ pub use dataset::{
 pub use replay::replay_sample;
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
-pub use trajectory::{projection_refusal, Unprojectable};
+pub use trajectory::{projection_refusal, session_dialogue, Unprojectable};
 pub use views::{
     chars_as_tokens, description, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
     OutcomeView, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep, VerifierView,
@@ -223,6 +223,17 @@ pub struct Record {
     pub metadata: RecordMetadata,
 }
 
+/// Which side of the training split a record is fixed to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Side {
+    /// Always trained on: a record the run exists to teach, which no rule
+    /// may hold out.
+    Train,
+    /// Never trained on: a record that only measures.
+    HeldOut,
+}
+
 /// Where a record came from.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordMetadata {
@@ -243,6 +254,11 @@ pub struct RecordMetadata {
     /// by a view.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// The side of the split the producer fixed for it, when it did; the
+    /// holdout rule leaves such a record where it is (see
+    /// `crate::holdout::Membership`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split: Option<Side>,
     /// The view that projected it.
     pub view: String,
     /// The objective it serves.
@@ -473,6 +489,7 @@ impl Projection {
                 task: provenance.task,
                 sources: provenance.sources,
                 group: None,
+                split: None,
                 view: self.view.clone(),
                 objective: self.objective,
             },

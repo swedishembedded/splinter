@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- `splinter-data`: a dataset record may fix its side of the training split (`metadata.split` of `train` or
+  `held_out`), which the holdout rule never moves and does not count among the units it chooses from;
+  `session_dialogue` renders a recorded session as the conversation it was with only the agent's replies after a
+  given step supervised.
 - `session add`, `claims extract`, `claims gate`, `claims list|show|ledger`: the first three stages of
   learning from a person's own sessions with an agent, each recorded as a run and repeatable. Sessions
   (ATIF files, or directories of `*.atif.json`) are validated, refused with the step and reason when the

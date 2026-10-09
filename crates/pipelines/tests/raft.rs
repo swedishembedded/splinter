@@ -110,6 +110,7 @@ fn record_with_experience(
         },
         metadata: RecordMetadata {
             group: None,
+            split: None,
             experiences: vec![id],
             task: None,
             sources: Vec::new(),

@@ -51,7 +51,7 @@ use std::path::{Path, PathBuf};
 
 use crate::partition::Unit;
 use crate::split::{verify_disjoint, Part};
-use crate::ViewError;
+use crate::{Side, ViewError};
 
 /// How one sample stands to the split: the group it is held out or trained
 /// on with, and whether it is a unit the split chooses from.
@@ -62,6 +62,11 @@ pub struct Membership {
     /// Whether the sample has a question a model can be examined on. One
     /// that has not follows its group.
     pub examinable: bool,
+    /// The side its producer fixed for it, when it did: a sample that must
+    /// be trained on (a fact the run exists to teach) or must be held out
+    /// (a wording of it no record trains). The rule never moves it, and
+    /// does not count it among the units it chooses from.
+    pub side: Option<Side>,
 }
 
 /// The fewest samples [`holdout_split_grouped`] splits: one to train on, one to
@@ -101,6 +106,7 @@ pub fn holdout_split_grouped<T>(
     holdout_split_by(samples, |sample| Membership {
         group: group(sample),
         examinable: true,
+        side: None,
     })
 }
 
@@ -150,7 +156,8 @@ pub fn holdout_split_by<T>(
 }
 
 /// [`holdout_split_by`] taking out what `rule` says instead of the
-/// held-out rule.
+/// held-out rule. A sample whose [`Membership::side`] is fixed stays on that
+/// side and is not one of the units the rule chooses from.
 pub fn split_by_rule<'a, T>(
     samples: &'a [T],
     membership: impl Fn(&T) -> Membership,
@@ -159,7 +166,41 @@ pub fn split_by_rule<'a, T>(
     if samples.len() < MIN_SAMPLES {
         return None;
     }
-    let mut memberships: Vec<Membership> = samples.iter().map(membership).collect();
+    let memberships: Vec<Membership> = samples.iter().map(membership).collect();
+    let held = held_out_flags(&memberships, rule);
+    let (out, kept): (Vec<_>, Vec<_>) = samples.iter().zip(held).partition(|(_, held)| *held);
+    Some((
+        kept.into_iter().map(|(s, _)| s).collect(),
+        out.into_iter().map(|(s, _)| s).collect(),
+    ))
+}
+
+/// Which of the samples `memberships` describe are held out: the ones whose
+/// side is fixed as held out, and of the others those `rule` chooses.
+fn held_out_flags(memberships: &[Membership], rule: &SplitRule) -> Vec<bool> {
+    let free: Vec<usize> = (0..memberships.len())
+        .filter(|&n| memberships[n].side.is_none())
+        .collect();
+    let mut held: Vec<bool> = memberships
+        .iter()
+        .map(|m| m.side == Some(Side::HeldOut))
+        .collect();
+    if free.len() < MIN_SAMPLES {
+        return held;
+    }
+    let free_memberships: Vec<Membership> = free.iter().map(|&n| memberships[n].clone()).collect();
+    for (n, chosen) in free
+        .into_iter()
+        .zip(choose_held_out(free_memberships, rule))
+    {
+        held[n] = chosen;
+    }
+    held
+}
+
+/// Which of `memberships` (at least [`MIN_SAMPLES`], none with a side fixed)
+/// `rule` takes out.
+fn choose_held_out(mut memberships: Vec<Membership>, rule: &SplitRule) -> Vec<bool> {
     if memberships.iter().filter(|m| m.examinable).count() < MIN_SAMPLES {
         for m in &mut memberships {
             m.examinable = true;
@@ -175,7 +216,7 @@ pub fn split_by_rule<'a, T>(
         })
         .collect();
     // The units and the counts are the examinable samples'.
-    let units: Vec<usize> = (0..samples.len())
+    let units: Vec<usize> = (0..memberships.len())
         .filter(|&n| memberships[n].examinable)
         .collect();
     let mut sizes: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
@@ -211,35 +252,24 @@ pub fn split_by_rule<'a, T>(
         // it is when there are no groups.
         let newest: std::collections::HashSet<usize> =
             units[units.len() - wanted..].iter().copied().collect();
-        let (out, kept): (Vec<_>, Vec<_>) = samples
-            .iter()
-            .enumerate()
-            .partition(|(n, _)| newest.contains(n));
-        return Some((
-            kept.into_iter().map(|(_, s)| s).collect(),
-            out.into_iter().map(|(_, s)| s).collect(),
-        ));
+        return (0..memberships.len())
+            .map(|n| newest.contains(&n))
+            .collect();
     }
-    let (out, kept): (Vec<_>, Vec<_>) = samples
-        .iter()
-        .zip(&keys)
-        .partition(|(_, key)| held.contains(key.as_str()));
-    Some((
-        kept.into_iter().map(|(s, _)| s).collect(),
-        out.into_iter().map(|(s, _)| s).collect(),
-    ))
+    keys.iter().map(|key| held.contains(key.as_str())).collect()
 }
 
 /// How a dataset record stands to the split, from its metadata: the group
-/// it names in `metadata.group`, and whether it was projected from a task
+/// it names in `metadata.group`, whether it was projected from a task
 /// or an experience (`metadata.task`, `metadata.experiences`), which is
-/// what makes it examinable. A record that is not JSON is its own group and
+/// what makes it examinable, and the side it fixes in `metadata.split`. A record that is not JSON is its own group and
 /// examinable.
 fn record_membership<S: AsRef<str>>(record: &S) -> Membership {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(record.as_ref()) else {
         return Membership {
             group: None,
             examinable: true,
+            side: None,
         };
     };
     let metadata = &value["metadata"];
@@ -249,6 +279,7 @@ fn record_membership<S: AsRef<str>>(record: &S) -> Membership {
             || metadata["experiences"]
                 .as_array()
                 .is_some_and(|experiences| !experiences.is_empty()),
+        side: serde_json::from_value(metadata["split"].clone()).ok(),
     }
 }
 

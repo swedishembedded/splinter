@@ -37,6 +37,7 @@ fn scratch(name: &str) -> PathBuf {
 fn metadata(objective: Objective) -> RecordMetadata {
     RecordMetadata {
         group: None,
+        split: None,
         experiences: Vec::new(),
         task: None,
         sources: Vec::new(),
