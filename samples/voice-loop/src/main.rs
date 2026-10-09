@@ -167,6 +167,19 @@ enum Command {
         #[arg(long)]
         out: PathBuf,
     },
+    /// The text path's loss on the chat records `ingress-train` kept of its
+    /// held-out questions: what the model does with the words themselves.
+    TextScore {
+        /// The language model's checkpoint directory.
+        #[arg(long)]
+        base: PathBuf,
+        /// A persona adapter folded into it.
+        #[arg(long)]
+        adapter: Option<PathBuf>,
+        /// The `test-chat.jsonl` an `ingress-train` run wrote.
+        #[arg(long)]
+        records: PathBuf,
+    },
     /// Join the shards `spoken-set --shard` wrote into one set.
     SpokenMerge {
         /// The directory the shards wrote `set-N.json` into.
@@ -318,6 +331,9 @@ enum Command {
         /// A persona adapter to attach to it.
         #[arg(long)]
         adapter: Option<PathBuf>,
+        /// The system turn the persona answers under; the persona prompt when absent.
+        #[arg(long)]
+        system: Option<String>,
         /// Also keep the report here.
         #[arg(long)]
         report: Option<PathBuf>,
@@ -335,6 +351,19 @@ fn main() -> Result<()> {
             attempts,
         } => speak_set(&models, &sentences, &out_dir, max_wer, attempts),
         Command::SpokenMerge { dir } => spoken_merge(&dir),
+        Command::TextScore {
+            base,
+            adapter,
+            records,
+        } => {
+            let score =
+                splinter_sdk::model::train::score_chat(&base, adapter.as_deref(), &records)?;
+            println!(
+                "{}",
+                serde_json::json!({"loss": score.loss, "token_accuracy": score.token_accuracy, "positions": score.positions, "records": score.records, "skipped": score.skipped})
+            );
+            Ok(())
+        }
         Command::Bundle {
             models,
             persona,
@@ -501,6 +530,7 @@ fn main() -> Result<()> {
             persona,
             base,
             adapter,
+            system,
             report,
         } => turns(
             &models.names(),
@@ -509,7 +539,13 @@ fn main() -> Result<()> {
                 questions: questions.as_deref(),
                 out_dir: &out_dir,
             },
-            &Persona::load(&persona, &base, adapter.as_deref())?,
+            &{
+                let loaded = Persona::load(&persona, &base, adapter.as_deref())?;
+                match system {
+                    Some(system) => loaded.under(system),
+                    None => loaded,
+                }
+            },
             report.as_deref(),
         ),
     }

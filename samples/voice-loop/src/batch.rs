@@ -66,6 +66,13 @@ impl Persona {
         })
     }
 
+    /// The same persona answering under another system turn.
+    #[must_use]
+    pub fn under(mut self, system: String) -> Self {
+        self.system = system;
+        self
+    }
+
     /// The persona's answer to a question, as text.
     pub fn answer(&self, question: &str) -> Result<String, PolicyError> {
         self.runtime
