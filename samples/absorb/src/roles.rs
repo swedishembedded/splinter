@@ -30,15 +30,19 @@ pub enum Role {
     ControlUntaught,
     /// Right at day 0 and never discussed in any session: measures forgetting.
     ControlKnown,
+    /// Right at day 0, never discussed, about an entity a test fact is about:
+    /// measures damage to what lies next to a taught fact.
+    NeighbourKnown,
 }
 
 impl Role {
     /// Every role, in the order quotas are filled.
-    pub const ALL: [Role; 4] = [
+    pub const ALL: [Role; 5] = [
         Role::Dev,
         Role::Test,
         Role::ControlUntaught,
         Role::ControlKnown,
+        Role::NeighbourKnown,
     ];
 
     /// The role's name as the manifest writes it.
@@ -49,6 +53,7 @@ impl Role {
             Role::Test => "test",
             Role::ControlUntaught => "control-untaught",
             Role::ControlKnown => "control-known",
+            Role::NeighbourKnown => "neighbour-known",
         }
     }
 
@@ -56,7 +61,7 @@ impl Role {
     /// right every time (otherwise among those it answers wrong every time).
     #[must_use]
     pub fn wants_known(self) -> bool {
-        self == Role::ControlKnown
+        matches!(self, Role::ControlKnown | Role::NeighbourKnown)
     }
 }
 
@@ -71,16 +76,22 @@ pub struct Quotas {
     pub control_untaught: usize,
     /// Controls right at day 0.
     pub control_known: usize,
+    /// Facts right at day 0 about an entity a test fact is about.
+    pub neighbour_known: usize,
+    /// Questions about things that do not exist, which must be declined.
+    pub hallucination: usize,
 }
 
 impl Quotas {
     /// The protocol's quotas: 20 development facts, 40 test facts (8 days of
-    /// 5) and 20 controls of each kind.
+    /// 5), 20 controls of each kind, 80 neighbours and 50 unknowns.
     pub const PROTOCOL: Quotas = Quotas {
         dev: 20,
         test: 40,
         control_untaught: 20,
         control_known: 20,
+        neighbour_known: 80,
+        hallucination: 50,
     };
 
     /// The quota of `role`.
@@ -91,6 +102,7 @@ impl Quotas {
             Role::Test => self.test,
             Role::ControlUntaught => self.control_untaught,
             Role::ControlKnown => self.control_known,
+            Role::NeighbourKnown => self.neighbour_known,
         }
     }
 }
@@ -141,6 +153,10 @@ pub enum Class {
 pub struct Screened {
     /// The fact's id.
     pub id: String,
+    /// Its family: at most one fact of a family is placed.
+    pub family: String,
+    /// The lower-case names the fact is about, for finding neighbours.
+    pub entities: Vec<String>,
     /// The role its family is a candidate for.
     pub candidate: Role,
     /// How it came out.
@@ -189,8 +205,9 @@ pub fn select(
     quotas: &Quotas,
     screened: &[Screened],
 ) -> Result<Vec<Placed>, Shortfalls> {
-    let mut placed = Vec::new();
+    let mut placed: Vec<Placed> = Vec::new();
     let mut short = Vec::new();
+    let mut used_families: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for role in Role::ALL {
         let wanted = quotas.of(role);
         let fits = if role.wants_known() {
@@ -198,15 +215,33 @@ pub fn select(
         } else {
             Class::ConsistentlyWrong
         };
+        // A neighbour is about an entity some test fact is about.
+        let test_entities: std::collections::HashSet<&str> = screened
+            .iter()
+            .filter(|s| placed.iter().any(|p| p.role == Role::Test && p.id == s.id))
+            .flat_map(|s| s.entities.iter().map(String::as_str))
+            .collect();
         let mut eligible: Vec<&Screened> = screened
             .iter()
             .filter(|s| s.candidate == role && s.class == fits)
+            .filter(|s| {
+                role != Role::NeighbourKnown
+                    || s.entities
+                        .iter()
+                        .any(|e| test_entities.contains(e.as_str()))
+            })
             .collect();
         eligible.sort_by_key(|s| (hashed(seed, &s.id), s.id.clone()));
-        if eligible.len() < wanted {
-            short.push((role, wanted, eligible.len()));
+        let mut taken = Vec::new();
+        for fact in eligible {
+            if taken.len() < wanted && used_families.insert(fact.family.as_str()) {
+                taken.push(fact);
+            }
         }
-        for (n, fact) in eligible.into_iter().take(wanted).enumerate() {
+        if taken.len() < wanted {
+            short.push((role, wanted, taken.len()));
+        }
+        for (n, fact) in taken.into_iter().enumerate() {
             placed.push(Placed {
                 id: fact.id.clone(),
                 role,
@@ -238,6 +273,8 @@ mod tests {
     fn screened(id: &str, candidate: Role, class: Class) -> Screened {
         Screened {
             id: id.into(),
+            family: id.into(),
+            entities: vec![],
             candidate,
             class,
         }
@@ -254,11 +291,14 @@ mod tests {
                 .entry(candidate_role(7, &format!("family-{n}"), &q))
                 .or_insert(0usize) += 1;
         }
-        // Shares follow the quotas 20:40:20:20 within sampling noise.
+        // Shares follow the quotas (20:40:20:20:80) within sampling noise.
         let share = |r: Role| tally[&r] as f64 / 4000.0;
-        assert!((share(Role::Test) - 0.4).abs() < 0.03, "{tally:?}");
-        assert!((share(Role::Dev) - 0.2).abs() < 0.03, "{tally:?}");
-        assert!((share(Role::ControlKnown) - 0.2).abs() < 0.03, "{tally:?}");
+        assert!((share(Role::Test) - 40.0 / 180.0).abs() < 0.03, "{tally:?}");
+        assert!((share(Role::Dev) - 20.0 / 180.0).abs() < 0.03, "{tally:?}");
+        assert!(
+            (share(Role::NeighbourKnown) - 80.0 / 180.0).abs() < 0.03,
+            "{tally:?}"
+        );
     }
 
     #[test]
@@ -268,6 +308,8 @@ mod tests {
             test: 6,
             control_untaught: 1,
             control_known: 1,
+            neighbour_known: 1,
+            hallucination: 0,
         };
         let mut pool: Vec<Screened> = (0..12)
             .map(|n| screened(&format!("t{n}"), Role::Test, Class::ConsistentlyWrong))
@@ -279,6 +321,20 @@ mod tests {
             Class::ConsistentlyWrong,
         ));
         pool.push(screened("k", Role::ControlKnown, Class::Known));
+        // A neighbour shares an entity with a placed test fact; one that does not is no neighbour.
+        let mut near = screened("near", Role::NeighbourKnown, Class::Known);
+        near.entities = vec!["madison".into()];
+        let mut far = screened("far", Role::NeighbourKnown, Class::Known);
+        far.entities = vec!["monroe".into()];
+        pool.push(near);
+        pool.push(far);
+        for t in pool.iter_mut().filter(|s| s.candidate == Role::Test) {
+            t.entities = vec!["madison".into()];
+        }
+        // Two facts of one family fill one place at most.
+        let mut twin = screened("t-twin", Role::Test, Class::ConsistentlyWrong);
+        twin.family = "t0".into();
+        pool.push(twin);
         // Fits no role: a known fact is no test fact, a mixed one no fact at all.
         pool.push(screened("known-test", Role::Test, Class::Known));
         pool.push(screened("mixed", Role::Dev, Class::Discarded));
@@ -288,6 +344,11 @@ mod tests {
         assert_eq!(placed, select(3, &quotas, &reversed).expect("enough facts"));
         let counts = counts(&placed);
         assert_eq!(counts[&Role::Test], 6);
+        assert_eq!(counts[&Role::NeighbourKnown], 1);
+        assert!(
+            placed.iter().any(|p| p.id == "near")
+                && placed.iter().all(|p| p.id != "far" && p.id != "t-twin")
+        );
         assert!(placed
             .iter()
             .all(|p| p.id != "known-test" && p.id != "mixed"));
@@ -303,6 +364,8 @@ mod tests {
             test: 1,
             control_untaught: 1,
             control_known: 1,
+            neighbour_known: 0,
+            hallucination: 0,
         };
         let pool = [screened("d", Role::Dev, Class::ConsistentlyWrong)];
         let error = select(1, &quotas, &pool).expect_err("too small");

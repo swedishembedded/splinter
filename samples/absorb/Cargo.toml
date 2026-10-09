@@ -13,6 +13,10 @@ publish.workspace = true
 name = "splinter_absorb"
 path = "src/lib.rs"
 
+[[bin]]
+name = "splinter-absorb"
+path = "src/main.rs"
+
 [dependencies]
 splinter-sdk = { workspace = true }
 anyhow = { workspace = true }

@@ -19,6 +19,8 @@ use std::path::Path;
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 
+use splinter_sdk::store::tasks::TaskSetId;
+
 use crate::keys::{self, Key, MAX_KEYS};
 use crate::roles::{candidate_role, Class, Quotas, Role};
 
@@ -65,6 +67,94 @@ pub struct Fact {
     /// How screening classed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class: Option<Class>,
+    /// For the canary: the false statement its sessions assert in place of
+    /// [`Fact::statement`]. Flagged here and nowhere in a session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canary: Option<String>,
+}
+
+impl Fact {
+    /// The lower-case names the fact is about: its keys that are names and
+    /// the names in its question.
+    #[must_use]
+    pub fn entities(&self) -> Vec<String> {
+        let mut found: Vec<String> = self
+            .keys
+            .iter()
+            .filter(|k| k.kind == keys::KeyKind::Name)
+            .map(|k| k.text.to_lowercase())
+            .chain(
+                keys::names_of(&self.question)
+                    .into_iter()
+                    .map(|n| n.to_lowercase()),
+            )
+            .collect();
+        found.sort();
+        found.dedup();
+        found
+    }
+}
+
+/// A question about something that does not exist, which must be declined.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Unknown {
+    /// Stable id.
+    pub id: String,
+    /// The question.
+    pub question: String,
+}
+
+/// `statement` with one of its keys replaced by something false: a figure
+/// moved by seven, or a name or term swapped for another fact's of the same
+/// kind (`donors`). `None` when no key can be replaced. The false statement
+/// is a canary or a hard negative for the judge, never a fact.
+#[must_use]
+pub fn corrupt(statement: &str, keys: &[Key], donors: &[Key]) -> Option<String> {
+    for key in keys {
+        let replacement = match key.kind {
+            keys::KeyKind::Number => key.text.parse::<u64>().ok().map(|n| (n + 7).to_string()),
+            kind => donors
+                .iter()
+                .find(|d| d.kind == kind && !d.text.eq_ignore_ascii_case(&key.text))
+                .map(|d| d.text.clone()),
+        };
+        if let Some(replacement) = replacement {
+            if let Some(at) = statement.find(&key.text) {
+                let mut out = statement.to_string();
+                out.replace_range(at..at + key.text.len(), &replacement);
+                return Some(out);
+            }
+        }
+    }
+    None
+}
+
+/// Keeps one fact of each family, the first in the order of a hash of the
+/// seed and the fact's id, and refuses the others by name.
+#[must_use]
+pub fn one_per_family(seed: u64, facts: Vec<Fact>) -> (Vec<Fact>, Vec<Refusal>) {
+    let mut ordered = facts;
+    ordered.sort_by_key(|f| {
+        let mut input = seed.to_le_bytes().to_vec();
+        input.extend_from_slice(b"family:");
+        input.extend_from_slice(f.id.as_bytes());
+        (blake3::hash(&input).as_bytes()[..8].to_vec(), f.id.clone())
+    });
+    let mut seen = std::collections::HashSet::new();
+    let (mut kept, mut refused) = (Vec::new(), Vec::new());
+    for fact in ordered {
+        if seen.insert(fact.family.clone()) {
+            kept.push(fact);
+        } else {
+            refused.push(Refusal {
+                family: fact.family,
+                question: fact.question,
+                reason: "another fact of the family is in the pool: at most one fact per family"
+                    .into(),
+            });
+        }
+    }
+    (kept, refused)
 }
 
 /// A proposed fact the pool refuses, and why.
@@ -128,6 +218,7 @@ pub fn admit(
         role: None,
         day: None,
         class: None,
+        canary: None,
     })
 }
 
@@ -183,6 +274,12 @@ pub struct Manifest {
     pub facts: Vec<Fact>,
     /// Proposals the pool refused.
     pub refusals: Vec<Refusal>,
+    /// Questions about things that do not exist.
+    #[serde(default)]
+    pub unknowns: Vec<Unknown>,
+    /// The tasks the generator proposed, kept in the run's state: what the
+    /// judge is calibrated on.
+    pub task_set: TaskSetId,
     /// The judge's calibration, once screened.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub judge: Option<JudgeCalibration>,
@@ -281,6 +378,45 @@ mod tests {
     }
 
     #[test]
+    fn a_corrupted_statement_differs_in_one_key_and_keeps_the_rest() {
+        let keys = keys::extract(S, Q);
+        let donors = keys::extract("Adams sailed to Lisbon.", "?");
+        let false_one = corrupt(S, &keys, &donors).expect("a key to replace");
+        assert_eq!(
+            false_one,
+            "Jefferson bought a copying press made by Boulton and Watt in 1792."
+        );
+        // Nothing to swap a name for and no figure: no corruption.
+        let names_only = keys::extract("The press came from Boulton.", "Where?");
+        assert_eq!(
+            corrupt("The press came from Boulton.", &names_only, &[]),
+            None
+        );
+    }
+
+    #[test]
+    fn at_most_one_fact_of_a_family_stays_in_the_pool() {
+        let make = |family: &str, question: &str| {
+            admit(1, &Quotas::PROTOCOL, family, question, S, "q").expect("a fact")
+        };
+        let facts = vec![
+            make("a.txt", "Q1 Which firm?"),
+            make("a.txt", "Q2 Which maker?"),
+            make("b.txt", "Q3 Whom?"),
+        ];
+        let (kept, refused) = one_per_family(1, facts.clone());
+        assert_eq!(kept.len(), 2);
+        assert_eq!(refused.len(), 1);
+        let mut reversed = facts;
+        reversed.reverse();
+        assert_eq!(
+            kept,
+            one_per_family(1, reversed).0,
+            "the choice does not depend on order"
+        );
+    }
+
+    #[test]
     fn the_manifest_round_trips_and_an_unknown_schema_is_refused() {
         let dir = tempfile::tempdir().expect("dir");
         assert!(Manifest::read(dir.path()).is_err());
@@ -293,6 +429,8 @@ mod tests {
             persona: "p".into(),
             facts: vec![admit(1, &Quotas::PROTOCOL, "f.txt", Q, S, "q").expect("a fact")],
             refusals: vec![],
+            unknowns: vec![],
+            task_set: TaskSetId(splinter_sdk::vocabulary::digest::Digest::of(b"tasks")),
             judge: None,
             probes: None,
         };

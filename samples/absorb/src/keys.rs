@@ -178,6 +178,12 @@ fn numbers(text: &str) -> Vec<String> {
     found
 }
 
+/// The names `text` holds, each known by the last word of its run.
+#[must_use]
+pub fn names_of(text: &str) -> Vec<String> {
+    names(text)
+}
+
 /// Each run of capitalised words, known by its last word; a sentence's first
 /// word counts only when it is no function word.
 fn names(text: &str) -> Vec<String> {

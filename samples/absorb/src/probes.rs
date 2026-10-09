@@ -36,6 +36,9 @@ pub const MAX_PROBE_CHARS: usize = 600;
 pub enum ProbeKind {
     /// The fact's question in other words.
     Paraphrase,
+    /// The question asked from the other end: starting from the answer,
+    /// ask for what the fact's question names.
+    Reverse,
     /// A question that cannot be answered without the fact.
     Indirect,
     /// A short scenario whose right answer uses the fact.
@@ -44,15 +47,16 @@ pub enum ProbeKind {
 
 impl ProbeKind {
     /// Every kind, in the order probes are written.
-    pub const ALL: [ProbeKind; 3] = [
+    pub const ALL: [ProbeKind; 4] = [
         ProbeKind::Paraphrase,
+        ProbeKind::Reverse,
         ProbeKind::Indirect,
         ProbeKind::Application,
     ];
 }
 
 /// One sealed probe.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Probe {
     /// The fact it measures.
     pub fact: String,
@@ -60,6 +64,10 @@ pub struct Probe {
     pub kind: ProbeKind,
     /// The text put to the model.
     pub question: String,
+    /// What an answer must contain: the fact's keys, or for a reverse probe
+    /// the names the fact's question held.
+    #[serde(default)]
+    pub keys: Vec<Key>,
 }
 
 /// The bytes of the sealed file: one JSON line per probe, sorted, so the same
@@ -69,7 +77,7 @@ pub struct Probe {
 /// A probe cannot be serialised (it always can).
 pub fn sealed_bytes(probes: &[Probe]) -> anyhow::Result<Vec<u8>> {
     let mut sorted: Vec<&Probe> = probes.iter().collect();
-    sorted.sort();
+    sorted.sort_by(|a, b| (&a.fact, a.kind, &a.question).cmp(&(&b.fact, b.kind, &b.question)));
     let mut bytes = Vec::new();
     for probe in sorted {
         bytes.extend_from_slice(serde_json::to_string(probe)?.as_bytes());
@@ -106,13 +114,15 @@ pub fn read_sealed(path: &Path) -> anyhow::Result<Vec<Probe>> {
 /// Why a written probe is refused, or `Ok` when it may be sealed.
 ///
 /// A probe must be a question of sensible length that is not the fact's own
-/// question, repeats neither the statement nor any of its eight-word runs,
-/// and does not hand over a key: an answer that holds a key only because the
-/// probe said it would prove nothing.
+/// question and repeats no eight-word run of the statement. A probe asked
+/// from the fact's question towards its answer must not hand over a key: an
+/// answer that holds a key only because the probe said it would prove
+/// nothing. A reverse probe starts from the answer, so it must hold one.
 ///
 /// # Errors
 /// The reason, worded as the correction sent back to the writer.
 pub fn admit(
+    kind: ProbeKind,
     question: &str,
     fact_question: &str,
     statement: &str,
@@ -128,13 +138,17 @@ pub fn admit(
     if words(question) == words(fact_question) {
         return Err("do not repeat the fact's own question; phrase it afresh".into());
     }
-    if !runs(question).is_disjoint(&runs(statement)) {
+    if shares_a_run(question, statement) {
         return Err("do not copy a stretch of the statement into the question".into());
     }
-    if let Some(key) = keys
-        .iter()
-        .find(|k| missing(question, std::slice::from_ref(k)).is_empty())
-    {
+    let holds = |k: &&Key| missing(question, std::slice::from_ref(*k)).is_empty();
+    if kind == ProbeKind::Reverse {
+        if !keys.iter().any(|k| holds(&k)) {
+            return Err(
+                "a reverse question starts from the answer: it must name part of it".into(),
+            );
+        }
+    } else if let Some(key) = keys.iter().find(holds) {
         return Err(format!(
             "the question must not contain {:?}: the answer is what holds it",
             key.text
@@ -148,23 +162,64 @@ fn runs(text: &str) -> HashSet<Vec<String>> {
     words(text).windows(RUN).map(<[String]>::to_vec).collect()
 }
 
+/// Whether `a` and `b` share a run of eight words, ignoring case and punctuation.
+#[must_use]
+pub fn shares_a_run(a: &str, b: &str) -> bool {
+    !runs(a).is_disjoint(&runs(b))
+}
+
 /// Whether `haystack` holds `needle` as a contiguous run of words.
 fn contains_run(haystack: &[String], needle: &[String]) -> bool {
     !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// How a training record leaks a probe.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Leak {
     /// The record contains the probe's question.
     Question,
     /// The record shares an eight-word run with the probe that the fact's
     /// statement does not hold.
     Run(String),
+    /// A line or sentence of the record has a four-word-run Jaccard
+    /// similarity of at least [`SIMILARITY`] with the probe.
+    Similar(f64),
+}
+
+/// The four-word-run Jaccard similarity from which a record is refused.
+pub const SIMILARITY: f64 = 0.5;
+
+/// The word count of the runs similarity is measured on.
+const SIMILAR_RUN: usize = 4;
+
+/// The four-word runs of `text`, normalised.
+fn grams(text: &str) -> HashSet<Vec<String>> {
+    words(text)
+        .windows(SIMILAR_RUN)
+        .map(<[String]>::to_vec)
+        .collect()
+}
+
+/// The Jaccard similarity of two sets of runs; zero when both are empty.
+fn jaccard(a: &HashSet<Vec<String>>, b: &HashSet<Vec<String>>) -> f64 {
+    let union = a.union(b).count();
+    if union == 0 {
+        0.0
+    } else {
+        a.intersection(b).count() as f64 / union as f64
+    }
+}
+
+/// The segments of a record similarity is measured on: its lines and sentences.
+fn segments(text: &str) -> Vec<&str> {
+    text.split(['\n', '.', '!', '?'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 /// A probe a training record leaks.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Violation {
     /// The probe's fact.
     pub fact: String,
@@ -187,6 +242,11 @@ impl std::fmt::Display for Violation {
                 "shares the eight-word run {run:?} with the {:?} probe of fact {}",
                 self.kind, self.fact
             ),
+            Leak::Similar(score) => write!(
+                f,
+                "is {score:.2} similar (four-word-run Jaccard) to the {:?} probe of fact {}",
+                self.kind, self.fact
+            ),
         }
     }
 }
@@ -201,6 +261,8 @@ struct Entry {
     words: Vec<String>,
     /// The probe's runs that the fact's statement does not hold.
     own_runs: HashSet<Vec<String>>,
+    /// The probe's four-word runs that the fact's statement does not hold.
+    own_grams: HashSet<Vec<String>>,
 }
 
 impl Guard {
@@ -220,6 +282,10 @@ impl Guard {
                     probe: probe.clone(),
                     words: words(&probe.question),
                     own_runs: runs(&probe.question).difference(&held).cloned().collect(),
+                    own_grams: grams(&probe.question)
+                        .difference(&grams(statement))
+                        .cloned()
+                        .collect(),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -240,7 +306,15 @@ impl Guard {
                 let mut shared: Vec<&Vec<String>> =
                     entry.own_runs.intersection(&record_runs).collect();
                 shared.sort();
-                shared.first().map(|run| Leak::Run(run.join(" ")))
+                let best = segments(text)
+                    .into_iter()
+                    .map(|segment| jaccard(&entry.own_grams, &grams(segment)))
+                    .fold(0.0, f64::max);
+                match shared.first() {
+                    Some(run) => Some(Leak::Run(run.join(" "))),
+                    None if best >= SIMILARITY => Some(Leak::Similar(best)),
+                    None => None,
+                }
             };
             if let Some(leak) = leak {
                 found.push(Violation {
@@ -316,6 +390,7 @@ mod tests {
             fact: "f1".into(),
             kind,
             question: question.into(),
+            keys: vec![],
         }
     }
 
@@ -379,6 +454,24 @@ mod tests {
     }
 
     #[test]
+    fn a_record_that_rewords_a_probe_barely_is_refused_by_similarity() {
+        let g = guard(&[probe(
+            ProbeKind::Indirect,
+            "Which firm supplied the press he used abroad for his letters at the court?",
+        )]);
+        // Seven of the probe's eleven four-word runs survive: too close, though no eight-word run is shared.
+        let near = "Which firm supplied the press he abroad for his letters at the court";
+        assert!(
+            matches!(g.violations(near)[0].leak, Leak::Similar(s) if s >= SIMILARITY),
+            "{:?}",
+            g.violations(near)
+        );
+        assert!(g
+            .violations("Describe the weather in Paris in the spring of that year.")
+            .is_empty());
+    }
+
+    #[test]
     fn what_the_facts_statement_holds_is_no_leak() {
         let g = guard(&[probe(
             ProbeKind::Paraphrase,
@@ -422,12 +515,32 @@ mod tests {
         let keys = extract(STATEMENT, fact_question);
         assert!(!keys.is_empty());
         let ok = admit(
+            ProbeKind::Indirect,
             "Who supplied the device he used to duplicate his letters from France?",
             fact_question,
             STATEMENT,
             &keys,
         );
         assert_eq!(ok, Ok(()));
+        // A reverse question starts from the answer: it must name part of it.
+        assert_eq!(
+            admit(
+                ProbeKind::Reverse,
+                "What else did Boulton and Watt supply to him?",
+                fact_question,
+                STATEMENT,
+                &keys
+            ),
+            Ok(())
+        );
+        assert!(admit(
+            ProbeKind::Reverse,
+            "What did the firm supply to him?",
+            fact_question,
+            STATEMENT,
+            &keys
+        )
+        .is_err());
         for (question, why) in [
             (fact_question, "own question"),
             ("A statement with no question mark", "question"),
@@ -437,7 +550,14 @@ mod tests {
                 "copy",
             ),
         ] {
-            let error = admit(question, fact_question, STATEMENT, &keys).expect_err(why);
+            let error = admit(
+                ProbeKind::Indirect,
+                question,
+                fact_question,
+                STATEMENT,
+                &keys,
+            )
+            .expect_err(why);
             assert!(error.contains(why), "{question}: {error}");
         }
     }

@@ -1,0 +1,190 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements measured validation of continual learning
+// from a user's own agent sessions for its clients. If your team needs
+// expertise in proving that a model absorbed what its user taught it, you can
+// procure our services by sending an email to info@swedishembedded.com.
+
+//! The command line of the absorb validation protocol's first part.
+
+use std::path::PathBuf;
+
+use clap::{Args, Parser, Subcommand};
+use splinter_absorb::roles::Quotas;
+use splinter_absorb::runtime::{DEFAULT_JUDGE, DEFAULT_MODEL};
+use splinter_absorb::{build, screen, seal};
+
+/// Persona the policy answers as, and the author of the writings.
+const PERSONA: &str = "Thomas Jefferson";
+
+#[derive(Parser)]
+#[command(
+    name = "splinter-absorb",
+    about = "Prepare and run the absorb validation protocol"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// The pool of facts the protocol measures.
+    #[command(subcommand)]
+    Facts(Facts),
+    /// The sealed probes of the development and test facts.
+    #[command(subcommand)]
+    Probes(Probes),
+}
+
+#[derive(Args)]
+struct Common {
+    /// The run's output directory: its state and manifest.
+    #[arg(long)]
+    out: PathBuf,
+    /// The model store, when not the configuration's.
+    #[arg(long)]
+    models: Option<PathBuf>,
+}
+
+#[derive(Subcommand)]
+enum Facts {
+    /// Read facts from a directory of family files with Splinter's task generator.
+    Build {
+        #[command(flatten)]
+        common: Common,
+        /// The directory `splinter-jefferson materials` wrote (its `letters` directory is read).
+        #[arg(long)]
+        materials: PathBuf,
+        /// Seeds the choice of families and every later hash.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// Family files to read facts from.
+        #[arg(long, default_value_t = 300)]
+        families: usize,
+        /// The fewest words a family file runs to be read.
+        #[arg(long, default_value_t = 150)]
+        min_words: usize,
+        /// The model that proposes the facts and writes the probes.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        generator: String,
+        /// Development facts.
+        #[arg(long, default_value_t = Quotas::PROTOCOL.dev)]
+        dev: usize,
+        /// Test facts.
+        #[arg(long, default_value_t = Quotas::PROTOCOL.test)]
+        test: usize,
+        /// Controls wrong at day 0.
+        #[arg(long, default_value_t = Quotas::PROTOCOL.control_untaught)]
+        control_untaught: usize,
+        /// Controls right at day 0.
+        #[arg(long, default_value_t = Quotas::PROTOCOL.control_known)]
+        control_known: usize,
+        /// Facts right at day 0 about an entity a test fact is about.
+        #[arg(long, default_value_t = Quotas::PROTOCOL.neighbour_known)]
+        neighbour_known: usize,
+        /// Questions about things that do not exist.
+        #[arg(long, default_value_t = Quotas::PROTOCOL.hallucination)]
+        hallucination: usize,
+    },
+    /// Put each fact to the day-0 policy six times, grade, class and fill the roles.
+    Screen {
+        #[command(flatten)]
+        common: Common,
+        /// The day-0 policy.
+        #[arg(long, default_value = DEFAULT_MODEL)]
+        policy: String,
+        /// The judge, calibrated on controls before it grades.
+        #[arg(long, default_value = DEFAULT_JUDGE)]
+        judge: String,
+        /// Screen only this many facts of the pool, in a fixed order.
+        #[arg(long)]
+        candidates: Option<usize>,
+    },
+}
+
+#[derive(Subcommand)]
+enum Probes {
+    /// Write three probes per development and test fact, hash them and record the hash.
+    Seal {
+        #[command(flatten)]
+        common: Common,
+    },
+    /// Refuse training files that contain a sealed probe's question or an
+    /// eight-word run of one beyond the fact's statement.
+    Check {
+        /// The run's output directory.
+        #[arg(long)]
+        out: PathBuf,
+        /// Training files, JSON lines.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+    },
+}
+
+fn main() -> anyhow::Result<()> {
+    match Cli::parse().command {
+        Command::Facts(Facts::Build {
+            common,
+            materials,
+            seed,
+            families,
+            min_words,
+            generator,
+            dev,
+            test,
+            control_untaught,
+            control_known,
+            neighbour_known,
+            hallucination,
+        }) => {
+            let report = build::run(&build::Request {
+                materials,
+                out: common.out,
+                seed,
+                quotas: Quotas {
+                    dev,
+                    test,
+                    control_untaught,
+                    control_known,
+                    neighbour_known,
+                    hallucination,
+                },
+                families,
+                min_words,
+                generator,
+                persona: PERSONA.to_string(),
+                models: common.models,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Command::Facts(Facts::Screen {
+            common,
+            policy,
+            judge,
+            candidates,
+        }) => {
+            let summary = screen::run(&screen::Request {
+                out: common.out,
+                models: common.models,
+                policy,
+                judge,
+                candidates,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Probes(Probes::Seal { common }) => {
+            let sealed = seal::seal(&seal::Request {
+                out: common.out,
+                models: common.models,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&sealed)?);
+        }
+        Command::Probes(Probes::Check { out, files }) => {
+            let records = seal::guard(&out)?.check_files(&files)?;
+            println!("{records} training records leak no sealed probe");
+        }
+    }
+    Ok(())
+}
