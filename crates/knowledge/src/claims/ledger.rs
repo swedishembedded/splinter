@@ -124,6 +124,9 @@ impl Ledger {
         let mut made = Vec::new();
         let mut offset = 0;
         for session in &set.sessions {
+            if session.proposals.is_empty() {
+                continue;
+            }
             let view = views
                 .get(&session.session)
                 .ok_or_else(|| GateError::MissingSession(session.session.clone()))?;

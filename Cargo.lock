@@ -4996,6 +4996,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "atif",
  "futures",
  "serde",
  "serde_json",
@@ -5009,6 +5010,7 @@ dependencies = [
  "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
 ]

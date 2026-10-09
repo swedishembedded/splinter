@@ -50,6 +50,7 @@ use splinter_sandbox::{
     SandboxError,
 };
 use splinter_store::artifacts::ArtifactStore;
+use splinter_store::claims::ClaimStore;
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::sources::SourceStore;
 use splinter_store::tasks::TaskStore;
@@ -241,6 +242,12 @@ impl Runtime {
     #[must_use]
     pub fn sources(&self) -> SourceStore {
         SourceStore::new(&self.workspace)
+    }
+
+    /// The claim sets and the claim ledger.
+    #[must_use]
+    pub fn claims(&self) -> ClaimStore {
+        ClaimStore::new(&self.workspace)
     }
 
     /// The task store.

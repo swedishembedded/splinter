@@ -28,6 +28,8 @@ async-trait = { workspace = true }
 
 [dev-dependencies]
 sven-sdk = { workspace = true }
+atif = { workspace = true }
+tempfile = { workspace = true }
 # The scripted base loader: the residency specs run without weights.
 splinter-model = { workspace = true, features = ["scripted"] }
 anyhow = { workspace = true }

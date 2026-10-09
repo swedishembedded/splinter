@@ -15,6 +15,9 @@
 //!
 //! * [`sources`] - capture and inspect sources.
 //! * [`tasks`] - sources become a task set.
+//! * [`sessions`], [`claims`] - what a person taught an agent in recorded
+//!   sessions: the sessions taken in with their secrets removed, claims
+//!   proposed by a model, and the rulings of code on them.
 //! * [`variants`] - the tasks kept for training asked again in other
 //!   words, to be measured and never trained on.
 //! * [`solving`] - a task set becomes an experience set.
@@ -46,6 +49,7 @@ pub mod ask;
 pub mod author;
 pub mod budget;
 pub mod checkpoints;
+pub mod claims;
 pub mod critique;
 pub mod curriculum;
 pub mod dataset_ref;
@@ -71,6 +75,7 @@ pub mod rerank;
 pub mod reserve;
 pub mod retrieval;
 pub mod router;
+pub mod sessions;
 pub mod solving;
 pub mod sources;
 pub mod state;
