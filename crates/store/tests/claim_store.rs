@@ -87,3 +87,37 @@ fn the_ledger_keeps_every_ruling_in_order_and_never_twice() -> Outcome {
     assert_eq!(store.entries()?, entries);
     Ok(())
 }
+
+#[test]
+fn task_links_and_absorptions_are_kept_once_and_the_first_release_stays() -> Outcome {
+    use splinter_core::claim::{Absorption, ClaimId, ClaimTaskLink, TaskRole};
+    use splinter_core::release::ReleaseId;
+
+    let dir = tempfile::tempdir()?;
+    let store = ClaimStore::new(&Workspace::at(&StateRoot::new(dir.path())));
+    let claim = ClaimId(Digest::of(b"claim"));
+    let link = |task: &[u8], role| ClaimTaskLink {
+        claim: claim.clone(),
+        task: Digest::of(task),
+        role,
+    };
+    let links = [
+        link(b"q", TaskRole::Question),
+        link(b"v1", TaskRole::Train),
+        link(b"v2", TaskRole::HeldOut),
+    ];
+    assert_eq!(store.link_tasks(&links)?, 3);
+    assert_eq!(store.link_tasks(&links[1..])?, 0, "a link is recorded once");
+    assert_eq!(store.task_links()?, links);
+
+    let first = ReleaseId(Digest::of(b"first"));
+    let second = ReleaseId(Digest::of(b"second"));
+    let absorbed = |release: &ReleaseId| Absorption {
+        claim: claim.clone(),
+        release: release.clone(),
+    };
+    assert_eq!(store.absorb(&[absorbed(&first)])?, 1);
+    assert_eq!(store.absorb(&[absorbed(&second)])?, 0);
+    assert_eq!(store.absorptions()?, [absorbed(&first)]);
+    Ok(())
+}

@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::digest::{canonical_json, Digest};
 use crate::experience::Span;
+use crate::release::ReleaseId;
 use crate::source::SourceId;
 
 /// What a claim teaches.
@@ -285,3 +286,37 @@ pub struct ClaimSet {
 }
 
 impl std::error::Error for Refusal {}
+
+/// What a task made from a claim is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskRole {
+    /// The claim's own question: trained on.
+    Question,
+    /// A differently worded question about the same fact: trained on.
+    Train,
+    /// A differently worded question about the same fact that no training
+    /// record contains: only measured.
+    HeldOut,
+}
+
+/// A task and the claim it was made from.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClaimTaskLink {
+    /// The claim.
+    pub claim: ClaimId,
+    /// The task, by its content address.
+    pub task: Digest,
+    /// What it is for.
+    pub role: TaskRole,
+}
+
+/// The release that first took a claim in: from then on the claim is
+/// replayed, not taught again.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Absorption {
+    /// The claim.
+    pub claim: ClaimId,
+    /// The release trained on it.
+    pub release: ReleaseId,
+}
