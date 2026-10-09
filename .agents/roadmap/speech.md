@@ -202,10 +202,16 @@ What is missing, in the order a user meets it:
    sentence; tool calls and their output are not spoken; the session opens
    with the spoken disclosure. Done and measured on 3 recordings (first sound
    p50 1.2 s). Tools are offered to the model only with `--workspace`
-   (specified in `crates/agent/tests/voice.rs`). Not shown: the persona
-   calling a tool by voice. Asked aloud to read `notes.txt` it declined, and
-   the recogniser heard "notes types text"; whether the model or the persona
-   prompt is the cause is untested.
+   (specified in `crates/agent/tests/voice.rs`). Tool use by voice: asked
+   aloud "How many files are there in current directory?" over a workspace of
+   five files, the persona called sven's `find_file` (the session's audit log
+   shows the call and its result) and answered by voice "There are 6 files
+   listed in the current directory". The count is wrong because the listing
+   also held `.sven/audit.jsonl`, which the session itself writes into the
+   workspace: the tool call was real, the answer was faithful to its output,
+   the question was not what the tool answered. One question, one run; the
+   earlier "read notes.txt" request was declined (the recogniser heard "notes
+   types text"), so tool calling by this persona is not reliable.
 2. A live microphone and speaker. This host has no PCM device (`/dev/snd`
    holds only `seq` and `timer`), so live voice needs a client on the user's
    machine and a transport to the GPU host; neither exists. Acceptance: a
