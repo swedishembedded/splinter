@@ -109,6 +109,17 @@ impl Seen {
     }
 }
 
+/// Whether `a` and `b` are one text by the two rules above: the same once
+/// normalised, or word shingles overlapping at `max_overlap` or more.
+#[must_use]
+pub fn repeat_of(a: &str, b: &str, shingle_words: usize, max_overlap: f64) -> Option<Repeat> {
+    if digest(a) == digest(b) {
+        return Some(Repeat::Exact);
+    }
+    (jaccard(&shingles(a, shingle_words), &shingles(b, shingle_words)) >= max_overlap)
+        .then_some(Repeat::Near)
+}
+
 /// A question as the contradiction rule compares it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Asked<'a> {
@@ -144,11 +155,7 @@ pub fn contradicts(a: &Asked<'_>, b: &Asked<'_>, shingle_words: usize, max_overl
     let same_question = match (a.subject, b.subject) {
         (Some(x), Some(y)) => {
             normalize(x) == normalize(y)
-                && (digest(a.instruction) == digest(b.instruction)
-                    || jaccard(
-                        &shingles(a.instruction, shingle_words),
-                        &shingles(b.instruction, shingle_words),
-                    ) >= max_overlap)
+                && repeat_of(a.instruction, b.instruction, shingle_words, max_overlap).is_some()
         }
         (None, None) => digest(a.instruction) == digest(b.instruction),
         _ => false,

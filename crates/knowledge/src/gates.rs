@@ -96,14 +96,31 @@ fn line_has_number(line: &str, number: &str) -> bool {
 /// matches when one section line carries it as a standalone token and -
 /// when the answer binds it to a unit word - that unit too.
 pub fn answer_numbers_traceable(answer: &str, section: &str) -> bool {
-    number_tokens(answer).into_iter().all(|(number, unit)| {
-        section.lines().any(|line| {
-            line_has_number(line, &number)
-                && unit
-                    .as_deref()
-                    .is_none_or(|u| line.to_lowercase().contains(u))
+    first_untraceable_number(answer, section, true).is_none()
+}
+
+/// The first number `answer` states that `section` does not carry as a
+/// standalone token on one line, as written in `answer` (number and unit
+/// word); `None` when every number is traceable. With `bind_units` false a
+/// number need not be followed in the section by the unit word it has in
+/// the answer: for an answer in the writer's own paraphrase, whose word after
+/// a number is not a unit but whatever came next.
+pub fn first_untraceable_number(answer: &str, section: &str, bind_units: bool) -> Option<String> {
+    number_tokens(answer)
+        .into_iter()
+        .find_map(|(number, unit)| {
+            let traceable = section.lines().any(|line| {
+                line_has_number(line, &number)
+                    && (!bind_units
+                        || unit
+                            .as_deref()
+                            .is_none_or(|u| line.to_lowercase().contains(u)))
+            });
+            (!traceable).then(|| match unit {
+                Some(unit) if bind_units => format!("{number} {unit}"),
+                _ => number,
+            })
         })
-    })
 }
 
 #[cfg(test)]

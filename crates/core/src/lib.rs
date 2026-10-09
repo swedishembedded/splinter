@@ -17,6 +17,9 @@
 //!   command runs, their parts addressed by content.
 //! * [`experience`] - the task a solver is given, and the immutable,
 //!   content-addressed record of an attempt at it.
+//! * [`claim`] - what a person taught an agent in conversation, as a
+//!   proposal, a gated claim tied to the words that taught it, and the
+//!   ledger entry that rules on it.
 //! * [`annotation`] - what is said about an experience after the fact:
 //!   verdicts, step labels and relations. Never a rewrite of the experience.
 //!
@@ -52,6 +55,7 @@
 
 pub mod annotation;
 pub mod chat;
+pub mod claim;
 pub mod clock;
 pub mod dataset;
 pub mod digest;

@@ -9,6 +9,8 @@
 //! * [`session`] - a captured session read as text addressable by step.
 //! * [`sections`] - a text split into addressable byte ranges: at headings
 //!   for Markdown, at paragraphs otherwise.
+//! * [`claims`] - what a person taught an agent in conversation: proposals
+//!   by a model, rulings by code, and the ledger that keeps them.
 //! * [`concepts`] - the concepts a task exercises: those it declares, else
 //!   the (source, section) pairs its evidence falls in, else its kind.
 //! * [`material`] - what a teacher is shown of a task: the source
@@ -41,6 +43,7 @@
 
 pub mod advice;
 pub mod capture;
+pub mod claims;
 pub mod codebook;
 pub mod concepts;
 pub mod denoise;
