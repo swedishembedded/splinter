@@ -213,3 +213,26 @@ fn a_monitor_share_outside_its_range_is_refused() {
         );
     }
 }
+
+#[test]
+fn a_run_that_monitors_nothing_waits_for_nothing() {
+    // brain refuses a patience with no evaluation to be patient about, so a
+    // run that names no cadence of evaluations must not be handed one.
+    let (_scratch, ctx) = gate_context("monitoring-none", Brain::Honest);
+    let data = dataset(&ctx, "alpha", 40);
+    let trainer = FakeTrainer::knowing(&["alpha"]);
+    let unmonitored = Tuning {
+        eval_every: Some(0),
+        ..Tuning::default()
+    };
+    train(
+        &ctx,
+        &request(&data.to_string(), Some(7), unmonitored),
+        &trainer,
+        &CancelToken::new(),
+    )
+    .unwrap();
+    let plan = trainer.plans.lock().unwrap()[0].clone();
+    assert_eq!((plan.eval_every, plan.patience), (0, 0));
+    assert_eq!(plan.tuning.patience, Some(0));
+}

@@ -235,3 +235,93 @@ impl Report for Absorbed {
         out
     }
 }
+
+/// One line saying what a finished `absorb` stage did, from its summary;
+/// `None` for a stage whose summary is a `learn` stage's.
+pub fn stage_line(stage: &str, summary: &serde_json::Value) -> Option<String> {
+    let n = |value: &serde_json::Value| value.as_u64().unwrap_or(0);
+    Some(match stage {
+        "intake" => format!(
+            "{} session(s), {} new, {} refused",
+            summary["sessions"].as_array().map_or(0, Vec::len),
+            n(&summary["new"]),
+            summary["refused"].as_array().map_or(0, Vec::len)
+        ),
+        "extract" => format!(
+            "{} proposal(s) from {} session(s)",
+            n(&summary["proposals"]),
+            n(&summary["sessions"])
+        ),
+        "gate" => format!(
+            "{} admitted, {} superseded, {} live",
+            n(&summary["admitted"]),
+            n(&summary["superseded"]),
+            n(&summary["live"])
+        ),
+        "kits" => format!(
+            "{} built, {} reused, {} not taught, {} teacher answer(s) verified",
+            n(&summary["built"]),
+            n(&summary["reused"]),
+            summary["untaught"].as_array().map_or(0, Vec::len),
+            n(&summary["verified"])
+        ),
+        "dataset" if summary["trained"].is_u64() => format!(
+            "{} record(s) for {} claim(s), {} held out, {} refused as sealed probes, in {}",
+            n(&summary["trained"]),
+            summary["claims"].as_array().map_or(0, Vec::len),
+            n(&summary["held_out"]),
+            summary["refused"].as_array().map_or(0, Vec::len),
+            summary["dataset"].as_str().unwrap_or("?")
+        ),
+        "train" if summary["candidate"].is_object() => {
+            format!(
+                "candidate {}",
+                summary["candidate"]["candidate"].as_str().unwrap_or("?")
+            )
+        }
+        "release" if summary["improvement"].is_object() => format!(
+            "{} of {} claim(s) answered, {} gained, {} regressed: {}",
+            n(&summary["answered"]),
+            summary["claims"].as_array().map_or(0, Vec::len),
+            summary["gained"].as_array().map_or(0, Vec::len),
+            summary["regressed"].as_array().map_or(0, Vec::len),
+            if summary["passed"] == true {
+                "passed"
+            } else {
+                "refused"
+            }
+        ),
+        "ledger" => format!(
+            "{} claim(s) recorded as absorbed",
+            summary[1].as_u64().unwrap_or(0)
+        ),
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// The stages `absorb` shares a name with are told apart from `learn`'s by
+    /// the shape of their summary, and the others are its own.
+    #[test]
+    fn absorb_stage_lines_are_told_from_learns_by_their_summaries() {
+        let dataset = json!({"trained": 54, "held_out": 12, "claims": [1, 2, 3], "refused": [],
+                              "dataset": "blake3:ab"});
+        assert_eq!(
+            stage_line("dataset", &dataset).as_deref(),
+            Some("54 record(s) for 3 claim(s), 12 held out, 0 refused as sealed probes, in blake3:ab")
+        );
+        assert_eq!(stage_line("dataset", &json!({"records": 3})), None);
+        assert_eq!(stage_line("train", &json!({"candidate": "c1"})), None);
+        let gate = json!({"improvement": {}, "answered": 2, "claims": [1, 2, 3],
+                           "gained": [1], "regressed": [], "passed": false});
+        assert_eq!(
+            stage_line("release", &gate).as_deref(),
+            Some("2 of 3 claim(s) answered, 1 gained, 0 regressed: refused")
+        );
+        assert_eq!(stage_line("release", &json!({"release": null})), None);
+    }
+}

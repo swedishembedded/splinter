@@ -133,6 +133,9 @@ fn exam_line(summary: &serde_json::Value) -> String {
 
 /// One line saying what a finished `learn` stage did, from its summary.
 pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
+    if let Some(line) = crate::absorb_output::stage_line(stage, summary) {
+        return line;
+    }
     let field = |name: &str| match &summary[name] {
         serde_json::Value::Null => "?".to_string(),
         serde_json::Value::String(s) => s.clone(),

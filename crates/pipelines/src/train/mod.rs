@@ -503,6 +503,12 @@ pub fn train(
         .tuning
         .eval_every
         .unwrap_or_else(|| eval_every_for(steps));
+    // A run with no evaluations has none to be patient about.
+    let patience = if eval_every == 0 {
+        0
+    } else {
+        request.tuning.patience.unwrap_or(DEFAULT_PATIENCE)
+    };
     let ModelSelection::Local(weights) = ctx.selection(&request.from)? else {
         return Err(OrchestratorError::Refused(format!(
             "{} is reached over the network and cannot be trained here",
@@ -582,12 +588,12 @@ pub fn train(
             weight_decay: Some(request.tuning.weight_decay.unwrap_or(DEFAULT_WEIGHT_DECAY)),
             records_per_step,
             eval_every: Some(eval_every),
-            patience: Some(request.tuning.patience.unwrap_or(DEFAULT_PATIENCE)),
+            patience: Some(patience),
             monitor_share: Some(monitor_share),
             ..request.tuning
         },
         eval_every,
-        patience: request.tuning.patience.unwrap_or(DEFAULT_PATIENCE),
+        patience,
         monitor_share,
     };
     // A fine-tune loads its own copy of the base: the device holds no

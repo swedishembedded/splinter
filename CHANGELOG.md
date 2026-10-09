@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A run that monitors nothing (`train --eval-every 0`) no longer hands brain the default patience, which brain refuses
+  when there is no evaluation to be patient about; it names none.
 - A number that ends a sentence ("on port 9090.") is a standalone number to the traceability rule that
   admits claims and task answers; its full stop was read as a decimal point, so a claim whose quote ended
   in the number was refused as stating an unsupported number.
