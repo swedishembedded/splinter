@@ -74,6 +74,7 @@ use splinter_core::experience::Task;
 pub use generator::{GenerateError, ModelTaskGenerator, SourceIdentity, SourceText};
 pub use kind::{
     AnswerForm, Catalogue, Focus, KindError, Material, SolverEnvironment, TaskKind, VerifierKind,
+    TAUGHT,
 };
 pub use variants::{can_vary, DEFAULT_VARIANTS_PER_TASK};
 

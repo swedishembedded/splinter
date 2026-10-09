@@ -41,6 +41,7 @@ use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_eval::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
 use splinter_eval::verifiers::speech::SpeechVerifier;
 use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
+use splinter_knowledge::claims::answer::ClaimTermsVerifier;
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_model::local::GREEDY_SAMPLING;
 use splinter_model::Sampling;
@@ -449,6 +450,7 @@ pub(crate) fn verifiers_for(
                 },
                 Normalisation::LENIENT,
             ))),
+            VerifierKind::Terms => verifiers.push(Box::new(ClaimTermsVerifier::new())),
             VerifierKind::Executable => {
                 verifiers.push(Box::new(ExecutableVerifier::new(runtimes())));
             }

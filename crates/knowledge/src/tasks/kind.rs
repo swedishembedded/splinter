@@ -23,7 +23,7 @@
 //! | `environment` | where the student works: `closed_book` or `runtime` |
 //! | `runtime` | the runtime code of the kind runs in (`python3`) |
 //! | `requires` | privileged material every task must carry beyond the reference: `hints`, `checks`, `tests`, `checks_or_tests` |
-//! | `verifiers` | which verifiers grade an answer: `formal`, `stated`, `final_number`, `line_count`, `executable`, `mutation_validated`, `consistency`, `judged`, `quotation`, `grounding`, `speech` |
+//! | `verifiers` | which verifiers grade an answer: `formal`, `stated`, `terms`, `final_number`, `line_count`, `executable`, `mutation_validated`, `consistency`, `judged`, `quotation`, `grounding`, `speech` |
 //! | `min_sections` | distinct sections the evidence must span |
 //!
 //! Whether a task of the kind must name its subject follows from these
@@ -92,6 +92,11 @@ pub enum VerifierKind {
     /// The answer states the reference: contains it, as whole words, in a
     /// bounded answer. For short facts a model answers in a sentence.
     Stated,
+    /// The answer carries every number, name and quoted term of the
+    /// reference and adds none the task does not give: the claim gate's own
+    /// term rule ([`crate::claims::answer`]), for a reference that is a
+    /// sentence a correct answer words differently.
+    Terms,
     /// The task's executable checks run against the answer.
     Executable,
     /// The task's generated tests, admitted by mutation, run against it.
@@ -126,7 +131,7 @@ impl VerifierKind {
     pub fn compares_with_reference(self) -> bool {
         matches!(
             self,
-            Self::Formal | Self::Stated | Self::FinalNumber | Self::LineCount
+            Self::Formal | Self::Stated | Self::Terms | Self::FinalNumber | Self::LineCount
         )
     }
 
@@ -321,7 +326,7 @@ impl Catalogue {
         Self::default()
     }
 
-    /// The kinds Splinter ships: recall, arithmetic, format, advise, converse,
+    /// The kinds Splinter ships: recall, taught, arithmetic, format, advise, converse,
     /// explain, predict, construct, debug, counterexample, transform, classify,
     /// retrieve, multi-turn and combine.
     #[must_use]
@@ -353,6 +358,10 @@ impl Catalogue {
     }
 }
 
+/// The kind of a task made from a claim: something a person taught an agent
+/// in conversation.
+pub const TAUGHT: &str = "taught";
+
 /// The runtime the built-in code kinds run in.
 pub const DEFAULT_CODE_RUNTIME: &str = "python3";
 
@@ -378,7 +387,7 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
 fn builtin_kinds() -> Vec<TaskKind> {
     use VerifierKind::{
         Consistency, Executable, FinalNumber, Formal, Grounding, Judged, LineCount,
-        MutationValidated, Quotation, Speech, Stated,
+        MutationValidated, Quotation, Speech, Stated, Terms,
     };
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
@@ -387,6 +396,16 @@ fn builtin_kinds() -> Vec<TaskKind> {
             "Write up to {count} questions, each asking for one fact the sections state. The \
              reference is the fact, as short as it can be while complete.",
             &[Stated, Judged],
+        ),
+        // What a person told an agent, which the model should be able to
+        // give back. Its reference is a sentence, so an answer is graded by
+        // the terms it carries, not by containing the sentence.
+        text(
+            TAUGHT,
+            "Write up to {count} questions, each asking for something a person told the agent \
+             that the sections record. The reference is what they told it, as one complete \
+             sentence.",
+            &[Terms, Judged],
         ),
         // The two form kinds are what an anchor suite holds a release to;
         // generated from sources, a task of either is admitted only where its
@@ -582,7 +601,14 @@ mod tests {
         assert!(needs("explain"));
         // A stated reference, a quotation, an exact match or an executed
         // check establishes a pass without any judge.
-        for name in ["recall", "advise", "predict", "construct", "debug"] {
+        for name in [
+            "recall",
+            "taught",
+            "advise",
+            "predict",
+            "construct",
+            "debug",
+        ] {
             assert!(!needs(name), "{name}");
         }
     }

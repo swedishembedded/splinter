@@ -22,13 +22,19 @@
 //!   disagrees with live ones supersedes them. Claims are never deleted: a
 //!   superseded or refused one stays with its reason.
 //!
+//! * [`task`] - a live claim as a task: the question it answers, graded
+//!   against the statement by [`answer`], grounded in the quotes' spans of
+//!   the session.
+//!
 //! No model is involved in a ruling: the same proposals and ledger give the
 //! same rulings.
 
+pub mod answer;
 pub mod extract;
 mod gates;
 mod ledger;
 pub mod reply;
+pub mod task;
 pub mod terms;
 
 pub use gates::{rule, MAX_QUESTION_CHARS, MAX_STATEMENT_CHARS};

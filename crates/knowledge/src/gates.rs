@@ -72,14 +72,18 @@ fn number_tokens(text: &str) -> Vec<(String, Option<String>)> {
 
 /// Does `line` carry `number` as a standalone token? A digit on either
 /// side means the match is inside a larger number ("14" is not in "114");
-/// a '.' after it means the match is the head of a decimal ("4" is not in
-/// "4.223").
+/// a '.' and a digit after it mean the match is the head of a decimal ("4"
+/// is not in "4.223"), where a '.' that ends a sentence ("on port 9090.")
+/// is not.
 fn line_has_number(line: &str, number: &str) -> bool {
     for (at, _) in line.match_indices(number) {
         let before = line[..at].chars().next_back();
-        let after = line[at + number.len()..].chars().next();
+        let mut after = line[at + number.len()..].chars();
+        let next = after.next();
+        let decimal_head = next == Some('.') && after.next().is_some_and(|c| c.is_ascii_digit());
         let standalone = before.is_none_or(|c| !c.is_ascii_digit())
-            && after.is_none_or(|c| !c.is_ascii_digit() && c != '.');
+            && next.is_none_or(|c| !c.is_ascii_digit())
+            && !decimal_head;
         if standalone {
             return true;
         }
@@ -172,5 +176,20 @@ mod tests {
         assert!(!answer_numbers_traceable("114 GPIO pins", sizes));
         assert!(answer_numbers_traceable("4.223 mm", sizes));
         assert!(!answer_numbers_traceable("14 mm", sizes));
+    }
+
+    /// A number that ends a sentence is a standalone number: the '.' after
+    /// "9090" in "on port 9090." is a full stop, not a decimal point.
+    #[test]
+    fn a_number_before_a_full_stop_is_traceable() {
+        assert!(answer_numbers_traceable(
+            "port 9090",
+            "No, it is on port 9090."
+        ));
+        assert!(answer_numbers_traceable(
+            "It is on port 9090.",
+            "It is on port 9090 now"
+        ));
+        assert!(!answer_numbers_traceable("port 9", "No, it is on port 9.5"));
     }
 }

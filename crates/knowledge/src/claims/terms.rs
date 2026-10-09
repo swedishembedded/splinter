@@ -64,6 +64,13 @@ pub fn unsupported_term(statement: &str, evidence: &str) -> Option<Unsupported> 
         .map(|term| Unsupported { kind: "name", term })
 }
 
+/// Whether `statement` states a number, a quoted term or a name: something
+/// the words it rests on can be held to.
+#[must_use]
+pub fn has_terms(statement: &str) -> bool {
+    unsupported_term(statement, "").is_some()
+}
+
 /// The quoted terms of `text`, and `text` with them blanked out.
 fn split_quoted(text: &str) -> (Vec<String>, String) {
     let mut terms = Vec::new();
@@ -100,6 +107,14 @@ fn closer_of(opener: char) -> Option<char> {
         '\u{201c}' => Some('\u{201d}'),
         _ => None,
     }
+}
+
+/// The names and quoted terms of `text`, in order: what a question or a
+/// statement is about by name.
+#[must_use]
+pub fn names_of(text: &str) -> Vec<String> {
+    let (quoted, rest) = split_quoted(text);
+    quoted.into_iter().chain(names(&rest)).collect()
 }
 
 /// The words of `text` that are names.

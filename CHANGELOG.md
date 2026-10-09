@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A number that ends a sentence ("on port 9090.") is a standalone number to the traceability rule that
+  admits claims and task answers; its full stop was read as a decimal point, so a claim whose quote ended
+  in the number was refused as stating an unsupported number.
 - The release gate's serve check no longer loses every served verdict: the
   served answers are decided (the judge, a model of its own, loads) only after
   the `brain serve` process has exited, instead of while it holds the device,
@@ -20,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- The `taught` task kind: a question a person's claim answers, closed-book, whose reference is the claim's
+  statement. It is graded by the new `terms` verifier, which passes an answer that carries every number,
+  name and quoted term of the statement and adds none the task did not give (the rule that admitted the
+  claim, applied to the answer), and leaves a statement with no such term to a judge. `claim_task` makes the
+  task from a live claim with the spans of the person's words as evidence, each checked against its quote.
 - `splinter-data`: a dataset record may fix its side of the training split (`metadata.split` of `train` or
   `held_out`), which the holdout rule never moves and does not count among the units it chooses from;
   `session_dialogue` renders a recorded session as the conversation it was with only the agent's replies after a

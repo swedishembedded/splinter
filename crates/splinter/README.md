@@ -512,7 +512,7 @@ take at most a quarter of it, a task kind half, a verification strength
 three quarters - never less than an equal split among the groups the
 pool actually has.
 
-Task kinds: `recall`, `explain`, `predict`, `construct`, `debug`,
+Task kinds: `recall`, `taught` (something a person told an agent; graded by the terms of its reference sentence an answer carries and adds, see `absorb`), `explain`, `predict`, `construct`, `debug`,
 `counterexample`, `transform`, `classify`, `retrieve`, `multi-turn`,
 `combine` (written by the generator model) and `denoise` (a corrupted
 passage to restore, no model needed). Kinds that run code need `python3`.
