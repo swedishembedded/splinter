@@ -24,7 +24,7 @@ Splinter lacks.
 
 ```bash
 # 1. The public-domain texts (checksummed) and the directory Splinter learns from.
-python3 resources/founding-america/fetch.py
+python3 samples/jefferson/fetch.py --resources RESOURCES
 splinter-jefferson materials --resources RESOURCES --out ./materials
 
 # 2. Freeze the suite the release gate holds the adapter to, so that learning
@@ -82,7 +82,7 @@ it or lower it; this sample reports which.
 
 ## Corpus
 
-Public-domain texts fetched by `resources/founding-america/fetch.py`: the
+Public-domain texts fetched by `samples/jefferson/fetch.py` (`python3 -I samples/jefferson/test_fetch.py` checks it offline): the
 Washington, Randolph and Library editions of the letters, the Ford edition (OCR,
 not parsed for letters), *Notes on the State of Virginia*, the *Summary View*,
 the Jefferson Bible and the *Manual of Parliamentary Practice*, plus the
