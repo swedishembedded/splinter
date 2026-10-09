@@ -278,6 +278,10 @@ pub struct ListenItem {
     pub reply_seconds: f64,
     /// Seconds from the end of the question to the first sentence spoken.
     pub first_audio_seconds: f64,
+    /// Seconds until the model wrote its first word.
+    pub first_text_seconds: f64,
+    /// Seconds until the first piece was handed to be spoken.
+    pub first_piece_seconds: f64,
     /// Seconds the model spent listening and writing.
     pub think_seconds: f64,
     /// Seconds speaking, summed over the sentences.
@@ -299,6 +303,10 @@ pub struct ListenReport<'a> {
     pub answer_word_error_rate: Option<f32>,
     /// Seconds from the end of the question to the first sentence spoken.
     pub first_audio_seconds: Option<Spread>,
+    /// Seconds until the model wrote its first word.
+    pub first_text_seconds: Option<Spread>,
+    /// Seconds until the first piece was handed to be spoken.
+    pub first_piece_seconds: Option<Spread>,
     /// Seconds listening and writing.
     pub think_seconds: Option<Spread>,
     /// Seconds speaking.

@@ -26,6 +26,12 @@ pub trait Listener {
 pub struct SpokenTimings {
     /// From the end of the question to the first sentence spoken.
     pub first_audio: Duration,
+    /// From the start to the first word the model wrote; a cascade's
+    /// recognition and the model's first token are in it.
+    pub first_text: Duration,
+    /// From the start to the first piece handed to be spoken: the wait for a
+    /// clause end after the first word.
+    pub first_piece: Duration,
     /// From the start until the model had written its whole answer; speaking
     /// runs beside it, so this and `synthesise` overlap.
     pub think: Duration,
@@ -59,6 +65,8 @@ pub fn take_spoken_turn(
 ) -> Result<SpokenTurn, PolicyError> {
     let started = Instant::now();
     let mut stream = SentenceStream::new(max_words);
+    let mut first_text = None;
+    let mut first_piece = None;
     // Bounded, so a synthesizer that falls behind slows the writer rather
     // than letting the unspoken text grow without limit.
     let (queue, sentences) = mpsc::sync_channel::<String>(QUEUED_SENTENCES);
@@ -80,7 +88,9 @@ pub fn take_spoken_turn(
         // A send fails only once the speaking side has stopped on an error,
         // which the join below reports; the writer has nothing more to do.
         let answer = listener.answer(input, &mut |delta| {
+            first_text.get_or_insert_with(|| started.elapsed());
             for sentence in stream.push(delta) {
+                first_piece.get_or_insert_with(|| started.elapsed());
                 let _ = queue.send(sentence);
             }
         });
@@ -112,6 +122,8 @@ pub fn take_spoken_turn(
         reply: join(&clips)?,
         timings: SpokenTimings {
             first_audio: first_audio.unwrap_or(total),
+            first_text: first_text.unwrap_or(total),
+            first_piece: first_piece.unwrap_or(answered),
             think: answered,
             synthesise,
             total,
