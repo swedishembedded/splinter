@@ -40,6 +40,7 @@ mod budget;
 pub mod claims;
 pub mod converse;
 pub mod critic;
+pub mod forms;
 pub mod judge;
 pub mod mapper;
 pub mod prompts;
