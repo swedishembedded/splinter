@@ -16,6 +16,7 @@ pub mod canary;
 pub mod facts;
 pub mod grading;
 pub mod keys;
+pub mod merge;
 pub mod policy;
 pub mod probes;
 pub mod record;

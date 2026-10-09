@@ -35,9 +35,9 @@ const KIND: &str = "recall";
 
 /// What the generator is told the facts are for: a question whose answer an
 /// answer can be checked for by words, not an opinion.
-const GOAL: &str = "each question asks for one specific name, number, date, place or quoted \
-term that the letter states, so that a right answer can be recognised by that word; never for an \
-opinion or a general description";
+const GOAL: &str = "each question names the person, place or matter it is about so that it \
+stands alone (never \"the letter\" or \"the text\"), and asks for one specific name, number, date \
+or place that the sections state, never for an opinion";
 
 /// The subdirectory of the materials directory that holds letters.
 const LETTERS: &str = "letters";
@@ -65,6 +65,9 @@ pub struct Request {
     pub persona: String,
     /// The model store, when not the configuration's.
     pub models: Option<PathBuf>,
+    /// Build only shard `.0` of `.1` of the chosen families (counted from 0),
+    /// so shards can be built on separate cards and merged.
+    pub shard: Option<(usize, usize)>,
 }
 
 /// What the build did.
@@ -149,6 +152,15 @@ pub fn run(request: &Request) -> anyhow::Result<Report> {
     let started = std::time::Instant::now();
     let files = family_files(&request.materials)?;
     let chosen = pick_families(&files, request.seed, request.families, request.min_words);
+    let chosen: Vec<String> = match request.shard {
+        Some((index, of)) => chosen
+            .into_iter()
+            .enumerate()
+            .filter(|(n, _)| n % of == index)
+            .map(|(_, name)| name)
+            .collect(),
+        None => chosen,
+    };
     anyhow::ensure!(
         !chosen.is_empty(),
         "no family file has {} words or more",

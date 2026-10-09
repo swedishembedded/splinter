@@ -73,6 +73,9 @@ enum Facts {
         /// The model that proposes the facts and writes the probes.
         #[arg(long, default_value = DEFAULT_MODEL)]
         generator: String,
+        /// Build only shard I of N (as `I/N`, from 0) of the families.
+        #[arg(long, value_parser = shard)]
+        shard: Option<(usize, usize)>,
         /// Development facts.
         #[arg(long, default_value_t = Quotas::PROTOCOL.dev)]
         dev: usize,
@@ -91,6 +94,18 @@ enum Facts {
         /// Questions about things that do not exist.
         #[arg(long, default_value_t = Quotas::PROTOCOL.hallucination)]
         hallucination: usize,
+    },
+    /// Merge the pools of shards built side by side into one.
+    Merge {
+        /// The merged run's output directory.
+        #[arg(long)]
+        out: PathBuf,
+        /// The model store, when not the configuration's.
+        #[arg(long)]
+        models: Option<PathBuf>,
+        /// The shards' output directories.
+        #[arg(required = true)]
+        parts: Vec<PathBuf>,
     },
     /// Flag one test fact as the canary: its sessions assert a false statement.
     Canary {
@@ -172,6 +187,19 @@ enum Session {
     },
 }
 
+/// `I/N`: shard I (from 0) of N.
+fn shard(text: &str) -> Result<(usize, usize), String> {
+    let (index, of) = text.split_once('/').ok_or("write the shard as I/N")?;
+    let (index, of): (usize, usize) = (
+        index.parse().map_err(|e| format!("{e}"))?,
+        of.parse().map_err(|e| format!("{e}"))?,
+    );
+    if of == 0 || index >= of {
+        return Err("I must be below N".into());
+    }
+    Ok((index, of))
+}
+
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Facts(Facts::Build {
@@ -181,6 +209,7 @@ fn main() -> anyhow::Result<()> {
             families,
             min_words,
             generator,
+            shard,
             dev,
             test,
             control_untaught,
@@ -205,6 +234,7 @@ fn main() -> anyhow::Result<()> {
                 generator,
                 persona: PERSONA.to_string(),
                 models: common.models,
+                shard,
             })?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
@@ -222,6 +252,10 @@ fn main() -> anyhow::Result<()> {
                 candidates,
             })?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Facts(Facts::Merge { out, models, parts }) => {
+            let facts = splinter_absorb::merge::run(&out, &parts, models.as_ref())?;
+            println!("{facts} facts in the merged pool");
         }
         Command::Facts(Facts::Canary { out, fact }) => {
             println!("{}", splinter_absorb::canary::flag(&out, &fact)?);

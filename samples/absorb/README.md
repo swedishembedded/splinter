@@ -39,6 +39,10 @@ splinter-jefferson materials --resources RESOURCES --out OUT/materials
 #    admits them, at most one fact per family, roles decided by family.
 splinter-absorb facts build --materials OUT/materials --out OUT --families 60
 
+#    A pool can be built in shards on separate cards and merged:
+#    `facts build ... --shard 0/2` and `--shard 1/2` into two directories, then
+#    `splinter-absorb facts merge --out OUT SHARD0 SHARD1`.
+
 # 2. Put every fact to the day-0 policy six times, grade, class, fill the roles.
 splinter-absorb facts screen --out OUT
 
