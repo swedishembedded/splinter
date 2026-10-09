@@ -12,6 +12,8 @@
 //! * [`capture_document`] - one UTF-8 text file; anything else is refused.
 //! * [`capture_repository`] - every UTF-8 text file of a directory tree,
 //!   with the git state when it is a work tree.
+//! * [`capture_session`] - one recorded session of an agent with a person
+//!   (an ATIF trajectory), secrets removed, each step's text a part.
 //! * [`capture_command`] - one run of a program: its standard output and
 //!   error, its exit code, under a timeout and an output cap.
 //!
@@ -22,6 +24,7 @@
 
 mod command;
 mod repository;
+mod session;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -34,6 +37,9 @@ pub use command::{
     DEFAULT_TERM, DEFAULT_TIMEOUT,
 };
 pub use repository::{capture_repository, IGNORED_NAMES};
+pub use session::{
+    capture_session, capture_session_file, SessionRefusal, DEFAULT_MAX_SESSION_BYTES,
+};
 pub use splinter_sandbox::process::ProcessError;
 
 /// The default cap on one captured file's size, in bytes: a document
@@ -104,6 +110,14 @@ pub enum CaptureError {
         path: PathBuf,
         /// Its exit status and standard error.
         detail: String,
+    },
+    /// A session file that is not a session worth learning from.
+    #[error("{path}: {source}")]
+    Session {
+        /// The file.
+        path: PathBuf,
+        /// Why it is refused.
+        source: SessionRefusal,
     },
     /// The captured source is not valid.
     #[error(transparent)]

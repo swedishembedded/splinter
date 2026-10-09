@@ -145,6 +145,17 @@ fn origin(origin: &Origin) -> String {
             shell_words(argv),
             exit_code.map_or("by signal".into(), |c| c.to_string())
         ),
+        Origin::Session {
+            session_id,
+            agent,
+            redactions,
+        } => {
+            let removed: u32 = redactions.iter().map(|r| r.count).sum();
+            format!(
+                "{} by {agent}, {removed} secret(s) removed",
+                session_id.as_deref().unwrap_or("(no session id)")
+            )
+        }
     }
 }
 

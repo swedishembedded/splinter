@@ -116,6 +116,20 @@ pub struct Skipped {
     pub reason: SkipReason,
 }
 
+/// What was removed from a session before it was stored: `count` secrets of
+/// one `kind` in one step. Only the fact of the removal is recorded, never
+/// the secret.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Redaction {
+    /// The ATIF `step_id` the secret was in; `None` outside the steps
+    /// (the session's own fields).
+    pub step: Option<u64>,
+    /// What it looked like: `private_key`, `token`, `credential`, ...
+    pub kind: String,
+    /// How many were removed.
+    pub count: u32,
+}
+
 /// Where a source came from.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -154,15 +168,26 @@ pub enum Origin {
         /// Whether standard error exceeded the capture's cap and was cut.
         stderr_truncated: bool,
     },
+    /// One recorded session of an agent with a person (an ATIF trajectory,
+    /// secrets removed); each step's text is a part.
+    Session {
+        /// The trajectory's own session id, when it states one.
+        session_id: Option<String>,
+        /// The agent that held it: its name and version.
+        agent: String,
+        /// What was removed from it, in step order.
+        redactions: Vec<Redaction>,
+    },
 }
 
 impl Origin {
-    /// The origin's kind as it is serialized: `document`, `repository` or
-    /// `command`.
+    /// The origin's kind as it is serialized: `document`, `repository`,
+    /// `command` or `session`.
     #[must_use]
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Document { .. } => "document",
+            Self::Session { .. } => "session",
             Self::Repository { .. } => "repository",
             Self::Command { .. } => "command",
         }
@@ -199,7 +224,7 @@ struct SourceBody<'a> {
 }
 
 impl Source {
-    /// The origin's kind: `document`, `repository` or `command`.
+    /// The origin's kind: `document`, `repository`, `command` or `session`.
     #[must_use]
     pub fn kind(&self) -> &'static str {
         self.origin.kind()

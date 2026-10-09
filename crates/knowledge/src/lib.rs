@@ -6,6 +6,7 @@
 //!
 //! * [`capture`] - a document, a repository tree or a command run captured
 //!   as an immutable source for the source store.
+//! * [`session`] - a captured session read as text addressable by step.
 //! * [`sections`] - a text split into addressable byte ranges: at headings
 //!   for Markdown, at paragraphs otherwise.
 //! * [`concepts`] - the concepts a task exercises: those it declares, else
@@ -13,6 +14,8 @@
 //! * [`material`] - what a teacher is shown of a task: the source
 //!   sections its evidence falls in, its passages and hints - never its
 //!   reference.
+//! * [`redact`] - secrets removed from text before it is stored or shown
+//!   to a model.
 //! * [`retrieve`] - the passages of the sources that bear on a query:
 //!   lexical and semantic ranking, fused.
 //! * [`gates`] - the text rules a generated task is held to: instruction
@@ -44,10 +47,12 @@ pub mod denoise;
 pub mod gates;
 pub mod harmonize;
 pub mod material;
+pub mod redact;
 pub mod rehearsal;
 pub mod retrieve;
 pub mod sections;
 mod seeded;
+pub mod session;
 pub mod survey;
 pub mod tabular;
 pub mod tasks;

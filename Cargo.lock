@@ -4922,14 +4922,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "atif",
  "futures",
  "schemars",
  "serde",
  "serde_json",
  "splinter-core",
+ "splinter-data",
  "splinter-eval",
  "splinter-sandbox",
  "splinter-store",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
 ]

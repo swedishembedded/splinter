@@ -99,6 +99,9 @@ impl SourceIdentity {
                 revision.as_ref().and_then(|r| r.commit.clone()),
             ),
             Origin::Command { argv, .. } => (argv.join(" "), None),
+            Origin::Session {
+                session_id, agent, ..
+            } => (session_id.clone().unwrap_or_else(|| agent.clone()), None),
         };
         Self {
             kind: origin.kind(),

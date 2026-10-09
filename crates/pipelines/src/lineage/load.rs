@@ -64,6 +64,9 @@ fn sources(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError> {
         let origin = match &source.origin {
             Origin::Document { path } | Origin::Repository { path, .. } => path.clone(),
             Origin::Command { argv, .. } => argv.join(" "),
+            Origin::Session {
+                session_id, agent, ..
+            } => session_id.clone().unwrap_or_else(|| agent.clone()),
         };
         graph.record(
             id.as_str(),
