@@ -18,6 +18,8 @@ splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budge
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
+splinter session add <PATH>... [--max-bytes N] | list
+splinter claims extract <SESSION-ID>... [--generator REF] | gate <CLAIMSET-ID> | list | show <ID> | ledger
 splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] [--author NAME] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
 splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N] [--teacher REF]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
@@ -105,6 +107,9 @@ other provider from `BRAIN_API_KEY`.
 | Stage | Command | Reads | Writes |
 |---|---|---|---|
 | sources | `source add` | a file, a directory, a command's run | a source |
+| sessions | `session add` | ATIF files of a person's sessions with an agent | session sources, secrets removed |
+| claims | `claims extract` | session sources | a claim set: what a model proposes the person taught, with their exact words |
+| gates | `claims gate` | a claim set | the ledger: every proposal admitted, refused (with the reason), or superseding earlier claims |
 | tasks | `tasks generate` | sources | a task set |
 | solve | `solve` | a task set | an experience set |
 | verify | `verify` | an experience set | verdicts on its experiences |
@@ -733,6 +738,54 @@ replaced, by code, by the one path the sentence names that exists, and never
 by a guess. `SPLINTER_FRONT_DOOR_MODEL` names a model for reading sentences
 other than the policy, since a larger model reads them better.
 
+## Learning from sessions
+
+A person's own sessions with an agent are ATIF trajectories (`*.atif.json`).
+`session add` takes files, or directories searched recursively, and for each:
+
+- validates the ATIF, and refuses (naming the step and why, in `refused`) a
+  trajectory the training projection cannot render - for instance a second
+  user step beside a tool call - or one with no user step;
+- removes secrets before anything is addressed: private key blocks, values
+  assigned to secret names (`password=`, `api_key:`, `GITHUB_TOKEN=`, JSON keys
+  of that kind), bearer credentials, and tokens known by their shape (`sk-`,
+  `ghp_`, `AKIA`, JSON web tokens). Each removal leaves `[REDACTED:<kind>]`; the
+  source's origin records the step and kind of every removal and never the
+  secret. The filter recognises shapes; it is not proof that nothing sensitive
+  remains;
+- stores one part per step text (`step-000003-user`, `step-000004-agent`,
+  `step-000004-calls`, `step-000004-observation`) beside the redacted trajectory,
+  so a claim cites a step by its ATIF `step_id` and a span into its part.
+
+The same bytes are the same source, so intake is repeatable. The command
+exits 1 when any file was refused; the others are taken in.
+
+`claims extract` shows each session to the generator model (a typed call; a
+malformed or over-long reply is sent back for correction, and one that stays
+unusable is reported against its session in `failed`) and stores the proposals
+whole as a claim set. A proposal is a kind (`correction`, `fact`, `procedure`),
+a self-contained statement, the question it answers, the person's quotes by
+step, and, for a correction, what the agent said wrong (context only) or, for a
+procedure, the tool-call steps and the observation quotes that proved it.
+
+`claims gate` rules on every proposal by code alone, in order: shape; every
+quote verbatim in the user step it cites (a quote of an agent step is refused
+as `assistant_evidence`, whatever it says); a procedure has its calls and
+observation; what the agent is said to have got wrong was said; every number,
+name and quoted term of the statement occurs in the cited words (and, for a
+procedure, in its cited tool calls); a repeat of a live claim is refused as
+`duplicate`; a claim that disagrees with live claims on the same question is
+admitted and supersedes them. Questions are the same by the near-duplicate rule
+that keeps task sets free of repeats, statements agree by the rule that finds
+contradictions among tasks. "Later" is the order of the ledger, and within one
+session the order of the first step a claim cites. Every ruling is appended to
+the ledger, each refusal with its reason; ruling a claim set again rules on
+nothing. `claims ledger` reads it back: the live claims, the superseded ones
+and by which claim, and the refused proposals.
+
+The first word of a sentence is not taken for a name, and numbers written in
+words are not recognised: both can only make the gate refuse more, never less.
+
 ## JSON output
 
 With `--json` every command prints one JSON document on stdout; errors
@@ -746,6 +799,16 @@ print `{"error": string, "refused": bool}`. Commands that record a run add
 "revision", "skipped"}` or `{"kind": "command", "argv", "cwd",
 "exit_code", "timed_out", "stdout_truncated", "stderr_truncated"}`);
 `parts` counts files or output streams and `bytes` sums their sizes.
+
+`session add`: `{"sessions": [{"path", "source", "new", "steps", "redactions"}],
+"refused": [{"path", "reason"}], "new", "redactions", "run"}`. `claims extract`:
+`{"claim_set", "sessions", "proposals", "by_kind", "failed": [{"session", "reason"}],
+"stopped", "run"}`. `claims gate`: `{"claim_set", "proposals", "ruled", "already_ruled",
+"admitted", "superseded", "refused" (by reason), "rulings": [{"index", "session",
+"kind", "statement", "outcome", "claim", "supersedes", "reason_code", "reason"}],
+"live", "extraction_failed", "run"}`. `claims ledger`: `{"live": [claim],
+"superseded": [{"claim", "statement", "by"}], "refused": [{"claim_set", "index",
+"session", "statement", "reason_code", "reason"}]}`.
 
 `status`: `{"state", "policy", "recent_runs", "counts", "concepts"}` - `policy` is
 `{"reference", "model", "base", "adapter", "release"}` (`adapter` and
@@ -876,6 +939,7 @@ their own have ids of their kind: `span:<content-hex>:<start>-<end>`,
 ## Exit status
 
 0 done; 1 the work failed or stopped short of what was asked (a candidate
-the gate blocked included); 2 refused
+the gate blocked, a session file refused, a session the extractor gave nothing
+usable for); 2 refused
 before anything ran (usage, an unknown id, a remote model without the
 opt-in); 3 a sentence was asked back.

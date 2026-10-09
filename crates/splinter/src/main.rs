@@ -18,6 +18,8 @@
 //! model without the opt-in); 3 when a sentence was not clear enough to
 //! act on and was asked back.
 
+mod absorb_output;
+mod absorb_session;
 mod cli;
 mod curriculum_output;
 mod exam_output;

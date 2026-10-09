@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- `session add`, `claims extract`, `claims gate`, `claims list|show|ledger`: the first three stages of
+  learning from a person's own sessions with an agent, each recorded as a run and repeatable. Sessions
+  (ATIF files, or directories of `*.atif.json`) are validated, refused with the step and reason when the
+  training projection cannot render them, stripped of secrets before they are addressed, and stored once
+  with one part per step text. A model proposes claims (correction, fact, procedure) with the person's
+  exact quotes; code admits a claim only when every quote is verbatim in a user step, every number, name and
+  quoted term of its statement is in the cited words, and no agent sentence is evidence. Repeats collapse, a
+  later claim on the same question supersedes the earlier, and every ruling, refusal included, stays in a
+  ledger with its reason. `splinter-data` names why the projection refuses a trajectory
+  (`projection_refusal`), and the release fixtures' `brain` stand-in script moved to its own file to keep
+  the fixture module under the file-size limit.
 - `exam CANDIDATE --exam-set EXAM --deployed-only` asks only the candidate under the prompt it is deployed
   with, for a candidate to be paired offline with the base and prompted arms of another report of the
   same exam instead of asking them again.

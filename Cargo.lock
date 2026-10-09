@@ -4780,6 +4780,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-sdk",
+ "tempfile",
 ]
 
 [[package]]

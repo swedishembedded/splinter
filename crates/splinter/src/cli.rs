@@ -93,6 +93,13 @@ pub enum Command {
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
+    /// Take in recorded agent sessions, secrets removed.
+    #[command(subcommand)]
+    Session(SessionCommand),
+    /// What a person taught in sessions: claims proposed by a model, ruled
+    /// on by code, and the ledger of the rulings.
+    #[command(subcommand)]
+    Claims(ClaimsCommand),
     /// Generate and inspect task sets.
     #[command(subcommand)]
     Tasks(TasksCommand),
@@ -761,9 +768,11 @@ impl LineageArgs {
     }
 }
 
+mod absorb;
 mod exam;
 mod state;
 mod train;
+pub use absorb::{ClaimsCommand, SessionCommand};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use state::{RunsCommand, StateCommand};
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};

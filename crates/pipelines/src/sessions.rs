@@ -28,6 +28,8 @@ use splinter_knowledge::session::SessionView;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
+use crate::sources::SourceSummary;
+
 /// What a directory's files are named to be taken as sessions.
 pub const SESSION_SUFFIX: &str = ".atif.json";
 
@@ -199,14 +201,22 @@ pub fn resolve(ctx: &Context, given: &[String]) -> Result<Vec<SourceId>, Orchest
         .collect()
 }
 
+/// What `session list` reports.
+#[derive(Clone, Debug, Serialize)]
+pub struct SessionList {
+    /// Every stored session, in id order.
+    pub sessions: Vec<SourceSummary>,
+}
+
 /// Every stored session source.
-pub fn list(ctx: &Context) -> Result<Vec<SourceId>, OrchestratorError> {
+pub fn list(ctx: &Context) -> Result<SessionList, OrchestratorError> {
     let store = ctx.sources();
     let mut sessions = Vec::new();
     for id in store.list()? {
-        if matches!(store.get_source(&id)?.origin, Origin::Session { .. }) {
-            sessions.push(id);
+        let source = store.get_source(&id)?;
+        if matches!(source.origin, Origin::Session { .. }) {
+            sessions.push(SourceSummary::from(&source));
         }
     }
-    Ok(sessions)
+    Ok(SessionList { sessions })
 }

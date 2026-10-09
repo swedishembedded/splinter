@@ -50,7 +50,9 @@ needs Splinter installed.
 | A document | chunked into addressable sections; facts and held-out probes are extracted and held to the text by code |
 | A directory of text | surveyed, then a planner model chooses what to teach from a menu; each choice is held to the sources |
 | A command-line tool | the tool's real output is captured as a source with provenance, then goes through the document path |
+| A person's own sessions with an agent | ATIF trajectories taken in with secrets removed; what the person taught (corrections, facts, procedures) is proposed by a model and admitted by code only on the person's exact words |
 | An agent's own attempts | solved closed-book or in a runtime, graded by the task kind's verifiers, critiqued and retried |
+| A user's recorded agent sessions | taken in once with secrets removed; a model proposes what the person taught, quoting them, and code admits a claim only when the person's own words carry it |
 
 ## What it produces
 

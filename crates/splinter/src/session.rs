@@ -41,6 +41,7 @@ use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::terms::Distribution;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
+use crate::absorb_session;
 use crate::cli::{
     Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, ReleaseCommand,
     RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
@@ -289,6 +290,8 @@ impl Session {
             }
             Command::Source(SourceCommand::List) => emit(json, &sources::list(ctx)?),
             Command::Source(SourceCommand::Show { id }) => emit(json, &sources::show(ctx, &id)?),
+            Command::Session(command) => return absorb_session::session(ctx, json, command),
+            Command::Claims(command) => return absorb_session::claims(ctx, json, command),
             Command::Tasks(TasksCommand::Generate {
                 sources: ids,
                 kinds,

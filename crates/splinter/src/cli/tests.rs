@@ -720,3 +720,36 @@ fn abstentions_are_taken_from_the_records_given_passages() {
     assert_eq!(learn.abstain, Some(0.1));
     assert!(parse(&["learn", "docs", "--abstain", "0.1"]).is_err());
 }
+
+#[test]
+fn sessions_and_claims_are_one_stage_per_command() {
+    let Command::Session(SessionCommand::Add { paths, max_bytes }) =
+        command(&["session", "add", "a.atif.json", "dir"])
+    else {
+        panic!("session add");
+    };
+    assert_eq!(paths.len(), 2);
+    assert_eq!(max_bytes, splinter_sdk::sessions::DEFAULT_MAX_SESSION_BYTES);
+    assert!(parse(&["session", "add"]).is_err(), "a path is required");
+
+    let Command::Claims(ClaimsCommand::Extract {
+        sessions,
+        generator,
+    }) = command(&["claims", "extract", "ab12", "cd34"])
+    else {
+        panic!("claims extract");
+    };
+    assert_eq!(sessions, ["ab12", "cd34"]);
+    assert_eq!(generator, ModelRef::policy_default());
+    assert!(
+        parse(&["claims", "extract"]).is_err(),
+        "a session is required"
+    );
+    assert!(matches!(
+        command(&["claims", "gate", "ab12"]),
+        Command::Claims(ClaimsCommand::Gate { .. })
+    ));
+    for verb in ["list", "ledger"] {
+        assert!(matches!(command(&["claims", verb]), Command::Claims(_)));
+    }
+}
