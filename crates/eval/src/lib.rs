@@ -62,5 +62,6 @@ pub mod significance;
 pub mod speech_features;
 pub mod speech_judge;
 pub mod speech_reward;
+pub mod teaching_check;
 pub mod timeline_metrics;
 pub mod verifiers;

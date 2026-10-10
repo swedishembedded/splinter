@@ -22,9 +22,11 @@ pub mod bundle;
 pub mod ingress;
 pub mod judge;
 pub mod rl;
+pub mod speakset;
 pub mod spoken;
 pub mod takes;
 pub mod teach;
+pub mod teach_eval;
 
 use serde::Serialize;
 use splinter_sdk::model::speech::{RoundTrip, RoundTripItem, StageTimings, Turn};

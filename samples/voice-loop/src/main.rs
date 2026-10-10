@@ -29,15 +29,15 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use splinter_sdk::model::speech::{
-    round_trip, speak_verified, take_turn, BrainRecognizer, BrainSynthesizer, ListenerOptions,
-    Sentences, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
+    round_trip, take_turn, BrainRecognizer, BrainSynthesizer, ListenerOptions, Sentences,
+    DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 use voice_loop::batch::{
     emit, listen_turns, read_clip, streamed_turns, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
 };
-use voice_loop::{read_sentences, Recorded, RoundTripReport, SpeakSetReport, TurnReport};
+use voice_loop::{read_sentences, RoundTripReport, TurnReport};
 
 #[derive(Parser)]
 #[command(about = "Talk to a persona and have it talk back, measuring each stage")]
@@ -87,6 +87,8 @@ enum Command {
     Agent(voice_loop::agent::AgentArgs),
     /// Fit the naturalness judge to a listener's blind choices and report what it predicts.
     Judge(voice_loop::judge::JudgeArgs),
+    /// Teach an agent facts, rules and procedures by what is said to it and test what it kept.
+    TeachEval(voice_loop::teach_eval::TeachEvalArgs),
     /// Teach the persona how to speak: hear a directive and keep what it teaches.
     Teach(voice_loop::teach::TeachArgs),
     /// Speak a sentence in the persona's synthetic voice.
@@ -369,6 +371,7 @@ fn main() -> Result<()> {
         Command::SpeechRl(args) => voice_loop::rl::run(&args),
         Command::Takes(args) => voice_loop::takes::run(&args),
         Command::Agent(args) => voice_loop::agent::run(&args),
+        Command::TeachEval(args) => voice_loop::teach_eval::run(&args),
         Command::Judge(args) => voice_loop::judge::run(&args),
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {
@@ -389,7 +392,15 @@ fn main() -> Result<()> {
             out_dir,
             max_wer,
             attempts,
-        } => speak_set(&models, &sentences, &out_dir, max_wer, attempts),
+        } => voice_loop::speakset::speak_set(
+            &models.tts,
+            &models.asr,
+            models.speaker(),
+            &sentences,
+            &out_dir,
+            max_wer,
+            attempts,
+        ),
         Command::SpokenMerge { dir } => voice_loop::spoken::merge(&dir),
         Command::TextScore {
             base,
@@ -594,65 +605,6 @@ fn main() -> Result<()> {
             }
         }
     }
-}
-
-fn speak_set(
-    models: &Models,
-    file: &std::path::Path,
-    out_dir: &std::path::Path,
-    max_wer: f32,
-    attempts: usize,
-) -> Result<()> {
-    let text =
-        std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-    let sentences = read_sentences(&text);
-    if sentences.is_empty() {
-        bail!("{} holds no sentences", file.display());
-    }
-    std::fs::create_dir_all(out_dir)?;
-    let speaker = models.speaker();
-    let (synthesizer, recognizer) = (
-        BrainSynthesizer::load(&models.tts)?,
-        BrainRecognizer::load(&models.asr)?,
-    );
-    let (mut kept, mut rejected) = (Vec::new(), Vec::new());
-    for sentence in sentences {
-        match speak_verified(
-            &synthesizer,
-            &recognizer,
-            &speaker,
-            &sentence,
-            max_wer,
-            attempts,
-        )? {
-            Some(v) => {
-                let name = format!("q{:02}.wav", kept.len() + 1);
-                v.clip.save(out_dir.join(&name))?;
-                kept.push(Recorded {
-                    text: sentence,
-                    file: name,
-                    seed: v.speaker.seed(),
-                    attempts: v.attempts,
-                    word_error_rate: v.word_error_rate,
-                    seconds: v.clip.seconds(),
-                });
-            }
-            None => rejected.push(sentence),
-        }
-    }
-    let lines: Vec<&str> = kept.iter().map(|r| r.text.as_str()).collect();
-    std::fs::write(out_dir.join("sentences.txt"), lines.join("\n") + "\n")?;
-    emit(
-        &SpeakSetReport {
-            recognizer: &models.asr,
-            synthesizer: &models.tts,
-            portrayal: speaker.portrayal().label(),
-            max_word_error_rate: max_wer,
-            kept: &kept,
-            rejected: &rejected,
-        },
-        Some(&out_dir.join("report.json")),
-    )
 }
 
 fn spoken_set(
