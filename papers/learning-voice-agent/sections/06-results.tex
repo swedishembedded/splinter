@@ -1,32 +1,25 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-\section{Results so far}\label{sec:results}
+\section{Results}\label{sec:results}
 
-\paragraph{First sound of the speaking agent (C6, partial).}
-\Cref{tab:latency} shows \LatencyTurns{} spoken questions answered by the cascade of \cref{sec:system} (Qwen3-8B, synthetic voice, seed 1) on
-\LatencyGpu{} with the CUDA backend, run \code{\LatencyRunId}. The first sound arrives \FirstSoundPfifty{}\,s after the end of the question at the median and
-\FirstSoundPninetyfive{}\,s at the 95th percentile, against a plan of 1.5\,s and 2.0\,s. This is one run in one process on synthetic speech; the gate
-requires at least three repeats on a card shown idle, with intervals, and a real-speech subset, so the claim stays partial.
+\subsection{Teaching an agent}
+
+\paragraph{Facts, rules and procedures (T2).}
+The test split of \cref{sec:evaluation} was run once under \code{prereg/teaching-test.md} (run \code{teaching-test-20261010}; \TeachScenarios{} scenarios, \TeachAsks{} asks; Qwen3-8B, non-thinking, CUDA). \Cref{tab:hypotheses} gives each pre-registered hypothesis and its verdict, and \cref{tab:teaching} the
+rates by kind. Untaught, the model answered none of the questions about the invented facts (\TeachFactUntaught{}); with the ledger of a session that had been taught, in a new session, it answered \TeachFactTaught{} as taught. A fact that was taught and then corrected was answered as
+corrected and never as first taught, a fact taught and then forgotten was not told, unrelated questions kept their answers, and sixteen facts taught in one session were each recalled. The last two kinds are leak and disturbance checks: both arms should pass, and they do.
+
+One pre-registered gate is not met: the procedure kind has only \TeachProcedureAsks{} asks, so its interval (lower bound \TeachProcedureLow{}) cannot reach 0.80 even when every ask passes, and a claim for procedures needs more scenarios. Rules (\TeachRulesAsks{} asks), a fact that must be used and two rules at once had no gate and are reported as measured. Two rules
+taught together were not both obeyed: every reply ended with ``over'' but none used ``captain'', which the same rule taught alone had produced in every reply. The gates on facts are met over asks; the registration names the scenario as the unit, and over the twelve fact scenarios the lower bound is \TeachFactScenarioLow{}, below 0.80. The agent restated every teaching utterance of the set for confirmation
+(\TeachUnderstood{} of \TeachTeachings{}), but these were written in the forms the plain reader knows, so that number tests the protocol and not the reader.
 
 \begin{table}[t]
 \centering\small
-\input{generated/latency_table}
-\caption{Stages of a spoken turn, run \code{\LatencyRunId}. Whole-turn time is the card's cost, not the listener's wait: the audio is longer than the turn.}
-\label{tab:latency}
+\input{generated/hypotheses_table}
+\caption{The pre-registered hypotheses of the teaching test and their verdicts. The gate for H1 is a lower 95\% Wilson bound of at least 0.80 over asks with the untaught rate below 0.20; for H2 a taught pass rate of at least 0.95 and not more than one ask below the untaught rate; for H3 at least 0.95.}
+\label{tab:hypotheses}
 \end{table}
-
-\paragraph{Teaching: facts, rules and procedures (T2).}
-\Cref{tab:teaching} is the test split of \cref{sec:evaluation}, run once under \code{prereg/teaching-test.md} (run \code{teaching-test-20261010};
-\TeachScenarios{} scenarios, \TeachAsks{} asks; Qwen3-8B, non-thinking, CUDA). Untaught, the model answered none of the questions about the invented facts
-(\TeachFactUntaught{}); with the ledger of a session that had been taught, in a new session, it answered \TeachFactTaught{} as taught. A fact that was taught and then corrected was
-answered as corrected and never as first taught, a fact taught and then forgotten was not told, and unrelated questions kept their answers (the last two rows are leak and disturbance checks: both arms should pass, and they do). Sixteen facts taught in one
-session were each recalled from the ledger.
-
-Three results do not meet the pre-registered gate. The procedure kind has only \(6\) asks, so its interval (lower bound \TeachProcedureLow{}) cannot reach 0.80 even when every ask passes: the gate is not met, and the claim for procedures needs more scenarios, which
-would be a new pre-registered set. The rule kind has eight asks and the same limit. And two rules taught together were not both obeyed: every reply ended with ``over'' but none used ``captain'', which the same rule taught alone had
-produced in every reply. That is a measured failure of the multi-rule case in one scenario. The agent restated every teaching utterance for confirmation (\TeachUnderstood{} of \TeachTeachings{}), but these utterances were written in the forms the plain reader knows, so that number tests the
-protocol, not the reader.
 
 \begin{table}[t]
 \centering\small
@@ -35,25 +28,20 @@ protocol, not the reader.
 \label{tab:teaching}
 \end{table}
 
-\paragraph{Taking a teaching back inside the conversation (T2, addendum).}
-A rule that the user has taken back kept being followed in the same conversation, because the model followed its own earlier replies (two dev scenarios failed on all six asks), and a note telling the model the rule was cancelled
-made it worse, since it named the rule. The agent now starts the conversation over when a teaching is taken back. Under \code{prereg/teaching-retract.md}, five scenarios (one rule, four facts), asked in the same session after ``Forget that'',
-passed \RetractPassed{} asks (run \code{teaching-retract-20261010}). The control arm, which was taught nothing, passes the same absence checks, so this shows that the taught content did not come back, not that anything was learned. The price is that
-the conversation so far is gone from the model's view.
+\paragraph{Taking a teaching back in the conversation that heard it (T2).}
+Under \code{prereg/teaching-retract.md}, five scenarios (one rule with three asks, four facts with two) were asked in the same session after ``Forget that''; all \RetractPassed{} asks passed (lower bound \RetractLow{}; run \code{teaching-retract-20261010}). The check is the absence of the taught content, the control arm passes it
+trivially, and only one scenario is a rule, so this shows that the taught content did not come back and not that anything was learned. It holds because the conversation starts over: with the conversation kept, a rule taken back was still followed because the model followed its own earlier replies (development scenarios, six of six asks failed).
 
-\paragraph{Teaching by voice (T4, partial).}
-Three scripted conversations were run end to end: the user's turns rendered in one synthetic voice and recognised, the agent hearing only the recognised text, its replies spoken. Under \code{prereg/teaching-spoken.md}, \SpokenPassed{} met their pre-registered conditions:
-a corrected fact was restated, confirmed and recalled; a rule was restated, confirmed, obeyed, taken back by ``Forget that'', and not obeyed after; a procedure was restated and told. The recogniser turned ``atlas seven'' into ``\SpokenHeardServer{}'' and ``quartz'' into
-``court's''; the agent restated what it heard, which is where the user would catch it, and kept what it heard. These are three conversations in one voice, a demonstration that the path works and not a rate; the first runs of the same conversations found two defects (\cref{sec:system}).
-
-\paragraph{A defect the dev split found.}
-The first dev run gave the taught arm exactly the answers of the untaught one: everything was kept, nothing reached the model. The live addendum had been applied outside the
-wrapper that sets the system turn, which then replaced it. It was fixed with a test that fails on the wrong order and passes on the right one; the second dev run, after the fix, passed every ask. Neither dev run is a result.
+\paragraph{Teaching by voice (T4).}
+Three scripted conversations were run end to end under \code{prereg/teaching-spoken.md}: the user's turns rendered in one synthetic voice and recognised, the agent hearing only the recognised text, its replies spoken. All \SpokenPassed{} met their pre-registered conditions. In the first, a spoken fact was restated, confirmed and recalled; the recogniser heard ``atlas seven'' as ``\SpokenHeardServer{}'', the agent restated what it heard, the user confirmed, and the wrong value is what was recalled. In the second, a rule was
+restated, confirmed, obeyed, taken back by ``Forget that'', and not obeyed after. In the third, a procedure was restated and told, though ``quartz'' was heard as ``court's'' and the restatement and the answer carry that. These are three conversations in one voice under a persona prompt, a demonstration that the path works and not a rate. Their first runs found
+that the pronunciation desk took ``Forget that'' before the ledger did (it is now routed to the kind taught last), and the retraction behaviour above.
 
 \paragraph{Reading natural phrasings (T1, T3).}
-\Cref{tab:reading} scores the readers on the test split of \(121\) authored utterances (\(80\) in test; run \code{teaching-read-20261010}). The plain reader never fired on a non-teaching and found \ReadPlainFound{} teachings;
-the model reader found \ReadModelFound{} and fired on \ReadModelFired{} non-teachings. The plain reader's misses are the point of the model reader: ``you got that wrong, the build server is atlas'', ``keep your answers short from now on'', ``to rotate the keys: freeze deploys, mint the new pair, then retire the old pair'' are teachings in
-forms its openers do not list. One development false fire of the plain reader (``Next time I will bring coffee'') was fixed before the test split was scored. The utterances are written by the implementer, so these numbers measure coverage of phrasings we thought of, not of the ones users produce; that is the first thing a real corpus must change.
+\Cref{tab:reading} scores the readers on the test split of the authored utterances (\(80\) of \(121\): 42 teachings and 38 non-teachings; run \code{teaching-read-20261010}). The plain reader never fired on a non-teaching (0 of 38) and found \ReadPlainFound{} teachings, so the gate of T1 is met by it; the model reader found \ReadModelFound{} and fired on \ReadModelFired{} non-teachings
+(``Please don't be late'' was read as a rule), so T1's gate is not met by the model reader, and one fire in 38 does not exclude a false-fire rate of several per cent. Asking the model only when the plain reader finds nothing gives the same numbers, because the plain reader never fires on a non-teaching. Test utterances only the model found include ``no no it's Monday not Friday'', ``the invoices go out on Fridays'',
+``don't act until I say go'' and ``the way we onboard a customer is to send the welcome mail, schedule the kickoff, and create their workspace''. The model missed ``the deploy window is Thursday at 14:00 by the way'' and read ``when I say the usual, I mean the weekly report'' as a fact. A development false fire of the plain reader (``Next time I will bring coffee'') was fixed before the test split was scored.
+The utterances are written by the implementer, so these numbers measure coverage of phrasings we thought of, not of the ones users produce.
 
 \begin{table}[t]
 \centering\small
@@ -62,33 +50,19 @@ forms its openers do not list. One development false fire of the plain reader (`
 \label{tab:reading}
 \end{table}
 
-\paragraph{The recogniser as a judge of pronunciation (a screen, not a result).}
-To find words a pronunciation experiment could use, \PilotSentences{} sentences (53 names, each in two carrier sentences) were spoken and recognised by one
-recogniser (run \code{pilot-names-20261009}). \PilotDiffering{} came back different from the text after normalisation, but \PilotEmpty{} of those were empty transcripts
-and others were cut off or repeated their last words; these are artefacts of one-shot recognition, not mispronunciation. Genuine candidates also appear
-(for example Faneuil heard as ``phoneil'', Rittenhouse as ``written house''). The consequence for the design is in \cref{sec:evaluation}: a pronunciation claim needs
-two agreeing recognisers and a listener.
+\subsection{How the agent speaks}
 
-\paragraph{A tail of silence before recognition (a screen).}
+\paragraph{A tail of silence before recognition.}
 Of \TakesN{} takes in one pinned voice (run \code{takes-pilot-20261009}), the streaming transducer returned a transcript differing from the text for
 \FirstRecogniserRaw{} when the take ended with the speech and for \FirstRecogniserTailed{} when 0.6\,s of silence followed it; the fixed-window
 recogniser differed for \SecondRecogniserRaw{} and \SecondRecogniserTailed{}. Both recognisers, given the tail, heard within the word-error bound
-\TakesAgreed{} of \TakesN{} takes; they disagreed on \TakesContested{}. This motivates the two-recogniser, tail-padded judge of
-\cref{sec:evaluation}; twenty takes are a screen, not a result.
+\TakesAgreed{} of \TakesN{} takes; they disagreed on \TakesContested{}. A take is therefore recognised with a tail of silence, and a pronunciation judgement needs two recognisers that agree; twenty takes are a screen, not a result.
 
-\paragraph{The training machinery learns a planted reward (a gate, not C4).}
-Before any claim about naturalness can be tested, the loop that trains the synthesizer from scores of its own takes has to be shown to
-work. With a reward that has a known answer (fewer codec frames per word, i.e.\ speaking faster), \GateUpdates{} updates over groups of \GateGroup{} takes moved the
-held-out sentences from \GateFramesBefore{} to \GateFramesAfter{} frames per word while the word error rate of the held-out takes, heard by the
-streaming recogniser, went from \GateWerBefore{} to \GateWerAfter{}; the KL estimate to the original policy reached \GateKlLast{} at the last update
-(run \code{rl-speed-gate-20261010}; eight held-out sentences, three takes each, one run and one seed). This shows the policy is trainable and
-generalizes across sentences; it also shows how a reward is exploited, which is why the reward of \cref{sec:formalism} carries a word-error term and the
-evaluation a human preference test.
-
-\Cref{tab:methods} puts the same gate under the two baselines the claim has to beat, with the same sentences, takes per update and
-seed: imitating the best take of each group moved the held-out sentences least, and the group-advantage update most, with the pairwise update between them
-(runs \code{rl-speed-dpo-20261010}, \code{rl-speed-best-of-n-20261010}). On a planted reward this orders the methods by how much of the group they use; it says nothing yet about naturalness,
-and one seed on eight held-out sentences cannot separate methods that are close.
+\paragraph{A planted reward (S1).}
+Before any claim about naturalness can be tested, the loop that trains the synthesizer from scores of its own takes has to move a policy. With a reward that has a known answer (fewer codec frames per word, i.e.\ speaking faster), \GateUpdates{} updates over groups of \GateGroup{} takes moved the held-out sentences from \GateFramesBefore{} to \GateFramesAfter{} frames per word
+while the recognised word error rate of the held-out takes went from \GateWerBefore{} to \GateWerAfter{}; the KL estimate to the original policy reached \GateKlLast{} at the last update (run \code{rl-speed-gate-20261010}; eight held-out sentences, three takes each, one run and one seed). \Cref{tab:methods} puts the same gate under the two baselines, with the same sentences, takes per update, seed and number of updates.
+GRPO ended lowest in frames per word, the pairwise step (DPO) \(0.12\) above it and imitating the best take of each group \(0.73\) above it; the first difference is within what one seed on eight sentences can resolve, and GRPO's word error rate rose to nearly twice its start while the other two did not. The reward here is frames per word alone, not the reward of \cref{sec:formalism}.
+The final KL estimates (GRPO 0.57, best-of-n 0.30) are not comparable at equal drift, and the pairwise step does not estimate one. This shows the optimiser moves a policy and that a reward is exploited, which is why the reward of \cref{sec:formalism} carries a word-error term; it says nothing about naturalness.
 
 \begin{table}[t]
 \centering\small
@@ -97,13 +71,9 @@ and one seed on eight held-out sentences cannot separate methods that are close.
 \label{tab:methods}
 \end{table}
 
-\paragraph{Reading what a user says (C1, a baseline).}
-The rule-based readers of \cref{sec:formalism} were run on \ExtractTestSize{} authored utterances of the test split (the utterances were written, with the
-gold label of what the user meant, before the readers were run, and the readers were not changed after; run \code{extraction-rules-20261010}). \Cref{tab:extraction} shows
-that the readers fired on no utterance they should not have (\ExtractFalsePositives{} false positives, near-misses such as ``Do you pronounce Jefferson correctly?'' included) and
-missed a share of the ways people phrase a correction that differs by reader (the recall column). That is the intended trade: a false lesson is worse than a missed one, and a
-missed one costs a repetition. These utterances are written by the implementer, so the table measures conformance to the specification, not accuracy on users;
-it is the baseline a model-assisted reader has to beat on utterances written after it is frozen.
+\paragraph{Reading directives about how to speak (S2).}
+The plain readers of directives about how to speak (\cref{sec:formalism}) were run on the test split of \ExtractTestSize{} authored utterances, written with their gold label before the readers were run and not changed after (run \code{extraction-rules-20261010}): 101 directives and 29 non-directives, among them near-misses such as ``Say hello to the delegates'' and ``What does pronounce mean?''.
+\Cref{tab:extraction} shows that no reader fired on a non-directive (\ExtractFalsePositives{} false positives in 29, so a false-fire rate above about 12\% is excluded at 95\%) and that recall differs by reader. A missed directive costs the user a repetition and a false lesson costs more, which is the intended trade. These utterances are written by the implementer, so the table measures conformance to the specification, not accuracy on users.
 
 \begin{table}[t]
 \centering\small
@@ -112,11 +82,19 @@ it is the baseline a model-assisted reader has to beat on utterances written aft
 \label{tab:extraction}
 \end{table}
 
-\paragraph{Speech understanding without a transcript (C8, failed).}
-A projector trained to put the recogniser's encoder features into the language model's embedding space produced fluent persona answers that were often
-about the wrong topic: on 12 held-out questions the word F$_1$ against the text path's answer was 0.299 from speech against 0.489 for the cascade, and the answer named the
-topic in 4 of 12 against 9 of 12 (repository roadmap, M4). One voice and 25 templated topics; the gate was not met and no redesign has been trained. Speech-in is
-excluded from this paper's claims unless a redesign passes a gate fixed before it is trained.
+\subsection{Latency and a negative result}
 
-\paragraph{Everything else.}
-C1--C5 and C7 have no result: \unmeasured.
+\paragraph{First sound of the speaking agent (L1).}
+\Cref{tab:latency} shows \LatencyTurns{} spoken questions answered by the cascade of \cref{sec:system} (Qwen3-8B, synthetic voice, seed 1) on \LatencyGpu{} with the CUDA backend, run \code{\LatencyRunId}. The first sound arrives \FirstSoundPfifty{}\,s after the end of the question at the median and \FirstSoundPninetyfive{}\,s at the 95th percentile.
+The targets of 1.5\,s and 2.0\,s are met in this run. It is one run in one process on synthetic speech, with no repeats or intervals and no real speech, so the claim is partial.
+
+\begin{table}[t]
+\centering\small
+\input{generated/latency_table}
+\caption{Stages of a spoken turn, run \code{\LatencyRunId}. Whole-turn time is the card's cost, not the listener's wait: the audio is longer than the turn.}
+\label{tab:latency}
+\end{table}
+
+\paragraph{Speech understanding without a transcript (N1, failed).}
+A projector trained to put the recogniser's encoder features into the language model's embedding space produced fluent persona answers that were often about the wrong topic: on \SpeechInTurns{} held-out spoken questions the word F$_1$ against the text path's answer was \SpeechInF{} from speech against \CascadeF{} for the cascade, and the answer named the topic in \SpeechInTopic{} against \CascadeTopic{} (run \code{speech-in-20261009}).
+The gate was not met and no redesign has been trained, so the cascade is the speech path of this paper.

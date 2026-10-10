@@ -187,6 +187,28 @@ def main():
     macros["TeachFactUntaught"] = f"{kinds['fact']['untaught']}/{kinds['fact']['asks']}"
     macros["TeachProcedureLow"] = f"{wilson(kinds['procedure']['taught'], kinds['procedure']['asks'])[0]:.2f}"
 
+    # The pre-registered hypotheses of the teaching test, each with its verdict.
+    low = lambda k: wilson(kinds[k]["taught"], kinds[k]["asks"])[0]
+    rate = lambda k, arm: kinds[k][arm] / kinds[k]["asks"]
+    def verdict(ok):
+        return "met" if ok else "not met"
+    hyp = [
+        ("H1 fact", f"taught {kinds['fact']['taught']}/{kinds['fact']['asks']}, lower bound {low('fact'):.2f}; untaught {kinds['fact']['untaught']}/{kinds['fact']['asks']}", low("fact") >= 0.80 and rate("fact", "untaught") < 0.20),
+        ("H1 corrected fact", f"taught {kinds['correction']['taught']}/{kinds['correction']['asks']}, lower bound {low('correction'):.2f}; untaught {kinds['correction']['untaught']}/{kinds['correction']['asks']}", low("correction") >= 0.80 and rate("correction", "untaught") < 0.20),
+        ("H1 procedure", f"taught {kinds['procedure']['taught']}/{kinds['procedure']['asks']}, lower bound {low('procedure'):.2f}", low("procedure") >= 0.80 and rate("procedure", "untaught") < 0.20),
+        ("H2 forgotten stays forgotten", f"{kinds['retract']['taught']}/{kinds['retract']['asks']} (untaught {kinds['retract']['untaught']})", rate("retract", "taught") >= 0.95 and kinds["retract"]["taught"] >= kinds["retract"]["untaught"] - 1),
+        ("H2 unrelated answers unchanged", f"{kinds['unrelated']['taught']}/{kinds['unrelated']['asks']} (untaught {kinds['unrelated']['untaught']})", rate("unrelated", "taught") >= 0.95 and kinds["unrelated"]["taught"] >= kinds["unrelated"]["untaught"] - 1),
+        ("H3 restated for confirmation", f"{sum(k['understood'] for k in kinds.values())}/{sum(k['teachings'] for k in kinds.values())}", sum(k["understood"] for k in kinds.values()) / sum(k["teachings"] for k in kinds.values()) >= 0.95),
+    ]
+    lines = ["\\begin{tabular}{@{}l l l@{}}", "\\toprule", "Pre-registered hypothesis & Result & Verdict\\\\", "\\midrule"]
+    lines += [f"{h} & {r} & {verdict(ok)}\\\\" for h, r, ok in hyp]
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "hypotheses_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    macros["TeachFactScenarioLow"] = f"{wilson(kinds['fact']['scenarios'], kinds['fact']['scenarios'])[0]:.2f}"
+    macros["TeachRulesAsks"] = str(kinds["rule"]["asks"])
+    macros["TeachProcedureAsks"] = str(kinds["procedure"]["asks"])
+    macros["TeachRulesTwoTaught"] = f"{kinds['rules2']['taught']}/{kinds['rules2']['asks']}"
+
     # The readers of what a user says, on the test split of the authored utterances.
     gold = [json.loads(l) for l in (ROOT / "data/teaching/utterances.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     readings = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-20261010"]["file"]).read_text(encoding="utf-8"))}
@@ -198,7 +220,7 @@ def main():
         text = json.dumps(body).lower()
         return name.lower() == g["kind"] and any(w in text for w in g["key"].lower().split("|"))
 
-    readers = {"plain phrases": lambda r: r["plain"], "model": lambda r: r["model"], "plain, then model": lambda r: r["plain"] or r["model"]}
+    readers = {"plain phrases": lambda r: r["plain"], "model": lambda r: r["model"]}
     lines = ["\\begin{tabular}{@{}l r r r@{}}", "\\toprule", "Reader & Teachings found & Fired on a non-teaching & Misread a teaching\\\\", "\\midrule"]
     test = [g for g in gold if g["split"] == "test"]
     pos = [g for g in test if g["kind"] != "none"]
@@ -208,7 +230,7 @@ def main():
         wrong = sum(pick(readings[g["id"]]) is not None and not right(g, pick(readings[g["id"]])) for g in pos)
         fired = sum(pick(readings[g["id"]]) is not None for g in neg)
         lines.append(f"{name} & {found}/{len(pos)} & {fired}/{len(neg)} & {wrong}\\\\")
-        key = {"plain phrases": "Plain", "model": "Model", "plain, then model": "Both"}[name]
+        key = {"plain phrases": "Plain", "model": "Model"}[name]
         macros[f"Read{key}Found"] = f"{found}/{len(pos)}"
         macros[f"Read{key}Fired"] = f"{fired}/{len(neg)}"
     lines += ["\\bottomrule", "\\end{tabular}"]
@@ -230,6 +252,15 @@ def main():
     retract = json.loads((ROOT / runs["teaching-retract-20261010"]["file"]).read_text(encoding="utf-8"))
     asks = [o for r in retract["results"] for o in r["outcomes"]]
     macros["RetractPassed"] = f"{sum(o['taught_passes'] for o in asks)}/{len(asks)}"
+    macros["RetractLow"] = f"{wilson(sum(o['taught_passes'] for o in asks), len(asks))[0]:.2f}"
+
+    # Speech in without a transcript: the projector against the cascade, on the same held-out spoken questions.
+    speech_in = json.loads((ROOT / runs["speech-in-20261009"]["file"]).read_text(encoding="utf-8"))
+    macros["SpeechInTurns"] = str(speech_in["listen-adams.json"]["turns"])
+    macros["SpeechInF"] = f"{speech_in['listen-adams.json']['mean_word_f1_vs_text_path_answer']:.3f}"
+    macros["CascadeF"] = f"{speech_in['cascade-adams.json']['mean_word_f1_vs_text_path_answer']:.3f}"
+    macros["SpeechInTopic"] = speech_in["listen-adams.json"]["answers_mentioning_a_topic_word"]
+    macros["CascadeTopic"] = speech_in["cascade-adams.json"]["answers_mentioning_a_topic_word"]
 
     # Extraction study: the rule-based readers of a user's words, on the frozen test split.
     study = runs["extraction-rules-20261010"]

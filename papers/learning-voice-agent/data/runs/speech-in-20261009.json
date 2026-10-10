@@ -1,0 +1,22 @@
+{
+ "listen-adams.json": {
+  "turns": 12,
+  "mean_word_f1_vs_text_path_answer": 0.299,
+  "answers_mentioning_a_topic_word": "4/12",
+  "answer_word_error_rate_after_speaking": 0.11512028,
+  "total_seconds": {
+   "p50": 70.482895154,
+   "p95": 152.966743527
+  }
+ },
+ "cascade-adams.json": {
+  "turns": 12,
+  "mean_word_f1_vs_text_path_answer": 0.489,
+  "answers_mentioning_a_topic_word": "9/12",
+  "answer_word_error_rate_after_speaking": 0.030303031,
+  "total_seconds": {
+   "p50": 75.439510494,
+   "p95": 96.555111599
+  }
+ }
+}

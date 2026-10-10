@@ -3,20 +3,21 @@
 
 \section{Discussion, limits and ethics}\label{sec:discussion}
 
-\paragraph{What the results do not show.}
-Teaching is measured on utterances we wrote, fed as text in the main study; the spoken path is a demonstration of three conversations in one synthetic voice. Nothing is known yet about how
-people phrase a correction, how often they correct, whether they say yes to a restatement, or what a recogniser does to the names and numbers that matter most in a correction (in the spoken demonstration it heard ``atlas seven'' as ``Atlas SIV'' and ``quartz'' as ``court's'', and
-the agent kept what it heard, which is why a restatement is spoken back). Procedures and rules rest on a handful of asks; two rules taught together were not both obeyed; a procedure is stored and told, but nothing yet checks that the agent \emph{does} its steps with tools.
-Selection of what to tell the model is overlap of content words, which fails on paraphrase that shares no word with the teaching; the ledger is a prompt addendum, so a teaching also costs context at every turn it is selected, and a very large ledger will need a better selection. A taught
-fact is trusted over what the model believes; a user who is wrong makes the agent wrong. Within a conversation a retraction is not enough by itself, because the model's own earlier replies still follow what was taken back (seen in a development run); the agent therefore also tells the model what was taken back.
-The speech lessons (\cref{sec:formalism}) are applied for pronunciation only; imitation and supervised lessons are kept but not used, there is no trained naturalness judge, and the optimiser has been shown to learn a planted reward, not naturalness.
+\paragraph{What the results show.}
+An agent that restates, confirms, keeps and tells the model what its user taught can answer from a taught fact in a new session and replace a fact on correction; the taught content did not return after a request to forget, in the five scenarios that tested it; and the path worked through recognition of synthetic speech in three scripted conversations. Nothing is trained, so a teaching is effective on the next turn and costs only context. The model reader recognises many more phrasings as teachings than plain phrase matching, at the price of one false reading in 38 non-teachings, which the plain reader did not make.
+
+\paragraph{What they do not show.}
+Teaching is measured on utterances we wrote, fed as text in the main study; the spoken path is a demonstration of three conversations in one synthetic voice. Nothing is known about how people phrase a correction, how often they correct, whether they say yes to a restatement,
+or what a recogniser does to the names and numbers that matter most in a correction (here it heard ``atlas seven'' as ``Atlas SIV'' and ``quartz'' as ``court's'', and the agent kept what it heard, which is why the restatement is spoken back). Procedures and rules rest on a handful of asks and miss their gate; two rules taught
+together were not both obeyed; a procedure is stored and told, but nothing yet checks that the agent \emph{does} its steps with tools. One model was tested. What the model is told is chosen by overlap of content words, which fails on paraphrase that shares no word with the teaching, and the ledger is part of the prompt, so a
+large ledger costs context at every turn. A taught fact is trusted over what the model believes: a user who is wrong makes the agent wrong. Taking a teaching back starts the conversation over, which removes the conversation so far from the model's view.
+
+The speech results are those of a training gate on a planted reward, one seed and eight held-out sentences; they show that the optimiser moves a policy and say nothing about naturalness, which needs a judge calibrated against listeners and a blind human preference test. Latency was measured once, on synthetic speech.
 
 \paragraph{Threats to validity.}
-All speech so far is synthetic and all recognition is of synthetic speech. A single recogniser is a poor pronunciation judge. A prompted persona is not a trained one,
-and one voice seed is not a population of voices. Latency was measured once. A reward that a learned judge defines can be hacked; the probes of \cref{sec:evaluation}
-exist for that, and the human preference test on the frozen exam is the guard that cannot be.
+A single recogniser is a poor pronunciation judge (\cref{sec:results}); the prompt persona is not a trained one; one voice seed is not a population of voices; and checks by text conditions fail a reply that is right in other words, so the pass rates are conservative in that direction and optimistic where a
+check is the absence of a word.
 
 \paragraph{Ethics and consent.}
-A synthetic voice is always declared as a portrayal, in the type that describes a speaker (a speaker cannot be constructed without one), in every report and in a
-spoken statement at the start of a session. A user's recordings are kept local and named by digest; a lesson never holds audio. A user's voice is not cloned without
-their instruction, and a lesson can be removed together with its effect.
+A synthetic voice is always declared as a portrayal, in the type that describes a speaker (a speaker cannot be constructed without one), in every report and in a spoken statement at the start of a session. A user's recordings are kept local and named by digest; a lesson never holds audio.
+A teaching is kept only after the user has heard it restated and said yes, can be taken back, and is stored in a file the user can read and delete.

@@ -3,49 +3,25 @@
 
 \section{Evaluation design}\label{sec:evaluation}
 
-Each experiment has a pre-registration file committed before its data is collected: hypothesis, sample size, split,
-metric, test, margin and stopping rule. Sizes below are planned, and are fixed by a power analysis before the sets are
-frozen. Sets are named by content digest; a held-out set is read once per candidate recipe and the reads are logged.
+Three studies are pre-registered (\code{prereg/}): the teaching test, the in-conversation retraction test and the spoken conversations. The test split of the teaching study was registered before it was run; the retraction and spoken registrations were written after development runs of the same
+scenarios, which they describe, and before the runs that count. The reading study, the extraction study, the training gate, the latency run and the recogniser screens are exploratory: their sets and checks were written before the readers or models were scored, but no registration file precedes them.
+Sets are named by content digest. A held-out split is run once for a recipe; development runs are stated as such and are not results. Intervals are Wilson intervals over the asks (three per scenario, so correlated); the unit of resampling in the registration is the scenario, and at that level the intervals are wider.
 
-\paragraph{Statistics.}
-Comparisons are paired by item. A difference is tested with an exact sign test or a paired test with an interval; a claim of
-\emph{equivalence} or \emph{no regression} uses two one-sided tests against a margin fixed in advance, never the absence of a
-significant difference. Families of tests (words, voices) are corrected with Holm's procedure. Intervals are reported with every
-$p$-value.
+\paragraph{Teaching scenarios (T2).}
+Each scenario is a list of utterances that teach, optionally a ``forget that'', and asks with text checks written before any reply exists (\code{data/teaching}). The facts are about an invented company with values no model
+can know, so a right answer is evidence of teaching and not of memory. Kinds: a fact, a corrected fact (taught, then corrected), a fact that must be used rather than recalled, sixteen facts at once, a procedure, a rule,
+two rules at once, a fact taught and then forgotten, and a fact taught followed by unrelated questions. The same model answers twice: untaught, with an empty ledger, and taught, in a new session holding the ledger that a first
+session built from the scenario's utterances, each confirmed with a yes. Twenty scenarios are dev and fifty are test. A second set asks the same questions in the \emph{same} session after ``forget that''.
 
-\paragraph{Judges.}
-Intelligibility is the word error rate under two recognisers that must agree, with their known failure modes handled: a one-shot
-transducer can cut the end of a sentence or return nothing (\cref{sec:results}). Naturalness is judged by a learned
-pairwise model trained on a person's blind A/B ratings, and by a model judge if one can be run; every naturalness claim of the paper rests on
-blind human preference on a sampled subset of the frozen exam. The learned judge is validated on held-out pairs, on the rater's repeat
-consistency, on degraded controls that must rank worse, and on reward-hacking probes (mumbling, slowing and loudness must not win).
+\paragraph{Reading study (T1, T3).}
+Authored utterances in many phrasings, a third in the unpunctuated lower case a recogniser produces, each with its gold kind (none, fact, rule, procedure) and a key word the content must hold; one in three is dev. A reading is right
+for a teaching when its kind is the gold kind and its content holds the key, and right for a non-teaching when it is null.
 
-\paragraph{Experiments.}
-\begin{description}
-\item[E1, pronunciation (C2).] About 60 names and archaic words the synthesizer demonstrably gets wrong (screened by the two
-recognisers and a listener), taught once as lexicon lessons and tested in unseen carrier sentences; paired by word; plus untaught words as the
-no-regression arm.
-\item[E2, imitation (C3).] A reference clip and its words conditions synthesis of unseen sentences; speaker similarity (two embedding models),
-word error rate and blind preference against synthesis without the clip; held-out voices.
-\item[E3, preference learning (C4).] The group-relative optimiser over the codec policy against three baselines: the untouched synthesizer,
-supervised fine-tuning on the best-scored take of each prompt, and direct preference optimisation. A dev split is used for every
-debugging step; the exam is read only for a recipe that wins on dev. Gate: blind human preference sign test in favour, word error rate not
-worse by the margin, speaker similarity to the base voice within a bound, no drift on held-out text.
-\item[E4, sessions (C5).] Scripted correction sessions and a person's real sessions: after each session the corrected items are re-tested and
-held-out phrases are re-checked for regressions; a rollback must restore the earlier behaviour.
-\item[E5, agent tasks (C6).] Spoken tasks that need tools in a fixture workspace, checked by script, against the same tasks given as text;
-first-sound latency over at least three repeats on a card shown idle before and after.
-\end{description}
+\paragraph{Spoken conversations (T4).}
+Scripted conversations whose user turns are rendered in a synthetic voice and recognised before the agent hears them, with pass conditions fixed before the run.
 
-\paragraph{Real speech.}
-A set of about one hundred short prompts recorded by a person (questions, tool tasks, directives; quiet and noisy), kept local and named by digest, with
-transcripts verified by the speaker, is the only basis for any statement about real speech.
+\paragraph{Training gate (S1).}
+A reward with a known answer (fewer codec frames per word) checks that the optimiser moves a policy. The three methods share sentences, takes per update, seed and budget; the guard is the word error rate of the held-out takes under the streaming recogniser.
 
-\paragraph{Teaching experiments (T2--T4).}
-\emph{Scenarios.} Each scenario is a list of utterances that teach, a flag that says ``forget that'' afterwards, and asks with text checks written before any reply exists
-(\cref{sec:results}; \code{data/teaching}). The facts are about an invented company with values no model can know, so a right answer is evidence of teaching and not of memory.
-Kinds: a fact, a corrected fact (taught, then corrected), a fact that must be used rather than recalled, sixteen facts at once, a procedure, a rule, two rules at once, a fact taught and then forgotten, and a fact taught followed by unrelated questions.
-\emph{Arms.} The same model answers twice: untaught, with an empty ledger, and taught, in a new session holding the ledger a first session built from the scenario's utterances, each confirmed with a yes.
-The split is fixed in the generator: twenty scenarios are dev and the rest test, and the test split is run once for a recipe (\code{prereg/teaching-test.md}).
-\emph{Reading study (T1, T3).} Authored utterances in many phrasings, a third in the unpunctuated lower-case a recogniser produces, with their gold kind and a key word the content must hold; one in three is dev.
-\emph{Spoken conversations (T4).} Scripted conversations whose user turns are rendered in a synthetic voice and recognised before the agent hears them, with pass conditions fixed before the run.
+\paragraph{Intelligibility.}
+Intelligibility is the word error rate under a recogniser. A one-shot transducer can cut the end of a sentence or return nothing, so a take is recognised with a tail of silence (\cref{sec:results}).

@@ -3,7 +3,7 @@
 
 \section{Teachings: a formal account}\label{sec:teachings}
 
-Definitions follow the implementation (\code{core::teaching}); each statement is the specification of a test in that module.
+Definitions follow the implementation (\code{core::teaching}).
 
 \paragraph{Teachings.}
 A teaching is one of: a \emph{fact} $(\sigma,c,\kappa)$, a subject $\sigma$, the claim $c$ as the user stated it, and whether it corrects an
@@ -35,7 +35,7 @@ procedures never withdraw one another. \emph{Retracting} an entry removes it fro
 retracting the last removes the most recently kept active entry. A retraction does not restore a fact it had replaced.
 
 \paragraph{What the agent is told.}
-At a turn where the user said $q$, the agent is told every active rule, and the at most $k$ active facts and procedures that share the most content words with $q$ (words of
+At a turn where the user said $q$, the agent is told every active rule, and the at most $k=5$ active facts and procedures that share the most content words with $q$ (words of
 more than two letters, minus common function words, with a plural ``s'' removed; ties go to the more recent), as a block appended to its system turn. A turn that none of these bear on is told nothing.
 The block says to treat facts as true and to follow rules and procedures, and to say so if one conflicts with what the agent was told earlier.
 
@@ -46,8 +46,7 @@ A plain ``forget that'' retracts the last teaching.
 
 \section{Speech lessons: a formal account}\label{sec:formalism}
 
-Definitions follow the implementation (\code{core::speech\_lesson}); each statement below is the
-specification of a test in that module. This layer is about how the agent speaks, and is kept apart from teachings.
+Definitions follow the implementation (\code{core::speech\_lesson}). This layer is about how the agent speaks, and is kept apart from teachings.
 
 \paragraph{Directives.}
 A transcript $u$ is read to at most one directive. Let $\operatorname{norm}(u)$ be $u$ with leading and
@@ -60,6 +59,10 @@ splits it into a word $w$ and a spelling $s$ (quotes and a trailing full stop or
 both non-empty and neither containing a space. Any other $u$ is not a directive. The reading is
 deliberately conservative: a false lesson is worse than a missed one, and a missed one costs the user
 a repetition.
+
+\paragraph{Feedback, comparison, confirmation, retraction.}
+Four further readers listen to the turns after the agent has spoken. \emph{Feedback} reads a plain ``that sounded wrong'' (reject) or ``that sounded good'' (approve) about the last utterance; \emph{comparison} reads which of two takes of the same words the user prefers (``the second one'', ``the first was better'');
+\emph{confirmation} reads a short plain yes or no to an offer; \emph{retraction} reads ``forget that''. Each accepts only a short, plain turn, for the same reason as above.
 
 \paragraph{Lessons and objectives.}
 A lesson is a record $(h, e, o, \pi)$: what was heard $h$ (kept as heard), an exemplar $e$, an objective

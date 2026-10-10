@@ -3,39 +3,32 @@
 
 \section{Introduction}\label{sec:intro}
 
-\paragraph{Question.}
-When a person works with an agent by voice, what do they correct? Rarely how a word is pronounced. Far more often: ``that deadline is
+When a person works with an agent by voice, what do they correct? Often not how a word is pronounced, but what the agent said or did: ``that deadline is
 Monday, not Friday'', ``never push to main without asking me'', ``here is how we deploy''. Can an agent keep such corrections, apply them
-the next time they bear on what it does, replace what they correct, and give them up when told, without the user having to repeat
-themselves and without anything else getting worse? And can the same machinery carry the smaller class of corrections about how the
-agent speaks? This paper formalises the setting, reports the experiments that exist, states the pre-registered gates they were held
-to, and lists what failed. A finding belongs here if it changes what is claimed about an agent that turns spoken or typed
-feedback into stored, applied, reversible knowledge of facts, rules, procedures and manner of speech.
+the next time they bear on what it does, replace what they correct, and give them up when told, without the user repeating themselves and
+without anything else getting worse? And can the same machinery carry the smaller class of corrections about how the agent speaks?
 
 \paragraph{Contributions.}
-(i) A typed account of what a user teaches (\cref{sec:teachings}): fact, rule and procedure, with a conservative reader, a model-assisted
-reader that is checked as carefully as the user's words, and a ledger with supersession and retraction.
-(ii) A confirmation protocol: the agent restates, the user says yes, and only then is it kept (\cref{sec:system}).
-(iii) A pre-registered evaluation on facts no model can know, with an untaught arm and a new-session arm
+(i) A typed account of what a user teaches---a fact, a rule or a procedure---with a conservative reader, a model-assisted reader whose output is validated before it can become a teaching, and a ledger with supersession and retraction (\cref{sec:teachings}).
+(ii) A confirmation protocol: the agent restates what it understood, the user says yes, and only then is it kept; when a teaching is taken back the conversation starts over, because the model's own replies would keep it alive (\cref{sec:system}).
+(iii) A pre-registered evaluation on facts no model can know, with an untaught arm and a new-session arm, that reports what passed its gate and what did not
 (\cref{sec:evaluation,sec:results}).
-(iv) The earlier layer for how the agent speaks: pronunciation, imitation and preference lessons, and a group-relative optimiser over the
-synthesizer with its baselines, tested so far on a planted reward only.
+(iv) The layer for how the agent speaks (pronunciation, imitation, preference), a group-relative optimiser over the synthesizer shown to learn a planted
+reward against two baselines, and a spoken agent whose first sound is measured (\cref{sec:formalism,sec:results}).
 
 \paragraph{Status of the claims.}
-\Cref{tab:claims} lists the claims. At the time of this draft three claims about teaching, and the latency of the speaking
-agent, have partial evidence; speech understanding without a transcript has failed its gate; the rest are pending. The tables of this paper are generated from stored run reports
+\Cref{tab:claims} lists every claim this paper makes with its status and the stored run that supports it. ``Partial'' means some of its gate is met or measured, or
+the evidence is a single run; ``failed'' means the test ran and the gate was not met. The tables of this paper are generated from the stored run reports
 (\cref{sec:repro}); a claim cannot be marked met without a run that supports it.
 
 \begin{table}[t]
 \centering\small
 \input{generated/claims_table}
-\caption{The claims of this paper and the status of their evidence. ``Pending'': no test has run.
-``Partial'': some of the gate is measured. ``Failed'': the test ran and the gate was not met.}
+\caption{The claims of this paper, their status and their gate. T: teaching; S: how the agent speaks; L: latency; N: a negative result.}
 \label{tab:claims}
 \end{table}
 
 \paragraph{What is not claimed.}
-Every voice in this work is a synthetic theatrical portrayal; no recording of Samuel Adams or Thomas
-Jefferson exists, so no voice here is theirs, and every report and spoken session carries that label.
-Until a real-speech test set is recorded and measured, nothing is claimed about real human speech.
-``Trained persona'' is not claimed: the persona is a language model under a system prompt (\cref{sec:system}).
+Every voice in this work is a synthetic theatrical portrayal; no recording of Samuel Adams or Thomas Jefferson exists, so no voice here is theirs, and every
+report and spoken session carries that label. Nothing is claimed about real human speech or about how users phrase corrections: the utterances are written by us
+(\cref{sec:discussion}). ``Trained persona'' is not claimed: the persona is a language model under a system prompt (\cref{sec:system}).

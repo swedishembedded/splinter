@@ -3,8 +3,7 @@
 
 \section{Related work}\label{sec:related}
 
-Only works that were read are cited; further related work is listed in the repository's materials
-file as unverified until read.
+Only works that were read are cited.
 
 \paragraph{Reinforcement learning on a speech model.}
 HappyRobot describes tuning a text-to-speech model with reinforcement learning: several takes of
@@ -22,15 +21,5 @@ Markup standards give a synthesizer explicit pronunciations: SSML phoneme and le
 are the same idea learned from a conversation rather than authored, with provenance, an owner and a
 rollback.
 
-\paragraph{Speaking in a given manner from an example.}
-Neural codec language models synthesize speech conditioned on a short reference clip
-\citep{wang2023valle}; the Qwen3 synthesizer used here takes a reference clip and its words in the same way
-\citep{qwen3}. Our in-context lessons route a user's example to such a prompt.
-
-\paragraph{Adaptation.}
-Supervised lessons train low-rank adapters \citep{hu2021lora} on (text, recording) pairs, with the base voice
-as the anchor.
-
 \paragraph{Teaching an agent.}
-Work on agent memory, learning instructions from feedback, and editing a model's stored knowledge is relevant to \cref{sec:teachings} and has not been surveyed for this draft; none is cited
-because none was read. Our setting differs in two ways that are testable: nothing is trained (a teaching is kept beside the model and put in front of it), and every teaching is restated and confirmed before it is kept and can be taken back.
+This paper makes no comparison with work on agent memory, learning from feedback or editing a model's knowledge: none was read for it, so none is cited.

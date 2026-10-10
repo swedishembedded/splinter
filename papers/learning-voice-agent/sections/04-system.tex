@@ -8,7 +8,7 @@ A recording is recognised, a text model answers under a system turn that makes i
 answer is spoken. Recognition is Nemotron 3.5 ASR (streaming transducer); synthesis is Qwen3-TTS 12~Hz, 0.6B
 (a talker that predicts the first codec codebook, a small predictor for the other fifteen, and a causal codec),
 held resident on the device; the text model is Qwen3-8B in non-thinking mode \citep{qwen3}. The persona is the system
-turn alone: no adapter has passed its release gate (\cref{tab:claims}, C7), so the agent is \emph{prompted}, not trained.
+turn alone: the agent is \emph{prompted}, not trained.
 
 \paragraph{Speaking as the model writes.}
 Text arrives in pieces. A piece goes to the voice at the end of a sentence; the first piece goes earlier, at the first clause
@@ -16,22 +16,18 @@ end after four words, or after ten words if none comes, because the wait for the
 Speaking runs on its own thread beside the model through a bounded queue. The synthesizer hands out sound after
 eight codec frames (0.64\,s of speech) and thereafter as the utterance grows; because the codec is causal, the samples of a prefix of
 the codes are the first samples of the whole, so each decode re-runs the prefix at 8, 24, 72, \ldots\ frames and emits only
-what is new (the streamed audio equals the whole decode exactly, a test of the engine).
+what is new (the streamed audio equals the whole decode exactly).
 
 \paragraph{An agent that acts.}
 The same loop runs a sven agent under the persona. The user's recognised turn is the agent's message; the words the
 model writes are spoken as they are written; tool calls and their output are other events and are not spoken. The session
-opens with a spoken statement that the voice is a theatrical portrayal. Tools are offered to the model only when a workspace is
-given (a test of the agent crate).
+opens with a spoken statement that the voice is a theatrical portrayal. Tools are offered to the model only when a workspace is given.
 
 \paragraph{Backend.}
-Which backend drives the hardware is a flag of the program (\code{--backend cuda}); a program that does not set it gets the
-backend the hardware probe prefers, which on the test host was not CUDA. A run's backend is read from the device handle,
-not from the adapter line the runtime prints.
+Which backend drives the hardware is a flag of the program (\code{--backend cuda}); every run reported here used CUDA, read from the device handle and not from the adapter line the runtime prints.
 
 \paragraph{A teachable agent.}
 The agent of the previous paragraph is wrapped by a layer that hears each turn before the model does (\code{agent::teach}). A turn the plain reader (or, with a flag, the model reader)
 reads as a teaching is answered by the agent itself with a restatement; a plain yes keeps it in the ledger of \cref{sec:teachings}, written to a file between sessions if one is given.
-Every other turn goes to the model with the ledger's selection appended to its system turn. The addendum is set after the agent's own system turn, because that turn replaces
-every other system turn on the request: in the first development run the order was the other way round and nothing taught reached the model (\cref{sec:results}). A spoken ``forget that'' is routed to whichever
-kind of lesson, a pronunciation or a teaching, was kept last. What the agent says on its own account goes through the same callback as the model's words, so the voice speaks it like any other reply.
+Every other turn goes to the model with the ledger's selection appended to its system turn. The addendum is set after the agent's own system turn, because that turn replaces every other system turn on the request. A spoken ``forget that'' is routed to whichever
+kind of lesson, a pronunciation or a teaching, was kept last. When a teaching is taken back the conversation starts over: a model follows its own earlier replies more closely than a note that they no longer apply, and naming the cancelled rule to it made it follow the rule. What the agent says on its own account goes through the same callback as the model's words, so the voice speaks it like any other reply.

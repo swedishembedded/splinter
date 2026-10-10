@@ -30,30 +30,22 @@
 \input{generated/macros}
 
 \newcommand{\code}[1]{\texttt{#1}}
-% A number that has not been measured is printed as such, never as zero.
-\newcommand{\unmeasured}{\textcolor{red!60!black}{\textit{not yet measured}}}
 
 \title{A Voice Agent That Learns from Being Corrected:\\
 Facts, Rules and Procedures, and How It Speaks}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
-\date{October 2026 --- working draft; claims are pending until their evidence is stored}
+\date{October 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Most of what a user corrects in a working agent is not how it speaks. They say that a fact it stated is wrong, that it must
-never do something again, or how a piece of work is done here. We treat such feedback as data. A turn, spoken or typed, is read into
-a typed \emph{teaching}---a fact, a rule or a procedure---by a conservative reader that a model can assist; the agent restates what it
-understood, keeps it only on a plain yes, tells the model what it has been taught on the turns it bears on, lets a corrected fact replace
-the old one, and takes a teaching back on request. On facts about an invented company that no model can know, a new session of an
-8B model holding the ledger answered \TeachFactTaught{} questions as taught against \TeachFactUntaught{} without it, kept corrected
-facts corrected, and left forgotten facts and unrelated answers alone; two rules taught at once were not both obeyed. A model reader found
-\ReadModelFound{} teachings in authored natural phrasings where plain phrase matching found \ReadPlainFound{}. The same layer carries
-lessons about how to speak (pronunciation, imitation, preference), whose training machinery is shown to learn a planted reward but not yet
-naturalness. All voices are synthetic theatrical portrayals. Every claim is listed with its status in \cref{tab:claims}; the utterances
-are authored by us and fed mostly as text, so the results measure the mechanism and not yet how people phrase corrections.
+Most of what a user corrects in a working agent is not how it speaks. They say that a fact it stated is wrong, that it must never do something again, or how a piece of work is done here. We
+treat such feedback as data. A turn, spoken or typed, is read into a typed \emph{teaching}---a fact, a rule or a procedure---by a conservative reader that a model can assist; the agent restates what it understood,
+keeps it only on a plain yes, tells the model what it has been taught on the turns it bears on, lets a corrected fact replace the old one, and starts the conversation over when a teaching is taken back. On facts about an invented company that no
+model can know, a new session of an 8B model holding the ledger answered \TeachFactTaught{} questions as taught against \TeachFactUntaught{} without it, kept corrected facts corrected, and did not return forgotten facts or disturb unrelated answers; the procedure gate was not met for lack of asks, and two rules taught at once were not both obeyed. A model reader found \ReadModelFound{} teachings in authored natural phrasings where plain phrase matching found \ReadPlainFound{}, with one false reading in 38 non-teachings, and
+\SpokenPassed{} scripted spoken conversations passed end to end through recognition. The same layer carries lessons about how to speak; its group-relative optimiser over the synthesizer lowers frames per word on a planted reward below two baselines in one seed, which shows that it moves a policy and not that it improves naturalness. All voices are synthetic theatrical portrayals. The utterances are authored by us, so the results measure the mechanism and not yet how people phrase corrections.
 \end{abstract}
 
 \input{sections/01-introduction}

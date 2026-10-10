@@ -21,12 +21,18 @@ pub struct Check {
     /// The reply contains at least one of these (ignoring case); empty means no requirement.
     #[serde(default)]
     pub any_of: Vec<String>,
+    /// The reply contains every one of these (ignoring case).
+    #[serde(default)]
+    pub all_of: Vec<String>,
     /// The reply contains none of these (ignoring case).
     #[serde(default)]
     pub none_of: Vec<String>,
     /// The reply has at most this many words.
     #[serde(default)]
     pub max_words: Option<usize>,
+    /// The reply begins with this as a whole word, ignoring case and leading punctuation and space.
+    #[serde(default)]
+    pub starts_with: Option<String>,
     /// The reply ends with this, ignoring case and trailing punctuation and space.
     #[serde(default)]
     pub ends_with: Option<String>,
@@ -43,7 +49,16 @@ impl Check {
                 .trim_end_matches(|c: char| !c.is_alphanumeric())
                 .ends_with(&tail.to_lowercase())
         };
+        let begins = |head: &String| {
+            let head = head.to_lowercase();
+            lower
+                .trim_start_matches(|c: char| !c.is_alphanumeric())
+                .strip_prefix(head.as_str())
+                .is_some_and(|rest| !rest.chars().next().is_some_and(char::is_alphanumeric))
+        };
         (self.any_of.is_empty() || self.any_of.iter().any(has))
+            && self.all_of.iter().all(has)
+            && self.starts_with.as_ref().is_none_or(begins)
             && !self.none_of.iter().any(has)
             && self
                 .max_words
@@ -87,5 +102,24 @@ mod specs {
         assert!(rule.passes("Roger that, over."));
         assert!(!rule.passes("Roger that, over and out."));
         assert!(!rule.passes("This reply is far too long, over."));
+    }
+
+    #[test]
+    fn every_word_of_all_of_and_the_start_must_be_there() {
+        let both = Check {
+            all_of: vec!["captain".into(), "copy".into()],
+            starts_with: Some("right".into()),
+            ..Check::default()
+        };
+        assert!(both.passes("Right, captain, copy that."));
+        assert!(!both.passes("Right, captain."), "copy is missing");
+        assert!(
+            !both.passes("Captain, copy that, right."),
+            "it does not start with right"
+        );
+        assert!(
+            !both.passes("  Alright, captain, copy."),
+            "a word that merely ends in right does not start it"
+        );
     }
 }
