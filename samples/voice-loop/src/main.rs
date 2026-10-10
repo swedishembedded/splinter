@@ -85,6 +85,8 @@ enum Command {
     Takes(voice_loop::takes::TakesArgs),
     /// Talk to a sven agent that answers as the persona: its words are spoken as they are written.
     Agent(voice_loop::agent::AgentArgs),
+    /// Fit the naturalness judge to a listener's blind choices and report what it predicts.
+    Judge(voice_loop::judge::JudgeArgs),
     /// Teach the persona how to speak: hear a directive and keep what it teaches.
     Teach(voice_loop::teach::TeachArgs),
     /// Speak a sentence in the persona's synthetic voice.
@@ -367,6 +369,7 @@ fn main() -> Result<()> {
         Command::SpeechRl(args) => voice_loop::rl::run(&args),
         Command::Takes(args) => voice_loop::takes::run(&args),
         Command::Agent(args) => voice_loop::agent::run(&args),
+        Command::Judge(args) => voice_loop::judge::run(&args),
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {
             models,

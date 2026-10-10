@@ -137,6 +137,12 @@ impl Judge {
             .collect()
     }
 
+    /// The weight of each feature, on standardised features.
+    #[must_use]
+    pub fn weights(&self) -> &[f32] {
+        &self.weights
+    }
+
     /// The judge's score of a take. Only differences between takes of one
     /// sentence mean anything.
     #[must_use]
@@ -163,6 +169,26 @@ impl Judge {
             .count();
         right as f32 / comparisons.len().max(1) as f32
     }
+}
+
+/// The share of `comparisons` a judge predicts when it is fitted on all the
+/// others and asked about the one left out, over every choice of the one left
+/// out. With the few hundred comparisons a listener can give, this is the
+/// honest estimate of agreement with that listener on comparisons not yet made.
+#[must_use]
+pub fn leave_one_out(comparisons: &[Comparison], options: &FitOptions) -> f32 {
+    let right = (0..comparisons.len())
+        .filter(|&held| {
+            let rest: Vec<Comparison> = comparisons
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != held)
+                .map(|(_, c)| c.clone())
+                .collect();
+            Judge::fit(&rest, options).agreement(&comparisons[held..=held]) > 0.5
+        })
+        .count();
+    right as f32 / comparisons.len().max(1) as f32
 }
 
 #[cfg(test)]
@@ -270,5 +296,24 @@ mod tests {
             heavy < light,
             "a heavy dissent moves the judge: {heavy} vs {light}"
         );
+    }
+
+    #[test]
+    fn leave_one_out_finds_the_signal_when_there_is_one_and_chance_when_there_is_none() {
+        let signal = leave_one_out(&comparisons(80, 4, 0.3), &FitOptions::default());
+        assert!(signal > 0.8, "{signal}");
+        let mut state = 5u64;
+        let none: Vec<Comparison> = (0..80)
+            .map(|_| {
+                let take = |s: &mut u64| (0..6).map(|_| lcg(s)).collect::<Vec<f32>>();
+                Comparison {
+                    winner: take(&mut state),
+                    loser: take(&mut state),
+                    weight: 1.0,
+                }
+            })
+            .collect();
+        let chance = leave_one_out(&none, &FitOptions::default());
+        assert!((chance - 0.5).abs() < 0.15, "{chance}");
     }
 }

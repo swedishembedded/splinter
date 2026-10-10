@@ -59,6 +59,7 @@ pub mod overlap;
 pub mod paired;
 pub mod predictive_gate;
 pub mod significance;
+pub mod speech_features;
 pub mod speech_judge;
 pub mod speech_reward;
 pub mod timeline_metrics;
