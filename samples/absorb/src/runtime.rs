@@ -112,3 +112,43 @@ pub fn writer(ctx: &splinter_sdk::Context, reference: &ModelRef) -> anyhow::Resu
     ctx.resampled(reference, sampling)?
         .with_context(|| format!("{reference} is not a local model: its sampling cannot be set"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_cycles_policy_alias_is_the_named_checkpoint_at_the_named_context() {
+        let dir = tempfile::tempdir().expect("dir");
+        let models = dir.path().join("models");
+        let splinter = open_cycle(
+            &dir.path().join("state"),
+            Some(&models),
+            "local:Qwen/Qwen3-8B@16384",
+        )
+        .expect("a handle");
+        let selection = splinter
+            .context()
+            .selection(&ModelRef::policy_default())
+            .expect("a selection");
+        let weights = selection.local().expect("local weights");
+        assert_eq!(weights.base, models.join("Qwen/Qwen3-8B"));
+        assert_eq!(weights.context_tokens, Some(16384));
+        assert_eq!(weights.adapter, None, "no release yet: the base");
+    }
+
+    #[test]
+    fn the_cycles_policy_is_a_plain_local_checkpoint() {
+        let dir = tempfile::tempdir().expect("dir");
+        for policy in ["policy:default", "local:Qwen/Qwen3-8B+adapter.safetensors"] {
+            let error = open_cycle(&dir.path().join("state"), None, policy)
+                .err()
+                .map(|e| format!("{e:#}"))
+                .expect("refused");
+            assert!(
+                error.contains("plain local checkpoint"),
+                "{policy}: {error}"
+            );
+        }
+    }
+}
