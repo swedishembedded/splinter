@@ -411,7 +411,7 @@ class Cycle:
         earlier = [f for f in self.facts if f.generation < generation]
         started = time.time()
         report = self.splinter.run("absorb", self.out / "sessions" / f"g{generation}u{update}",
-                                   *self.roles, "--no-consolidate",
+                                   *self.roles, "--no-consolidate", *self.args.absorb_flag,
                                    "--sealed-probes", self.out / "sealed.jsonl", ok=(0, 1))
         ended = time.time()
         per = FACTS_PER_GENERATION // UPDATES_PER_GENERATION
@@ -535,6 +535,8 @@ def main():
         q.add_argument("--helper", required=True,
                        help="the checkpoint that plays generator, teacher and judge")
         q.add_argument("--helper-context", type=int, default=8192)
+        q.add_argument("--absorb-flag", action="append", default=[],
+                       help="a flag more for every `absorb` (repeatable), such as --no-stance")
         q.add_argument("--policy-context", type=int, default=8192,
                        help="the policy's context in tokens (its KV cache is built for exactly this)")
     r.add_argument("--lr", help="the full consolidation's peak learning rate (default: the command's)")

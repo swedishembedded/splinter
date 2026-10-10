@@ -27,7 +27,7 @@
 #   SEED, GENERATIONS  the facts of a first run (default: the sample's own)
 #   WAIT             set to wait for a claimed card instead of ending the run
 #   LRS              the learning rates of a tune run
-#   EXTRA            more arguments for `generations.py run`
+#   EXTRA            more arguments for `generations.py` (such as --absorb-flag=--no-stance)
 set -uo pipefail
 
 if [ "$#" -ne 3 ]; then
