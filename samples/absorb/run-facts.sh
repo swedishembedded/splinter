@@ -19,8 +19,7 @@
 # The quotas are the protocol's. When the screening cannot fill them it names
 # every role that falls short and stops; run again with the quotas to place
 # instead as flags (`--neighbour-known 61`): they are passed to `facts screen`
-# and recorded in the manifest, never chosen silently. The canary is the first
-# test fact of day 1 in the manifest's order.
+# and recorded in the manifest, never chosen silently.
 
 set -euo pipefail
 
@@ -56,12 +55,18 @@ stage select facts select --materials "$materials" --out "$out" --families "$fam
 "$bin" facts pool --materials "$materials" --out "$out"
 stage known facts known --materials "$materials" --out "$out"
 stage screen facts screen --out "$out" "$@"
-canary=$(python3 - "$out/manifest.json" <<'PY'
+# The canary of the test cycle is the first test fact of day 1, and that of a
+# development cycle the first development fact, in the manifest's order.
+first_fact() {
+    python3 - "$out/manifest.json" "$1" "${2:-}" <<'PY'
 import json, sys
-facts = json.load(open(sys.argv[1]))["facts"]
-print(next(f["id"] for f in facts if f.get("role") == "test" and f.get("day") == 1))
+manifest, role, day = sys.argv[1], sys.argv[2], sys.argv[3]
+facts = json.load(open(manifest))["facts"]
+print(next(f["id"] for f in facts
+           if f.get("role") == role and (not day or str(f.get("day")) == day)))
 PY
-)
-"$bin" facts canary --out "$out" --fact "$canary"
+}
+"$bin" facts canary --out "$out" --fact "$(first_fact test 1)"
+"$bin" facts canary --out "$out" --fact "$(first_fact dev)"
 stage seal probes seal --out "$out"
 stage baseline probes baseline --out "$out"
