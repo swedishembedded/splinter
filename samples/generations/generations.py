@@ -383,7 +383,9 @@ class Cycle:
             env["SPLINTER_BRAIN_BIN"] = args.brain
         self.splinter = Splinter(args.splinter, self.state, self.log, env, args.policy_context)
         role = f"local:{args.helper}@{args.helper_context}"
-        self.roles = ["--generator", role, "--teacher", role, "--judge", role]
+        # No judge: a model does not grade its own work, and a judge of another
+        # size is no part of what this sample measures.
+        self.roles = ["--generator", role, "--teacher", role]
 
     def record(self, step, generation, kind, started, ended, extra):
         row = {"step": step, "generation": generation, "kind": kind,
@@ -537,7 +539,7 @@ def main():
         q.add_argument("--brain")
         q.add_argument("--policy-weights", required=True, help="the policy's base checkpoint")
         q.add_argument("--helper", required=True,
-                       help="the checkpoint that plays generator, teacher and judge")
+                       help="the checkpoint that plays generator and teacher")
         q.add_argument("--helper-context", type=int, default=8192)
         q.add_argument("--absorb-flag", action="append", default=[],
                        help="a flag more for every `absorb` (repeatable), such as --no-stance")

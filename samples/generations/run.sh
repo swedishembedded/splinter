@@ -20,13 +20,14 @@
 #   SPLINTER_BIN     the splinter binary
 #   BRAIN_BIN        the brain binary the serve check starts
 #   POLICY_WEIGHTS   the policy's base checkpoint
-#   HELPER_WEIGHTS   the checkpoint that plays generator, teacher and judge
+#   HELPER_WEIGHTS   the checkpoint that plays generator and teacher
 #   NVML_LIB         libnvidia-ml.so.1, for the memory watcher
 #   CLAIM_DIR        where the card claim files are kept
 #   GPU_ONLY         the gpu-only.sh pin (default: samples/jefferson/gpu-only.sh)
 #   SEED, GENERATIONS  the facts of a first run (default: the sample's own)
 #   WAIT             set to wait for a claimed card instead of ending the run
 #   LRS              the learning rates of a tune run
+#   RETRY_WAIT       seconds a failed run keeps the card for a mended retry (default 0)
 #   EXTRA            more arguments for `generations.py` (such as --absorb-flag=--no-stance)
 set -uo pipefail
 
@@ -76,9 +77,22 @@ if [ "$mode" = tune ]; then
 else
     verb=(run --mode "$mode")
 fi
-"$gpu_only" "$card" "$out/run-$mode.log" -- python3 "$here/generations.py" "${verb[@]}" \
-    --out "$out" --splinter "${SPLINTER_BIN:?}" --brain "${BRAIN_BIN:?}" \
-    --policy-weights "${POLICY_WEIGHTS:?}" --helper "${HELPER_WEIGHTS:?}" ${EXTRA:-}
-code=$?
+# A run that fails keeps the card for RETRY_WAIT seconds, so that what broke it
+# can be mended without losing the place in the queue: the run starts again
+# when the file $out/retry appears (it is removed first).
+while true; do
+    "$gpu_only" "$card" "$out/run-$mode.log" -- python3 "$here/generations.py" "${verb[@]}" \
+        --out "$out" --splinter "${SPLINTER_BIN:?}" --brain "${BRAIN_BIN:?}" \
+        --policy-weights "${POLICY_WEIGHTS:?}" --helper "${HELPER_WEIGHTS:?}" ${EXTRA:-}
+    code=$?
+    [ "$code" -eq 0 ] && break
+    waited=0
+    while [ ! -e "$out/retry" ] && [ "$waited" -lt "${RETRY_WAIT:-0}" ]; do
+        sleep 10
+        waited=$((waited + 10))
+    done
+    [ -e "$out/retry" ] || break
+    rm -f "$out/retry"
+done
 echo "$code" > "$out/exit-$mode"
 exit "$code"

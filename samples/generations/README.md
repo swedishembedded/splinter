@@ -43,7 +43,7 @@ whether general behaviour is intact.
 `generations.py run --mode full|merge` drives the `splinter` binary on a state
 root of its own: `absorb --no-consolidate` for each update, then `consolidate
 --mode MODE`, and `eval policy:default --suite FILE` after every step. The
-policy is Qwen3-0.6B; generator, teacher and judge are Qwen3-8B. The measure
+policy is Qwen3-0.6B; generator and teacher are Qwen3-8B. The measure
 after a step asks the facts taught so far and the anchor in one `eval`, so the
 model loads once. `memwatch.py` samples the card memory the driver reports
 (the whole card) and the host memory of the run once a second; `report` joins

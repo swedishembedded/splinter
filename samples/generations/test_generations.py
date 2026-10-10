@@ -111,3 +111,66 @@ class Criteria(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+FAKE_SPLINTER = r'''#!/usr/bin/env python3
+# A stand-in for the splinter binary: answers what a cycle asks of it, from
+# the files the cycle wrote, so the driver can be run end to end without a model.
+import json, sys
+args = sys.argv[1:]
+state = args[args.index("--state") + 1]
+verb = next(a for a in args[4:] if a in ("eval", "absorb", "consolidate", "runs"))
+if verb == "eval":
+    if "--freeze" in args:
+        print(json.dumps({"anchor": {"version": 1}}))
+    else:
+        suite = args[args.index("--suite") + 1]
+        tasks = [json.loads(l) for l in open(suite)]
+        taught = set(open(state + "/taught").read().split()) if __import__("os").path.exists(state + "/taught") else set()
+        missed = [{"instruction": t["instruction"]} for t in tasks
+                  if t["reference"].isdigit() and t["reference"] not in taught]
+        print(json.dumps({"scores": [{"missed": missed}]}))
+elif verb == "absorb":
+    import os, glob
+    os.makedirs(state, exist_ok=True)
+    folder = next(a for a in args if "sessions" in a)
+    with open(state + "/taught", "a") as f:
+        for path in glob.glob(folder + "/*.atif.json"):
+            steps = json.load(open(path))["steps"]
+            f.write(" ".join(w.strip(".") for w in steps[2]["message"].split() if w.strip(".").isdigit()) + "\n")
+    print(json.dumps({"run": "run-1", "release": "blake3:aa", "gate": {"passed": True, "answered": 4, "claims": [1, 2, 3, 4]},
+                      "dataset": {"trained": 72}, "replayed_records": 0, "stopped": None}))
+elif verb == "consolidate":
+    print(json.dumps({"run": "run-2", "consolidated": {"release": "blake3:bb", "gate": {"passed": True},
+                      "steps_completed": 9, "final_loss": 0.1, "dataset": {"trained": 200}, "replayed_records": 10}}))
+else:
+    print(json.dumps({"stages": [{"stage": "train", "duration_ms": 1500}]}))
+'''
+
+
+class Driver(unittest.TestCase):
+    def test_a_cycle_runs_end_to_end_against_a_stand_in_and_is_judged(self):
+        import argparse, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            fake = out / "splinter"
+            fake.write_text(FAKE_SPLINTER)
+            fake.chmod(0o755)
+            g.build(out, seed=3, generations=2)
+            args = argparse.Namespace(out=str(out), mode="merge", splinter=str(fake), brain=None,
+                                      policy_weights="policy", helper="helper", helper_context=4096,
+                                      policy_context=4096, absorb_flag=["--no-stance"],
+                                      lr=None, epochs=None)
+            g.run(args)
+            rows = [json.loads(l) for l in (out / "results-merge.jsonl").read_text().splitlines()]
+            self.assertEqual([r["step"] for r in rows],
+                             ["base"] + [f"g{n}.{s}" for n in (0, 1)
+                                         for s in ("u0", "u1", "u2", "consolidate")])
+            last = rows[-1]
+            self.assertEqual(last["current"], [12, 12])
+            self.assertEqual(last["retention"], [12, 12])
+            self.assertEqual(rows[1]["stage_s"], {"train": 1.5})
+            verdict = json.loads((out / "verdict-merge.json").read_text())
+            self.assertTrue(verdict["success"], verdict)
+            self.assertTrue((out / "splinter-merge.log").read_text().count("absorb") >= 6)
