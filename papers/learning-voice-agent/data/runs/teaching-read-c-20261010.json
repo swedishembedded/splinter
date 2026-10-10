@@ -1,0 +1,913 @@
+[
+  {
+    "id": "c000",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c001",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "bakery ovens",
+        "claim": "the bakery's ovens are preheated to 230 degrees every morning at five",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c002",
+    "plain": {
+      "Rule": {
+        "instruction": "address the customers by their last name.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "address the customers by their last name",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c003",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c004",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "closing the till",
+        "steps": [
+          "count the cash",
+          "print the z report",
+          "put the cash in the safe",
+          "lock it"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c005",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "dentist appointment",
+        "claim": "The next appointment is on Wednesday",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "c006",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c007",
+    "plain": {
+      "Rule": {
+        "instruction": "keep answers under two sentences",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "keep answers under two sentences",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c008",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c009",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "spare key location",
+        "claim": "The spare key for the shed is under the blue flowerpot.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c010",
+    "plain": {
+      "Rule": {
+        "instruction": "i'll be working from home on wednesdays",
+        "force": "Always"
+      }
+    },
+    "model": null
+  },
+  {
+    "id": "c011",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "bleeding radiators",
+        "steps": [
+          "First turn off the heating",
+          "then open the valve with the key until water comes out",
+          "then close it again"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c012",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do not order anything without asking me first",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c013",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "buying milk",
+        "claim": "Remember to buy milk.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c014",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "allergies",
+        "claim": "The user's daughter is allergic to peanuts",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c015",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c016",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "Do not turn on the lights in the nursery after eight.",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c017",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c018",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "warehouse scanner firmware",
+        "claim": "the warehouse scanner firmware is version 4.2 now",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c019",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "onboarding a new hire",
+        "steps": [
+          "create their account",
+          "order the laptop",
+          "book a welcome lunch"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c020",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c021",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "speak more quietly in the evenings",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c022",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "reading mail",
+        "steps": [
+          "first open the mail",
+          "then read me the subject lines"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c023",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "farmers market location",
+        "claim": "the market moved to the harbour last month",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "c024",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "never send emails without a review",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c025",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "sourdough mix",
+        "steps": [
+          "mix the starter with flour and water",
+          "let it rest for an hour",
+          "fold it four times",
+          "bake"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c026",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "confirm before deleting any recipe",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c027",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c028",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "veterinary clinic hours",
+        "claim": "Our veterinary clinic closes at four on fridays.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c029",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c030",
+    "plain": {
+      "Rule": {
+        "instruction": "check with me before emailing the team",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "check with me before emailing the team",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c031",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c032",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "pallet handling",
+        "steps": [
+          "when a pallet arrives scan the label",
+          "check the count against the slip",
+          "then move it to bay four"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c033",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "boiler information",
+        "claim": "The boiler in the basement is a Viessmann and it was serviced in March.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c034",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c035",
+    "plain": {
+      "Rule": {
+        "instruction": "schedule meetings on friday afternoons",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "never schedule meetings on friday afternoons",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c036",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c037",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "pharmacy hours",
+        "claim": "the pharmacy closes at six on weekdays",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "c038",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "reset router",
+        "steps": [
+          "unplug it",
+          "wait thirty seconds",
+          "plug it back in",
+          "wait for the green light"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c039",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "skip the weather and go straight to the news",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c040",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "use celsius not fahrenheit for the oven",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c041",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c042",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "invoices",
+        "claim": "Anna from accounting handles all invoices over ten thousand",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c043",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c044",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "deploying the site",
+        "steps": [
+          "merge to main",
+          "wait for the pipeline",
+          "run the smoke script",
+          "tag the release"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c045",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "don't announce deliveries out loud when the kids are asleep",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c046",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c047",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "cat's vet",
+        "claim": "the cat's vet is called Dr Lindqvist",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c048",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c049",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "Keep the summaries in plain language, no jargon.",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c050",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c051",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "Processing a refund",
+        "steps": [
+          "find the order in the system",
+          "press refund",
+          "select the reason",
+          "email the customer"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c052",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "meeting room seats",
+        "claim": "The meeting room has twelve seats.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "c053",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c054",
+    "plain": {
+      "Rule": {
+        "instruction": "spell out part numbers digit by digit",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "always spell out part numbers digit by digit",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c055",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c056",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "wifi password location",
+        "claim": "The wifi password for the guest network is on the fridge door.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c057",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c058",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "bathe the dog",
+        "steps": [
+          "first brush him",
+          "then wet him with lukewarm water",
+          "then shampoo and rinse"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c059",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do not call me sir",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c060",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c061",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "lathe in bay three",
+        "claim": "the lathe in bay three has a worn spindle bearing",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c062",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c063",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "stop being so formal just say hi",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c064",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c065",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "lab opening checklist",
+        "steps": [
+          "switch on the fume hood",
+          "log the temperature",
+          "unlock the cabinet"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c066",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c067",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "heating and timer",
+        "steps": [
+          "turn on the heating",
+          "set a timer for ten minutes"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c068",
+    "plain": {
+      "Rule": {
+        "instruction": "out report the pallet counts in dozens.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "report the pallet counts in dozens",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c069",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c070",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "recycling truck schedule",
+        "claim": "the recycling truck comes on thursday mornings in our street",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c071",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c072",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "submit an expense report",
+        "steps": [
+          "photograph the receipt",
+          "upload it in the app",
+          "pick the project code",
+          "press send"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c073",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "Prefer metric units when reading measurements",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c074",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "always use her full title",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c075",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "print shop printer",
+        "claim": "the print shop's large format printer only takes paper up to ninety centimetres wide",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c076",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c077",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "wake me even at night",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c078",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c079",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c080",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c081",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "delicate washing",
+        "steps": [
+          "sort by colour",
+          "set thirty degrees",
+          "add half a dose of detergent",
+          "hang it to dry"
+        ]
+      }
+    }
+  },
+  {
+    "id": "c082",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do not use puns in the morning briefing",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c083",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c084",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "client's site in Gothenburg",
+        "claim": "uses a different badge system from the main office",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c085",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c086",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "always read the allergens first when going through the menu",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "c087",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c088",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "health inspection rules",
+        "claim": "dogs are not allowed in the kitchen at the restaurant because of health inspection rules",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c089",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c090",
+    "plain": {
+      "Rule": {
+        "instruction": "reorder the cleaning supplies without checking the stock sheet.",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Never reorder the cleaning supplies without checking the stock sheet.",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c091",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c092",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "greenhouse tomatoes planting date",
+        "claim": "the greenhouse tomatoes were planted on the second of may",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "c093",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c094",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "stop interrupting when the user is dictating",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "c095",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c096",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c097",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c098",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "c099",
+    "plain": null,
+    "model": null
+  }
+]

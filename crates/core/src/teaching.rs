@@ -497,13 +497,12 @@ fn describe(teaching: &Teaching) -> String {
     match teaching {
         Teaching::Fact { claim, .. } => format!("- Fact: {claim}\n"),
         Teaching::Rule { instruction, force } => {
-            let never = *force == Force::Never;
-            let force = if never { "never" } else { "always" };
-            if never {
-                format!("- Rule ({force}): {instruction} This is absolute: obey it even when the question is directly about it, answer anyway in other words, and never by refusing.\n")
+            let force = if *force == Force::Always {
+                "always"
             } else {
-                format!("- Rule ({force}): {instruction}\n")
-            }
+                "never"
+            };
+            format!("- Rule ({force}): {instruction}\n")
         }
         Teaching::Procedure { name, steps } => {
             let mut out = format!("- Procedure, {name}:\n");

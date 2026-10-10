@@ -285,6 +285,22 @@ def main():
     macros["MoreDoRules"] = f"{groups['rules to do something'][2]}/{groups['rules to do something'][0]}"
     macros["MoreAvoidRules"] = f"{groups['rules to avoid a word'][2]}/{groups['rules to avoid a word'][0]}"
 
+    # The spoken test split again, with a user who refuses a wrong restatement and says it again.
+    rec = json.loads((ROOT / runs["teaching-recovery-20261010"]["file"]).read_text(encoding="utf-8"))
+    rk = {}
+    for r in rec["results"]:
+        k = rk.setdefault(r["kind"], {"asks": 0, "taught": 0, "retries": 0})
+        k["retries"] += r["retried"]
+        for o in r["outcomes"]:
+            k["asks"] += 1
+            k["taught"] += o["taught_passes"]
+    macros["RecoveryFactPass"] = f"{rk['fact']['taught']}/{rk['fact']['asks']}"
+    macros["RecoveryCorrectionPass"] = f"{rk['correction']['taught']}/{rk['correction']['asks']}"
+    macros["RecoveryFactRetries"] = str(rk["fact"]["retries"])
+    macros["RecoveryCorrectionRetries"] = str(rk["correction"]["retries"])
+    macros["RecoveryFactLow"] = f"{wilson(rk['fact']['taught'], rk['fact']['asks'])[1]:.2f}"
+    macros["SpokenCorrectionPass"] = f"{sk['correction']['taught']}/{sk['correction']['asks']}"
+
     # The readers of what a user says, on the test split of the authored utterances.
     gold = [json.loads(l) for l in (ROOT / "data/teaching/utterances.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     readings = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-20261010"]["file"]).read_text(encoding="utf-8"))}
@@ -357,6 +373,22 @@ def main():
                 macros[f"ReadB{field.capitalize()}Fired"] = f"{fired}/{len(neg_b)}"
     lines += ["\\bottomrule", "\\end{tabular}"]
     (OUT / "reading_b_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # The revised readers on the third set.
+    gold_c = [json.loads(l) for l in (ROOT / "data/teaching/utterances-c.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    readings_c = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-c-20261010"]["file"]).read_text(encoding="utf-8"))}
+    pos_c = [g for g in gold_c if g["kind"] != "none"]
+    neg_c = [g for g in gold_c if g["kind"] == "none"]
+    lines = ["\\begin{tabular}{@{}l r r r@{}}", "\\toprule", "Reader & Teachings found & Fired on a non-teaching & Misread\\\\", "\\midrule"]
+    for name, field in (("plain phrases", "plain"), ("model", "model")):
+        found = sum(right(g, readings_c[g["id"]][field]) for g in pos_c)
+        fired = sum(readings_c[g["id"]][field] is not None for g in neg_c)
+        wrong = sum(readings_c[g["id"]][field] is not None and not right(g, readings_c[g["id"]][field]) for g in pos_c)
+        lines.append(f"{name} & {found}/{len(pos_c)} & {fired}/{len(neg_c)} & {wrong}\\\\")
+        macros[f"ReadC{field.capitalize()}Found"] = f"{found}/{len(pos_c)}"
+        macros[f"ReadC{field.capitalize()}Fired"] = f"{fired}/{len(neg_c)}"
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "reading_c_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # Extraction study: the rule-based readers of a user's words, on the frozen test split.
     study = runs["extraction-rules-20261010"]

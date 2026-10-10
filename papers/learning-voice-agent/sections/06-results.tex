@@ -67,6 +67,8 @@ names and codes became other words (``NW-Guest-Fjord'' as ``NW Gist Fjord'', ``K
 Rules, which are made of ordinary words, held up better (\SpokenRulePass{}, \SpokenRuleExact{} where the rule was heard as said); the taught-then-forgotten and unrelated checks passed (\SpokenRetractPass{}, \SpokenUnrelatedPass{}); procedures were told when heard, with some step words altered. Two rules at once failed in text and in speech on this model.
 The recognised word depends on the voice: every fact and corrected-fact ask of one of the four voices failed. Four seeds of one synthesizer are not four speakers.
 
+A simulated user who reads the restatement and refuses it when it lacks the intended words, then says the teaching again as another take of the voice (up to twice; \code{prereg/teaching-recovery.md}, run \code{teaching-recovery-20261010}), recovered only a little: facts \RecoveryFactPass{} (from \SpokenFactPass{}) and corrected facts \RecoveryCorrectionPass{} (from \SpokenCorrectionPass{}) after \RecoveryFactRetries{} and \RecoveryCorrectionRetries{} retries, so the gate stays unmet. Another take of the same voice mostly yields the same misrecognition of a name; a user who spells it or says it differently was not simulated.
+
 \begin{table}[t]
 \centering\small
 \input{generated/spoken_scale_table}
@@ -84,6 +86,10 @@ On a second set of 90 utterances written by a separate agent that had seen neith
 ``can you always keep answers short?'', ``Just this once, send it to Priya without asking'', ``She told me to never use the old form'' and ``Open the log from yesterday and read the last line'' (a two-step request read as a procedure). The plain reader, which did not fire on the first set's 38 non-teachings, fired once here (``Next time maybe we'll try the other supplier''), so the gate of T1 is met on the first set and not on the second.
 The writing agent's brief shared example phrasings with the first set and 14 of its 90 utterances follow them; the table also gives the other 76, where the pattern is the same. The false readings of the model reader are all ones that a restatement would show to the user, who could refuse; but each costs a turn that is not answered.
 
+After those errors the plain reader was changed to refuse a rule that begins with a hedge, and the model reader's prompt was changed to exclude one-time instructions, short sequences of requests, questions about whether to do something, and reports; a third set of 100 utterances was then written by a separate agent from a brief that described the kinds in words and gave no example phrasings (\cref{tab:readingc}; run \code{teaching-read-c-20261010}, \code{prereg/teaching-reading-c.md}).
+The model reader found \ReadCModelFound{} teachings and fired on \ReadCModelFired{} non-teachings, the plain reader found \ReadCPlainFound{} and fired on \ReadCPlainFired{}. The prompt change did not remove the false readings: the model still read ``first open the mail then read me the subject lines'', ``turn on the heating and then set a timer for ten minutes'', ``just this once skip the weather and go straight to the news'' and ``she wants you to always use her full title'' as teachings, as well as ``Remember to buy milk''.
+The plain reader's one fire was ``from now on i'll be working from home on wednesdays''. So the model reader's false-reading rate on near-misses is about one in eight on this set, and the hedge fix does not generalise to a speaker's own plans.
+
 \begin{table}[t]
 \centering\small
 \input{generated/reading_table}
@@ -96,6 +102,13 @@ The writing agent's brief shared example phrasings with the first set and 14 of 
 \input{generated/reading_b_table}
 \caption{The same readers on the independently written utterances.}
 \label{tab:readingb}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\input{generated/reading_c_table}
+\caption{The revised readers on a third independently written set.}
+\label{tab:readingc}
 \end{table}
 
 \subsection{How the agent speaks}
