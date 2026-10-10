@@ -54,6 +54,7 @@ pub mod replay;
 pub mod run_code;
 pub mod solve;
 mod system_prompt;
+pub mod teach;
 pub mod typed;
 pub mod voice;
 pub mod work;

@@ -16,17 +16,19 @@
 //! what the person said. The conversation, tools and session are sven's.
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use sven_sdk::model::ModelProvider;
 use sven_sdk::{Agent, ApprovalPolicy, CallError, Engine, SessionEvent, Toolset};
 
 use crate::solve::SOLVER_MODE;
-use crate::system_prompt::UnderSystemPrompt;
+use crate::system_prompt::{with_live_addendum, UnderSystemPrompt};
+use crate::teach::Asker;
 
 /// One conversation with a sven agent, asked in turn.
 pub struct VoiceAgent {
     agent: Mutex<Agent>,
+    taught: Arc<RwLock<String>>,
     runtime: tokio::runtime::Runtime,
 }
 
@@ -43,7 +45,8 @@ impl VoiceAgent {
         system: &str,
         workspace: Option<&Path>,
     ) -> Result<Self, CallError> {
-        let model = UnderSystemPrompt::wrap(model, system);
+        let taught = Arc::new(RwLock::new(String::new()));
+        let model = compose(model, system, taught.clone());
         let builder = Engine::builder().model_provider(model);
         let engine = match workspace {
             Some(root) => builder
@@ -59,6 +62,7 @@ impl VoiceAgent {
             .map_err(|e| CallError::Infrastructure(e.into()))?;
         Ok(Self {
             agent: Mutex::new(engine.agent(SOLVER_MODE)),
+            taught,
             runtime,
         })
     }
@@ -92,6 +96,17 @@ impl VoiceAgent {
     }
 }
 
+/// `model` answering under `system` and, after it, whatever `taught` holds.
+fn compose(
+    model: Arc<dyn ModelProvider>,
+    system: &str,
+    taught: Arc<RwLock<String>>,
+) -> Arc<dyn ModelProvider> {
+    // The taught text is appended to the system turn, so it goes where it is
+    // read after that turn has been set.
+    UnderSystemPrompt::wrap(with_live_addendum(model, taught), system)
+}
+
 /// Hand a text delta on; every other event, and a lagging or closed channel,
 /// is not words to speak.
 fn forward(
@@ -100,5 +115,82 @@ fn forward(
 ) {
     if let Ok(SessionEvent::TextDelta(piece)) = event {
         on_text(&piece);
+    }
+}
+
+impl Asker for VoiceAgent {
+    fn ask(&self, question: &str, on_text: &mut dyn FnMut(&str)) -> Result<String, CallError> {
+        VoiceAgent::ask(self, question, on_text)
+    }
+
+    fn taught(&self, text: &str) {
+        *self
+            .taught
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = text.to_string();
+    }
+}
+
+#[cfg(test)]
+mod specs {
+    use sven_sdk::model::{CompletionRequest, Message, ResponseStream, Role};
+
+    use super::*;
+
+    /// A provider that records the system turn of every request it gets.
+    struct Capture(Arc<Mutex<Vec<String>>>);
+
+    #[async_trait::async_trait]
+    impl ModelProvider for Capture {
+        fn name(&self) -> &str {
+            "capture"
+        }
+
+        fn model_name(&self) -> &str {
+            "capture"
+        }
+
+        async fn complete(&self, request: CompletionRequest) -> anyhow::Result<ResponseStream> {
+            let system = request
+                .messages
+                .iter()
+                .find(|m| m.role == Role::System)
+                .and_then(|m| m.as_text())
+                .unwrap_or_default()
+                .to_string();
+            self.0.lock().unwrap().push(system);
+            Ok(Box::pin(futures::stream::empty()))
+        }
+    }
+
+    #[test]
+    fn what_was_taught_reaches_the_model_after_the_agents_own_system_turn() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let taught = Arc::new(RwLock::new(String::new()));
+        let model = compose(
+            Arc::new(Capture(seen.clone())),
+            "You are an assistant.",
+            taught.clone(),
+        );
+        let ask = |model: &Arc<dyn ModelProvider>| {
+            let request = CompletionRequest {
+                messages: vec![Message::system("sven's own"), Message::user("hi")],
+                ..Default::default()
+            };
+            let _stream = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(model.complete(request))
+                .unwrap();
+        };
+        ask(&model);
+        *taught.write().unwrap() = "- Fact: the build server is atlas".to_string();
+        ask(&model);
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0], "You are an assistant.");
+        assert_eq!(
+            seen[1],
+            "You are an assistant.\n\n- Fact: the build server is atlas"
+        );
     }
 }

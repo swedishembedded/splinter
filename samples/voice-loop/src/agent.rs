@@ -26,6 +26,9 @@ use splinter_sdk::model::PolicyError;
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::speech::{spoken_disclosure, Portrayal, SpeakerProfile};
 
+use splinter_sdk::agent::teach::Teachable;
+use splinter_sdk::vocabulary::teaching::Ledger;
+
 use crate::batch::{spoken_turns, Batch, Conversation, Names, Persona};
 
 #[derive(Args)]
@@ -62,6 +65,10 @@ pub struct AgentArgs {
     /// between sessions; without it they last for this session only.
     #[arg(long)]
     lessons: Option<PathBuf>,
+    /// Where the facts, rules and procedures the user teaches in conversation
+    /// are kept between sessions; without it they last for this session only.
+    #[arg(long)]
+    taught: Option<PathBuf>,
     /// Also keep the report here.
     #[arg(long)]
     report: Option<PathBuf>,
@@ -83,6 +90,14 @@ pub fn run(args: &AgentArgs) -> Result<()> {
             .with_context(|| format!("opening {}", file.display()))?,
         None => LessonDesk::new(speaker.portrayal().clone()),
     };
+    let ledger = match &args.taught {
+        Some(file) if file.exists() => serde_json::from_slice(
+            &std::fs::read(file).with_context(|| format!("reading {}", file.display()))?,
+        )
+        .with_context(|| format!("{} is not a ledger of teachings", file.display()))?,
+        _ => Ledger::new(),
+    };
+    let teachable = std::cell::RefCell::new(Teachable::new(&voice, ledger));
     let desk_spoke = std::cell::Cell::new(false);
     let listener = CascadeListener::new(
         BrainRecognizer::load(&args.asr)?,
@@ -101,13 +116,26 @@ pub fn run(args: &AgentArgs) -> Result<()> {
                 }
                 Heard::Pass => desk_spoke.set(false),
             }
-            voice
-                .ask(question, on_text)
+            // What is said about what the agent knows or does is the ledger's.
+            let mut teachable = teachable.borrow_mut();
+            let reply = teachable
+                .hear(question, on_text)
                 .map_err(|e| PolicyError::Generate {
                     path: args.base.clone(),
                     adapter: args.adapter.clone(),
                     reason: e.to_string(),
-                })
+                })?;
+            if let Some(file) = &args.taught {
+                let kept = serde_json::to_vec_pretty(teachable.ledger())
+                    .map_err(|e| e.to_string())
+                    .and_then(|json| std::fs::write(file, json).map_err(|e| e.to_string()));
+                kept.map_err(|reason| PolicyError::Generate {
+                    path: file.clone(),
+                    adapter: None,
+                    reason: format!("keeping what was taught: {reason}"),
+                })?;
+            }
+            Ok(reply)
         },
     );
     spoken_turns(

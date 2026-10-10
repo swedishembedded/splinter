@@ -37,6 +37,8 @@
 //!   every item.
 //! * [`speech`] - how a speaking persona is described, and the label a
 //!   synthetic voice always carries.
+//! * [`teaching`] - what a user teaches an agent about what it knows and does:
+//!   facts, rules and procedures, kept so they can be taken back.
 //! * [`speech_lesson`] - what a user teaches a speaking persona about how to
 //!   speak, read from what they said and kept as lessons with a stated
 //!   objective.
@@ -73,5 +75,6 @@ pub mod speech;
 pub mod speech_bundle;
 pub mod speech_lesson;
 pub mod spoken;
+pub mod teaching;
 pub mod terms;
 pub mod training;
