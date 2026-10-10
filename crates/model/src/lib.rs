@@ -20,6 +20,8 @@
 //! * [`selection`] - which model a stage runs on (local weights, or a model
 //!   reached over an API), the identity every record gives it, and the
 //!   model loaded for a command.
+//! * [`consolidate`] - a full-parameter fine-tune and the merge of an adapter, each
+//!   into a checkpoint directory that is a base like any other
 //! * [`train`] - one LoRA fine-tune, supervised (chat) or by DPO
 //!   (preference pairs), scored on held-out records.
 //! * [`capabilities`] - which dataset formats brain trains, and the check of a
@@ -37,6 +39,7 @@
 
 pub mod answer;
 pub mod capabilities;
+pub mod consolidate;
 pub mod device;
 pub mod embed;
 pub mod error;

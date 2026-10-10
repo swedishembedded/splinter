@@ -621,7 +621,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
 /// directory supplies the tokenizer and chat template. The card names what
 /// produced the adapter and what it sits on, so an adapter is traceable to
 /// its own training evidence.
-fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyError> {
+pub(crate) fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyError> {
     let weights = crate::local::load_source(&crate::local::resolve_base(model_dir)?);
     let weights = weights
         .to_str()

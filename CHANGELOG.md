@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
   compared with the champion's by counts; a rate over no items is absent.
+- `splinter-model` can take what a generation learned into the weights themselves: a full-parameter fine-tune of a base
+  and the merge of an adapter into it, each writing a checkpoint directory that is a base like any other (brain's
+  `ChatFullFineTune` and `merge_adapter`).
 - Extraction precision and recall: a session whose trajectory carries `extra.absorb_subject` is checked against
   the fact descriptions of `--subjects FILE` (`claims gate`, `absorb`); the gate report lists whether the proposed
   and the admitted claims cover each subject, with recall and precision.
