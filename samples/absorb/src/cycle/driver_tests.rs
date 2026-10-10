@@ -180,11 +180,7 @@ fn a_three_night_cycle_runs_back_to_back_and_reports_what_it_measured() {
         [
             Entry::Start { run: 1, .. },
             Entry::Registered { run: 1, .. },
-            Entry::Finished {
-                run: 1,
-                met: true,
-                ..
-            }
+            Entry::Finished { met: true, .. }
         ]
     ));
 }

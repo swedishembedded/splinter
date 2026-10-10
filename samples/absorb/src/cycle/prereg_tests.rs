@@ -80,48 +80,37 @@ fn a_report_from_other_analysis_code_than_was_registered_is_refused() {
 }
 
 #[test]
-fn every_full_run_is_counted_in_the_ledger_of_its_fact_pool() {
+fn every_full_run_is_counted_in_the_ledger_of_its_fact_pool_among_the_runs_of_its_role() {
     let dir = tempfile::tempdir().expect("dir");
-    assert_eq!(next_run(dir.path()).expect("count"), 1);
-    record(
-        dir.path(),
-        &Entry::Start {
-            run: 1,
-            dir: "a".into(),
-        },
-    )
-    .expect("recorded");
-    record(
-        dir.path(),
-        &Entry::Registered {
-            run: 1,
-            hash: "h".into(),
-        },
-    )
-    .expect("recorded");
+    let start = |role, run| Entry::Start {
+        role,
+        run,
+        dir: "a".into(),
+    };
+    assert_eq!(next_run(dir.path(), CycleRole::Test).expect("count"), 1);
+    record(dir.path(), &start(CycleRole::Dev, 1)).expect("recorded");
+    record(dir.path(), &start(CycleRole::Dev, 2)).expect("recorded");
     assert_eq!(
-        next_run(dir.path()).expect("count"),
+        next_run(dir.path(), CycleRole::Test).expect("count"),
+        1,
+        "development cycles do not use up the numbers of the pre-registered runs"
+    );
+    record(dir.path(), &start(CycleRole::Test, 1)).expect("recorded");
+    assert_eq!(
+        next_run(dir.path(), CycleRole::Test).expect("count"),
         2,
         "a run is counted when it starts"
     );
+    assert_eq!(next_run(dir.path(), CycleRole::Dev).expect("count"), 3);
     record(
         dir.path(),
         &Entry::Finished {
-            run: 1,
+            hash: "h".into(),
             met: false,
             text: "not met".into(),
         },
     )
     .expect("recorded");
-    record(
-        dir.path(),
-        &Entry::Start {
-            run: 2,
-            dir: "b".into(),
-        },
-    )
-    .expect("recorded");
-    assert_eq!(next_run(dir.path()).expect("count"), 3);
     assert_eq!(read_ledger(dir.path()).expect("ledger").len(), 4);
 }
 

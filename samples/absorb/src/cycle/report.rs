@@ -19,6 +19,7 @@ use serde::Serialize;
 use super::analysis::{tables, FactInfo, Inputs, Night, NightSummary, Transitions};
 use super::eval::Evaluation;
 use super::items::Item;
+use super::plan::CycleRole;
 use super::plan::Plan;
 use super::prereg::{Entry, Prereg};
 use super::stats::{difference, Proportion};
@@ -85,10 +86,14 @@ pub struct Report {
 /// One full run, as the ledger lists it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct RunLine {
-    /// The run's number.
+    /// Which facts it teaches.
+    pub role: CycleRole,
+    /// The run's number among the runs of its role.
     pub run: usize,
     /// Its directory.
     pub dir: String,
+    /// The hash of its pre-registration, once registered.
+    pub hash: Option<String>,
     /// Whether its rule was met, once it finished.
     pub met: Option<bool>,
     /// Its verdict.
@@ -99,19 +104,25 @@ fn run_lines(runs: &[Entry]) -> Vec<RunLine> {
     let mut lines: Vec<RunLine> = Vec::new();
     for entry in runs {
         match entry {
-            Entry::Start { run, dir } => lines.push(RunLine {
+            Entry::Start { role, run, dir } => lines.push(RunLine {
+                role: *role,
                 run: *run,
                 dir: dir.clone(),
+                hash: None,
                 met: None,
                 text: None,
             }),
-            Entry::Finished { run, met, text } => {
-                if let Some(line) = lines.iter_mut().find(|l| l.run == *run) {
+            Entry::Registered { role, run, hash } => {
+                if let Some(line) = lines.iter_mut().find(|l| l.role == *role && l.run == *run) {
+                    line.hash = Some(hash.clone());
+                }
+            }
+            Entry::Finished { hash, met, text } => {
+                if let Some(line) = lines.iter_mut().find(|l| l.hash.as_ref() == Some(hash)) {
                     line.met = Some(*met);
                     line.text = Some(text.clone());
                 }
             }
-            Entry::Registered { .. } => {}
         }
     }
     lines
@@ -345,7 +356,8 @@ pub fn markdown(report: &Report) -> String {
     for r in &report.runs {
         let _ = writeln!(
             out,
-            "- run {} in `{}`: {}",
+            "- {:?} run {} in `{}`: {}",
+            r.role,
             r.run,
             r.dir,
             r.text.as_deref().unwrap_or("not finished")

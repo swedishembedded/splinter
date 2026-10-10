@@ -277,10 +277,11 @@ fn register(request: &Request, inputs: &Inputs) -> anyhow::Result<Prereg> {
         "a run on the test facts starts from a clean tree: commit first"
     );
     std::fs::create_dir_all(&request.dir)?;
-    let counter = prereg::next_run(&request.manifest_dir)?;
+    let counter = prereg::next_run(&request.manifest_dir, inputs.plan.role)?;
     prereg::record(
         &request.manifest_dir,
         &Entry::Start {
+            role: inputs.plan.role,
             run: counter,
             dir: request.dir.display().to_string(),
         },
@@ -292,6 +293,7 @@ fn register(request: &Request, inputs: &Inputs) -> anyhow::Result<Prereg> {
     prereg::record(
         &request.manifest_dir,
         &Entry::Registered {
+            role: inputs.plan.role,
             run: counter,
             hash: registered.hash.clone(),
         },
@@ -355,20 +357,14 @@ pub fn run(request: &Request, world: &dyn World) -> anyhow::Result<Report> {
         .with_context(|| format!("night {}: the evaluation", night.night))?;
     }
     let report = make_report(&request.dir, &request.manifest_dir)?;
-    if let Some(Entry::Registered { run, .. }) = prereg::read_ledger(&request.manifest_dir)?
-        .into_iter()
-        .rev()
-        .find(|e| matches!(e, Entry::Registered { hash, .. } if *hash == registered.hash))
-    {
-        prereg::record(
-            &request.manifest_dir,
-            &Entry::Finished {
-                run,
-                met: report.verdict.met,
-                text: report.verdict.text.clone(),
-            },
-        )?;
-    }
+    prereg::record(
+        &request.manifest_dir,
+        &Entry::Finished {
+            hash: registered.hash.clone(),
+            met: report.verdict.met,
+            text: report.verdict.text.clone(),
+        },
+    )?;
     Ok(report)
 }
 

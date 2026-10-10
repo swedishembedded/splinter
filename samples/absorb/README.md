@@ -196,8 +196,9 @@ The cycle's state is `CYCLE/state` (releases, the claim ledger) and each
 night's files are under `CYCLE/nights/night-NN`: `record.json`, `absorb.json`
 and `evaluation.json`, which marks the night finished. `prereg.json`, `plan.json`
 and `items.json` are written before the first session; the ledger
-`RUN/cycle-runs.jsonl` counts every full run of the pool and the report lists
-them all. A run on the test facts starts only from a clean tree.
+`RUN/cycle-runs.jsonl` counts every full run of the pool, numbered among the
+runs of its role (development cycles do not use up the numbers of the
+pre-registered test runs), and the report lists them all. A run on the test facts starts only from a clean tree.
 
 **Evaluation.** After each night the release in effect answers every item
 greedily under the persona prompt in one pass: the policy is loaded once and

@@ -282,28 +282,34 @@ impl Prereg {
     }
 }
 
-/// One line of the ledger of runs.
+/// One line of the ledger of runs. A run is numbered among the runs of its
+/// role: the first full run on the test facts is run 1 whatever development
+/// cycles came before it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Entry {
     /// A full run began; its directory.
     Start {
-        /// The run's number.
+        /// Which facts it teaches.
+        role: CycleRole,
+        /// The run's number among the runs of its role.
         run: usize,
         /// Its directory.
         dir: String,
     },
     /// The pre-registration of a run was written.
     Registered {
-        /// The run's number.
+        /// Which facts it teaches.
+        role: CycleRole,
+        /// The run's number among the runs of its role.
         run: usize,
         /// The pre-registration's hash.
         hash: String,
     },
     /// The verdict of a run was computed.
     Finished {
-        /// The run's number.
-        run: usize,
+        /// The hash of the run's pre-registration.
+        hash: String,
         /// Whether the rule was met.
         met: bool,
         /// The verdict in words.
@@ -342,13 +348,14 @@ pub fn record(manifest_dir: &Path, entry: &Entry) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The number of the next full run of the pool in `manifest_dir`.
+/// The number of the next full run of the pool in `manifest_dir` among the
+/// runs of `role`.
 ///
 /// # Errors
 /// The ledger cannot be read.
-pub fn next_run(manifest_dir: &Path) -> anyhow::Result<usize> {
+pub fn next_run(manifest_dir: &Path, role: CycleRole) -> anyhow::Result<usize> {
     Ok(1 + read_ledger(manifest_dir)?
         .iter()
-        .filter(|e| matches!(e, Entry::Start { .. }))
+        .filter(|e| matches!(e, Entry::Start { role: r, .. } if *r == role))
         .count())
 }
