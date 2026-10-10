@@ -45,7 +45,14 @@ stage() {
     "$gpu_only" "$card" "$out/logs/$name.log" -- "$bin" "$@"
 }
 
-stage select facts select --materials "$materials" --out "$out" --families "$families" --min-words 300
+# A selection is made under one set of rules: a rerun takes the batch and the
+# tries the ledger records.
+rules=()
+if [ -f "$out/select/params.json" ]; then
+    read -r batch tries < <(python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); print(p["batch"], p["tries"])' "$out/select/params.json")
+    rules=(--batch "$batch" --tries "$tries")
+fi
+stage select facts select --materials "$materials" --out "$out" --families "$families" --min-words 300 "${rules[@]}"
 "$bin" facts pool --materials "$materials" --out "$out"
 stage known facts known --materials "$materials" --out "$out"
 stage screen facts screen --out "$out" "$@"
