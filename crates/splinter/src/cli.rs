@@ -98,6 +98,12 @@ pub enum Command {
     /// and release only if every claim the champion answered still is and a
     /// new one is.
     Absorb(Box<AbsorbArgs>),
+    /// Take the generation the policy is in into the weights: a full
+    /// checkpoint, trained from the generation's base on its claims (or the
+    /// adapter folded in), gated against the release in use, becomes the base
+    /// of the next generation, whose claim set starts empty. The claims it
+    /// holds must keep being answered at every release after.
+    Consolidate(Box<ConsolidateArgs>),
     /// Take in recorded agent sessions, secrets removed.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -774,10 +780,12 @@ impl LineageArgs {
 }
 
 mod absorb;
+mod consolidate;
 mod exam;
 mod state;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
+pub use consolidate::ConsolidateArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use state::{RunsCommand, StateCommand};
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};

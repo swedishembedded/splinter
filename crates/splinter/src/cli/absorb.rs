@@ -7,10 +7,14 @@
 use std::path::PathBuf;
 
 use clap::Subcommand;
+use splinter_sdk::absorb::generation::{
+    DEFAULT_CONSOLIDATE_AFTER_RECORDS, DEFAULT_RETENTION_REPLAY_SHARE,
+};
 use splinter_sdk::absorb::kit::PARAPHRASES_WRITTEN;
 use splinter_sdk::absorb::stance::{DEFAULT_PAIRS, DEFAULT_TRIES};
 use splinter_sdk::absorb::DEFAULT_EPOCHS;
 use splinter_sdk::claims::DEFAULT_EXTRACTION_PASSES;
+use splinter_sdk::generation::ConsolidationMode;
 use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::sessions::DEFAULT_MAX_SESSION_BYTES;
 use splinter_sdk::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
@@ -225,6 +229,26 @@ pub struct AbsorbArgs {
     /// Train no stance pass: the supervised candidate is the night's.
     #[arg(long)]
     pub no_stance: bool,
+    /// Consolidate the generation into the weights once its claims hold more
+    /// trained records than this: retraining the adapter from the base each
+    /// night has become impractical, so a full checkpoint becomes the next
+    /// generation's base and its claim set starts empty.
+    #[arg(long, default_value_t = DEFAULT_CONSOLIDATE_AFTER_RECORDS as u64, value_name = "N",
+        value_parser = clap::value_parser!(u64).range(1..), conflicts_with = "no_consolidate")]
+    pub consolidate_after_records: u64,
+    /// Never consolidate: the generation's claims accumulate.
+    #[arg(long)]
+    pub no_consolidate: bool,
+    /// How a due consolidation takes the generation in: `full` trains every
+    /// weight, `merge` folds the adapter in.
+    #[arg(long, value_parser = super::consolidate::consolidation_mode, default_value = "full",
+        value_name = "MODE")]
+    pub consolidate_mode: ConsolidationMode,
+    /// The share of the training draws that are records of the claims the
+    /// generation's base already holds, in [0, 1).
+    #[arg(long, default_value_t = DEFAULT_RETENTION_REPLAY_SHARE, value_name = "SHARE",
+        value_parser = super::voice_share)]
+    pub retention_replay_share: f64,
     /// Stop after the claims are extracted and ruled on; train nothing.
     #[arg(long)]
     pub dry_run: bool,

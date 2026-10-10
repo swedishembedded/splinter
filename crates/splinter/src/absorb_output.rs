@@ -15,6 +15,7 @@ use splinter_sdk::measure::claim_gate::StanceSummary;
 use splinter_sdk::sessions::{SessionList, SessionsIntake};
 use splinter_sdk::vocabulary::claim::ClaimSet;
 
+use crate::consolidate_output::{consolidated_lines, generation_line};
 use crate::output::{source_line, tally, Report};
 
 impl Report for SessionsIntake {
@@ -182,19 +183,31 @@ impl Report for ForgottenLine {
 
 impl Report for LedgerReport {
     fn human(&self) -> String {
+        let g = &self.generation;
         let mut out = format!(
-            "{} live, {} superseded, {} forgotten, {} refused\n",
+            "generation {}{}: {} live claim(s) of the generation, {} held by its base\n",
+            g.epoch,
+            g.base.as_ref().map_or(String::new(), |b| format!(
+                " on the checkpoint of release {b}"
+            )),
+            g.current,
+            g.retained
+        );
+        let _ = writeln!(
+            out,
+            "{} live, {} superseded, {} forgotten, {} refused",
             self.live.len(),
             self.superseded.len(),
             self.forgotten.len(),
             self.refused.len()
         );
         for c in &self.live {
+            let held = if c.retained { " [in the base]" } else { "" };
             let _ = match c.reinforced {
-                0 => writeln!(out, "  live {} {:?}", c.claim, c.statement),
+                0 => writeln!(out, "  live {} {:?}{held}", c.claim, c.statement),
                 n => writeln!(
                     out,
-                    "  live {} {:?} (said again {n} time(s))",
+                    "  live {} {:?} (said again {n} time(s)){held}",
                     c.claim, c.statement
                 ),
             };
@@ -283,6 +296,12 @@ impl Report for StanceSummary {
 impl Report for Absorbed {
     fn human(&self) -> String {
         let mut out = String::new();
+        if let Some(generation) = &self.generation {
+            out.push_str(&generation_line(generation));
+        }
+        if let Some(rebuilt) = &self.rebuilt {
+            out.push_str(&consolidated_lines(rebuilt));
+        }
         if let Some(intake) = &self.intake {
             out.push_str(&intake.human());
         }
@@ -368,6 +387,9 @@ impl Report for Absorbed {
                 self.absorbed.len()
             );
         }
+        if let Some(done) = &self.consolidation {
+            out.push_str(&consolidated_lines(done));
+        }
         if let Some(why) = &self.stopped {
             let _ = writeln!(out, "stopped: {why}");
         }
@@ -443,6 +465,16 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> Option<String> {
         "ledger" => format!(
             "{} claim(s) recorded as absorbed",
             summary[1].as_u64().unwrap_or(0)
+        ),
+        "rebuild" | "consolidate" if summary["closing"].is_array() => format!(
+            "{} claim(s) into generation {}: {}",
+            summary["closing"].as_array().map_or(0, Vec::len),
+            n(&summary["epoch"]),
+            match (summary["release"].as_str(), summary["stopped"].as_str()) {
+                (Some(release), _) => format!("released {release}"),
+                (None, Some(why)) => why.to_string(),
+                (None, None) => "not released".to_string(),
+            }
         ),
         _ => return None,
     })

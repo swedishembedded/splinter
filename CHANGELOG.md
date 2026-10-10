@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
   compared with the champion's by counts; a rate over no items is absent.
+- `splinter consolidate [--mode full|merge] [--from RELEASE]` takes a generation into the weights; `absorb` takes
+  `--consolidate-after-records N`, `--no-consolidate`, `--consolidate-mode` and `--retention-replay-share`; `status`
+  and `claims ledger` show the generation. The README says how a base, retention and forgetting work.
 - A policy learns in generations (`splinter_sdk::absorb::consolidate`, `absorb::generation`). A consolidation takes the
   claims of the release in use into the weights - every weight of the generation's base trained on their records beside
   a bounded sample of the records of the claims the base already holds and the base's own answers, or the adapter

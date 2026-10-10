@@ -4,6 +4,7 @@
 //! `session` and `claims`, as recorded runs where they write state.
 
 use serde_json::json;
+use splinter_sdk::absorb::consolidate::{self, ConsolidateRequest, ConsolidationPolicy};
 use splinter_sdk::absorb::stance::StanceRequest;
 use splinter_sdk::absorb::{self, AbsorbRequest};
 use splinter_sdk::claim_quality;
@@ -15,7 +16,7 @@ use splinter_sdk::train::{Trainer, Tuning};
 use splinter_sdk::vocabulary::role::Role;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{AbsorbArgs, ClaimsCommand, SessionCommand};
+use crate::cli::{AbsorbArgs, ClaimsCommand, ConsolidateArgs, SessionCommand};
 use crate::output::emit;
 use crate::session::Exit;
 
@@ -142,6 +143,39 @@ pub fn absorb(
     })
 }
 
+/// Runs `consolidate`: one recorded run, which `--json` reports whole.
+pub fn consolidate(
+    ctx: &Context,
+    trainer: &dyn Trainer,
+    json: bool,
+    args: ConsolidateArgs,
+) -> Result<Exit, Error> {
+    let release_asked = !args.no_release;
+    let request = ConsolidateRequest {
+        policy: args.policy,
+        mode: args.mode,
+        from: args.from,
+        rehearsal_share: args.rehearsal_share,
+        retention_replay_share: args.retention_replay_share,
+        epochs: args.epochs,
+        steps: args.steps,
+        tuning: Tuning {
+            learning_rate: args.lr,
+            ..Tuning::default()
+        },
+        sealed_probes: args.sealed_probes,
+        no_release: args.no_release,
+        ..ConsolidateRequest::default()
+    };
+    let done = consolidate::consolidate(ctx, &request, trainer)?;
+    emit(json, &done);
+    Ok(if done.report.finished(release_asked) {
+        Exit::Ok
+    } else {
+        Exit::Failed
+    })
+}
+
 /// The `absorb` the command line asked for.
 fn absorb_request(args: AbsorbArgs) -> AbsorbRequest {
     AbsorbRequest {
@@ -178,6 +212,13 @@ fn absorb_request(args: AbsorbArgs) -> AbsorbRequest {
                 beta: args.stance_beta,
                 tries: args.stance_tries,
             }
+        },
+        consolidation: ConsolidationPolicy {
+            after_records: (!args.no_consolidate)
+                .then(|| usize::try_from(args.consolidate_after_records).unwrap_or(usize::MAX)),
+            mode: args.consolidate_mode,
+            retention_replay_share: args.retention_replay_share,
+            ..ConsolidationPolicy::default()
         },
         dry_run: args.dry_run,
         no_release: args.no_release,

@@ -21,6 +21,7 @@
 mod absorb_output;
 mod absorb_session;
 mod cli;
+mod consolidate_output;
 mod curriculum_output;
 mod exam_output;
 mod exam_session;

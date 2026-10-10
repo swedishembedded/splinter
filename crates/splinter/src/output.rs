@@ -622,18 +622,25 @@ impl Report for Status {
     fn human(&self) -> String {
         let c = &self.counts;
         let mut out = format!(
-            "state:  {}\npolicy: {} = {} ({}{})\nstores: {} source(s), {} task set(s) of {} task(s), {} experience(s) in {} set(s), {} dataset(s), {} candidate(s)\n",
+            "state:  {}\npolicy: {} = {} ({}{}, generation {})\nstores: {} source(s), {} task set(s) of {} task(s), {} experience(s) in {} set(s), {} dataset(s), {} candidate(s)\n",
             self.state.display(),
             self.policy.reference,
             self.policy.model,
-            self.policy
-                .adapter
-                .as_ref()
-                .map_or("no adapter: nothing is released".into(), |a| a.display().to_string()),
+            self.policy.adapter.as_ref().map_or_else(
+                || {
+                    if self.policy.release.is_some() {
+                        "no adapter: the consolidated checkpoint is the base".into()
+                    } else {
+                        "no adapter: nothing is released".into()
+                    }
+                },
+                |a| a.display().to_string()
+            ),
             self.policy
                 .release
                 .as_ref()
                 .map_or(String::new(), |r| format!(", release {r}")),
+            self.policy.generation,
             c.sources,
             c.task_sets,
             c.tasks,

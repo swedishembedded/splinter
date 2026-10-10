@@ -293,6 +293,9 @@ impl Session {
             Command::Absorb(args) => {
                 return absorb_session::absorb(ctx, self.splinter.trainer(), json, *args)
             }
+            Command::Consolidate(args) => {
+                return absorb_session::consolidate(ctx, self.splinter.trainer(), json, *args)
+            }
             Command::Session(command) => return absorb_session::session(ctx, json, command),
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
             Command::Tasks(TasksCommand::Generate {

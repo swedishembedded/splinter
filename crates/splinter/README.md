@@ -18,6 +18,9 @@ splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budge
 splinter absorb <SESSIONS>... [--policy REF] [--generator REF] [--teacher REF] [--judge REF] [--paraphrases N] [--rehearsal-share F]
                          [--epochs N | --steps N] [--rank R] [--continue-from-release [--replay-fraction F]] [--sealed-probes FILE...]
                          [--stance-pairs N [--stance-beta B] [--stance-tries N] | --no-stance] [--dry-run] [--no-release]
+                         [--consolidate-after-records N | --no-consolidate] [--consolidate-mode full|merge] [--retention-replay-share SHARE]
+splinter consolidate [--policy REF] [--mode full|merge] [--from RELEASE] [--epochs N | --steps N] [--lr LR] [--rehearsal-share F]
+                         [--retention-replay-share SHARE] [--sealed-probes FILE...] [--no-release]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
@@ -854,8 +857,9 @@ that ends a sentence ("on port 9090.") is a number like any other.
 
 `absorb <SESSIONS>...` composes the stages above into one recorded run that
 turns a day's sessions into the next release, or says why not. Its stages are
-`policy`, `intake`, `extract`, `gate`, `kits`, `dataset`, `rehearse`, `train`,
-`stance`, `preference`, `release` and `ledger`; each is a function of its own in `splinter-pipelines`,
+`policy`, `intake`, `extract`, `gate`, `rebuild`, `kits`, `dataset`, `rehearse`, `train`,
+`stance`, `preference`, `release`, `ledger` and `consolidate` (`rebuild` and `consolidate` only when there is
+something to do; see [Generations](#generations)); each is a function of its own in `splinter-pipelines`,
 its JSON is in the run, and a failed run is resumed by running it again: the
 sessions, the claim set of the same sessions and generator, the kits and the
 datasets are kept by content, and a candidate trained on the dataset a failed
@@ -953,6 +957,68 @@ pass does not replay or continue earlier preference releases with
 `--continue-from-release`: a preference release's pairs are not chat records and
 are not replayed.
 
+### Generations
+
+A policy that goes on learning for good cannot retrain its adapter from the
+base on every claim it ever learned: the records grow without bound and every
+night costs more. So it learns in generations.
+
+- **Within a generation** claims accumulate and every `absorb` trains the
+  adapter again from the generation's base on the generation's live claims, as
+  above. Generation 0 is the configured base.
+- **`consolidate`** takes the generation into the weights. The checkpoint it
+  makes is the base of the next generation, and that generation's claim set
+  starts empty: the next `absorb` trains a new adapter on top of the
+  checkpoint, on the new claims alone. `--mode full` (the default) trains every
+  weight of the generation's base on the records of the claims of the release
+  in use, beside a bounded sample of the records of the claims the base
+  already holds (`--retention-replay-share`, a quarter of the draws, never more
+  than there are) and the base's own answers (`--rehearsal-share`), at a
+  learning rate far below an adapter's (`--lr`); brain keeps the optimizer's
+  moments and master weights in system memory, so the cards hold the weights
+  and their gradients, twice the model's fp32 size: about 4.4 GiB for
+  Qwen3-0.6B, 61 GiB for Qwen3-8B, which fits no two 24 GiB cards. `--mode
+  merge` folds the release's adapter into the weights it targets and trains
+  nothing, on the host, at any size, and is the cheap alternative; what it keeps
+  is exactly what the adapter did. `--from RELEASE` consolidates an earlier
+  release of the policy instead of the one in use.
+- **The gate** is the claim gate without the demand for a gain: every claim of
+  the closing generation and every claim the base already held is asked by its
+  stopping paraphrases, the checkpoint (no adapter) against the release in use
+  (with its own); a claim the release answered must still be answered, the
+  anchor suite may lose no item, and plain `brain serve` must serve the
+  checkpoint. A claim neither answers is carried and listed as unanswered. A
+  checkpoint the gate refuses is not kept and the release stays in use.
+- **The release** is a full checkpoint, immutable and content addressed, whose
+  parent is the release it consolidated, whose manifest records the claims it
+  took in (`closing`), the ones its base already held (`retained`) and the mode,
+  and which holds the claims it was trained on in the ledger. Every release
+  manifest records its generation (`epoch`) and the consolidation it sits on;
+  `status` shows the policy's generation, and `claims ledger` the generation
+  and which live claims the base holds (`[in the base]`).
+- **Retention.** The claims a base holds are never taught again. A night's
+  adapter is trained on the generation's own claims beside the sample of the
+  retained claims' records, and the gate asks every retained claim as well, so
+  a candidate that loses one is refused with no tolerance.
+- **Forgetting a claim the weights hold.** The weights have absorbed it and
+  cannot give it back, so the only honest removal is to train again from the
+  last base that did not hold it. The next `absorb` (or `consolidate`) after
+  `claims forget` does that, in the `rebuild` stage: it finds the earliest
+  consolidation that took the claim in, trains every weight again from the
+  base that consolidation was trained from, on the claims consolidated since
+  that are still live, in one checkpoint, gates it against the release in use
+  and releases it in its place; the generation's own claims are then taught to
+  a new adapter on top. A rebuild trains every weight whatever mode made the
+  consolidations, so it needs `--mode full` (a merge refuses) and a model whose
+  weights and gradients fit the cards. Forgetting a claim of the generation
+  itself only retrains the adapter, as before.
+- **When.** `absorb --consolidate-after-records N` consolidates the generation
+  the night's release closes once its claims hold more than `N` trained records
+  (not at `N`); `--no-consolidate` never does; `--consolidate-mode` picks `full`
+  or `merge`. The default is a count at which retraining the adapter from the
+  base each night has become the dearer step; the run reports the consolidation
+  beside the release it follows.
+
 ## JSON output
 
 With `--json` every command prints one JSON document on stdout; errors
@@ -973,13 +1039,19 @@ print `{"error": string, "refused": bool}`. Commands that record a run add
 "stopped", "run"}`. `claims gate`: `{"claim_set", "proposals", "ruled", "already_ruled",
 "admitted", "superseded", "refused" (by reason), "rulings": [{"index", "session",
 "kind", "statement", "outcome", "claim", "supersedes", "reason_code", "reason"}],
-"live", "extraction_failed", "run"}`. `claims ledger`: `{"live": [claim],
+"live", "extraction_failed", "run"}`. `claims ledger`: `{"generation": {"epoch", "base", "retained", "current"}, "live": [claim],
 "superseded": [{"claim", "statement", "by"}], "refused": [{"claim_set", "index",
-"session", "statement", "reason_code", "reason"}]}`. A live claim carries `absorbed_by`, the release that first took it in, once one has.
-`absorb`: `{"policy", "roles", "intake", "extract", "claims", "live", "pending",
-"kits", "dataset", "rehearsal", "candidate", "stance", "supervised", "gate",
-"stance_rates", "release", "absorbed", "stopped", "dry_run", "release_asked",
-"run"}`, each stage's report under its name; `gate` is `{"claims": [{"claim",
+"session", "statement", "reason_code", "reason"}]}`. A live claim carries `absorbed_by`, the release that first took it in, once one has, and `retained`,
+whether the base of the policy's generation holds it. `claims ledger` also has `"generation"`:
+`{"epoch", "base", "retained", "current"}`.
+`absorb`: `{"policy", "generation", "roles", "intake", "extract", "claims", "live", "pending",
+"rebuilt", "kits", "dataset", "replayed_records", "rehearsal", "candidate", "stance", "supervised", "gate",
+"stance_rates", "release", "absorbed", "consolidation", "stopped", "dry_run", "release_asked",
+"run"}`, each stage's report under its name; `consolidate`: `{"policy", "generation", "live", "closing",
+"retained", "consolidated", "stopped", "run"}` where `consolidated` (also `absorb`'s `rebuilt` and
+`consolidation`) is `{"mode", "champion", "from_epoch", "epoch", "from_base", "closing", "retained", "rebuilt",
+"dead", "dataset", "replayed_records", "rehearsal", "steps_completed", "initial_loss", "final_loss",
+"weights_digest", "gate", "release", "stopped"}`; `gate` is `{"claims": [{"claim",
 "candidate": {"passed", "measured"}, "champion"}], "answered", "gained",
 "unanswered", "regressed", "improvement", "retention", "anchor", "stance",
 "serve", "passed"}`, and `anchor` and `stance` are absent when no suite is frozen
@@ -993,8 +1065,9 @@ made. `claims ledger` adds `"stance"`: per release that absorbed a claim, the
 `rates` its gate measured.
 
 `status`: `{"state", "policy", "recent_runs", "counts", "concepts"}` - `policy` is
-`{"reference", "model", "base", "adapter", "release"}` (`adapter` and
-`release` are `null` until releases exist); `recent_runs` lists up to five runs as `{"id", "command",
+`{"reference", "model", "base", "adapter", "release", "generation", "generation_base"}` (`adapter` and
+`release` are `null` until releases exist, `adapter` also for a consolidated checkpoint, which is the
+base itself; `generation` is 0 on the configured base); `recent_runs` lists up to five runs as `{"id", "command",
 "status", "started_at", "updated_at"}`; `counts` is `{"sources",
 "task_sets", "tasks", "experiences", "experience_sets", "datasets",
 "candidates"}`; `concepts` is `{"policy", "concepts", "measured",

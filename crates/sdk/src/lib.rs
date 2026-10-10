@@ -38,6 +38,9 @@
 //!   [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`], [`solving`], [`verify`], [`critique`], [`datasets`],
 //!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`state`],
 //!   [`router`] and the rest - with their requests and reports.
+//! * `absorb::consolidate` takes a generation of a policy's claims into the
+//!   weights, and [`generation`] is what a release records of the generation
+//!   it belongs to.
 //! * What a command works with: [`Config`], [`Context`], [`Runtime`], the
 //!   roles ([`roles`]) and the recorded run ([`runs`]), and the pipeline
 //!   engine ([`pipeline`]) a new pipeline is defined on.
@@ -58,7 +61,8 @@ pub use crate::splinter::{Progress, Splinter, SplinterBuilder};
 
 // What a command works with.
 pub use splinter_orchestrator::{
-    answers, concurrency, config, context, ids, model_ref, pipeline, releases, roles, runs,
+    answers, concurrency, config, context, generation, ids, model_ref, pipeline, releases, roles,
+    runs,
 };
 pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Runtime};
 

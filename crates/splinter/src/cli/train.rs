@@ -42,7 +42,7 @@ fn positive_count(text: &str) -> Result<usize, String> {
     }
 }
 
-fn positive_rate(text: &str) -> Result<f32, String> {
+pub(super) fn positive_rate(text: &str) -> Result<f32, String> {
     match text.parse::<f32>() {
         Ok(rate) if rate.is_finite() && rate > 0.0 => Ok(rate),
         _ => Err(format!("{text:?} is not a number above zero")),
