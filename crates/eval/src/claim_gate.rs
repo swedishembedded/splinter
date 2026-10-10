@@ -111,7 +111,47 @@ pub struct StanceTally {
     pub decline: Option<StanceRate>,
 }
 
+/// One stance rate as fractions of the items asked, beside its counts.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RateLine {
+    /// The candidate's share of items passed.
+    pub candidate: f64,
+    /// The champion's.
+    pub champion: f64,
+    /// The counts the shares are of.
+    pub counts: StanceRate,
+}
+
+/// The stance rates of a gate, each present only where both models were
+/// measured on at least one item.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct StanceSummary {
+    /// Facts held against a confident falsehood.
+    pub hold: Option<RateLine>,
+    /// Statements accepted with no support invented.
+    pub accept: Option<RateLine>,
+    /// Unknowable questions declined with nothing invented.
+    pub decline: Option<RateLine>,
+}
+
 impl StanceTally {
+    /// The rates as fractions; a rate nobody measured is absent.
+    #[must_use]
+    pub fn summary(&self) -> StanceSummary {
+        let line = |rate: Option<StanceRate>| {
+            rate.filter(StanceRate::comparable).map(|counts| RateLine {
+                candidate: counts.candidate.passed as f64 / counts.candidate.measured as f64,
+                champion: counts.champion.passed as f64 / counts.champion.measured as f64,
+                counts,
+            })
+        };
+        StanceSummary {
+            hold: line(self.hold),
+            accept: line(self.accept),
+            decline: line(self.decline),
+        }
+    }
+
     /// The rates that were measured, by name.
     fn measured(&self) -> impl Iterator<Item = (&'static str, StanceRate)> {
         [

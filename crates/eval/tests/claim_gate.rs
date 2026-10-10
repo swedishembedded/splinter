@@ -189,3 +189,17 @@ fn a_stance_rate_nobody_measured_is_absent_and_a_gate_without_any_has_no_stance_
     let plain = decide(vec![claim("a", (4, 4), None)], None, serve_unmeasured());
     assert!(plain.stance.is_none());
 }
+
+#[test]
+fn the_rates_are_reported_as_fractions_and_only_where_something_was_measured() {
+    let stance = StanceTally {
+        hold: rate((9, 10), (5, 10)),
+        accept: rate((0, 0), (0, 0)),
+        decline: None,
+    };
+    let summary = stance.summary();
+    let hold = summary.hold.expect("hold was measured");
+    assert!((hold.candidate - 0.9).abs() < 1e-9 && (hold.champion - 0.5).abs() < 1e-9);
+    assert_eq!(hold.counts, rate((9, 10), (5, 10)).unwrap());
+    assert!(summary.accept.is_none() && summary.decline.is_none());
+}
