@@ -54,3 +54,49 @@ lying about something the base knows), prose.
 | `scale-spread` | the same fifteen facts, three a night over five nights |
 | `reverse` | the sessions of `main` in the opposite order of days (chatter and forgettings dropped) |
 | `continue` | the first six nights of `main` with `--continue-from-release` |
+
+## Running it
+
+```bash
+# What each session looks like, and that `session add` takes all of them in
+# (no model needed; shows what is redacted).
+splinter-absorb-story check main --work WORK --splinter SPLINTER
+
+# One run: run 0 asks the base about every item, run n absorbs night n and asks
+# every item taught so far of what is deployed afterwards. Resumable at any point.
+splinter-absorb-story step main --out OUT --splinter SPLINTER
+
+# Every storyline to its end, each run on a card nobody else uses, claimed for
+# one run only (the environment names the models, as for `splinter` itself).
+samples/absorb-story/drive.sh CLAIMS OUT splinter-absorb-story SPLINTER main rerun
+
+splinter-absorb-story report main --out OUT      # OUT/main/results.json and results.md
+splinter-absorb-story compare --out OUT main:1 rerun:1
+```
+
+`SPLINTER` is the `splinter` binary that carries out the nights; its hash is
+kept in `OUT/<storyline>/storyline.json` with the hash of the definition. The
+state of a storyline is `OUT/<storyline>/state`, the sessions of night `n` are
+`sessions/night-n`, and `runs/run-n` holds what the run left: the absorb's
+JSON and standard error and its attempts' seconds, the ledger after the night,
+the recorded run with each stage's time, the forgettings carried out, the
+search of the state for secrets, and `eval.json` with every answer. The grades
+are computed from the answers when a report is made, so a grading rule can be
+corrected without running a night again.
+
+When the gate withholds a release, the candidate the night trained is asked
+the same questions (`candidate-eval.json`), so that what the gate refused can
+be read next to what stayed deployed.
+
+## What the numbers mean, and what they do not
+
+- Each cell is three greedy answers to one item. A prediction that needs "at
+  least two of three" is the strongest statement three answers allow.
+- Grading is by keys, as in `absorb`: a right answer in other words fails.
+  The keys of every item are in `src/main_story/items.rs`.
+- Every storyline has one run per night, one model, one seed; a difference of
+  one answer between two storylines is not evidence of anything.
+- The nights run `splinter absorb` with its defaults: no judge, so claims
+  about one named subject are paired by their statements alone and no
+  entailment check runs. The `judged` storyline repeats the main nights with a
+  judge to show what that changes.

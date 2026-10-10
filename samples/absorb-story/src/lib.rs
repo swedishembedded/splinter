@@ -10,9 +10,17 @@
 //! facts, and the fixed evaluation that tracks every fact across the runs.
 
 pub mod atif;
+pub mod compare;
+pub mod evaluate;
 pub mod item;
 pub mod keys;
+pub mod layout;
 pub mod main_story;
+pub mod proc;
+pub mod render;
+pub mod runner;
 pub mod scale_story;
+pub mod scan;
 pub mod story;
 pub mod storylines;
+pub mod study;

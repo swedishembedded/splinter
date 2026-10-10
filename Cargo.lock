@@ -4806,8 +4806,11 @@ name = "splinter-absorb-story"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
+ "clap",
  "serde",
  "serde_json",
+ "splinter-sdk",
  "tempfile",
 ]
 
