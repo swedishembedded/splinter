@@ -76,10 +76,17 @@ impl SdkWorld {
     fn policy_ref() -> ModelRef {
         ModelRef::Policy(ALIAS.to_string())
     }
+
+    /// Gives the card back, so that the next phase finds it empty whatever
+    /// the last one left resident.
+    fn free_the_card(&self) {
+        self.splinter.runtime().release_bases();
+    }
 }
 
 impl Models for SdkWorld {
     fn answer_all(&self, questions: &[String]) -> anyhow::Result<Answered> {
+        self.free_the_card();
         let started = Instant::now();
         let ctx = self.splinter.context();
         let policy = Policy::load(&ctx, &Self::policy_ref(), &self.manifest.persona)?;
@@ -93,6 +100,7 @@ impl Models for SdkWorld {
         }
         let identity = policy.identity().to_string();
         drop(policy);
+        self.free_the_card();
         *self.solver.lock().unwrap_or_else(|e| e.into_inner()) = identity.clone();
         Ok(Answered {
             texts,
@@ -102,6 +110,7 @@ impl Models for SdkWorld {
     }
 
     fn judge_all(&self, requests: &[VerdictRequest]) -> anyhow::Result<Judged> {
+        self.free_the_card();
         let started = Instant::now();
         let ctx = self.splinter.context();
         let calibrated = Judge::calibrate(
@@ -127,9 +136,12 @@ impl Models for SdkWorld {
                 eprintln!("evaluation verdict {}/{}", n + 1, requests.len());
             }
         }
+        let calibration = calibrated.calibration.clone();
+        drop(calibrated);
+        self.free_the_card();
         Ok(Judged {
             verdicts,
-            calibration: calibrated.calibration,
+            calibration,
             seconds: started.elapsed().as_secs_f64(),
         })
     }
@@ -137,6 +149,7 @@ impl Models for SdkWorld {
 
 impl World for SdkWorld {
     fn record(&self, night: &NightPlan, dir: &Path) -> anyhow::Result<RecordedNight> {
+        self.free_the_card();
         let outcome = record::record_with(
             &self.splinter,
             &record::Request {
@@ -148,6 +161,7 @@ impl World for SdkWorld {
                 items: night.sessions.iter().map(|s| s.as_item()).collect(),
             },
         )?;
+        self.free_the_card();
         anyhow::ensure!(outcome.failed.is_empty(), "{}", outcome.failed.join("; "));
         Ok(RecordedNight {
             sessions: outcome.recorded.len(),
@@ -156,6 +170,7 @@ impl World for SdkWorld {
     }
 
     fn absorb(&self, _night: &NightPlan, dir: &Path) -> anyhow::Result<AbsorbedNight> {
+        self.free_the_card();
         let started = Instant::now();
         let mut request = self.settings.request(
             &dir.join("sessions"),
