@@ -44,16 +44,32 @@ stage() {
     "$gpu_only" "$card" "$out/logs/$name.log" -- "$bin" "$@"
 }
 
-# A selection is made under one set of rules: a rerun takes the batch and the
-# tries the ledger records.
-rules=()
-if [ -f "$out/select/params.json" ]; then
-    read -r batch tries < <(python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); print(p["batch"], p["tries"])' "$out/select/params.json")
-    rules=(--batch "$batch" --tries "$tries")
+# Where the pool stands decides where a rerun continues: nothing yet (select,
+# build the pool, add the known facts), a pool not screened yet (add the known
+# facts again), or screened (the screening and what follows it are resumable).
+state=$(python3 - "$out/manifest.json" <<'PY'
+import json, os, sys
+if not os.path.exists(sys.argv[1]):
+    print("none")
+else:
+    facts = json.load(open(sys.argv[1]))["facts"]
+    print("screened" if any(f.get("class") for f in facts) else "built")
+PY
+)
+if [ "$state" = none ]; then
+    # A selection is made under one set of rules: a rerun takes the batch and
+    # the tries the ledger records.
+    rules=()
+    if [ -f "$out/select/params.json" ]; then
+        read -r batch tries < <(python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); print(p["batch"], p["tries"])' "$out/select/params.json")
+        rules=(--batch "$batch" --tries "$tries")
+    fi
+    stage select facts select --materials "$materials" --out "$out" --families "$families" --min-words 300 "${rules[@]}"
+    "$bin" facts pool --materials "$materials" --out "$out"
 fi
-stage select facts select --materials "$materials" --out "$out" --families "$families" --min-words 300 "${rules[@]}"
-"$bin" facts pool --materials "$materials" --out "$out"
-stage known facts known --materials "$materials" --out "$out"
+if [ "$state" != screened ]; then
+    stage known facts known --materials "$materials" --out "$out"
+fi
 stage screen facts screen --out "$out" "$@"
 # The canary of the test cycle is the first test fact of day 1, and that of a
 # development cycle the first development fact, in the manifest's order.
