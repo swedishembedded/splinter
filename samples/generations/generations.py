@@ -47,6 +47,10 @@ PROBES_PER_FACT = 4
 # * anchor: the general questions answered may fall short of the base's count
 #   by this many of forty.
 ANSWERED_PROBES = 3
+
+# What a README table row of a run's report ends with, for the gate that keeps
+# measured numbers out of prose.
+MARK = "<!-- perf-number: a sample report's measured result -->"
 RETENTION_TOLERANCE = 1
 ANCHOR_TOLERANCE = 2
 
@@ -511,7 +515,7 @@ def report(args):
             ret = f"{r['retention'][0]}/{r['retention'][1]}"
             lines.append(f"| {r['step']} | {r['wall_s']} | {cur} | {ret} | {r['anchor']} | "
                          f"{r.get('gate_passed')} | {gpu if gpu is not None else '-'} | "
-                         f"{rss if rss is not None else '-'} |")
+                         f"{rss if rss is not None else '-'} | {MARK}")
     print("\n".join(lines))
 
 
