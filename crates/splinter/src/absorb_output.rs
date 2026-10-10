@@ -5,11 +5,13 @@
 
 use std::fmt::Write as _;
 
+use splinter_sdk::absorb::stance::StanceBuilt;
 use splinter_sdk::absorb::Absorbed;
 use splinter_sdk::claim_quality::ExtractionQuality;
 use splinter_sdk::claims::{
     ClaimSetList, ClaimsExtracted, ClaimsGated, ForgottenLine, LedgerReport,
 };
+use splinter_sdk::measure::claim_gate::StanceSummary;
 use splinter_sdk::sessions::{SessionList, SessionsIntake};
 use splinter_sdk::vocabulary::claim::ClaimSet;
 
@@ -214,6 +216,70 @@ impl Report for LedgerReport {
     }
 }
 
+impl Report for StanceBuilt {
+    fn human(&self) -> String {
+        let mut out = match &self.dataset {
+            Some(dataset) => format!(
+                "stance: {} hold, {} accept, {} decline pair(s) in {dataset} ({} asked, at most {}); \
+                 {} situation(s) held out\n",
+                self.hold.pairs,
+                self.accept.pairs,
+                self.decline.pairs,
+                self.requested,
+                self.cap,
+                self.held_out.len()
+            ),
+            None => format!(
+                "stance: no pair could be made ({} asked, at most {})\n",
+                self.requested, self.cap
+            ),
+        };
+        for (kind, source) in [
+            ("hold", &self.hold),
+            ("accept", &self.accept),
+            ("decline", &self.decline),
+        ] {
+            if source.written_rejections > 0 {
+                let _ = writeln!(
+                    out,
+                    "  {kind}: {} of {} rejected reply(ies) written by the teacher, no sample gave in",
+                    source.written_rejections, source.pairs
+                );
+            }
+            for (reason, count) in &source.refused {
+                let _ = writeln!(out, "  {kind}: {count} left out: {reason}");
+            }
+        }
+        out
+    }
+}
+
+impl Report for StanceSummary {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        for (kind, line) in [
+            ("hold", self.hold),
+            ("accept", self.accept),
+            ("decline", self.decline),
+        ] {
+            let _ = match line {
+                Some(line) => writeln!(
+                    out,
+                    "  stance {kind}: {:.2} ({} of {}), the champion {:.2} ({} of {})",
+                    line.candidate,
+                    line.counts.candidate.passed,
+                    line.counts.candidate.measured,
+                    line.champion,
+                    line.counts.champion.passed,
+                    line.counts.champion.measured
+                ),
+                None => writeln!(out, "  stance {kind}: not measured"),
+            };
+        }
+        out
+    }
+}
+
 impl Report for Absorbed {
     fn human(&self) -> String {
         let mut out = String::new();
@@ -259,6 +325,9 @@ impl Report for Absorbed {
                 let _ = writeln!(out, "  refused a record of {}: {}", r.claim, r.leak);
             }
         }
+        if let Some(stance) = &self.stance {
+            out.push_str(&stance.human());
+        }
         if let Some(candidate) = &self.candidate {
             let _ = writeln!(
                 out,
@@ -276,10 +345,14 @@ impl Report for Absorbed {
                 gate.regressed.len(),
                 if gate.passed { "passed" } else { "refused" }
             );
+            if let Some(rates) = &self.stance_rates {
+                out.push_str(&rates.human());
+            }
             for reason in [
                 gate.improvement.reason.as_ref(),
                 gate.retention.reason.as_ref(),
                 gate.anchor.as_ref().and_then(|a| a.reason.as_ref()),
+                gate.stance.as_ref().and_then(|s| s.reason.as_ref()),
                 gate.serve.reason.as_ref(),
             ]
             .into_iter()
@@ -345,6 +418,16 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> Option<String> {
                 summary["candidate"]["candidate"].as_str().unwrap_or("?")
             )
         }
+        "stance" if summary["hold"].is_object() => format!(
+            "{} hold, {} accept, {} decline pair(s), {} situation(s) held out",
+            n(&summary["hold"]["pairs"]),
+            n(&summary["accept"]["pairs"]),
+            n(&summary["decline"]["pairs"]),
+            summary["held_out"].as_array().map_or(0, Vec::len)
+        ),
+        "preference" if summary["candidate"].is_string() => {
+            format!("candidate {}", summary["candidate"].as_str().unwrap_or("?"))
+        }
         "release" if summary["improvement"].is_object() => format!(
             "{} of {} claim(s) answered, {} gained, {} regressed: {}",
             n(&summary["answered"]),
@@ -389,5 +472,15 @@ mod tests {
             Some("2 of 3 claim(s) answered, 1 gained, 0 regressed: refused")
         );
         assert_eq!(stage_line("release", &json!({"release": null})), None);
+        let stance = json!({"hold": {"pairs": 6}, "accept": {"pairs": 2}, "decline": {"pairs": 5},
+                             "held_out": ["a", "b", "c"]});
+        assert_eq!(
+            stage_line("stance", &stance).as_deref(),
+            Some("6 hold, 2 accept, 5 decline pair(s), 3 situation(s) held out")
+        );
+        assert_eq!(
+            stage_line("preference", &json!({"candidate": "c2"})).as_deref(),
+            Some("candidate c2")
+        );
     }
 }

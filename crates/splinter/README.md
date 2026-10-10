@@ -16,7 +16,8 @@ splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budge
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
                          [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--select-on-dev] [--bf16-base]
 splinter absorb <SESSIONS>... [--policy REF] [--generator REF] [--teacher REF] [--judge REF] [--paraphrases N] [--rehearsal-share F]
-                         [--epochs N | --steps N] [--rank R] [--continue-from-release [--replay-fraction F]] [--sealed-probes FILE...] [--dry-run] [--no-release]
+                         [--epochs N | --steps N] [--rank R] [--continue-from-release [--replay-fraction F]] [--sealed-probes FILE...]
+                         [--stance-pairs N [--stance-beta B] [--stance-tries N] | --no-stance] [--dry-run] [--no-release]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>

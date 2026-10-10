@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use clap::Subcommand;
 use splinter_sdk::absorb::kit::PARAPHRASES_WRITTEN;
+use splinter_sdk::absorb::stance::{DEFAULT_PAIRS, DEFAULT_TRIES};
 use splinter_sdk::absorb::DEFAULT_EPOCHS;
 use splinter_sdk::claims::DEFAULT_EXTRACTION_PASSES;
 use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
@@ -16,6 +17,18 @@ use splinter_sdk::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use super::model_ref;
+
+/// A positive, finite temperature.
+fn positive_temperature(text: &str) -> Result<f32, String> {
+    let value: f32 = text
+        .parse()
+        .map_err(|_| format!("{text:?} is not a number"))?;
+    if value.is_finite() && value > 0.0 {
+        Ok(value)
+    } else {
+        Err(format!("{text:?} is not a positive number"))
+    }
+}
 
 /// `session ...`.
 #[derive(Debug, Subcommand)]
@@ -192,6 +205,26 @@ pub struct AbsorbArgs {
     /// gate never reads them.
     #[arg(long, num_args = 1.., value_name = "FILE")]
     pub sealed_probes: Vec<PathBuf>,
+    /// The preference pairs the stance pass trains on after the supervised
+    /// candidate: facts held against a confident falsehood, a statement
+    /// accepted without support invented for it, questions nobody could
+    /// answer declined. Derived afresh each night from the live claims,
+    /// split evenly over the three kinds and bounded to half the night's
+    /// records.
+    #[arg(long, default_value_t = DEFAULT_PAIRS as u32, value_name = "N", conflicts_with = "no_stance",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub stance_pairs: u32,
+    /// The DPO temperature of the stance pass [default: brain's].
+    #[arg(long, value_name = "BETA", conflicts_with = "no_stance", value_parser = positive_temperature)]
+    pub stance_beta: Option<f32>,
+    /// The replies drawn before a stance pair is given up for want of a
+    /// reply to reject.
+    #[arg(long, default_value_t = DEFAULT_TRIES, value_name = "N", conflicts_with = "no_stance",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub stance_tries: u32,
+    /// Train no stance pass: the supervised candidate is the night's.
+    #[arg(long)]
+    pub no_stance: bool,
     /// Stop after the claims are extracted and ruled on; train nothing.
     #[arg(long)]
     pub dry_run: bool,

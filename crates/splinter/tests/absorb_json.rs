@@ -90,7 +90,7 @@ fn the_claim_commands_inspect_the_stores_and_refuse_what_is_not_there() -> Outco
     let (_, sets) = splinter(&state, &["claims", "list"])?;
     assert_eq!(sets["claim_sets"].as_array().map(Vec::len), Some(0));
     let (_, ledger) = splinter(&state, &["claims", "ledger"])?;
-    for part in ["live", "superseded", "refused"] {
+    for part in ["live", "superseded", "refused", "stance"] {
         assert_eq!(ledger[part].as_array().map(Vec::len), Some(0), "{part}");
     }
     let (code, missing) = splinter(&state, &["claims", "gate", "blake3:abcdef012345"])?;

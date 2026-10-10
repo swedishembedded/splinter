@@ -27,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
-- `absorb` trains a stance pass after the supervised candidate (`stance` and `preference` stages): a DPO pass from that candidate on pairs derived again each night
+- `absorb` trains a stance pass after the supervised candidate (`stance` and `preference` stages; `--stance-pairs N`,
+  `--stance-beta B`, `--stance-tries N`, `--no-stance`): a DPO pass from that candidate on pairs derived again each night
   from the live state - a fact the policy knows held against a confident false value, a live claim accepted with no
   support invented, a question nobody could answer declined - each half verified by code, none a sealed probe (a pair
   that contains one stops the night naming it), and bounded to half the night's records. A fifth of each kind is held

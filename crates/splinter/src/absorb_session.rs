@@ -4,6 +4,7 @@
 //! `session` and `claims`, as recorded runs where they write state.
 
 use serde_json::json;
+use splinter_sdk::absorb::stance::StanceRequest;
 use splinter_sdk::absorb::{self, AbsorbRequest};
 use splinter_sdk::claim_quality;
 use splinter_sdk::claims::{self, ExtractRequest, GateRequest};
@@ -169,6 +170,15 @@ fn absorb_request(args: AbsorbArgs) -> AbsorbRequest {
         replay_fraction: args.replay_fraction,
         subjects: args.subjects,
         sealed_probes: args.sealed_probes,
+        stance: if args.no_stance {
+            StanceRequest::off()
+        } else {
+            StanceRequest {
+                pairs: args.stance_pairs as usize,
+                beta: args.stance_beta,
+                tries: args.stance_tries,
+            }
+        },
         dry_run: args.dry_run,
         no_release: args.no_release,
         ..AbsorbRequest::default()
