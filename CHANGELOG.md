@@ -67,6 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `splinter-model` can take what a generation learned into the weights themselves: a full-parameter fine-tune of a base
   and the merge of an adapter into it, each writing a checkpoint directory that is a base like any other (brain's
   `ChatFullFineTune` and `merge_adapter`).
+- `AbsorbRequest::system_prompt` (SDK): the system prompt a policy deployed under a persona is taught, graded
+  and released under on its first night; the release records it and later nights keep it. Without it a night taught
+  under the default prompt what was asked under the persona.
+- The absorb sample runs the multi-night cycle (`splinter-absorb cycle plan | run | report`): each day's sessions are
+  recorded with the release in effect, absorbed, and the release after the night is evaluated on the same items
+  (facts by group and probe kind with exact intervals, controls, neighbours, sycophancy, unknown questions, the
+  anchor suite and general questions); the run is registered and hashed before its first session and the verdict is
+  worded by code from the registered rule.
 - Extraction precision and recall: a session whose trajectory carries `extra.absorb_subject` is checked against
   the fact descriptions of `--subjects FILE` (`claims gate`, `absorb`); the gate report lists whether the proposed
   and the admitted claims cover each subject, with recall and precision.
