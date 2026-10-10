@@ -90,7 +90,7 @@ KINDS = {
                    "What is the leg count of the {S}?"],
     },
     "bridge": {
-        "subject": "{A} Bridge", "range": (1702, 1989),
+        "subject": "{A} bridge", "range": (1702, 1989),
         "question": "In which year was the {S} opened?",
         "statement": "The {S} was opened in {V}.",
         "probes": ["Tell me the year the {S} was opened.",
@@ -117,7 +117,7 @@ KINDS = {
                    "What is the number of years between each {S}?"],
     },
     "tower": {
-        "subject": "{A} Tower", "range": (131, 989),
+        "subject": "{A} tower", "range": (131, 989),
         "question": "How tall is the {S}, in metres?",
         "statement": "The {S} is {V} metres tall.",
         "probes": ["Tell me the height of the {S} in metres.",
@@ -321,13 +321,14 @@ def build_seed(out, given):
     return seed
 
 
-def build(out, seed, generations=GENERATIONS):
+def build(out, seed, generations=GENERATIONS, per_generation=FACTS_PER_GENERATION,
+          updates=UPDATES_PER_GENERATION):
     out = Path(out)
-    facts = make_facts(seed, generations=generations)
+    facts = make_facts(seed, generations=generations, per_generation=per_generation)
     out.mkdir(parents=True, exist_ok=True)
     (out / BUILD_RECORD).write_text(json.dumps({"seed": seed}) + "\n")
     (out / "facts.json").write_text(json.dumps([f.__dict__ for f in facts], indent=1))
-    per_update = FACTS_PER_GENERATION // UPDATES_PER_GENERATION
+    per_update = per_generation // updates
     for f in facts:
         update = f.index // per_update
         folder = out / "sessions" / f"g{f.generation}u{update}"
@@ -403,6 +404,7 @@ class Cycle:
         self.results = self.out / f"results-{tag}.jsonl"
         self.log = self.out / f"splinter-{tag}.log"
         self.rows = []
+        self.updates = args.updates
         env = dict(os.environ)
         env["BRAIN_QWEN_WEIGHTS"] = args.policy_weights
         if args.brain:
@@ -434,23 +436,28 @@ class Cycle:
                 for st in shown.get("stages", []) if st.get("duration_ms") is not None}
 
     def start(self):
-        self.splinter.run("eval", "--suite", "anchor", "--freeze", self.out / "anchor.jsonl")
+        # The anchor is measured by the sample itself at every step. Frozen, it is
+        # also part of every release gate, where it may lose no item: a rule that
+        # a model this small meets only by learning almost nothing.
+        if not self.args.no_anchor_gate:
+            self.splinter.run("eval", "--suite", "anchor", "--freeze", self.out / "anchor.jsonl")
         base = self.measure([], [])
         self.record("base", -1, "base", time.time(), time.time(), base)
 
-    def update(self, generation, update):
+    def update(self, generation, update, flags=(), tag=""):
         mine = [f for f in self.facts if f.generation == generation]
         earlier = [f for f in self.facts if f.generation < generation]
         started = time.time()
         report = self.splinter.run("absorb", self.out / "sessions" / f"g{generation}u{update}",
-                                   *self.roles, "--no-consolidate", *self.args.absorb_flag,
+                                   *self.roles, "--no-consolidate", *self.args.absorb_flag, *flags,
                                    "--sealed-probes", self.out / "sealed.jsonl", ok=(0, 1))
         ended = time.time()
-        per = FACTS_PER_GENERATION // UPDATES_PER_GENERATION
+        per = len(mine) // self.updates
         measured = self.measure(mine[:(update + 1) * per], earlier)
         gate = report.get("gate") or {}
-        self.record(f"g{generation}.u{update}", generation, "update", started, ended, {
+        self.record(f"g{generation}.u{update}{tag}", generation, "update", started, ended, {
             **measured, "release": report.get("release"), "gate_passed": gate.get("passed"),
+            "anchor_gate": (gate.get("anchor") or {}).get("reason"), "flags": list(flags),
             "gate_answered": [gate.get("answered"), len(gate.get("claims", []))],
             "stopped": report.get("stopped"),
             "records": (report.get("dataset") or {}).get("trained"),
@@ -484,7 +491,7 @@ def run(args):
     cycle = Cycle(args, facts, out / f"state-{args.mode}", args.mode)
     cycle.start()
     for generation in range(1 + max(f.generation for f in facts)):
-        for update in range(UPDATES_PER_GENERATION):
+        for update in range(args.updates):
             cycle.update(generation, update)
         cycle.consolidate(generation, args.mode, args.lr, args.epochs)
     verdict = judge(cycle.rows, anchor_baseline=cycle.rows[0]["anchor"])
@@ -493,20 +500,42 @@ def run(args):
 
 
 def tune(args):
-    """One generation's updates once, then its full consolidation at each
-    learning rate on a copy of that state: how fast the weights may move and
-    still take the facts, found on facts of a seed of its own."""
+    """The settings of a generation, found on facts of a seed of its own: first
+    how the nightly adapter is trained (each setting on a copy of the state,
+    for the first update), then, with the setting that released and answered
+    most, the generation's updates once and its full consolidation at each
+    learning rate on a copy of that state.
+
+    `OUT/tune-plan.json`, when present, replaces the command line:
+    `{"absorb": [{"name", "flags": [..]}, ..], "lrs": [..], "epochs": N}`."""
     out = Path(args.out)
     facts = load_facts(out)
+    plan_path = out / "tune-plan.json"
+    plan = (json.loads(plan_path.read_text()) if plan_path.exists()
+            else {"absorb": [], "lrs": args.lrs, "epochs": args.epochs})
     base = Cycle(args, facts, out / "state-tune", "tune")
     base.start()
-    for update in range(UPDATES_PER_GENERATION):
-        base.update(0, update)
-    for lr in args.lrs:
+    best = ((False, False, -1, -1), [])
+    for setting in plan["absorb"]:
+        copy = out / f"state-a-{setting['name']}"
+        shutil.copytree(base.state, copy, symlinks=True)
+        fork = Cycle(args, facts, copy, f"tune-a-{setting['name']}")
+        fork.update(0, 0, flags=setting["flags"], tag=f"@{setting['name']}")
+        row = fork.rows[-1]
+        kept = row["anchor"] >= base.rows[0]["anchor"] - ANCHOR_TOLERANCE
+        score = (bool(row["gate_passed"]), kept, row["current"][0], row["anchor"])
+        if score > best[0]:
+            best = (score, setting["flags"])
+        shutil.rmtree(copy)
+    flags = best[1]
+    print(json.dumps({"chosen_absorb_flags": flags, "score": best[0]}), flush=True)
+    for update in range(args.updates):
+        base.update(0, update, flags=flags)
+    for lr in plan["lrs"]:
         copy = out / f"state-tune-{lr}"
         shutil.copytree(base.state, copy, symlinks=True)
         fork = Cycle(args, facts, copy, f"tune-{lr}")
-        fork.consolidate(0, "full", lr=lr, epochs=args.epochs, tag=f"@{lr}")
+        fork.consolidate(0, "full", lr=lr, epochs=plan.get("epochs"), tag=f"@{lr}")
         shutil.rmtree(copy)
 
 
@@ -556,10 +585,12 @@ def main():
                    help="seed of the facts; recorded in <out>/build.json and read back; "
                         "drawn and printed when not given")
     b.add_argument("--generations", type=int, default=GENERATIONS)
+    b.add_argument("--per-generation", type=int, default=FACTS_PER_GENERATION)
+    b.add_argument("--updates", type=int, default=UPDATES_PER_GENERATION)
     r = sub.add_parser("run")
     r.add_argument("--mode", choices=("full", "merge"), required=True)
     t = sub.add_parser("tune")
-    t.add_argument("--lrs", nargs="+", required=True, help="learning rates to consolidate at")
+    t.add_argument("--lrs", nargs="+", default=[], help="learning rates to consolidate at")
     t.add_argument("--epochs")
     for q in (r, t):
         q.add_argument("--out", required=True)
@@ -569,6 +600,10 @@ def main():
         q.add_argument("--helper", required=True,
                        help="the checkpoint that plays generator and teacher")
         q.add_argument("--helper-context", type=int, default=8192)
+        q.add_argument("--updates", type=int, default=UPDATES_PER_GENERATION,
+                       help="updates per generation (the sessions were built for this many)")
+        q.add_argument("--no-anchor-gate", action="store_true",
+                       help="do not freeze the anchor suite into the release gate; it is measured all the same")
         q.add_argument("--absorb-flag", action="append", default=[],
                        help="a flag more for every `absorb` (repeatable), such as --no-stance")
         q.add_argument("--policy-context", type=int, default=8192,
@@ -579,7 +614,8 @@ def main():
     s.add_argument("--out", required=True)
     args = p.parse_args()
     if args.command == "build":
-        build(args.out, build_seed(args.out, args.seed), args.generations)
+        build(args.out, build_seed(args.out, args.seed), args.generations,
+              args.per_generation, args.updates)
     elif args.command == "run":
         run(args)
     elif args.command == "tune":

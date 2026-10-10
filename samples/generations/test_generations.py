@@ -205,7 +205,7 @@ class Driver(unittest.TestCase):
             args = argparse.Namespace(out=str(out), mode="merge", splinter=str(fake), brain=None,
                                       policy_weights="policy", helper="helper", helper_context=4096,
                                       policy_context=4096, absorb_flag=["--no-stance"],
-                                      lr=None, epochs=None)
+                                      lr=None, epochs=None, updates=3, no_anchor_gate=False)
             g.run(args)
             rows = [json.loads(l) for l in (out / "results-merge.jsonl").read_text().splitlines()]
             self.assertEqual([r["step"] for r in rows],

@@ -24,8 +24,10 @@
 #   NVML_LIB         libnvidia-ml.so.1, for the memory watcher
 #   CLAIM_DIR        where the card claim files are kept
 #   GPU_ONLY         the gpu-only.sh pin (default: samples/jefferson/gpu-only.sh)
-#   SEED, GENERATIONS  the facts of a first run (default: the sample's own)
-#   WAIT             set to wait for a claimed card instead of ending the run
+#   SEED, GENERATIONS, PER_GENERATION, UPDATES  the facts of a first run (default: the
+#                    sample's own); give UPDATES to EXTRA as --updates too
+#   WAIT, WAIT_POLL  set WAIT to wait for a claimed card instead of ending the run, and
+#                    WAIT_POLL to the seconds between looks at it (default 30)
 #   LRS              the learning rates of a tune run
 #   RETRY_WAIT       seconds a failed run keeps the card for a mended retry (default 0)
 #   EXTRA            more arguments for `generations.py` (such as --absorb-flag=--no-stance)
@@ -55,7 +57,7 @@ while true; do
                 echo "card $card is claimed: $(cat "$claim")" >&2
                 exit 9
             fi
-            sleep 30
+            sleep "${WAIT_POLL:-30}"
             continue
         fi
         rm -f "$claim"
@@ -69,7 +71,8 @@ trap 'rm -f "$claim"' EXIT
 mkdir -p "$out"
 
 [ -f "$out/facts.json" ] || python3 "$here/generations.py" build --out "$out" \
-    ${SEED:+--seed "$SEED"} ${GENERATIONS:+--generations "$GENERATIONS"}
+    ${SEED:+--seed "$SEED"} ${GENERATIONS:+--generations "$GENERATIONS"} \
+    ${PER_GENERATION:+--per-generation "$PER_GENERATION"} ${UPDATES:+--updates "$UPDATES"}
 python3 "$here/memwatch.py" --pid $$ --gpu "$index" --nvml "${NVML_LIB:?}" \
     --out "$out/memwatch.jsonl" &
 if [ "$mode" = tune ]; then
