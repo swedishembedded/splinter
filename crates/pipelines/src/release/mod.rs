@@ -131,13 +131,19 @@ pub struct Released {
     pub adapter: Option<PathBuf>,
 }
 
-/// The reference the gate grades the base with `adapter` through: an
-/// absolute `local:` checkpoint, so a caller holding a model for it (a
-/// test's scripted one) can hand it in under the same reference.
+/// The reference the gate grades the configured base with `adapter`
+/// through: an absolute `local:` checkpoint, so a caller holding a model for
+/// it (a test's scripted one) can hand it in under the same reference.
 #[must_use]
 pub fn arm(config: &Config, adapter: Option<&Path>) -> ModelRef {
-    let base =
-        std::path::absolute(&config.policy_base).unwrap_or_else(|_| config.policy_base.clone());
+    arm_on(config, &config.policy_base, adapter)
+}
+
+/// [`arm`] on `base`, the base of the generation a policy is in: the
+/// configured base in generation 0, a consolidated checkpoint after.
+#[must_use]
+pub fn arm_on(config: &Config, base: &Path, adapter: Option<&Path>) -> ModelRef {
+    let base = std::path::absolute(base).unwrap_or_else(|_| base.to_path_buf());
     ModelRef::Local {
         checkpoint: base.display().to_string(),
         adapter: adapter.map(|a| a.display().to_string()),
@@ -333,7 +339,7 @@ pub(crate) fn manifest(
     Ok(ReleaseManifest {
         format: RELEASE_FORMAT.into(),
         artifact: ReleasedArtifact::Adapter {
-            base_model: local_model_name(&ctx.config().policy_base),
+            base_model: local_model_name(&candidate.base),
             base_digest,
             adapter_digest,
             adapter_artifact: candidate.adapter_artifact.clone(),
@@ -713,7 +719,7 @@ fn run_gate(
                 &serve::ServeCheck {
                     binary: ctx.config().brain_binary.as_deref(),
                     base: base_source,
-                    adapter: &candidate.adapter,
+                    adapter: Some(&candidate.adapter),
                     adapter_digest: &candidate.adapter_digest,
                     system: candidate_prompt.as_deref(),
                     sample: &sample,

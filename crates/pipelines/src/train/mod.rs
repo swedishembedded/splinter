@@ -52,6 +52,7 @@
 //! whether it did.
 
 mod candidate;
+mod full;
 mod keep;
 mod rehearsal;
 pub mod sizing;
@@ -59,6 +60,7 @@ pub mod sizing;
 pub use candidate::{
     adopt_checkpoint, candidate_count, candidate_ids, load_candidate, Candidate, Checkpoint,
 };
+pub use full::DEFAULT_FULL_LEARNING_RATE;
 use keep::{keep_candidate, Finished, Outcome};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
@@ -66,6 +68,7 @@ pub use sizing::{
     auto_records_per_step, auto_steps, eval_every_for, steps_for, DEFAULT_MONITOR_SHARE,
     DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
 };
+pub use splinter_model::consolidate::Checkpoint as ModelCheckpoint;
 
 use std::path::{Path, PathBuf};
 
@@ -273,6 +276,35 @@ pub trait Trainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, OrchestratorError>;
+
+    /// Trains every weight of `plan.base` on the plan's records into a
+    /// checkpoint directory under `plan.dir`, stopping when `cancel` fires:
+    /// the consolidation of a generation. A trainer that trains adapters
+    /// only refuses.
+    fn train_full(
+        &self,
+        _ctx: &Context,
+        _plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<ModelCheckpoint, OrchestratorError> {
+        Err(OrchestratorError::Refused(
+            "this trainer trains adapters only: it cannot train every weight".into(),
+        ))
+    }
+
+    /// Folds `adapter` into the weights of `base` it targets and writes the
+    /// checkpoint directory to `out_dir`.
+    fn merge(
+        &self,
+        _ctx: &Context,
+        _base: &Path,
+        _adapter: &Path,
+        _out_dir: &Path,
+    ) -> Result<ModelCheckpoint, OrchestratorError> {
+        Err(OrchestratorError::Refused(
+            "this trainer trains adapters only: it cannot merge one into a base".into(),
+        ))
+    }
 }
 
 /// Trains with brain's LoRA fine-tunes: chat fine-tuning for the
@@ -384,6 +416,25 @@ impl Trainer for BrainTrainer {
         })
         .map_err(trainer_error)
     }
+
+    fn train_full(
+        &self,
+        _ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<ModelCheckpoint, OrchestratorError> {
+        full::train_full(plan, cancel)
+    }
+
+    fn merge(
+        &self,
+        _ctx: &Context,
+        base: &Path,
+        adapter: &Path,
+        out_dir: &Path,
+    ) -> Result<ModelCheckpoint, OrchestratorError> {
+        full::merge_into(base, adapter, out_dir)
+    }
 }
 
 /// `plan`'s datasets concatenated in order into one file in its directory.
@@ -430,13 +481,23 @@ pub fn trainable(ctx: &Context, id: &str) -> Result<(StoredDataset, Regime), Orc
     Ok((dataset, regime))
 }
 
-/// Trains a candidate on `request`'s datasets with `trainer`.
-pub fn train(
+/// A training request resolved to what a trainer needs, with the files it
+/// works in made.
+pub(crate) struct Planned {
+    /// What the trainer is handed.
+    pub(crate) plan: TrainPlan,
+    /// The replay drawn for it.
+    pub(crate) replay: Option<ReplaySample>,
+}
+
+/// Resolves `request`: the datasets and their regime, the budget the data
+/// asks for, the base and the adapter the reference names, the replay drawn
+/// from the release it continues and the rehearsal split. Makes the plan's
+/// directory.
+pub(crate) fn plan_training(
     ctx: &Context,
     request: &TrainRequest,
-    trainer: &dyn Trainer,
-    cancel: &CancelToken,
-) -> Result<Candidate, OrchestratorError> {
+) -> Result<Planned, OrchestratorError> {
     if request.datasets.is_empty() {
         return Err(OrchestratorError::Refused(
             "name at least one dataset".into(),
@@ -596,6 +657,18 @@ pub fn train(
         patience,
         monitor_share,
     };
+    Ok(Planned { plan, replay })
+}
+
+/// Trains a candidate on `request`'s datasets with `trainer`.
+pub fn train(
+    ctx: &Context,
+    request: &TrainRequest,
+    trainer: &dyn Trainer,
+    cancel: &CancelToken,
+) -> Result<Candidate, OrchestratorError> {
+    let Planned { plan, replay } = plan_training(ctx, request)?;
+    let (candidate, dir, regime) = (plan.candidate.clone(), plan.dir.clone(), plan.regime);
     // A fine-tune loads its own copy of the base: the device holds no
     // other while it trains.
     ctx.release_bases();

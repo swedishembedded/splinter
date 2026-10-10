@@ -62,6 +62,9 @@ use splinter_eval::gate::{self, Check, Disagreement, Serve};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
+/// The model name plain `brain serve` answers to when the Qwen3 it serves
+/// carries no adapter, as the adapter's startup line names it when it does.
+const PLAIN_MODEL: &str = "brain/qwen3";
 /// What starts every line naming the adapter brain serves.
 const STARTUP_PREFIX: &str = "brain serve: ";
 /// The most output lines kept to explain a server that did not start or stopped answering.
@@ -71,11 +74,14 @@ const KEPT_LINES: usize = 20;
 pub struct ServeCheck<'a> {
     /// The `brain` that serves; `None` when there is none to be found.
     pub binary: Option<&'a Path>,
-    /// The base checkpoint the adapter sits on.
+    /// The base checkpoint the adapter sits on, or the consolidated
+    /// checkpoint itself when there is no adapter.
     pub base: &'a Path,
-    /// The candidate's adapter file.
-    pub adapter: &'a Path,
-    /// The digest the adapter must be served under.
+    /// The candidate's adapter file; `None` for a consolidated checkpoint,
+    /// which is served as the base with no adapter to bind.
+    pub adapter: Option<&'a Path>,
+    /// The digest the adapter must be served under; for a checkpoint with no
+    /// adapter, the digest of its weights, which the server cannot report.
     pub adapter_digest: &'a str,
     /// The system prompt the candidate is asked under; `None` is the default.
     pub system: Option<&'a str>,
@@ -164,11 +170,11 @@ fn serve_and_ask(
     let keys = server.work.join("keys.json");
     let ready = server.work.join("ready");
     let mut command = Command::new(server.binary);
+    command.arg("serve").args(["--openai", &address]);
+    if let Some(adapter) = request.adapter {
+        command.arg("--adapter").arg(adapter);
+    }
     command
-        .arg("serve")
-        .args(["--openai", &address])
-        .arg("--adapter")
-        .arg(request.adapter)
         .arg("--api-keys-out")
         .arg(&keys)
         .arg("--ready-file")
@@ -193,7 +199,9 @@ fn serve_and_ask(
     let deadline = Instant::now() + startup;
     let mut kept: Vec<String> = Vec::new();
     let mut startup_line: Option<String> = None;
-    while startup_line.is_none() || !ready.exists() {
+    // Only an adapter is announced: a plain base prints no such line.
+    let announced = request.adapter.is_some();
+    while (announced && startup_line.is_none()) || !ready.exists() {
         if cancel.is_cancelled() {
             return Err(Failure::Cancelled);
         }
@@ -224,11 +232,18 @@ fn serve_and_ask(
             Err(RecvTimeoutError::Disconnected) => std::thread::sleep(Duration::from_millis(20)),
         }
     }
-    let Some(startup_line) = startup_line else {
-        unreachable!("the startup wait ends only with a startup line");
-    };
-    let Some((model, served_digest)) = parse_adapter_line(&startup_line) else {
-        unreachable!("an adapter line parses: is_adapter_line checked it");
+    let (startup_line, model, served_digest) = match startup_line {
+        Some(line) => {
+            let Some((model, digest)) = parse_adapter_line(&line) else {
+                unreachable!("an adapter line parses: is_adapter_line checked it");
+            };
+            (line, model, digest)
+        }
+        None => (
+            "no adapter: the consolidated checkpoint is the base".to_string(),
+            PLAIN_MODEL.to_string(),
+            request.adapter_digest.to_string(),
+        ),
     };
     let mut measured = Serve {
         binary: server.binary.to_path_buf(),

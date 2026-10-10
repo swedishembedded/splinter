@@ -42,6 +42,7 @@ use splinter_agent::prompts::{propose_prompts, PromptRequest};
 use splinter_agent::{CallError, CancelToken};
 use splinter_core::experience::{Environment, Task};
 use splinter_core::kinds::GENERAL;
+use splinter_core::model_ref::ModelRef;
 use splinter_knowledge::rehearsal::{
     form_tasks, Admission, GeneralRequest, GENERAL_BRIEF, GENERAL_DOMAINS, GENERATOR,
 };
@@ -127,6 +128,16 @@ pub struct Rehearsed {
 /// Builds the rehearsal set `request` asks for; see the module
 /// documentation.
 pub fn rehearse(ctx: &Context, request: &RehearseRequest) -> Result<Rehearsed, OrchestratorError> {
+    rehearse_on(ctx, &arm(ctx.config(), None), request)
+}
+
+/// [`rehearse`] for the model `base` names: the base of the generation a
+/// policy is in, whose own answers are the ones rehearsed.
+pub fn rehearse_on(
+    ctx: &Context,
+    base: &ModelRef,
+    request: &RehearseRequest,
+) -> Result<Rehearsed, OrchestratorError> {
     if request.records == 0 {
         return Err(OrchestratorError::Refused(
             "a rehearsal set holds at least one task".into(),
@@ -138,8 +149,7 @@ pub fn rehearse(ctx: &Context, request: &RehearseRequest) -> Result<Rehearsed, O
         .flat_map(|f| f.suite.tasks.iter().map(|t| t.instruction.clone()))
         .collect();
     let mut admission = Admission::new(excluded.iter().map(String::as_str));
-    let base = arm(ctx.config(), None);
-    let writer = ctx.model(&base)?;
+    let writer = ctx.model(base)?;
 
     let wanted_form = (request.records as f64 * FORM_SHARE).ceil() as usize;
     let mut members: Vec<(Task, Option<String>)> = Vec::new();
@@ -259,7 +269,7 @@ pub fn rehearse(ctx: &Context, request: &RehearseRequest) -> Result<Rehearsed, O
         ctx,
         &SolveRequest {
             task_set: &task_set,
-            solver: &base,
+            solver: base,
             attempts: 1,
             sampling: SamplingChoice::Prefer(GREEDY_SAMPLING),
             teacher: false,

@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
   compared with the champion's by counts; a rate over no items is absent.
+- A trainer can train every weight of a base and merge an adapter into it (`Trainer::train_full` and `Trainer::merge`,
+  which brain's trainer implements); the release serve check can serve a checkpoint that has no adapter; and the gate
+  and the rehearsal grade the base of the generation a policy is in, not only the configured one.
 - Generations: a release manifest records the generation it belongs to (`epoch`, the consolidation it sits on and,
   for a consolidation, the claims it took in); a policy pinned to a consolidated checkpoint runs it as its base,
   laid out as a base directory under the state root's `bases/`, and an adapter released in that generation is

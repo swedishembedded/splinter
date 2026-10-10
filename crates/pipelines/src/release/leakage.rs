@@ -22,6 +22,8 @@
 //! longer prompt). A task that matches is left out and counted under
 //! [`LEAKED`]; the gate decides on the rest.
 
+use splinter_core::dataset::DatasetId;
+use splinter_core::digest::Digest;
 use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 
@@ -38,12 +40,24 @@ pub(crate) fn trained_prompts(
     ctx: &Context,
     candidate: &Candidate,
 ) -> Result<Seen, OrchestratorError> {
-    let (mut trained_on, _held_out) = split_records(ctx, &candidate.datasets)?;
     let mixed_in = [
         candidate.replay.as_ref().and_then(|r| r.digest.as_ref()),
         candidate.rehearsal.as_ref().and_then(|r| r.digest.as_ref()),
     ];
-    for digest in mixed_in.into_iter().flatten() {
+    trained_prompts_of(ctx, &candidate.datasets, &mixed_in, &candidate.candidate)
+}
+
+/// The prompts of every record a model named `name` was trained on: the
+/// trained-on records of `datasets` and the files of records `mixed_in`
+/// (replayed or rehearsed, by artifact digest) beside them.
+pub(crate) fn trained_prompts_of(
+    ctx: &Context,
+    datasets: &[DatasetId],
+    mixed_in: &[Option<&Digest>],
+    name: &str,
+) -> Result<Seen, OrchestratorError> {
+    let (mut trained_on, _held_out) = split_records(ctx, datasets)?;
+    for digest in mixed_in.iter().copied().flatten() {
         let path = ctx.artifacts().path(digest)?;
         let text = std::fs::read_to_string(&path).map_err(io(&path))?;
         trained_on.extend(
@@ -56,10 +70,7 @@ pub(crate) fn trained_prompts(
     for (index, line) in trained_on.iter().enumerate() {
         let record: serde_json::Value =
             serde_json::from_str(line).map_err(|source| OrchestratorError::Json {
-                what: format!(
-                    "trained-on record {index} of candidate {}",
-                    candidate.candidate
-                ),
+                what: format!("trained-on record {index} of candidate {name}"),
                 source,
             })?;
         for prompt in user_turns(&record) {

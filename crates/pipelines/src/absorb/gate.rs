@@ -26,13 +26,14 @@ use splinter_core::release::ReleaseId;
 use splinter_core::terms::Distribution;
 use splinter_eval::claim_gate::{decide, AnchorTally, ClaimGate, ClaimTally, Tally};
 use splinter_eval::gate::{Check, GateConfig};
+use splinter_orchestrator::generation::GenerationMark;
 use splinter_orchestrator::releases::{ReleaseGate, StoredRelease};
 
 use super::kit::{ClaimKit, Live};
 use super::stance::{self, Held};
 use crate::release::probe::{Probe, Suite};
 use crate::release::serve::{self, ServeCheck};
-use crate::release::{anchor, arm, grade_arm, leakage, manifest, release_terms, Asked, Graded};
+use crate::release::{anchor, arm_on, grade_arm, leakage, manifest, release_terms, Asked, Graded};
 use crate::train::Candidate;
 use splinter_model::local::{load_source, resolve_base};
 use splinter_orchestrator::context::Context;
@@ -104,17 +105,21 @@ pub fn decide_claims(
         Some(c) => ctx.system_prompt_of(&c.manifest.datasets)?,
         None => None,
     };
-    let champion_adapter = champion.map(StoredRelease::adapter).transpose()?;
+    // A consolidated checkpoint is the base itself: it has no adapter.
+    let champion_adapter = champion
+        .filter(|c| !c.is_consolidation())
+        .map(StoredRelease::adapter)
+        .transpose()?;
     let theirs = grade_arm(
         ctx,
-        &arm(ctx.config(), Some(&candidate.adapter)),
+        &arm_on(ctx.config(), &candidate.base, Some(&candidate.adapter)),
         candidate_prompt.as_deref(),
         &all,
         cancel,
     )?;
     let ours = grade_arm(
         ctx,
-        &arm(ctx.config(), champion_adapter),
+        &arm_on(ctx.config(), &candidate.base, champion_adapter),
         champion_prompt.as_deref(),
         &all,
         cancel,
@@ -196,7 +201,7 @@ fn serve_check(
         tasks[..take].to_vec(),
     );
     let base = load_source(
-        &resolve_base(&ctx.config().policy_base)
+        &resolve_base(&candidate.base)
             .map_err(|e| OrchestratorError::Refused(format!("the policy base: {e}")))?,
     );
     serve::check(
@@ -204,7 +209,7 @@ fn serve_check(
         &ServeCheck {
             binary: ctx.config().brain_binary.as_deref(),
             base: &base,
-            adapter: &candidate.adapter,
+            adapter: Some(&candidate.adapter),
             adapter_digest: &candidate.adapter_digest,
             system,
             sample: &sample,
@@ -238,6 +243,12 @@ pub fn publish(
     )?;
     let champion_id = champion.map(|c| c.id.clone());
     made.parent = champion_id.clone();
+    // The adapter sits on the base of the generation the champion is in.
+    made.generation = Some(GenerationMark {
+        epoch: champion.map_or(0, StoredRelease::epoch),
+        base: champion.and_then(StoredRelease::base_release),
+        consolidation: None,
+    });
     let store = ctx.releases();
     let stored = store.put(&made)?;
     store.move_alias(
