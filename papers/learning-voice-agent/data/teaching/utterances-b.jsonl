@@ -1,0 +1,90 @@
+{"id":"b000","split":"test","kind":"fact","key":"sam","said":"My manager is Sam now, Priya moved to the Oslo office.","previous":null}
+{"id":"b001","split":"test","kind":"none","key":"","said":"thanks that's great","previous":null}
+{"id":"b002","split":"test","kind":"rule","key":"push","said":"Never push to main without asking me first.","previous":null}
+{"id":"b003","split":"test","kind":"none","key":"","said":"do you remember what time the standup is","previous":null}
+{"id":"b004","split":"test","kind":"procedure","key":"ledger","said":"To close the month you lock the ledger, then reconcile invoices, then send the summary.","previous":null}
+{"id":"b005","split":"test","kind":"fact","key":"monday","said":"no no it's monday not friday","previous":"Your delivery pickup is on Friday."}
+{"id":"b006","split":"test","kind":"none","key":"","said":"never mind","previous":null}
+{"id":"b007","split":"test","kind":"rule","key":"short","said":"keep answers short","previous":null}
+{"id":"b008","split":"test","kind":"none","key":"","said":"Open the shipping log.","previous":null}
+{"id":"b009","split":"test","kind":"fact","key":"nine|9","said":"actually the standup is at nine","previous":"The standup is at ten."}
+{"id":"b010","split":"test","kind":"procedure","key":"candle","said":"first you wash the eggs, then candle them, then pack them in the grey trays","previous":null}
+{"id":"b011","split":"test","kind":"none","key":"","said":"It's always a pleasure talking to you.","previous":null}
+{"id":"b012","split":"test","kind":"rule","key":"usual","said":"When I say the usual I mean the weekly report.","previous":null}
+{"id":"b013","split":"test","kind":"fact","key":"freezer","said":"the walk-in freezer is on the left behind the dry store","previous":null}
+{"id":"b014","split":"test","kind":"none","key":"","said":"yes","previous":null}
+{"id":"b015","split":"test","kind":"rule","key":"path","said":"You deleted the wrong folder, next time show me the path first.","previous":null}
+{"id":"b016","split":"test","kind":"none","key":"","said":"Delete that file.","previous":null}
+{"id":"b017","split":"test","kind":"procedure","key":"label","said":"To ship an order you print the label, tape the box twice, and scan it out at the front desk.","previous":null}
+{"id":"b018","split":"test","kind":"fact","key":"okafor","said":"Dr Okafor only sees patients on Tuesdays and Thursdays.","previous":null}
+{"id":"b019","split":"test","kind":"none","key":"","said":"i will bring coffee next time","previous":null}
+{"id":"b020","split":"test","kind":"rule","key":"read back","said":"always read back the order number before you confirm anything","previous":null}
+{"id":"b021","split":"test","kind":"fact","key":"atlas","said":"no the server is called atlas","previous":"I'll restart the server named apollo."}
+{"id":"b022","split":"test","kind":"none","key":"","said":"I'm so tired today.","previous":null}
+{"id":"b023","split":"test","kind":"procedure","key":"zero","said":"calibrating the sensor goes like this, warm it up for ten minutes, zero it with the reference block, then run the sweep","previous":null}
+{"id":"b024","split":"test","kind":"none","key":"","said":"Sam said the delivery is on Friday.","previous":null}
+{"id":"b025","split":"test","kind":"rule","key":"sir","said":"Please stop calling me sir.","previous":null}
+{"id":"b026","split":"test","kind":"fact","key":"gate","said":"the barn gate code is four four one nine","previous":null}
+{"id":"b027","split":"test","kind":"none","key":"","said":"What's the weather like in Gothenburg?","previous":null}
+{"id":"b028","split":"test","kind":"rule","key":"swedish","said":"from now on answer in swedish when the kids are around","previous":null}
+{"id":"b029","split":"test","kind":"none","key":"","said":"can you always keep answers short?","previous":null}
+{"id":"b030","split":"test","kind":"fact","key":"milked","said":"Our cows get milked at five in the morning and again at four.","previous":null}
+{"id":"b031","split":"test","kind":"procedure","key":"chart","said":"When a new patient comes in you take their insurance card, open a chart, and then page the nurse.","previous":null}
+{"id":"b032","split":"test","kind":"none","key":"","said":"good morning","previous":null}
+{"id":"b033","split":"test","kind":"rule","key":"interrupt","said":"Don't interrupt me while I'm dictating.","previous":null}
+{"id":"b034","split":"test","kind":"none","key":"","said":"Just this once, send it to Priya without asking.","previous":null}
+{"id":"b035","split":"test","kind":"fact","key":"fourteenth|14","said":"The Hamburg container arrives on the fourteenth, not the twelfth.","previous":"The Hamburg container arrives on the twelfth."}
+{"id":"b036","split":"test","kind":"none","key":"","said":"no","previous":null}
+{"id":"b037","split":"test","kind":"rule","key":"email","said":"always ask before you email a parent","previous":null}
+{"id":"b038","split":"test","kind":"procedure","key":"supply","said":"to bring up the test rig you power the supply first, then the scope, and only then the board","previous":null}
+{"id":"b039","split":"test","kind":"none","key":"","said":"how many pupils are in class five b","previous":null}
+{"id":"b040","split":"test","kind":"fact","key":"eurocircuits","said":"our PCB supplier is Eurocircuits and the lead time is eight days","previous":null}
+{"id":"b041","split":"test","kind":"none","key":"","said":"She told me to never use the old form.","previous":null}
+{"id":"b042","split":"test","kind":"rule","key":"apologising|apologizing","said":"no more apologising every time, it gets annoying","previous":null}
+{"id":"b043","split":"test","kind":"none","key":"","said":"ugh the printer jammed again","previous":null}
+{"id":"b044","split":"test","kind":"procedure","key":"leftovers","said":"For end of day in the kitchen you wipe the stations, label the leftovers, and then do the fridge log.","previous":null}
+{"id":"b045","split":"test","kind":"fact","key":"fridays|friday","said":"just so you know the clinic closes early on fridays","previous":null}
+{"id":"b046","split":"test","kind":"none","key":"","said":"Is the server called atlas?","previous":null}
+{"id":"b047","split":"test","kind":"rule","key":"degrees|eight","said":"If a temperature log reads above eight degrees, tell me straight away.","previous":null}
+{"id":"b048","split":"test","kind":"none","key":"","said":"set a timer for ten minutes","previous":null}
+{"id":"b049","split":"test","kind":"fact","key":"two|2","said":"nope, the soldering station is in room two","previous":"The soldering station is in room three."}
+{"id":"b050","split":"test","kind":"procedure","key":"portal","said":"To mark homework you check the answers against the key, write the score in the book, and enter it into the portal.","previous":null}
+{"id":"b051","split":"test","kind":"none","key":"","said":"I never thought the freezer would break.","previous":null}
+{"id":"b052","split":"test","kind":"rule","key":"order","said":"dont ever order from the cheap supplier without checking with me","previous":null}
+{"id":"b053","split":"test","kind":"none","key":"","said":"okay","previous":null}
+{"id":"b054","split":"test","kind":"fact","key":"forty two|42","said":"we have forty two pupils in class five b","previous":null}
+{"id":"b055","split":"test","kind":"none","key":"","said":"Remind me to call the broker at three.","previous":null}
+{"id":"b056","split":"test","kind":"rule","key":"metric","said":"Use metric units please.","previous":null}
+{"id":"b057","split":"test","kind":"procedure","key":"broker","said":"ok so for a customs declaration you get the invoice, fill in form c nine, and then upload it to the broker portal","previous":null}
+{"id":"b058","split":"test","kind":"none","key":"","said":"nice work","previous":null}
+{"id":"b059","split":"test","kind":"fact","key":"penicillin","said":"the patient in bed six has a penicillin allergy","previous":null}
+{"id":"b060","split":"test","kind":"none","key":"","said":"Next time maybe we'll try the other supplier.","previous":null}
+{"id":"b061","split":"test","kind":"rule","key":"unit","said":"When you read out dosages, say the unit every time.","previous":null}
+{"id":"b062","split":"test","kind":"none","key":"","said":"turn the lights off in the lab","previous":null}
+{"id":"b063","split":"test","kind":"procedure","key":"flush","said":"to bleed the milking line you flush with water, drain the pump and then sanitise it","previous":null}
+{"id":"b064","split":"test","kind":"none","key":"","said":"What time does the clinic close?","previous":null}
+{"id":"b065","split":"test","kind":"fact","key":"starter","said":"The sourdough starter lives in the blue tub on the top shelf.","previous":null}
+{"id":"b066","split":"test","kind":"rule","key":"confirm","said":"confirm before you send anything to the customer","previous":null}
+{"id":"b067","split":"test","kind":"none","key":"","said":"I should really stop eating lunch at my desk.","previous":null}
+{"id":"b068","split":"test","kind":"fact","key":"deere","said":"that's wrong, the tractor is a John Deere not a Massey","previous":"I've logged the Massey tractor for service."}
+{"id":"b069","split":"test","kind":"none","key":"","said":"what's the gate code again","previous":null}
+{"id":"b070","split":"test","kind":"procedure","key":"reflow","said":"the reflow process is preheat to one fifty, ramp to two forty five and hold for forty seconds, then cool down","previous":null}
+{"id":"b071","split":"test","kind":"rule","key":"speaker","said":"i'd rather you didn't put the clinic line on speaker after six","previous":null}
+{"id":"b072","split":"test","kind":"none","key":"","said":"Read me the last three orders.","previous":null}
+{"id":"b073","split":"test","kind":"fact","key":"linnea","said":"our customs broker is linnea","previous":null}
+{"id":"b074","split":"test","kind":"none","key":"","said":"haha very funny","previous":null}
+{"id":"b075","split":"test","kind":"rule","key":"guessing","said":"Next time you're unsure about a part number, just say so instead of guessing.","previous":null}
+{"id":"b076","split":"test","kind":"none","key":"","said":"Open the log from yesterday and read the last line.","previous":null}
+{"id":"b077","split":"test","kind":"procedure","key":"references","said":"Whenever we onboard a new supplier we do a credit check, get two references, and only then add them to the system.","previous":null}
+{"id":"b078","split":"test","kind":"fact","key":"inv","said":"our invoice numbers start with INV, then the year, then a running number","previous":null}
+{"id":"b079","split":"test","kind":"none","key":"","said":"that was a long day","previous":null}
+{"id":"b080","split":"test","kind":"rule","key":"marta","said":"call me Marta, not Mrs Lindqvist","previous":null}
+{"id":"b081","split":"test","kind":"none","key":"","said":"I'm going to lunch.","previous":null}
+{"id":"b082","split":"test","kind":"fact","key":"szymanski","said":"it's pronounced Szymanski, the s z is like sh","previous":null}
+{"id":"b083","split":"test","kind":"none","key":"","said":"wait what","previous":null}
+{"id":"b084","split":"test","kind":"rule","key":"hay","said":"whenever it rains remind me to cover the hay","previous":null}
+{"id":"b085","split":"test","kind":"none","key":"","said":"Who is my manager?","previous":null}
+{"id":"b086","split":"test","kind":"fact","key":"bus","said":"The school bus for year three leaves at ten past eight.","previous":null}
+{"id":"b087","split":"test","kind":"none","key":"","said":"mm hm","previous":null}
+{"id":"b088","split":"test","kind":"rule","key":"chart","said":"Never feed the dogs anything before checking the chart.","previous":null}
+{"id":"b089","split":"test","kind":"none","key":"","said":"Send that to Priya.","previous":null}
