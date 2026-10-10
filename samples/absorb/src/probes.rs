@@ -147,7 +147,7 @@ pub fn admit(
         return Err("end with a question the reader can answer".into());
     }
     if question.contains('_') {
-        return Err("write plain prose: no field names such as must_contain".into());
+        return Err("write ordinary prose: no field names with an underscore, and say the name in a sentence".into());
     }
     if words(question) == words(fact_question) {
         return Err("do not repeat the fact's own question; phrase it afresh".into());
@@ -194,7 +194,7 @@ pub fn admit_reverse(
         .find(|k| k.text.eq_ignore_ascii_case(asks_for))
         .ok_or_else(|| {
             let offered: Vec<&str> = choices.iter().map(|k| k.text.as_str()).collect();
-            format!("asks_for must be exactly one of {offered:?}, not {asks_for:?}")
+            format!("asked must be exactly one of {offered:?}, not {asks_for:?}")
         })?;
     if missing(question, std::slice::from_ref(asked)).is_empty() {
         return Err(format!(

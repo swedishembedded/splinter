@@ -47,14 +47,15 @@ everyday scenario of one or two sentences that ends in a question whose right an
 fact. None of them contains any of the `answer_parts`, and none quotes `statement`. Each ends with \
 a question mark.";
 
-const REVERSE_TASK: &str = "Write one question about the fact in `statement` that starts from \
-one part of it. The question MUST contain `include_exactly` exactly as written and asks for exactly \
-one of the names in `choices`, so that only someone who knows the fact can answer it. The question \
-must not contain the name it asks for. Example: statement \"Boulton and Watt made the press in \
-1785.\", include_exactly \"Watt\", choices [\"Boulton\"]: \"Which partner worked with Watt on the \
-copying press?\" with asks_for \"Boulton\". Write `approach` first (one sentence), then `question`, \
-then `asks_for`: the one name of `choices` the question asks for, copied exactly. Do not quote \
-`statement`. End with a question mark.";
+const REVERSE_TASK: &str = "Write one natural question about the fact in `statement`. The person \
+asking already knows `known`, a part of the fact, and wants to find out one of the names in \
+`choices`. The question must mention `known` word for word, must not mention the name it asks for, \
+and can only be answered by someone who knows the fact. Example: statement \"Boulton and Watt made \
+the press in 1785.\", known \"Watt\", choices [\"Boulton\"]: \"Which partner worked with Watt on the \
+copying press?\" with asked \"Boulton\". Write `approach` first (one sentence), then `question`, \
+then `asked`: the one name of `choices` the question asks for, copied exactly. Write the question \
+as ordinary prose, with none of these field names in it. Do not quote `statement`. End with a \
+question mark.";
 
 const PARAPHRASE_TASK: &str = "Say again, in different words and in the same voice, what \
 `statement` says. Keep every name, number and date it holds exactly, change the sentence \
@@ -73,7 +74,7 @@ struct Shown<'a> {
 #[derive(Serialize)]
 struct ShownReverse<'a> {
     statement: &'a str,
-    include_exactly: &'a str,
+    known: &'a str,
     choices: Vec<String>,
 }
 
@@ -82,13 +83,12 @@ struct ShownReverse<'a> {
 #[schemars(crate = "schemars")]
 struct WrittenReverse {
     /// One sentence on how the question turns `question` around: what it
-    /// gives (`include_exactly`) and what it asks for.
+    /// gives (`known`) and what it asks for.
     approach: String,
-    /// The question: it contains `include_exactly` exactly and not the name
-    /// it asks for.
+    /// The question: it contains `known` exactly and not the name it asks for.
     question: String,
     /// The one name of `choices` the question asks for, as written there.
-    asks_for: String,
+    asked: String,
 }
 
 /// The three other questions the generator writes.
@@ -221,7 +221,7 @@ fn write_reverse(
             .postcondition(move |w: &WrittenReverse| {
                 let admitted = admit_reverse(
                     w.question.trim(),
-                    w.asks_for.trim(),
+                    w.asked.trim(),
                     &question,
                     &statement,
                     &keys,
@@ -238,14 +238,14 @@ fn write_reverse(
             generator,
             &ShownReverse {
                 statement: &fact.statement,
-                include_exactly: fact.keys.first().map_or("", |k| k.text.as_str()),
+                known: fact.keys.first().map_or("", |k| k.text.as_str()),
                 choices: choices.iter().map(|k| k.text.clone()).collect(),
             },
         ))
         .with_context(|| format!("writing the reverse probe of fact {}", fact.id))?;
     let asked = admit_reverse(
         reply.question.trim(),
-        reply.asks_for.trim(),
+        reply.asked.trim(),
         &fact.question,
         &fact.statement,
         &fact.keys,
