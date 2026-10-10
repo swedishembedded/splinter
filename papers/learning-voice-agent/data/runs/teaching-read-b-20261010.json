@@ -1,0 +1,839 @@
+[
+  {
+    "id": "b000",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b001",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b002",
+    "plain": {
+      "Rule": {
+        "instruction": "push to main without asking me first.",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Never push to main without asking me first",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b003",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b004",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "closing the month",
+        "steps": [
+          "lock the ledger",
+          "reconcile invoices",
+          "send the summary"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b005",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "delivery pickup day",
+        "claim": "Your delivery pickup is on Monday",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "b006",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b007",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "keep answers short",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b008",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b009",
+    "plain": {
+      "Fact": {
+        "subject": "the standup",
+        "claim": "the standup is at nine",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "standup time",
+        "claim": "The standup is at nine",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "b010",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "egg processing",
+        "steps": [
+          "first you wash the eggs",
+          "then candle them",
+          "then pack them in the grey trays"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b011",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b012",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "weekly report",
+        "claim": "When I say the usual I mean the weekly report",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b013",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "store layout",
+        "claim": "the walk-in freezer is on the left behind the dry store",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b014",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b015",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "show me the path before deleting",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b016",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b017",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "shipping an order",
+        "steps": [
+          "print the label",
+          "tape the box twice",
+          "scan it out at the front desk"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b018",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "Dr Okafor's schedule",
+        "claim": "Dr Okafor only sees patients on Tuesdays and Thursdays",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b019",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b020",
+    "plain": {
+      "Rule": {
+        "instruction": "read back the order number before you confirm anything",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "read back the order number before confirming anything",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b021",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "server name",
+        "claim": "The server is called atlas",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "b022",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b023",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "calibrating the sensor",
+        "steps": [
+          "warm it up for ten minutes",
+          "zero it with the reference block",
+          "run the sweep"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b024",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b025",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do not call me sir",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b026",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "barn gate code",
+        "claim": "the barn gate code is four four one nine",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b027",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b028",
+    "plain": {
+      "Rule": {
+        "instruction": "answer in swedish when the kids are around",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "answer in swedish when the kids are around",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b029",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "keep answers short",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b030",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "cow milking schedule",
+        "claim": "Our cows get milked at five in the morning and again at four.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b031",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "handling new patient",
+        "steps": [
+          "take their insurance card",
+          "open a chart",
+          "page the nurse"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b032",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b033",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "Don't interrupt me while I'm dictating",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b034",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "send it to Priya without asking",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b035",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "Hamburg container arrival date",
+        "claim": "The Hamburg container arrives on the fourteenth, not the twelfth.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "b036",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b037",
+    "plain": {
+      "Rule": {
+        "instruction": "ask before you email a parent",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "ask before emailing a parent",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b038",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "bringing up the test rig",
+        "steps": [
+          "power the supply first",
+          "then the scope",
+          "only then the board"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b039",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b040",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "PCB supplier and lead time",
+        "claim": "our PCB supplier is Eurocircuits and the lead time is eight days",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b041",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "never use the old form",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b042",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do not apologise every time",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b043",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b044",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "end of day in the kitchen",
+        "steps": [
+          "wipe the stations",
+          "label the leftovers",
+          "do the fridge log"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b045",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "clinic hours",
+        "claim": "the clinic closes early on fridays",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b046",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b047",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "If a temperature log reads above eight degrees, tell me straight away.",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b048",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b049",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "soldering station location",
+        "claim": "The soldering station is in room two",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "b050",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "mark homework",
+        "steps": [
+          "check the answers against the key",
+          "write the score in the book",
+          "enter it into the portal"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b051",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b052",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "never order from the cheap supplier without checking with me",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b053",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b054",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "class five b",
+        "claim": "we have forty two pupils in class five b",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b055",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b056",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "use metric units",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b057",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "customs declaration process",
+        "steps": [
+          "get the invoice",
+          "fill in form c nine",
+          "upload it to the broker portal"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b058",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b059",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "patient allergy",
+        "claim": "the patient in bed six has a penicillin allergy",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b060",
+    "plain": {
+      "Rule": {
+        "instruction": "maybe we'll try the other supplier.",
+        "force": "Always"
+      }
+    },
+    "model": null
+  },
+  {
+    "id": "b061",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "say the unit every time when reading out dosages",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b062",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b063",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "milking line maintenance",
+        "claim": "to bleed the milking line you flush with water, drain the pump and then sanitise it",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b064",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b065",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "sourdough starter location",
+        "claim": "The sourdough starter lives in the blue tub on the top shelf.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b066",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "confirm before you send anything to the customer",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b067",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b068",
+    "plain": {
+      "Fact": {
+        "subject": "the tractor",
+        "claim": "the tractor is a John Deere not a Massey",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "tractor brand",
+        "claim": "the tractor is a John Deere not a Massey",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "b069",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b070",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "reflow process",
+        "claim": "the reflow process is preheat to one fifty, ramp to two forty five and hold for forty seconds, then cool down",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b071",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "don't put the clinic line on speaker after six",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b072",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b073",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "customs broker",
+        "claim": "our customs broker is linnea",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b074",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b075",
+    "plain": {
+      "Rule": {
+        "instruction": "you're unsure about a part number, just say so instead of guessing.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "say so instead of guessing",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b076",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "read log",
+        "steps": [
+          "Open the log from yesterday",
+          "Read the last line"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b077",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "onboarding a new supplier",
+        "steps": [
+          "do a credit check",
+          "get two references",
+          "add them to the system"
+        ]
+      }
+    }
+  },
+  {
+    "id": "b078",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "invoice numbering",
+        "claim": "our invoice numbers start with INV, then the year, then a running number",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b079",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b080",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "call me Marta, not Mrs Lindqvist",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b081",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b082",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "pronunciation of Szymanski",
+        "claim": "it's pronounced Szymanski, the s z is like sh",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b083",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b084",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "remind me to cover the hay whenever it rains",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "b085",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b086",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "school bus schedule",
+        "claim": "The school bus for year three leaves at ten past eight.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "b087",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "b088",
+    "plain": {
+      "Rule": {
+        "instruction": "feed the dogs anything before checking the chart.",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Never feed the dogs anything before checking the chart.",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "b089",
+    "plain": null,
+    "model": null
+  }
+]

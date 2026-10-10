@@ -227,6 +227,64 @@ def main():
     lines += ["\\bottomrule", "\\end{tabular}"]
     (OUT / "models_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
+    # The same test split with every user turn said aloud and recognised, four voices.
+    scale = json.loads((ROOT / runs["teaching-spoken-scale-20261010"]["file"]).read_text(encoding="utf-8"))
+    sk = {}
+    for r in scale["results"]:
+        k = sk.setdefault(r["kind"], {"asks": 0, "taught": 0, "exact_asks": 0, "exact_taught": 0, "teachings": 0, "misheard": 0})
+        k["teachings"] += r["teachings"]
+        k["misheard"] += len(r["misheard"])
+        for o in r["outcomes"]:
+            k["asks"] += 1
+            k["taught"] += o["taught_passes"]
+            if not r["misheard"]:
+                k["exact_asks"] += 1
+                k["exact_taught"] += o["taught_passes"]
+    lines = ["\\begin{tabular}{@{}l r r r r@{}}", "\\toprule", "Taught & Asks & Passes, text (one run) & Passes, spoken (four voices) & of which, teaching heard as said\\\\", "\\midrule"]
+    for key, label in labels.items():
+        k = sk[key]
+        exact = f"{k['exact_taught']}/{k['exact_asks']}" if k["exact_asks"] else "none"
+        lines.append(f"{label} & {k['asks']} & {kinds[key]['taught']}/{kinds[key]['asks']} & {k['taught']}/{k['asks']} & {exact}\\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "spoken_scale_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    macros["SpokenFactPass"] = f"{sk['fact']['taught']}/{sk['fact']['asks']}"
+    macros["SpokenFactLow"] = f"{wilson(sk['fact']['taught'], sk['fact']['asks'])[1]:.2f}"
+    macros["SpokenFactMisheard"] = f"{sk['fact']['misheard']}/{sk['fact']['teachings']}"
+    macros["SpokenRulePass"] = f"{sk['rule']['taught']}/{sk['rule']['asks']}"
+    macros["SpokenRuleExact"] = f"{sk['rule']['exact_taught']}/{sk['rule']['exact_asks']}"
+    macros["SpokenRetractPass"] = f"{sk['retract']['taught']}/{sk['retract']['asks']}"
+    macros["SpokenUnrelatedPass"] = f"{sk['unrelated']['taught']}/{sk['unrelated']['asks']}"
+
+    # Procedures and rules, the second set, with enough asks to meet the gate.
+    more = json.loads((ROOT / runs["teaching-more-20261010"]["file"]).read_text(encoding="utf-8"))
+    scen = {json.loads(l)["id"]: json.loads(l) for l in (ROOT / "data/teaching/scenarios-more-test.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()}
+    groups = {"procedures": [0, 0, 0], "rules to do something": [0, 0, 0], "rules to avoid a word": [0, 0, 0]}
+    for r in more["results"]:
+        if r["kind"] == "procedure":
+            g = groups["procedures"]
+        elif scen[r["id"]]["tests"][0]["check"].get("none_of"):
+            g = groups["rules to avoid a word"]
+        else:
+            g = groups["rules to do something"]
+        for o in r["outcomes"]:
+            g[0] += 1
+            g[1] += o["untaught_passes"]
+            g[2] += o["taught_passes"]
+    lines = ["\\begin{tabular}{@{}l r r l l@{}}", "\\toprule", "Taught & Asks & Untaught passes & Taught passes (95\\% interval) & Gate\\\\", "\\midrule"]
+    for label, (n, un, tp) in groups.items():
+        lo, hi = wilson(tp, n)
+        gate = "met" if lo >= 0.80 and un / n < 0.20 else "not met"
+        lines.append(f"{label} & {n} & {un} & {tp} ({lo:.2f}--{hi:.2f}) & {gate}\\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "more_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    pooled_rules = [groups["rules to do something"][i] + groups["rules to avoid a word"][i] for i in range(3)]
+    macros["MoreRulesPooled"] = f"{pooled_rules[2]}/{pooled_rules[0]}"
+    macros["MoreRulesPooledLow"] = f"{wilson(pooled_rules[2], pooled_rules[0])[0]:.2f}"
+    macros["MoreProcedures"] = f"{groups['procedures'][2]}/{groups['procedures'][0]}"
+    macros["MoreProceduresLow"] = f"{wilson(groups['procedures'][2], groups['procedures'][0])[0]:.2f}"
+    macros["MoreDoRules"] = f"{groups['rules to do something'][2]}/{groups['rules to do something'][0]}"
+    macros["MoreAvoidRules"] = f"{groups['rules to avoid a word'][2]}/{groups['rules to avoid a word'][0]}"
+
     # The readers of what a user says, on the test split of the authored utterances.
     gold = [json.loads(l) for l in (ROOT / "data/teaching/utterances.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     readings = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-20261010"]["file"]).read_text(encoding="utf-8"))}
@@ -279,6 +337,26 @@ def main():
     macros["CascadeF"] = f"{speech_in['cascade-adams.json']['mean_word_f1_vs_text_path_answer']:.3f}"
     macros["SpeechInTopic"] = speech_in["listen-adams.json"]["answers_mentioning_a_topic_word"]
     macros["CascadeTopic"] = speech_in["cascade-adams.json"]["answers_mentioning_a_topic_word"]
+
+    # The same readers on the independently written set.
+    gold_b = [json.loads(l) for l in (ROOT / "data/teaching/utterances-b.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    brief = set((ROOT / "data/teaching/utterances-b.brief.txt").read_text(encoding="utf-8").split())
+    readings_b = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-b-20261010"]["file"]).read_text(encoding="utf-8"))}
+    lines = ["\\begin{tabular}{@{}l l r r r@{}}", "\\toprule", "Utterances & Reader & Teachings found & Fired on a non-teaching & Misread\\\\", "\\midrule"]
+    for label, rows_b in (("all 90", gold_b), ("the 76 not from the brief", [g for g in gold_b if g["id"] not in brief])):
+        pos_b = [g for g in rows_b if g["kind"] != "none"]
+        neg_b = [g for g in rows_b if g["kind"] == "none"]
+        for name, field in (("plain phrases", "plain"), ("model", "model")):
+            pick = lambda g: readings_b[g["id"]][field]
+            found = sum(right(g, pick(g)) for g in pos_b)
+            fired = sum(pick(g) is not None for g in neg_b)
+            wrong = sum(pick(g) is not None and not right(g, pick(g)) for g in pos_b)
+            lines.append(f"{label} & {name} & {found}/{len(pos_b)} & {fired}/{len(neg_b)} & {wrong}\\\\")
+            if label == "all 90":
+                macros[f"ReadB{field.capitalize()}Found"] = f"{found}/{len(pos_b)}"
+                macros[f"ReadB{field.capitalize()}Fired"] = f"{fired}/{len(neg_b)}"
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "reading_b_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # Extraction study: the rule-based readers of a user's words, on the frozen test split.
     study = runs["extraction-rules-20261010"]

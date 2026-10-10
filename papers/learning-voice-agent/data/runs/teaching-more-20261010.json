@@ -1,0 +1,575 @@
+{
+  "scenarios_digest": "blake3:f0d068dc55ea5b09d34e36d75933c923f0a4b0de69afb59ad4be52e5dcbc47db",
+  "base": "Qwen3-8B",
+  "system": "You are a helpful voice assistant. Your answers are spoken aloud, so keep them short and plain.",
+  "results": [
+    {
+      "id": "more-procedure-02",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to launch the weather balloon?",
+          "untaught_reply": "The first step is to check the weather conditions and ensure they are suitable for launching the weather balloon.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to check the helium gauge.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I launch the weather balloon?",
+          "untaught_reply": "To launch the weather balloon, first prepare the balloon and payload, then secure it to a launcher, and finally release it into the air.",
+          "untaught_passes": false,
+          "taught_reply": "To launch the weather balloon, follow these steps:  \n1. Check the helium gauge.  \n2. Tie the orange tag.  \n3. Release the tether.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to launch the weather balloon?",
+          "untaught_reply": "The last step is to release the weather balloon into the atmosphere.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to release the tether.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-03",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to feed the kiln crew?",
+          "untaught_reply": "The first step to feed the kiln crew is to prepare the food.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to ring the copper bell.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I feed the kiln crew?",
+          "untaught_reply": "To feed the kiln crew, gather food supplies and distribute them to the crew members.",
+          "untaught_passes": false,
+          "taught_reply": "To feed the kiln crew, follow these steps:  \n1. Ring the copper bell.  \n2. Ladle the barley soup.  \n3. Wash the tin cups.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to feed the kiln crew?",
+          "untaught_reply": "The last step to feed the kiln crew is to clean up any leftover food and dispose of waste properly.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to wash the tin cups.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-04",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to archive a project?",
+          "untaught_reply": "The first step to archive a project is to gather all the relevant files and materials related to the project.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to zip the folder.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I archive a project?",
+          "untaught_reply": "To archive a project, first gather all files and materials, then organize them into folders or categories. Next, choose a storage method like a cloud service or physical storage. Finally, label everything clearly and keep a record of where everything is stored.",
+          "untaught_passes": false,
+          "taught_reply": "To archive a project, first zip the folder, then stamp it with the date, and finally move it to the cold shelf.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to archive a project?",
+          "untaught_reply": "The last step to archive a project is to review the archive to ensure all files are properly organized and stored, and then close the project or mark it as completed.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to move it to the cold shelf.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-05",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to close the greenhouse?",
+          "untaught_reply": "The first step to close the greenhouse is to secure all the vents and openings.",
+          "untaught_passes": true,
+          "taught_reply": "The first step is to lower the vents.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I close the greenhouse?",
+          "untaught_reply": "To close the greenhouse, start by securing all vents and openings, then close the doors or panels and lock them.",
+          "untaught_passes": false,
+          "taught_reply": "To close the greenhouse, follow these steps:  \n1. Lower the vents.  \n2. Drain the long hose.  \n3. Lock the north door.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to close the greenhouse?",
+          "untaught_reply": "The last step to close the greenhouse is to lock all doors and panels securely.",
+          "untaught_passes": true,
+          "taught_reply": "The last step is to lock the north door.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-06",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to service the printer?",
+          "untaught_reply": "Turn off the printer and unplug it from the power source.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to unplug the cable.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I service the printer?",
+          "untaught_reply": "Turn off the printer and unplug it from the power source. Then, open the printer cover and check for any jams or paper stuck inside. Clean the rollers and make sure all parts are properly aligned. If needed, replace any worn-out parts. Finally, plug the printer back in and turn it on.",
+          "untaught_passes": false,
+          "taught_reply": "To service the printer, follow these steps:  \n1. Unplug the cable.  \n2. Dust the rollers.  \n3. Print the test page.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to service the printer?",
+          "untaught_reply": "Plug the printer back in and turn it on.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to print the test page.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-07",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to welcome a guest?",
+          "untaught_reply": "The first step to welcome a guest is to greet them warmly and offer assistance.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to offer the blue slippers.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I welcome a guest?",
+          "untaught_reply": "To welcome a guest, start by greeting them with a smile and a friendly \"Hello!\" or \"Welcome!\" Then offer help with anything they might need.",
+          "untaught_passes": false,
+          "taught_reply": "To welcome a guest, first offer the blue slippers. Then show them the tea corner. Finally, note their name in the guest book.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to welcome a guest?",
+          "untaught_reply": "The last step to welcome a guest is to ensure they feel comfortable and offer further assistance if needed.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to note their name in the guest book.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-08",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to calibrate the scale?",
+          "untaught_reply": "Place the scale on a flat, hard surface.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to clear the tray.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I calibrate the scale?",
+          "untaught_reply": "Turn on the scale and press the calibration button. Follow the on-screen instructions.",
+          "untaught_passes": false,
+          "taught_reply": "To calibrate the scale, follow these steps:  \n1. Clear the tray.  \n2. Place the silver weight.  \n3. Press the zero key.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to calibrate the scale?",
+          "untaught_reply": "Wait for the calibration to complete, then place an object on the scale to check accuracy.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to press the zero key.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-procedure-09",
+      "voice": null,
+      "misheard": [],
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to send the weekly mail?",
+          "untaught_reply": "Check the schedule for the weekly mail.",
+          "untaught_passes": false,
+          "taught_reply": "The first step is to gather the notes.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I send the weekly mail?",
+          "untaught_reply": "Open the email client and compose a new message.",
+          "untaught_passes": false,
+          "taught_reply": "To send the weekly mail, first gather the notes, then write the summary, and finally send it before noon.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the last step to send the weekly mail?",
+          "untaught_reply": "Send the message and confirm it's delivered.",
+          "untaught_passes": false,
+          "taught_reply": "The last step is to send it before noon.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-rule-02",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "Right, the capital of France is Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions. Shorter wavelengths of light, like blue and violet, are scattered more than longer wavelengths like red and yellow. Our eyes are more sensitive to blue light, so the sky looks blue to us.",
+          "untaught_passes": false,
+          "taught_reply": "Right, the sky appears blue because the Earth's atmosphere scatters sunlight in all directions, and blue light is scattered more than other colors due to its shorter wavelength. This scattered blue light is what we see when we look up at the sky.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for about 6-12 minutes, depending on how done you want it. Use a timer to avoid overcooking.",
+          "untaught_passes": false,
+          "taught_reply": "Right, to boil an egg, place it in a pot of cold water, bring the water to a boil, then reduce the heat to a simmer and cook for about 8-12 minutes depending on how done you want it.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat include Luna, Max, Whiskers, Oliver, or Bella. Choose one that matches your cat's personality!",
+          "untaught_passes": false,
+          "taught_reply": "Right, some good names for a cat could be Whiskers, Luna, Oliver, or Max.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-rule-03",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "Paris. Roger.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions. Shorter wavelengths of light, like blue and violet, are scattered more than longer wavelengths like red and yellow. Our eyes are more sensitive to blue light, so the sky looks blue to us.",
+          "untaught_passes": false,
+          "taught_reply": "Because the atmosphere scatters sunlight, making the sky appear blue. Roger.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for about 6-12 minutes, depending on how done you want it. Use a timer to avoid overcooking.",
+          "untaught_passes": false,
+          "taught_reply": "Place the egg in boiling water and cook for about 6-8 minutes. Roger.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat include Luna, Max, Whiskers, Oliver, or Bella. Choose one that matches your cat's personality!",
+          "untaught_passes": false,
+          "taught_reply": "Whiskers. Roger.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-rule-04",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What color is the sky on a clear day?",
+          "untaught_reply": "The sky is blue on a clear day.",
+          "untaught_passes": false,
+          "taught_reply": "The sky appears white on a clear day.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What color is the ocean?",
+          "untaught_reply": "The ocean can be blue, green, or even gray depending on the light and depth.",
+          "untaught_passes": false,
+          "taught_reply": "The ocean appears blue, but I cannot mention the color blue. The ocean is often described as blue, but I will not say that.",
+          "taught_passes": false
+        },
+        {
+          "ask": "What color are jeans?",
+          "untaught_reply": "Jeans are typically blue, but they can also come in other colors like black, gray, or brown.",
+          "untaught_passes": false,
+          "taught_reply": "Jeans are typically blue, but I cannot mention the color blue.",
+          "taught_passes": false
+        },
+        {
+          "ask": "What color is a blueberry?",
+          "untaught_reply": "A blueberry is blue.",
+          "untaught_passes": false,
+          "taught_reply": "A blueberry is often described as blue, but I cannot mention the color blue.",
+          "taught_passes": false
+        }
+      ]
+    },
+    {
+      "id": "more-rule-05",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "The capital of France is Paris. Paris harbor is a famous place for ships and tourists.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions. Shorter wavelengths of light, like blue and violet, are scattered more than longer wavelengths like red and yellow. Our eyes are more sensitive to blue light, so the sky looks blue to us.",
+          "untaught_passes": false,
+          "taught_reply": "The sky appears blue because the atmosphere scatters sunlight in all directions, and blue light is scattered more than other colors. This scattered blue light reaches our eyes, making the sky look blue. The harbor often reflects this blue sky, creating a beautiful view.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for about 6-12 minutes, depending on how done you want it. Use a timer to avoid overcooking.",
+          "untaught_passes": false,
+          "taught_reply": "To boil an egg, place it in a pot of water, bring the water to a boil, then reduce the heat and let it simmer for about 8-12 minutes, depending on how done you want it. Make sure the water is at a rolling boil before adding the egg. The harbor might be a nice place to relax after cooking.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat include Luna, Max, Whiskers, Oliver, or Bella. Choose one that matches your cat's personality!",
+          "untaught_passes": false,
+          "taught_reply": "A good name for a cat could be Whiskers, Shadow, or Luna. The harbor often has a peaceful vibe, perfect for a cat to nap in.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-rule-06",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions. Shorter wavelengths of light, like blue and violet, are scattered more than longer wavelengths like red and yellow. Our eyes are more sensitive to blue light, so the sky looks blue to us.",
+          "untaught_passes": false,
+          "taught_reply": "Light scatters blue.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for about 6-12 minutes, depending on how done you want it. Use a timer to avoid overcooking.",
+          "untaught_passes": false,
+          "taught_reply": "Boil water, add egg, wait.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat include Luna, Max, Whiskers, Oliver, or Bella. Choose one that matches your cat's personality!",
+          "untaught_passes": false,
+          "taught_reply": "Whiskers.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-rule-07",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "Paris, chief.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions. Shorter wavelengths of light, like blue and violet, are scattered more than longer wavelengths like red and yellow. Our eyes are more sensitive to blue light, so the sky looks blue to us.",
+          "untaught_passes": false,
+          "taught_reply": "Because the atmosphere scatters sunlight, chief.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for about 6-12 minutes, depending on how done you want it. Use a timer to avoid overcooking.",
+          "untaught_passes": false,
+          "taught_reply": "Place the egg in boiling water and cook for 6-7 minutes, chief.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat include Luna, Max, Whiskers, Oliver, or Bella. Choose one that matches your cat's personality!",
+          "untaught_passes": false,
+          "taught_reply": "Whiskers, chief.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "more-rule-08",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "How many days are in a week?",
+          "untaught_reply": "There are seven days in a week.",
+          "untaught_passes": false,
+          "taught_reply": "There are seven days in a week.",
+          "taught_passes": false
+        },
+        {
+          "ask": "How many colors are in a rainbow?",
+          "untaught_reply": "There are seven colors in a rainbow.",
+          "untaught_passes": false,
+          "taught_reply": "There are seven colors in a rainbow.",
+          "taught_passes": false
+        },
+        {
+          "ask": "How many continents are there?",
+          "untaught_reply": "There are seven continents.",
+          "untaught_passes": false,
+          "taught_reply": "There are seven continents.",
+          "taught_passes": false
+        },
+        {
+          "ask": "What is three plus four?",
+          "untaught_reply": "Three plus four is seven.",
+          "untaught_passes": false,
+          "taught_reply": "Seven.",
+          "taught_passes": false
+        }
+      ]
+    },
+    {
+      "id": "more-rule-09",
+      "voice": null,
+      "misheard": [],
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "The capital of France is Paris. stay sharp.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions. Shorter wavelengths of light, like blue and violet, are scattered more than longer wavelengths like red and yellow. Our eyes are more sensitive to blue light, so the sky looks blue to us.",
+          "untaught_passes": false,
+          "taught_reply": "The sky appears blue because sunlight is scattered by the atmosphere, and blue light scatters more than other colors. stay sharp.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for about 6-12 minutes, depending on how done you want it. Use a timer to avoid overcooking.",
+          "untaught_passes": false,
+          "taught_reply": "To boil an egg, place it in a pot of water, bring the water to a boil, then cook for about 6-8 minutes for a soft-boiled egg. stay sharp.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat include Luna, Max, Whiskers, Oliver, or Bella. Choose one that matches your cat's personality!",
+          "untaught_passes": false,
+          "taught_reply": "A good name for a cat could be Whiskers, Luna, or Max. stay sharp.",
+          "taught_passes": true
+        }
+      ]
+    }
+  ]
+}

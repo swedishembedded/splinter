@@ -29,6 +29,12 @@ use splinter_sdk::vocabulary::teaching::{
     parse_teaching, teaching_from_json, Ledger, Teaching, READER_PROMPT,
 };
 
+use splinter_sdk::model::speech::{
+    BrainRecognizer, BrainSynthesizer, Recognizer, Synthesizer, DEFAULT_RECOGNIZER,
+    DEFAULT_SYNTHESIZER,
+};
+use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
+
 use crate::batch::{emit, Persona};
 
 /// The system turn of the agent under test: nothing about a person to portray.
@@ -42,9 +48,36 @@ pub struct TeachEvalArgs {
     /// The scenarios, one JSON object per line.
     #[arg(long)]
     scenarios: PathBuf,
+    /// Say every user turn aloud in a synthetic voice of each of these seeds and
+    /// give the agent what a recogniser heard; without it the turns go in as text.
+    #[arg(long, value_delimiter = ',')]
+    voices: Vec<u64>,
+    /// The synthesis model, in brain's model store (with `--voices`).
+    #[arg(long, default_value = DEFAULT_SYNTHESIZER)]
+    tts: String,
+    /// The recognition model, in brain's model store (with `--voices`).
+    #[arg(long, default_value = DEFAULT_RECOGNIZER)]
+    asr: String,
+    /// Also let the model read what the user says for teachings.
+    #[arg(long)]
+    model_reader: bool,
     /// Also keep the report here.
     #[arg(long)]
     report: Option<PathBuf>,
+}
+
+/// A user's turn said aloud and heard back: the words the agent gets.
+struct Ears<'a> {
+    synthesizer: &'a BrainSynthesizer,
+    recognizer: &'a BrainRecognizer,
+    speaker: SpeakerProfile,
+}
+
+impl Ears<'_> {
+    fn hear(&self, said: &str) -> Result<String> {
+        let clip = self.synthesizer.speak(said, &self.speaker)?;
+        Ok(self.recognizer.transcribe(&clip)?.text)
+    }
 }
 
 #[derive(Deserialize)]
@@ -84,6 +117,10 @@ struct Outcome {
 #[derive(Serialize)]
 struct ScenarioResult {
     id: String,
+    /// The seed of the voice the turns were said in; none for text.
+    voice: Option<u64>,
+    /// Teaching utterances the recogniser did not hear as said: (said, heard).
+    misheard: Vec<(String, String)>,
     kind: String,
     /// How many of the teaching utterances the agent restated for confirmation.
     understood: usize,
@@ -100,28 +137,62 @@ struct Report {
     results: Vec<ScenarioResult>,
 }
 
-fn session(persona: &Persona, ledger: Ledger) -> Result<Teachable<'_, VoiceAgent>> {
-    Ok(Teachable::new(persona.voice_agent(None)?, ledger))
+fn session<'a>(
+    persona: &'a Persona,
+    reader: Option<&'a Persona>,
+    ledger: Ledger,
+) -> Result<Teachable<'a, VoiceAgent>> {
+    let teachable = Teachable::new(persona.voice_agent(None)?, ledger);
+    Ok(match reader {
+        Some(reader) => teachable.with_reader(model_reader(reader)),
+        None => teachable,
+    })
 }
 
-fn run_scenario(persona: &Persona, scenario: &Scenario) -> Result<ScenarioResult> {
-    let mut first = session(persona, Ledger::new())?;
+/// Words of `text` as a recogniser would be compared on: lower case, letters and digits.
+fn plain(text: &str) -> String {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+fn run_scenario(
+    persona: &Persona,
+    reader: Option<&Persona>,
+    ears: Option<&Ears>,
+    scenario: &Scenario,
+) -> Result<ScenarioResult> {
+    let mut misheard = Vec::new();
+    // What the agent gets of what the user said: the words, or what was heard of them.
+    let mut heard = |said: &str, teaching: bool| -> Result<String> {
+        let Some(ears) = ears else {
+            return Ok(said.to_string());
+        };
+        let heard = ears.hear(said)?;
+        if teaching && plain(said) != plain(&heard) {
+            misheard.push((said.to_string(), heard.clone()));
+        }
+        Ok(heard)
+    };
+    let mut first = session(persona, reader, Ledger::new())?;
     let mut understood = 0;
     for said in &scenario.teach {
-        let restated = first.hear(said, &mut |_| {})?;
+        let restated = first.hear(&heard(said, true)?, &mut |_| {})?;
         understood += usize::from(restated.ends_with("Is that right?"));
-        first.hear("Yes.", &mut |_| {})?;
+        first.hear(&heard("Yes.", false)?, &mut |_| {})?;
     }
     for prime in &scenario.primes {
-        first.hear(prime, &mut |_| {})?;
+        first.hear(&heard(prime, false)?, &mut |_| {})?;
     }
     if scenario.forget_last {
-        first.hear("Forget that.", &mut |_| {})?;
+        first.hear(&heard("Forget that.", false)?, &mut |_| {})?;
     }
     let ledger = first.ledger().clone();
     let kept = ledger.active().count();
-    let mut untaught = session(persona, Ledger::new())?;
-    let mut fresh = session(persona, ledger)?;
+    let mut untaught = session(persona, reader, Ledger::new())?;
+    let mut fresh = session(persona, reader, ledger)?;
     let taught = if scenario.same_session {
         &mut first
     } else {
@@ -129,8 +200,9 @@ fn run_scenario(persona: &Persona, scenario: &Scenario) -> Result<ScenarioResult
     };
     let mut outcomes = Vec::new();
     for test in &scenario.tests {
-        let untaught_reply = untaught.hear(&test.ask, &mut |_| {})?;
-        let taught_reply = taught.hear(&test.ask, &mut |_| {})?;
+        let asked = heard(&test.ask, false)?;
+        let untaught_reply = untaught.hear(&asked, &mut |_| {})?;
+        let taught_reply = taught.hear(&asked, &mut |_| {})?;
         outcomes.push(Outcome {
             ask: test.ask.clone(),
             untaught_passes: test.check.passes(&untaught_reply),
@@ -141,6 +213,8 @@ fn run_scenario(persona: &Persona, scenario: &Scenario) -> Result<ScenarioResult
     }
     Ok(ScenarioResult {
         id: scenario.id.clone(),
+        voice: ears.map(|e| e.speaker.seed()),
+        misheard,
         kind: scenario.kind.clone(),
         understood,
         teachings: scenario.teach.len(),
@@ -159,10 +233,46 @@ pub fn run(args: &TeachEvalArgs) -> Result<()> {
         .collect::<Result<_, _>>()
         .with_context(|| format!("{} is not a file of scenarios", args.scenarios.display()))?;
     let persona = Persona::load("assistant", &args.base, None)?.under(SYSTEM.to_string());
+    let reader = args
+        .model_reader
+        .then(|| reading_persona(&args.base))
+        .transpose()?;
+    let (synthesizer, recognizer) = if args.voices.is_empty() {
+        (None, None)
+    } else {
+        (
+            Some(BrainSynthesizer::load(&args.tts)?),
+            Some(BrainRecognizer::load(&args.asr)?),
+        )
+    };
     let mut results = Vec::new();
-    for scenario in &scenarios {
-        eprintln!("teach-eval: {} ({})", scenario.id, scenario.kind);
-        results.push(run_scenario(&persona, scenario)?);
+    // Text turns once; spoken turns once per voice.
+    let voices: Vec<Option<u64>> = if args.voices.is_empty() {
+        vec![None]
+    } else {
+        args.voices.iter().map(|v| Some(*v)).collect()
+    };
+    for voice in voices {
+        let ears = match (voice, synthesizer.as_ref(), recognizer.as_ref()) {
+            (Some(seed), Some(synth), Some(recog)) => Some(Ears {
+                synthesizer: synth,
+                recognizer: recog,
+                speaker: SpeakerProfile::new(seed, Portrayal::synthetic_theatrical()),
+            }),
+            _ => None,
+        };
+        for scenario in &scenarios {
+            eprintln!(
+                "teach-eval: {} ({}) voice {:?}",
+                scenario.id, scenario.kind, voice
+            );
+            results.push(run_scenario(
+                &persona,
+                reader.as_ref(),
+                ears.as_ref(),
+                scenario,
+            )?);
+        }
     }
     emit(
         &Report {

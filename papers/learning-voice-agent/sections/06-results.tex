@@ -10,7 +10,7 @@ The test split of \cref{sec:evaluation} was run once under \code{prereg/teaching
 rates by kind. Untaught, the model answered none of the questions about the invented facts (\TeachFactUntaught{}); with the ledger of a session that had been taught, in a new session, it answered \TeachFactTaught{} as taught. A fact that was taught and then corrected was answered as
 corrected and never as first taught, a fact taught and then forgotten was not told, unrelated questions kept their answers, and sixteen facts taught in one session were each recalled. The last two kinds are leak and disturbance checks: both arms should pass, and they do.
 
-One pre-registered gate is not met: the procedure kind has only \TeachProcedureAsks{} asks, so its interval (lower bound \TeachProcedureLow{}) cannot reach 0.80 even when every ask passes, and a claim for procedures needs more scenarios. Rules (\TeachRulesAsks{} asks), a fact that must be used and two rules at once had no gate and are reported as measured. Two rules
+One pre-registered gate is not met: the procedure kind has only \TeachProcedureAsks{} asks, so its interval (lower bound \TeachProcedureLow{}) cannot reach 0.80 even when every ask passes; a second set below meets it. Rules (\TeachRulesAsks{} asks), a fact that must be used and two rules at once had no gate and are reported as measured. Two rules
 taught together were not both obeyed: every reply ended with ``over'' but none used ``captain'', which the same rule taught alone had produced in every reply. The gates on facts are met over asks; the registration names the scenario as the unit, and over the twelve fact scenarios the lower bound is \TeachFactScenarioLow{}, below 0.80. The agent restated every teaching utterance of the set for confirmation
 (\TeachUnderstood{} of \TeachTeachings{}), but these were written in the forms the plain reader knows, so that number tests the protocol and not the reader.
 
@@ -26,6 +26,18 @@ taught together were not both obeyed: every reply ended with ``over'' but none u
 \input{generated/teaching_table}
 \caption{Test split, untaught against taught. Asks that pass their text check, with the 95\% Wilson interval of the taught rate. For the last two rows a pass is the absence of a leak (a forgotten fact told) and of a disturbance (an unrelated answer changed).}
 \label{tab:teaching}
+\end{table}
+
+\paragraph{Procedures and rules with enough asks (T2).}
+The procedure gate could not be met with six asks, so a second set was registered (\code{prereg/teaching-more.md}; run \code{teaching-more-20261010}): eight new procedures with three asks each and eight new rules with four, in vocabulary the first set did not use. \Cref{tab:more} gives the result. Procedures were told as taught in \MoreProcedures{} asks (lower bound \MoreProceduresLow{}), so H4 is met. Rules are
+not met as registered: pooled over the eight rules the taught rate was \MoreRulesPooled{} (lower bound \MoreRulesPooledLow{}), because the rules split in two. The six rules that ask the agent to \emph{do} something (start with a word, end with a word, include a word, answer in five words, address the user as chief) were obeyed in \MoreDoRules{} asks; the two that ask it to \emph{avoid} something (never mention
+the color blue, never mention the number seven) in \MoreAvoidRules{}: asked what color the sky is, the model said white, and asked how many days are in a week it said seven. On dev, the same kind of rule was ``obeyed'' by refusing to answer, which is why the avoid-a-word checks also fail a refusal. This is a split we did not register as two hypotheses; it is reported as found.
+
+\begin{table}[t]
+\centering\small
+\input{generated/more_table}
+\caption{The second set of procedures and rules (one run, Qwen3-8B). The gate is a lower 95\% Wilson bound of at least 0.80 over asks with the untaught rate below 0.20; the last two rows are the pre-registered rule hypothesis split by the kind of rule.}
+\label{tab:more}
 \end{table}
 
 \paragraph{Other model sizes (T2).}
@@ -48,17 +60,42 @@ Three scripted conversations were run end to end under \code{prereg/teaching-spo
 restated, confirmed, obeyed, taken back by ``Forget that'', and not obeyed after. In the third, a procedure was restated and told, though ``quartz'' was heard as ``court's'' and the restatement and the answer carry that. These are three conversations in one voice under a persona prompt, a demonstration that the path works and not a rate. Their first runs found
 that the pronunciation desk took ``Forget that'' before the ledger did (it is now routed to the kind taught last), and the retraction behaviour above.
 
+\paragraph{Teaching through recognition at scale (T5, failed; T4).}
+Under \code{prereg/teaching-spoken-scale.md} the whole test split was run with every user turn---the teaching, the yes, the forget, the asks---said by the synthesizer in four voices and recognised, the agent getting only the recognised text and the model reader on (run \code{teaching-spoken-scale-20261010}; \cref{tab:spokenscale}).
+The agent restated all but two of 312 teaching utterances for confirmation. But the facts did not survive: \SpokenFactPass{} asks about a taught fact passed (an upper bound of \SpokenFactLow{} on the rate), against 144 of 144 in text, and the gate on facts is not met. The reason is recognition, and the protocol keeps what was heard. \SpokenFactMisheard{} fact utterances were not heard as said:
+names and codes became other words (``NW-Guest-Fjord'' as ``NW Gist Fjord'', ``Kestrel'' as ``Kest''), numbers were written out (``09:45'' as ``zero nine forty five'', ``B12'' as ``B twelve''), and the agent then recalled what it had heard, so the answer was consistent with the teaching and wrong against the check. In this study the scripted user always says yes; a user who hears the wrong word in the restatement could refuse, and that recovery was not tested.
+Rules, which are made of ordinary words, held up better (\SpokenRulePass{}, \SpokenRuleExact{} where the rule was heard as said); the taught-then-forgotten and unrelated checks passed (\SpokenRetractPass{}, \SpokenUnrelatedPass{}); procedures were told when heard, with some step words altered. Two rules at once failed in text and in speech on this model.
+The recognised word depends on the voice: every fact and corrected-fact ask of one of the four voices failed. Four seeds of one synthesizer are not four speakers.
+
+\begin{table}[t]
+\centering\small
+\input{generated/spoken_scale_table}
+\caption{The test split with every user turn said and recognised, pooled over four voices; the text column is the single text run of \cref{tab:teaching}. The last column counts the asks of scenarios whose teaching utterances were all heard as said, ignoring case and punctuation.}
+\label{tab:spokenscale}
+\end{table}
+
 \paragraph{Reading natural phrasings (T1, T3).}
 \Cref{tab:reading} scores the readers on the test split of the authored utterances (\(80\) of \(121\): 42 teachings and 38 non-teachings; run \code{teaching-read-20261010}). The plain reader never fired on a non-teaching (0 of 38) and found \ReadPlainFound{} teachings, so the gate of T1 is met by it; the model reader found \ReadModelFound{} and fired on \ReadModelFired{} non-teachings
 (``Please don't be late'' was read as a rule), so T1's gate is not met by the model reader, and one fire in 38 does not exclude a false-fire rate of several per cent. Asking the model only when the plain reader finds nothing gives the same numbers, because the plain reader never fires on a non-teaching. Test utterances only the model found include ``no no it's Monday not Friday'', ``the invoices go out on Fridays'',
 ``don't act until I say go'' and ``the way we onboard a customer is to send the welcome mail, schedule the kickoff, and create their workspace''. The model missed ``the deploy window is Thursday at 14:00 by the way'' and read ``when I say the usual, I mean the weekly report'' as a fact. A development false fire of the plain reader (``Next time I will bring coffee'') was fixed before the test split was scored.
 The utterances are written by the implementer, so these numbers measure coverage of phrasings we thought of, not of the ones users produce.
 
+On a second set of 90 utterances written by a separate agent that had seen neither the first set nor the readers (\cref{tab:readingb}; run \code{teaching-read-b-20261010}, pre-registered in \code{prereg/teaching-reading-b.md}), the readers were scored once, unchanged. The model reader again found most teachings (\ReadBModelFound{}, plain phrases \ReadBPlainFound{}) but fired on \ReadBModelFired{} non-teachings:
+``can you always keep answers short?'', ``Just this once, send it to Priya without asking'', ``She told me to never use the old form'' and ``Open the log from yesterday and read the last line'' (a two-step request read as a procedure). The plain reader, which did not fire on the first set's 38 non-teachings, fired once here (``Next time maybe we'll try the other supplier''), so the gate of T1 is met on the first set and not on the second.
+The writing agent's brief shared example phrasings with the first set and 14 of its 90 utterances follow them; the table also gives the other 76, where the pattern is the same. The false readings of the model reader are all ones that a restatement would show to the user, who could refuse; but each costs a turn that is not answered.
+
 \begin{table}[t]
 \centering\small
 \input{generated/reading_table}
 \caption{Readers of what a user says, on the test split of the authored utterances. ``Misread'' is a reading of a teaching with the wrong kind or without its key content.}
 \label{tab:reading}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\input{generated/reading_b_table}
+\caption{The same readers on the independently written utterances.}
+\label{tab:readingb}
 \end{table}
 
 \subsection{How the agent speaks}
