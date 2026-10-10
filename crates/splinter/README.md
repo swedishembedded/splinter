@@ -1012,6 +1012,11 @@ night costs more. So it learns in generations.
   consolidations, so it needs `--mode full` (a merge refuses) and a model whose
   weights and gradients fit the cards. Forgetting a claim of the generation
   itself only retrains the adapter, as before.
+- **The stance pass** (hold, accept without inventing, decline) is trained on the
+  nightly adapter, so a `merge` carries it into the base and a `full`
+  consolidation, trained on the claims' records alone, does not: the next night's
+  stance pass teaches it again on top of the checkpoint, and the consolidation
+  gate does not ask the stance rates.
 - **When.** `absorb --consolidate-after-records N` consolidates the generation
   the night's release closes once its claims hold more than `N` trained records
   (not at `N`); `--no-consolidate` never does; `--consolidate-mode` picks `full`
