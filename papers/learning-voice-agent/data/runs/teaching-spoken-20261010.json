@@ -1,0 +1,51 @@
+{
+  "c1": {
+    "user_turns": [
+      "Actually, the build server is called atlas seven.",
+      "Yes.",
+      "What is the build server called?"
+    ],
+    "answers": [
+      "So the build server is called Atlas SIV. Is that right?",
+      "Understood. I will remember that.",
+      "The build server is called Atlas SIV."
+    ],
+    "answer_word_error_rate": 0.04347826,
+    "turns": 3,
+    "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists"
+  },
+  "c2": {
+    "user_turns": [
+      "From now on, always end your answers with the word over.",
+      "Yes.",
+      "What is the capital of France?",
+      "Forget that.",
+      "What is the capital of Norway?"
+    ],
+    "answers": [
+      "So from now on I will always end your answers with the word over. Is that right?",
+      "Understood. I will remember that.",
+      "Paris. Over.",
+      "Forgotten.",
+      "The capital of Norway is Oslo. It is a city of great beauty and significance, much like the virtues of liberty and justice that I have long championed. May it ever remain a beacon of freedom and progress."
+    ],
+    "answer_word_error_rate": 0.015873017,
+    "turns": 5,
+    "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists"
+  },
+  "c3": {
+    "user_turns": [
+      "Here is how to deploy the site: first run the quartz checks, then seal the bundle, then push it to the harbor.",
+      "Yes.",
+      "How do I deploy the site?"
+    ],
+    "answers": [
+      "So to deploy the site, I first run the court's checks, then then seal the bundle, then then push it to the harbor. Is that right?",
+      "Understood. I will remember that.",
+      "I shall guide you, as one who has stood firm against tyranny and sought the liberty of the people. To deploy the site, first run the court's checks, for truth and justice must be upheld. Then seal the bundle, for it is the safeguard of our rights and freedoms. Lastly, push it to the harbor, for it is the path to liberty and the rejection of oppression. Do this with courage and conviction, for the cause of freedom demands it."
+    ],
+    "answer_word_error_rate": 0.21238938,
+    "turns": 3,
+    "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists"
+  }
+}

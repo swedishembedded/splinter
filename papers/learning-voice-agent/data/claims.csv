@@ -2,7 +2,7 @@ id,claim,status,evidence,gate
 T1,"What a user teaches an agent (a fact, a rule, a procedure) is a typed record read conservatively from what was said",partial,teaching-read-20261010,"no teaching read from a non-teaching on an authored set; the reader finds the teachings of natural phrasings"
 T2,"A taught fact, correction, procedure or rule is applied in a new session; a corrected fact stays corrected; a forgotten one stays forgotten; unrelated answers are unchanged",partial,teaching-test-20261010,"pre-registered: lower 95% bound >= 0.80 per kind with untaught < 0.20; leak and disturbance checks pass"
 T3,"A model reads teachings that plain phrase matching misses, with few false readings",partial,teaching-read-20261010,"found share and false-reading count on the test split of authored utterances"
-T4,"Teaching works by voice: spoken correction, spoken confirmation, changed next answer, spoken retraction",pending,,"scripted spoken conversations pass their checks end to end"
+T4,"Teaching works by voice: spoken correction, spoken confirmation, changed next answer, spoken retraction",partial,teaching-spoken-20261010,"scripted spoken conversations pass their checks end to end (three conversations, one synthetic voice)"
 C1,"Lessons are a formal typed account of spoken feedback with a safe application rule",pending,,"extraction F1 on a frozen held-out utterance set; no lesson from a non-directive"
 C2,"A lexicon lesson fixes a mispronounced word and generalizes across sentences",pending,,"human-rated pronunciation rises; no regression on untaught words (TOST)"
 C3,"One spoken example lets the voice imitate delivery in context",pending,,"speaker similarity up; WER not worse; humans prefer"

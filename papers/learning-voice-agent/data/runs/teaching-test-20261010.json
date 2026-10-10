@@ -1,6 +1,6 @@
 {
   "scenarios_digest": "blake3:c0de23110ac2c2b2ecb6279381e3cd1053ca1e0f4a9a6cb1e2e198f37407acfe",
-  "base": "/home/marsch/project/shared/containers/brain-models/Qwen/Qwen3-8B",
+  "base": "Qwen3-8B",
   "system": "You are a helpful voice assistant. Your answers are spoken aloud, so keep them short and plain.",
   "results": [
     {

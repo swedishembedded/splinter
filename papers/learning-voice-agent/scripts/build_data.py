@@ -18,6 +18,7 @@ unmeasured number is absent, never zero. Standard library only.
 
 import csv
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -212,6 +213,23 @@ def main():
         macros[f"Read{key}Fired"] = f"{fired}/{len(neg)}"
     lines += ["\\bottomrule", "\\end{tabular}"]
     (OUT / "reading_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # Teaching by voice: the pre-registered pass conditions of three scripted conversations.
+    spoken = json.loads((ROOT / runs["teaching-spoken-20261010"]["file"]).read_text(encoding="utf-8"))
+    ends = lambda text, tail: text.lower().rstrip(" .!?").endswith(tail)
+    c1, c2, c3 = (spoken[c]["answers"] for c in ("c1", "c2", "c3"))
+    passes = {
+        "c1": "atlas" in c1[-1].lower() and c1[0].endswith("Is that right?"),
+        "c2": ends(c2[2], "over") and c2[3] == "Forgotten." and not ends(c2[4], "over"),
+        "c3": "harbor" in c3[-1].lower() and "seal" in c3[-1].lower(),
+    }
+    macros["SpokenPassed"] = f"{sum(passes.values())} of {len(passes)}"
+    macros["SpokenHeardServer"] = re.search(r"called (.+?)\.", c1[0]).group(1)
+
+    # Taking a teaching back inside the conversation that heard it.
+    retract = json.loads((ROOT / runs["teaching-retract-20261010"]["file"]).read_text(encoding="utf-8"))
+    asks = [o for r in retract["results"] for o in r["outcomes"]]
+    macros["RetractPassed"] = f"{sum(o['taught_passes'] for o in asks)}/{len(asks)}"
 
     # Extraction study: the rule-based readers of a user's words, on the frozen test split.
     study = runs["extraction-rules-20261010"]

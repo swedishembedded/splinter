@@ -1,0 +1,129 @@
+{
+  "scenarios_digest": "blake3:f8232ec5a74f3ce4c98c5efcc3dff3369bee601e67170193a9e26a30c1ed0a38",
+  "base": "Qwen3-8B",
+  "system": "You are a helpful voice assistant. Your answers are spoken aloud, so keep them short and plain.",
+  "results": [
+    {
+      "id": "session-retract-rule-02",
+      "kind": "session_retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "What is the capital of Norway?",
+          "untaught_reply": "The capital of Norway is Oslo.",
+          "untaught_passes": true,
+          "taught_reply": "The capital of Norway is Oslo.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "To boil an egg, place it in a pot of boiling water and cook for 6-12 minutes, depending on how done you want it.",
+          "untaught_passes": true,
+          "taught_reply": "To boil an egg, place it in a pot of boiling water and cook for 6-12 minutes, depending on how done you want it.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Some good names for a cat are Whiskers, Luna, Oliver, Bella, or Max.",
+          "untaught_passes": true,
+          "taught_reply": "Some good names for a cat are Whiskers, Luna, Oliver, Bella, or Max.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "session-retract-fact-00",
+      "kind": "session_retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Which name does our build server have?",
+          "untaught_reply": "The build server is named \"Jenkins\".",
+          "untaught_passes": true,
+          "taught_reply": "The build server is named \"Jenkins\".",
+          "taught_passes": true
+        },
+        {
+          "ask": "I need to log in to the build server, what do I call it?",
+          "untaught_reply": "You can call it \"Jenkins\" to log in.",
+          "untaught_passes": true,
+          "taught_reply": "You can call it \"Jenkins\" to log in.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "session-retract-fact-02",
+      "kind": "session_retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Who do I page if production breaks this week?",
+          "untaught_reply": "You should page the on-call engineer or the production support team. Check your team's communication plan for specific details.",
+          "untaught_passes": true,
+          "taught_reply": "You should page the on-call engineer or the production support team. Check your team's communication plan for specific details.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which engineer is on call right now?",
+          "untaught_reply": "I don't have real-time access to who is on call. Check your team's on-call schedule or contact your team lead for the current on-call engineer.",
+          "untaught_passes": true,
+          "taught_reply": "I don't have real-time access to who is on call. Check your team's on-call schedule or contact your team lead for the current on-call engineer.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "session-retract-fact-10",
+      "kind": "session_retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Which host do I connect the vpn to?",
+          "untaught_reply": "You connect the VPN to the host provided by your VPN service. Check the instructions from your VPN provider for the correct host address.",
+          "untaught_passes": true,
+          "taught_reply": "You connect the VPN to the host provided by your VPN service. Check the instructions from your VPN provider for the correct host address.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What address does the vpn use?",
+          "untaught_reply": "The VPN uses the server address provided by your VPN service. Check your account settings or support documentation for the correct server address.",
+          "untaught_passes": true,
+          "taught_reply": "The VPN uses the server address provided by your VPN service. Check your account settings or support documentation for the correct server address.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "session-retract-fact-12",
+      "kind": "session_retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Which company supplies our parts?",
+          "untaught_reply": "The parts are supplied by XYZ Manufacturing.",
+          "untaught_passes": true,
+          "taught_reply": "The parts are supplied by XYZ Manufacturing.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do we order parts from?",
+          "untaught_reply": "You order parts from XYZ Manufacturing.",
+          "untaught_passes": true,
+          "taught_reply": "You order parts from XYZ Manufacturing.",
+          "taught_passes": true
+        }
+      ]
+    }
+  ]
+}

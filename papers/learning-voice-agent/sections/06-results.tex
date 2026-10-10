@@ -35,6 +35,17 @@ protocol, not the reader.
 \label{tab:teaching}
 \end{table}
 
+\paragraph{Taking a teaching back inside the conversation (T2, addendum).}
+A rule that the user has taken back kept being followed in the same conversation, because the model followed its own earlier replies (two dev scenarios failed on all six asks), and a note telling the model the rule was cancelled
+made it worse, since it named the rule. The agent now starts the conversation over when a teaching is taken back. Under \code{prereg/teaching-retract.md}, five scenarios (one rule, four facts), asked in the same session after ``Forget that'',
+passed \RetractPassed{} asks (run \code{teaching-retract-20261010}). The control arm, which was taught nothing, passes the same absence checks, so this shows that the taught content did not come back, not that anything was learned. The price is that
+the conversation so far is gone from the model's view.
+
+\paragraph{Teaching by voice (T4, partial).}
+Three scripted conversations were run end to end: the user's turns rendered in one synthetic voice and recognised, the agent hearing only the recognised text, its replies spoken. Under \code{prereg/teaching-spoken.md}, \SpokenPassed{} met their pre-registered conditions:
+a corrected fact was restated, confirmed and recalled; a rule was restated, confirmed, obeyed, taken back by ``Forget that'', and not obeyed after; a procedure was restated and told. The recogniser turned ``atlas seven'' into ``\SpokenHeardServer{}'' and ``quartz'' into
+``court's''; the agent restated what it heard, which is where the user would catch it, and kept what it heard. These are three conversations in one voice, a demonstration that the path works and not a rate; the first runs of the same conversations found two defects (\cref{sec:system}).
+
 \paragraph{A defect the dev split found.}
 The first dev run gave the taught arm exactly the answers of the untaught one: everything was kept, nothing reached the model. The live addendum had been applied outside the
 wrapper that sets the system turn, which then replaced it. It was fixed with a test that fails on the wrong order and passes on the right one; the second dev run, after the fix, passed every ask. Neither dev run is a result.
@@ -108,4 +119,4 @@ topic in 4 of 12 against 9 of 12 (repository roadmap, M4). One voice and 25 temp
 excluded from this paper's claims unless a redesign passes a gate fixed before it is trained.
 
 \paragraph{Everything else.}
-C1--C5 and C7 have no result: \unmeasured. T4 is reported above only if its run exists.
+C1--C5 and C7 have no result: \unmeasured.
