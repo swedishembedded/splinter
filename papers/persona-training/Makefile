@@ -15,9 +15,8 @@ generated/.stamp: scripts/build_data.py $(wildcard data/*.csv)
 	python3 scripts/build_data.py
 	touch $@
 
-$(PAPER).pdf: $(SOURCES) generated/.stamp
+$(PDF): $(SOURCES) generated/.stamp
 	$(call latexmk-pdf,$(PAPER).tex)
 
 clean::
-	latexmk -C $(PAPER).tex
 	rm -rf generated

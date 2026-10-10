@@ -2,7 +2,7 @@ Persona training paper: how Splinter learns to think like a historical author
 
 Build (needs python3, pdflatex, bibtex and latexmk; no Python packages):
 
-    make          builds paper.pdf
+    make          builds target/papers/persona-training.pdf
     make clean    removes the PDF, LaTeX intermediates and generated/
 
 Every table and plot in the paper is generated from data/*.csv by

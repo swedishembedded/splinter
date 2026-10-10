@@ -11,5 +11,5 @@ include ../paper.mk
 
 # The figures in img/ are drawn by figures.py (matplotlib; see its header) and are
 # committed, so they are not rebuilt here.
-$(PAPER).pdf: $(PAPER).md $(wildcard img/*.png)
-	$(call pandoc-pdf,$(PAPER).md,$@)
+$(PDF): $(PAPER).md $(wildcard img/*.png)
+	$(call pandoc-pdf,$(PAPER).md)

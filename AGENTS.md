@@ -114,6 +114,9 @@ that reads like one of them is wrong.
   out or are stated as limitations. Every citation is checked to exist.
 - **The paper must build.** `make` in the paper directory produces the PDF
   with no undefined references or citations before the change is committed.
+  The PDF is `target/papers/<directory name>.pdf` and the LaTeX intermediates
+  are under `target/papers/.build/`; nothing is written into the paper's
+  directory.
 
 ## Architecture
 

@@ -5,6 +5,9 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Papers
 
+`make papers/<name>/pdf` (or `make papers/pdf` for all) builds a paper into
+`target/papers/<name>.pdf`.
+
 Each paper has one question, stated as its scope in the introduction. A new
 verified finding goes into the paper whose scope it falls in, in the same change
 that produces it (see "Research papers" in `AGENTS.md`). A finding that fits no
