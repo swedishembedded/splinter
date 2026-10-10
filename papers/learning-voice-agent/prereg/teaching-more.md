@@ -10,3 +10,5 @@ Hypotheses:
 - H5 (rules): the same, pooled over the eight rules.
 Per-rule rates are reported. A rule whose untaught arm already passes at least half of its asks is reported but cannot support H5 alone; if the pooled untaught rate is not below 0.20 the gate is not met for that reason and is reported so.
 Limit: text checks (a start word, an end word, a word count, a word to include, a word to avoid); one model; utterances written by the implementer in the forms the plain reader reads.
+
+Amendment before the run (found on the dev split): a rule to avoid a word (the colors, the number seven) was "obeyed" on dev by answering "I cannot answer that question". Those checks now also fail a reply that contains a refusal marker (cannot, can't, unable, sorry, not allowed). The sets were regenerated before the test split was run.

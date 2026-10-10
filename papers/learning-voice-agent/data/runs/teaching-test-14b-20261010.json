@@ -1,0 +1,1395 @@
+{
+  "scenarios_digest": "blake3:c0de23110ac2c2b2ecb6279381e3cd1053ca1e0f4a9a6cb1e2e198f37407acfe",
+  "base": "Qwen3-14B",
+  "system": "You are a helpful voice assistant. Your answers are spoken aloud, so keep them short and plain.",
+  "results": [
+    {
+      "id": "fact-04",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the office wifi network called?",
+          "untaught_reply": "The office Wi-Fi network is called \"OfficeNetwork.\"",
+          "untaught_passes": false,
+          "taught_reply": "The office wifi network is called NW-Guest-Fjord.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which wifi should visitors join?",
+          "untaught_reply": "Visitors should join the \"GuestNetwork\" Wi-Fi.",
+          "untaught_passes": false,
+          "taught_reply": "Visitors should join the NW-Guest-Fjord wifi network.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What name does the guest wifi have?",
+          "untaught_reply": "The guest Wi-Fi is named \"GuestNetwork.\"",
+          "untaught_passes": false,
+          "taught_reply": "The guest wifi network is called NW-Guest-Fjord.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-04",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the office wifi network called?",
+          "untaught_reply": "The office Wi-Fi network is called \"OfficeNetwork.\"",
+          "untaught_passes": false,
+          "taught_reply": "The office wifi network is called NW-Guest-Delta.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which wifi should visitors join?",
+          "untaught_reply": "Visitors should join the \"GuestNetwork\" Wi-Fi.",
+          "untaught_passes": false,
+          "taught_reply": "Visitors should join the NW-Guest-Delta wifi network.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What name does the guest wifi have?",
+          "untaught_reply": "The guest Wi-Fi is named \"GuestNetwork.\"",
+          "untaught_passes": false,
+          "taught_reply": "The guest wifi network is named NW-Guest-Delta.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-04",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "What is the office wifi network called?",
+          "untaught_reply": "The office Wi-Fi network is called \"OfficeNetwork.\"",
+          "untaught_passes": true,
+          "taught_reply": "The office Wi-Fi network is called \"OfficeNetwork.\"",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "unrelated-04",
+      "kind": "unrelated",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is two plus three?",
+          "untaught_reply": "Five.",
+          "untaught_passes": true,
+          "taught_reply": "Five.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "Paris.",
+          "untaught_passes": true,
+          "taught_reply": "Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How many days are in a week?",
+          "untaught_reply": "Seven.",
+          "untaught_passes": true,
+          "taught_reply": "Seven.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-05",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the release codename?",
+          "untaught_reply": "The release codename is \"Red Bull.\"",
+          "untaught_passes": false,
+          "taught_reply": "The release codename is Kestrel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which codename does this release have?",
+          "untaught_reply": "This release has the codename \"Red Bull.\"",
+          "untaught_passes": false,
+          "taught_reply": "This release has the codename Kestrel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What are we calling the release?",
+          "untaught_reply": "We're calling the release \"Red Bull.\"",
+          "untaught_passes": false,
+          "taught_reply": "We are calling the release Kestrel.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-05",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the release codename?",
+          "untaught_reply": "The release codename is \"Red Bull.\"",
+          "untaught_passes": false,
+          "taught_reply": "The release codename is Marlin.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which codename does this release have?",
+          "untaught_reply": "This release has the codename \"Red Bull.\"",
+          "untaught_passes": false,
+          "taught_reply": "This release has the codename Marlin.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What are we calling the release?",
+          "untaught_reply": "We're calling the release \"Red Bull.\"",
+          "untaught_passes": false,
+          "taught_reply": "We are calling the release Marlin.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-05",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "What is the release codename?",
+          "untaught_reply": "The release codename is \"Red Bull.\"",
+          "untaught_passes": true,
+          "taught_reply": "The release codename is \"Red Bull.\"",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "unrelated-05",
+      "kind": "unrelated",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is two plus three?",
+          "untaught_reply": "Five.",
+          "untaught_passes": true,
+          "taught_reply": "Five.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "Paris.",
+          "untaught_passes": true,
+          "taught_reply": "Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How many days are in a week?",
+          "untaught_reply": "Seven.",
+          "untaught_passes": true,
+          "taught_reply": "Seven.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-06",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Which chat channel does the team use?",
+          "untaught_reply": "The team uses Slack for communication.",
+          "untaught_passes": false,
+          "taught_reply": "The team uses the #ops-heron chat channel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do I post updates for the team?",
+          "untaught_reply": "You should post updates in the #general channel on Slack.",
+          "untaught_passes": false,
+          "taught_reply": "You should post updates in the #ops-heron chat channel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the team channel?",
+          "untaught_reply": "The team channel is #general on Slack.",
+          "untaught_passes": false,
+          "taught_reply": "The team channel is #ops-heron.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-06",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Which chat channel does the team use?",
+          "untaught_reply": "The team uses Slack for communication.",
+          "untaught_passes": false,
+          "taught_reply": "The team uses the #ops-lynx chat channel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do I post updates for the team?",
+          "untaught_reply": "You should post updates in the #general channel on Slack.",
+          "untaught_passes": false,
+          "taught_reply": "You should post updates in the #ops-lynx chat channel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the team channel?",
+          "untaught_reply": "The team channel is #general on Slack.",
+          "untaught_passes": false,
+          "taught_reply": "The team channel is #ops-lynx.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-06",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Which chat channel does the team use?",
+          "untaught_reply": "The team uses Slack for communication.",
+          "untaught_passes": true,
+          "taught_reply": "The team uses Slack for communication.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "unrelated-06",
+      "kind": "unrelated",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is two plus three?",
+          "untaught_reply": "Five.",
+          "untaught_passes": true,
+          "taught_reply": "Five.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "Paris.",
+          "untaught_passes": true,
+          "taught_reply": "Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How many days are in a week?",
+          "untaught_reply": "Seven.",
+          "untaught_passes": true,
+          "taught_reply": "Seven.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-07",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "When is the standup?",
+          "untaught_reply": "The standup is at 10:00 AM.",
+          "untaught_passes": false,
+          "taught_reply": "The standup is at 09:45.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What time does standup start?",
+          "untaught_reply": "Standup starts at 10:00 AM.",
+          "untaught_passes": false,
+          "taught_reply": "The standup starts at 09:45.",
+          "taught_passes": true
+        },
+        {
+          "ask": "At what time do we meet for standup?",
+          "untaught_reply": "We meet for standup at 10:00 AM.",
+          "untaught_passes": false,
+          "taught_reply": "We meet for standup at 09:45.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-07",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "When is the standup?",
+          "untaught_reply": "The standup is at 10:00 AM.",
+          "untaught_passes": false,
+          "taught_reply": "The standup is at 10:20.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What time does standup start?",
+          "untaught_reply": "Standup starts at 10:00 AM.",
+          "untaught_passes": false,
+          "taught_reply": "The standup starts at 10:20.",
+          "taught_passes": true
+        },
+        {
+          "ask": "At what time do we meet for standup?",
+          "untaught_reply": "We meet for standup at 10:00 AM.",
+          "untaught_passes": false,
+          "taught_reply": "We meet for standup at 10:20.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-07",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "When is the standup?",
+          "untaught_reply": "The standup is at 10:00 AM.",
+          "untaught_passes": true,
+          "taught_reply": "The standup is at 10:00 AM.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "unrelated-07",
+      "kind": "unrelated",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is two plus three?",
+          "untaught_reply": "Five.",
+          "untaught_passes": true,
+          "taught_reply": "Five.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "Paris.",
+          "untaught_passes": true,
+          "taught_reply": "Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How many days are in a week?",
+          "untaught_reply": "Seven.",
+          "untaught_passes": true,
+          "taught_reply": "Seven.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-08",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the ticket prefix?",
+          "untaught_reply": "The ticket prefix is T.",
+          "untaught_passes": false,
+          "taught_reply": "The ticket prefix is NWR.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which prefix do our tickets use?",
+          "untaught_reply": "Our tickets use the prefix T.",
+          "untaught_passes": false,
+          "taught_reply": "Our tickets use the NWR prefix.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do ticket numbers start?",
+          "untaught_reply": "Ticket numbers start with the prefix T followed by a number.",
+          "untaught_passes": false,
+          "taught_reply": "Ticket numbers start with the NWR prefix.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-08",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the ticket prefix?",
+          "untaught_reply": "The ticket prefix is T.",
+          "untaught_passes": false,
+          "taught_reply": "The ticket prefix is HRN.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which prefix do our tickets use?",
+          "untaught_reply": "Our tickets use the prefix T.",
+          "untaught_passes": false,
+          "taught_reply": "Our tickets use the HRN prefix.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do ticket numbers start?",
+          "untaught_reply": "Ticket numbers start with the prefix T followed by a number.",
+          "untaught_passes": false,
+          "taught_reply": "Ticket numbers start with the HRN prefix.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-08",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "What is the ticket prefix?",
+          "untaught_reply": "The ticket prefix is T.",
+          "untaught_passes": true,
+          "taught_reply": "The ticket prefix is T.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-09",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Where are the backups stored?",
+          "untaught_reply": "Backups are stored in the cloud.",
+          "untaught_passes": false,
+          "taught_reply": "The backups are stored in the vault-oslo bucket.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which bucket holds the backups?",
+          "untaught_reply": "The backups are in the \"backup-bucket\" bucket.",
+          "untaught_passes": false,
+          "taught_reply": "The backups are stored in the vault-oslo bucket.",
+          "taught_passes": true
+        },
+        {
+          "ask": "I need a backup, where do I look?",
+          "untaught_reply": "You should look in the \"backup-bucket\" in the cloud.",
+          "untaught_passes": false,
+          "taught_reply": "You should look in the vault-oslo bucket.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-09",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Where are the backups stored?",
+          "untaught_reply": "Backups are stored in the cloud.",
+          "untaught_passes": false,
+          "taught_reply": "The backups are stored in the vault-turku bucket.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which bucket holds the backups?",
+          "untaught_reply": "The backups are in the \"backup-bucket\" bucket.",
+          "untaught_passes": false,
+          "taught_reply": "The backups are stored in the vault-turku bucket.",
+          "taught_passes": true
+        },
+        {
+          "ask": "I need a backup, where do I look?",
+          "untaught_reply": "You should look in the \"backup-bucket\" in the cloud.",
+          "untaught_passes": false,
+          "taught_reply": "You should look in the vault-turku bucket.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-09",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Where are the backups stored?",
+          "untaught_reply": "Backups are stored in the cloud.",
+          "untaught_passes": true,
+          "taught_reply": "Backups are stored in the cloud.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-10",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the vpn host?",
+          "untaught_reply": "A VPN host is a server that provides virtual private network services. It allows users to connect securely to a network over the internet.",
+          "untaught_passes": false,
+          "taught_reply": "The VPN host is gate.nw-robotics.example.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which host do I connect the vpn to?",
+          "untaught_reply": "You connect to the VPN host provided by your VPN service. It's usually listed in your account settings or provided when you sign up for the service.",
+          "untaught_passes": false,
+          "taught_reply": "You should connect the VPN to gate.nw-robotics.example.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What address does the vpn use?",
+          "untaught_reply": "The VPN uses an IP address of the server you connect to. This address is usually provided by your VPN service and can be found in your account or connection settings.",
+          "untaught_passes": false,
+          "taught_reply": "The VPN uses the address gate.nw-robotics.example.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-10",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the vpn host?",
+          "untaught_reply": "A VPN host is a server that provides virtual private network services. It allows users to connect securely to a network over the internet.",
+          "untaught_passes": false,
+          "taught_reply": "The VPN host is portal.nw-robotics.example.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which host do I connect the vpn to?",
+          "untaught_reply": "You connect to the VPN host provided by your VPN service. It's usually listed in your account settings or provided when you sign up for the service.",
+          "untaught_passes": false,
+          "taught_reply": "You connect the VPN to portal.nw-robotics.example.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What address does the vpn use?",
+          "untaught_reply": "The VPN uses an IP address of the server you connect to. This address is usually provided by your VPN service and can be found in your account or connection settings.",
+          "untaught_passes": false,
+          "taught_reply": "The VPN uses the address portal.nw-robotics.example.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-10",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "What is the vpn host?",
+          "untaught_reply": "A VPN host is a server that provides virtual private network services. It allows users to connect securely to a network over the internet.",
+          "untaught_passes": true,
+          "taught_reply": "A VPN host is a server that provides virtual private network services. It allows users to connect securely to a network over the internet.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-11",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "When is the code freeze?",
+          "untaught_reply": "The code freeze is scheduled for next Tuesday.",
+          "untaught_passes": false,
+          "taught_reply": "The code freeze is on the 14th.",
+          "taught_passes": true
+        },
+        {
+          "ask": "On which date does the code freeze start?",
+          "untaught_reply": "The code freeze starts on Tuesday, April 9th.",
+          "untaught_passes": false,
+          "taught_reply": "The code freeze starts on the 14th.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What day is the freeze?",
+          "untaught_reply": "The freeze is on Tuesday.",
+          "untaught_passes": false,
+          "taught_reply": "The freeze is on the 14th.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-11",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "When is the code freeze?",
+          "untaught_reply": "The code freeze is scheduled for next Tuesday.",
+          "untaught_passes": false,
+          "taught_reply": "The code freeze is on the 21st.",
+          "taught_passes": true
+        },
+        {
+          "ask": "On which date does the code freeze start?",
+          "untaught_reply": "The code freeze starts on Tuesday, April 9th.",
+          "untaught_passes": false,
+          "taught_reply": "The code freeze starts on the 21st.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What day is the freeze?",
+          "untaught_reply": "The freeze is on Tuesday.",
+          "untaught_passes": false,
+          "taught_reply": "The freeze is on the 21st.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-11",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "When is the code freeze?",
+          "untaught_reply": "The code freeze is scheduled for next Tuesday.",
+          "untaught_passes": true,
+          "taught_reply": "The code freeze is scheduled for next Tuesday.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-12",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Who is the parts supplier?",
+          "untaught_reply": "The parts supplier is the company or individual that provides parts for a product or service.",
+          "untaught_passes": false,
+          "taught_reply": "The parts supplier is Halvorsen Components.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which company supplies our parts?",
+          "untaught_reply": "I don't have access to specific information about your company's parts suppliers. You may need to check with your company's procurement or supply chain department for this information.",
+          "untaught_passes": false,
+          "taught_reply": "The company that supplies your parts is Halvorsen Components.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do we order parts from?",
+          "untaught_reply": "You should check with your company's procurement or purchasing department to find out where parts are ordered from. They will have the necessary information.",
+          "untaught_passes": false,
+          "taught_reply": "You can order parts from Halvorsen Components.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-12",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Who is the parts supplier?",
+          "untaught_reply": "The parts supplier is the company or individual that provides parts for a product or service.",
+          "untaught_passes": false,
+          "taught_reply": "The parts supplier is Brandt Mechatronik.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which company supplies our parts?",
+          "untaught_reply": "I don't have access to specific information about your company's parts suppliers. You may need to check with your company's procurement or supply chain department for this information.",
+          "untaught_passes": false,
+          "taught_reply": "The company that supplies your parts is Brandt Mechatronik.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do we order parts from?",
+          "untaught_reply": "You should check with your company's procurement or purchasing department to find out where parts are ordered from. They will have the necessary information.",
+          "untaught_passes": false,
+          "taught_reply": "You should order parts from Brandt Mechatronik.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-12",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Who is the parts supplier?",
+          "untaught_reply": "The parts supplier is the company or individual that provides parts for a product or service.",
+          "untaught_passes": true,
+          "taught_reply": "The parts supplier is the company or individual that provides parts for a product or service.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-13",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Where is the test rig?",
+          "untaught_reply": "The test rig is in the lab.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room B12.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which room has the test rig?",
+          "untaught_reply": "The lab has the test rig.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room B12.",
+          "taught_passes": true
+        },
+        {
+          "ask": "I need the test rig, which room?",
+          "untaught_reply": "The lab has the test rig.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room B12.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-13",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Where is the test rig?",
+          "untaught_reply": "The test rig is in the lab.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room C07.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which room has the test rig?",
+          "untaught_reply": "The lab has the test rig.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room C07.",
+          "taught_passes": true
+        },
+        {
+          "ask": "I need the test rig, which room?",
+          "untaught_reply": "The lab has the test rig.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room C07.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-13",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Where is the test rig?",
+          "untaught_reply": "The test rig is in the lab.",
+          "untaught_passes": true,
+          "taught_reply": "The test rig is in the lab.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-14",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Who keeps the lab key?",
+          "untaught_reply": "The lab key is kept by the lab manager.",
+          "untaught_passes": false,
+          "taught_reply": "Sunniva keeps the lab key.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who do I ask for the lab key?",
+          "untaught_reply": "You should ask the lab manager for the lab key.",
+          "untaught_passes": false,
+          "taught_reply": "You should ask Sunniva for the lab key.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which person holds the lab key?",
+          "untaught_reply": "The lab manager holds the lab key.",
+          "untaught_passes": false,
+          "taught_reply": "Sunniva holds the lab key.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-14",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Who keeps the lab key?",
+          "untaught_reply": "The lab key is kept by the lab manager.",
+          "untaught_passes": false,
+          "taught_reply": "Henrik keeps the lab key.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who do I ask for the lab key?",
+          "untaught_reply": "You should ask the lab manager for the lab key.",
+          "untaught_passes": false,
+          "taught_reply": "You should ask Henrik for the lab key.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which person holds the lab key?",
+          "untaught_reply": "The lab manager holds the lab key.",
+          "untaught_passes": false,
+          "taught_reply": "Henrik holds the lab key.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-14",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Who keeps the lab key?",
+          "untaught_reply": "The lab key is kept by the lab manager.",
+          "untaught_passes": true,
+          "taught_reply": "The lab key is kept by the lab manager.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "fact-15",
+      "kind": "fact",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Who approves invoices?",
+          "untaught_reply": "The person who approves invoices depends on the company's policies. It could be a manager, a finance team member, or someone with authority over the expenses.",
+          "untaught_passes": false,
+          "taught_reply": "Dagny Foss approves invoices.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which person signs off on invoices?",
+          "untaught_reply": "The person who signs off on invoices is usually someone with approval authority, like a manager, team lead, or finance officer. It depends on the company's process.",
+          "untaught_passes": false,
+          "taught_reply": "Dagny Foss signs off on invoices.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who do I send an invoice to for approval?",
+          "untaught_reply": "You should send the invoice to the person or department responsible for approvals in your company, such as your manager, finance team, or accounts payable. Check your company's guidelines for the correct contact.",
+          "untaught_passes": false,
+          "taught_reply": "You should send the invoice to Dagny Foss for approval.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "correction-15",
+      "kind": "correction",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Who approves invoices?",
+          "untaught_reply": "The person who approves invoices depends on the company's policies. It could be a manager, a finance team member, or someone with authority over the expenses.",
+          "untaught_passes": false,
+          "taught_reply": "Leif Strand approves invoices.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which person signs off on invoices?",
+          "untaught_reply": "The person who signs off on invoices is usually someone with approval authority, like a manager, team lead, or finance officer. It depends on the company's process.",
+          "untaught_passes": false,
+          "taught_reply": "Leif Strand signs off on invoices.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who do I send an invoice to for approval?",
+          "untaught_reply": "You should send the invoice to the person or department responsible for approvals in your company, such as your manager, finance team, or accounts payable. Check your company's guidelines for the correct contact.",
+          "untaught_passes": false,
+          "taught_reply": "You should send the invoice to Leif Strand for approval.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "retract-15",
+      "kind": "retract",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 0,
+      "outcomes": [
+        {
+          "ask": "Who approves invoices?",
+          "untaught_reply": "The person who approves invoices depends on the company's policies. It could be a manager, a finance team member, or someone with authority over the expenses.",
+          "untaught_passes": true,
+          "taught_reply": "The person who approves invoices depends on the company's policies. It could be a manager, a finance team member, or someone with authority over the expenses.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "rule-01",
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "Captain, the capital of France is Paris.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters blue light from the sun more than other colors. This is called Rayleigh scattering.",
+          "untaught_passes": false,
+          "taught_reply": "Captain, the sky appears blue because molecules in the Earth's atmosphere scatter blue light from the sun more than other colors.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "Place the egg in a pot, cover it with water, bring the water to a boil, then reduce the heat and let it simmer for about 7 to 10 minutes.",
+          "untaught_passes": false,
+          "taught_reply": "Captain, to boil an egg: place it in a pot of boiling water, cover, and cook for 8-12 minutes depending on how runny you want it.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Whiskers!",
+          "untaught_passes": false,
+          "taught_reply": "Captain, a good name for a cat could be Whiskers, Luna, or Oliver.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "rule-03",
+      "kind": "rule",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "The capital of France is Paris. Copy.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters blue light from the sun more than other colors. This is called Rayleigh scattering.",
+          "untaught_passes": false,
+          "taught_reply": "The sky appears blue because the Earth's atmosphere scatters sunlight in all directions, and blue light is scattered more than other colors. Copy.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "Place the egg in a pot, cover it with water, bring the water to a boil, then reduce the heat and let it simmer for about 7 to 10 minutes.",
+          "untaught_passes": false,
+          "taught_reply": "Place the egg in a pot, cover it with water, bring the water to a boil, then reduce the heat and let it simmer for about 8-10 minutes. Copy.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Whiskers!",
+          "untaught_passes": false,
+          "taught_reply": "A good name for a cat could be Whiskers. Copy.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "procedure-02",
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to close the month?",
+          "untaught_reply": "The first step to close the month is to gather all the financial records and documents for the month.",
+          "untaught_passes": false,
+          "taught_reply": "The first step to close the month is to lock the ledger.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I close the month?",
+          "untaught_reply": "To close the month, start by gathering all financial records, then review and categorize expenses, income, and invoices. Next, update your accounting system with all transactions, reconcile bank statements, and ensure all accounts are balanced. Finally, prepare and review financial reports for the month.",
+          "untaught_passes": false,
+          "taught_reply": "To close the month, follow these steps:  \n\n1. Lock the ledger.  \n2. Reconcile the tide table.  \n3. Send the summary to Dagny.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who gets the summary when closing the month?",
+          "untaught_reply": "The summary when closing the month is usually given to the business owner or manager, and sometimes to the accounting team or financial department for review and record-keeping.",
+          "untaught_passes": false,
+          "taught_reply": "The summary is sent to Dagny when closing the month.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "procedure-03",
+      "kind": "procedure",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "What is the first step to reset the rig?",
+          "untaught_reply": "Turn off the rig.",
+          "untaught_passes": false,
+          "taught_reply": "The first step to reset the rig is to drain the coolant.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I reset the rig?",
+          "untaught_reply": "Turn off the rig, wait 10 seconds, then turn it back on.",
+          "untaught_passes": false,
+          "taught_reply": "To reset the rig, follow these steps:\n\n1. Drain the coolant.\n2. Recalibrate the arm.\n3. Log it in the green book.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do I log the rig reset?",
+          "untaught_reply": "Log the reset in the maintenance logbook.",
+          "untaught_passes": false,
+          "taught_reply": "You log the rig reset in the green book.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "scale-00",
+      "kind": "scale",
+      "understood": 16,
+      "teachings": 16,
+      "kept": 16,
+      "outcomes": [
+        {
+          "ask": "Which name does our build server have?",
+          "untaught_reply": "Our build server is named Jenkins.",
+          "untaught_passes": false,
+          "taught_reply": "The build server is called atlas-7.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What day and time can we deploy?",
+          "untaught_reply": "You can deploy any day at 10 AM.",
+          "untaught_passes": false,
+          "taught_reply": "The deploy window is Thursday at 14:00.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who do I page if production breaks this week?",
+          "untaught_reply": "You should page the on-call engineer for production support.",
+          "untaught_passes": false,
+          "taught_reply": "You should page Marit Lindqvist.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is the staging database port?",
+          "untaught_reply": "The staging database port is 5432.",
+          "untaught_passes": false,
+          "taught_reply": "The staging database port is 54871.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which wifi should visitors join?",
+          "untaught_reply": "Visitors should join the \"GuestWiFi\" network.",
+          "untaught_passes": false,
+          "taught_reply": "Visitors should join the NW-Guest-Fjord wifi network.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which codename does this release have?",
+          "untaught_reply": "This release is codenamed \"Phoenix\".",
+          "untaught_passes": false,
+          "taught_reply": "The release codename is Kestrel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Where do I post updates for the team?",
+          "untaught_reply": "Post updates in the #team-announcements channel.",
+          "untaught_passes": false,
+          "taught_reply": "You should post updates in the #ops-heron team chat channel.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What time does standup start?",
+          "untaught_reply": "Standup starts at 9 AM.",
+          "untaught_passes": false,
+          "taught_reply": "The standup starts at 09:45.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which prefix do our tickets use?",
+          "untaught_reply": "Our tickets use the \"PROD-\" prefix.",
+          "untaught_passes": false,
+          "taught_reply": "Our tickets use the prefix NWR.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which bucket holds the backups?",
+          "untaught_reply": "The backups are stored in the \"backup-bucket\" S3 bucket.",
+          "untaught_passes": false,
+          "taught_reply": "The backups are stored in the vault-oslo bucket.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which host do I connect the vpn to?",
+          "untaught_reply": "Connect your VPN to the host `vpn-gateway.example.com`.",
+          "untaught_passes": false,
+          "taught_reply": "You should connect the VPN to gate.nw-robotics.example.",
+          "taught_passes": true
+        },
+        {
+          "ask": "On which date does the code freeze start?",
+          "untaught_reply": "The code freeze starts on March 15th.",
+          "untaught_passes": false,
+          "taught_reply": "The code freeze starts on the 14th.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which company supplies our parts?",
+          "untaught_reply": "Our parts are supplied by TechParts Inc.",
+          "untaught_passes": false,
+          "taught_reply": "The parts supplier is Halvorsen Components.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which room has the test rig?",
+          "untaught_reply": "The test rig is in Room 304.",
+          "untaught_passes": false,
+          "taught_reply": "The test rig is in room B12.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Who do I ask for the lab key?",
+          "untaught_reply": "Ask the lab administrator for the lab key.",
+          "untaught_passes": false,
+          "taught_reply": "You should ask Sunniva for the lab key.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Which person signs off on invoices?",
+          "untaught_reply": "The finance manager signs off on invoices.",
+          "untaught_passes": false,
+          "taught_reply": "Dagny Foss signs off on invoices.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "indirect-00",
+      "kind": "indirect",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Write one sentence telling the team that the build is broken, naming the machine it ran on.",
+          "untaught_reply": "The build is broken and ran on the machine named Jenkins-Server-01.",
+          "untaught_passes": false,
+          "taught_reply": "The build is broken and ran on atlas-7.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "indirect-02",
+      "kind": "indirect",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Draft a one-line page message to whoever is on call about the outage.",
+          "untaught_reply": "There's currently an outage affecting our services; please investigate and resolve as soon as possible.",
+          "untaught_passes": false,
+          "taught_reply": "Marit Lindqvist, please attend to the current outage as soon as possible.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "indirect-10",
+      "kind": "indirect",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Give me the command line to connect to the vpn, with the host in it.",
+          "untaught_reply": "You can use the following command line to connect to a VPN with a specified host:\n\n```\nopenvpn --config your-config-file.ovpn --remote your-host-ip port\n```\n\nReplace `your-config-file.ovpn` with the path to your OpenVPN configuration file, `your-host-ip` with the IP address of the VPN host, and `port` with the correct port number.",
+          "untaught_passes": false,
+          "taught_reply": "You can use the following command line to connect to the VPN:\n\n```\nopenvpn --remote gate.nw-robotics.example\n```",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "indirect-12",
+      "kind": "indirect",
+      "understood": 1,
+      "teachings": 1,
+      "kept": 1,
+      "outcomes": [
+        {
+          "ask": "Write a one-line purchase request for ten servo motors, addressed to the supplier.",
+          "untaught_reply": "Please send ten servo motors as per our order.",
+          "untaught_passes": false,
+          "taught_reply": "Please send ten servo motors to Halvorsen Components.",
+          "taught_passes": true
+        }
+      ]
+    },
+    {
+      "id": "rules-two-00",
+      "kind": "rules2",
+      "understood": 2,
+      "teachings": 2,
+      "kept": 2,
+      "outcomes": [
+        {
+          "ask": "What is the capital of France?",
+          "untaught_reply": "The capital of France is Paris.",
+          "untaught_passes": false,
+          "taught_reply": "The capital of France is Paris, captain. Over.",
+          "taught_passes": true
+        },
+        {
+          "ask": "Why is the sky blue?",
+          "untaught_reply": "The sky appears blue because the Earth's atmosphere scatters blue light from the sun more than other colors. This is called Rayleigh scattering.",
+          "untaught_passes": false,
+          "taught_reply": "The sky appears blue because sunlight scatters more easily in the shorter blue wavelengths, captain. Over.",
+          "taught_passes": true
+        },
+        {
+          "ask": "How do I boil an egg?",
+          "untaught_reply": "Place the egg in a pot, cover it with water, bring the water to a boil, then reduce the heat and let it simmer for about 7 to 10 minutes.",
+          "untaught_passes": false,
+          "taught_reply": "Place the egg in a pot of boiling water, cover it, and let it cook for about 7 to 10 minutes, captain. Over.",
+          "taught_passes": true
+        },
+        {
+          "ask": "What is a good name for a cat?",
+          "untaught_reply": "Whiskers!",
+          "untaught_passes": false,
+          "taught_reply": "Whiskers, captain. Over.",
+          "taught_passes": true
+        }
+      ]
+    }
+  ]
+}

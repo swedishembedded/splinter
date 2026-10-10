@@ -28,6 +28,17 @@ taught together were not both obeyed: every reply ended with ``over'' but none u
 \label{tab:teaching}
 \end{table}
 
+\paragraph{Other model sizes (T2).}
+Under \code{prereg/teaching-models.md} the unchanged test split was run once each on Qwen3-4B and Qwen3-14B (runs \code{teaching-test-4b-20261010}, \code{teaching-test-14b-20261010}); \cref{tab:models} shows the pass counts beside the 8B model's. The three sizes agree on every kind except two rules taught together, which the 14B model obeyed in all four asks and the smaller two in none.
+That is one scenario, so it says only that the failure is not shared by all sizes. The H1 and H2 verdicts of \cref{tab:hypotheses} hold for all three models.
+
+\begin{table}[t]
+\centering\small
+\input{generated/models_table}
+\caption{Taught asks that pass, by kind, on the three model sizes (the same test split, one run each).}
+\label{tab:models}
+\end{table}
+
 \paragraph{Taking a teaching back in the conversation that heard it (T2).}
 Under \code{prereg/teaching-retract.md}, five scenarios (one rule with three asks, four facts with two) were asked in the same session after ``Forget that''; all \RetractPassed{} asks passed (lower bound \RetractLow{}; run \code{teaching-retract-20261010}). The check is the absence of the taught content, the control arm passes it
 trivially, and only one scenario is a rule, so this shows that the taught content did not come back and not that anything was learned. It holds because the conversation starts over: with the conversation kept, a rule taken back was still followed because the model followed its own earlier replies (development scenarios, six of six asks failed).

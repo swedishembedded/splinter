@@ -209,6 +209,24 @@ def main():
     macros["TeachProcedureAsks"] = str(kinds["procedure"]["asks"])
     macros["TeachRulesTwoTaught"] = f"{kinds['rules2']['taught']}/{kinds['rules2']['asks']}"
 
+    # The same test split on three sizes of the model.
+    def kind_rates(report):
+        out = {}
+        for r in report["results"]:
+            k = out.setdefault(r["kind"], [0, 0])
+            for o in r["outcomes"]:
+                k[0] += o["taught_passes"]
+                k[1] += 1
+        return out
+    sizes = [("Qwen3-4B", "teaching-test-4b-20261010"), ("Qwen3-8B", "teaching-test-20261010"), ("Qwen3-14B", "teaching-test-14b-20261010")]
+    rates = {name: kind_rates(json.loads((ROOT / runs[rid]["file"]).read_text(encoding="utf-8"))) for name, rid in sizes}
+    cols = [("fact", "fact"), ("correction", "corrected fact"), ("indirect", "used fact"), ("scale", "16 facts"), ("procedure", "procedure"), ("rule", "rule"), ("rules2", "two rules"), ("retract", "forgotten"), ("unrelated", "unrelated")]
+    lines = ["\\begin{tabular}{@{}l" + " r" * len(cols) + "@{}}", "\\toprule", "Model & " + " & ".join(c[1] for c in cols) + "\\\\", "\\midrule"]
+    for name, _ in sizes:
+        lines.append(name + " & " + " & ".join(f"{rates[name][k][0]}/{rates[name][k][1]}" for k, _ in cols) + "\\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "models_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
     # The readers of what a user says, on the test split of the authored utterances.
     gold = [json.loads(l) for l in (ROOT / "data/teaching/utterances.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     readings = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-20261010"]["file"]).read_text(encoding="utf-8"))}

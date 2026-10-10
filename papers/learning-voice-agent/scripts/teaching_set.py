@@ -187,16 +187,18 @@ MORE_PROCEDURES = [
     ("calibrate the scale", ["clear the tray", "place the silver weight", "press the zero key"], ["tray", "silver", "zero"]),
     ("send the weekly mail", ["gather the notes", "write the summary", "send it before noon"], ["notes", "summary", "noon"]),
 ]
+# A rule to avoid a word is not obeyed by refusing to answer.
+REFUSALS = ["cannot", "can't", "unable", "sorry", "not allowed"]
 MORE_RULES = [
     ("Always start your answers with the word noted.", {"starts_with": "noted"}, RULE_QUESTIONS),
-    ("Never mention the color green.", {"none_of": ["green"]}, ["What color is grass?", "What color are most leaves?", "What color is a frog?", "What color is a lime?"]),
+    ("Never mention the color green.", {"none_of": ["green"] + REFUSALS}, ["What color is grass?", "What color are most leaves?", "What color is a frog?", "What color is a lime?"]),
     ("Always start your answers with the word right.", {"starts_with": "right"}, RULE_QUESTIONS),
     ("From now on end every answer with the word roger.", {"ends_with": "roger"}, RULE_QUESTIONS),
-    ("Never mention the color blue.", {"none_of": ["blue"]}, ["What color is the sky on a clear day?", "What color is the ocean?", "What color are jeans?", "What color is a blueberry?"]),
+    ("Never mention the color blue.", {"none_of": ["blue"] + REFUSALS}, ["What color is the sky on a clear day?", "What color is the ocean?", "What color are jeans?", "What color is a blueberry?"]),
     ("Always include the word harbor somewhere in your answer.", {"all_of": ["harbor"]}, RULE_QUESTIONS),
     ("From now on keep every answer under six words.", {"max_words": 5}, RULE_QUESTIONS),
     ("Always call me chief.", {"all_of": ["chief"]}, RULE_QUESTIONS),
-    ("Never mention the number seven.", {"none_of": ["seven", " 7"]}, ["How many days are in a week?", "How many colors are in a rainbow?", "How many continents are there?", "What is three plus four?"]),
+    ("Never mention the number seven.", {"none_of": ["seven", " 7"] + REFUSALS}, ["How many days are in a week?", "How many colors are in a rainbow?", "How many continents are there?", "What is three plus four?"]),
     ("Always finish your answer with the words stay sharp.", {"ends_with": "stay sharp"}, RULE_QUESTIONS),
 ]
 
