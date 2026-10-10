@@ -24,6 +24,8 @@
 //!   paired held-out units: performance, calibration, retention on
 //!   subgroups, serving correctness and data-policy compliance, built on
 //!   [`metric_gate`] requirements.
+//! * [`speech_judge`] - a judge of how natural a take sounds, learned from a
+//!   listener's pairwise choices and tested on choices it never saw.
 //! * [`speech_reward`] - the reward a spoken take earns (naturalness against
 //!   clarity) and how takes of one sentence are compared.
 //! * [`significance`] - the paired sign test the gate rests on, handed in by
@@ -57,6 +59,7 @@ pub mod overlap;
 pub mod paired;
 pub mod predictive_gate;
 pub mod significance;
+pub mod speech_judge;
 pub mod speech_reward;
 pub mod timeline_metrics;
 pub mod verifiers;
