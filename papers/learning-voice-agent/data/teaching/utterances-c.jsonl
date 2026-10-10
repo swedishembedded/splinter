@@ -1,0 +1,100 @@
+{"id":"c000","split":"test","kind":"none","key":"","said":"do you always close the shop at six","previous":null}
+{"id":"c001","split":"test","kind":"fact","key":"230","said":"the bakery's ovens are preheated to 230 degrees every morning at five","previous":null}
+{"id":"c002","split":"test","kind":"rule","key":"last","said":"Always address the customers by their last name.","previous":null}
+{"id":"c003","split":"test","kind":"none","key":"","said":"thanks that was helpful","previous":null}
+{"id":"c004","split":"test","kind":"procedure","key":"safe","said":"to close the till you first count the cash then print the z report then put the cash in the safe and lock it","previous":null}
+{"id":"c005","split":"test","kind":"fact","key":"wednesday","said":"no it's wednesday not tuesday","previous":"Your next appointment with the dentist is on Tuesday."}
+{"id":"c006","split":"test","kind":"none","key":"","said":"My brother never remembers to lock the door, it drives me mad.","previous":null}
+{"id":"c007","split":"test","kind":"rule","key":"sentences","said":"from now on keep answers under two sentences","previous":null}
+{"id":"c008","split":"test","kind":"none","key":"","said":"what's the weather tomorrow","previous":null}
+{"id":"c009","split":"test","kind":"fact","key":"flowerpot","said":"The spare key for the shed is under the blue flowerpot.","previous":null}
+{"id":"c010","split":"test","kind":"none","key":"","said":"from now on i'll be working from home on wednesdays","previous":null}
+{"id":"c011","split":"test","kind":"procedure","key":"radiators","said":"Here's how we bleed the radiators. First turn off the heating, then open the valve with the key until water comes out, then close it again.","previous":null}
+{"id":"c012","split":"test","kind":"rule","key":"order","said":"don't order anything without asking me first","previous":"I've ordered twelve boxes of screws."}
+{"id":"c013","split":"test","kind":"none","key":"","said":"Remember to buy milk.","previous":null}
+{"id":"c014","split":"test","kind":"fact","key":"peanuts","said":"my daughter is allergic to peanuts","previous":null}
+{"id":"c015","split":"test","kind":"none","key":"","said":"yes","previous":null}
+{"id":"c016","split":"test","kind":"rule","key":"nursery","said":"Do not turn on the lights in the nursery after eight.","previous":null}
+{"id":"c017","split":"test","kind":"none","key":"","said":"actually can you read me the first email","previous":null}
+{"id":"c018","split":"test","kind":"fact","key":"4.2","said":"the warehouse scanner firmware is version 4.2 now","previous":null}
+{"id":"c019","split":"test","kind":"procedure","key":"onboard","said":"The way we onboard a new hire is: create their account, then order the laptop, then book a welcome lunch.","previous":null}
+{"id":"c020","split":"test","kind":"none","key":"","said":"I'm so tired today.","previous":null}
+{"id":"c021","split":"test","kind":"rule","key":"quietly","said":"speak more quietly in the evenings","previous":null}
+{"id":"c022","split":"test","kind":"none","key":"","said":"first open the mail then read me the subject lines","previous":null}
+{"id":"c023","split":"test","kind":"fact","key":"harbour","said":"actually the market moved to the harbour last month","previous":"The farmers market is at the town square."}
+{"id":"c024","split":"test","kind":"none","key":"","said":"My boss says the assistant should never send emails without a review.","previous":null}
+{"id":"c025","split":"test","kind":"procedure","key":"sourdough","said":"to make our sourdough mix the starter with flour and water let it rest for an hour then fold it four times and bake","previous":null}
+{"id":"c026","split":"test","kind":"rule","key":"confirm","said":"You should confirm before deleting any recipe.","previous":null}
+{"id":"c027","split":"test","kind":"none","key":"","said":"play some jazz","previous":null}
+{"id":"c028","split":"test","kind":"fact","key":"fridays","said":"Our veterinary clinic closes at four on fridays.","previous":null}
+{"id":"c029","split":"test","kind":"none","key":"","said":"once i left the oven on all day what a disaster","previous":null}
+{"id":"c030","split":"test","kind":"rule","key":"check","said":"next time check with me before emailing the team","previous":"Sure, I've emailed the whole team."}
+{"id":"c031","split":"test","kind":"none","key":"","said":"Yes sure, go ahead.","previous":null}
+{"id":"c032","split":"test","kind":"procedure","key":"pallet","said":"when a pallet arrives scan the label check the count against the slip and then move it to bay four","previous":null}
+{"id":"c033","split":"test","kind":"fact","key":"viessmann","said":"The boiler in the basement is a Viessmann and it was serviced in March.","previous":null}
+{"id":"c034","split":"test","kind":"none","key":"","said":"haha you always say that, like a broken record","previous":null}
+{"id":"c035","split":"test","kind":"rule","key":"friday","said":"never schedule meetings on friday afternoons","previous":null}
+{"id":"c036","split":"test","kind":"none","key":"","said":"Set a timer for fifteen minutes.","previous":null}
+{"id":"c037","split":"test","kind":"fact","key":"six","said":"no the pharmacy closes at six on weekdays","previous":"The pharmacy is open until nine."}
+{"id":"c038","split":"test","kind":"procedure","key":"router","said":"To reset the router, unplug it, wait thirty seconds, plug it back in, and wait for the green light.","previous":null}
+{"id":"c039","split":"test","kind":"none","key":"","said":"just this once skip the weather and go straight to the news","previous":null}
+{"id":"c040","split":"test","kind":"rule","key":"celsius","said":"use celsius not fahrenheit for the oven","previous":null}
+{"id":"c041","split":"test","kind":"none","key":"","said":"What time does the bakery open?","previous":null}
+{"id":"c042","split":"test","kind":"fact","key":"anna","said":"Anna from accounting handles all invoices over ten thousand.","previous":null}
+{"id":"c043","split":"test","kind":"none","key":"","said":"i never eat breakfast before nine maybe i should","previous":null}
+{"id":"c044","split":"test","kind":"procedure","key":"deploying","said":"deploying the site goes like this merge to main wait for the pipeline then run the smoke script and tag the release","previous":null}
+{"id":"c045","split":"test","kind":"rule","key":"announce","said":"when the kids are asleep don't announce deliveries out loud","previous":null}
+{"id":"c046","split":"test","kind":"none","key":"","said":"Is it true that you should always preheat the oven?","previous":null}
+{"id":"c047","split":"test","kind":"fact","key":"lindqvist","said":"the cat's vet is called Dr Lindqvist","previous":null}
+{"id":"c048","split":"test","kind":"none","key":"","said":"good morning","previous":null}
+{"id":"c049","split":"test","kind":"rule","key":"jargon","said":"Keep the summaries in plain language, no jargon.","previous":null}
+{"id":"c050","split":"test","kind":"none","key":"","said":"Carlos told me the supplier closes on mondays.","previous":null}
+{"id":"c051","split":"test","kind":"procedure","key":"refund","said":"Processing a refund works as follows: find the order in the system, press refund, select the reason, and email the customer.","previous":null}
+{"id":"c052","split":"test","kind":"fact","key":"twelve","said":"it has twelve seats actually","previous":"The meeting room has eight seats."}
+{"id":"c053","split":"test","kind":"none","key":"","said":"maybe the meeting is on thursday not sure","previous":null}
+{"id":"c054","split":"test","kind":"rule","key":"digit","said":"always spell out part numbers digit by digit","previous":null}
+{"id":"c055","split":"test","kind":"none","key":"","said":"Call my sister.","previous":null}
+{"id":"c056","split":"test","kind":"fact","key":"guest","said":"The wifi password for the guest network is on the fridge door.","previous":null}
+{"id":"c057","split":"test","kind":"none","key":"","said":"i think the key might be in the drawer","previous":null}
+{"id":"c058","split":"test","kind":"procedure","key":"bathe","said":"to bathe the dog first brush him then wet him with lukewarm water then shampoo and rinse","previous":null}
+{"id":"c059","split":"test","kind":"rule","key":"martin","said":"dont call me sir its martin","previous":null}
+{"id":"c060","split":"test","kind":"none","key":"","said":"And then she left without saying a word.","previous":null}
+{"id":"c061","split":"test","kind":"fact","key":"spindle","said":"the lathe in bay three has a worn spindle bearing","previous":null}
+{"id":"c062","split":"test","kind":"none","key":"","said":"do we usually order flour on tuesdays","previous":null}
+{"id":"c063","split":"test","kind":"rule","key":"formal","said":"stop being so formal just say hi","previous":"Hello Mr Schroder, good morning!"}
+{"id":"c064","split":"test","kind":"none","key":"","said":"Add eggs to the shopping list.","previous":null}
+{"id":"c065","split":"test","kind":"procedure","key":"fume","said":"The opening checklist for the lab is: switch on the fume hood, log the temperature, then unlock the cabinet.","previous":null}
+{"id":"c066","split":"test","kind":"fact","key":"berg","said":"our landlord is Mr Berg and the rent is due on the first","previous":null}
+{"id":"c067","split":"test","kind":"none","key":"","said":"turn on the heating and then set a timer for ten minutes","previous":null}
+{"id":"c068","split":"test","kind":"rule","key":"dozens","said":"From here on out report the pallet counts in dozens.","previous":null}
+{"id":"c069","split":"test","kind":"none","key":"","said":"I'm feeling a bit stressed about the audit.","previous":null}
+{"id":"c070","split":"test","kind":"fact","key":"thursday","said":"the recycling truck comes on thursday mornings in our street","previous":null}
+{"id":"c071","split":"test","kind":"none","key":"","said":"Tomorrow I will first call the plumber and then go to the market.","previous":null}
+{"id":"c072","split":"test","kind":"procedure","key":"expense","said":"to submit an expense report photograph the receipt, upload it in the app, pick the project code, and press send","previous":null}
+{"id":"c073","split":"test","kind":"rule","key":"metric","said":"Prefer metric units when reading measurements.","previous":null}
+{"id":"c074","split":"test","kind":"none","key":"","said":"she wants you to always use her full title","previous":null}
+{"id":"c075","split":"test","kind":"fact","key":"ninety","said":"the print shop's large format printer only takes paper up to ninety centimetres wide","previous":null}
+{"id":"c076","split":"test","kind":"none","key":"","said":"How long does sourdough take to rise?","previous":null}
+{"id":"c077","split":"test","kind":"rule","key":"freezer","said":"if the freezer alarm goes off wake me even at night","previous":null}
+{"id":"c078","split":"test","kind":"none","key":"","said":"never mind","previous":null}
+{"id":"c079","split":"test","kind":"fact","key":"tomas","said":"My husband's name is Tomas and he works nights at the hospital.","previous":null}
+{"id":"c080","split":"test","kind":"none","key":"","said":"that's a great idea","previous":null}
+{"id":"c081","split":"test","kind":"procedure","key":"delicate","said":"for delicate washing sort by colour, set thirty degrees, add half a dose of detergent, then hang it to dry","previous":null}
+{"id":"c082","split":"test","kind":"rule","key":"puns","said":"No more puns in the morning briefing.","previous":null}
+{"id":"c083","split":"test","kind":"none","key":"","said":"forget it for now i'll do it later","previous":null}
+{"id":"c084","split":"test","kind":"fact","key":"gothenburg","said":"FYI the client's site in Gothenburg uses a different badge system from the main office.","previous":null}
+{"id":"c085","split":"test","kind":"none","key":"","said":"How do I descale the kettle?","previous":null}
+{"id":"c086","split":"test","kind":"rule","key":"allergens","said":"please always read the allergens first when going through the menu","previous":null}
+{"id":"c087","split":"test","kind":"none","key":"","said":"ha that's funny","previous":null}
+{"id":"c088","split":"test","kind":"fact","key":"kitchen","said":"dogs are not allowed in the kitchen at the restaurant because of health inspection rules","previous":null}
+{"id":"c089","split":"test","kind":"none","key":"","said":"What's the rule for overtime pay again?","previous":null}
+{"id":"c090","split":"test","kind":"rule","key":"stock","said":"Never reorder the cleaning supplies without checking the stock sheet.","previous":null}
+{"id":"c091","split":"test","kind":"none","key":"","said":"i guess it could rain later","previous":null}
+{"id":"c092","split":"test","kind":"fact","key":"tomatoes","said":"the greenhouse tomatoes were planted on the second of may","previous":null}
+{"id":"c093","split":"test","kind":"none","key":"","said":"Can you remind me at five to pick up the kids?","previous":null}
+{"id":"c094","split":"test","kind":"rule","key":"interrupting","said":"please stop interrupting me when i'm dictating","previous":null}
+{"id":"c095","split":"test","kind":"none","key":"","said":"The neighbours are loud tonight.","previous":null}
+{"id":"c096","split":"test","kind":"fact","key":"twentieth","said":"the library book i borrowed is due back on the twentieth","previous":null}
+{"id":"c097","split":"test","kind":"none","key":"","said":"Read me my next appointment.","previous":null}
+{"id":"c098","split":"test","kind":"none","key":"","said":"no thanks","previous":null}
+{"id":"c099","split":"test","kind":"none","key":"","said":"Yesterday my colleague swore he would never again touch the coffee machine.","previous":null}
