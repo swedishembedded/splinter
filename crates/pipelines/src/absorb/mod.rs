@@ -174,6 +174,13 @@ pub struct AbsorbRequest {
     pub no_release: bool,
     /// The serve check's bounds.
     pub gate: GateConfig,
+    /// The system prompt the policy is deployed under (a persona, say), for a
+    /// policy whose release does not record one yet: the teacher answers
+    /// under it, the records are trained under it and the gate grades under
+    /// it. A release carries the prompt it was trained under, so only the
+    /// first night names it; a release recorded under another prompt keeps
+    /// its own.
+    pub system_prompt: Option<String>,
 }
 
 impl Default for AbsorbRequest {
@@ -200,6 +207,7 @@ impl Default for AbsorbRequest {
             dry_run: false,
             no_release: false,
             gate: GateConfig::default(),
+            system_prompt: None,
         }
     }
 }

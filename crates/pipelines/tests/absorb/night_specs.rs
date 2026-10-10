@@ -535,3 +535,59 @@ fn a_forgotten_claim_is_not_in_the_next_nights_set_even_when_nothing_else_is_new
     );
     Ok(())
 }
+
+#[test]
+fn a_night_trains_and_releases_under_the_system_prompt_the_request_names() -> Outcome {
+    let persona = "You are a man of the eighteenth century and answer as he would.";
+    let w = night("night-persona");
+    let dir = w.sessions("s", &[0, 1])?;
+    let learner = Learner::default();
+    let first = absorb(
+        &w.ctx,
+        &AbsorbRequest {
+            system_prompt: Some(persona.to_string()),
+            ..w.request(dir)
+        },
+        &learner,
+    )?;
+    let data = first
+        .report
+        .dataset
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("no dataset"))?;
+    let text = std::fs::read_to_string(&data.path)?;
+    let systems: Vec<String> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter_map(|r| r["messages"][0]["content"].as_str().map(str::to_string))
+        .collect();
+    assert!(!systems.is_empty());
+    assert!(
+        systems.iter().all(|s| s == persona),
+        "every record is under the persona: {systems:?}"
+    );
+    let release = first
+        .report
+        .release
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("no release: {:#?}", first.report))?;
+
+    // The release carries the prompt: a later night names none and trains under it.
+    serve_release(&w.ctx, &release);
+    w.ctx.repin_policy("default");
+    let dir = w.sessions("t", &[2])?;
+    let second = absorb(&w.ctx, &w.request(dir), &learner)?;
+    let data = second
+        .report
+        .dataset
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("no dataset"))?;
+    let text = std::fs::read_to_string(&data.path)?;
+    assert!(
+        text.lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .all(|r| r["messages"][0]["content"] == persona),
+        "the next night keeps the persona"
+    );
+    Ok(())
+}

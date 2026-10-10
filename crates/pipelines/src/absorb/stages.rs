@@ -261,7 +261,10 @@ fn previous_run(ctx: &Context, request: &AbsorbRequest, current: &str) -> Option
 
 fn policy_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
     let pin = ctx.policy_pin(&st.alias)?;
-    st.system = pin.as_ref().and_then(|p| p.system_prompt.clone());
+    st.system = pin
+        .as_ref()
+        .and_then(|p| p.system_prompt.clone())
+        .or_else(|| st.request.system_prompt.clone());
     st.report.policy = PolicyUsed {
         alias: st.alias.clone(),
         release: pin.map(|p| p.release),

@@ -889,7 +889,9 @@ run built is taken as it is.
   records. `--sealed-probes FILE...` (JSON Lines of `{"question", "reference"?,
   "name"?}`) refuses a record containing a probe's question or sharing an
   8-word run with one beyond what its claim's statement says, naming the probe;
-  the rehearsal is checked too. The gate never reads the probes.
+  the rehearsal is checked too. The gate never reads the probes. A policy deployed under a system prompt (a persona) is taught and graded under it: the SDK's
+  `AbsorbRequest::system_prompt` names it for the first night, and each release records the prompt it was
+  trained under, so a later night keeps it.
 - **train.** The adapter is trained again from the base on every live claim and
   the rehearsal (`--rehearsal-share`, a quarter by default), for at most
   `--epochs` passes (6) over the records, so a superseded claim is simply not in
