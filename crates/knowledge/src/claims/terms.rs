@@ -72,7 +72,7 @@ pub fn has_terms(statement: &str) -> bool {
 }
 
 /// The quoted terms of `text`, and `text` with them blanked out.
-fn split_quoted(text: &str) -> (Vec<String>, String) {
+pub(crate) fn split_quoted(text: &str) -> (Vec<String>, String) {
     let mut terms = Vec::new();
     let mut rest = String::with_capacity(text.len());
     let mut open: Option<(char, String)> = None;
@@ -118,7 +118,7 @@ pub fn names_of(text: &str) -> Vec<String> {
 }
 
 /// The words of `text` that are names.
-fn names(text: &str) -> Vec<String> {
+pub(crate) fn names(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut sentence_start = true;
     for raw in text.split_whitespace() {

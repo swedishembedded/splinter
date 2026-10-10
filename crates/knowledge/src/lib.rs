@@ -38,6 +38,9 @@
 //!   built by code with fresh numbers, the brief a model writes general
 //!   requests from, and the admission that keeps every anchor task and its
 //!   near copies out.
+//! * [`stance`] - the code checks a stance pair rests on: a fact's keys, a
+//!   falsehood made by replacing one, whether a reply holds the true value or
+//!   adopts the false one, and whether it invents a term or declines.
 
 #![warn(missing_docs)]
 
@@ -56,6 +59,7 @@ pub mod retrieve;
 pub mod sections;
 mod seeded;
 pub mod session;
+pub mod stance;
 pub mod survey;
 pub mod tabular;
 pub mod tasks;
