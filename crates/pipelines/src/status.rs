@@ -11,6 +11,7 @@ use serde::Serialize;
 use splinter_model::ModelSelection;
 use splinter_store::runs::list_runs;
 
+use crate::absorb::generation::Generation;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
 use crate::train::candidate_count;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
@@ -34,6 +35,12 @@ pub struct PolicyStatus {
     pub adapter: Option<PathBuf>,
     /// The release `policy:default` points at: `null` until one exists.
     pub release: Option<ReleaseId>,
+    /// The generation it is in: 0 on the configured base, one more for each
+    /// consolidation.
+    pub generation: u32,
+    /// The consolidation release whose checkpoint is the base of the
+    /// generation; `null` on the configured base.
+    pub generation_base: Option<ReleaseId>,
 }
 
 /// How much each store holds.
@@ -81,6 +88,8 @@ pub fn status(ctx: &Context) -> Result<Status, OrchestratorError> {
         ModelSelection::Local(weights) => (weights.base.clone(), weights.adapter.clone()),
         ModelSelection::Remote(_) => (PathBuf::new(), None),
     };
+    let pin = ctx.policy_pin(POLICY_DEFAULT)?;
+    let generation = Generation::of(ctx, POLICY_DEFAULT)?;
     let runs = list_runs(ctx.workspace())?;
     let recent_runs = runs
         .iter()
@@ -94,7 +103,9 @@ pub fn status(ctx: &Context) -> Result<Status, OrchestratorError> {
             model: selection.identity(),
             base,
             adapter,
-            release: ctx.policy_pin(POLICY_DEFAULT)?.map(|pin| pin.release),
+            release: pin.as_ref().map(|pin| pin.release.clone()),
+            generation: pin.as_ref().map_or(0, |pin| pin.generation),
+            generation_base: generation.base_release,
         },
         roles: roles::assignments(ctx.config(), &RoleOverrides::new())?
             .iter()

@@ -30,6 +30,7 @@ use splinter_store::runs::{list_runs, RunStatus};
 
 use super::dataset::assemble;
 use super::gate::{decide_claims, publish, ClaimsDecision};
+use super::generation::{records_of, replay_budget, retention_sample, Generation, Split};
 use super::kit::{self, build_kits, ClaimKit, KitRequest, Live};
 use super::sealed::SealedProbes;
 use super::stance::{self, Derivation, Held};
@@ -41,8 +42,8 @@ use crate::claims::{
 };
 use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::learn::{records_at_share, PolicyUsed};
-use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
-use crate::release::arm;
+use crate::rehearsal::{rehearse_on, RehearseRequest, REHEARSAL_SEED};
+use crate::release::arm_on;
 use crate::sessions::{intake, IntakeRequest};
 use crate::train::{
     auto_records_per_step, load_candidate, train, Candidate, Rehearse, TrainRequest, Trainer,
@@ -50,6 +51,10 @@ use crate::train::{
 };
 use crate::verify::adopt_judge;
 use splinter_knowledge::claims::coverage::Subject;
+
+mod generations;
+
+use generations::{consolidate_stage, consolidation_is_due, rebuild_stage};
 
 type Done = Result<StageEnd, OrchestratorError>;
 
@@ -120,6 +125,10 @@ struct State<'a> {
     /// The situations the stance pairs were not made of.
     held: Option<Held>,
     previous: Option<Previous>,
+    /// The generation the policy is in: its base and what the base holds.
+    generation: Generation,
+    /// The live claims split by whether the generation's base holds them.
+    split: Split,
 }
 
 /// What a failed run of the same request left that is worth keeping.
@@ -173,6 +182,8 @@ pub(super) fn run(
         pairs: None,
         held: None,
         previous: previous_run(ctx, request, run.id()),
+        generation: Generation::root(ctx),
+        split: Split::default(),
     };
     let stopped = pipeline().run(ctx, run, &mut state, None)?;
     let mut report = state.report;
@@ -186,6 +197,11 @@ fn pipeline<'a>() -> Pipeline<'a, State<'a>> {
         .then(FnStage::new("intake", intake_stage).ignoring_budget())
         .then(FnStage::new("extract", extract_stage).ignoring_budget())
         .then(FnStage::new("gate", gate_stage).ignoring_budget())
+        .then(
+            FnStage::new("rebuild", rebuild_stage)
+                .when(|s| !s.generation.dead(&s.live).is_empty() && !s.request.dry_run)
+                .ignoring_budget(),
+        )
         .then(FnStage::new("kits", kits_stage).ignoring_budget())
         .then(FnStage::new("dataset", dataset_stage).ignoring_budget())
         .then(
@@ -212,6 +228,11 @@ fn pipeline<'a>() -> Pipeline<'a, State<'a>> {
         .then(
             FnStage::new("ledger", ledger_stage)
                 .when(|s| s.report.release.is_some())
+                .ignoring_budget(),
+        )
+        .then(
+            FnStage::new("consolidate", consolidate_stage)
+                .when(consolidation_is_due)
                 .ignoring_budget(),
         )
 }
@@ -249,6 +270,8 @@ fn policy_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done
         alias: st.alias.clone(),
         release: pin.map(|p| p.release),
     };
+    st.generation = Generation::of(ctx, &st.alias)?;
+    st.report.generation = Some(st.generation.clone());
     if st.report.policy.release.is_none() && st.alias != POLICY_DEFAULT {
         return Err(OrchestratorError::NotFound {
             what: "release alias",
@@ -378,7 +401,8 @@ fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
         .map(|(id, _)| id.clone())
         .filter(|id| !absorbed.contains(id))
         .collect();
-    let stale = release_holds_dead_claim(ctx, st)?;
+    st.split = st.generation.split(&st.live);
+    let stale = release_holds_dead_claim(ctx, st)? || !st.generation.dead(&st.live).is_empty();
     st.report.live = st.live.len();
     st.report.pending = st.pending.iter().cloned().collect();
     let summary = value(&gated)?;
@@ -455,19 +479,50 @@ fn kits_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done
     Ok(StageEnd::done(summary))
 }
 
-/// The claims a night trains on: all that are live, or only the new ones
-/// when continuing a release.
+/// The claims a night trains on: the generation's own that are live - the
+/// base already holds the rest - or only the new ones when continuing a
+/// release.
 fn trained_claims(st: &State<'_>) -> Vec<Live> {
-    st.live
+    st.split
+        .current
         .iter()
         .filter(|(id, _)| !st.request.continue_from_release || st.pending.contains(id))
         .cloned()
         .collect()
 }
 
+/// The claims the gate asks about: the ones trained on, and the ones the
+/// generation's base holds, which must keep being answered.
+fn gated_claims(st: &State<'_>) -> Vec<Live> {
+    trained_claims(st)
+        .into_iter()
+        .chain(st.split.retention.iter().cloned())
+        .collect()
+}
+
 fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
     let claims = trained_claims(st);
-    let Some(assembled) = assemble(ctx, &claims, &st.kits, st.system.as_deref(), &st.sealed)?
+    // The records of the claims the base holds stay in the mix, as many as
+    // keep them a share of the draws, so the adapter does not pull the base
+    // away from them.
+    let replayed = retention_sample(
+        &st.kits,
+        &st.split.retention,
+        replay_budget(
+            records_of(&st.kits, &claims),
+            records_of(&st.kits, &st.split.retention),
+            st.request.consolidation.retention_replay_share,
+        ),
+    );
+    st.report.replayed_records = replayed.len();
+    let Some(assembled) = assemble(
+        ctx,
+        &claims,
+        &replayed,
+        &st.kits,
+        st.system.as_deref(),
+        &st.sealed,
+    )?
     else {
         return Ok(StageEnd::halt("no claim has a record to train on"));
     };
@@ -485,8 +540,9 @@ fn rehearse_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> 
     let Some(assembled) = &st.report.dataset else {
         unreachable!("the rehearse stage follows the dataset stage")
     };
-    let rehearsed = rehearse(
+    let rehearsed = rehearse_on(
         ctx,
+        &arm_on(ctx.config(), &st.generation.base, None),
         &RehearseRequest {
             records: records_at_share(assembled.trained, st.request.rehearsal_share).max(1),
             seed: REHEARSAL_SEED,
@@ -546,7 +602,7 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Don
             let from = if st.request.continue_from_release {
                 st.request.policy.clone()
             } else {
-                arm(ctx.config(), None)
+                arm_on(ctx.config(), &st.generation.base, None)
             };
             train(
                 ctx,
@@ -594,7 +650,7 @@ fn stance_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Do
     };
     let claims = trained_claims(st);
     let trained_records = st.report.dataset.as_ref().map_or(0, |d| d.trained);
-    let student = arm(ctx.config(), Some(&supervised.adapter));
+    let student = arm_on(ctx.config(), &supervised.base, Some(&supervised.adapter));
     let derived = stance::derive(&Derivation {
         ctx,
         request: &st.request.stance,
@@ -628,7 +684,7 @@ fn preference_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -
         &TrainRequest {
             datasets: vec![pairs],
             rehearsal: None,
-            from: arm(ctx.config(), Some(&supervised.adapter)),
+            from: arm_on(ctx.config(), &supervised.base, Some(&supervised.adapter)),
             replay_fraction: st.request.replay_fraction,
             steps: None,
             rank: st.request.rank,
@@ -681,7 +737,7 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> D
         .alias(&st.alias)?
         .map(|id| store.get(&id))
         .transpose()?;
-    let claims = trained_claims(st);
+    let claims = gated_claims(st);
     let gate = decide_claims(
         ctx,
         &ClaimsDecision {

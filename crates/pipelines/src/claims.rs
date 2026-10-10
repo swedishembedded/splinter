@@ -33,7 +33,7 @@ use splinter_agent::claims::{ClaimExtractor, Extraction};
 use splinter_agent::CancelToken;
 use splinter_core::claim::{Claim, ClaimId, ClaimSet, LedgerEntry, Ruling, SessionClaims};
 use splinter_core::digest::Digest;
-use splinter_core::model_ref::ModelRef;
+use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::release::ReleaseId;
 use splinter_core::source::SourceId;
 use splinter_eval::claim_gate::{StanceSummary, StanceTally};
@@ -46,6 +46,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::ids;
 
+use crate::absorb::generation::Generation;
 use crate::claim_quality::{assess, ExtractionQuality};
 use crate::verify::judge_model;
 use splinter_knowledge::claims::coverage::Subject;
@@ -456,6 +457,10 @@ pub struct ClaimLine {
     /// How many times the person said it again: a signal that the model
     /// is still wrong.
     pub reinforced: usize,
+    /// Whether the base of the generation the default policy is in holds the
+    /// claim: it is in the weights, graded at every release and not taught
+    /// again.
+    pub retained: bool,
 }
 
 impl ClaimLine {
@@ -463,6 +468,7 @@ impl ClaimLine {
         Self {
             absorbed_by,
             reinforced,
+            retained: false,
             claim: id,
             kind: claim.kind.as_str().into(),
             statement: claim.statement.clone(),
@@ -513,6 +519,8 @@ pub struct ForgottenLine {
 /// What `claims ledger` reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct LedgerReport {
+    /// The generation the default policy is in.
+    pub generation: GenerationLine,
     /// Admitted claims that are still the answer to their question.
     pub live: Vec<ClaimLine>,
     /// Admitted claims that were replaced.
@@ -567,6 +575,21 @@ fn release_stances(
     Ok(lines)
 }
 
+/// The generation a policy is in, as the ledger and `status` tell it.
+#[derive(Clone, Debug, Serialize)]
+pub struct GenerationLine {
+    /// Consolidations behind the release in use: 0 on the configured base.
+    pub epoch: u32,
+    /// The consolidation release whose checkpoint is the base; absent on the
+    /// configured base.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<ReleaseId>,
+    /// Live claims the base holds.
+    pub retained: usize,
+    /// Live claims of the generation itself, which its adapter is for.
+    pub current: usize,
+}
+
 /// The ledger as it stands.
 pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
     let ledger = Ledger::new(ctx.claims().entries()?);
@@ -577,16 +600,31 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
         .iter()
         .map(|a| (a.claim.clone(), a.release.clone()))
         .collect();
+    let generation = Generation::of(ctx, POLICY_DEFAULT)?;
     let mut report = LedgerReport {
+        generation: GenerationLine {
+            epoch: generation.epoch,
+            base: generation.base_release.clone(),
+            retained: live
+                .iter()
+                .filter(|(id, _)| generation.held.contains(id))
+                .count(),
+            current: live
+                .iter()
+                .filter(|(id, _)| !generation.held.contains(id))
+                .count(),
+        },
         live: live
             .iter()
             .map(|(id, claim)| {
-                ClaimLine::of(
+                let mut line = ClaimLine::of(
                     id.clone(),
                     claim,
                     absorbed.get(id).cloned(),
                     ledger.reinforcements(id),
-                )
+                );
+                line.retained = generation.held.contains(id);
+                line
             })
             .collect(),
         superseded: Vec::new(),

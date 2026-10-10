@@ -45,14 +45,29 @@
 //!     with the numbers and the current release stays in use. `--no-release`
 //!     stops at the candidate;
 //! 12. **ledger** - each claim the release answers records the release that
-//!     first absorbed it.
+//!     first absorbed it;
+//! 13. **consolidate** - once the generation's claims hold more records than
+//!     retraining the adapter from the base each night is worth, the
+//!     generation is taken into the weights ([`consolidate`]) and the next one
+//!     starts from an empty claim set on top of the checkpoint.
+//!
+//! The policy learns in **generations** ([`generation`]). Within one, claims
+//! accumulate and each night trains the adapter again from the generation's
+//! base. The claims a consolidated base holds are never taught again: the
+//! night trains the generation's own claims beside a bounded sample of the
+//! retained claims' records, and the gate asks every retained claim as well,
+//! so none may be lost. A claim the base holds that is forgotten cannot be
+//! taken out of the weights; the night first trains the base again from the
+//! last one that did not hold it (the **rebuild** stage).
 //!
 //! A failed run is resumed by running it again: intake, the claim set, the
 //! kits and the datasets are kept by content, and a candidate trained on the
 //! dataset a failed run built is taken as it is.
 
+pub mod consolidate;
 pub mod dataset;
 pub mod gate;
+pub mod generation;
 pub mod kit;
 pub mod sealed;
 mod stages;
@@ -77,7 +92,9 @@ use crate::learn::PolicyUsed;
 use crate::rehearsal::{Rehearsed, DEFAULT_REHEARSAL_SHARE};
 use crate::sessions::{SessionsIntake, DEFAULT_MAX_SESSION_BYTES};
 use crate::train::{Candidate, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
+use consolidate::{Consolidated, ConsolidationPolicy};
 use dataset::Assembled;
+use generation::Generation;
 use kit::{KitsBuilt, PARAPHRASES_WRITTEN};
 use stance::{StanceBuilt, StanceRequest};
 
@@ -85,11 +102,12 @@ use stance::{StanceBuilt, StanceRequest};
 pub const DEFAULT_EPOCHS: u32 = 6;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 12] = [
+pub const STAGES: [&str; 14] = [
     "policy",
     "intake",
     "extract",
     "gate",
+    "rebuild",
     "kits",
     "dataset",
     "rehearse",
@@ -98,6 +116,7 @@ pub const STAGES: [&str; 12] = [
     "preference",
     "release",
     "ledger",
+    "consolidate",
 ];
 
 /// One `absorb`.
@@ -147,6 +166,8 @@ pub struct AbsorbRequest {
     /// The preference pass on pairs derived from tonight's live state; see
     /// [`stance`].
     pub stance: StanceRequest,
+    /// When and how the generation is taken into the weights.
+    pub consolidation: ConsolidationPolicy,
     /// Stop after the claims are extracted and ruled on; train nothing.
     pub dry_run: bool,
     /// Stop at the candidate: do not run the gate.
@@ -175,6 +196,7 @@ impl Default for AbsorbRequest {
             subjects: Vec::new(),
             sealed_probes: Vec::new(),
             stance: StanceRequest::default(),
+            consolidation: ConsolidationPolicy::default(),
             dry_run: false,
             no_release: false,
             gate: GateConfig::default(),
@@ -187,6 +209,9 @@ impl Default for AbsorbRequest {
 pub struct Absorbed {
     /// The policy the run worked from.
     pub policy: PolicyUsed,
+    /// The generation the policy was in: its epoch, the base its adapters
+    /// are trained on and the claims that base holds.
+    pub generation: Option<Generation>,
     /// The model each role was given.
     pub roles: BTreeMap<Role, String>,
     /// The intake stage.
@@ -203,6 +228,12 @@ pub struct Absorbed {
     pub kits: Option<KitsBuilt>,
     /// The dataset stage.
     pub dataset: Option<Assembled>,
+    /// Records of the claims the base holds that were trained again beside
+    /// the generation's own.
+    pub replayed_records: usize,
+    /// The rebuild that took a forgotten claim out of the weights holding
+    /// it, when one was needed.
+    pub rebuilt: Option<Consolidated>,
     /// The rehearse stage.
     pub rehearsal: Option<Rehearsed>,
     /// The candidate trained: the preference pass's when there was one,
@@ -222,6 +253,9 @@ pub struct Absorbed {
     pub release: Option<ReleaseId>,
     /// The claims this release first absorbed.
     pub absorbed: Vec<ClaimId>,
+    /// The consolidation the release made the generation due for, when it
+    /// ran.
+    pub consolidation: Option<Consolidated>,
     /// Why the run stopped before its last stage, if it did.
     pub stopped: Option<String>,
     /// Whether it was a dry run.

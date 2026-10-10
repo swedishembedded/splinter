@@ -76,16 +76,23 @@ if os.path.exists("@DEVICE@"):
 args = sys.argv[1:]
 assert args[0] == "serve", args
 opts = dict(zip(args[1::2], args[2::2]))
-adapter = open(opts["--adapter"], "rb").read()
+
+# A consolidated checkpoint is served with no adapter: the weights file of
+# the base is the card, and nothing is announced.
+weights = os.environ.get("BRAIN_QWEN_WEIGHTS", "")
+if os.path.isdir(weights):
+    weights = os.path.join(weights, "model.safetensors")
+adapter = open(opts.get("--adapter") or weights, "rb").read()
 digest = "sha256:" + hashlib.sha256(adapter).hexdigest()
 if @WRONG@:
     digest = "sha256:" + "0" * 64
 card = json.loads(adapter)
-knows = card["knows"]
+knows = card.get("knows", [])
 answers = card.get("answers", {})
 json.dump({"openai": "sk-fake"}, open(opts["--api-keys-out"], "w"))
-print("brain serve: brain/qwen3 adapter=local/test:splinter:candidate digest=" + digest,
-      file=sys.stderr, flush=True)
+if "--adapter" in opts:
+    print("brain serve: brain/qwen3 adapter=local/test:splinter:candidate digest=" + digest,
+          file=sys.stderr, flush=True)
 
 def reply(text):
     for key, said in answers.items():

@@ -62,6 +62,7 @@ needs Splinter installed.
 | Datasets | training records projected from experience for one objective, with a manifest naming where every record came from |
 | Candidates | a LoRA adapter trained from the champion on the new material plus a replay of everything learned before |
 | Releases | an immutable adapter or full checkpoint with a manifest of every number the release gate measured, the terms it was made under, and lineage back to the sources |
+| Generations | a policy that learns for good keeps its adapter small by consolidating: the claims of a generation are trained into a full checkpoint (or the adapter is merged into the weights), gated, and released as the base of the next generation, whose claim set starts empty and whose gate keeps asking every claim already in the weights |
 
 ## Quick start
 

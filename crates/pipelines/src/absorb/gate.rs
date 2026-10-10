@@ -156,14 +156,14 @@ pub fn decide_claims(
     };
     let theirs = stance::measure(
         ctx,
-        &arm(ctx.config(), Some(&candidate.adapter)),
+        &arm_on(ctx.config(), &candidate.base, Some(&candidate.adapter)),
         candidate_prompt.as_deref(),
         held,
         cancel,
     )?;
     let ours = stance::measure(
         ctx,
-        &arm(ctx.config(), champion_adapter),
+        &arm_on(ctx.config(), &candidate.base, champion_adapter),
         champion_prompt.as_deref(),
         held,
         cancel,

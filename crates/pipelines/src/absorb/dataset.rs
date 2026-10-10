@@ -43,6 +43,18 @@ pub struct RefusedRecord {
     pub leak: Leak,
 }
 
+/// A record of a claim the generation's base already holds, taken into the
+/// training mix again.
+#[derive(Clone, Debug)]
+pub struct Replayed {
+    /// The claim it teaches.
+    pub claim: ClaimId,
+    /// The claim's statement, which the record may repeat.
+    pub statement: String,
+    /// The record.
+    pub record: Record,
+}
+
 /// The dataset built for a night.
 #[derive(Clone, Debug, Serialize)]
 pub struct Assembled {
@@ -102,10 +114,13 @@ fn first_user_turn(record: &Record) -> String {
 }
 
 /// The dataset of the kits of `live`, under `system` when the policy answers
-/// under one, with `sealed` probes kept out.
+/// under one, with `sealed` probes kept out. `replayed` are records of
+/// claims the base already holds, trained beside the claims' own: a sample
+/// that keeps the generation's adapter from pulling the base away from them.
 pub fn assemble(
     ctx: &Context,
     live: &[Live],
+    replayed: &[Replayed],
     kits: &BTreeMap<ClaimId, ClaimKit>,
     system: Option<&str>,
     sealed: &SealedProbes,
@@ -156,6 +171,36 @@ pub fn assemble(
     if records.is_empty() {
         return Ok(None);
     }
+    let mut by_claim: BTreeMap<&ClaimId, (&str, Vec<Record>)> = BTreeMap::new();
+    for r in replayed {
+        by_claim
+            .entry(&r.claim)
+            .or_insert_with(|| (r.statement.as_str(), Vec::new()))
+            .1
+            .push(r.record.clone());
+    }
+    let mut kept_replay: Vec<Record> = Vec::new();
+    for (id, (statement, group)) in by_claim {
+        let mut projection = Projection {
+            view: VIEW.into(),
+            objective: Objective::Sft,
+            strip: None,
+            min_strength: None,
+            records: group,
+            excluded: BTreeMap::new(),
+            system_prompt: None,
+            terms: None,
+        };
+        // A sealed probe is refused wherever a record came from.
+        let leaks = sealed.remove_leaks(&mut projection, |_| vec![statement.to_string()]);
+        refused.extend(leaks.into_iter().map(|(record, leak)| RefusedRecord {
+            claim: id.clone(),
+            prompt: first_user_turn(&record),
+            leak,
+        }));
+        kept_replay.extend(projection.records);
+    }
+    records.extend(kept_replay);
     let trained = records.len();
     let held = held_out.len();
     records.extend(held_out);

@@ -41,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
   compared with the champion's by counts; a rate over no items is absent.
+- A policy learns in generations (`splinter_sdk::absorb::consolidate`, `absorb::generation`). A consolidation takes the
+  claims of the release in use into the weights - every weight of the generation's base trained on their records beside
+  a bounded sample of the records of the claims the base already holds and the base's own answers, or the adapter
+  folded in - gates the checkpoint against the release in use (no claim it answered lost, the anchor suite no worse,
+  plain `brain serve` serves it; a gain is not demanded) and releases it as the full-checkpoint base of the next
+  generation, whose claim set starts empty. The claims a base holds are retained: not taught again, replayed in a
+  bounded sample, asked at every release, where losing one refuses the candidate. `absorb` consolidates a generation by
+  itself once its claims hold more trained records than a threshold (not at it). Forgetting a claim the weights hold
+  trains the base again from the last one that did not hold it (the `rebuild` stage) instead of pretending the weights
+  forgot. `status` and `claims ledger` show the generation and which live claims the base holds.
 - A trainer can train every weight of a base and merge an adapter into it (`Trainer::train_full` and `Trainer::merge`,
   which brain's trainer implements); the release serve check can serve a checkpoint that has no adapter; and the gate
   and the rehearsal grade the base of the generation a policy is in, not only the configured one.
