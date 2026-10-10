@@ -29,6 +29,9 @@
 //!   counts. A rate over no items is absent, never zero, and a gate with no
 //!   rate has no stance check;
 //! * **serve** is the existing check that plain brain serves the candidate.
+//!
+//! A consolidation is decided by the same rule without the improvement:
+//! [`decide_consolidation`].
 
 use serde::{Deserialize, Serialize};
 
@@ -246,6 +249,29 @@ pub fn decide(
     anchor: Option<AnchorTally>,
     serve: Check<Serve>,
 ) -> ClaimGate {
+    rule(claims, anchor, serve, true)
+}
+
+/// Decides the gate of a consolidation: the same rule, except that a gain
+/// is not asked for. A consolidated checkpoint takes a generation into the
+/// weights and is meant to answer what the release in use answered; a claim
+/// neither answers is carried and listed as unanswered, not a reason to
+/// refuse it.
+#[must_use]
+pub fn decide_consolidation(
+    claims: Vec<ClaimTally>,
+    anchor: Option<AnchorTally>,
+    serve: Check<Serve>,
+) -> ClaimGate {
+    rule(claims, anchor, serve, false)
+}
+
+fn rule(
+    claims: Vec<ClaimTally>,
+    anchor: Option<AnchorTally>,
+    serve: Check<Serve>,
+    gain_required: bool,
+) -> ClaimGate {
     let champion_answered = |c: &ClaimTally| c.champion.is_some_and(|t| t.answered());
     let gained: Vec<String> = claims
         .iter()
@@ -268,7 +294,7 @@ pub fn decide(
     let anything_to_gain = claims.iter().any(|c| !champion_answered(c));
     let improvement = decided(
         gained.len(),
-        (gained.is_empty() && anything_to_gain)
+        (gain_required && gained.is_empty() && anything_to_gain)
             .then(|| "no claim is newly answered on its stopping paraphrases".to_string()),
     );
     let retention = decided(
