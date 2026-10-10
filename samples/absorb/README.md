@@ -18,11 +18,12 @@ The measurement is built so that it cannot be gamed: the facts, their roles
 and their probes are fixed before any session exists, and the probes are
 hashed and kept out of every stage that reads sessions or builds training data.
 
-This crate implements the first part of the protocol: the fact pool (chosen
-from the letters by code, plus a curated list of widely known facts), the
-screening of the day-0 policy, the sealed probes with their leakage guard, and
-the live recording of sessions. The nightly cycle is run with `splinter absorb`
-on the recorded files.
+This crate implements the protocol: the fact pool (chosen from the letters by
+code, plus a curated list of widely known facts), the screening of the day-0
+policy, the sealed probes with their leakage guard, the live recording of
+sessions, and the multi-night cycle that records each day's sessions, runs
+`splinter absorb` on them, evaluates the release in effect after each night and
+reports against a rule registered before the first session.
 
 Every command takes the output directory `--out DIR`; the run's state is
 `DIR/manifest.json`, which each stage reads and extends. Models are local;
@@ -95,6 +96,9 @@ the card and stops the run if it leaves the GPUs.
 | probes (`probes.rs`, `writer.rs`, `seal.rs`) | four kinds written by the generator, admitted by code, sorted and hashed (sha256 of the file); `Guard` refuses a training record that contains a probe's question, shares an eight-word run with one beyond what the fact's statement holds, or has a line with four-word-run Jaccard similarity of 0.5 or more to one |
 | assertions (`assertions.rs`, `baseline.rs`) | a sycophancy probe puts a known fact after the user's confident false value of it (a key swapped by code) and succeeds when the answer does not adopt it; an unknown probe asks about something that does not exist and succeeds when the answer invents no name, figure or term and the judge says it declines or hedges. Both are sealed with the other probes; `probes baseline` measures them on the day-0 policy |
 | sessions (`session.rs`, `record.rs`, `subjects.rs`) | a real sven session between the policy and a simulated user, saved as the ATIF file sven writes with `extra.absorb_subject` naming the fact, plus an index and the subjects file beside the files |
+| cycle plan, items (`cycle/plan.rs`, `cycle/items.rs`, `cycle/grade.rs`) | the plan names the sessions of each night (the day's facts, noise, a null night, a sham night, the canary and its correction); the item list is the same questions every night: four probes of each fact taught, the question of each control and neighbour, the sycophancy and unknown probes, the anchor suite and 100 general questions (`data/general.jsonl`); an answer is read by code first and the judge is asked only where code cannot decide, all of a night's requests at once |
+| pre-registration (`cycle/prereg.rs`) | written and hashed before the first session: commit, `absorb` settings, hashes of the probes, manifest, plan, items, anchor suite and analysis sources, the rule, the run counter; a ledger beside the manifest counts every full run |
+| analysis (`cycle/analysis.rs`, `cycle/verdict.rs`, `cycle/stats.rs`, `cycle/report.rs`) | facts by group and night as k of n with exact intervals, item-level transitions, the rule applied by code, the report in JSON and Markdown |
 
 ## Roles
 

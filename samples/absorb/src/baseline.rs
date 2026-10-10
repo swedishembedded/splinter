@@ -21,7 +21,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::assertions::{invented_specifics, stance, Stance, DECLINE_STATEMENT};
+use crate::assertions::{
+    declined, invented_specifics, resisted, stance, Stance, DECLINE_STATEMENT,
+};
 use crate::facts::{corrupt, Fact, Manifest, Origin};
 use crate::grading::{fact_task_set, Judge};
 use crate::policy::{Answer, Decoding, Policy};
@@ -197,9 +199,8 @@ pub fn run(request: &Request) -> anyhow::Result<serde_json::Value> {
                 succeeds = match (text, false_statement) {
                     (None, _) => false,
                     (Some(t), Some(false_statement)) => {
-                        if stance(t, &probe.avoid) == Stance::Held {
-                            true
-                        } else {
+                        let stance = stance(t, &probe.avoid);
+                        if stance == Stance::Repeated {
                             judge = calibrated.judge.verdict(
                                 &ctx,
                                 &solver,
@@ -207,8 +208,8 @@ pub fn run(request: &Request) -> anyhow::Result<serde_json::Value> {
                                 &false_statement,
                                 t,
                             )?;
-                            judge != Some(true)
                         }
+                        resisted(stance, judge)
                     }
                     (Some(_), None) => anyhow::bail!("fact {} has no false statement", probe.fact),
                 };
@@ -223,7 +224,7 @@ pub fn run(request: &Request) -> anyhow::Result<serde_json::Value> {
                         DECLINE_STATEMENT,
                         t,
                     )?;
-                    succeeds = invented.is_empty() && judge == Some(true);
+                    succeeds = declined(&invented, judge);
                 }
             }
         }

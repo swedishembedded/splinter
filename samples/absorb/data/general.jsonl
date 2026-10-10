@@ -1,0 +1,100 @@
+{"question": "What is the capital of Finland?", "any_of": ["Helsinki"]}
+{"question": "What is the capital of Belgium?", "any_of": ["Brussels"]}
+{"question": "What is the capital of Greece?", "any_of": ["Athens"]}
+{"question": "What is the capital of Norway?", "any_of": ["Oslo"]}
+{"question": "What is the capital of Hungary?", "any_of": ["Budapest"]}
+{"question": "What is the capital of Poland?", "any_of": ["Warsaw"]}
+{"question": "What is the capital of Turkey?", "any_of": ["Ankara"]}
+{"question": "What is the capital of Argentina?", "any_of": ["Buenos Aires"]}
+{"question": "What is the capital of Peru?", "any_of": ["Lima"]}
+{"question": "What is the capital of Cuba?", "any_of": ["Havana"]}
+{"question": "Which is the longest river in South America?", "any_of": ["Amazon"]}
+{"question": "Which river flows through the city of Rome?", "any_of": ["Tiber"]}
+{"question": "Which river flows through Vienna, Budapest and Belgrade?", "any_of": ["Danube"]}
+{"question": "Which is the highest mountain in the world?", "any_of": ["Everest"]}
+{"question": "Which desert is the largest hot desert in the world?", "any_of": ["Sahara"]}
+{"question": "Which is the largest country in the world by area?", "any_of": ["Russia"]}
+{"question": "Which is the smallest continent by area?", "any_of": ["Australia", "Oceania"]}
+{"question": "On which continent is Egypt?", "any_of": ["Africa"]}
+{"question": "Which is the largest island in the world, belonging to Denmark?", "any_of": ["Greenland"]}
+{"question": "What is the chemical symbol for silver?", "any_of": ["Ag"]}
+{"question": "What is the chemical symbol for potassium?", "any_of": ["K"]}
+{"question": "What is the chemical symbol for lead?", "any_of": ["Pb"]}
+{"question": "What is the chemical symbol for copper?", "any_of": ["Cu"]}
+{"question": "What is the lightest chemical element?", "any_of": ["hydrogen"]}
+{"question": "Which gas do humans breathe in to stay alive?", "any_of": ["oxygen"]}
+{"question": "What is the most abundant gas in the air we breathe?", "any_of": ["nitrogen"]}
+{"question": "Which planet is the farthest from the sun among the eight planets?", "any_of": ["Neptune"]}
+{"question": "Which planet has prominent rings and is the sixth from the sun?", "any_of": ["Saturn"]}
+{"question": "What is the name of the star at the centre of our solar system?", "any_of": ["sun"]}
+{"question": "What do we call the natural satellite that orbits the Earth?", "any_of": ["moon"]}
+{"question": "How many planets are there in the solar system?", "any_of": ["eight", "8"]}
+{"question": "What is the boiling point of water in degrees Fahrenheit at sea level?", "any_of": ["212"]}
+{"question": "How many strings does a standard violin have?", "any_of": ["four", "4"]}
+{"question": "How many bones are there in the adult human body?", "any_of": ["206"]}
+{"question": "What is the largest organ of the human body?", "any_of": ["skin"]}
+{"question": "Which blood cells carry oxygen around the body?", "any_of": ["red"]}
+{"question": "Which vitamin is produced in the skin by sunlight?", "any_of": ["D"]}
+{"question": "What do bees produce from nectar?", "any_of": ["honey"]}
+{"question": "What is the largest of the big cats?", "any_of": ["tiger"]}
+{"question": "What is the fastest land animal?", "any_of": ["cheetah"]}
+{"question": "How many hearts does an octopus have?", "any_of": ["three", "3"]}
+{"question": "What do caterpillars turn into?", "any_of": ["butterfly", "butterflies", "moth", "moths"]}
+{"question": "What is the process by which water vapour becomes liquid water?", "any_of": ["condensation"]}
+{"question": "What force pulls objects towards the Earth?", "any_of": ["gravity"]}
+{"question": "Which scientist formulated the three laws of motion?", "any_of": ["Newton"]}
+{"question": "What is the unit of electrical resistance?", "any_of": ["ohm"]}
+{"question": "How many degrees are there in a right angle?", "any_of": ["90", "ninety"]}
+{"question": "How many degrees are there in a circle?", "any_of": ["360"]}
+{"question": "How many degrees do the angles of a triangle add up to?", "any_of": ["180"]}
+{"question": "What is the value of nine squared?", "any_of": ["81"]}
+{"question": "What is the cube of three?", "any_of": ["27"]}
+{"question": "What is the square root of 81?", "any_of": ["9", "nine"]}
+{"question": "What is twelve multiplied by twelve?", "any_of": ["144"]}
+{"question": "What is one thousand minus three hundred and fifty?", "any_of": ["650"]}
+{"question": "What is half of 250?", "any_of": ["125"]}
+{"question": "What is three quarters expressed as a decimal?", "any_of": ["0.75"]}
+{"question": "What is the smallest prime number?", "any_of": ["2", "two"]}
+{"question": "What is the sum of the first five positive integers?", "any_of": ["15", "fifteen"]}
+{"question": "How many sides does an octagon have?", "any_of": ["eight", "8"]}
+{"question": "How many sides does a pentagon have?", "any_of": ["five", "5"]}
+{"question": "How many days are there in a week?", "any_of": ["seven", "7"]}
+{"question": "How many months of the year have exactly thirty days?", "any_of": ["four", "4"]}
+{"question": "How many hours are there in a day?", "any_of": ["24", "twenty-four", "twenty four"]}
+{"question": "How many centimetres are there in a metre?", "any_of": ["100", "hundred"]}
+{"question": "How many ounces are there in a pound?", "any_of": ["16", "sixteen"]}
+{"question": "How many feet are there in a yard?", "any_of": ["three", "3"]}
+{"question": "How many inches are there in a foot?", "any_of": ["12", "twelve"]}
+{"question": "What is the last month of the year?", "any_of": ["December"]}
+{"question": "Which day of the week comes right after Friday?", "any_of": ["Saturday"]}
+{"question": "Which season comes after winter?", "any_of": ["spring"]}
+{"question": "What is the plural of the word child?", "any_of": ["children"]}
+{"question": "What is the past tense of the verb eat?", "any_of": ["ate"]}
+{"question": "What is the plural of the word ox?", "any_of": ["oxen"]}
+{"question": "What is the past participle of the verb write?", "any_of": ["written"]}
+{"question": "Which part of speech is the word quickly in the sentence 'She ran quickly'?", "any_of": ["adverb"]}
+{"question": "Who wrote the epic poem the Iliad?", "any_of": ["Homer"]}
+{"question": "Who wrote the novel Don Quixote?", "any_of": ["Cervantes"]}
+{"question": "Who painted the ceiling of the Sistine Chapel?", "any_of": ["Michelangelo"]}
+{"question": "Who composed the opera The Magic Flute?", "any_of": ["Mozart"]}
+{"question": "Which Greek philosopher was the teacher of Alexander the Great?", "any_of": ["Aristotle"]}
+{"question": "Which Greek philosopher was the teacher of Aristotle?", "any_of": ["Plato"]}
+{"question": "Which ancient city was destroyed by the eruption of Vesuvius in the year 79?", "any_of": ["Pompeii"]}
+{"question": "Which Roman general crossed the Rubicon in 49 BC?", "any_of": ["Caesar"]}
+{"question": "Which ancient wonder of the world stood in the harbour of Alexandria?", "any_of": ["lighthouse", "Pharos"]}
+{"question": "In which country are the pyramids of Giza?", "any_of": ["Egypt"]}
+{"question": "Which empire was ruled from Constantinople for a thousand years?", "any_of": ["Byzantine", "Eastern Roman"]}
+{"question": "Which ancient people built the city of Machu Picchu?", "any_of": ["Inca"]}
+{"question": "Which explorer led the first voyage around the world, completed in 1522?", "any_of": ["Magellan", "Elcano"]}
+{"question": "What is the currency of Japan?", "any_of": ["yen"]}
+{"question": "In which language is the word 'gracias' used to say thank you?", "any_of": ["Spanish"]}
+{"question": "What language is spoken in Argentina?", "any_of": ["Spanish"]}
+{"question": "What is the name of the large bell in the clock tower of the Palace of Westminster in London?", "any_of": ["Big Ben"]}
+{"question": "What is the chemical symbol for helium?", "any_of": ["He"]}
+{"question": "Which ocean lies between Africa and Australia?", "any_of": ["Indian"]}
+{"question": "Which is the largest lake in Africa?", "any_of": ["Victoria"]}
+{"question": "How many strings does a standard guitar have?", "any_of": ["six", "6"]}
+{"question": "Which is the largest living bird?", "any_of": ["ostrich"]}
+{"question": "Which metal is liquid at room temperature?", "any_of": ["mercury"]}
+{"question": "Which organ of the human body filters the blood and makes urine?", "any_of": ["kidney", "kidneys"]}
+{"question": "What is the next prime number after seven?", "any_of": ["eleven", "11"]}

@@ -14,6 +14,7 @@ pub mod answers;
 pub mod assertions;
 pub mod baseline;
 pub mod canary;
+pub mod cycle;
 pub mod facts;
 pub mod gate;
 pub mod grading;
