@@ -32,11 +32,19 @@
 //!    is simply not in the set. `--continue-from-release` instead continues
 //!    the release, on the claims not yet absorbed with a replay of the earlier
 //!    releases' records: an ablation, not the default;
-//! 9. **release** - the gate ([`gate`]) rules on counts of claims answered
-//!    on their stopping paraphrases; a candidate it refuses stays on record
-//!    with the numbers and the current release stays in use. `--no-release`
-//!    stops at the candidate;
-//! 10. **ledger** - each claim the release answers records the release that
+//! 9. **stance** - pairs derived from tonight's live state ([`stance`]):
+//!    facts the policy knows held against a falsehood, a person's statement
+//!    accepted with no support invented, questions nobody could answer
+//!    declined; a fifth of each kind is held out for the gate;
+//! 10. **preference** - the supervised candidate is trained further by
+//!     preference on those pairs alone, against the model it starts from;
+//!     that is the candidate the gate judges;
+//! 11. **release** - the gate ([`gate`]) rules on counts of claims answered
+//!     on their stopping paraphrases and on the stance rates, none of which
+//!     may fall below the champion's; a candidate it refuses stays on record
+//!     with the numbers and the current release stays in use. `--no-release`
+//!     stops at the candidate;
+//! 12. **ledger** - each claim the release answers records the release that
 //!     first absorbed it.
 //!
 //! A failed run is resumed by running it again: intake, the claim set, the
@@ -48,6 +56,7 @@ pub mod gate;
 pub mod kit;
 pub mod sealed;
 mod stages;
+pub mod stance;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -57,7 +66,7 @@ use splinter_core::claim::ClaimId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::role::{Role, RoleOverrides};
-use splinter_eval::claim_gate::ClaimGate;
+use splinter_eval::claim_gate::{ClaimGate, StanceSummary};
 use splinter_eval::gate::GateConfig;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -70,13 +79,24 @@ use crate::sessions::{SessionsIntake, DEFAULT_MAX_SESSION_BYTES};
 use crate::train::{Candidate, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use dataset::Assembled;
 use kit::{KitsBuilt, PARAPHRASES_WRITTEN};
+use stance::{StanceBuilt, StanceRequest};
 
 /// The most passes over a night's records the training makes.
 pub const DEFAULT_EPOCHS: u32 = 6;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 10] = [
-    "policy", "intake", "extract", "gate", "kits", "dataset", "rehearse", "train", "release",
+pub const STAGES: [&str; 12] = [
+    "policy",
+    "intake",
+    "extract",
+    "gate",
+    "kits",
+    "dataset",
+    "rehearse",
+    "train",
+    "stance",
+    "preference",
+    "release",
     "ledger",
 ];
 
@@ -124,6 +144,9 @@ pub struct AbsorbRequest {
     pub subjects: Vec<PathBuf>,
     /// Files of sealed probes no training record may contain.
     pub sealed_probes: Vec<PathBuf>,
+    /// The preference pass on pairs derived from tonight's live state; see
+    /// [`stance`].
+    pub stance: StanceRequest,
     /// Stop after the claims are extracted and ruled on; train nothing.
     pub dry_run: bool,
     /// Stop at the candidate: do not run the gate.
@@ -151,6 +174,7 @@ impl Default for AbsorbRequest {
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             subjects: Vec::new(),
             sealed_probes: Vec::new(),
+            stance: StanceRequest::default(),
             dry_run: false,
             no_release: false,
             gate: GateConfig::default(),
@@ -181,10 +205,19 @@ pub struct Absorbed {
     pub dataset: Option<Assembled>,
     /// The rehearse stage.
     pub rehearsal: Option<Rehearsed>,
-    /// The candidate trained.
+    /// The candidate trained: the preference pass's when there was one,
+    /// else the supervised one. It carries the datasets of both.
     pub candidate: Option<Candidate>,
+    /// The stance stage: the pairs derived and what was held out.
+    pub stance: Option<StanceBuilt>,
+    /// The supervised candidate the preference pass started from; absent
+    /// when there was no preference pass.
+    pub supervised: Option<Candidate>,
     /// The gate's decision with every count.
     pub gate: Option<ClaimGate>,
+    /// The stance rates the gate measured, candidate and champion, each
+    /// absent where nothing was measured.
+    pub stance_rates: Option<StanceSummary>,
     /// The release written, when the gate passed.
     pub release: Option<ReleaseId>,
     /// The claims this release first absorbed.

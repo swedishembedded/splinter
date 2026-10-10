@@ -18,6 +18,8 @@ use splinter_core::claim::{Absorption, ClaimId, TrainedClaims};
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::role::Role;
 use splinter_core::source::SourceId;
+use splinter_core::terms::combine_stated;
+use splinter_eval::claim_gate::StanceTally;
 use splinter_knowledge::claims::extract::ExtractionPolicy;
 use splinter_knowledge::claims::task::claim_task;
 use splinter_knowledge::claims::Ledger;
@@ -27,9 +29,10 @@ use splinter_orchestrator::{roles, Context, OrchestratorError};
 use splinter_store::runs::{list_runs, RunStatus};
 
 use super::dataset::assemble;
-use super::gate::{decide_claims, publish};
+use super::gate::{decide_claims, publish, ClaimsDecision};
 use super::kit::{self, build_kits, ClaimKit, KitRequest, Live};
 use super::sealed::SealedProbes;
+use super::stance::{self, Derivation, Held};
 use super::{AbsorbRequest, Absorbed};
 use crate::claim_quality::load_subjects;
 use crate::claims::{
@@ -42,7 +45,8 @@ use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
 use crate::release::arm;
 use crate::sessions::{intake, IntakeRequest};
 use crate::train::{
-    auto_records_per_step, load_candidate, train, Rehearse, TrainRequest, Trainer, Tuning,
+    auto_records_per_step, load_candidate, train, Candidate, Rehearse, TrainRequest, Trainer,
+    Tuning,
 };
 use crate::verify::adopt_judge;
 use splinter_knowledge::claims::coverage::Subject;
@@ -78,6 +82,18 @@ pub(super) fn validate(request: &AbsorbRequest) -> Result<(), OrchestratorError>
             "epochs and paraphrases are at least one".into(),
         ));
     }
+    if request.stance.tries == 0 {
+        return Err(OrchestratorError::Refused(
+            "the stance pass draws at least one reply per pair".into(),
+        ));
+    }
+    if let Some(beta) = request.stance.beta {
+        if !(beta.is_finite() && beta > 0.0) {
+            return Err(OrchestratorError::Refused(format!(
+                "the stance temperature {beta} is not a positive number"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -99,6 +115,10 @@ struct State<'a> {
     min_strength: Strength,
     rehearsal: Option<String>,
     candidate: Option<crate::train::Candidate>,
+    /// The stance pairs' dataset, when the stance stage made one.
+    pairs: Option<String>,
+    /// The situations the stance pairs were not made of.
+    held: Option<Held>,
     previous: Option<Previous>,
 }
 
@@ -150,6 +170,8 @@ pub(super) fn run(
         min_strength: DEFAULT_MIN_STRENGTH,
         rehearsal: None,
         candidate: None,
+        pairs: None,
+        held: None,
         previous: previous_run(ctx, request, run.id()),
     };
     let stopped = pipeline().run(ctx, run, &mut state, None)?;
@@ -172,6 +194,16 @@ fn pipeline<'a>() -> Pipeline<'a, State<'a>> {
                 .ignoring_budget(),
         )
         .then(FnStage::new("train", train_stage).ignoring_budget())
+        .then(
+            FnStage::new("stance", stance_stage)
+                .when(|s| s.request.stance.on())
+                .ignoring_budget(),
+        )
+        .then(
+            FnStage::new("preference", preference_stage)
+                .when(|s| s.pairs.is_some())
+                .ignoring_budget(),
+        )
         .then(
             FnStage::new("release", release_stage)
                 .when(|s| !s.request.no_release)
@@ -554,6 +586,92 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Don
     Ok(StageEnd::done(summary))
 }
 
+/// The stance pairs of tonight, derived from the live state and the
+/// supervised candidate, and the situations held out of them.
+fn stance_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
+    let Some(supervised) = st.candidate.clone() else {
+        unreachable!("the stance stage follows the train stage")
+    };
+    let claims = trained_claims(st);
+    let trained_records = st.report.dataset.as_ref().map_or(0, |d| d.trained);
+    let student = arm(ctx.config(), Some(&supervised.adapter));
+    let derived = stance::derive(&Derivation {
+        ctx,
+        request: &st.request.stance,
+        claims: &claims,
+        sessions: &st.sessions,
+        trained_records,
+        policy: &st.request.policy,
+        teacher: &st.teacher,
+        generator: &st.generator,
+        supervised: &student,
+        system: st.system.as_deref(),
+        sealed: &st.sealed,
+        cancel: run.cancel_token(),
+    })?;
+    st.pairs = derived.built.dataset.as_ref().map(ToString::to_string);
+    st.held = Some(derived.held);
+    let summary = value(&derived.built)?;
+    st.report.stance = Some(derived.built);
+    Ok(StageEnd::done(summary))
+}
+
+/// The supervised candidate trained further on the pairs alone, against the
+/// model it starts from; the result stands for the night's candidate, with
+/// the datasets of both passes.
+fn preference_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
+    let (Some(supervised), Some(pairs)) = (st.candidate.clone(), st.pairs.clone()) else {
+        unreachable!("the preference stage follows a stance stage that made pairs")
+    };
+    let preferred = train(
+        ctx,
+        &TrainRequest {
+            datasets: vec![pairs],
+            rehearsal: None,
+            from: arm(ctx.config(), Some(&supervised.adapter)),
+            replay_fraction: st.request.replay_fraction,
+            steps: None,
+            rank: st.request.rank,
+            beta: st.request.stance.beta,
+            tuning: Tuning {
+                records_per_step: None,
+                eval_every: None,
+                ..st.request.tuning
+            },
+        },
+        st.trainer,
+        &run.cancel_token(),
+    )?;
+    let candidate = after_preference(&supervised, preferred);
+    let summary = value(&candidate)?;
+    st.candidate = Some(candidate.clone());
+    st.report.candidate = Some(candidate);
+    st.report.supervised = Some(supervised);
+    Ok(StageEnd::done(summary))
+}
+
+/// The candidate a preference pass made, as the night's: it was trained
+/// from the supervised candidate, so it stands for both passes - their
+/// datasets, the replay and rehearsal of the first, the terms of everything
+/// either was made from.
+fn after_preference(supervised: &Candidate, preferred: Candidate) -> Candidate {
+    let terms = combine_stated([supervised.terms.as_ref(), preferred.terms.as_ref()]);
+    Candidate {
+        datasets: supervised
+            .datasets
+            .iter()
+            .chain(&preferred.datasets)
+            .cloned()
+            .collect(),
+        replay: supervised.replay.clone(),
+        rehearsal: supervised.rehearsal.clone(),
+        parent: supervised.parent.clone(),
+        records: supervised.records + preferred.records,
+        terms,
+        ..preferred
+    }
+}
+
 fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
     let Some(candidate) = st.candidate.clone() else {
         unreachable!("the release stage follows the train stage")
@@ -566,13 +684,21 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> D
     let claims = trained_claims(st);
     let gate = decide_claims(
         ctx,
-        &candidate,
-        champion.as_ref(),
-        &claims,
-        &st.kits,
-        &st.request.gate,
-        &run.cancel_token(),
+        &ClaimsDecision {
+            candidate: &candidate,
+            champion: champion.as_ref(),
+            live: &claims,
+            kits: &st.kits,
+            held: st.held.as_ref(),
+            config: &st.request.gate,
+            cancel: &run.cancel_token(),
+        },
     )?;
+    st.report.stance_rates = gate
+        .stance
+        .as_ref()
+        .and_then(|check| check.measured.as_ref())
+        .map(StanceTally::summary);
     let passed = gate.passed;
     let answered: Vec<ClaimId> = claims
         .iter()

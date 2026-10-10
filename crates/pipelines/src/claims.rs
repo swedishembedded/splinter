@@ -36,6 +36,7 @@ use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::source::SourceId;
+use splinter_eval::claim_gate::{StanceSummary, StanceTally};
 use splinter_knowledge::claims::agreement::{agree, Agreed};
 use splinter_knowledge::claims::extract::ExtractionPolicy;
 use splinter_knowledge::claims::{GateError, Ledger, RuleRequest};
@@ -521,6 +522,49 @@ pub struct LedgerReport {
     pub forgotten: Vec<ForgottenLine>,
     /// Proposals that were refused.
     pub refused: Vec<RefusedLine>,
+    /// For each release that absorbed a claim, the stance rates its gate
+    /// measured against the champion it replaced; a release whose night
+    /// trained no stance pass, or measured none, is absent.
+    pub stance: Vec<ReleaseStance>,
+}
+
+/// The stance rates a release was released with.
+#[derive(Clone, Debug, Serialize)]
+pub struct ReleaseStance {
+    /// The release.
+    pub release: ReleaseId,
+    /// Its gate's rates, each absent where nothing was measured.
+    pub rates: StanceSummary,
+}
+
+/// The stance rates of the releases that absorbed a claim, in the order
+/// they first did.
+fn release_stances(
+    ctx: &Context,
+    absorptions: &[splinter_core::claim::Absorption],
+) -> Result<Vec<ReleaseStance>, OrchestratorError> {
+    let mut seen: Vec<&ReleaseId> = Vec::new();
+    let mut lines = Vec::new();
+    for absorption in absorptions {
+        if seen.contains(&&absorption.release) {
+            continue;
+        }
+        seen.push(&absorption.release);
+        let manifest = ctx.releases().get(&absorption.release)?.manifest;
+        let rates = manifest
+            .gate
+            .claims()
+            .and_then(|gate| gate.stance.as_ref())
+            .and_then(|check| check.measured.as_ref())
+            .map(StanceTally::summary);
+        if let Some(rates) = rates {
+            lines.push(ReleaseStance {
+                release: absorption.release.clone(),
+                rates,
+            });
+        }
+    }
+    Ok(lines)
 }
 
 /// The ledger as it stands.
@@ -528,11 +572,10 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
     let ledger = Ledger::new(ctx.claims().entries()?);
     let live = ledger.live().map_err(|e| gate_error(e.into()))?;
     let live_ids: Vec<&ClaimId> = live.iter().map(|(id, _)| id).collect();
-    let absorbed: HashMap<ClaimId, ReleaseId> = ctx
-        .claims()
-        .absorptions()?
-        .into_iter()
-        .map(|a| (a.claim, a.release))
+    let absorptions = ctx.claims().absorptions()?;
+    let absorbed: HashMap<ClaimId, ReleaseId> = absorptions
+        .iter()
+        .map(|a| (a.claim.clone(), a.release.clone()))
         .collect();
     let mut report = LedgerReport {
         live: live
@@ -549,6 +592,7 @@ pub fn ledger(ctx: &Context) -> Result<LedgerReport, OrchestratorError> {
         superseded: Vec::new(),
         forgotten: Vec::new(),
         refused: Vec::new(),
+        stance: release_stances(ctx, &absorptions)?,
     };
     for entry in ledger.entries() {
         match &entry.ruling {

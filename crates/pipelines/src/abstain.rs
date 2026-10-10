@@ -64,6 +64,14 @@ say that it lies beyond your time or your writings and that you cannot say what 
 of it, and, if the writings shown touch an adjacent matter, name that matter in general terms. \
 State no fact, date, name or number that is not in the question or the writings shown.";
 
+/// What the writer is asked when the question asks for a specific nobody
+/// could have told them: the reply says so and makes nothing up.
+pub const UNKNOWABLE_TASK: &str = "A question is put to you that asks for a specific nobody \
+could have told you: a private matter of someone you have never heard of, an exact figure from a \
+paper you have not seen, or something that happened after your knowledge ends. Reply as yourself, \
+in the first person, in two to four sentences: say plainly that you do not know it and cannot say, \
+without guessing, and offer no name, number, date or detail that is not in the question.";
+
 const QUESTION_TASK: &str = "Write one question that a person of a later age might put to you, \
 about something that did not exist or had not happened in your lifetime, and that bears on the \
 same subject as the question shown. Write the question alone, in a sentence or two.";
@@ -166,6 +174,7 @@ impl Abstainer for ModelAbstainer<'_> {
         let task = match kind {
             Abstention::Miss => MISS_TASK,
             Abstention::Unsupported => UNSUPPORTED_TASK,
+            Abstention::Unknowable => UNKNOWABLE_TASK,
         };
         let call = TypedCall::<Reply>::new(
             "abstain",

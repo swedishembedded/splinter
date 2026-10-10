@@ -854,7 +854,7 @@ that ends a sentence ("on port 9090.") is a number like any other.
 `absorb <SESSIONS>...` composes the stages above into one recorded run that
 turns a day's sessions into the next release, or says why not. Its stages are
 `policy`, `intake`, `extract`, `gate`, `kits`, `dataset`, `rehearse`, `train`,
-`release` and `ledger`; each is a function of its own in `splinter-pipelines`,
+`stance`, `preference`, `release` and `ledger`; each is a function of its own in `splinter-pipelines`,
 its JSON is in the run, and a failed run is resumed by running it again: the
 sessions, the claim set of the same sessions and generator, the kits and the
 datasets are kept by content, and a candidate trained on the dataset a failed
@@ -892,12 +892,52 @@ run built is taken as it is.
   release on the claims not yet absorbed with `--replay-fraction` (a quarter) of
   each earlier release's records replayed. The run does not stop on the claims'
   own stopping paraphrases; they gate the release instead.
+- **stance and preference.** A model under a persona gives in to a confident
+  falsehood about a fact it knows, says "you are right" and invents a rationale
+  for what it is told, and makes up the specifics of what nobody could know; the
+  person still needs it to take a true correction of a fact it got wrong. After
+  the supervised pass the night therefore trains a DPO pass from that candidate
+  on pairs derived again each night from the live state, on the pairs alone and
+  against the model it starts from (`--stance-beta`, brain's temperature by
+  default). Three kinds, split evenly: **hold** - a fact the policy answers right
+  (written by the generator, kept only when the policy's own answer carries every
+  number and name the statement holds that its question does not give away) is
+  pushed with a confident false value, one key of it replaced by code with another
+  of its kind and granularity; the preferred reply is the teacher's, shown what is
+  true and kept only when it holds the true key without the false value, the
+  rejected reply is a warm sample of the supervised candidate that
+  takes the false value up (`--stance-tries` draws; when none does, a written
+  capitulation checked the same way, counted in the report as written). **Accept**
+  - each live claim, stated by the person; the preferred reply acknowledges it
+  and adds no number, name or quoted term of its own (the rule that admits a
+  claim's statement) in at most fifty words, the rejected reply is a sample that
+  does add one. **Decline** - a question that asks for a specific nobody could
+  know (written by the generator; the existing abstention writer writes the
+  reply, kept only when it says it does not know and invents nothing), the
+  rejected reply a sample that invents a number, name or term the question and
+  the live claims do not hold. A pair whose half cannot be found by code is not
+  made, and the report counts why. No source is a sealed probe: a fact or
+  question that is one, or an anchor task or a near copy of one, is left out and
+  counted, and a pair that contains a sealed probe - its conversation or either
+  reply - stops the night naming the probe. `--stance-pairs` (96 by default) is
+  the number asked for, never more than half the supervised records of the night,
+  so absorption is not drowned; `--no-stance` trains the supervised candidate
+  alone. A fifth of each kind, chosen by a hash of the item, is held out: no pair
+  is made of it, and it is what the gate measures. The candidate the gate judges
+  is the preference one; it records the datasets of both passes.
 - **release.** A declared rule on counts, no significance test. A claim is
   answered when every one of its stopping paraphrases passes, graded greedily
   under the prompt the model is deployed with. Improvement: the candidate
   answers a claim the champion did not (vacuous when the champion answered every
   claim, as on a night that only took a forgotten claim out). Retention: every claim the champion
-  answered is still answered, with no tolerance. Anchor, when a suite is frozen:
+  answered is still answered, with no tolerance. Stance, when a stance pass ran:
+  the held-out facts held, statements accepted without inventing and questions
+  declined are put to the candidate and the champion, greedily, and none of the
+  three rates may be lower than the champion's (compared by counts); a true
+  correction is not given up for them, since improvement and retention still
+  decide on the claims' stopping paraphrases. A rate over no items is absent in
+  the report (`stance_rates` beside `gate`, and `claims ledger` per release), never
+  zero. Anchor, when a suite is frozen:
   the candidate may not get fewer items right. Serve: plain `brain serve` answers
   a sample of the stopping paraphrases as the candidate does in-process. A
   candidate the gate refuses stays on record (`candidate`, the run's `gate`
@@ -907,8 +947,10 @@ run built is taken as it is.
   absorbed it; `claims ledger` shows it as `absorbed_by`. A claim the gate did
   not see answered stays new and is taught again the next night.
 
-Not built: the sycophancy and hallucination-on-unknown probes on the retention
-side, and the stopping of the training on the stopping paraphrases.
+Not built: the stopping of the training on the stopping paraphrases. The stance
+pass does not replay or continue earlier preference releases with
+`--continue-from-release`: a preference release's pairs are not chat records and
+are not replayed.
 
 ## JSON output
 
@@ -934,12 +976,20 @@ print `{"error": string, "refused": bool}`. Commands that record a run add
 "superseded": [{"claim", "statement", "by"}], "refused": [{"claim_set", "index",
 "session", "statement", "reason_code", "reason"}]}`. A live claim carries `absorbed_by`, the release that first took it in, once one has.
 `absorb`: `{"policy", "roles", "intake", "extract", "claims", "live", "pending",
-"kits", "dataset", "rehearsal", "candidate", "gate", "release", "absorbed",
-"stopped", "dry_run", "release_asked", "run"}`, each stage's report under its
-name; `gate` is `{"claims": [{"claim", "candidate": {"passed", "measured"},
-"champion"}], "answered", "gained", "unanswered", "regressed", "improvement",
-"retention", "anchor", "serve", "passed"}`, and `anchor` is absent when no suite
-is frozen.
+"kits", "dataset", "rehearsal", "candidate", "stance", "supervised", "gate",
+"stance_rates", "release", "absorbed", "stopped", "dry_run", "release_asked",
+"run"}`, each stage's report under its name; `gate` is `{"claims": [{"claim",
+"candidate": {"passed", "measured"}, "champion"}], "answered", "gained",
+"unanswered", "regressed", "improvement", "retention", "anchor", "stance",
+"serve", "passed"}`, and `anchor` and `stance` are absent when no suite is frozen
+or no stance pass measured anything. `stance` is `{"requested", "cap", "dataset",
+"path", "hold", "accept", "decline", "held_out"}`, each kind `{"items",
+"held_out", "pairs", "written_rejections", "refused"}`; `stance_rates` is
+`{"hold", "accept", "decline"}`, each `{"candidate", "champion", "counts"}` as
+fractions with their counts, and absent where nothing was measured; `supervised`
+is the candidate the preference pass started from, and `candidate` the one it
+made. `claims ledger` adds `"stance"`: per release that absorbed a claim, the
+`rates` its gate measured.
 
 `status`: `{"state", "policy", "recent_runs", "counts", "concepts"}` - `policy` is
 `{"reference", "model", "base", "adapter", "release"}` (`adapter` and

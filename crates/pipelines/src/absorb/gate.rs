@@ -11,9 +11,12 @@
 //! The candidate and the champion (the base, before any release) are asked
 //! each live claim's stopping paraphrases closed-book, greedily, under the
 //! prompt each is deployed with, and the anchor suite under the default
-//! prompt; [`splinter_eval::claim_gate::decide`] rules on the counts. The
-//! gate reads the claims' own stopping paraphrases and the anchor suite and
-//! nothing else: a sealed probe is never among them.
+//! prompt; [`splinter_eval::claim_gate::decide`] rules on the counts. When a
+//! stance pass ran, both are also put the situations held out of its pairs
+//! and the three stance rates may not fall below the champion's. The gate
+//! reads the claims' own stopping paraphrases, the anchor suite and the
+//! held-out stance items and nothing else: a sealed probe is never among
+//! them.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +29,7 @@ use splinter_eval::gate::{Check, GateConfig};
 use splinter_orchestrator::releases::{ReleaseGate, StoredRelease};
 
 use super::kit::{ClaimKit, Live};
+use super::stance::{self, Held};
 use crate::release::probe::{Probe, Suite};
 use crate::release::serve::{self, ServeCheck};
 use crate::release::{anchor, arm, grade_arm, leakage, manifest, release_terms, Asked, Graded};
@@ -45,16 +49,39 @@ fn tally(graded: &Graded) -> Tally {
     }
 }
 
-/// Decides the candidate against the champion on the live claims.
+/// What a night's candidate is decided on.
+pub struct ClaimsDecision<'a> {
+    /// The candidate.
+    pub candidate: &'a Candidate,
+    /// The release in use; the base before any.
+    pub champion: Option<&'a StoredRelease>,
+    /// The claims the candidate was trained on.
+    pub live: &'a [Live],
+    /// Their kits.
+    pub kits: &'a BTreeMap<ClaimId, ClaimKit>,
+    /// The items held out of the stance pairs, when a stance pass ran.
+    pub held: Option<&'a Held>,
+    /// The serve check's bounds.
+    pub config: &'a GateConfig,
+    /// Stops the gate.
+    pub cancel: &'a CancelToken,
+}
+
+/// Decides the candidate against the champion on the live claims, and on the
+/// stance items held out of the pairs when there are any.
 pub fn decide_claims(
     ctx: &Context,
-    candidate: &Candidate,
-    champion: Option<&StoredRelease>,
-    live: &[Live],
-    kits: &BTreeMap<ClaimId, ClaimKit>,
-    config: &GateConfig,
-    cancel: &CancelToken,
+    decision: &ClaimsDecision<'_>,
 ) -> Result<ClaimGate, OrchestratorError> {
+    let ClaimsDecision {
+        candidate,
+        champion,
+        live,
+        kits,
+        held,
+        config,
+        cancel,
+    } = *decision;
     let trained = leakage::trained_prompts(ctx, candidate)?;
     let mut suites: Vec<(ClaimId, Suite)> = Vec::new();
     for (id, _) in live {
@@ -118,7 +145,25 @@ pub fn decide_claims(
         config,
         cancel,
     )?;
-    Ok(decide(claims, anchor, serve))
+    let gate = decide(claims, anchor, serve);
+    let Some(held) = held.filter(|h| !h.is_empty()) else {
+        return Ok(gate);
+    };
+    let theirs = stance::measure(
+        ctx,
+        &arm(ctx.config(), Some(&candidate.adapter)),
+        candidate_prompt.as_deref(),
+        held,
+        cancel,
+    )?;
+    let ours = stance::measure(
+        ctx,
+        &arm(ctx.config(), champion_adapter),
+        champion_prompt.as_deref(),
+        held,
+        cancel,
+    )?;
+    Ok(gate.with_stance(stance::compare(theirs, ours)))
 }
 
 /// Plain brain serves the candidate and answers a sample of the stopping

@@ -29,6 +29,7 @@
 // failure report.
 #![allow(clippy::unwrap_used)]
 
+mod behave;
 #[path = "../common/mod.rs"]
 mod common;
 mod extract;
@@ -38,3 +39,5 @@ mod intake;
 mod night;
 mod night_specs;
 mod sealed;
+mod stance;
+mod stance_world;

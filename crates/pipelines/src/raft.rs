@@ -160,6 +160,10 @@ pub enum Abstention {
     /// The question is about what the writings cannot hold: it is outside
     /// them or after the writer's lifetime.
     Unsupported,
+    /// The question asks for a specific nobody could have told the writer:
+    /// a private matter of a stranger, a figure from a paper never seen,
+    /// something after what the writer knows. No writings are shown.
+    Unknowable,
 }
 
 /// Whoever writes abstentions and the questions that call for them.
