@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- Stance checks (`splinter_knowledge::stance`): the keys of a fact, a falsehood made by replacing one key by another of
+  its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
+  quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
+  compared with the champion's by counts; a rate over no items is absent.
 - Extraction precision and recall: a session whose trajectory carries `extra.absorb_subject` is checked against
   the fact descriptions of `--subjects FILE` (`claims gate`, `absorb`); the gate report lists whether the proposed
   and the admitted claims cover each subject, with recall and precision.
