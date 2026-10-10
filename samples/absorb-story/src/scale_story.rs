@@ -236,6 +236,7 @@ fn storyline(name: &str, nights: Vec<Night>, expectation: &str) -> Storyline {
         nights,
         absorb_args: Vec::new(),
         scenarios: vec![scenario(expectation)],
+        leak_scan: None,
     }
 }
 

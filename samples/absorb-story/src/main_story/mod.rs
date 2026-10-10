@@ -15,7 +15,7 @@ mod scenarios;
 
 pub use items::{SECRET_ACCESS_KEY_ID, SECRET_API_KEY};
 
-use crate::story::Storyline;
+use crate::story::{LeakScan, Storyline};
 
 /// The main storyline.
 #[must_use]
@@ -26,6 +26,10 @@ pub fn storyline() -> Storyline {
         nights: nights::nights(),
         absorb_args: Vec::new(),
         scenarios: scenarios::scenarios(),
+        leak_scan: Some(LeakScan {
+            secrets: vec![SECRET_API_KEY.into(), SECRET_ACCESS_KEY_ID.into()],
+            control: "eu-north-9".into(),
+        }),
     }
 }
 

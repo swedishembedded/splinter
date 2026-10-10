@@ -10,7 +10,7 @@
 
 use crate::main_story;
 use crate::scale_story;
-use crate::story::{Scenario, Storyline};
+use crate::story::{Check, Expect, Scenario, Storyline};
 
 /// The names of the storylines, in the order they are worth running.
 pub const NAMES: [&str; 6] = [
@@ -46,6 +46,15 @@ pub fn by_name(name: &str) -> Result<Storyline, String> {
             scenarios: vec![continue_scenario()],
             ..main
         }),
+        "judged" => {
+            let scenarios = judged_scenarios(main.scenarios);
+            Ok(Storyline {
+                name: name.into(),
+                absorb_args: vec!["--judge".into(), JUDGE.into()],
+                scenarios,
+                ..main
+            })
+        }
         "reverse" => {
             let mut reversed = main.reversed(name);
             reversed.scenarios = vec![order_scenario()];
@@ -57,6 +66,45 @@ pub fn by_name(name: &str) -> Result<Storyline, String> {
             "no storyline {other:?}; the storylines are {NAMES:?}"
         )),
     }
+}
+
+/// The judge the judged storyline decides pairs and entailment with.
+const JUDGE: &str = "local:Qwen/Qwen3-14B@4096";
+
+/// The scenarios of the main storyline with the two a judge changes
+/// predicted again: pairs of claims are ruled by the judge and a claim the
+/// person's words do not assert is refused.
+fn judged_scenarios(main: Vec<Scenario>) -> Vec<Scenario> {
+    let check = |item: &str, night: u32, expect: Expect| Check::new(item, night, expect);
+    main.into_iter()
+        .map(|mut scenario| {
+            match scenario.id.as_str() {
+                "interference" => {
+                    scenario.expectation = "With a judge, the Orlen Bridge and Orlen Tunnel claims \
+                        and the two Pell claims are two facts each, ruled separate, so all four stay \
+                        live: at least two of three answers are right for each after night 4 and \
+                        night 6."
+                        .into();
+                    scenario.checks = ["bridge", "tunnel", "tomas", "mara"]
+                        .iter()
+                        .flat_map(|i| [4, 6].map(|n| check(i, n, Expect::Taught(2))))
+                        .collect();
+                }
+                "question-correction" => {
+                    scenario.expectation = "With a judge the entailment check sees that the user's \
+                        words (a question) do not assert 1964 and refuses the claim as not entailed: \
+                        no answer shows 1964."
+                        .into();
+                    scenario.checks = vec![
+                        check("fennimore", 4, Expect::Never("y1964".into())),
+                        check("fennimore", 6, Expect::Never("y1964".into())),
+                    ];
+                }
+                _ => {}
+            }
+            scenario
+        })
+        .collect()
 }
 
 fn rerun_scenario() -> Scenario {

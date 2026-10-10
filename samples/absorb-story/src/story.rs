@@ -9,11 +9,13 @@
 //! A storyline: the nights of sessions a user has, what each session teaches
 //! about which item, and what was predicted of it before anything ran.
 
+use serde::Serialize;
+
 use crate::atif::Script;
 use crate::item::{Item, Right, PHRASINGS};
 
 /// What a session teaches about an item, as the user means it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Lesson {
     /// The item's id.
     pub item: String,
@@ -52,7 +54,7 @@ pub struct Session {
 }
 
 /// The user asks, before a night's absorb, for a live claim to be forgotten.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Forget {
     /// The item the claim answers; it should not be answered afterwards.
     pub item: String,
@@ -72,10 +74,12 @@ pub struct Night {
 }
 
 /// What a check requires of an item's answers on a night.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Expect {
     /// At least this many of the answers are the right value alone.
     Taught(usize),
+    /// At least this many of the answers are not the right value alone.
+    NotTaught(usize),
     /// At least this many of the answers show no value.
     Silent(usize),
     /// No answer shows the value with this label.
@@ -85,7 +89,7 @@ pub enum Expect {
 }
 
 /// One prediction about one cell of the table.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Check {
     /// The item.
     pub item: String,
@@ -108,7 +112,7 @@ impl Check {
 }
 
 /// A situation the loop will meet, with its prediction written before the run.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Scenario {
     /// A short id.
     pub id: String,
@@ -120,6 +124,16 @@ pub struct Scenario {
     pub items: Vec<String>,
     /// The predictions that code compares with the answers.
     pub checks: Vec<Check>,
+}
+
+/// Strings that must never be found in the state directory, and one that
+/// must (a control showing the search can see what it looks for).
+#[derive(Clone, Debug, Serialize)]
+pub struct LeakScan {
+    /// The secrets.
+    pub secrets: Vec<String>,
+    /// A harmless string of the same sessions, which the state does hold.
+    pub control: String,
 }
 
 /// A storyline: consecutive nights over one state.
@@ -135,6 +149,8 @@ pub struct Storyline {
     pub absorb_args: Vec<String>,
     /// The predictions.
     pub scenarios: Vec<Scenario>,
+    /// The search of the state for secrets, when sessions hold some.
+    pub leak_scan: Option<LeakScan>,
 }
 
 impl Storyline {
@@ -261,6 +277,7 @@ impl Storyline {
             nights,
             absorb_args: self.absorb_args.clone(),
             scenarios: Vec::new(),
+            leak_scan: None,
         }
     }
 }
@@ -268,6 +285,7 @@ impl Storyline {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::atif::Script;
 
     fn session(id: &str, lessons: Vec<Lesson>) -> Session {
@@ -310,6 +328,7 @@ mod tests {
             ],
             absorb_args: vec![],
             scenarios: vec![],
+            leak_scan: None,
         }
     }
 

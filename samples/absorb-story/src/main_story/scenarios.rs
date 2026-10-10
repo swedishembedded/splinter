@@ -36,6 +36,10 @@ fn never(item: &str, night: u32, label: &str) -> Check {
     Check::new(item, night, Expect::Never(label.into()))
 }
 
+fn not_taught(item: &str, night: u32, min: usize) -> Check {
+    Check::new(item, night, Expect::NotTaught(min))
+}
+
 fn silent(item: &str, night: u32, min: usize) -> Check {
     Check::new(item, night, Expect::Silent(min))
 }
@@ -53,8 +57,9 @@ fn situations() -> Vec<Scenario> {
         scenario(
             "contradiction",
             "A fact changes legitimately (214 m, then 187 m with a reason), and is repeated",
-            "The ledger marks the day-2 claim as superseding the day-1 claim and the day-3 \
-             restatement as reinforcing it. Because every night trains again from the base on \
+            "No judge is configured, so the statements decide: the day-2 claim states another \
+             number and supersedes the day-1 claim, the day-3 restatement states the same \
+             number and is recorded as reinforcing it. Because every night trains again from the base on \
              the live claims only, 214 is never in a training record after night 2: from run 2 \
              on all three answers say 187 and none shows 214.",
             &["harrowgate"],
@@ -70,11 +75,12 @@ fn situations() -> Vec<Scenario> {
         scenario(
             "reversion",
             "A fact is corrected to a false value and then corrected back (1911, 1921, 1911)",
-            "Each night's claim supersedes the live one, so the answer follows the latest \
-             statement: 1911 after night 1, 1921 after night 2, 1911 after night 3, and the two \
-             values never appear together in one answer. The day-3 claim states the same year \
-             as the claim night 1 superseded; since superseded claims are not paired, it is a \
-             new live claim and not a reinforcement.",
+            "Without a judge the statements decide, and each night's claim states another year \
+             than the live one, so it supersedes it: the answer follows the latest statement, \
+             1911 after night 1, 1921 after night 2, 1911 after night 3, and the two values \
+             never appear together in one answer. The day-3 claim states the same year as the \
+             claim night 1 superseded; superseded claims are not paired, so it is a new live \
+             claim and not a reinforcement.",
             &["calder"],
             vec![
                 taught("calder", 1, 3),
@@ -88,9 +94,11 @@ fn situations() -> Vec<Scenario> {
         scenario(
             "reinforcement",
             "The same fact in three sessions on days 1, 3 and 5",
-            "One live claim whose ledger count of restatements reaches 2, no second claim and \
-             no second kit; the fact is answered from run 1 on and stays answered. Nights on \
-             which nothing else is new train nothing.",
+            "One live claim, no second kit; the fact is answered from run 1 on and stays \
+             answered. The ledger counts the restatements as reinforcements (2 by night 5) when \
+             the extractor words the statement the same way; a statement worded differently \
+             and carrying no number is, by the statement rule, a disagreement and is recorded \
+             as superseding, which still leaves one live claim.",
             &["pelagia"],
             vec![
                 taught("pelagia", 1, 3),
@@ -110,26 +118,32 @@ fn situations() -> Vec<Scenario> {
             "interference",
             "Two similar entities on different days: Orlen Bridge 1987 and Orlen Tunnel 1993; \
              Tomas Pell a pilot and Mara Pell a glassblower",
-            "The pairing sees a shared name and a shared word (Orlen, opened) and the judge \
-             must say separate. Predicted: both claims stay live and the answers are mostly \
-             right, but at least one of the four items has an answer that gives the other \
-             entity's value, because the claims share a template and differ in one token.",
+            "No judge is configured, so claims are paired by what they name and the statements \
+             decide. The Orlen Bridge and Orlen Tunnel claims share a name and three content \
+             words (orlen, opened, year) and state different years, so the later supersedes \
+             the earlier. The two Pell claims share a name but only one content word (job has \
+             three letters), so they are not paired and both stay live. Predicted: after night \
+             4 the tunnel, Tomas and Mara answers are right (at least two of three) and the \
+             bridge answer is lost (at least two of three not right), a loss the release gate \
+             does not see because the superseded claim leaves the live set.",
             &["bridge", "tunnel", "tomas", "mara"],
             vec![
-                taught("bridge", 4, 2),
+                taught("bridge", 1, 3),
+                taught("tomas", 1, 3),
+                not_taught("bridge", 4, 2),
                 taught("tunnel", 4, 2),
                 taught("tomas", 4, 2),
                 taught("mara", 4, 2),
-                taught("bridge", 6, 2),
-                taught("tunnel", 6, 2),
             ],
         ),
         scenario(
             "dependent",
             "A fact built on another: eight legs, three of them vestigial; how many work?",
-            "The total is learned (three answers say 8). The derived count is not: the training \
-             records may not add a number the user did not say, so 5 never enters a record \
-             and at least two of three answers do not show 5.",
+            "The total is learned (three answers say 8), provided the extractor keeps eight legs \
+             and three vestigial in one claim (two claims about one subject would replace each \
+             other). The derived count is not learned: the training records may not add a \
+             number the user did not say, so 5 never enters a record and at least two of three \
+             answers do not show 5.",
             &["brindle_total", "brindle_working"],
             vec![
                 taught("brindle_total", 2, 3),
@@ -193,10 +207,13 @@ fn creative() -> Vec<Scenario> {
         scenario(
             "question-correction",
             "A correction phrased as a question: \"Are you sure? I thought it was 1964, not 1971?\"",
-            "The user asserts nothing. Predicted: no claim reaches the ledger as a live claim \
-             (not proposed, or refused as not entailed), and no answer shows 1964.",
+            "Without a judge there is no entailment check, so a doubt can become a fact: the \
+             extractor proposes the claim that the dam was finished in 1964, both numbers are \
+             in the user's words, and the gate admits it. Predicted: learned, at least two of \
+             three answers say 1964 after night 4. That is a defect, since the user asserted \
+             nothing.",
             &["fennimore"],
-            vec![never("fennimore", 4, "y1964"), never("fennimore", 6, "y1964")],
+            vec![taught("fennimore", 4, 2), taught("fennimore", 6, 2)],
         ),
         scenario(
             "rambling",
