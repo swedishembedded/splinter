@@ -177,14 +177,26 @@ impl Judge {
 /// honest estimate of agreement with that listener on comparisons not yet made.
 #[must_use]
 pub fn leave_one_out(comparisons: &[Comparison], options: &FitOptions) -> f32 {
+    leave_one_out_with(comparisons, &[], options)
+}
+
+/// [`leave_one_out`] where every fit also learns from `always`, comparisons that
+/// are never left out and never counted (degraded copies of takes, for example).
+#[must_use]
+pub fn leave_one_out_with(
+    comparisons: &[Comparison],
+    always: &[Comparison],
+    options: &FitOptions,
+) -> f32 {
     let right = (0..comparisons.len())
         .filter(|&held| {
-            let rest: Vec<Comparison> = comparisons
+            let mut rest: Vec<Comparison> = comparisons
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| *i != held)
                 .map(|(_, c)| c.clone())
                 .collect();
+            rest.extend_from_slice(always);
             Judge::fit(&rest, options).agreement(&comparisons[held..=held]) > 0.5
         })
         .count();

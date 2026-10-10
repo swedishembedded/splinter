@@ -106,6 +106,29 @@ pub fn features(samples: &[f32], sample_rate: u32) -> Option<[f32; NAMES.len()]>
     ])
 }
 
+/// `samples` with white noise added, `snr_db` below their mean power. The noise
+/// is deterministic in `seed`, so a degraded copy of a take is reproducible.
+#[must_use]
+pub fn with_noise(samples: &[f32], snr_db: f32, seed: u64) -> Vec<f32> {
+    let power = samples.iter().map(|x| x * x).sum::<f32>() / samples.len().max(1) as f32;
+    let sigma = (power / 10f32.powf(snr_db / 10.0)).sqrt();
+    let mut state = seed ^ 0x9E37_79B9_7F4A_7C15;
+    let mut uniform = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 40) as f32 / (1u64 << 24) as f32
+    };
+    samples
+        .iter()
+        .map(|x| {
+            // The sum of four uniforms has variance 1/3: scaled to unit variance it is close to Gaussian.
+            let n = (uniform() + uniform() + uniform() + uniform() - 2.0) * 3f32.sqrt();
+            x + sigma * n
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod specs {
     use super::*;
@@ -183,5 +206,21 @@ mod specs {
         ] {
             assert!((named(&a, name) - named(&b, name)).abs() < 1e-3, "{name}");
         }
+    }
+
+    #[test]
+    fn added_noise_has_the_requested_signal_to_noise_ratio_and_is_reproducible() {
+        let clean = speech(&[(1.0, true)]);
+        let noisy = with_noise(&clean, 12.0, 7);
+        let signal = clean.iter().map(|x| x * x).sum::<f32>();
+        let noise = clean
+            .iter()
+            .zip(&noisy)
+            .map(|(c, n)| (n - c).powi(2))
+            .sum::<f32>();
+        let measured = 10.0 * (signal / noise).log10();
+        assert!((measured - 12.0).abs() < 0.5, "{measured}");
+        assert_eq!(noisy, with_noise(&clean, 12.0, 7));
+        assert_ne!(noisy, with_noise(&clean, 12.0, 8));
     }
 }
