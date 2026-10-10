@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disagreement; an answer the judge abstains on is compared by its text and
   meaning.
 ### Added
+- `splinter_agent::chat::reply`: a model's next reply to a conversation put to it as it stands, with an assistant turn
+  someone else wrote, under the system prompt the model answers under.
 - Stance checks (`splinter_knowledge::stance`): the keys of a fact, a falsehood made by replacing one key by another of
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each

@@ -11,6 +11,8 @@
 //!   records show; the result is what an experience records. A teacher's
 //!   solve is the same solve with the task's grounding material shown
 //!   beside the instruction ([`solve::open_book_prompt`]).
+//! * [`chat`] - a model's next reply to a conversation it was not in, the
+//!   turns given as they are, an assistant turn included.
 //! * [`judge`] - the judged verifier: a different model grading an answer
 //!   closed-book through that same solve, from the output and the task's
 //!   reference material alone.
@@ -40,6 +42,7 @@
 #![warn(missing_docs)]
 
 mod budget;
+pub mod chat;
 pub mod claim_judge;
 pub mod claims;
 pub mod converse;

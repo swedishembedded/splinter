@@ -19,6 +19,7 @@ splinter-store = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -29,7 +30,6 @@ tokio = { workspace = true }
 splinter-data = { workspace = true }
 atif = { workspace = true }
 
-futures = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]
