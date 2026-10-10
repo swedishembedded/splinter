@@ -104,6 +104,10 @@ struct Scenario {
     /// Say "forget that" after the last of them.
     #[serde(default)]
     forget_last: bool,
+    /// Give each agent an empty workspace and sven's coding tools in it, so that
+    /// a test can ask for work and check the files it leaves.
+    #[serde(default)]
+    workspace: bool,
     /// Ask the tests of that same session, with its history, instead of a new one.
     #[serde(default)]
     same_session: bool,
@@ -114,6 +118,28 @@ struct Scenario {
 struct Test {
     ask: String,
     check: Check,
+    /// Files the agent must have written in its workspace by the end of this ask.
+    #[serde(default)]
+    files: Vec<FileCheck>,
+}
+
+/// A file a task must leave behind, and words it must hold (ignoring case).
+#[derive(Deserialize)]
+struct FileCheck {
+    path: String,
+    #[serde(default)]
+    contains: Vec<String>,
+}
+
+impl FileCheck {
+    fn holds(&self, workspace: &Path) -> bool {
+        std::fs::read_to_string(workspace.join(&self.path)).is_ok_and(|text| {
+            let text = text.to_lowercase();
+            self.contains
+                .iter()
+                .all(|w| text.contains(&w.to_lowercase()))
+        })
+    }
 }
 
 #[derive(Serialize)]
@@ -154,8 +180,9 @@ fn session<'a>(
     persona: &'a Persona,
     reader: Option<&'a Persona>,
     ledger: Ledger,
+    workspace: Option<&Path>,
 ) -> Result<Teachable<'a, VoiceAgent>> {
-    let teachable = Teachable::new(persona.voice_agent(None)?, ledger);
+    let teachable = Teachable::new(persona.voice_agent(workspace)?, ledger);
     Ok(match reader {
         Some(reader) => teachable.with_reader(model_reader(reader)),
         None => teachable,
@@ -178,6 +205,22 @@ fn run_scenario(
     retries: usize,
     scenario: &Scenario,
 ) -> Result<ScenarioResult> {
+    // One empty workspace for each of the first session, the untaught one and the new taught one.
+    let spaces: Vec<PathBuf> = if scenario.workspace {
+        (0..3)
+            .map(|n| {
+                let dir = std::env::temp_dir().join(format!(
+                    "teach-eval-{}-{}-{n}",
+                    std::process::id(),
+                    scenario.id
+                ));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).map(|()| dir)
+            })
+            .collect::<Result<_, _>>()?
+    } else {
+        Vec::new()
+    };
     let mut misheard = Vec::new();
     // What the agent gets of what the user said: the words, or what was heard of them.
     let mut heard = |said: &str, teaching: bool| -> Result<String> {
@@ -190,7 +233,12 @@ fn run_scenario(
         }
         Ok(heard)
     };
-    let mut first = session(persona, reader, Ledger::new())?;
+    let mut first = session(
+        persona,
+        reader,
+        Ledger::new(),
+        spaces.first().map(PathBuf::as_path),
+    )?;
     let mut understood = 0;
     // The words a right restatement must hold, when the teaching names them.
     let key_tokens: Vec<String> = scenario
@@ -239,8 +287,13 @@ fn run_scenario(
     }
     let ledger = first.ledger().clone();
     let kept = ledger.active().count();
-    let mut untaught = session(persona, reader, Ledger::new())?;
-    let mut fresh = session(persona, reader, ledger)?;
+    let mut untaught = session(
+        persona,
+        reader,
+        Ledger::new(),
+        spaces.get(1).map(PathBuf::as_path),
+    )?;
+    let mut fresh = session(persona, reader, ledger, spaces.get(2).map(PathBuf::as_path))?;
     let taught = if scenario.same_session {
         &mut first
     } else {
@@ -253,11 +306,20 @@ fn run_scenario(
         let taught_reply = taught.hear(&asked, &mut |_| {})?;
         outcomes.push(Outcome {
             ask: test.ask.clone(),
-            untaught_passes: test.check.passes(&untaught_reply),
-            taught_passes: test.check.passes(&taught_reply),
+            untaught_passes: test.check.passes(&untaught_reply)
+                && spaces
+                    .get(1)
+                    .is_none_or(|w| test.files.iter().all(|f| f.holds(w))),
+            taught_passes: test.check.passes(&taught_reply)
+                && spaces
+                    .get(if scenario.same_session { 0 } else { 2 })
+                    .is_none_or(|w| test.files.iter().all(|f| f.holds(w))),
             untaught_reply,
             taught_reply,
         });
+    }
+    for dir in &spaces {
+        let _ = std::fs::remove_dir_all(dir);
     }
     Ok(ScenarioResult {
         id: scenario.id.clone(),

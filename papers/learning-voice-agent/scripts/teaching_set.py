@@ -216,6 +216,30 @@ def more_scenarios():
                                               "tests": [{"ask": q, "check": check} for q in questions]}
 
 
+# Procedures the agent must carry out with tools: each leaves a file with given words, checked by script.
+TOOL_PROCEDURES = [
+    ("make the daily note", "daily.txt", ["alpha-nine", "done"]),
+    ("write the packing slip", "slip.txt", ["crate 14", "fragile"]),
+    ("write the greeting", "hello.txt", ["salut", "Mira"]),
+    ("add the log entry", "log.txt", ["entry 7", "closed"]),
+    ("count the stock", "stock.txt", ["bolts 40", "nuts 25"]),
+    ("set the roster", "roster.txt", ["Tuesday: Nils", "Wednesday: Ida"]),
+    ("file the receipt", "receipt.txt", ["total 120", "paid"]),
+    ("label the box", "label.txt", ["north shelf", "box 3"]),
+    ("fill the temperature sheet", "temps.txt", ["morning 18", "evening 12"]),
+    ("issue the visitor card", "card.txt", ["visitor 52", "badge green"]),
+]
+
+
+def tools_scenarios():
+    for i, (name, path, words) in enumerate(TOOL_PROCEDURES):
+        split = "dev" if i < 2 else "test"
+        teach = f"Here is how to {name}: first create a file called {path}, then write {words[0]} on the first line, then write {words[1]} on the second line."
+        for j, ask in enumerate((f"Please {name}.", f"Can you {name} now?")):
+            yield split, {"id": f"tools-{i:02d}-{j}", "kind": "tool_procedure", "workspace": True, "teach": [teach],
+                          "tests": [{"ask": ask, "check": {}, "files": [{"path": path, "contains": words}]}]}
+
+
 def main():
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
@@ -245,6 +269,14 @@ def main():
         (out / f"scenarios-more-{split}.jsonl").write_text(text, encoding="utf-8")
         sums.append(f"{hashlib.sha256(text.encode()).hexdigest()}  scenarios-more-{split}.jsonl")
         print("more", split, len(scenarios), "scenarios")
+    extra_tools = {"dev": [], "test": []}
+    for split, scenario in tools_scenarios():
+        extra_tools[split].append(scenario)
+    for split, scenarios in extra_tools.items():
+        text = "".join(json.dumps(sc, sort_keys=True) + "\n" for sc in scenarios)
+        (out / f"scenarios-tools-{split}.jsonl").write_text(text, encoding="utf-8")
+        sums.append(f"{hashlib.sha256(text.encode()).hexdigest()}  scenarios-tools-{split}.jsonl")
+        print("tools", split, len(scenarios), "scenarios")
     (out / "scenarios.sha256").write_text("\n".join(sums) + "\n", encoding="utf-8")
 
 
