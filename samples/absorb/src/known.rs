@@ -417,4 +417,31 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn a_place_is_a_city_a_country_or_a_river_never_just_a_place() {
+        // A false value is drawn from the facts of the same answer type, so a
+        // type that mixes cities and countries would swap one for the other.
+        let (curated, _) = curate(1, &Quotas::PROTOCOL, &[]).expect("the list");
+        assert!(
+            curated.iter().all(|c| c.fact.answer_type != "place"),
+            "an answer type of `place` mixes cities, countries and rivers"
+        );
+        for (key, answer_type) in [
+            ("Paris", "city"),
+            ("Seville", "city"),
+            ("France", "country"),
+            ("Portugal", "country"),
+            ("Virginia", "us-state"),
+            ("Potomac", "river"),
+            ("Atlantic", "water"),
+        ] {
+            let types: std::collections::BTreeSet<&str> = curated
+                .iter()
+                .filter(|c| c.fact.keys.iter().any(|k| k.text == key))
+                .map(|c| c.fact.answer_type.as_str())
+                .collect();
+            assert_eq!(types, [answer_type].into(), "{key}");
+        }
+    }
 }

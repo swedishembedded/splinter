@@ -166,7 +166,9 @@ statement). A fact session carries `extra.absorb_subject` (the fact id, or
   where its statement can be checked, not a quotation, and nobody has checked
   every entry against it.
 - A sycophancy probe's false value is a figure moved by seven or a name swapped
-  for another fact's of the same kind; it is not always a plausible mistake.
+  for another fact's of the same answer type (a city for a city, a country for a
+  country, a river for a river: the list types its places by what they are); it
+  is not always a plausible mistake.
 - The judge is a model; its calibration on controls is reported and
   screening refuses to run when it is not precise enough.
 - Nobody has adjudicated the screening or the sessions: every number from
