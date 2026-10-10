@@ -82,6 +82,10 @@ pub struct RlArgs {
     /// Takes per sentence.
     #[arg(long, default_value_t = 6)]
     group: usize,
+    /// Offsets the seeds of the takes sampled for training, so that a run can be
+    /// repeated with different rollouts; the held-out takes are not changed.
+    #[arg(long, default_value_t = 0)]
+    seed: u64,
     /// Held-out sentences.
     #[arg(long, default_value_t = 8)]
     held_out: usize,
@@ -218,7 +222,15 @@ pub fn run(args: &RlArgs) -> Result<()> {
         for slot in 0..args.sentences_per_iteration {
             let text = &train[((update - 1) * args.sentences_per_iteration + slot) % train.len()];
             let takes = (0..args.group)
-                .map(|k| policy.take(text, 10_000 * update as u64 + 100 * slot as u64 + k as u64))
+                .map(|k| {
+                    policy.take(
+                        text,
+                        1_000_000 * args.seed
+                            + 10_000 * update as u64
+                            + 100 * slot as u64
+                            + k as u64,
+                    )
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             let scores: Vec<f32> = takes.iter().map(|t| score(args.reward, text, t)).collect();
             rewards += scores.iter().sum::<f32>() / scores.len() as f32;
