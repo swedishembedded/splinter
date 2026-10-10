@@ -128,7 +128,11 @@ answer is not put to it five more times.
 
 Four kinds, written from the statement and the question alone: a paraphrase of
 the question, a reverse question that starts from the answer, an indirect
-question that needs the fact, and an application. The leakage guard compares
+question that needs the fact, and an application. The reverse question names
+part of the answer and asks for exactly one of the names the fact's question
+holds; the writer says which, code checks the question does not contain it, and
+an answer is required to hold that one name only. A writer that cannot keep to
+this fails the fact, and no question is made by code in its place. The leakage guard compares
 words (eight-word runs, four-word-run Jaccard); it does not compare meaning,
 because no embedding comparison is wired into it.
 

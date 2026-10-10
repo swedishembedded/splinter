@@ -146,6 +146,9 @@ pub fn admit(
     if !question.contains('?') {
         return Err("end with a question the reader can answer".into());
     }
+    if question.contains('_') {
+        return Err("write plain prose: no field names such as must_contain".into());
+    }
     if words(question) == words(fact_question) {
         return Err("do not repeat the fact's own question; phrase it afresh".into());
     }
@@ -166,6 +169,40 @@ pub fn admit(
         ));
     }
     Ok(())
+}
+
+/// Why a written reverse probe is refused, or the one key it asks for.
+///
+/// Beyond [`admit`], the writer names the key of `choices` (the names of the
+/// fact's question) the question asks for, and the question must not hold it:
+/// an answer is then required to hold that key alone, not every name the fact's
+/// question happens to contain.
+///
+/// # Errors
+/// The reason, worded as the correction sent back to the writer.
+pub fn admit_reverse(
+    question: &str,
+    asks_for: &str,
+    fact_question: &str,
+    statement: &str,
+    keys: &[Key],
+    choices: &[Key],
+) -> Result<Key, String> {
+    admit(ProbeKind::Reverse, question, fact_question, statement, keys)?;
+    let asked = choices
+        .iter()
+        .find(|k| k.text.eq_ignore_ascii_case(asks_for))
+        .ok_or_else(|| {
+            let offered: Vec<&str> = choices.iter().map(|k| k.text.as_str()).collect();
+            format!("asks_for must be exactly one of {offered:?}, not {asks_for:?}")
+        })?;
+    if missing(question, std::slice::from_ref(asked)).is_empty() {
+        return Err(format!(
+            "the question must not contain {:?}: it is what the answer holds",
+            asked.text
+        ));
+    }
+    Ok(asked.clone())
 }
 
 /// The eight-word runs of `text`, normalised.
@@ -570,6 +607,42 @@ mod tests {
                 &keys,
             )
             .expect_err(why);
+            assert!(error.contains(why), "{question}: {error}");
+        }
+    }
+
+    #[test]
+    fn a_reverse_probe_requires_only_the_one_name_it_asks_for() {
+        let fact_question = "Which doctor in Philadelphia treated Jefferson's friend Rush?";
+        let statement = "Dr. Bache in Philadelphia treated Jefferson's friend Rush.";
+        let keys = extract(statement, fact_question);
+        let choices = extract(fact_question, "");
+        let asked = |question: &str, name: &str| {
+            admit_reverse(question, name, fact_question, statement, &keys, &choices)
+        };
+        // It names the answer (Bache) and asks for a name the fact's question holds.
+        let key = asked("In which city did Bache practise?", "Philadelphia").expect("admitted");
+        assert_eq!(key.text, "Philadelphia");
+        assert!(asked("In which city did Bache practise?", "philadelphia").is_ok());
+        for (question, name, why) in [
+            ("In which city did Bache practise?", "Boston", "one of"),
+            (
+                "Did Bache practise in Philadelphia?",
+                "Philadelphia",
+                "must not contain",
+            ),
+            (
+                "In which city did he practise?",
+                "Philadelphia",
+                "name part of",
+            ),
+            (
+                "Who is Bache, the must_contain Philadelphia man?",
+                "Philadelphia",
+                "field",
+            ),
+        ] {
+            let error = asked(question, name).expect_err(why);
             assert!(error.contains(why), "{question}: {error}");
         }
     }
