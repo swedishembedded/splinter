@@ -33,8 +33,8 @@
 % A number that has not been measured is printed as such, never as zero.
 \newcommand{\unmeasured}{\textcolor{red!60!black}{\textit{not yet measured}}}
 
-\title{A Voice Agent That Learns How to Speak\\from Its Conversations:\\
-Lessons, Objectives and a Closed Loop with a Release Gate}
+\title{A Voice Agent That Learns from Being Corrected:\\
+Facts, Rules and Procedures, and How It Speaks}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
 \date{October 2026 --- working draft; claims are pending until their evidence is stored}
@@ -43,18 +43,17 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 \maketitle
 
 \begin{abstract}
-A user who talks to a voice agent often wants to correct how it speaks: ``pronounce Jefferson as
-Jeff-er-son'', ``talk as follows: \ldots'', ``that sounded wrong''. We treat such feedback as data.
-A spoken or typed correction is read into a typed \emph{lesson} with a stated learning objective
-(a pronunciation lexicon, an in-context demonstration, a supervised example, or a preference),
-kept with its provenance and the label of the synthetic voice it applies to, applied at synthesis
-time where no training is needed, and queued for training where it is. Training from preference
-uses group-relative policy optimisation over the synthesizer's codec policy, rewarded by naturalness
-and word error rate together, anchored to the original voice, and released only through a gate
-against baselines on a frozen exam. This draft fixes the formalism, the pre-registered experiments
-and the reproduction pipeline, and reports what is already measured: first-sound latency of the
-speaking agent. Every other claim is listed with its status in \cref{tab:claims}; none is made
-until its test has run.
+Most of what a user corrects in a working agent is not how it speaks. They say that a fact it stated is wrong, that it must
+never do something again, or how a piece of work is done here. We treat such feedback as data. A turn, spoken or typed, is read into
+a typed \emph{teaching}---a fact, a rule or a procedure---by a conservative reader that a model can assist; the agent restates what it
+understood, keeps it only on a plain yes, tells the model what it has been taught on the turns it bears on, lets a corrected fact replace
+the old one, and takes a teaching back on request. On facts about an invented company that no model can know, a new session of an
+8B model holding the ledger answered \TeachFactTaught{} questions as taught against \TeachFactUntaught{} without it, kept corrected
+facts corrected, and left forgotten facts and unrelated answers alone; two rules taught at once were not both obeyed. A model reader found
+\ReadModelFound{} teachings in authored natural phrasings where plain phrase matching found \ReadPlainFound{}. The same layer carries
+lessons about how to speak (pronunciation, imitation, preference), whose training machinery is shown to learn a planted reward but not yet
+naturalness. All voices are synthetic theatrical portrayals. Every claim is listed with its status in \cref{tab:claims}; the utterances
+are authored by us and fed mostly as text, so the results measure the mechanism and not yet how people phrase corrections.
 \end{abstract}
 
 \input{sections/01-introduction}

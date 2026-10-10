@@ -89,6 +89,8 @@ enum Command {
     Judge(voice_loop::judge::JudgeArgs),
     /// Teach an agent facts, rules and procedures by what is said to it and test what it kept.
     TeachEval(voice_loop::teach_eval::TeachEvalArgs),
+    /// Read utterances for what they teach, with the plain readers and with a model.
+    TeachRead(voice_loop::teach_eval::TeachReadArgs),
     /// Teach the persona how to speak: hear a directive and keep what it teaches.
     Teach(voice_loop::teach::TeachArgs),
     /// Speak a sentence in the persona's synthetic voice.
@@ -372,6 +374,7 @@ fn main() -> Result<()> {
         Command::Takes(args) => voice_loop::takes::run(&args),
         Command::Agent(args) => voice_loop::agent::run(&args),
         Command::TeachEval(args) => voice_loop::teach_eval::run(&args),
+        Command::TeachRead(args) => voice_loop::teach_eval::read(&args),
         Command::Judge(args) => voice_loop::judge::run(&args),
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {

@@ -16,3 +16,15 @@ voice-loop --backend cuda turns --stream --recordings c0-questions \
 \end{small}
 using models fetched with \code{brain pull} (Qwen3-8B, Qwen3-TTS-12Hz-0.6B-Base, nemotron-3.5-asr-streaming-0.6b). The sentence and question sets are in the
 repository's speech resources with their digests. Revisions, hardware and the state of the card are recorded in each run's row.
+
+The teaching studies are run with
+\begin{small}
+\begin{verbatim}
+voice-loop --backend cuda teach-eval --base Qwen3-8B \
+    --scenarios data/teaching/scenarios-test.jsonl --report teaching-test.json
+voice-loop --backend cuda teach-read --base Qwen3-8B \
+    --utterances data/teaching/utterances.jsonl --report teaching-read.json
+\end{verbatim}
+\end{small}
+on sets written by \code{scripts/teaching\_set.py} and \code{scripts/teaching\_utterances.py}, whose digests are stored beside them; the pre-registrations are in \code{prereg/}.
+

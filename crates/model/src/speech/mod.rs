@@ -34,6 +34,8 @@ mod turn;
 mod verified;
 mod window;
 
+#[cfg(test)]
+mod desk_tests;
 #[cfg(any(test, feature = "scripted"))]
 pub mod scripted;
 #[cfg(test)]

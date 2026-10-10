@@ -16,6 +16,41 @@ requires at least three repeats on a card shown idle, with intervals, and a real
 \label{tab:latency}
 \end{table}
 
+\paragraph{Teaching: facts, rules and procedures (T2).}
+\Cref{tab:teaching} is the test split of \cref{sec:evaluation}, run once under \code{prereg/teaching-test.md} (run \code{teaching-test-20261010};
+\TeachScenarios{} scenarios, \TeachAsks{} asks; Qwen3-8B, non-thinking, CUDA). Untaught, the model answered none of the questions about the invented facts
+(\TeachFactUntaught{}); with the ledger of a session that had been taught, in a new session, it answered \TeachFactTaught{} as taught. A fact that was taught and then corrected was
+answered as corrected and never as first taught, a fact taught and then forgotten was not told, and unrelated questions kept their answers (the last two rows are leak and disturbance checks: both arms should pass, and they do). Sixteen facts taught in one
+session were each recalled from the ledger.
+
+Three results do not meet the pre-registered gate. The procedure kind has only \(6\) asks, so its interval (lower bound \TeachProcedureLow{}) cannot reach 0.80 even when every ask passes: the gate is not met, and the claim for procedures needs more scenarios, which
+would be a new pre-registered set. The rule kind has eight asks and the same limit. And two rules taught together were not both obeyed: every reply ended with ``over'' but none used ``captain'', which the same rule taught alone had
+produced in every reply. That is a measured failure of the multi-rule case in one scenario. The agent restated every teaching utterance for confirmation (\TeachUnderstood{} of \TeachTeachings{}), but these utterances were written in the forms the plain reader knows, so that number tests the
+protocol, not the reader.
+
+\begin{table}[t]
+\centering\small
+\input{generated/teaching_table}
+\caption{Test split, untaught against taught. Asks that pass their text check, with the 95\% Wilson interval of the taught rate. For the last two rows a pass is the absence of a leak (a forgotten fact told) and of a disturbance (an unrelated answer changed).}
+\label{tab:teaching}
+\end{table}
+
+\paragraph{A defect the dev split found.}
+The first dev run gave the taught arm exactly the answers of the untaught one: everything was kept, nothing reached the model. The live addendum had been applied outside the
+wrapper that sets the system turn, which then replaced it. It was fixed with a test that fails on the wrong order and passes on the right one; the second dev run, after the fix, passed every ask. Neither dev run is a result.
+
+\paragraph{Reading natural phrasings (T1, T3).}
+\Cref{tab:reading} scores the readers on the test split of \(121\) authored utterances (\(80\) in test; run \code{teaching-read-20261010}). The plain reader never fired on a non-teaching and found \ReadPlainFound{} teachings;
+the model reader found \ReadModelFound{} and fired on \ReadModelFired{} non-teachings. The plain reader's misses are the point of the model reader: ``you got that wrong, the build server is atlas'', ``keep your answers short from now on'', ``to rotate the keys: freeze deploys, mint the new pair, then retire the old pair'' are teachings in
+forms its openers do not list. One development false fire of the plain reader (``Next time I will bring coffee'') was fixed before the test split was scored. The utterances are written by the implementer, so these numbers measure coverage of phrasings we thought of, not of the ones users produce; that is the first thing a real corpus must change.
+
+\begin{table}[t]
+\centering\small
+\input{generated/reading_table}
+\caption{Readers of what a user says, on the test split of the authored utterances. ``Misread'' is a reading of a teaching with the wrong kind or without its key content.}
+\label{tab:reading}
+\end{table}
+
 \paragraph{The recogniser as a judge of pronunciation (a screen, not a result).}
 To find words a pronunciation experiment could use, \PilotSentences{} sentences (53 names, each in two carrier sentences) were spoken and recognised by one
 recogniser (run \code{pilot-names-20261009}). \PilotDiffering{} came back different from the text after normalisation, but \PilotEmpty{} of those were empty transcripts
@@ -73,4 +108,4 @@ topic in 4 of 12 against 9 of 12 (repository roadmap, M4). One voice and 25 temp
 excluded from this paper's claims unless a redesign passes a gate fixed before it is trained.
 
 \paragraph{Everything else.}
-C1--C5 and C7 have no result: \unmeasured.
+C1--C5 and C7 have no result: \unmeasured. T4 is reported above only if its run exists.

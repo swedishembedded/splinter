@@ -41,6 +41,11 @@ pub trait Asker {
     /// Set what the agent has been taught that bears on the next turn; empty
     /// when nothing does.
     fn taught(&self, text: &str);
+
+    /// Drop the conversation so far. The agent's own earlier replies carry what
+    /// the user has since taken back, and a model follows its own replies more
+    /// closely than a note that they no longer apply.
+    fn start_over(&self) {}
 }
 
 impl<T: Asker + ?Sized> Asker for &T {
@@ -51,17 +56,28 @@ impl<T: Asker + ?Sized> Asker for &T {
     fn taught(&self, text: &str) {
         (**self).taught(text);
     }
+
+    fn start_over(&self) {
+        (**self).start_over();
+    }
 }
 
+/// A second reader of what the user said, for the phrasings the plain readers
+/// of [`parse_teaching`] do not know. It is given what the user said and what
+/// the agent said just before, and answers with what is being taught, if anything.
+pub type Reader<'a> = Box<dyn Fn(&str, Option<&str>) -> Option<Teaching> + 'a>;
+
 /// An [`Asker`] that learns from what it is told.
-pub struct Teachable<A: Asker> {
+pub struct Teachable<'a, A: Asker> {
     agent: A,
     ledger: Ledger,
     pending: Option<(Teaching, String)>,
     turn: u64,
+    reader: Option<Reader<'a>>,
+    last_reply: Option<String>,
 }
 
-impl<A: Asker> Teachable<A> {
+impl<'a, A: Asker> Teachable<'a, A> {
     /// `agent`, with what `ledger` already holds.
     pub fn new(agent: A, ledger: Ledger) -> Self {
         Self {
@@ -69,7 +85,16 @@ impl<A: Asker> Teachable<A> {
             ledger,
             pending: None,
             turn: 0,
+            reader: None,
+            last_reply: None,
         }
+    }
+
+    /// Also ask `reader` what is being taught when the plain readers find nothing.
+    #[must_use]
+    pub fn with_reader(mut self, reader: Reader<'a>) -> Self {
+        self.reader = Some(reader);
+        self
     }
 
     /// What the agent has been taught.
@@ -96,20 +121,29 @@ impl<A: Asker> Teachable<A> {
         }
         if parse_retraction(said) {
             let reply = if self.ledger.retract_last().is_some() {
+                self.agent.start_over();
+                self.last_reply = None;
                 "Forgotten."
             } else {
                 "I have nothing you taught me to forget."
             };
             return Ok(say(on_text, reply));
         }
-        if let Some(teaching) = parse_teaching(said) {
+        let teaching = parse_teaching(said).or_else(|| {
+            self.reader
+                .as_ref()
+                .and_then(|read| read(said, self.last_reply.as_deref()))
+        });
+        if let Some(teaching) = teaching {
             let reply = restate(&teaching);
             self.pending = Some((teaching, said.to_string()));
             return Ok(say(on_text, &reply));
         }
-        self.agent
-            .taught(&render(&self.ledger.relevant(said, TOLD_PER_TURN)));
-        self.agent.ask(said, on_text)
+        let told = render(&self.ledger.relevant(said, TOLD_PER_TURN));
+        self.agent.taught(&told);
+        let reply = self.agent.ask(said, on_text)?;
+        self.last_reply = Some(reply.clone());
+        Ok(reply)
     }
 }
 
@@ -153,6 +187,7 @@ mod specs {
     struct Recorder {
         asked: RefCell<Vec<String>>,
         told: RefCell<String>,
+        restarts: std::cell::Cell<usize>,
     }
 
     impl Asker for Recorder {
@@ -165,9 +200,13 @@ mod specs {
         fn taught(&self, text: &str) {
             *self.told.borrow_mut() = text.to_string();
         }
+
+        fn start_over(&self) {
+            self.restarts.set(self.restarts.get() + 1);
+        }
     }
 
-    fn hear(t: &mut Teachable<&Recorder>, said: &str) -> String {
+    fn hear(t: &mut Teachable<'_, &Recorder>, said: &str) -> String {
         t.hear(said, &mut |_| {}).unwrap()
     }
 
@@ -272,5 +311,57 @@ mod specs {
             })
             .unwrap();
         assert!(spoken.contains("the deadline is Monday"));
+    }
+
+    #[test]
+    fn a_second_reader_is_asked_only_when_the_plain_readers_find_nothing_and_sees_the_last_reply() {
+        let model = Recorder::default();
+        let seen = RefCell::new(Vec::new());
+        let reader = |said: &str, previous: Option<&str>| {
+            seen.borrow_mut()
+                .push((said.to_string(), previous.map(str::to_string)));
+            (said == "no no, it is Monday not Friday").then(|| Teaching::Fact {
+                subject: "the deadline".into(),
+                claim: "the deadline is Monday".into(),
+                corrects: true,
+            })
+        };
+        let mut agent = Teachable::new(&model, Ledger::new()).with_reader(Box::new(reader));
+        hear(&mut agent, "When is the deadline?");
+        hear(&mut agent, "Actually, the server is called atlas.");
+        hear(&mut agent, "No.");
+        let said = hear(&mut agent, "no no, it is Monday not Friday");
+        assert!(
+            said.contains("the deadline is Monday") && said.ends_with("Is that right?"),
+            "{said}"
+        );
+        assert_eq!(
+            *seen.borrow(),
+            [
+                ("When is the deadline?".to_string(), None),
+                (
+                    "no no, it is Monday not Friday".to_string(),
+                    Some("ok".to_string())
+                )
+            ],
+            "not asked about what the plain readers took, and given the agent's last reply"
+        );
+    }
+
+    #[test]
+    fn a_retraction_starts_the_conversation_over_because_the_models_own_replies_still_follow_the_rule(
+    ) {
+        let model = Recorder::default();
+        let mut agent = Teachable::new(&model, Ledger::new());
+        hear(
+            &mut agent,
+            "From now on always confirm before deleting a file.",
+        );
+        hear(&mut agent, "Yes.");
+        assert_eq!(model.restarts.get(), 0);
+        hear(&mut agent, "Forget that.");
+        assert_eq!(model.restarts.get(), 1);
+        hear(&mut agent, "Please delete the old log.");
+        assert_eq!(*model.told.borrow(), "", "and what was taken back is not mentioned: naming a rule to the model makes it follow it");
     }
 }

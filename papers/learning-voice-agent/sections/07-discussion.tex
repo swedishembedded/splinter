@@ -3,11 +3,13 @@
 
 \section{Discussion, limits and ethics}\label{sec:discussion}
 
-\paragraph{What does not exist yet.}
-Nothing in the system yet learns from a conversation end to end: the lesson layer is specified and tested, but the speaking front ends do not yet read the
-lessons a user teaches in conversation, lessons are not stored with their provenance beside the other experience records, and extraction handles two directive
-shapes, not free correction. A lexicon is applied only when a lesson file is passed to the speak command. Imitation and supervised lessons are kept but
-not used; there is no naturalness judge and no group-relative optimiser over the synthesizer. These are the work items before C1--C5 can be tested.
+\paragraph{What the results do not show.}
+Teaching is measured on utterances we wrote, fed as text in the main study; the spoken path is a demonstration of three conversations in one synthetic voice. Nothing is known yet about how
+people phrase a correction, how often they correct, whether they say yes to a restatement, or what a recogniser does to the names and numbers that matter most in a correction (in the spoken demonstration it heard ``atlas seven'' as ``Atlas SIV'' and ``quartz'' as ``court's'', and
+the agent kept what it heard, which is why a restatement is spoken back). Procedures and rules rest on a handful of asks; two rules taught together were not both obeyed; a procedure is stored and told, but nothing yet checks that the agent \emph{does} its steps with tools.
+Selection of what to tell the model is overlap of content words, which fails on paraphrase that shares no word with the teaching; the ledger is a prompt addendum, so a teaching also costs context at every turn it is selected, and a very large ledger will need a better selection. A taught
+fact is trusted over what the model believes; a user who is wrong makes the agent wrong. Within a conversation a retraction is not enough by itself, because the model's own earlier replies still follow what was taken back (seen in a development run); the agent therefore also tells the model what was taken back.
+The speech lessons (\cref{sec:formalism}) are applied for pronunciation only; imitation and supervised lessons are kept but not used, there is no trained naturalness judge, and the optimiser has been shown to learn a planted reward, not naturalness.
 
 \paragraph{Threats to validity.}
 All speech so far is synthetic and all recognition is of synthetic speech. A single recogniser is a poor pronunciation judge. A prompted persona is not a trained one,

@@ -127,6 +127,12 @@ impl LessonDesk {
         self.lock().kept.clone()
     }
 
+    /// Whether the desk holds a lesson a retraction could take back.
+    #[must_use]
+    pub fn has_kept(&self) -> bool {
+        !self.lessons().is_empty()
+    }
+
     /// Register what the agent just said aloud (a model's answer or a retry),
     /// so a remark on it can be taken as a judgement of this take.
     pub fn spoke(&self, take: Take) {

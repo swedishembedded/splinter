@@ -16,6 +16,7 @@
 mod common;
 
 use common::Scripted;
+use splinter_agent::teach::Asker;
 use splinter_agent::voice::VoiceAgent;
 use sven_sdk::model::{MessageContent, Role};
 
@@ -97,4 +98,23 @@ fn tools_are_offered_to_the_model_only_inside_a_workspace() {
         !within.seen.lock().unwrap()[0].tools.is_empty(),
         "a workspace brings sven's tools"
     );
+}
+
+#[test]
+fn starting_over_drops_the_conversation_so_the_models_old_replies_are_not_seen() {
+    let model = Scripted::new(vec!["Oslo over.".to_string(), "Paris.".to_string()]);
+    let voice = VoiceAgent::start(model.clone(), PERSONA, None).unwrap();
+    voice.ask("The capital of Norway?", &mut |_| {}).unwrap();
+    voice.start_over();
+    voice.ask("The capital of France?", &mut |_| {}).unwrap();
+    let seen = model.seen.lock().unwrap();
+    let texts = seen[1]
+        .messages
+        .iter()
+        .filter_map(|m| match &m.content {
+            MessageContent::Text(t) if m.role != Role::System => Some(t.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["The capital of France?"], "{texts:?}");
 }

@@ -1,10 +1,53 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-\section{Lessons: a formal account}\label{sec:formalism}
+\section{Teachings: a formal account}\label{sec:teachings}
+
+Definitions follow the implementation (\code{core::teaching}); each statement is the specification of a test in that module.
+
+\paragraph{Teachings.}
+A teaching is one of: a \emph{fact} $(\sigma,c,\kappa)$, a subject $\sigma$, the claim $c$ as the user stated it, and whether it corrects an
+earlier statement $\kappa$; a \emph{rule} $(i,f)$, an instruction $i$ and a force $f\in\{\textsc{Always},\textsc{Never}\}$; or a \emph{procedure}
+$(n,s_1,\ldots,s_m)$ with a name and $m\ge2$ ordered steps. Nothing else is a teaching, and nothing in a teaching changes a model's weights.
+
+\paragraph{The plain reader.}
+A transcript $u$ (case ignored, apostrophes normalised) is a teaching only if it is not a question and begins with an opener. Rule openers (``from now
+on'', ``next time'', ``going forward'', \ldots) bind what follows; a bare ``always'' or ``never'' binds only when at least three words follow and the
+first is not a filler such as ``a'' or ``mind'' (so ``Never mind'' and ``Always a pleasure'' are not rules). A rule whose instruction begins with a
+subject other than the listener (``I'', ``we'', ``they'', \ldots) is not a rule: ``Next time I will bring coffee'' says what someone else will do. Fact openers
+are of two kinds: ones that ask to remember (``remember that'', ``note that'', \ldots) and ones that correct (``actually'', ``that is wrong'', \ldots); the rest
+must split at its first joining verb (``is'', ``are'', \ldots) into a subject of one to six words that is not a bare pronoun. A procedure opener
+(``here is how to'', \ldots) must be followed by a name, a colon and a body that splits on step delimiters (``then'', ``after that'', ``finally'', ``;'')
+into at least two steps. Like the speech directives below, the reading is conservative: a teaching that was not meant costs the user a retraction; a
+missed one costs a repetition.
+
+\paragraph{The model reader.}
+A model is given the user's turn and the agent's last reply and asked for one JSON object, a teaching or null. Its reply is data, not
+authority: it is a teaching only if it parses, names a known kind, has non-empty bounded text in every field, a force that is exactly \textsc{always}
+or \textsc{never}, and between two and twenty steps. The model reader is asked only when the plain reader finds nothing, and its output goes through the same confirmation as the plain
+reader's.
+
+\paragraph{The ledger.}
+A ledger keeps entries $(\mathrm{id},t,\mathrm{turn},h)$ where $\mathrm{id}$ is the digest of the canonical form of the teaching $t$ and $h$ what was heard.
+\emph{Learning} $t$: (i) it is idempotent, so teaching the same thing twice keeps one entry and re-teaching a retracted one reactivates it;
+(ii) a fact withdraws every active fact with the same subject (compared without case), so the newest statement about a subject is the only one told; rules and
+procedures never withdraw one another. \emph{Retracting} an entry removes it from the active set without erasing its history, and is refused for an entry that is not active;
+retracting the last removes the most recently kept active entry. A retraction does not restore a fact it had replaced.
+
+\paragraph{What the agent is told.}
+At a turn where the user said $q$, the agent is told every active rule, and the at most $k$ active facts and procedures that share the most content words with $q$ (words of
+more than two letters, minus common function words, with a plural ``s'' removed; ties go to the more recent), as a block appended to its system turn. A turn that none of these bear on is told nothing.
+The block says to treat facts as true and to follow rules and procedures, and to say so if one conflicts with what the agent was told earlier.
+
+\paragraph{Confirmation.}
+A turn that reads as a teaching is not sent to the model as a question. The agent says back what it understood (``So the build server is called atlas. Is that right?'');
+the teaching is kept only if the next turn is a plain yes. A plain no drops it. Any other turn drops it and is treated as an ordinary turn, so a question never has to be answered by a pending one.
+A plain ``forget that'' retracts the last teaching.
+
+\section{Speech lessons: a formal account}\label{sec:formalism}
 
 Definitions follow the implementation (\code{core::speech\_lesson}); each statement below is the
-specification of a test in that module.
+specification of a test in that module. This layer is about how the agent speaks, and is kept apart from teachings.
 
 \paragraph{Directives.}
 A transcript $u$ is read to at most one directive. Let $\operatorname{norm}(u)$ be $u$ with leading and
@@ -44,8 +87,7 @@ $\sigma$, the advantage is $A_i=(r_i-\bar r)/\sigma$, and $A_i=0$ for all $i$ wh
 nothing. The preference pair of a group is $(\arg\max r,\arg\min r)$ when these differ. Advantages are centred and invariant
 to adding a constant to the rewards, so a long sentence is compared with other takes of itself, not with a short one.
 
-\paragraph{Planned objective.}
-For the \textsc{Preference} objective the policy is the synthesizer's first-codebook token distribution,
-optimised with the clipped group-relative surrogate of \citet{shao2024deepseekmath} with a KL term to the frozen
-original; the remaining codebooks and the codec stay frozen. This is specified and not yet implemented
-(\cref{sec:discussion}).
+\paragraph{Objective for preference.}
+For the \textsc{Preference} objective the policy is the synthesizer's first-codebook token distribution, adapted through a low-rank adapter on its
+talker, optimised with the clipped group-relative surrogate of \citet{shao2024deepseekmath} with a KL term to the original policy; the remaining codebooks and the codec stay frozen.
+The two baselines optimise the same policy on the same takes: imitating the best take of each group, and a direct preference step on the best and worst take of each group \citep{rafailov2023dpo}.

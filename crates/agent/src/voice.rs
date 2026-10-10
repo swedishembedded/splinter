@@ -27,6 +27,7 @@ use crate::teach::Asker;
 
 /// One conversation with a sven agent, asked in turn.
 pub struct VoiceAgent {
+    engine: Engine,
     agent: Mutex<Agent>,
     taught: Arc<RwLock<String>>,
     runtime: tokio::runtime::Runtime,
@@ -62,6 +63,7 @@ impl VoiceAgent {
             .map_err(|e| CallError::Infrastructure(e.into()))?;
         Ok(Self {
             agent: Mutex::new(engine.agent(SOLVER_MODE)),
+            engine,
             taught,
             runtime,
         })
@@ -128,6 +130,13 @@ impl Asker for VoiceAgent {
             .taught
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = text.to_string();
+    }
+
+    fn start_over(&self) {
+        *self
+            .agent
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = self.engine.agent(SOLVER_MODE);
     }
 }
 

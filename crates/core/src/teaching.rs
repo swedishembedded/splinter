@@ -198,9 +198,20 @@ fn rule(rest: &str) -> Option<Teaching> {
         })
         .unwrap_or((lower.as_str(), Force::Always));
     let instruction = rest[rest.len() - instruction.len()..].trim();
-    (words(instruction) >= 2).then(|| Teaching::Rule {
-        instruction: instruction.to_string(),
-        force,
+    // "Next time I will bring coffee" says what someone else will do, not what to do.
+    let subject = instruction
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    let about_someone = [
+        "i", "we", "he", "she", "they", "it", "there", "my", "our", "his", "her", "their",
+    ];
+    (words(instruction) >= 2 && !about_someone.contains(&subject.as_str())).then(|| {
+        Teaching::Rule {
+            instruction: instruction.to_string(),
+            force,
+        }
     })
 }
 
@@ -295,6 +306,69 @@ pub fn parse_teaching(transcript: &str) -> Option<Teaching> {
         }
     }
     None
+}
+
+/// The instruction given to a model that reads what a user said for something
+/// it is being taught. The reply it must give is read by [`teaching_from_json`].
+pub const READER_PROMPT: &str = "You read one thing a user said to their assistant and decide whether the user is TEACHING the assistant \
+something it should keep: a fact, a rule about how to behave, or a procedure. Most things users say are questions, requests or chat, \
+and are not teaching. Reply with one JSON object and nothing else.\n\
+- Not teaching: {\"teaching\": null}\n\
+- A fact (something true the assistant should know or a correction of what it said): {\"teaching\": \"fact\", \"subject\": \"what it is about\", \
+\"claim\": \"the full statement\", \"corrects\": true or false}\n\
+- A rule (always or never do something, from now on): {\"teaching\": \"rule\", \"instruction\": \"what to do or not do\", \"force\": \"always\" or \"never\"}\n\
+- A procedure (how a piece of work is done, in order): {\"teaching\": \"procedure\", \"name\": \"the work\", \"steps\": [\"first step\", \"second step\"]}\n\
+A request for one action now (\"delete that file\") is not a rule. A question is never teaching. When unsure, reply {\"teaching\": null}.";
+
+/// Read a model's reply to [`READER_PROMPT`]. `None` when the model said it is
+/// not teaching, or said anything that is not a complete, well-formed teaching:
+/// the reply is the model's, so it is checked as carefully as the user's words.
+#[must_use]
+pub fn teaching_from_json(reply: &str) -> Option<Teaching> {
+    let start = reply.find('{')?;
+    let end = reply.rfind('}')?;
+    let value: serde_json::Value = serde_json::from_str(reply.get(start..=end)?).ok()?;
+    let text = |key: &str| {
+        value
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|t| !t.is_empty() && t.len() <= 400)
+            .map(str::to_string)
+    };
+    match value.get("teaching")?.as_str()? {
+        "fact" => Some(Teaching::Fact {
+            subject: text("subject")?,
+            claim: text("claim")?,
+            corrects: value
+                .get("corrects")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+        }),
+        "rule" => {
+            let force = match text("force")?.to_lowercase().as_str() {
+                "always" => Force::Always,
+                "never" => Force::Never,
+                _ => return None,
+            };
+            Some(Teaching::Rule {
+                instruction: text("instruction")?,
+                force,
+            })
+        }
+        "procedure" => {
+            let steps: Vec<String> = value
+                .get("steps")?
+                .as_array()?
+                .iter()
+                .filter_map(|s| s.as_str().map(|s| s.trim().to_string()))
+                .filter(|s| !s.is_empty() && s.len() <= 200)
+                .collect();
+            let name = text("name")?;
+            ((2..=20).contains(&steps.len())).then_some(Teaching::Procedure { name, steps })
+        }
+        _ => None,
+    }
 }
 
 /// A teaching that has been kept.
@@ -412,25 +486,30 @@ pub fn render(entries: &[&Entry]) -> String {
          and say so if one conflicts with what you were told earlier.\n",
     );
     for entry in entries {
-        match &entry.teaching {
-            Teaching::Fact { claim, .. } => out.push_str(&format!("- Fact: {claim}\n")),
-            Teaching::Rule { instruction, force } => {
-                let force = if *force == Force::Always {
-                    "always"
-                } else {
-                    "never"
-                };
-                out.push_str(&format!("- Rule ({force}): {instruction}\n"));
-            }
-            Teaching::Procedure { name, steps } => {
-                out.push_str(&format!("- Procedure, {name}:\n"));
-                for (n, step) in steps.iter().enumerate() {
-                    out.push_str(&format!("  {}. {step}\n", n + 1));
-                }
-            }
-        }
+        out.push_str(&describe(&entry.teaching));
     }
     out
+}
+
+fn describe(teaching: &Teaching) -> String {
+    match teaching {
+        Teaching::Fact { claim, .. } => format!("- Fact: {claim}\n"),
+        Teaching::Rule { instruction, force } => {
+            let force = if *force == Force::Always {
+                "always"
+            } else {
+                "never"
+            };
+            format!("- Rule ({force}): {instruction}\n")
+        }
+        Teaching::Procedure { name, steps } => {
+            let mut out = format!("- Procedure, {name}:\n");
+            for (n, step) in steps.iter().enumerate() {
+                out.push_str(&format!("  {}. {step}\n", n + 1));
+            }
+            out
+        }
+    }
 }
 
 /// Everything a teaching says, as text to match a question against.
@@ -553,6 +632,8 @@ mod specs {
             "Do you remember that the deadline is Friday?",
             "Always a pleasure.",
             "Never mind.",
+            "Next time I will bring coffee.",
+            "From now on we are in the new office.",
             "Here is how it went yesterday.",
             "",
         ] {
@@ -654,5 +735,31 @@ mod specs {
         ledger.learn(fact("the server", "the server is atlas.", false), "y", 2);
         let back: Ledger = serde_json::from_str(&serde_json::to_string(&ledger).unwrap()).unwrap();
         assert_eq!(back.active().count(), 1);
+    }
+
+    #[test]
+    fn a_models_reading_is_taken_only_when_it_is_a_complete_teaching() {
+        assert_eq!(
+            teaching_from_json("```json\n{\"teaching\": \"fact\", \"subject\": \"the deadline\", \"claim\": \"the deadline is Monday\", \"corrects\": true}\n```"),
+            Some(fact("the deadline", "the deadline is Monday", true))
+        );
+        assert_eq!(
+            teaching_from_json("{\"teaching\": \"rule\", \"instruction\": \"ask before deleting\", \"force\": \"Always\"}"),
+            Some(Teaching::Rule { instruction: "ask before deleting".into(), force: Force::Always })
+        );
+        assert_eq!(
+            teaching_from_json("{\"teaching\": \"procedure\", \"name\": \"deploy\", \"steps\": [\"test\", \"build\"]}"),
+            Some(Teaching::Procedure { name: "deploy".into(), steps: vec!["test".into(), "build".into()] })
+        );
+        for bad in [
+            "{\"teaching\": null}",
+            "not json at all",
+            "{\"teaching\": \"fact\", \"subject\": \"\", \"claim\": \"x is y\"}",
+            "{\"teaching\": \"rule\", \"instruction\": \"do it\", \"force\": \"sometimes\"}",
+            "{\"teaching\": \"procedure\", \"name\": \"deploy\", \"steps\": [\"only one\"]}",
+            "{\"teaching\": \"poem\"}",
+        ] {
+            assert_eq!(teaching_from_json(bad), None, "{bad}");
+        }
     }
 }

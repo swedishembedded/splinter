@@ -50,6 +50,17 @@ def spread(report, key):
     return column["p50"], column["p95"]
 
 
+def wilson(k, n, z=1.96):
+    """The Wilson score interval of k successes in n."""
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    d = 1 + z * z / n
+    c = p + z * z / (2 * n)
+    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5)
+    return (c - h) / d, (c + h) / d
+
+
 def main():
     runs = {r["id"]: r for r in rows("runs.csv")}
     for run in runs.values():
@@ -145,6 +156,62 @@ def main():
         lines.append(f"{label} & {ev[0]['mean_frames_per_word']:.2f} & {ev[-1]['mean_frames_per_word']:.2f} & {ev[0]['word_error_rate']:.3f} & {ev[-1]['word_error_rate']:.3f}\\\\")
     lines += ["\\bottomrule", "\\end{tabular}"]
     (OUT / "methods_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # Teaching: facts, rules and procedures, untaught against taught, on the pre-registered test split.
+    teach = json.loads((ROOT / runs["teaching-test-20261010"]["file"]).read_text(encoding="utf-8"))
+    kinds = {}
+    for r in teach["results"]:
+        k = kinds.setdefault(r["kind"], {"scenarios": 0, "asks": 0, "untaught": 0, "taught": 0, "understood": 0, "teachings": 0})
+        k["scenarios"] += 1
+        k["understood"] += r["understood"]
+        k["teachings"] += r["teachings"]
+        for o in r["outcomes"]:
+            k["asks"] += 1
+            k["untaught"] += o["untaught_passes"]
+            k["taught"] += o["taught_passes"]
+    labels = {"fact": "a fact", "correction": "a corrected fact", "indirect": "a fact that must be used", "scale": "sixteen facts at once",
+              "procedure": "a procedure", "rule": "a rule", "rules2": "two rules at once", "retract": "taught, then forgotten", "unrelated": "unrelated questions"}
+    lines = ["\\begin{tabular}{@{}l r r r l@{}}", "\\toprule", "Taught & Scenarios & Asks & Untaught passes & Taught passes (95\\% interval)\\\\", "\\midrule"]
+    for key, label in labels.items():
+        k = kinds[key]
+        lo, hi = wilson(k["taught"], k["asks"])
+        lines.append(f"{label} & {k['scenarios']} & {k['asks']} & {k['untaught']} & {k['taught']} ({lo:.2f}--{hi:.2f})\\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "teaching_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    macros["TeachScenarios"] = str(len(teach["results"]))
+    macros["TeachAsks"] = str(sum(k["asks"] for k in kinds.values()))
+    macros["TeachUnderstood"] = str(sum(k["understood"] for k in kinds.values()))
+    macros["TeachTeachings"] = str(sum(k["teachings"] for k in kinds.values()))
+    macros["TeachFactTaught"] = f"{kinds['fact']['taught']}/{kinds['fact']['asks']}"
+    macros["TeachFactUntaught"] = f"{kinds['fact']['untaught']}/{kinds['fact']['asks']}"
+    macros["TeachProcedureLow"] = f"{wilson(kinds['procedure']['taught'], kinds['procedure']['asks'])[0]:.2f}"
+
+    # The readers of what a user says, on the test split of the authored utterances.
+    gold = [json.loads(l) for l in (ROOT / "data/teaching/utterances.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    readings = {r["id"]: r for r in json.loads((ROOT / runs["teaching-read-20261010"]["file"]).read_text(encoding="utf-8"))}
+
+    def right(g, t):
+        if t is None:
+            return g["kind"] == "none"
+        (name, body), = t.items()
+        text = json.dumps(body).lower()
+        return name.lower() == g["kind"] and any(w in text for w in g["key"].lower().split("|"))
+
+    readers = {"plain phrases": lambda r: r["plain"], "model": lambda r: r["model"], "plain, then model": lambda r: r["plain"] or r["model"]}
+    lines = ["\\begin{tabular}{@{}l r r r@{}}", "\\toprule", "Reader & Teachings found & Fired on a non-teaching & Misread a teaching\\\\", "\\midrule"]
+    test = [g for g in gold if g["split"] == "test"]
+    pos = [g for g in test if g["kind"] != "none"]
+    neg = [g for g in test if g["kind"] == "none"]
+    for name, pick in readers.items():
+        found = sum(right(g, pick(readings[g["id"]])) for g in pos)
+        wrong = sum(pick(readings[g["id"]]) is not None and not right(g, pick(readings[g["id"]])) for g in pos)
+        fired = sum(pick(readings[g["id"]]) is not None for g in neg)
+        lines.append(f"{name} & {found}/{len(pos)} & {fired}/{len(neg)} & {wrong}\\\\")
+        key = {"plain phrases": "Plain", "model": "Model", "plain, then model": "Both"}[name]
+        macros[f"Read{key}Found"] = f"{found}/{len(pos)}"
+        macros[f"Read{key}Fired"] = f"{fired}/{len(neg)}"
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "reading_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # Extraction study: the rule-based readers of a user's words, on the frozen test split.
     study = runs["extraction-rules-20261010"]

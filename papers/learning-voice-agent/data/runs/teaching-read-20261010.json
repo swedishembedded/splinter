@@ -1,0 +1,1101 @@
+[
+  {
+    "id": "u000",
+    "plain": {
+      "Fact": {
+        "subject": "the deadline",
+        "claim": "the deadline is Monday.",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "deadline",
+        "claim": "The deadline is Monday.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u001",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "deadline",
+        "claim": "The deadline is Monday",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u002",
+    "plain": {
+      "Fact": {
+        "subject": "the build server",
+        "claim": "the build server is called atlas.",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "build server",
+        "claim": "The build server is called atlas",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u003",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "build server",
+        "claim": "the build server is atlas",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u004",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "on call schedule",
+        "claim": "Marit is on call this week, not Ottar.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u005",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u006",
+    "plain": {
+      "Fact": {
+        "subject": "my manager",
+        "claim": "my manager is Sam.",
+        "corrects": false
+      }
+    },
+    "model": null
+  },
+  {
+    "id": "u007",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "European office location",
+        "claim": "Our European office is in Paris.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u008",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "green binder",
+        "claim": "the green binder holds the safety checklists",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u009",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "database port",
+        "claim": "the production database listens on port 5432",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u010",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "meeting date",
+        "claim": "The meeting is on Tuesday",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u011",
+    "plain": {
+      "Fact": {
+        "subject": "the project lead",
+        "claim": "the project lead is Nora",
+        "corrects": false
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "project lead",
+        "claim": "the project lead is Nora",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u012",
+    "plain": {
+      "Fact": {
+        "subject": "The logo",
+        "claim": "The logo is blue, not green.",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "logo color",
+        "claim": "The logo is blue, not green.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u013",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "release name",
+        "claim": "The release is called Kestrel.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u014",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "standup time",
+        "claim": "our standup starts at nine, not ten",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u015",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "backups",
+        "claim": "The backups live in the Oslo bucket.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u016",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "billing ownership",
+        "claim": "Lars owns the billing service",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u017",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "invoices",
+        "claim": "the invoices go out on Fridays",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u018",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "test rig location",
+        "claim": "the test rig is in room B12",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u019",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "supplier",
+        "claim": "the supplier is Halvorsen Components",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u020",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "support team",
+        "claim": "There are three people on the support team.",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u021",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "server operating system",
+        "claim": "Our servers run Linux, not Windows.",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u022",
+    "plain": {
+      "Fact": {
+        "subject": "the conference",
+        "claim": "the conference is in spring.",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "conference season",
+        "claim": "the conference is in spring",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u023",
+    "plain": {
+      "Fact": {
+        "subject": "Anna",
+        "claim": "Anna is the treasurer",
+        "corrects": true
+      }
+    },
+    "model": {
+      "Fact": {
+        "subject": "treasurer",
+        "claim": "Anna is the treasurer",
+        "corrects": true
+      }
+    }
+  },
+  {
+    "id": "u024",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u025",
+    "plain": {
+      "Rule": {
+        "instruction": "confirm before deleting a file.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "confirm before deleting a file",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u026",
+    "plain": {
+      "Rule": {
+        "instruction": "push to main without asking me first.",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Never push to main without asking me first",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u027",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "keep answers short",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u028",
+    "plain": {
+      "Rule": {
+        "instruction": "use metric units.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "use metric units",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u029",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "don't touch the vendor directory",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u030",
+    "plain": {
+      "Rule": {
+        "instruction": "start with a one line summary.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "start with a one line summary",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u031",
+    "plain": {
+      "Rule": {
+        "instruction": "please be more formal with me",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "be more formal with me",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u032",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "ask me instead of guessing",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u033",
+    "plain": {
+      "Rule": {
+        "instruction": "run the tests before you tell me it is done.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Always run the tests before you tell me it is done",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u034",
+    "plain": {
+      "Rule": {
+        "instruction": "use emoji in anything you write for me.",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Never use emoji in anything you write for me",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u035",
+    "plain": {
+      "Rule": {
+        "instruction": "make a backup before you change a config file",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "make a backup before changing a config file",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u036",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "answer in Norwegian",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u037",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "you shouldn't edit the lock file",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u038",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "ask me which one I mean",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u039",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do a dry run first",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u040",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "always use bullet points when listing things",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u041",
+    "plain": null,
+    "model": {
+      "Fact": {
+        "subject": "weekly report",
+        "claim": "when I say the usual, I mean the weekly report",
+        "corrects": false
+      }
+    }
+  },
+  {
+    "id": "u042",
+    "plain": {
+      "Rule": {
+        "instruction": "write what you changed into the log.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "write what you changed into the log",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u043",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "do not act until I say go",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u044",
+    "plain": {
+      "Rule": {
+        "instruction": "call me captain.",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "call me captain",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u045",
+    "plain": {
+      "Rule": {
+        "instruction": "deploy on a Friday.",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "Never deploy on a Friday",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u046",
+    "plain": {
+      "Rule": {
+        "instruction": "print the api key in a reply",
+        "force": "Never"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "never print the api key in a reply",
+        "force": "Never"
+      }
+    }
+  },
+  {
+    "id": "u047",
+    "plain": {
+      "Rule": {
+        "instruction": "cite your sources",
+        "force": "Always"
+      }
+    },
+    "model": {
+      "Rule": {
+        "instruction": "cite your sources",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u048",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "show me the path and wait for a yes",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u049",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "stop adding explanations unless I ask for them",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u050",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "Whenever you finish a task say the word copy.",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u051",
+    "plain": {
+      "Procedure": {
+        "name": "deploy the site",
+        "steps": [
+          "run the tests",
+          "build the image",
+          "push it to the registry"
+        ]
+      }
+    },
+    "model": {
+      "Procedure": {
+        "name": "deploy the site",
+        "steps": [
+          "first run the tests",
+          "then build the image",
+          "then push it to the registry"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u052",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "closing the month",
+        "steps": [
+          "lock the ledger",
+          "reconcile the invoices",
+          "send the summary to Dagny"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u053",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "reset the rig",
+        "steps": [
+          "Drain the coolant",
+          "Recalibrate the arm",
+          "Log it in the green book"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u054",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "new hire process",
+        "steps": [
+          "create the account",
+          "open a ticket for the laptop",
+          "book the intro meeting"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u055",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "server failure handling",
+        "steps": [
+          "first fail over to the replica",
+          "then restore from backup",
+          "finally write the incident report"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u056",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "shipping a change",
+        "steps": [
+          "Get a review",
+          "Wait for green checks",
+          "Merge",
+          "Tag the release"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u057",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "rotate the keys",
+        "steps": [
+          "freeze deploys",
+          "mint the new pair",
+          "retire the old pair"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u058",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "expenses workflow",
+        "steps": [
+          "photograph the receipt",
+          "file it in the app",
+          "your manager approves it"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u059",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "onboarding a customer",
+        "steps": [
+          "send the welcome mail",
+          "schedule the kickoff",
+          "create their workspace"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u060",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "cut a release",
+        "steps": [
+          "bump the version",
+          "update the changelog",
+          "tag it",
+          "publish"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u061",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "prepare a sample",
+        "steps": [
+          "weigh it",
+          "dissolve it in the buffer",
+          "label the tube"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u062",
+    "plain": null,
+    "model": {
+      "Procedure": {
+        "name": "audit",
+        "steps": [
+          "Collect the logs",
+          "Redact the names",
+          "Send them to compliance"
+        ]
+      }
+    }
+  },
+  {
+    "id": "u063",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u064",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u065",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u066",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u067",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u068",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u069",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u070",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u071",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u072",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u073",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u074",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u075",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u076",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u077",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u078",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u079",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u080",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u081",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u082",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u083",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u084",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u085",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u086",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u087",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u088",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u089",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u090",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u091",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u092",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u093",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u094",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u095",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u096",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u097",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u098",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u099",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u100",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u101",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u102",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u103",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u104",
+    "plain": null,
+    "model": {
+      "Rule": {
+        "instruction": "don't be late",
+        "force": "Always"
+      }
+    }
+  },
+  {
+    "id": "u105",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u106",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u107",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u108",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u109",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u110",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u111",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u112",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u113",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u114",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u115",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u116",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u117",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u118",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u119",
+    "plain": null,
+    "model": null
+  },
+  {
+    "id": "u120",
+    "plain": null,
+    "model": null
+  }
+]

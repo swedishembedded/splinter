@@ -40,3 +40,12 @@ first-sound latency over at least three repeats on a card shown idle before and 
 \paragraph{Real speech.}
 A set of about one hundred short prompts recorded by a person (questions, tool tasks, directives; quiet and noisy), kept local and named by digest, with
 transcripts verified by the speaker, is the only basis for any statement about real speech.
+
+\paragraph{Teaching experiments (T2--T4).}
+\emph{Scenarios.} Each scenario is a list of utterances that teach, a flag that says ``forget that'' afterwards, and asks with text checks written before any reply exists
+(\cref{sec:results}; \code{data/teaching}). The facts are about an invented company with values no model can know, so a right answer is evidence of teaching and not of memory.
+Kinds: a fact, a corrected fact (taught, then corrected), a fact that must be used rather than recalled, sixteen facts at once, a procedure, a rule, two rules at once, a fact taught and then forgotten, and a fact taught followed by unrelated questions.
+\emph{Arms.} The same model answers twice: untaught, with an empty ledger, and taught, in a new session holding the ledger a first session built from the scenario's utterances, each confirmed with a yes.
+The split is fixed in the generator: twenty scenarios are dev and the rest test, and the test split is run once for a recipe (\code{prereg/teaching-test.md}).
+\emph{Reading study (T1, T3).} Authored utterances in many phrasings, a third in the unpunctuated lower-case a recogniser produces, with their gold kind and a key word the content must hold; one in three is dev.
+\emph{Spoken conversations (T4).} Scripted conversations whose user turns are rendered in a synthetic voice and recognised before the agent hears them, with pass conditions fixed before the run.

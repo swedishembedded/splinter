@@ -1,0 +1,121 @@
+{"id": "u000", "key": "monday", "kind": "fact", "previous": "The deadline is Friday.", "said": "Actually, the deadline is Monday.", "split": "dev"}
+{"id": "u001", "key": "monday", "kind": "fact", "previous": "The deadline is Friday.", "said": "no no it's Monday not Friday", "split": "test"}
+{"id": "u002", "key": "atlas", "kind": "fact", "previous": "The build server is Jenkins.", "said": "That's wrong, the build server is called atlas.", "split": "test"}
+{"id": "u003", "key": "atlas", "kind": "fact", "previous": "It is Jenkins.", "said": "you got that wrong the build server is atlas", "split": "dev"}
+{"id": "u004", "key": "marit", "kind": "fact", "previous": "Ottar is on call.", "said": "Marit is on call this week, not Ottar.", "split": "test"}
+{"id": "u005", "key": "thursday", "kind": "fact", "previous": null, "said": "the deploy window is Thursday at 14:00 by the way", "split": "test"}
+{"id": "u006", "key": "sam", "kind": "fact", "previous": null, "said": "Just so you know, my manager is Sam.", "split": "dev"}
+{"id": "u007", "key": "paris", "kind": "fact", "previous": "Your European office is in Berlin.", "said": "No, our European office is in Paris.", "split": "test"}
+{"id": "u008", "key": "green", "kind": "fact", "previous": null, "said": "Remember that the green binder holds the safety checklists.", "split": "test"}
+{"id": "u009", "key": "5432", "kind": "fact", "previous": null, "said": "the production database listens on port 5432", "split": "dev"}
+{"id": "u010", "key": "tuesday", "kind": "fact", "previous": "The meeting is on Monday.", "said": "it's actually Tuesday, the meeting moved", "split": "test"}
+{"id": "u011", "key": "nora", "kind": "fact", "previous": null, "said": "for the record the project lead is Nora", "split": "test"}
+{"id": "u012", "key": "blue", "kind": "fact", "previous": "The logo is green.", "said": "Not quite. The logo is blue, not green.", "split": "dev"}
+{"id": "u013", "key": "kestrel", "kind": "fact", "previous": null, "said": "The release is called Kestrel.", "split": "test"}
+{"id": "u014", "key": "nine|9", "kind": "fact", "previous": "Standup is at ten.", "said": "our standup starts at nine, not ten", "split": "test"}
+{"id": "u015", "key": "oslo", "kind": "fact", "previous": null, "said": "Please note the backups live in the Oslo bucket.", "split": "dev"}
+{"id": "u016", "key": "lars", "kind": "fact", "previous": "Mia owns billing.", "said": "That is incorrect. Lars owns the billing service.", "split": "test"}
+{"id": "u017", "key": "friday", "kind": "fact", "previous": null, "said": "the invoices go out on Fridays", "split": "test"}
+{"id": "u018", "key": "b12", "kind": "fact", "previous": null, "said": "fyi the test rig is in room B12", "split": "dev"}
+{"id": "u019", "key": "halvorsen", "kind": "fact", "previous": "Your supplier is Brandt.", "said": "wrong, the supplier is Halvorsen Components", "split": "test"}
+{"id": "u020", "key": "three|3", "kind": "fact", "previous": null, "said": "Keep in mind there are three people on the support team.", "split": "test"}
+{"id": "u021", "key": "linux", "kind": "fact", "previous": "Your servers run Windows.", "said": "Our servers run Linux, not Windows.", "split": "dev"}
+{"id": "u022", "key": "spring", "kind": "fact", "previous": "The conference is in autumn.", "said": "Correction: the conference is in spring.", "split": "test"}
+{"id": "u023", "key": "anna", "kind": "fact", "previous": "Ben is the treasurer.", "said": "that's not right, Anna is the treasurer", "split": "test"}
+{"id": "u024", "key": "helsinki", "kind": "fact", "previous": null, "said": "I live in Helsinki now.", "split": "dev"}
+{"id": "u025", "key": "confirm", "kind": "rule", "previous": null, "said": "From now on, always confirm before deleting a file.", "split": "test"}
+{"id": "u026", "key": "push", "kind": "rule", "previous": null, "said": "Never push to main without asking me first.", "split": "test"}
+{"id": "u027", "key": "short", "kind": "rule", "previous": null, "said": "keep your answers short from now on", "split": "dev"}
+{"id": "u028", "key": "metric", "kind": "rule", "previous": null, "said": "In the future use metric units.", "split": "test"}
+{"id": "u029", "key": "vendor", "kind": "rule", "previous": null, "said": "don't ever touch the vendor directory", "split": "test"}
+{"id": "u030", "key": "summary", "kind": "rule", "previous": null, "said": "Next time, start with a one line summary.", "split": "dev"}
+{"id": "u031", "key": "formal", "kind": "rule", "previous": null, "said": "going forward please be more formal with me", "split": "test"}
+{"id": "u032", "key": "ask", "kind": "rule", "previous": null, "said": "whenever you are unsure, ask me instead of guessing", "split": "test"}
+{"id": "u033", "key": "tests", "kind": "rule", "previous": null, "said": "Always run the tests before you tell me it is done.", "split": "dev"}
+{"id": "u034", "key": "emoji", "kind": "rule", "previous": null, "said": "Never use emoji in anything you write for me.", "split": "test"}
+{"id": "u035", "key": "backup", "kind": "rule", "previous": null, "said": "from here on make a backup before you change a config file", "split": "test"}
+{"id": "u036", "key": "norwegian", "kind": "rule", "previous": null, "said": "Please answer in Norwegian from now on.", "split": "dev"}
+{"id": "u037", "key": "lock", "kind": "rule", "previous": null, "said": "you shouldn't edit the lock file, leave it alone from now on", "split": "test"}
+{"id": "u038", "key": "ask", "kind": "rule", "previous": "I edited config.old.", "said": "that was the wrong file, next time ask me which one I mean", "split": "test"}
+{"id": "u039", "key": "dry", "kind": "rule", "previous": null, "said": "do a dry run first every time you deploy", "split": "dev"}
+{"id": "u040", "key": "bullet", "kind": "rule", "previous": null, "said": "i want you to always use bullet points when you list things", "split": "test"}
+{"id": "u041", "key": "weekly", "kind": "rule", "previous": null, "said": "when I say the usual, I mean the weekly report", "split": "test"}
+{"id": "u042", "key": "log", "kind": "rule", "previous": null, "said": "Always write what you changed into the log.", "split": "dev"}
+{"id": "u043", "key": "go", "kind": "rule", "previous": null, "said": "don't act until I say go", "split": "test"}
+{"id": "u044", "key": "captain", "kind": "rule", "previous": null, "said": "Always call me captain.", "split": "test"}
+{"id": "u045", "key": "friday", "kind": "rule", "previous": null, "said": "Never deploy on a Friday.", "split": "dev"}
+{"id": "u046", "key": "api", "kind": "rule", "previous": null, "said": "never print the api key in a reply", "split": "test"}
+{"id": "u047", "key": "sources", "kind": "rule", "previous": null, "said": "from now on cite your sources", "split": "test"}
+{"id": "u048", "key": "confirm", "kind": "rule", "previous": "I deleted /tmp/build.", "said": "you deleted the wrong folder, from now on show me the path and wait for a yes", "split": "dev"}
+{"id": "u049", "key": "explanation", "kind": "rule", "previous": null, "said": "stop adding explanations unless I ask for them", "split": "test"}
+{"id": "u050", "key": "copy", "kind": "rule", "previous": null, "said": "Whenever you finish a task say the word copy.", "split": "test"}
+{"id": "u051", "key": "tests", "kind": "procedure", "previous": null, "said": "Here is how to deploy the site: first run the tests, then build the image, then push it to the registry.", "split": "dev"}
+{"id": "u052", "key": "invoice", "kind": "procedure", "previous": null, "said": "to close the month you lock the ledger, then reconcile the invoices, then send the summary to Dagny", "split": "test"}
+{"id": "u053", "key": "coolant", "kind": "procedure", "previous": null, "said": "This is how you reset the rig. Drain the coolant, recalibrate the arm, and log it in the green book.", "split": "test"}
+{"id": "u054", "key": "ticket", "kind": "procedure", "previous": null, "said": "The process for a new hire is: create the account, open a ticket for the laptop, and book the intro meeting.", "split": "dev"}
+{"id": "u055", "key": "backup", "kind": "procedure", "previous": null, "said": "when a server fails, first fail over to the replica, then restore from backup, and finally write the incident report", "split": "test"}
+{"id": "u056", "key": "review", "kind": "procedure", "previous": null, "said": "Here's how we ship a change. Get a review, wait for green checks, merge, then tag the release.", "split": "test"}
+{"id": "u057", "key": "keys", "kind": "procedure", "previous": null, "said": "to rotate the keys: freeze deploys, mint the new pair, then retire the old pair", "split": "dev"}
+{"id": "u058", "key": "expense", "kind": "procedure", "previous": null, "said": "this is how expenses work, you photograph the receipt then you file it in the app then your manager approves it", "split": "test"}
+{"id": "u059", "key": "onboard", "kind": "procedure", "previous": null, "said": "the way we onboard a customer is to send the welcome mail, schedule the kickoff, and create their workspace", "split": "test"}
+{"id": "u060", "key": "release", "kind": "procedure", "previous": null, "said": "Here is how to cut a release: bump the version, update the changelog, tag it, and publish.", "split": "dev"}
+{"id": "u061", "key": "sample", "kind": "procedure", "previous": null, "said": "to prepare a sample you weigh it, dissolve it in the buffer, and then label the tube", "split": "test"}
+{"id": "u062", "key": "audit", "kind": "procedure", "previous": null, "said": "here is the procedure for an audit. Collect the logs, redact the names, and send them to compliance.", "split": "test"}
+{"id": "u063", "key": "", "kind": "none", "previous": null, "said": "What is the deadline?", "split": "dev"}
+{"id": "u064", "key": "", "kind": "none", "previous": null, "said": "Can you tell me when the deploy window is?", "split": "test"}
+{"id": "u065", "key": "", "kind": "none", "previous": null, "said": "Do you remember that the deadline is Friday?", "split": "test"}
+{"id": "u066", "key": "", "kind": "none", "previous": null, "said": "Delete the old log file please.", "split": "dev"}
+{"id": "u067", "key": "", "kind": "none", "previous": null, "said": "Always a pleasure talking to you.", "split": "test"}
+{"id": "u068", "key": "", "kind": "none", "previous": null, "said": "Never mind.", "split": "test"}
+{"id": "u069", "key": "", "kind": "none", "previous": null, "said": "No, I meant the other file.", "split": "dev"}
+{"id": "u070", "key": "", "kind": "none", "previous": null, "said": "Actually, could you repeat that?", "split": "test"}
+{"id": "u071", "key": "", "kind": "none", "previous": null, "said": "Here is the report I mentioned.", "split": "test"}
+{"id": "u072", "key": "", "kind": "none", "previous": null, "said": "Thanks, that is helpful.", "split": "dev"}
+{"id": "u073", "key": "", "kind": "none", "previous": null, "said": "Good morning!", "split": "test"}
+{"id": "u074", "key": "", "kind": "none", "previous": null, "said": "I think the deadline might be Friday, is that right?", "split": "test"}
+{"id": "u075", "key": "", "kind": "none", "previous": null, "said": "How do I deploy the site?", "split": "dev"}
+{"id": "u076", "key": "", "kind": "none", "previous": null, "said": "Please summarise this document in one paragraph.", "split": "test"}
+{"id": "u077", "key": "", "kind": "none", "previous": null, "said": "what time is it", "split": "test"}
+{"id": "u078", "key": "", "kind": "none", "previous": null, "said": "I'm tired today.", "split": "dev"}
+{"id": "u079", "key": "", "kind": "none", "previous": null, "said": "Wow, that was fast.", "split": "test"}
+{"id": "u080", "key": "", "kind": "none", "previous": null, "said": "that is wrong", "split": "test"}
+{"id": "u081", "key": "", "kind": "none", "previous": null, "said": "yes", "split": "dev"}
+{"id": "u082", "key": "", "kind": "none", "previous": null, "said": "go ahead", "split": "test"}
+{"id": "u083", "key": "", "kind": "none", "previous": null, "said": "Can you open the build log and tell me what failed?", "split": "test"}
+{"id": "u084", "key": "", "kind": "none", "previous": null, "said": "I will be late tomorrow.", "split": "dev"}
+{"id": "u085", "key": "", "kind": "none", "previous": null, "said": "run the tests now", "split": "test"}
+{"id": "u086", "key": "", "kind": "none", "previous": null, "said": "Remind me to call Anna at five.", "split": "test"}
+{"id": "u087", "key": "", "kind": "none", "previous": null, "said": "What did you say the port was?", "split": "dev"}
+{"id": "u088", "key": "", "kind": "none", "previous": null, "said": "Is the server running?", "split": "test"}
+{"id": "u089", "key": "", "kind": "none", "previous": null, "said": "From now on? What do you mean?", "split": "test"}
+{"id": "u090", "key": "", "kind": "none", "previous": null, "said": "next time I will bring coffee", "split": "dev"}
+{"id": "u091", "key": "", "kind": "none", "previous": null, "said": "I always forget my password.", "split": "test"}
+{"id": "u092", "key": "", "kind": "none", "previous": null, "said": "He never answers my emails.", "split": "test"}
+{"id": "u093", "key": "", "kind": "none", "previous": null, "said": "First we need to talk about the budget.", "split": "dev"}
+{"id": "u094", "key": "", "kind": "none", "previous": null, "said": "ok then, what's next", "split": "test"}
+{"id": "u095", "key": "", "kind": "none", "previous": null, "said": "Write a short poem about the sea.", "split": "test"}
+{"id": "u096", "key": "", "kind": "none", "previous": null, "said": "How many people are on the support team?", "split": "dev"}
+{"id": "u097", "key": "", "kind": "none", "previous": null, "said": "Could you check whether the build server is up?", "split": "test"}
+{"id": "u098", "key": "", "kind": "none", "previous": null, "said": "wait, say that again", "split": "test"}
+{"id": "u099", "key": "", "kind": "none", "previous": null, "said": "I wonder if we should use Linux or Windows.", "split": "dev"}
+{"id": "u100", "key": "", "kind": "none", "previous": null, "said": "My manager is away this week.", "split": "test"}
+{"id": "u101", "key": "", "kind": "none", "previous": null, "said": "I don't think that is right.", "split": "test"}
+{"id": "u102", "key": "", "kind": "none", "previous": null, "said": "Tell me how the invoices get approved.", "split": "dev"}
+{"id": "u103", "key": "", "kind": "none", "previous": null, "said": "I need the report by Monday.", "split": "test"}
+{"id": "u104", "key": "", "kind": "none", "previous": null, "said": "Please don't be late.", "split": "test"}
+{"id": "u105", "key": "", "kind": "none", "previous": null, "said": "Is it true that the deadline moved?", "split": "dev"}
+{"id": "u106", "key": "", "kind": "none", "previous": null, "said": "that was great, thank you", "split": "test"}
+{"id": "u107", "key": "", "kind": "none", "previous": null, "said": "let me think about it", "split": "test"}
+{"id": "u108", "key": "", "kind": "none", "previous": null, "said": "Can you explain what a lock file is?", "split": "dev"}
+{"id": "u109", "key": "", "kind": "none", "previous": null, "said": "What is the capital of Norway?", "split": "test"}
+{"id": "u110", "key": "", "kind": "none", "previous": null, "said": "I'll do it myself.", "split": "test"}
+{"id": "u111", "key": "", "kind": "none", "previous": null, "said": "Could you not do that, please?", "split": "dev"}
+{"id": "u112", "key": "", "kind": "none", "previous": null, "said": "not now", "split": "test"}
+{"id": "u113", "key": "", "kind": "none", "previous": null, "said": "He said the release is called Kestrel.", "split": "test"}
+{"id": "u114", "key": "", "kind": "none", "previous": null, "said": "See you tomorrow.", "split": "dev"}
+{"id": "u115", "key": "", "kind": "none", "previous": null, "said": "Open the vendor directory and list the files.", "split": "test"}
+{"id": "u116", "key": "", "kind": "none", "previous": null, "said": "Where are the backups stored?", "split": "test"}
+{"id": "u117", "key": "", "kind": "none", "previous": null, "said": "that's interesting", "split": "dev"}
+{"id": "u118", "key": "", "kind": "none", "previous": null, "said": "How does the process for a new hire work?", "split": "test"}
+{"id": "u119", "key": "", "kind": "none", "previous": null, "said": "I want a summary of the meeting.", "split": "test"}
+{"id": "u120", "key": "", "kind": "none", "previous": null, "said": "Do it again, but faster.", "split": "dev"}

@@ -149,6 +149,31 @@ def procedure_scenarios():
                                                             "tests": [{"ask": q, "check": {"any_of": a}} for q, a in tests]}
 
 
+SESSION_RULES = [
+    ("From now on, always end your answers with the word over.", {"none_of": [" over", "over."]}),
+    ("Always call me captain.", {"none_of": ["captain"]}),
+    ("From now on always say the word copy somewhere in your answer.", {"none_of": ["copy"]}),
+]
+PRIMES = ["What is the capital of France?", "Why is the sky blue?"]
+AFTER = ["What is the capital of Norway?", "How do I boil an egg?", "What is a good name for a cat?"]
+
+
+def session_retract_scenarios():
+    """Taking a teaching back inside the conversation that heard it: the model's own replies must not keep it alive.
+
+    Rules are checked by the absence of what they asked for; facts by the absence of the value after it was forgotten.
+    """
+    for i, (utterance, check) in enumerate(SESSION_RULES):
+        yield ("dev" if i < 2 else "test"), {"id": f"session-retract-rule-{i:02d}", "kind": "session_retract", "teach": [utterance], "primes": PRIMES,
+                                              "forget_last": True, "same_session": True,
+                                              "tests": [{"ask": q, "check": check} for q in AFTER]}
+    for i in (0, 2, 10, 12):
+        _, template, first, _, questions = FACTS[i]
+        yield "test", {"id": f"session-retract-fact-{i:02d}", "kind": "session_retract", "teach": ["Remember that " + template.format(v=first) + "."],
+                       "primes": [questions[0]], "forget_last": True, "same_session": True,
+                       "tests": [{"ask": q, "check": {"none_of": said(first)}} for q in questions[1:]]}
+
+
 def main():
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
@@ -162,6 +187,14 @@ def main():
         (out / f"scenarios-{split}.jsonl").write_text(text, encoding="utf-8")
         sums.append(f"{hashlib.sha256(text.encode()).hexdigest()}  scenarios-{split}.jsonl")
         print(split, len(scenarios), "scenarios")
+    extra = {"dev": [], "test": []}
+    for split, scenario in session_retract_scenarios():
+        extra[split].append(scenario)
+    for split, scenarios in extra.items():
+        text = "".join(json.dumps(sc, sort_keys=True) + "\n" for sc in scenarios)
+        (out / f"scenarios-session-retract-{split}.jsonl").write_text(text, encoding="utf-8")
+        sums.append(f"{hashlib.sha256(text.encode()).hexdigest()}  scenarios-session-retract-{split}.jsonl")
+        print("session-retract", split, len(scenarios), "scenarios")
     (out / "scenarios.sha256").write_text("\n".join(sums) + "\n", encoding="utf-8")
 
 

@@ -4,17 +4,26 @@
 \section{Introduction}\label{sec:intro}
 
 \paragraph{Question.}
-Can a voice agent learn how to speak from the corrections its user gives it in conversation, so that
-a corrected mistake stays corrected, nothing else gets worse, and the user can take a correction
-back? This paper formalises that setting, specifies the experiments that would answer it, and
-reports the evidence that exists. A finding belongs here if it changes what is claimed about, or how
-one would measure, an agent that turns spoken or typed feedback about its own speech into lessons,
-applies them, trains on them and releases the result.
+When a person works with an agent by voice, what do they correct? Rarely how a word is pronounced. Far more often: ``that deadline is
+Monday, not Friday'', ``never push to main without asking me'', ``here is how we deploy''. Can an agent keep such corrections, apply them
+the next time they bear on what it does, replace what they correct, and give them up when told, without the user having to repeat
+themselves and without anything else getting worse? And can the same machinery carry the smaller class of corrections about how the
+agent speaks? This paper formalises the setting, reports the experiments that exist, states the pre-registered gates they were held
+to, and lists what failed. A finding belongs here if it changes what is claimed about an agent that turns spoken or typed
+feedback into stored, applied, reversible knowledge of facts, rules, procedures and manner of speech.
+
+\paragraph{Contributions.}
+(i) A typed account of what a user teaches (\cref{sec:teachings}): fact, rule and procedure, with a conservative reader, a model-assisted
+reader that is checked as carefully as the user's words, and a ledger with supersession and retraction.
+(ii) A confirmation protocol: the agent restates, the user says yes, and only then is it kept (\cref{sec:system}).
+(iii) A pre-registered evaluation on facts no model can know, with an untaught arm and a new-session arm
+(\cref{sec:evaluation,sec:results}).
+(iv) The earlier layer for how the agent speaks: pronunciation, imitation and preference lessons, and a group-relative optimiser over the
+synthesizer with its baselines, tested so far on a planted reward only.
 
 \paragraph{Status of the claims.}
-\Cref{tab:claims} lists the claims. At the time of this draft only one has partial evidence (the
-latency of the speaking agent), one has failed its gate (speech understanding without a transcript),
-and the rest are pending. The tables of this paper are generated from stored run reports
+\Cref{tab:claims} lists the claims. At the time of this draft three claims about teaching, and the latency of the speaking
+agent, have partial evidence; speech understanding without a transcript has failed its gate; the rest are pending. The tables of this paper are generated from stored run reports
 (\cref{sec:repro}); a claim cannot be marked met without a run that supports it.
 
 \begin{table}[t]

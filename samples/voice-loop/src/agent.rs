@@ -27,9 +27,11 @@ use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::speech::{spoken_disclosure, Portrayal, SpeakerProfile};
 
 use splinter_sdk::agent::teach::Teachable;
+use splinter_sdk::vocabulary::speech_lesson::parse_retraction;
 use splinter_sdk::vocabulary::teaching::Ledger;
 
 use crate::batch::{spoken_turns, Batch, Conversation, Names, Persona};
+use crate::teach_eval::{model_reader, reading_persona};
 
 #[derive(Args)]
 pub struct AgentArgs {
@@ -69,6 +71,11 @@ pub struct AgentArgs {
     /// are kept between sessions; without it they last for this session only.
     #[arg(long)]
     taught: Option<PathBuf>,
+    /// Also let the model read what the user says for facts, rules and
+    /// procedures in phrasings the plain readers do not know. It loads the
+    /// model a second time.
+    #[arg(long)]
+    model_reader: bool,
     /// Also keep the report here.
     #[arg(long)]
     report: Option<PathBuf>,
@@ -97,27 +104,44 @@ pub fn run(args: &AgentArgs) -> Result<()> {
         .with_context(|| format!("{} is not a ledger of teachings", file.display()))?,
         _ => Ledger::new(),
     };
-    let teachable = std::cell::RefCell::new(Teachable::new(&voice, ledger));
+    let reading = args
+        .model_reader
+        .then(|| reading_persona(&args.base))
+        .transpose()?;
+    let mut teachable = Teachable::new(&voice, ledger);
+    if let Some(reading) = &reading {
+        teachable = teachable.with_reader(model_reader(reading));
+    }
+    let teachable = std::cell::RefCell::new(teachable);
     let desk_spoke = std::cell::Cell::new(false);
+    let teaching_last = std::cell::Cell::new(false);
     let listener = CascadeListener::new(
         BrainRecognizer::load(&args.asr)?,
         |question: &str, on_text: &mut dyn FnMut(&str)| {
+            // "Forget that" takes back whichever kind of lesson was taught last.
+            let to_ledger = parse_retraction(question)
+                && teachable.borrow().ledger().active().next().is_some()
+                && (!desk.has_kept() || teaching_last.get());
             // What is said about how to speak is the desk's, not the model's.
-            match desk.hear(question) {
-                Heard::Say(reply) => {
-                    desk_spoke.set(true);
-                    on_text(&reply);
-                    return Ok(reply);
+            if !to_ledger {
+                match desk.hear(question) {
+                    Heard::Say(reply) => {
+                        desk_spoke.set(true);
+                        teaching_last.set(false);
+                        on_text(&reply);
+                        return Ok(reply);
+                    }
+                    Heard::Retry(text) => {
+                        desk_spoke.set(false);
+                        on_text(&text);
+                        return Ok(text);
+                    }
+                    Heard::Pass => desk_spoke.set(false),
                 }
-                Heard::Retry(text) => {
-                    desk_spoke.set(false);
-                    on_text(&text);
-                    return Ok(text);
-                }
-                Heard::Pass => desk_spoke.set(false),
             }
             // What is said about what the agent knows or does is the ledger's.
             let mut teachable = teachable.borrow_mut();
+            let kept_before = teachable.ledger().active().count();
             let reply = teachable
                 .hear(question, on_text)
                 .map_err(|e| PolicyError::Generate {
@@ -125,6 +149,9 @@ pub fn run(args: &AgentArgs) -> Result<()> {
                     adapter: args.adapter.clone(),
                     reason: e.to_string(),
                 })?;
+            if teachable.ledger().active().count() > kept_before {
+                teaching_last.set(true);
+            }
             if let Some(file) = &args.taught {
                 let kept = serde_json::to_vec_pretty(teachable.ledger())
                     .map_err(|e| e.to_string())

@@ -28,3 +28,10 @@ given (a test of the agent crate).
 Which backend drives the hardware is a flag of the program (\code{--backend cuda}); a program that does not set it gets the
 backend the hardware probe prefers, which on the test host was not CUDA. A run's backend is read from the device handle,
 not from the adapter line the runtime prints.
+
+\paragraph{A teachable agent.}
+The agent of the previous paragraph is wrapped by a layer that hears each turn before the model does (\code{agent::teach}). A turn the plain reader (or, with a flag, the model reader)
+reads as a teaching is answered by the agent itself with a restatement; a plain yes keeps it in the ledger of \cref{sec:teachings}, written to a file between sessions if one is given.
+Every other turn goes to the model with the ledger's selection appended to its system turn. The addendum is set after the agent's own system turn, because that turn replaces
+every other system turn on the request: in the first development run the order was the other way round and nothing taught reached the model (\cref{sec:results}). A spoken ``forget that'' is routed to whichever
+kind of lesson, a pronunciation or a teaching, was kept last. What the agent says on its own account goes through the same callback as the model's words, so the voice speaks it like any other reply.
