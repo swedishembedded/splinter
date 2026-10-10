@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
   compared with the champion's by counts; a rate over no items is absent.
+- `samples/generations`: three generations of invented facts taught on Qwen3-0.6B, each several `absorb` updates and a
+  consolidation (`full` and `merge` in runs of their own), with the criteria declared before any run and the memory
+  of each step watched.
 - `splinter consolidate [--mode full|merge] [--from RELEASE]` takes a generation into the weights; `absorb` takes
   `--consolidate-after-records N`, `--no-consolidate`, `--consolidate-mode` and `--retention-replay-share`; `status`
   and `claims ledger` show the generation. The README says how a base, retention and forgetting work.
