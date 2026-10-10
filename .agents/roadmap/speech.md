@@ -254,6 +254,33 @@ results only; no claims beyond what frozen data and held-out evaluation support.
 Materials and gaps are documented in `papers/learning-voice-agent/MATERIALS.md`;
 the roadmap below lists what must be done before claims can be made.
 
+### Status, 2026-10-10
+
+Done since this list was written (each with its test or stored run):
+
+* The Talker is a trainable policy in brain (`qwen3tts::train`, `brain::TtsPolicy`):
+  rows rebuilt from codes, a LoRA policy-gradient step with a KL term, a direct
+  preference step, folded adapters loaded in place; checked against the inference
+  path to 6e-5. Knowledge 012. Items 1 (supervised) and 4 (GRPO) below are now
+  about *what to train on and how to judge it*, not about a missing trainer; the
+  supervised arm is the best-of-n update of `voice-loop speech-rl --method`.
+* `voice-loop speech-rl` trains with a planted reward as a machinery gate (GRPO:
+  3.77 to 1.99 codec frames per word on held-out sentences, word error rate 0.013 to
+  0.024); the comparison with best-of-n and DPO on the same reward and budget is in
+  `~/resources/speech/rl/`.
+* Lessons are read in conversation (`LessonDesk`: pronunciations confirmed, kept,
+  applied and taken back; a rejected take is said again and the user's pick becomes a
+  preference). The rule readers have precision 1.00 and recall 0.43 to 1.00 on 130
+  authored test utterances; a model-assisted reader has to beat that on utterances
+  written after it is frozen.
+* The listening test (`scripts/make_rating_set.py`, `build_rating_page.py`) and the
+  power calculations (`scripts/power.py`) exist; no ratings have been taken yet.
+* The paper builds from stored runs; `papers/learning-voice-agent`.
+
+Still open: the naturalness judge (needs the ratings), the frozen exam sets, the
+real-speech recordings, the user study with real corrections, persona retraining,
+the ingress redesign, and the live client.
+
 ### 1. Implement TTS supervised training pipeline
 
 **What**: Brain trainer for TTS that accepts (text, audio) pairs and measures

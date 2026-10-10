@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use clap::{Args, ValueEnum};
 use serde::Serialize;
-use splinter_sdk::measure::speech_reward::group_advantages;
+use splinter_sdk::measure::speech_reward::{group_advantages, preference_pair};
 use splinter_sdk::model::speech::{
     corpus_word_error_rate, with_trailing_silence, BrainRecognizer, BrainSynthesizer, Recognizer,
     SpeechPolicy, SpeechTake, Synthesizer, UpdateRule, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
@@ -42,8 +42,22 @@ enum Reward {
     Speed,
 }
 
+/// How scores become updates.
+#[derive(Clone, Copy, ValueEnum)]
+enum Method {
+    /// Group-relative policy gradient over every take of a group.
+    Grpo,
+    /// Supervised on the best-scoring take of each group (best-of-n).
+    BestOfN,
+    /// Direct preference on the best and worst take of each group.
+    Dpo,
+}
+
 #[derive(Args)]
 pub struct RlArgs {
+    /// How scores become updates.
+    #[arg(long, value_enum, default_value = "grpo")]
+    method: Method,
     /// The synthesis model, in brain's model store.
     #[arg(long, default_value = DEFAULT_SYNTHESIZER)]
     tts: String,
@@ -98,6 +112,8 @@ struct Eval {
 struct Step {
     update: usize,
     mean_reward: f32,
+    /// The mean log-probability of the sampled tokens; for DPO, the probability the
+    /// policy gave the preference.
     mean_logprob: f32,
     mean_kl: f32,
 }
@@ -105,6 +121,7 @@ struct Step {
 #[derive(Serialize)]
 struct Report<'a> {
     portrayal: &'a Portrayal,
+    method: &'static str,
     iterations: usize,
     group: usize,
     train_sentences: usize,
@@ -204,12 +221,32 @@ pub fn run(args: &RlArgs) -> Result<()> {
                 .map(|k| policy.take(text, 10_000 * update as u64 + 100 * slot as u64 + k as u64))
                 .collect::<Result<Vec<_>, _>>()?;
             let scores: Vec<f32> = takes.iter().map(|t| score(args.reward, text, t)).collect();
-            let advantages = group_advantages(&scores);
             rewards += scores.iter().sum::<f32>() / scores.len() as f32;
-            let group: Vec<(&SpeechTake, f32)> = takes.iter().zip(advantages).collect();
-            let report = policy.update(&group, &rule)?;
-            logprob += report.mean_logprob;
-            kl += report.mean_kl;
+            let report = match args.method {
+                Method::Grpo => {
+                    let group: Vec<(&SpeechTake, f32)> =
+                        takes.iter().zip(group_advantages(&scores)).collect();
+                    Some(policy.update(&group, &rule)?)
+                }
+                Method::BestOfN => {
+                    let best = (0..takes.len())
+                        .max_by(|&a, &b| scores[a].total_cmp(&scores[b]))
+                        .unwrap_or(0);
+                    Some(policy.update(&[(&takes[best], 1.0)], &rule)?)
+                }
+                Method::Dpo => match preference_pair(&scores) {
+                    Some((best, worst)) => {
+                        let probability = policy.prefer(&takes[best], &takes[worst], 0.5, &rule)?;
+                        logprob += probability;
+                        None
+                    }
+                    None => None,
+                },
+            };
+            if let Some(report) = report {
+                logprob += report.mean_logprob;
+                kl += report.mean_kl;
+            }
             groups += 1.0;
         }
         steps.push(Step {
@@ -236,6 +273,11 @@ pub fn run(args: &RlArgs) -> Result<()> {
     emit(
         &Report {
             portrayal: &portrayal,
+            method: match args.method {
+                Method::Grpo => "grpo",
+                Method::BestOfN => "best-of-n",
+                Method::Dpo => "dpo",
+            },
             iterations: args.iterations,
             group: args.group,
             train_sentences: train.len(),

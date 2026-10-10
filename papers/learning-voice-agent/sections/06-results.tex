@@ -39,6 +39,33 @@ streaming recogniser, went from \GateWerBefore{} to \GateWerAfter{}; the KL esti
 generalizes across sentences; it also shows how a reward is exploited, which is why the reward of \cref{sec:formalism} carries a word-error term and the
 evaluation a human preference test.
 
+\Cref{tab:methods} puts the same gate under the two baselines the claim has to beat, with the same sentences, takes per update and
+seed: imitating the best take of each group moved the held-out sentences least, and the group-advantage update most, with the pairwise update between them
+(runs \code{rl-speed-dpo-20261010}, \code{rl-speed-best-of-n-20261010}). On a planted reward this orders the methods by how much of the group they use; it says nothing yet about naturalness,
+and one seed on eight held-out sentences cannot separate methods that are close.
+
+\begin{table}[t]
+\centering\small
+\input{generated/methods_table}
+\caption{One planted reward (fewer codec frames per word), three training methods, held-out sentences before and after twelve updates.}
+\label{tab:methods}
+\end{table}
+
+\paragraph{Reading what a user says (C1, a baseline).}
+The rule-based readers of \cref{sec:formalism} were run on \ExtractTestSize{} authored utterances of the test split (the utterances were written, with the
+gold label of what the user meant, before the readers were run, and the readers were not changed after; run \code{extraction-rules-20261010}). \Cref{tab:extraction} shows
+that the readers fired on no utterance they should not have (\ExtractFalsePositives{} false positives, near-misses such as ``Do you pronounce Jefferson correctly?'' included) and
+missed a share of the ways people phrase a correction that differs by reader (the recall column). That is the intended trade: a false lesson is worse than a missed one, and a
+missed one costs a repetition. These utterances are written by the implementer, so the table measures conformance to the specification, not accuracy on users;
+it is the baseline a model-assisted reader has to beat on utterances written after it is frozen.
+
+\begin{table}[t]
+\centering\small
+\input{generated/extraction_table}
+\caption{Rule-based readers on the test split, each asked only about the turns it would be listening to. Precision and recall of firing on the utterances of its class.}
+\label{tab:extraction}
+\end{table}
+
 \paragraph{Speech understanding without a transcript (C8, failed).}
 A projector trained to put the recogniser's encoder features into the language model's embedding space produced fluent persona answers that were often
 about the wrong topic: on 12 held-out questions the word F$_1$ against the text path's answer was 0.299 from speech against 0.489 for the cascade, and the answer named the

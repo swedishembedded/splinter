@@ -135,6 +135,29 @@ impl SpeechPolicy {
         })
     }
 
+    /// One direct-preference step on two takes of the same sentence. Returns the
+    /// probability the policy gave the preference before the step.
+    pub fn prefer(
+        &mut self,
+        chosen: &SpeechTake,
+        rejected: &SpeechTake,
+        beta: f32,
+        rule: &UpdateRule,
+    ) -> Result<f32, PolicyError> {
+        self.inner
+            .update_preference(
+                &chosen.inner,
+                &rejected.inner,
+                beta,
+                &PolicyUpdate {
+                    lr: rule.learning_rate,
+                    kl_beta: 0.0,
+                    clip: 1.0,
+                },
+            )
+            .map_err(failed)
+    }
+
     /// Write the trained adapter to `path`.
     pub fn save(&self, path: &Path) -> Result<(), PolicyError> {
         self.inner.save(path).map_err(failed)

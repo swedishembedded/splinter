@@ -44,15 +44,66 @@ pub struct TeachArgs {
     #[arg(long)]
     example: Option<PathBuf>,
     /// Where the lessons are kept, one per line; appended to.
-    #[arg(long)]
+    #[arg(long, default_value = "lessons.jsonl")]
     lessons: PathBuf,
+    /// Read each line of this file with every reader and print what each made
+    /// of it, one JSON object per line, instead of teaching anything.
+    #[arg(long)]
+    classify: Option<PathBuf>,
     /// Also keep the report here.
     #[arg(long)]
     report: Option<PathBuf>,
 }
 
+/// What every reader of a user's words makes of each line of `path`, as
+/// JSON lines. Each reader is asked in isolation; which of them is listening
+/// at a given turn is the conversation's business.
+fn classify(path: &std::path::Path) -> Result<()> {
+    use splinter_sdk::vocabulary::speech_lesson::{
+        parse_comparison, parse_confirmation, parse_feedback, parse_retraction, Comparison,
+        Directive, Feedback,
+    };
+    for line in std::fs::read_to_string(path)
+        .with_context(|| format!("reading {}", path.display()))?
+        .lines()
+    {
+        let directive = parse_directive(line);
+        println!(
+            "{}",
+            serde_json::json!({
+                "text": line,
+                "directive": match directive {
+                    Some(Directive::Respell { .. }) => "respell",
+                    Some(Directive::Imitate { .. }) => "imitate",
+                    None => "none",
+                },
+                "feedback": match parse_feedback(line) {
+                    Some(Feedback::Reject) => "reject",
+                    Some(Feedback::Approve) => "approve",
+                    None => "none",
+                },
+                "retract": parse_retraction(line),
+                "confirmation": match parse_confirmation(line) {
+                    Some(true) => "yes",
+                    Some(false) => "no",
+                    None => "none",
+                },
+                "comparison": match parse_comparison(line) {
+                    Some(Comparison::NewBetter) => "new",
+                    Some(Comparison::OldBetter) => "old",
+                    None => "none",
+                },
+            })
+        );
+    }
+    Ok(())
+}
+
 /// Hear the directive, make its lessons and keep them.
 pub fn teach(args: &TeachArgs) -> Result<()> {
+    if let Some(path) = &args.classify {
+        return classify(path);
+    }
     let heard = match (&args.directive, &args.said) {
         (Some(wav), _) => {
             BrainRecognizer::load(&args.asr)?

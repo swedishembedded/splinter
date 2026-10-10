@@ -1,0 +1,108 @@
+{
+  "portrayal": "Synthetic theatrical portrayal; no recording of this person's voice exists",
+  "method": "dpo",
+  "iterations": 12,
+  "group": 6,
+  "train_sentences": 107,
+  "held_out_sentences": 8,
+  "steps": [
+    {
+      "update": 1,
+      "mean_reward": -4.139998,
+      "mean_logprob": 0.5777801,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 2,
+      "mean_reward": -3.7659922,
+      "mean_logprob": 0.6263342,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 3,
+      "mean_reward": -3.320614,
+      "mean_logprob": 0.41356364,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 4,
+      "mean_reward": -3.1854353,
+      "mean_logprob": 0.6287849,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 5,
+      "mean_reward": -3.2708862,
+      "mean_logprob": 0.33854753,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 6,
+      "mean_reward": -2.9583457,
+      "mean_logprob": 0.73309743,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 7,
+      "mean_reward": -2.8467534,
+      "mean_logprob": 0.31557083,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 8,
+      "mean_reward": -2.7005954,
+      "mean_logprob": 0.68547446,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 9,
+      "mean_reward": -2.6674972,
+      "mean_logprob": 0.5949382,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 10,
+      "mean_reward": -2.768271,
+      "mean_logprob": 0.8650049,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 11,
+      "mean_reward": -2.6268275,
+      "mean_logprob": 0.78650576,
+      "mean_kl": 0.0
+    },
+    {
+      "update": 12,
+      "mean_reward": -2.6022727,
+      "mean_logprob": 0.42818293,
+      "mean_kl": 0.0
+    }
+  ],
+  "evals": [
+    {
+      "after_updates": 0,
+      "mean_frames_per_word": 3.7656782,
+      "mean_reward": -3.7656782,
+      "word_error_rate": 0.013245033
+    },
+    {
+      "after_updates": 4,
+      "mean_frames_per_word": 2.9846733,
+      "mean_reward": -2.9846733,
+      "word_error_rate": 0.011037528
+    },
+    {
+      "after_updates": 8,
+      "mean_frames_per_word": 2.501795,
+      "mean_reward": -2.501795,
+      "word_error_rate": 0.008830022
+    },
+    {
+      "after_updates": 12,
+      "mean_frames_per_word": 2.111555,
+      "mean_reward": -2.111555,
+      "word_error_rate": 0.011037528
+    }
+  ]
+}

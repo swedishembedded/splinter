@@ -1,0 +1,197 @@
+id,split,text,gold
+u000,dev,Pronounce Philadelphia as Fill-uh-del-fee-uh.,respell
+u001,test,I'd like you to pronounce Appomattox as Ap-uh-mat-uks.,respell
+u002,test,That sounds much better now.,approve
+u003,dev,Say Cornwallis as Corn-wall-iss.,respell
+u004,test,You should say Boylston as Boil-ston.,respell
+u005,test,undo it,retract
+u006,dev,I said no such thing.,none
+u007,test,That was a bit off.,reject
+u008,test,Speak as follows: Good evening.,imitate
+u009,dev,say Faneuil as Fan-yool,respell
+u010,test,Pronounce Madison as Mad-ih-son.,respell
+u011,test,What is the second amendment?,none
+u012,dev,Say Livingston as Liv-ing-stun.,respell
+u013,test,Stop saying it that way.,retract
+u014,test,That sounded weird.,reject
+u015,dev,"No, that is worse.",compare_old
+u016,test,That's correct.,confirm_yes
+u017,test,Talk like this: I shall not yield.,imitate
+u018,dev,Say Lafayette as Laff-ee-et.,respell
+u019,test,Say this like this: no taxation without representation.,imitate
+u020,test,Perfect.,approve
+u021,dev,pronounce Hutchinson as Hutch-in-son,respell
+u022,test,That was well said.,approve
+u023,test,You got that wrong.,reject
+u024,dev,"No, that's not what I meant.",confirm_no
+u025,test,"That is a fine question, Mr Adams.",none
+u026,test,I preferred the first.,compare_old
+u027,dev,Could you explain why the first one was wrong in history?,none
+u028,test,Could you repeat that more naturally?,reject
+u029,test,That sounded robotic.,reject
+u030,dev,"talk as follows, we hold these truths",imitate
+u031,test,Say something about liberty.,none
+u032,test,How should I say goodbye in French?,none
+u033,dev,"Say it exactly like this: aye, with feeling.",imitate
+u034,test,Speak as follows: Let us proceed.,imitate
+u035,test,Yes or no questions are hard.,none
+u036,dev,Never mind that.,retract
+u037,test,"Listen and talk as follows: Welcome, friend.",imitate
+u038,test,He pronounced the word badly in his speech.,none
+u039,dev,"Say it like this, Good morning everyone.",imitate
+u040,test,It's pronounced Jef-fer-son.,respell
+u041,test,Keep it.,confirm_yes
+u042,dev,"Actually, forget what I just taught you.",retract
+u043,test,Undo the last thing.,retract
+u044,test,Say it in this way: it is the voice of reason.,imitate
+u045,dev,That is worse,compare_old
+u046,test,What do you think of taxation without representation?,none
+u047,test,forget it,retract
+u048,dev,Please talk as follows: Thank you for coming.,imitate
+u049,test,Please pronounce Hancock as Han-cock.,respell
+u050,test,The speaker said it again and again.,none
+u051,dev,"Speak up, I cannot hear you.",none
+u052,test,Please say Townshend like Town-send.,respell
+u053,test,Who was Samuel Adams?,none
+u054,dev,Cancel that.,retract
+u055,test,Speak like this: we must resist.,imitate
+u056,test,"Yes, exactly like that.",approve
+u057,dev,"No, leave it as it was.",confirm_no
+u058,test,When did the Congress meet in Philadelphia?,none
+u059,test,Pronounce Burr as Bur.,respell
+u060,dev,"No, that's not how it goes.",reject
+u061,test,Say Monroe as Mun-roe.,respell
+u062,test,Talk as follows - it is a dangerous thing.,imitate
+u063,dev,The name is pronounced Pinck-ney.,respell
+u064,test,Undo that.,retract
+u065,test,Yes that sounds right.,confirm_yes
+u066,dev,Definitely better.,compare_new
+u067,test,That is wrong.,confirm_no
+u068,test,Is it Jefferson or Jeffersen?,none
+u069,dev,That's better,compare_new
+u070,test,that sounded off,reject
+u071,test,Please say what year the war began.,none
+u072,dev,Do you pronounce Jefferson correctly?,none
+u073,test,"Talk as follows. Gentlemen, the hour is late.",imitate
+u074,test,The first one.,compare_old
+u075,dev,Revert that.,retract
+u076,test,Yes.,compare_new
+u077,test,Say hello to the delegates.,none
+u078,dev,Say it again.,reject
+u079,test,That sounded bad.,reject
+u080,test,Say that again.,reject
+u081,dev,Remove that lesson.,retract
+u082,test,That sounded better,compare_new
+u083,test,Wonderful.,approve
+u084,dev,Talk as follows: The tax is unjust.,imitate
+u085,test,That is wrong.,reject
+u086,test,Not that one.,confirm_no
+u087,dev,The old one was better.,compare_old
+u088,test,That word was mispronounced.,reject
+u089,test,That was perfect.,approve
+u090,dev,How is Jefferson pronounced in Virginia?,none
+u091,test,"Pronounce ""Monticello"" as Mon-ti-chello.",respell
+u092,test,pronounce Adams as Add-ums,respell
+u093,dev,Talk as follows: Good morning to you all.,imitate
+u094,test,Say it like this: the people must be taught.,imitate
+u095,test,Talk to me about the Boston Tea Party.,none
+u096,dev,That sounded odd.,reject
+u097,test,Go back to how you said it before.,retract
+u098,test,"Sure, keep that.",confirm_yes
+u099,dev,Yeah!,confirm_yes
+u100,test,Please read the file notes dot txt.,none
+u101,test,That was good.,approve
+u102,dev,The new one is better.,compare_new
+u103,test,You said that strangely.,reject
+u104,test,Say it as follows: I am at your service.,imitate
+u105,dev,That's right.,approve
+u106,test,Talk as follows: Fellow citizens.,imitate
+u107,test,That was too fast.,reject
+u108,dev,Say Grenville as Gren-vill.,respell
+u109,test,I didn't like how you said that.,reject
+u110,test,no thanks,confirm_no
+u111,dev,Please do.,confirm_yes
+u112,test,That is right.,approve
+u113,test,That was wrong.,reject
+u114,dev,Thank you.,none
+u115,test,Tell me why that sounded wrong to the delegates.,none
+u116,test,Say 'Ticonderoga' as 'Tie-con-der-oh-ga'.,respell
+u117,dev,"Yes, keep it.",confirm_yes
+u118,test,"Better late than never, they say.",none
+u119,test,"Yes, that is better.",compare_new
+u120,dev,yes please,confirm_yes
+u121,test,I want to learn how to talk.,none
+u122,test,Pronounce Quincy as Quin-zee.,respell
+u123,dev,Try that again.,reject
+u124,test,That sounded wrong.,reject
+u125,test,Go back.,compare_old
+u126,dev,What would Adams say about the tax?,none
+u127,test,"Good morning, how are you today?",none
+u128,test,Could you say Susquehanna as Sus-kwe-han-a?,respell
+u129,dev,Pronounce Saratoga as Sar-uh-toe-guh.,respell
+u130,test,"Right, now tell me about the Navigation Acts.",none
+u131,test,Tell me a story.,none
+u132,dev,Explain how a lexicon works.,none
+u133,test,"Okay, keep it.",confirm_yes
+u134,test,Forget about the tax for a moment and tell me about trade.,none
+u135,dev,"Hmm, that didn't sound right to me.",reject
+u136,test,Please don't.,confirm_no
+u137,test,Why did the colonists distrust a standing army?,none
+u138,dev,That was the wrong tax.,none
+u139,test,Don't keep that.,confirm_no
+u140,test,Perfectly reasonable question.,none
+u141,dev,In future say Adams as Add-ums.,respell
+u142,test,Nope,confirm_no
+u143,test,The second one.,compare_new
+u144,dev,Please forget that.,retract
+u145,test,Pronounce Wedderburn as Wed-der-burn.,respell
+u146,test,Scratch that.,retract
+u147,dev,That is right.,confirm_yes
+u148,test,Exactly.,approve
+u149,test,That's how it should sound.,approve
+u150,dev,Can you pronounce Rittenhouse as Rit-ten-house?,respell
+u151,test,Not like that.,reject
+u152,test,Worse,compare_old
+u153,dev,Speak as follows: Liberty is the breath of life.,imitate
+u154,test,Keep that.,confirm_yes
+u155,test,What does pronounce mean?,none
+u156,dev,Can you say that again?,reject
+u157,test,Better!,compare_new
+u158,test,Undo is a word in the dictionary.,none
+u159,dev,Please pronounce Gouverneur as Guv-er-neer.,respell
+u160,test,"Great, that sounded natural.",approve
+u161,test,Pronounce Otis as Oh-tis.,respell
+u162,dev,Say that the delegates met in June.,none
+u163,test,Forget that.,retract
+u164,test,"Good, keep it like that.",approve
+u165,dev,"Nice, that's better.",approve
+u166,test,That was not right.,reject
+u167,test,Take that back.,retract
+u168,dev,"Say it as follows, I have the honour to be.",imitate
+u169,test,That sounded good.,approve
+u170,test,What time is it?,none
+u171,dev,Say Wythe as Withe.,respell
+u172,test,Yep,confirm_yes
+u173,test,Pronounce Chesapeake as Ches-uh-peek.,respell
+u174,dev,That doesn't sound natural.,reject
+u175,test,From now on pronounce Jefferson as Jeff-er-son.,respell
+u176,test,Say Paine as Payne.,respell
+u177,dev,Tell me about the Stamp Act.,none
+u178,test,Pronounce Jefferson as Jeff-er-son.,respell
+u179,test,That's not right.,reject
+u180,dev,Yes.,confirm_yes
+u181,test,The first one was better.,compare_old
+u182,test,No.,confirm_no
+u183,dev,Much better.,compare_new
+u184,test,No.,compare_old
+u185,test,"Never mind, forget that pronunciation.",retract
+u186,dev,The second was better.,compare_new
+u187,test,How many files are in the directory?,none
+u188,test,The first sounded better.,compare_old
+u189,dev,That did not sound right.,reject
+u190,test,Say Concord as Conk-ord.,respell
+u191,test,Can you summarise the Declaration?,none
+u192,dev,That is not right.,confirm_no
+u193,test,Do not keep it.,confirm_no
+u194,test,That sounded right.,approve
+u195,dev,Always pronounce Hamilton as Ham-il-ton.,respell

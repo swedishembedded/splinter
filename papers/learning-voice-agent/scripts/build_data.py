@@ -137,6 +137,31 @@ def main():
     macros["GateWerAfter"] = f"{last_eval['word_error_rate']:.3f}"
     macros["GateKlLast"] = f"{report['steps'][-1]['mean_kl']:.3f}"
 
+    # The same planted reward and budget under three training methods.
+    methods = [("GRPO (group advantages)", "rl-speed-gate-20261010"), ("DPO (best vs worst take)", "rl-speed-dpo-20261010"), ("Best-of-n (imitate the best take)", "rl-speed-best-of-n-20261010")]
+    lines = ["\\begin{tabular}{@{}l r r r r@{}}", "\\toprule", "Method & Frames/word before & after & WER before & after\\\\", "\\midrule"]
+    for label, rid in methods:
+        ev = json.loads((ROOT / runs[rid]["file"]).read_text(encoding="utf-8"))["evals"]
+        lines.append(f"{label} & {ev[0]['mean_frames_per_word']:.2f} & {ev[-1]['mean_frames_per_word']:.2f} & {ev[0]['word_error_rate']:.3f} & {ev[-1]['word_error_rate']:.3f}\\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "methods_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # Extraction study: the rule-based readers of a user's words, on the frozen test split.
+    study = runs["extraction-rules-20261010"]
+    readers = json.loads((ROOT / study["file"]).read_text(encoding="utf-8"))["readers"]
+    names = {"respell": "pronounce X as Y", "imitate": "talk as follows", "reject": "that sounded wrong", "approve": "that sounded good",
+             "retract": "forget that", "confirm_yes": "confirm", "confirm_no": "refuse", "compare_new": "second take better", "compare_old": "first take better"}
+    lines = ["\\begin{tabular}{@{}l r r r@{}}", "\\toprule", "Reader & Utterances & Precision & Recall\\\\", "\\midrule"]
+    for key, label in names.items():
+        t = readers[key]["test"]
+        precision = "n/a" if t["precision"] is None else f"{t['precision']:.2f}"
+        recall = "n/a" if t["recall"] is None else f"{t['recall']:.2f}"
+        lines.append(f"{label} & {t['positives']} & {precision} & {recall}\\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (OUT / "extraction_table.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    macros["ExtractFalsePositives"] = str(sum(r["test"]["false_positives"] for r in readers.values()))
+    macros["ExtractTestSize"] = study["n"]
+
     (OUT / "macros.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()), encoding="utf-8")
 
 

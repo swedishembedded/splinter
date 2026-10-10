@@ -1,0 +1,305 @@
+{
+ "table": "data/utterances/utterances.csv",
+ "utterances": 196,
+ "readers": {
+  "respell": {
+   "test": {
+    "positives": 20,
+    "true_positives": 13,
+    "false_positives": 0,
+    "false_negatives": 7,
+    "precision": 1.0,
+    "recall": 0.65,
+    "f1": 0.787878787878788,
+    "missed": [
+     "I'd like you to pronounce Appomattox as Ap-uh-mat-uks.",
+     "You should say Boylston as Boil-ston.",
+     "It's pronounced Jef-fer-son.",
+     "Please pronounce Hancock as Han-cock.",
+     "Please say Townshend like Town-send.",
+     "Could you say Susquehanna as Sus-kwe-han-a?",
+     "From now on pronounce Jefferson as Jeff-er-son."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 14,
+    "true_positives": 9,
+    "false_positives": 0,
+    "false_negatives": 5,
+    "precision": 1.0,
+    "recall": 0.6428571428571429,
+    "f1": 0.782608695652174,
+    "missed": [
+     "The name is pronounced Pinck-ney.",
+     "In future say Adams as Add-ums.",
+     "Can you pronounce Rittenhouse as Rit-ten-house?",
+     "Please pronounce Gouverneur as Guv-er-neer.",
+     "Always pronounce Hamilton as Ham-il-ton."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "imitate": {
+   "test": {
+    "positives": 12,
+    "true_positives": 8,
+    "false_positives": 0,
+    "false_negatives": 4,
+    "precision": 1.0,
+    "recall": 0.6666666666666666,
+    "f1": 0.8,
+    "missed": [
+     "Talk like this: I shall not yield.",
+     "Listen and talk as follows: Welcome, friend.",
+     "Say it in this way: it is the voice of reason.",
+     "Speak like this: we must resist."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 8,
+    "true_positives": 6,
+    "false_positives": 0,
+    "false_negatives": 2,
+    "precision": 1.0,
+    "recall": 0.75,
+    "f1": 0.8571428571428571,
+    "missed": [
+     "Say it exactly like this: aye, with feeling.",
+     "Please talk as follows: Thank you for coming."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "reject": {
+   "test": {
+    "positives": 18,
+    "true_positives": 8,
+    "false_positives": 0,
+    "false_negatives": 10,
+    "precision": 1.0,
+    "recall": 0.4444444444444444,
+    "f1": 0.6153846153846153,
+    "missed": [
+     "That was a bit off.",
+     "That sounded weird.",
+     "You got that wrong.",
+     "Could you repeat that more naturally?",
+     "That sounded robotic.",
+     "That word was mispronounced.",
+     "You said that strangely.",
+     "That was too fast.",
+     "I didn't like how you said that.",
+     "Not like that."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 8,
+    "true_positives": 4,
+    "false_positives": 0,
+    "false_negatives": 4,
+    "precision": 1.0,
+    "recall": 0.5,
+    "f1": 0.6666666666666666,
+    "missed": [
+     "No, that's not how it goes.",
+     "Hmm, that didn't sound right to me.",
+     "Can you say that again?",
+     "That doesn't sound natural."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "approve": {
+   "test": {
+    "positives": 14,
+    "true_positives": 6,
+    "false_positives": 0,
+    "false_negatives": 8,
+    "precision": 1.0,
+    "recall": 0.42857142857142855,
+    "f1": 0.6,
+    "missed": [
+     "That sounds much better now.",
+     "That was well said.",
+     "Yes, exactly like that.",
+     "Wonderful.",
+     "Exactly.",
+     "That's how it should sound.",
+     "Great, that sounded natural.",
+     "Good, keep it like that."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 2,
+    "true_positives": 1,
+    "false_positives": 0,
+    "false_negatives": 1,
+    "precision": 1.0,
+    "recall": 0.5,
+    "f1": 0.6666666666666666,
+    "missed": [
+     "Nice, that's better."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "retract": {
+   "test": {
+    "positives": 10,
+    "true_positives": 5,
+    "false_positives": 0,
+    "false_negatives": 5,
+    "precision": 1.0,
+    "recall": 0.5,
+    "f1": 0.6666666666666666,
+    "missed": [
+     "Stop saying it that way.",
+     "Undo the last thing.",
+     "Go back to how you said it before.",
+     "Scratch that.",
+     "Never mind, forget that pronunciation."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 6,
+    "true_positives": 1,
+    "false_positives": 0,
+    "false_negatives": 5,
+    "precision": 1.0,
+    "recall": 0.16666666666666666,
+    "f1": 0.2857142857142857,
+    "missed": [
+     "Actually, forget what I just taught you.",
+     "Cancel that.",
+     "Revert that.",
+     "Remove that lesson.",
+     "Please forget that."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "confirm_yes": {
+   "test": {
+    "positives": 7,
+    "true_positives": 4,
+    "false_positives": 0,
+    "false_negatives": 3,
+    "precision": 1.0,
+    "recall": 0.5714285714285714,
+    "f1": 0.7272727272727273,
+    "missed": [
+     "Yes that sounds right.",
+     "Sure, keep that.",
+     "Okay, keep it."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 6,
+    "true_positives": 4,
+    "false_positives": 0,
+    "false_negatives": 2,
+    "precision": 1.0,
+    "recall": 0.6666666666666666,
+    "f1": 0.8,
+    "missed": [
+     "Please do.",
+     "Yes, keep it."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "confirm_no": {
+   "test": {
+    "positives": 8,
+    "true_positives": 6,
+    "false_positives": 0,
+    "false_negatives": 2,
+    "precision": 1.0,
+    "recall": 0.75,
+    "f1": 0.8571428571428571,
+    "missed": [
+     "Not that one.",
+     "Please don't."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 3,
+    "true_positives": 1,
+    "false_positives": 0,
+    "false_negatives": 2,
+    "precision": 1.0,
+    "recall": 0.3333333333333333,
+    "f1": 0.5,
+    "missed": [
+     "No, that's not what I meant.",
+     "No, leave it as it was."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "compare_new": {
+   "test": {
+    "positives": 5,
+    "true_positives": 5,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "missed": [],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 5,
+    "true_positives": 2,
+    "false_positives": 0,
+    "false_negatives": 3,
+    "precision": 1.0,
+    "recall": 0.4,
+    "f1": 0.5714285714285715,
+    "missed": [
+     "Definitely better.",
+     "The new one is better.",
+     "The second was better."
+    ],
+    "wrongly_fired_on": []
+   }
+  },
+  "compare_old": {
+   "test": {
+    "positives": 7,
+    "true_positives": 5,
+    "false_positives": 0,
+    "false_negatives": 2,
+    "precision": 1.0,
+    "recall": 0.7142857142857143,
+    "f1": 0.8333333333333333,
+    "missed": [
+     "I preferred the first.",
+     "The first sounded better."
+    ],
+    "wrongly_fired_on": []
+   },
+   "dev": {
+    "positives": 3,
+    "true_positives": 2,
+    "false_positives": 0,
+    "false_negatives": 1,
+    "precision": 1.0,
+    "recall": 0.6666666666666666,
+    "f1": 0.8,
+    "missed": [
+     "The old one was better."
+    ],
+    "wrongly_fired_on": []
+   }
+  }
+ }
+}
