@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-absorb-story"
+description = "What the nightly consolidation loop does in the situations it will meet: contradictions, reversions, interference, forgetting, secrets, scale and order, over a scripted storyline of invented facts."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "splinter_absorb_story"
+path = "src/lib.rs"
+
+[[bin]]
+name = "splinter-absorb-story"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

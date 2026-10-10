@@ -8,6 +8,7 @@ resolver = "2"
 members = [
     "crates/*",
     "samples/absorb",
+    "samples/absorb-story",
     "samples/adams",
     "samples/agent/loop",
     "samples/health",
