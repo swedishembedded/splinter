@@ -174,6 +174,46 @@ def session_retract_scenarios():
                        "tests": [{"ask": q, "check": {"none_of": said(first)}} for q in questions[1:]]}
 
 
+# A second set of procedures and rules, for the gates the first set could not meet: unseen vocabulary, more asks.
+MORE_PROCEDURES = [
+    ("prepare the lab bench", ["wipe the amber cloth", "stack the glass rack", "light the green lamp"], ["amber", "rack", "lamp"]),
+    ("open the shop", ["raise the shutters", "count the brass till", "hang the open sign"], ["shutters", "till", "sign"]),
+    ("launch the weather balloon", ["check the helium gauge", "tie the orange tag", "release the tether"], ["gauge", "tag", "tether"]),
+    ("feed the kiln crew", ["ring the copper bell", "ladle the barley soup", "wash the tin cups"], ["bell", "soup", "cups"]),
+    ("archive a project", ["zip the folder", "stamp it with the date", "move it to the cold shelf"], ["zip", "stamp", "shelf"]),
+    ("close the greenhouse", ["lower the vents", "drain the long hose", "lock the north door"], ["vents", "hose", "door"]),
+    ("service the printer", ["unplug the cable", "dust the rollers", "print the test page"], ["cable", "rollers", "test page"]),
+    ("welcome a guest", ["offer the blue slippers", "show the tea corner", "note the name in the guest book"], ["slippers", "tea", "guest book"]),
+    ("calibrate the scale", ["clear the tray", "place the silver weight", "press the zero key"], ["tray", "silver", "zero"]),
+    ("send the weekly mail", ["gather the notes", "write the summary", "send it before noon"], ["notes", "summary", "noon"]),
+]
+MORE_RULES = [
+    ("Always start your answers with the word noted.", {"starts_with": "noted"}, RULE_QUESTIONS),
+    ("Never mention the color green.", {"none_of": ["green"]}, ["What color is grass?", "What color are most leaves?", "What color is a frog?", "What color is a lime?"]),
+    ("Always start your answers with the word right.", {"starts_with": "right"}, RULE_QUESTIONS),
+    ("From now on end every answer with the word roger.", {"ends_with": "roger"}, RULE_QUESTIONS),
+    ("Never mention the color blue.", {"none_of": ["blue"]}, ["What color is the sky on a clear day?", "What color is the ocean?", "What color are jeans?", "What color is a blueberry?"]),
+    ("Always include the word harbor somewhere in your answer.", {"all_of": ["harbor"]}, RULE_QUESTIONS),
+    ("From now on keep every answer under six words.", {"max_words": 5}, RULE_QUESTIONS),
+    ("Always call me chief.", {"all_of": ["chief"]}, RULE_QUESTIONS),
+    ("Never mention the number seven.", {"none_of": ["seven", " 7"]}, ["How many days are in a week?", "How many colors are in a rainbow?", "How many continents are there?", "What is three plus four?"]),
+    ("Always finish your answer with the words stay sharp.", {"ends_with": "stay sharp"}, RULE_QUESTIONS),
+]
+
+
+def more_scenarios():
+    for i, (name, steps, tokens) in enumerate(MORE_PROCEDURES):
+        split = "dev" if i < 2 else "test"
+        said_ = f"Here is how to {name}: first {steps[0]}, then {steps[1]}, then {steps[2]}."
+        yield split, {"id": f"more-procedure-{i:02d}", "kind": "procedure", "teach": [said_],
+                      "tests": [{"ask": f"What is the first step to {name}?", "check": {"any_of": [tokens[0]]}},
+                                {"ask": f"How do I {name}?", "check": {"all_of": [tokens[1], tokens[2]]}},
+                                {"ask": f"What is the last step to {name}?", "check": {"any_of": [tokens[2]]}}]}
+    for i, (utterance, check, questions) in enumerate(MORE_RULES):
+        yield ("dev" if i < 2 else "test"), {"id": f"more-rule-{i:02d}", "kind": "rule", "teach": [utterance],
+                                              "tests": [{"ask": q, "check": check} for q in questions]}
+
+
 def main():
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
@@ -195,6 +235,14 @@ def main():
         (out / f"scenarios-session-retract-{split}.jsonl").write_text(text, encoding="utf-8")
         sums.append(f"{hashlib.sha256(text.encode()).hexdigest()}  scenarios-session-retract-{split}.jsonl")
         print("session-retract", split, len(scenarios), "scenarios")
+    extra_more = {"dev": [], "test": []}
+    for split, scenario in more_scenarios():
+        extra_more[split].append(scenario)
+    for split, scenarios in extra_more.items():
+        text = "".join(json.dumps(sc, sort_keys=True) + "\n" for sc in scenarios)
+        (out / f"scenarios-more-{split}.jsonl").write_text(text, encoding="utf-8")
+        sums.append(f"{hashlib.sha256(text.encode()).hexdigest()}  scenarios-more-{split}.jsonl")
+        print("more", split, len(scenarios), "scenarios")
     (out / "scenarios.sha256").write_text("\n".join(sums) + "\n", encoding="utf-8")
 
 
