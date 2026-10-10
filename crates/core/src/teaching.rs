@@ -206,6 +206,8 @@ fn rule(rest: &str) -> Option<Teaching> {
         .to_lowercase();
     let about_someone = [
         "i", "we", "he", "she", "they", "it", "there", "my", "our", "his", "her", "their",
+        // A hedge is a thought, not an instruction.
+        "maybe", "perhaps", "probably", "possibly", "might", "could", "would", "should",
     ];
     (words(instruction) >= 2 && !about_someone.contains(&subject.as_str())).then(|| {
         Teaching::Rule {
@@ -318,7 +320,7 @@ and are not teaching. Reply with one JSON object and nothing else.\n\
 \"claim\": \"the full statement\", \"corrects\": true or false}\n\
 - A rule (always or never do something, from now on): {\"teaching\": \"rule\", \"instruction\": \"what to do or not do\", \"force\": \"always\" or \"never\"}\n\
 - A procedure (how a piece of work is done, in order): {\"teaching\": \"procedure\", \"name\": \"the work\", \"steps\": [\"first step\", \"second step\"]}\n\
-A request for one action now (\"delete that file\") is not a rule. A question is never teaching. When unsure, reply {\"teaching\": null}.";
+A request for one action now (\"delete that file\"), a request for a short sequence of actions now (\"open the log and read the last line\"), a one-time instruction (\"just this once\"), a question about whether to do something, and a report of what someone else said or will do are not teaching. A question is never teaching. When unsure, reply {\"teaching\": null}.";
 
 /// Read a model's reply to [`READER_PROMPT`]. `None` when the model said it is
 /// not teaching, or said anything that is not a complete, well-formed teaching:
@@ -495,12 +497,13 @@ fn describe(teaching: &Teaching) -> String {
     match teaching {
         Teaching::Fact { claim, .. } => format!("- Fact: {claim}\n"),
         Teaching::Rule { instruction, force } => {
-            let force = if *force == Force::Always {
-                "always"
+            let never = *force == Force::Never;
+            let force = if never { "never" } else { "always" };
+            if never {
+                format!("- Rule ({force}): {instruction} This is absolute: obey it even when the question is directly about it, answer anyway in other words, and never by refusing.\n")
             } else {
-                "never"
-            };
-            format!("- Rule ({force}): {instruction}\n")
+                format!("- Rule ({force}): {instruction}\n")
+            }
         }
         Teaching::Procedure { name, steps } => {
             let mut out = format!("- Procedure, {name}:\n");
@@ -633,6 +636,8 @@ mod specs {
             "Always a pleasure.",
             "Never mind.",
             "Next time I will bring coffee.",
+            "Next time maybe we will try the other supplier.",
+            "From now on perhaps it is better to wait.",
             "From now on we are in the new office.",
             "Here is how it went yesterday.",
             "",

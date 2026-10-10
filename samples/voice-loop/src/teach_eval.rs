@@ -58,6 +58,11 @@ pub struct TeachEvalArgs {
     /// The recognition model, in brain's model store (with `--voices`).
     #[arg(long, default_value = DEFAULT_RECOGNIZER)]
     asr: String,
+    /// A user who hears a restatement that lacks the words of the intended
+    /// teaching says no and says it again, up to this many times, each time as
+    /// another take of the voice. Zero: the user always confirms.
+    #[arg(long, default_value_t = 0)]
+    retries: usize,
     /// Also let the model read what the user says for teachings.
     #[arg(long)]
     model_reader: bool,
@@ -75,7 +80,13 @@ struct Ears<'a> {
 
 impl Ears<'_> {
     fn hear(&self, said: &str) -> Result<String> {
-        let clip = self.synthesizer.speak(said, &self.speaker)?;
+        self.hear_as(said, self.speaker.seed())
+    }
+
+    /// The same words said again, as another take of the voice.
+    fn hear_as(&self, said: &str, seed: u64) -> Result<String> {
+        let speaker = SpeakerProfile::new(seed, self.speaker.portrayal().clone());
+        let clip = self.synthesizer.speak(said, &speaker)?;
         Ok(self.recognizer.transcribe(&clip)?.text)
     }
 }
@@ -121,6 +132,8 @@ struct ScenarioResult {
     voice: Option<u64>,
     /// Teaching utterances the recogniser did not hear as said: (said, heard).
     misheard: Vec<(String, String)>,
+    /// How many times the user refused a restatement and said it again.
+    retried: usize,
     kind: String,
     /// How many of the teaching utterances the agent restated for confirmation.
     understood: usize,
@@ -162,6 +175,7 @@ fn run_scenario(
     persona: &Persona,
     reader: Option<&Persona>,
     ears: Option<&Ears>,
+    retries: usize,
     scenario: &Scenario,
 ) -> Result<ScenarioResult> {
     let mut misheard = Vec::new();
@@ -178,9 +192,43 @@ fn run_scenario(
     };
     let mut first = session(persona, reader, Ledger::new())?;
     let mut understood = 0;
+    // The words a right restatement must hold, when the teaching names them.
+    let key_tokens: Vec<String> = scenario
+        .tests
+        .first()
+        .map(|t| {
+            t.check
+                .any_of
+                .iter()
+                .chain(&t.check.all_of)
+                .map(|k| k.to_lowercase())
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut retried = 0;
     for said in &scenario.teach {
-        let restated = first.hear(&heard(said, true)?, &mut |_| {})?;
-        understood += usize::from(restated.ends_with("Is that right?"));
+        let needs_key = key_tokens.iter().any(|k| said.to_lowercase().contains(k));
+        let mut attempt = 0;
+        loop {
+            let text = match (attempt, ears) {
+                (0, _) | (_, None) => heard(said, true)?,
+                (n, Some(ears)) => ears.hear_as(said, ears.speaker.seed() + 1000 * n as u64)?,
+            };
+            let restated = first.hear(&text, &mut |_| {})?;
+            let right = !needs_key
+                || key_tokens
+                    .iter()
+                    .any(|k| restated.to_lowercase().contains(k));
+            if ears.is_some() && !right && attempt < retries && restated.ends_with("Is that right?")
+            {
+                first.hear(&heard("No.", false)?, &mut |_| {})?;
+                attempt += 1;
+                retried += 1;
+                continue;
+            }
+            understood += usize::from(restated.ends_with("Is that right?"));
+            break;
+        }
         first.hear(&heard("Yes.", false)?, &mut |_| {})?;
     }
     for prime in &scenario.primes {
@@ -215,6 +263,7 @@ fn run_scenario(
         id: scenario.id.clone(),
         voice: ears.map(|e| e.speaker.seed()),
         misheard,
+        retried,
         kind: scenario.kind.clone(),
         understood,
         teachings: scenario.teach.len(),
@@ -270,6 +319,7 @@ pub fn run(args: &TeachEvalArgs) -> Result<()> {
                 &persona,
                 reader.as_ref(),
                 ears.as_ref(),
+                args.retries,
                 scenario,
             )?);
         }
