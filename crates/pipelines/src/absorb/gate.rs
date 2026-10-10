@@ -26,6 +26,7 @@ use splinter_core::release::ReleaseId;
 use splinter_core::terms::Distribution;
 use splinter_eval::claim_gate::{decide, AnchorTally, ClaimGate, ClaimTally, Tally};
 use splinter_eval::gate::{Check, GateConfig};
+use splinter_knowledge::tasks::dedup::Seen;
 use splinter_orchestrator::generation::GenerationMark;
 use splinter_orchestrator::releases::{ReleaseGate, StoredRelease};
 
@@ -48,6 +49,88 @@ fn tally(graded: &Graded) -> Tally {
         passed: probes.iter().filter(|p| p.verdict == Some(true)).count(),
         measured: probes.iter().filter(|p| p.verdict.is_some()).count(),
     }
+}
+
+/// The stopping paraphrases of each of `claims` as a suite, without the ones
+/// a record `trained` on contains.
+pub(super) fn claim_suites(
+    ctx: &Context,
+    claims: &[Live],
+    kits: &BTreeMap<ClaimId, ClaimKit>,
+    trained: &Seen,
+) -> Result<Vec<(ClaimId, Suite)>, OrchestratorError> {
+    let mut suites = Vec::new();
+    for (id, _) in claims {
+        let Some(kit) = kits.get(id) else { continue };
+        let tasks = kit
+            .stopping
+            .iter()
+            .map(|t| ctx.tasks().get(t))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut suite = Suite::of_tasks(format!("claim {id}"), tasks);
+        leakage::exclude_leaked(&mut suite, trained);
+        suites.push((id.clone(), suite));
+    }
+    Ok(suites)
+}
+
+/// The counts of the two arms on the claims' suites (the first answers of
+/// each arm's grading, in suite order) and on the anchor suite, which follows
+/// them when one is frozen.
+pub(super) fn tallies(
+    suites: &[(ClaimId, Suite)],
+    anchor_frozen: bool,
+    theirs: &[Graded],
+    ours: &[Graded],
+) -> (Vec<ClaimTally>, Option<AnchorTally>) {
+    let claims = suites
+        .iter()
+        .enumerate()
+        .map(|(n, (id, _))| ClaimTally {
+            claim: id.to_string(),
+            candidate: tally(&theirs[n]),
+            champion: ours[n].as_ref().ok().map(|_| tally(&ours[n])),
+        })
+        .collect();
+    let anchor = anchor_frozen
+        .then(|| {
+            let n = suites.len();
+            let measured = |g: &Graded| g.as_ref().ok().map(|_| tally(g));
+            Some(AnchorTally {
+                candidate: measured(&theirs[n])?,
+                champion: measured(&ours[n])?,
+            })
+        })
+        .flatten();
+    (claims, anchor)
+}
+
+/// The sample of stopping paraphrases the serve check re-asks through the
+/// server, with the answers the model gave them in-process; none when no
+/// paraphrase was graded in-process to compare with.
+pub(super) fn served_sample(
+    suites: &[(ClaimId, Suite)],
+    graded: &[Graded],
+    wanted: usize,
+) -> Option<(Suite, Vec<Probe>)> {
+    let mut tasks = Vec::new();
+    let mut probes: Vec<Probe> = Vec::new();
+    for ((_, suite), outcome) in suites.iter().zip(graded) {
+        if let Ok(answers) = outcome {
+            tasks.extend(suite.tasks.iter().cloned());
+            probes.extend(answers.iter().cloned());
+        }
+    }
+    let take = wanted.min(tasks.len());
+    (take > 0).then(|| {
+        (
+            Suite::of_tasks(
+                "stopping paraphrases (served sample)",
+                tasks[..take].to_vec(),
+            ),
+            probes[..take].to_vec(),
+        )
+    })
 }
 
 /// What a night's candidate is decided on.
@@ -84,18 +167,7 @@ pub fn decide_claims(
         cancel,
     } = *decision;
     let trained = leakage::trained_prompts(ctx, candidate)?;
-    let mut suites: Vec<(ClaimId, Suite)> = Vec::new();
-    for (id, _) in live {
-        let Some(kit) = kits.get(id) else { continue };
-        let tasks = kit
-            .stopping
-            .iter()
-            .map(|t| ctx.tasks().get(t))
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut suite = Suite::of_tasks(format!("claim {id}"), tasks);
-        leakage::exclude_leaked(&mut suite, &trained);
-        suites.push((id.clone(), suite));
-    }
+    let suites = claim_suites(ctx, live, kits, &trained)?;
     let anchor_suite = anchor::current(ctx)?.map(|frozen| frozen.probe_suite());
     let mut all: Vec<(&Suite, Asked)> = suites.iter().map(|(_, s)| (s, Asked::Deployed)).collect();
     all.extend(anchor_suite.iter().map(|s| (s, Asked::Default)));
@@ -124,23 +196,7 @@ pub fn decide_claims(
         &all,
         cancel,
     )?;
-    let claims: Vec<ClaimTally> = suites
-        .iter()
-        .enumerate()
-        .map(|(n, (id, _))| ClaimTally {
-            claim: id.to_string(),
-            candidate: tally(&theirs[n]),
-            champion: ours[n].as_ref().ok().map(|_| tally(&ours[n])),
-        })
-        .collect();
-    let anchor = anchor_suite.as_ref().and_then(|_| {
-        let n = suites.len();
-        let measured = |g: &Graded| g.as_ref().ok().map(|_| tally(g));
-        Some(AnchorTally {
-            candidate: measured(&theirs[n])?,
-            champion: measured(&ours[n])?,
-        })
-    });
+    let (claims, anchor) = tallies(&suites, anchor_suite.is_some(), &theirs, &ours);
     let serve = serve_check(
         ctx,
         candidate,
@@ -182,24 +238,11 @@ fn serve_check(
     config: &GateConfig,
     cancel: &CancelToken,
 ) -> Result<Check<splinter_eval::gate::Serve>, OrchestratorError> {
-    let mut tasks = Vec::new();
-    let mut probes: Vec<Probe> = Vec::new();
-    for ((_, suite), outcome) in suites.iter().zip(graded) {
-        if let Ok(answers) = outcome {
-            tasks.extend(suite.tasks.iter().cloned());
-            probes.extend(answers.iter().cloned());
-        }
-    }
-    let take = config.serve_sample.min(tasks.len());
-    if take == 0 {
+    let Some((sample, probes)) = served_sample(suites, graded, config.serve_sample) else {
         return Ok(Check::unmeasured(
             "no stopping paraphrase was graded in-process to compare with",
         ));
-    }
-    let sample = Suite::of_tasks(
-        "stopping paraphrases (served sample)",
-        tasks[..take].to_vec(),
-    );
+    };
     let base = load_source(
         &resolve_base(&candidate.base)
             .map_err(|e| OrchestratorError::Refused(format!("the policy base: {e}")))?,
@@ -213,7 +256,7 @@ fn serve_check(
             adapter_digest: &candidate.adapter_digest,
             system,
             sample: &sample,
-            in_process: &probes[..take],
+            in_process: &probes,
             startup: Duration::from_secs(config.serve_startup_secs),
         },
         cancel,

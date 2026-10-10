@@ -26,15 +26,16 @@ use splinter_agent::CancelToken;
 use splinter_core::claim::ClaimId;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
-use splinter_eval::claim_gate::{decide_consolidation, AnchorTally, ClaimGate, ClaimTally, Tally};
+use splinter_eval::claim_gate::{decide_consolidation, ClaimGate};
 use splinter_eval::gate::{Check, GateConfig, Serve};
 use splinter_model::local::{load_source, resolve_base};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::releases::StoredRelease;
 
+use crate::absorb::gate::{claim_suites, served_sample, tallies};
 use crate::absorb::kit::{ClaimKit, Live};
-use crate::release::probe::{Probe, Suite};
+use crate::release::probe::Suite;
 use crate::release::serve::{self, ServeCheck};
 use crate::release::{anchor, arm_on, grade_arm, leakage, Asked, Graded};
 
@@ -62,14 +63,6 @@ pub(super) struct Decision<'a> {
     pub(super) cancel: &'a CancelToken,
 }
 
-fn tally(graded: &Graded) -> Tally {
-    let probes = graded.as_deref().unwrap_or_default();
-    Tally {
-        passed: probes.iter().filter(|p| p.verdict == Some(true)).count(),
-        measured: probes.iter().filter(|p| p.verdict.is_some()).count(),
-    }
-}
-
 /// Decides the checkpoint against the release in use.
 pub(super) fn decide(
     ctx: &Context,
@@ -81,20 +74,7 @@ pub(super) fn decide(
         decision.mixed_in,
         "the consolidated checkpoint",
     )?;
-    let mut suites: Vec<(ClaimId, Suite)> = Vec::new();
-    for (id, _) in decision.claims {
-        let Some(kit) = decision.kits.get(id) else {
-            continue;
-        };
-        let tasks = kit
-            .stopping
-            .iter()
-            .map(|t| ctx.tasks().get(t))
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut suite = Suite::of_tasks(format!("claim {id}"), tasks);
-        leakage::exclude_leaked(&mut suite, &trained);
-        suites.push((id.clone(), suite));
-    }
+    let suites = claim_suites(ctx, decision.claims, decision.kits, &trained)?;
     let anchor_suite = anchor::current(ctx)?.map(|frozen| frozen.probe_suite());
     let mut all: Vec<(&Suite, Asked)> = suites.iter().map(|(_, s)| (s, Asked::Deployed)).collect();
     all.extend(anchor_suite.iter().map(|s| (s, Asked::Default)));
@@ -123,23 +103,7 @@ pub(super) fn decide(
         &all,
         decision.cancel,
     )?;
-    let claims: Vec<ClaimTally> = suites
-        .iter()
-        .enumerate()
-        .map(|(n, (id, _))| ClaimTally {
-            claim: id.to_string(),
-            candidate: tally(&theirs[n]),
-            champion: ours[n].as_ref().ok().map(|_| tally(&ours[n])),
-        })
-        .collect();
-    let anchor = anchor_suite.as_ref().and_then(|_| {
-        let n = suites.len();
-        let measured = |g: &Graded| g.as_ref().ok().map(|_| tally(g));
-        Some(AnchorTally {
-            candidate: measured(&theirs[n])?,
-            champion: measured(&ours[n])?,
-        })
-    });
+    let (claims, anchor) = tallies(&suites, anchor_suite.is_some(), &theirs, &ours);
     let serve = serve_check(ctx, decision, &suites, &theirs, candidate_prompt.as_deref())?;
     Ok(decide_consolidation(claims, anchor, serve))
 }
@@ -153,24 +117,11 @@ fn serve_check(
     graded: &[Graded],
     system: Option<&str>,
 ) -> Result<Check<Serve>, OrchestratorError> {
-    let mut tasks = Vec::new();
-    let mut probes: Vec<Probe> = Vec::new();
-    for ((_, suite), outcome) in suites.iter().zip(graded) {
-        if let Ok(answers) = outcome {
-            tasks.extend(suite.tasks.iter().cloned());
-            probes.extend(answers.iter().cloned());
-        }
-    }
-    let take = decision.config.serve_sample.min(tasks.len());
-    if take == 0 {
+    let Some((sample, probes)) = served_sample(suites, graded, decision.config.serve_sample) else {
         return Ok(Check::unmeasured(
             "no stopping paraphrase was graded in-process to compare with",
         ));
-    }
-    let sample = Suite::of_tasks(
-        "stopping paraphrases (served sample)",
-        tasks[..take].to_vec(),
-    );
+    };
     let base =
         load_source(&resolve_base(decision.checkpoint).map_err(|e| {
             OrchestratorError::Refused(format!("the consolidated checkpoint: {e}"))
@@ -184,7 +135,7 @@ fn serve_check(
             adapter_digest: decision.weights_digest,
             system,
             sample: &sample,
-            in_process: &probes[..take],
+            in_process: &probes,
             startup: Duration::from_secs(decision.config.serve_startup_secs),
         },
         decision.cancel,

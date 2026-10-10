@@ -12,7 +12,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
-use splinter_agent::claims::ClaimExtractor;
 use splinter_core::annotation::Strength;
 use splinter_core::claim::{Absorption, ClaimId, TrainedClaims};
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
@@ -20,7 +19,6 @@ use splinter_core::role::Role;
 use splinter_core::source::SourceId;
 use splinter_core::terms::combine_stated;
 use splinter_eval::claim_gate::StanceTally;
-use splinter_knowledge::claims::extract::ExtractionPolicy;
 use splinter_knowledge::claims::task::claim_task;
 use splinter_knowledge::claims::Ledger;
 use splinter_orchestrator::pipeline::{FnStage, Pipeline, StageEnd};
@@ -36,15 +34,11 @@ use super::sealed::SealedProbes;
 use super::stance::{self, Derivation, Held};
 use super::{AbsorbRequest, Absorbed};
 use crate::claim_quality::load_subjects;
-use crate::claims::{
-    extract, gate as rule_claims, resolve_set, ClaimsExtracted, ExtractRequest, GateRequest,
-    Unconfirmed,
-};
+use crate::claims::{gate as rule_claims, resolve_set, GateRequest};
 use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::learn::{records_at_share, PolicyUsed};
 use crate::rehearsal::{rehearse_on, RehearseRequest, REHEARSAL_SEED};
 use crate::release::arm_on;
-use crate::sessions::{intake, IntakeRequest};
 use crate::train::{
     auto_records_per_step, load_candidate, train, Candidate, Rehearse, TrainRequest, Trainer,
     Tuning,
@@ -53,8 +47,10 @@ use crate::verify::adopt_judge;
 use splinter_knowledge::claims::coverage::Subject;
 
 mod generations;
+mod intake;
 
 use generations::{consolidate_stage, consolidation_is_due, rebuild_stage};
+use intake::{extract_stage, intake_stage};
 
 type Done = Result<StageEnd, OrchestratorError>;
 
@@ -282,90 +278,6 @@ fn policy_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done
         &st.report.policy,
         &st.report.roles,
     ))?))
-}
-
-fn intake_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
-    let taken = intake(
-        ctx,
-        &IntakeRequest {
-            paths: &st.request.sessions,
-            max_bytes: st.request.max_session_bytes,
-        },
-    )?;
-    st.sessions = taken.sessions.iter().map(|s| s.source.clone()).collect();
-    let summary = value(&taken)?;
-    let none = st.sessions.is_empty();
-    st.report.intake = Some(taken);
-    Ok(if none {
-        StageEnd::stop(summary, "no session was taken in")
-    } else {
-        StageEnd::done(summary)
-    })
-}
-
-fn extract_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
-    let identity = ClaimExtractor::new(ctx.model(&st.generator)?)
-        .identity()
-        .to_string();
-    let claims = ctx.claims();
-    let mut reused = None;
-    for id in claims.list_sets()? {
-        let set = claims.get_set(&id)?;
-        let same_sessions = set
-            .sessions
-            .iter()
-            .map(|s| &s.session)
-            .eq(st.sessions.iter());
-        if same_sessions
-            && set.passes == st.request.extraction_passes
-            && set.extractor == identity
-            && set.sessions.iter().all(|s| s.failure.is_none())
-        {
-            reused = Some((id, set));
-        }
-    }
-    let extracted = match reused {
-        Some((claim_set, set)) => {
-            let mut by_kind = BTreeMap::new();
-            for p in set.sessions.iter().flat_map(|s| &s.proposals) {
-                *by_kind.entry(p.kind.as_str().to_string()).or_default() += 1;
-            }
-            ClaimsExtracted {
-                claim_set,
-                sessions: set.sessions.len(),
-                passes: set.passes,
-                proposals: set.sessions.iter().map(|s| s.proposals.len()).sum(),
-                disagreements: set.sessions.iter().map(|s| s.unconfirmed.len()).sum(),
-                unconfirmed: set
-                    .sessions
-                    .iter()
-                    .flat_map(|s| {
-                        s.unconfirmed.iter().map(|p| Unconfirmed {
-                            session: s.session.clone(),
-                            statement: p.statement.clone(),
-                        })
-                    })
-                    .collect(),
-                by_kind,
-                failed: Vec::new(),
-                stopped: None,
-            }
-        }
-        None => extract(
-            ctx,
-            &ExtractRequest {
-                sessions: &st.sessions,
-                extractor: &st.generator,
-                policy: ExtractionPolicy::default(),
-                passes: st.request.extraction_passes,
-                deadline: None,
-                cancel: run.cancel_token(),
-            },
-        )?,
-    };
-    let summary = value(&extracted)?;
-    st.report.extract = Some(extracted);
-    Ok(StageEnd::done(summary))
 }
 
 fn gate_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
