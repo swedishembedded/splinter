@@ -35,6 +35,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::embedding::{ModelEmbedder, SharedEmbedder};
+use crate::generation::lay_out_base;
+use crate::model_ref::PolicyWeights;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -93,8 +95,14 @@ pub struct PolicyPin {
     pub alias: String,
     /// The release it pointed at.
     pub release: ReleaseId,
-    /// That release's adapter file.
-    pub adapter: PathBuf,
+    /// That release's adapter file; `None` for a consolidation, which is the
+    /// base itself.
+    pub adapter: Option<PathBuf>,
+    /// The generation the release belongs to.
+    pub generation: u32,
+    /// The directory of the generation's base; `None` is the configured
+    /// base (generation 0).
+    pub base: Option<PathBuf>,
     /// The system prompt the release was trained under, when it is not the
     /// default ([`Context::system_prompt_of`]).
     pub system_prompt: Option<String>,
@@ -530,7 +538,7 @@ impl Context {
         &self,
         reference: &ModelRef,
     ) -> Result<(Option<PathBuf>, ModelSelection), OrchestratorError> {
-        let adapter = match reference {
+        let pin = match reference {
             ModelRef::Policy(alias) => {
                 let pin = self.policy_pin(alias)?;
                 if pin.is_none() && alias != splinter_core::model_ref::POLICY_DEFAULT {
@@ -539,15 +547,19 @@ impl Context {
                         id: alias.clone(),
                     });
                 }
-                pin.map(|p| p.adapter)
+                pin
             }
             _ => None,
         };
-        let selection = crate::model_ref::resolve(
+        let (base, adapter) = pin.map_or((None, None), |p| (p.base, p.adapter));
+        let selection = crate::model_ref::resolve_on(
             reference,
             self.config(),
             self.allow_remote(),
-            adapter.as_deref(),
+            PolicyWeights {
+                base: base.as_deref(),
+                adapter: adapter.as_deref(),
+            },
         )?;
         Ok((adapter, selection))
     }
@@ -567,10 +579,23 @@ impl Context {
             Some(release) => {
                 let stored = store.get(&release)?;
                 let system_prompt = self.system_prompt_of(&stored.manifest.datasets)?;
+                // A full checkpoint is a policy only as a consolidation, the
+                // base of a generation; any other has no adapter to load.
+                let adapter = if stored.is_consolidation() {
+                    None
+                } else {
+                    Some(stored.adapter()?.to_path_buf())
+                };
+                let base = match stored.base_release() {
+                    Some(base) => Some(self.generation_base(&base)?),
+                    None => None,
+                };
                 Some(PolicyPin {
                     alias: alias.to_string(),
+                    generation: stored.epoch(),
                     release,
-                    adapter: stored.adapter()?.to_path_buf(),
+                    adapter,
+                    base,
                     system_prompt,
                 })
             }
@@ -578,6 +603,33 @@ impl Context {
         };
         pins.insert(alias.to_string(), pin.clone());
         Ok(pin)
+    }
+
+    /// The base directory a policy alias runs on: the generation's base its
+    /// release was pinned to, else the configured base.
+    pub fn policy_base(&self, alias: &str) -> Result<PathBuf, OrchestratorError> {
+        Ok(self
+            .policy_pin(alias)?
+            .and_then(|pin| pin.base)
+            .unwrap_or_else(|| self.config().policy_base.clone()))
+    }
+
+    /// The directory the consolidated checkpoint of release `consolidation`
+    /// is a base as, laid out beside the configured base's tokenizer files
+    /// when it is not yet ([`crate::generation::lay_out_base`]).
+    pub fn generation_base(&self, consolidation: &ReleaseId) -> Result<PathBuf, OrchestratorError> {
+        let stored = self.releases().get(consolidation)?;
+        if !stored.is_consolidation() {
+            return Err(OrchestratorError::Refused(format!(
+                "release {consolidation} is not a consolidation: it is no generation's base"
+            )));
+        }
+        lay_out_base(
+            self.root(),
+            &self.config().policy_base,
+            consolidation,
+            &stored.artifact,
+        )
     }
 
     /// Drops `alias`'s pin and the policy model this context's runtime

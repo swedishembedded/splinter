@@ -92,6 +92,14 @@ impl StateRoot {
         self.0.join("artifacts")
     }
 
+    /// Where a consolidated checkpoint is laid out as a base directory, one
+    /// per release: derived from the release and the configured base, so it
+    /// can be removed and is recreated on demand.
+    #[must_use]
+    pub fn bases(&self) -> PathBuf {
+        self.0.join("bases")
+    }
+
     /// Where work in progress is done: files that exist only while a command
     /// runs, and are removed after.
     #[must_use]

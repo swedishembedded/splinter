@@ -262,6 +262,7 @@ pub fn release_predictive(
         terms: terms.unwrap_or_else(|| splinter_core::terms::Terms::unknown("unstated")),
         distribution: request.distribution,
         provenance,
+        generation: None,
         created_at: ctx.clock().utc_now(),
     };
     let stored = store.put(&manifest)?;

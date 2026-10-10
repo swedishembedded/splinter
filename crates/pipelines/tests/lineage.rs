@@ -150,6 +150,7 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
         },
         metrics: None,
         provenance: Provenance::default(),
+        generation: None,
         terms: Terms::unknown("written by the lineage spec"),
         distribution: Distribution::Restricted,
         created_at: NOW.into(),

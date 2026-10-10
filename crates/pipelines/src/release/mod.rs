@@ -364,6 +364,7 @@ pub(crate) fn manifest(
             dataset_snapshots,
             ..Provenance::default()
         },
+        generation: None,
         created_at: ctx.clock().utc_now(),
     })
 }

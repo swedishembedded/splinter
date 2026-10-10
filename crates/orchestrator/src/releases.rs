@@ -95,6 +95,33 @@ pub struct StoredRelease {
 }
 
 impl StoredRelease {
+    /// The generation it belongs to: 0 for a release that records none.
+    #[must_use]
+    pub fn epoch(&self) -> u32 {
+        self.manifest.generation.as_ref().map_or(0, |g| g.epoch)
+    }
+
+    /// The consolidation release whose checkpoint the weights are built on:
+    /// itself when it is a consolidation, else the base its generation mark
+    /// names. `None` is the configured base.
+    #[must_use]
+    pub fn base_release(&self) -> Option<ReleaseId> {
+        let mark = self.manifest.generation.as_ref()?;
+        if self.is_consolidation() {
+            Some(self.id.clone())
+        } else {
+            mark.base.clone()
+        }
+    }
+
+    /// Whether it is a consolidation: a full checkpoint that is the base of
+    /// the generation it opens.
+    #[must_use]
+    pub fn is_consolidation(&self) -> bool {
+        self.manifest.artifact.kind() == ArtifactKind::FullCheckpoint
+            && self.manifest.generation.is_some()
+    }
+
     /// The adapter file brain loads on a base; refused for a release that is
     /// not an adapter, which has none.
     pub fn adapter(&self) -> Result<&Path, OrchestratorError> {

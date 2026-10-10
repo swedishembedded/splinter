@@ -19,6 +19,8 @@
 //!   reference resolves to under the configuration.
 //! * [`runs`] - the recorded run and its cross-process cancel.
 //! * [`pipeline`] - stages run in order over one state, each recorded.
+//! * [`generation`] - the generation a release belongs to, and a consolidated
+//!   checkpoint laid out as a base directory.
 //! * [`releases`] and [`answers`] - the release store with its aliases, and
 //!   the answers `ask` gave.
 //! * [`ids`] - an id, or a unique prefix of one, resolved against what a
@@ -36,6 +38,7 @@ pub mod config;
 pub mod context;
 pub mod embedding;
 pub mod error;
+pub mod generation;
 pub mod ids;
 pub mod model_ref;
 pub mod pipeline;

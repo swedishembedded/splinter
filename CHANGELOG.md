@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its kind and granularity, and whether a reply holds the true value, adopts the false one, invents a number, name or
   quoted term, or declines. The claim gate takes three stance rates (hold, accept without inventing, decline), each
   compared with the champion's by counts; a rate over no items is absent.
+- Generations: a release manifest records the generation it belongs to (`epoch`, the consolidation it sits on and,
+  for a consolidation, the claims it took in); a policy pinned to a consolidated checkpoint runs it as its base,
+  laid out as a base directory under the state root's `bases/`, and an adapter released in that generation is
+  pinned to the same base. A release that records none is generation 0 on the configured base.
 - `splinter-model` can take what a generation learned into the weights themselves: a full-parameter fine-tune of a base
   and the merge of an adapter into it, each writing a checkpoint directory that is a base like any other (brain's
   `ChatFullFineTune` and `merge_adapter`).

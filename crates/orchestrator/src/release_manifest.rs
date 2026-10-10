@@ -30,6 +30,8 @@ use splinter_eval::gate::GateReport;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveReport;
 
+use crate::generation::GenerationMark;
+
 /// The `format` every manifest is written with.
 pub const RELEASE_FORMAT: &str = "splinter-release-v4";
 
@@ -238,6 +240,11 @@ pub struct ReleaseManifest {
     /// What else it was made and judged from.
     #[serde(default, skip_serializing_if = "Provenance::is_empty")]
     pub provenance: Provenance,
+    /// The generation it belongs to and the base it sits on; `None` for a
+    /// release recorded before generations: generation 0, on the configured
+    /// base.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation: Option<GenerationMark>,
     /// When it was released, from the injected clock.
     pub created_at: String,
 }
@@ -336,6 +343,7 @@ impl ManifestV3 {
             terms: self.terms,
             distribution: self.distribution,
             provenance: Provenance::default(),
+            generation: None,
             created_at: self.created_at,
         }
     }

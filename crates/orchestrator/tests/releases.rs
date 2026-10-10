@@ -144,6 +144,7 @@ fn manifest_of(
         terms,
         distribution,
         provenance: Provenance::default(),
+        generation: None,
         created_at: "2026-09-30T12:00:00.000Z".into(),
     }
 }

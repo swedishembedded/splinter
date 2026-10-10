@@ -20,20 +20,52 @@ use splinter_model::{LocalWeights, ModelSelection, RemoteModel};
 
 use crate::config::Config;
 
+/// What a policy alias was resolved to: the base its release's generation
+/// sits on (`None` is the configured base) and the adapter of the release
+/// (`None` before any release, and for a consolidation, which is the base
+/// itself).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PolicyWeights<'a> {
+    /// The generation's base directory; `None` is `config.policy_base`.
+    pub base: Option<&'a Path>,
+    /// The release's adapter file.
+    pub adapter: Option<&'a Path>,
+}
+
 /// The model `reference` names under `config`; a policy reference is the
-/// base with `policy_adapter`, the adapter of the release its alias was
-/// resolved to (`None` before any release). A remote reference is refused
-/// unless `allow_remote` or the configuration opts in.
+/// configured base with `policy_adapter`, the adapter of the release its
+/// alias was resolved to (`None` before any release). A remote reference is
+/// refused unless `allow_remote` or the configuration opts in.
 pub fn resolve(
     reference: &ModelRef,
     config: &Config,
     allow_remote: bool,
     policy_adapter: Option<&Path>,
 ) -> Result<ModelSelection, RefError> {
+    resolve_on(
+        reference,
+        config,
+        allow_remote,
+        PolicyWeights {
+            base: None,
+            adapter: policy_adapter,
+        },
+    )
+}
+
+/// [`resolve`], with the policy on the base its release's generation sits on.
+pub fn resolve_on(
+    reference: &ModelRef,
+    config: &Config,
+    allow_remote: bool,
+    policy: PolicyWeights<'_>,
+) -> Result<ModelSelection, RefError> {
     match reference {
         ModelRef::Policy(_) => Ok(ModelSelection::Local(LocalWeights {
-            base: config.policy_base.clone(),
-            adapter: policy_adapter.map(Path::to_path_buf),
+            base: policy
+                .base
+                .map_or_else(|| config.policy_base.clone(), Path::to_path_buf),
+            adapter: policy.adapter.map(Path::to_path_buf),
             context_tokens: config.policy_context_tokens,
         })),
         ModelRef::Local {
