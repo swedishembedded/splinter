@@ -161,6 +161,79 @@ statement). A fact session carries `extra.absorb_subject` (the fact id, or
 `<id>#canary`) in its ATIF root, and `subjects.jsonl` beside the files is the
 `--subjects` file of `splinter claims gate` and `splinter absorb`.
 
+## The cycle
+
+One cycle runs the nights back to back with no waiting between them; each
+night's state is a directory, and a rerun skips what is finished.
+
+```bash
+# The plan: the sessions of each night, written once and hashed into the
+# pre-registration. A test cycle teaches each day's five test facts; a null
+# night (noise only), a sham night (the next day's facts asked about and never
+# corrected) and the canary (a false statement asserted on one night, the true
+# one on a later night) are where the flags put them.
+splinter-absorb cycle plan --manifest RUN --role test --nights 10 \
+    --null-night 3 --sham-night 6 --canary FACT --canary-night 1 --canary-back 5 --out plan.json
+splinter-absorb cycle plan --manifest RUN --role dev --nights 2 --per-night 5 --out dev-plan.json
+
+# The nights. Night 0 is the base under the persona prompt; each night after
+# it records that day's sessions with the release in effect, runs `absorb`
+# on them (with the sealed probes and the subjects file), and evaluates the
+# release in effect after it. `--arm` names an ablation (`no-rehearsal`,
+# `continue-from-release`, `no-replay`; the last two on development facts only).
+samples/jefferson/gpu-only.sh gpu0 LOG -- \
+    splinter-absorb cycle run --manifest RUN --plan plan.json --days 10 --out CYCLE
+
+# The report is rebuilt from the directory; it is refused when the
+# pre-registration or a registered file was changed, or a night was
+# evaluated under another pre-registration.
+splinter-absorb cycle report --dir CYCLE --manifest RUN
+```
+
+The cycle's state is `CYCLE/state` (releases, the claim ledger) and each
+night's files are under `CYCLE/nights/night-NN`: `record.json`, `absorb.json`
+and `evaluation.json`, which marks the night finished. `prereg.json`, `plan.json`
+and `items.json` are written before the first session; the ledger
+`RUN/cycle-runs.jsonl` counts every full run of the pool and the report lists
+them all. A run on the test facts starts only from a clean tree.
+
+**Evaluation.** After each night the release in effect answers every item
+greedily under the persona prompt in one pass: the policy is loaded once and
+answers all of them, then the judge is loaded once, calibrated, and rules on
+every answer code could not decide. A probe or control is right when every key
+is in the answer, the judge says it states the statement, and no name or figure
+the day-0 policy wrongly asserted is repeated. The unit is the fact: a fact is
+right on a kind when the probe of that kind is right, and right on direct
+recall when its paraphrase and reverse probes both are. Facts are counted in
+groups: corrected today, corrected on an earlier night, not corrected yet (they
+must not improve), the canary (until it is corrected back), the untaught
+controls (must stay wrong), the known controls (must stay right) and the
+neighbours of taught facts. The sycophancy probes, the unknown questions, the
+anchor suite and the 100 general questions are counted as items. Every cell is
+k of n with the exact Clopper-Pearson interval; the taught facts minus the
+untaught controls carry a Newcombe interval. A judge that abstains makes the
+item not right and is counted in the report.
+
+The mean log-probability against the base on a fixed text is not measured: the
+one scoring call the model layer offers loads the weights at f32, which for an
+8B base is about 33 GB and does not fit a 24 GiB card. The report says "not
+measured" and never a number.
+
+**Rule.** The rule is data in the pre-registration and the code applies it. The
+primary criterion is on direct recall (paraphrase and reverse): every fact
+taught by the final night is right. It is met only if also no earlier fact fails
+direct recall on any night, no known control that was right at night 0 is wrong
+at the end, the anchor and general questions, the sycophancy probes and the
+unknown questions are not significantly worse than at night 0, and the untaught
+controls and facts not yet taught have not significantly improved (one-sided
+exact sign tests at 0.05). Indirect and application probes are secondary:
+small models without reasoning are expected to fail multi-hop use of a new
+fact, and no verdict is taken on them. The verdict is worded by code and
+says "unadjudicated" until a person has read the failures and a sample of the
+passes. The canary is reported night by night: whether the answer follows the
+false statement, and whether it is right by the true one after it is corrected
+back.
+
 ## Limits, stated up front
 
 - The keys are the specific's tokens, chosen by rules, not understood: a right

@@ -37,16 +37,53 @@ pub const DEFAULT_JUDGE: &str = "local:Qwen/Qwen3-14B@4096";
 /// # Errors
 /// The runtime cannot start.
 pub fn open(out: &Path, models: Option<&PathBuf>) -> anyhow::Result<Splinter> {
+    let config = base_config(&out.join(STATE_DIR), models);
+    Splinter::builder(config)
+        .build()
+        .context("starting the Splinter runtime")
+}
+
+/// A Splinter handle for a cycle: its state is `state`, and `policy:default`
+/// is the checkpoint and context limit of `policy` (a `local:` reference)
+/// with the adapter of the release in effect.
+///
+/// # Errors
+/// `policy` is not a local checkpoint, or the runtime cannot start.
+pub fn open_cycle(
+    state: &Path,
+    models: Option<&PathBuf>,
+    policy: &str,
+) -> anyhow::Result<Splinter> {
+    let ModelRef::Local {
+        checkpoint,
+        adapter: None,
+        context_tokens,
+    } = model_ref(policy)?
+    else {
+        anyhow::bail!("the cycle's policy is a plain local checkpoint, not {policy}");
+    };
+    let mut config = base_config(state, models);
+    let path = PathBuf::from(&checkpoint);
+    config.policy_base = if path.is_absolute() {
+        path
+    } else {
+        config.model_store.join(path)
+    };
+    config.policy_context_tokens = context_tokens;
+    Splinter::builder(config)
+        .build()
+        .context("starting the Splinter runtime")
+}
+
+fn base_config(state: &Path, models: Option<&PathBuf>) -> Config {
     let mut config = Config::from_env();
-    config.state_root = StateRoot::new(out.join(STATE_DIR));
+    config.state_root = StateRoot::new(state);
     config.thinking = false;
     config.allow_remote = false;
     if let Some(models) = models {
         config.model_store.clone_from(models);
     }
-    Splinter::builder(config)
-        .build()
-        .context("starting the Splinter runtime")
+    config
 }
 
 /// The model reference `text` names.

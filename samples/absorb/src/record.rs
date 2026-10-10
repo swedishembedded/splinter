@@ -23,6 +23,7 @@ use serde_json::json;
 
 use anyhow::Context as _;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
+use splinter_sdk::Splinter;
 
 use crate::facts::Manifest;
 use crate::gate::{Gate, Gated, Side};
@@ -64,7 +65,9 @@ pub struct Item {
 
 /// What `session record` needs.
 pub struct Request {
-    /// The run's output directory.
+    /// The directory of the run's fact pool: its manifest and sealed probes.
+    pub run: PathBuf,
+    /// Where the sessions are written (with their index and subjects file).
     pub out: PathBuf,
     /// The model store, when not the configuration's.
     pub models: Option<PathBuf>,
@@ -281,10 +284,20 @@ struct Pending {
 /// may discuss, or a model cannot run. A session every attempt of which is
 /// discarded is reported in the outcome, not as an error.
 pub fn record(request: &Request) -> anyhow::Result<Outcome> {
+    let splinter = runtime::open(&request.out, request.models.as_ref())?;
+    record_with(&splinter, request)
+}
+
+/// Records the sessions of `request` on `splinter`, which already holds the
+/// models a cycle shares between its phases.
+///
+/// # Errors
+/// As [`record`].
+pub fn record_with(splinter: &Splinter, request: &Request) -> anyhow::Result<Outcome> {
     let started = std::time::Instant::now();
-    let manifest = Manifest::read(&request.out)?;
+    let manifest = Manifest::read(&request.run)?;
     // No session exists before the probes: this is the protocol's order.
-    verified_probes(&request.out, &manifest)?;
+    verified_probes(&request.run, &manifest)?;
 
     let simulator_ref = runtime::model_ref(&request.simulator)?;
     anyhow::ensure!(
@@ -318,7 +331,6 @@ pub fn record(request: &Request) -> anyhow::Result<Outcome> {
         });
     }
 
-    let splinter = runtime::open(&request.out, request.models.as_ref())?;
     let ctx = splinter.context();
     let policy = Policy::load(
         &ctx,
@@ -416,7 +428,7 @@ pub fn record(request: &Request) -> anyhow::Result<Outcome> {
                         .open(&index)?;
                     writeln!(file, "{}", serde_json::to_string(&entry)?)?;
                     drop(file);
-                    crate::subjects::write(&request.out)?;
+                    crate::subjects::write(&request.run, &request.out)?;
                     eprintln!("recorded {} ({} user turns)", entry.file, entry.user_turns);
                     recorded[p.item] = Some(entry);
                 }

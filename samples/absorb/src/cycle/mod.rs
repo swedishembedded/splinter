@@ -13,7 +13,11 @@
 //! session.
 
 pub mod analysis;
+pub mod cli;
+pub mod driver;
 pub mod eval;
+#[cfg(test)]
+mod fake;
 #[cfg(test)]
 mod fixtures;
 pub mod grade;
@@ -23,9 +27,12 @@ pub mod prereg;
 pub mod report;
 pub mod stats;
 pub mod verdict;
+pub mod world;
 
 #[cfg(test)]
 mod analysis_tests;
+#[cfg(test)]
+mod driver_tests;
 #[cfg(test)]
 mod items_tests;
 #[cfg(test)]

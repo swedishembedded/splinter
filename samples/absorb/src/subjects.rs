@@ -36,12 +36,13 @@ struct Subject {
 
 /// Writes the subjects of every recorded fact session under `out`: a fact's
 /// keys, or for the canary the keys of its false statement. Returns how many.
+/// The facts are those of the manifest under `run`.
 ///
 /// # Errors
 /// The manifest or the index cannot be read, a session names an unknown fact,
 /// or the file cannot be written.
-pub fn write(out: &Path) -> anyhow::Result<usize> {
-    let manifest = Manifest::read(out)?;
+pub fn write(run: &Path, out: &Path) -> anyhow::Result<usize> {
+    let manifest = Manifest::read(run)?;
     let index = std::fs::read_to_string(out.join(INDEX)).unwrap_or_default();
     let mut subjects: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (n, line) in index
@@ -159,7 +160,7 @@ mod tests {
         .collect();
         std::fs::write(dir.path().join(INDEX), lines.join("\n") + "\n").expect("index");
         assert_eq!(
-            write(dir.path()).expect("written"),
+            write(dir.path(), dir.path()).expect("written"),
             2,
             "a sham session teaches nothing"
         );

@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+use splinter_absorb::cycle;
 use splinter_absorb::roles::Quotas;
 use splinter_absorb::runtime::{DEFAULT_JUDGE, DEFAULT_MODEL};
 use splinter_absorb::session::Style;
@@ -40,6 +41,9 @@ enum Command {
     /// Sessions between the policy and a simulated user.
     #[command(subcommand)]
     Session(Session),
+    /// The nights of the protocol: record, absorb, evaluate, report.
+    #[command(subcommand)]
+    Cycle(cycle::cli::Cycle),
 }
 
 #[derive(Args)]
@@ -427,6 +431,7 @@ fn main() -> anyhow::Result<()> {
             let records = seal::guard(&out)?.check_files(&files)?;
             println!("{records} training records leak no sealed probe");
         }
+        Command::Cycle(command) => cycle::cli::run(command)?,
         Command::Session(Session::Record {
             common,
             plan,
@@ -457,6 +462,7 @@ fn main() -> anyhow::Result<()> {
                 }
             };
             let outcome = record::record(&record::Request {
+                run: common.out.clone(),
                 out: common.out,
                 models: common.models,
                 policy,
