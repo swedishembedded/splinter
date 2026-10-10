@@ -72,7 +72,7 @@ pub struct ConsolidateArgs {
     /// "name"?}): a training record containing one is refused.
     #[arg(long, num_args = 1.., value_name = "FILE")]
     pub sealed_probes: Vec<PathBuf>,
-    /// Stop at the checkpoint: do not run the gate or release it.
+    /// Gate the checkpoint but do not release it: it is not kept.
     #[arg(long)]
     pub no_release: bool,
 }

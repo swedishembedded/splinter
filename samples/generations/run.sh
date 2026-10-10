@@ -11,7 +11,10 @@
 # One run of the generations sample on one card: claims the card, pins the run
 # to it, watches its memory, and releases the card when it ends.
 #
-# Usage: run.sh <gpu0|gpu1> <full|merge> <out-dir>
+# Usage: run.sh <gpu0|gpu1> <full|merge|tune> <out-dir>
+#
+# `tune` takes one generation's updates once and consolidates it at each
+# learning rate in LRS, on facts of a seed of its own.
 #
 # The environment names what the run is made of:
 #   SPLINTER_BIN     the splinter binary
@@ -23,11 +26,12 @@
 #   GPU_ONLY         the gpu-only.sh pin (default: samples/jefferson/gpu-only.sh)
 #   SEED, GENERATIONS  the facts of a first run (default: the sample's own)
 #   WAIT             set to wait for a claimed card instead of ending the run
+#   LRS              the learning rates of a tune run
 #   EXTRA            more arguments for `generations.py run`
 set -uo pipefail
 
 if [ "$#" -ne 3 ]; then
-    echo "usage: $0 <gpu0|gpu1> <full|merge> <out-dir>" >&2
+    echo "usage: $0 <gpu0|gpu1> <full|merge|tune> <out-dir>" >&2
     exit 2
 fi
 card=$1
@@ -67,8 +71,13 @@ mkdir -p "$out"
     ${SEED:+--seed "$SEED"} ${GENERATIONS:+--generations "$GENERATIONS"}
 python3 "$here/memwatch.py" --pid $$ --gpu "$index" --nvml "${NVML_LIB:?}" \
     --out "$out/memwatch.jsonl" &
-"$gpu_only" "$card" "$out/run-$mode.log" -- python3 "$here/generations.py" run \
-    --out "$out" --mode "$mode" --splinter "${SPLINTER_BIN:?}" --brain "${BRAIN_BIN:?}" \
+if [ "$mode" = tune ]; then
+    verb=(tune --lrs ${LRS:?LRS names the learning rates to try})
+else
+    verb=(run --mode "$mode")
+fi
+"$gpu_only" "$card" "$out/run-$mode.log" -- python3 "$here/generations.py" "${verb[@]}" \
+    --out "$out" --splinter "${SPLINTER_BIN:?}" --brain "${BRAIN_BIN:?}" \
     --policy-weights "${POLICY_WEIGHTS:?}" --helper "${HELPER_WEIGHTS:?}" ${EXTRA:-}
 code=$?
 echo "$code" > "$out/exit-$mode"

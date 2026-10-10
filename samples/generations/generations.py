@@ -26,6 +26,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -360,74 +361,121 @@ def measure(splinter, work, facts_taught, earlier, all_facts, anchor):
     }
 
 
-def run(args):
-    out = Path(args.out)
-    facts = load_facts(out)
-    anchor = anchor_suite()
-    state = out / f"state-{args.mode}"
-    work = out / f"work-{args.mode}"
-    work.mkdir(parents=True, exist_ok=True)
-    log = out / f"splinter-{args.mode}.log"
-    env = dict(os.environ)
-    env["BRAIN_QWEN_WEIGHTS"] = args.policy_weights
-    if args.brain:
-        env["SPLINTER_BRAIN_BIN"] = args.brain
-    splinter = Splinter(args.splinter, state, log, env, args.policy_context)
-    role = f"local:{args.helper}@{args.helper_context}"
-    roles = ["--generator", role, "--teacher", role, "--judge", role]
-    rows = []
-    results = out / f"results-{args.mode}.jsonl"
+class Cycle:
+    """The updates and consolidations of one policy on one state root."""
 
-    def record(step, generation, kind, started, ended, extra):
+    def __init__(self, args, facts, state, tag):
+        self.args, self.facts, self.state = args, facts, Path(state)
+        self.out = Path(args.out)
+        self.anchor = anchor_suite()
+        self.work = self.out / f"work-{tag}"
+        self.work.mkdir(parents=True, exist_ok=True)
+        self.results = self.out / f"results-{tag}.jsonl"
+        self.log = self.out / f"splinter-{tag}.log"
+        self.rows = []
+        env = dict(os.environ)
+        env["BRAIN_QWEN_WEIGHTS"] = args.policy_weights
+        if args.brain:
+            env["SPLINTER_BRAIN_BIN"] = args.brain
+        self.splinter = Splinter(args.splinter, self.state, self.log, env, args.policy_context)
+        role = f"local:{args.helper}@{args.helper_context}"
+        self.roles = ["--generator", role, "--teacher", role, "--judge", role]
+
+    def record(self, step, generation, kind, started, ended, extra):
         row = {"step": step, "generation": generation, "kind": kind,
                "t_start": started, "t_end": ended, "wall_s": round(ended - started, 1), **extra}
-        rows.append(row)
-        with open(results, "a") as f:
+        self.rows.append(row)
+        with open(self.results, "a") as f:
             f.write(json.dumps(row) + "\n")
         print(json.dumps(row), flush=True)
 
-    splinter.run("eval", "--suite", "anchor", "--freeze", out / "anchor.jsonl")
-    base = measure(splinter, work, [], [], facts, anchor)
-    record("base", -1, "base", time.time(), time.time(), base)
-    for generation in range(1 + max(f.generation for f in facts)):
-        mine = [f for f in facts if f.generation == generation]
-        earlier = [f for f in facts if f.generation < generation]
-        taught = []
-        for update in range(UPDATES_PER_GENERATION):
-            started = time.time()
-            report = splinter.run("absorb", out / "sessions" / f"g{generation}u{update}",
-                                  *roles, "--no-consolidate",
-                                  "--sealed-probes", out / "sealed.jsonl", ok=(0, 1))
-            ended = time.time()
-            per = FACTS_PER_GENERATION // UPDATES_PER_GENERATION
-            taught = mine[:(update + 1) * per]
-            m = measure(splinter, work, taught, earlier, facts, anchor)
-            gate = report.get("gate") or {}
-            record(f"g{generation}.u{update}", generation, "update", started, ended, {
-                **m, "release": report.get("release"), "gate_passed": gate.get("passed"),
-                "gate_answered": [gate.get("answered"), len(gate.get("claims", []))],
-                "stopped": report.get("stopped"),
-                "records": (report.get("dataset") or {}).get("trained"),
-                "replayed": report.get("replayed_records"),
-            })
+    def measure(self, taught, earlier):
+        return measure(self.splinter, self.work, taught, earlier, self.facts, self.anchor)
+
+    def stage_seconds(self, report):
+        """Seconds each stage of a recorded run took, from its run record."""
+        run = report.get("run")
+        if not run:
+            return {}
+        shown = self.splinter.run("runs", "show", run)
+        return {st["stage"]: round(st["duration_ms"] / 1000, 1)
+                for st in shown.get("stages", []) if st.get("duration_ms") is not None}
+
+    def start(self):
+        self.splinter.run("eval", "--suite", "anchor", "--freeze", self.out / "anchor.jsonl")
+        base = self.measure([], [])
+        self.record("base", -1, "base", time.time(), time.time(), base)
+
+    def update(self, generation, update):
+        mine = [f for f in self.facts if f.generation == generation]
+        earlier = [f for f in self.facts if f.generation < generation]
         started = time.time()
-        tuning = ([] if args.lr is None else ["--lr", args.lr]) + (
-            [] if args.epochs is None else ["--epochs", args.epochs])
-        report = splinter.run("consolidate", "--mode", args.mode, *tuning, ok=(0, 1))
+        report = self.splinter.run("absorb", self.out / "sessions" / f"g{generation}u{update}",
+                                   *self.roles, "--no-consolidate",
+                                   "--sealed-probes", self.out / "sealed.jsonl", ok=(0, 1))
+        ended = time.time()
+        per = FACTS_PER_GENERATION // UPDATES_PER_GENERATION
+        measured = self.measure(mine[:(update + 1) * per], earlier)
+        gate = report.get("gate") or {}
+        self.record(f"g{generation}.u{update}", generation, "update", started, ended, {
+            **measured, "release": report.get("release"), "gate_passed": gate.get("passed"),
+            "gate_answered": [gate.get("answered"), len(gate.get("claims", []))],
+            "stopped": report.get("stopped"),
+            "records": (report.get("dataset") or {}).get("trained"),
+            "replayed": report.get("replayed_records"),
+            "stage_s": self.stage_seconds(report),
+        })
+
+    def consolidate(self, generation, mode, lr=None, epochs=None, tag=""):
+        mine = [f for f in self.facts if f.generation == generation]
+        earlier = [f for f in self.facts if f.generation < generation]
+        tuning = ([] if lr is None else ["--lr", lr]) + ([] if epochs is None else ["--epochs", epochs])
+        started = time.time()
+        report = self.splinter.run("consolidate", "--mode", mode, *tuning, ok=(0, 1))
         ended = time.time()
         done = report.get("consolidated") or {}
-        m = measure(splinter, work, mine, earlier, facts, anchor)
-        record(f"g{generation}.consolidate", generation, "consolidate", started, ended, {
-            **m, "release": done.get("release"), "mode": args.mode,
+        measured = self.measure(mine, earlier)
+        self.record(f"g{generation}.consolidate{tag}", generation, "consolidate", started, ended, {
+            **measured, "release": done.get("release"), "mode": mode, "lr": lr, "epochs": epochs,
             "gate_passed": (done.get("gate") or {}).get("passed"),
             "stopped": done.get("stopped") or report.get("stopped"),
             "steps": done.get("steps_completed"), "final_loss": done.get("final_loss"),
             "records": (done.get("dataset") or {}).get("trained"),
             "replayed": done.get("replayed_records"),
+            "stage_s": self.stage_seconds(report),
         })
-    verdict = judge(rows, anchor_baseline=rows[0]["anchor"])
+
+
+def run(args):
+    out = Path(args.out)
+    facts = load_facts(out)
+    cycle = Cycle(args, facts, out / f"state-{args.mode}", args.mode)
+    cycle.start()
+    for generation in range(1 + max(f.generation for f in facts)):
+        for update in range(UPDATES_PER_GENERATION):
+            cycle.update(generation, update)
+        cycle.consolidate(generation, args.mode, args.lr, args.epochs)
+    verdict = judge(cycle.rows, anchor_baseline=cycle.rows[0]["anchor"])
     (out / f"verdict-{args.mode}.json").write_text(json.dumps(verdict, indent=1))
     print(json.dumps(verdict), flush=True)
+
+
+def tune(args):
+    """One generation's updates once, then its full consolidation at each
+    learning rate on a copy of that state: how fast the weights may move and
+    still take the facts, found on facts of a seed of its own."""
+    out = Path(args.out)
+    facts = load_facts(out)
+    base = Cycle(args, facts, out / "state-tune", "tune")
+    base.start()
+    for update in range(UPDATES_PER_GENERATION):
+        base.update(0, update)
+    for lr in args.lrs:
+        copy = out / f"state-tune-{lr}"
+        shutil.copytree(base.state, copy, symlinks=True)
+        fork = Cycle(args, facts, copy, f"tune-{lr}")
+        fork.consolidate(0, "full", lr=lr, epochs=args.epochs, tag=f"@{lr}")
+        shutil.rmtree(copy)
 
 
 # --- the report --------------------------------------------------------------
@@ -475,18 +523,22 @@ def main():
     b.add_argument("--seed", type=int, default=20261010)
     b.add_argument("--generations", type=int, default=GENERATIONS)
     r = sub.add_parser("run")
-    r.add_argument("--out", required=True)
     r.add_argument("--mode", choices=("full", "merge"), required=True)
-    r.add_argument("--splinter", required=True)
-    r.add_argument("--brain")
-    r.add_argument("--policy-weights", required=True, help="the policy's base checkpoint")
-    r.add_argument("--helper", required=True,
-                   help="the checkpoint that plays generator, teacher and judge")
-    r.add_argument("--helper-context", type=int, default=8192)
+    t = sub.add_parser("tune")
+    t.add_argument("--lrs", nargs="+", required=True, help="learning rates to consolidate at")
+    t.add_argument("--epochs")
+    for q in (r, t):
+        q.add_argument("--out", required=True)
+        q.add_argument("--splinter", required=True)
+        q.add_argument("--brain")
+        q.add_argument("--policy-weights", required=True, help="the policy's base checkpoint")
+        q.add_argument("--helper", required=True,
+                       help="the checkpoint that plays generator, teacher and judge")
+        q.add_argument("--helper-context", type=int, default=8192)
+        q.add_argument("--policy-context", type=int, default=8192,
+                       help="the policy's context in tokens (its KV cache is built for exactly this)")
     r.add_argument("--lr", help="the full consolidation's peak learning rate (default: the command's)")
     r.add_argument("--epochs", help="the full consolidation's passes over its records (default: the command's)")
-    r.add_argument("--policy-context", type=int, default=8192,
-                   help="the policy's context in tokens (its KV cache is built for exactly this)")
     s = sub.add_parser("report")
     s.add_argument("--out", required=True)
     args = p.parse_args()
@@ -494,6 +546,8 @@ def main():
         build(args.out, args.seed, args.generations)
     elif args.command == "run":
         run(args)
+    elif args.command == "tune":
+        tune(args)
     else:
         report(args)
 
