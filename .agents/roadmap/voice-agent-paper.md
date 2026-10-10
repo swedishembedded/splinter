@@ -48,3 +48,12 @@ labelled synthetic portrayals; nothing unmeasured is stated as a number.
 - Speech understanding without a transcript, redesigned (the projector in `huggingface/qwen3-asr-speech-projector` failed its gate).
 - Imitation from one spoken example and supervised lessons applied at synthesis time.
 - A live microphone and speaker client with barge-in.
+
+## State when work stopped (2026-10-10, afternoon)
+
+Runs queued on the GPU under `~/project/shared/containers/gpu.lock` that were not folded into the paper (their pre-registrations are committed; scripts are in `~/project/shared/resources/speech/{teach,rl}`):
+- `rl/run-seeds.sh`: GRPO, DPO and best-of-n over seeds 1 to 3, 24 held-out sentences (`prereg/rl-seeds.md`); outputs in `rl/seeds-<method>-<seed>/report.json`.
+- `teach/run-latency.sh`: first-sound latency, 3 repeats x 3 conditions (`prereg/latency-repeats.md`); outputs in `teach/latency/<condition>-<rep>/report.json`, `done.txt` when finished.
+- `teach/run-teach-eval.sh dev-tools-1 ...`: the dev split of taught procedures carried out with tools; the test split (`scenarios-tools-test.jsonl`, `prereg/teaching-tools.md`) is not yet run.
+- `read-b-2`: the second utterance set re-scored with the revised readers (regression check; `read-a-2` on the first set is done: model reader 56/63 found, 3/58 fired).
+To fold a finished run in: copy its report to `papers/learning-voice-agent/data/runs/`, add a row to `data/runs.csv`, add its table to `scripts/build_data.py` and its paragraph to `sections/06-results.tex`, then run the gate chain.
