@@ -80,7 +80,9 @@ splinter-absorb probes check --out OUT training.jsonl
 ```
 
 Every GPU command is run through `samples/jefferson/gpu-only.sh`, which pins
-the card and stops the run if it leaves the GPUs.
+the card and stops the run if it leaves the GPUs. `run-facts.sh` runs steps 1
+to 5 in one go, resumably (select, pool, known, screen, canary, seal, baseline);
+quotas the pool cannot fill are passed to it as flags and recorded.
 
 ## The pieces
 
