@@ -26,6 +26,7 @@ mod desk;
 mod ingress;
 mod lexical;
 mod listener;
+mod policy;
 mod round_trip;
 mod sentences;
 mod spoken_turn;
@@ -49,6 +50,7 @@ pub use ingress::{
 };
 pub use lexical::Lexical;
 pub use listener::{BrainListener, ListenerOptions};
+pub use policy::{SpeechPolicy, SpeechTake, UpdateReport, UpdateRule};
 pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};
 pub use sentences::{SentenceStream, Sentences, PAUSE_MILLIS};

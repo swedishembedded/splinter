@@ -20,6 +20,7 @@ pub mod agent;
 pub mod batch;
 pub mod bundle;
 pub mod ingress;
+pub mod rl;
 pub mod spoken;
 pub mod takes;
 pub mod teach;

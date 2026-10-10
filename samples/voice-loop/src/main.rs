@@ -79,6 +79,8 @@ impl Models {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Train the synthesizer from scores of its own takes.
+    SpeechRl(voice_loop::rl::RlArgs),
     /// Render several takes of each sentence in one voice and have two recognisers hear each.
     Takes(voice_loop::takes::TakesArgs),
     /// Talk to a sven agent that answers as the persona: its words are spoken as they are written.
@@ -362,6 +364,7 @@ fn main() -> Result<()> {
         splinter_sdk::model::device::select_backend(backend)?;
     }
     match cli.command {
+        Command::SpeechRl(args) => voice_loop::rl::run(&args),
         Command::Takes(args) => voice_loop::takes::run(&args),
         Command::Agent(args) => voice_loop::agent::run(&args),
         Command::Teach(args) => voice_loop::teach::teach(&args),

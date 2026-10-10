@@ -123,6 +123,20 @@ def main():
         macros[f"{key}Raw"] = str(summary["differing_raw"][name])
         macros[f"{key}Tailed"] = str(summary["differing_tailed"][name])
 
+    # Machinery gate: the policy learns a planted reward and generalizes to held-out sentences.
+    gate = runs["rl-speed-gate-20261010"]
+    report = json.loads((ROOT / gate["file"]).read_text(encoding="utf-8"))
+    if str(report["held_out_sentences"]) != gate["n"]:
+        fail(f"gate run: the report holds {report['held_out_sentences']} held-out sentences, runs.csv says {gate['n']}")
+    first_eval, last_eval = report["evals"][0], report["evals"][-1]
+    macros["GateUpdates"] = str(last_eval["after_updates"])
+    macros["GateGroup"] = str(report["group"])
+    macros["GateFramesBefore"] = f"{first_eval['mean_frames_per_word']:.2f}"
+    macros["GateFramesAfter"] = f"{last_eval['mean_frames_per_word']:.2f}"
+    macros["GateWerBefore"] = f"{first_eval['word_error_rate']:.3f}"
+    macros["GateWerAfter"] = f"{last_eval['word_error_rate']:.3f}"
+    macros["GateKlLast"] = f"{report['steps'][-1]['mean_kl']:.3f}"
+
     (OUT / "macros.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()), encoding="utf-8")
 
 
