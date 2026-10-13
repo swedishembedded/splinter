@@ -34,6 +34,11 @@ pub struct Sampling {
     /// the reply cap leaves room for that.
     #[serde(default)]
     pub thinking: bool,
+    /// Seed of the decoding's draws. Set, the same prompt on the same
+    /// weights decodes to the same reply, so a rollout can be repeated;
+    /// `None` leaves brain to draw a fresh seed per request.
+    #[serde(default)]
+    pub seed: Option<u64>,
 }
 
 /// Maps sven's request onto brain's. The output budget is the request's own
@@ -42,12 +47,16 @@ pub struct Sampling {
 /// it by what the prompt leaves of the context, so a big ask degrades to
 /// "every token the engine can still hold" rather than failing.
 pub(super) fn chat_request(req: &CompletionRequest, sampling: &Sampling) -> ChatRequest {
-    ChatRequest::new(chat_messages(&req.messages))
+    let request = ChatRequest::new(chat_messages(&req.messages))
         .tools(req.tools.iter().map(tool_schema).collect())
         .max_tokens(output_budget(req, sampling))
         .temperature(sampling.temperature)
         .top_k(sampling.top_k)
-        .thinking(sampling.thinking)
+        .thinking(sampling.thinking);
+    match sampling.seed {
+        Some(seed) => request.seed(seed),
+        None => request,
+    }
 }
 
 /// The most tokens the reply may take: the request's override, else the
@@ -251,6 +260,29 @@ mod tests {
                 "{expected:?} missing from the prompt:\n{prompt}"
             );
         }
+    }
+
+    /// A seed makes a rollout repeatable: it reaches brain's request, the
+    /// same seed and prompt build the same request, and a different seed
+    /// builds a different one. Unseeded, the request carries none.
+    #[test]
+    fn the_request_carries_the_seed() {
+        let req = CompletionRequest {
+            messages: vec![user("q")],
+            ..CompletionRequest::default()
+        };
+        let seeded = |seed| {
+            let sampling = Sampling {
+                seed: Some(seed),
+                ..SAMPLING
+            };
+            format!("{:?}", chat_request(&req, &sampling))
+        };
+        assert!(seeded(7).contains("seed: Some(7)"), "{}", seeded(7));
+        assert_eq!(seeded(7), seeded(7));
+        assert_ne!(seeded(7), seeded(8));
+        let unseeded = format!("{:?}", chat_request(&req, &SAMPLING));
+        assert!(unseeded.contains("seed: None"), "{unseeded}");
     }
 
     #[test]

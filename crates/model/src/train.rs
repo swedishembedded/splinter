@@ -35,6 +35,7 @@ use splinter_core::training::{
     CurvePoint, HeldOutScore, PreferenceScore, Selection, TrainingCurve,
 };
 
+use crate::capabilities::overlong_records;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
 
@@ -109,6 +110,11 @@ pub struct FineTune<'a> {
     /// brain's default when `None`. Two runs that differ only here show
     /// how much of a measured difference is the draw.
     pub seed: Option<u64>,
+    /// The longest training row in tokens; `None` sizes the row to the
+    /// longest record. Set, a record longer than it is named (see
+    /// [`crate::capabilities::overlong_records`]) before any device is claimed, and the run does
+    /// not start.
+    pub max_block: Option<u32>,
     /// Whether the model is trained to reason before it answers. Off, it is
     /// trained for no-think mode - what Splinter asks of it by default - so a
     /// reasoning model trains on the state a no-think prompt leaves it in
@@ -308,6 +314,36 @@ pub fn validate_preference_dataset(
         })
 }
 
+/// Names every record of every chat dataset the run trains or scores that
+/// is longer than `max_block`, as the failure reason; `Ok` when none is.
+fn refuse_overlong(request: &FineTune<'_>, max_block: u32) -> Result<(), String> {
+    let datasets = [
+        Some(request.train),
+        Some(request.held_out),
+        request.held_out_text,
+        request.monitor,
+    ]
+    .into_iter()
+    .flatten()
+    .chain(request.replay.iter().map(PathBuf::as_path))
+    .chain(request.weighted_replay.iter().map(|(p, _)| p.as_path()));
+    let mut named = Vec::new();
+    for dataset in datasets {
+        let found =
+            overlong_records(dataset, request.model_dir, max_block).map_err(|e| e.to_string())?;
+        named.extend(found.iter().map(ToString::to_string));
+    }
+    if named.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} record(s) longer than max_block {max_block}; shorten or drop them: {}",
+            named.len(),
+            named.join("; ")
+        ))
+    }
+}
+
 /// Fine-tunes a LoRA on `request.train` and scores base and tuned on the
 /// held-out records.
 pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
@@ -330,6 +366,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         return Err(failed(
             "the run was asked to evaluate as it trains but given no monitoring records".into(),
         ));
+    }
+    if let Some(max_block) = request.max_block {
+        refuse_overlong(request, max_block).map_err(failed)?;
     }
     let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
         .dataset(request.train)
@@ -366,6 +405,9 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     }
     if let Some(seed) = request.seed {
         fine_tune = fine_tune.seed(seed);
+    }
+    if let Some(max_block) = request.max_block {
+        fine_tune = fine_tune.max_block(max_block);
     }
     for replayed in request.replay {
         fine_tune = fine_tune.replay(replayed);

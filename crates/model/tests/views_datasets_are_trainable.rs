@@ -81,6 +81,7 @@ fn chat(train: bool) -> Projection {
                 message("user", "What is two plus two?", false),
                 message("assistant", "4", train),
             ],
+            tools: Vec::new(),
         },
     )
 }

@@ -58,6 +58,7 @@ pub const AGENT_SAMPLING: Sampling = Sampling {
     // Agent work wants the answer, not a reasoning preamble it cannot use as
     // tool input; a run that wants the reasoning asks for it.
     thinking: false,
+    seed: None,
 };
 
 /// Greedy decoding for measurement: agent sampling at temperature zero,
