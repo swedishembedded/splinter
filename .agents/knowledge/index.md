@@ -18,3 +18,4 @@ in the same commit.
 | [010](010-a-windowed-overlap-rule-misses-a-letter-printed-inside-its-neighbour.md) | A windowed overlap rule misses a letter printed inside its neighbour |
 | [011](011-a-library-that-resolves-its-own-device-drops-the-backend-you-set.md) | A library that resolves its own device drops the backend you set |
 | [012](012-a-synthesizer-fine-tune-that-never-saw-text-trained-nothing-usable.md) | A synthesizer fine-tune that never saw text trained nothing usable |
+| [013](013-an-unpinned-local-run-measured-the-wrong-model-on-the-wrong-device.md) | An unpinned local run measured the wrong model on the wrong device |

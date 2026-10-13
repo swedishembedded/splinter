@@ -78,23 +78,25 @@ Update this file in the commit that finishes or changes an item.
 
 ## Measured baseline of task generation
 
-A real run (Qwen3-8B at bf16 on one P40, four Jefferson texts of 148 KB, kinds
-recall, explain and advise, 193 s):
+A pinned run (Qwen3-8B with its context limited to 16384, one P40, four Jefferson
+texts of 148 KB, kinds recall, explain and advise):
 
-- 43 requests; 186 s of the 193 s is model time; each request takes 3.3 to
-  6.9 s and shows the model 2 to 8 KB.
-- Every request returned exactly one candidate although eight were asked for.
-- 2 tasks were admitted of 43 proposals. Rejections: 24 do not name their
-  subject (the subject was taken to be the directory name), 11 quote
-  nothing from the section, 2 duplicates, 2 ungrounded, 2 not
-  self-contained. The advise kind reproduced the built-in example reply.
-- Questions asked were about the document ("What is the name of the document
-  that ..."), not about what the author thought or would do.
+- 32 requests in 3,015 s, 2,338 s of it in the model: 73 s per request, each
+  returning up to 8 candidates. About 240 proposals, 101 tasks admitted (42%).
+- Admitted by kind: advise 51, explain 49, recall 1. Rejections: 82 do not name
+  their subject, 28 quote nothing from the section, 14 ungrounded, 13 not
+  self-contained, 2 duplicates.
+- What the admitted tasks are: single-passage questions. Some come from the
+  Gutenberg boilerplate and OCR tables ("Why does Thomas Jefferson refer to
+  'Aro University'?"); advise tasks put a modern question beside an
+  eighteenth-century quotation ("I received a donation and want to ensure it
+  complies with the law"); almost none ask what the author decided or why.
 
-Consequences: the cost is yield, not decode speed; the existing kinds were
-designed for documents and tools and are the wrong frame for a person's
-judgment; requests for different kinds can share the device only if brain
-batches them, which the local provider does not yet allow.
+Consequences: the gates do their job but the kinds are the wrong frame for a
+person's judgment; boilerplate and tables must be removed from sources before
+tasks are written; recall needs its subject taken from the text and not from the
+source's name; and requests are the cost (73 s each), so a corpus of millions of
+tokens is out of reach until the local provider lets brain batch them.
 
 ## Persona task menu (replaces the document-oriented kinds for persona runs)
 
