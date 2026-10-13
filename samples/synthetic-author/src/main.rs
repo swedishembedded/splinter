@@ -27,7 +27,7 @@ use synthetic_author::cache::Cache;
 use synthetic_author::gates::check;
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::{scenario_pool, TOPICS};
-use synthetic_author::writer::{plan, write_corpus, Options};
+use synthetic_author::writer::{plan, write_corpus_read, Options};
 
 /// The temperature the writer draws at, so that no two articles are alike.
 const WRITER_TEMPERATURE: f32 = 0.8;
@@ -82,6 +82,10 @@ enum Command {
         /// The model that writes, as a model reference.
         #[arg(long)]
         writer: String,
+        /// The model that reads each article and says what was decided; the
+        /// marker words judge when none is named.
+        #[arg(long)]
+        reader: Option<String>,
         /// Permit a writer reached over the network.
         #[arg(long)]
         allow_remote: bool,
@@ -104,6 +108,25 @@ enum Command {
         #[arg(long)]
         max_output_tokens: u64,
     },
+}
+
+/// The model `name` names, sampling at the writer's temperature when it runs
+/// here and at its server's own when it does not.
+fn model_named(
+    ctx: &splinter_sdk::Context,
+    name: &str,
+) -> anyhow::Result<splinter_sdk::agent::solve::Model> {
+    let reference = ModelRef::from_str(name).with_context(|| format!("model {name:?}"))?;
+    if reference.is_remote() {
+        return Ok(ctx.model(&reference)?);
+    }
+    let sampling = Sampling {
+        temperature: WRITER_TEMPERATURE,
+        thinking: false,
+        ..GREEDY_SAMPLING
+    };
+    ctx.resampled(&reference, sampling)?
+        .with_context(|| format!("{reference} cannot be sampled at a temperature"))
 }
 
 fn main() -> anyhow::Result<()> {
@@ -168,6 +191,7 @@ fn main() -> anyhow::Result<()> {
             seed,
             cache,
             writer,
+            reader,
             allow_remote,
             articles,
             episodes_per_article,
@@ -185,21 +209,12 @@ fn main() -> anyhow::Result<()> {
             let splinter = Splinter::builder(config)
                 .build()
                 .context("starting the runtime")?;
-            let reference =
-                ModelRef::from_str(&writer).with_context(|| format!("model {writer:?}"))?;
             let ctx = splinter.context();
-            let model = if reference.is_remote() {
-                ctx.model(&reference)?
-            } else {
-                let sampling = Sampling {
-                    temperature: WRITER_TEMPERATURE,
-                    thinking: false,
-                    ..GREEDY_SAMPLING
-                };
-                ctx.resampled(&reference, sampling)?
-                    .with_context(|| format!("{reference} cannot be sampled at a temperature"))?
-            };
-            let blocking = BlockingModel::new(model)?;
+            let blocking = BlockingModel::new(model_named(&ctx, &writer)?)?;
+            let reading = reader
+                .as_deref()
+                .map(|name| model_named(&ctx, name).and_then(|m| Ok(BlockingModel::new(m)?)))
+                .transpose()?;
             let options = Options {
                 articles,
                 episodes_per_article,
@@ -208,7 +223,14 @@ fn main() -> anyhow::Result<()> {
                 max_calls,
                 max_output_tokens,
             };
-            let summary = write_corpus(&persona, seed, &blocking, &cache, &options)?;
+            let summary = write_corpus_read(
+                &persona,
+                seed,
+                &blocking,
+                reading.as_ref(),
+                &cache,
+                &options,
+            )?;
             println!(
                 "{}: {} written, {} already kept, {} given up, {} turned away; {} calls, about {} tokens in and {} out{}",
                 persona.name,

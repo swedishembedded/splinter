@@ -17,7 +17,7 @@ use splinter_sdk::agent::typed::TypedCall;
 
 use crate::cache::{Cache, StoredArticle, Usage};
 use crate::episode::{episodes_for, Episode};
-use crate::gates::{check, Article};
+use crate::gates::{check_form, check_markers, check_reading, told_paragraphs, Article, Reading};
 use crate::persona::Persona;
 use crate::scenario::{Archetype, TOPICS};
 
@@ -38,7 +38,14 @@ const MAX_CONSECUTIVE_ERRORS: usize = 3;
 const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
 
-const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case`, say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
+const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case`, say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not copy sentences from `situation` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
+
+const READER_ROLE: &str = "You read a steward's recollections and say plainly what he did.";
+
+const READER_TASK: &str = "Each entry of `cases` is the part of a steward's essay that tells one case. For each, say which way the narrator himself acted in that case: `act_alone` (he decided and acted on his own), `consult_then_act` (he took it to the assembly or the community and acted on its word), `defer_to_outsider` (he accepted the offer of the outside house), `hold_and_wait` (he waited and did nothing yet), or `unclear` if the text does not show it. Ignore the ways he says he did not act. Reply as JSON with `cases`, each with the `case` as given and `chose`.";
+
+/// The most tokens a reading may run to.
+const MAX_READING_TOKENS: u64 = 400;
 
 /// What a run may spend and how it writes.
 #[derive(Clone, Debug)]
@@ -144,6 +151,23 @@ pub fn write_corpus(
     cache: &Cache,
     opts: &Options,
 ) -> anyhow::Result<Summary> {
+    write_corpus_read(persona, seed, writer, None, cache, opts)
+}
+
+/// Writes the corpus of `persona` into `cache`, within `opts`, with the
+/// decisions of each article judged by `reader` when there is one and by their
+/// marker words when there is not.
+///
+/// # Errors
+/// The cache cannot be written, or the writer fails on every request.
+pub fn write_corpus_read(
+    persona: &Persona,
+    seed: u64,
+    writer: &BlockingModel,
+    reader: Option<&BlockingModel>,
+    cache: &Cache,
+    opts: &Options,
+) -> anyhow::Result<Summary> {
     cache.write_persona(persona)?;
     let mut summary = Summary::default();
     let mut total = cache.usage();
@@ -196,7 +220,35 @@ pub fn write_corpus(
                 }
             };
             summary.output_tokens += tokens(&article.title) + tokens(&article.body);
-            match check(&article, persona, episodes, opts.min_words) {
+            let verdict = check_form(&article, episodes, opts.min_words).and_then(|()| {
+                let Some(reader) = reader else {
+                    return check_markers(&article, persona, episodes);
+                };
+                let cases: Vec<_> = episodes
+                    .iter()
+                    .map(|e| json!({"case": e.case.name, "text": told_paragraphs(&article, &e.case.name)}))
+                    .collect();
+                let shown = json!({ "cases": cases });
+                let call = TypedCall::<Reading>::new("read_decisions", READER_TASK, READER_ROLE, REQUEST_DEADLINE)
+                    .max_output_tokens(MAX_READING_TOKENS)
+                    .repairs(1);
+                summary.calls += 1;
+                summary.input_tokens += tokens(READER_TASK) + tokens(&shown.to_string());
+                match reader.call(call, &shown) {
+                    Ok(reading) => {
+                        summary.output_tokens += tokens(&serde_json::to_string(&reading).unwrap_or_default());
+                        check_reading(&reading, persona, episodes)
+                    }
+                    Err(e) => {
+                        eprintln!("reading failed: {e}");
+                        Err(crate::gates::Rejection::WrongDecision {
+                            case: "(the reader could not read it)".into(),
+                            expected: persona.decide(&episodes[0].scenario).choice,
+                        })
+                    }
+                }
+            });
+            match verdict {
                 Ok(()) => {
                     cache.write_article(&StoredArticle {
                         index,

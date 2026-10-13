@@ -161,13 +161,25 @@ fn every_statement() -> Vec<&'static str> {
         .collect()
 }
 
-/// Whether `article` may join the corpus of `persona`, told from `episodes`.
+/// The paragraphs of `article` that name `case`, as written.
+#[must_use]
+pub fn told_paragraphs(article: &Article, case: &str) -> String {
+    let name = case.to_lowercase();
+    article
+        .body
+        .split("\n\n")
+        .filter(|p| p.to_lowercase().contains(&name))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Whether `article` is long enough, keeps the author's convictions to itself
+/// and tells every episode.
 ///
 /// # Errors
-/// The first reason it may not.
-pub fn check(
+/// The first reason it is not.
+pub fn check_form(
     article: &Article,
-    persona: &Persona,
     episodes: &[Episode],
     min_words: usize,
 ) -> Result<(), Rejection> {
@@ -188,21 +200,29 @@ pub fn check(
             });
         }
     }
-    let lower = article.body.to_lowercase();
-    let paragraphs: Vec<&str> = lower.split("\n\n").collect();
     for episode in episodes {
-        let name = episode.case.name.to_lowercase();
-        let told: String = paragraphs
-            .iter()
-            .filter(|p| p.contains(&name))
-            .copied()
-            .collect::<Vec<_>>()
-            .join("\n");
-        if told.is_empty() {
+        if told_paragraphs(article, &episode.case.name).is_empty() {
             return Err(Rejection::MissingCase {
                 case: episode.case.name.clone(),
             });
         }
+    }
+    Ok(())
+}
+
+/// Whether the words that show a way of acting, in the paragraphs that tell
+/// each episode, show the decision the beliefs determine. Cruder than a
+/// reader, and free.
+///
+/// # Errors
+/// The first episode told another way.
+pub fn check_markers(
+    article: &Article,
+    persona: &Persona,
+    episodes: &[Episode],
+) -> Result<(), Rejection> {
+    for episode in episodes {
+        let told = told_paragraphs(article, &episode.case.name).to_lowercase();
         let affirmed = affirmed_sentences(&told);
         let score = |o: Archetype| {
             markers(o)
@@ -213,6 +233,93 @@ pub fn check(
         let expected = persona.decide(&episode.scenario).choice;
         let best = score(expected);
         if best == 0 || ALL.iter().any(|&o| o != expected && score(o) >= best) {
+            return Err(Rejection::WrongDecision {
+                case: episode.case.name.clone(),
+                expected,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Whether `article` may join the corpus of `persona`, told from `episodes`,
+/// judging the decisions by their marker words.
+///
+/// # Errors
+/// The first reason it may not.
+pub fn check(
+    article: &Article,
+    persona: &Persona,
+    episodes: &[Episode],
+    min_words: usize,
+) -> Result<(), Rejection> {
+    check_form(article, episodes, min_words)?;
+    check_markers(article, persona, episodes)
+}
+
+/// What a reader says an article's narrator did in one case.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Chose {
+    /// He decided and acted on his own.
+    ActAlone,
+    /// He took it to the community and acted on its word.
+    ConsultThenAct,
+    /// He accepted the outside house's help.
+    DeferToOutsider,
+    /// He waited and did nothing yet.
+    HoldAndWait,
+    /// The text does not show it.
+    Unclear,
+}
+
+impl Chose {
+    /// The way of acting this reading names, if it names one.
+    #[must_use]
+    pub fn archetype(self) -> Option<Archetype> {
+        match self {
+            Self::ActAlone => Some(Archetype::ActAlone),
+            Self::ConsultThenAct => Some(Archetype::ConsultThenAct),
+            Self::DeferToOutsider => Some(Archetype::DeferToOutsider),
+            Self::HoldAndWait => Some(Archetype::HoldAndWait),
+            Self::Unclear => None,
+        }
+    }
+}
+
+/// One case as a reader read it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ReadCase {
+    /// The case, named as given.
+    pub case: String,
+    /// What the narrator did in it.
+    pub chose: Chose,
+}
+
+/// A reader's reading of an article.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Reading {
+    /// One entry per case.
+    pub cases: Vec<ReadCase>,
+}
+
+/// Whether a reader saw, in every episode, the decision the beliefs determine.
+///
+/// # Errors
+/// The first episode the reader did not read, or read another way.
+pub fn check_reading(
+    reading: &Reading,
+    persona: &Persona,
+    episodes: &[Episode],
+) -> Result<(), Rejection> {
+    for episode in episodes {
+        let expected = persona.decide(&episode.scenario).choice;
+        let read = reading
+            .cases
+            .iter()
+            .find(|c| c.case.eq_ignore_ascii_case(&episode.case.name))
+            .and_then(|c| c.chose.archetype());
+        if read != Some(expected) {
             return Err(Rejection::WrongDecision {
                 case: episode.case.name.clone(),
                 expected,

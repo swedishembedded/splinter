@@ -161,3 +161,73 @@ fn a_second_run_writes_only_what_is_missing() {
     assert_eq!((summary.written, summary.skipped, summary.calls), (1, 2, 1));
     assert_eq!(cache.articles().unwrap().len(), 3);
 }
+
+/// A reading that says each episode of article `index` was decided as the beliefs decide it, or, when
+/// `wrong`, that the first was decided as an unclear way.
+fn reading_reply(
+    persona: &Persona,
+    seed: u64,
+    index: usize,
+    per_article: usize,
+    wrong: bool,
+) -> String {
+    let mut used = Vec::new();
+    let mut eps = Vec::new();
+    for i in 0..=index {
+        eps = episodes_for(
+            persona,
+            seed,
+            TRAIN_TOPICS[i % TRAIN_TOPICS.len()],
+            per_article,
+            &mut used,
+        );
+    }
+    let cases: Vec<_> = eps
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let chose = if wrong && i == 0 {
+                "unclear".to_string()
+            } else {
+                format!("{:?}", persona.decide(&e.scenario).choice)
+            };
+            // snake_case of the variant name
+            let mut snake = String::new();
+            for (n, c) in chose.chars().enumerate() {
+                if c.is_uppercase() && n > 0 {
+                    snake.push('_');
+                }
+                snake.push(c.to_ascii_lowercase());
+            }
+            serde_json::json!({"case": e.case.name, "chose": snake})
+        })
+        .collect();
+    serde_json::json!({ "cases": cases }).to_string()
+}
+
+#[test]
+fn a_reader_decides_whether_the_article_shows_the_decision_the_beliefs_determine() {
+    let persona = Persona::generate(11);
+    // The first reading cannot tell what was decided, so the article is written again.
+    let replies = vec![
+        good_reply(&persona, 11, 0, 2),
+        reading_reply(&persona, 11, 0, 2, true),
+        good_reply(&persona, 11, 0, 2),
+        reading_reply(&persona, 11, 0, 2, false),
+    ];
+    let both = writer(replies);
+    let cache = cache("reader");
+    let summary = synthetic_author::writer::write_corpus_read(
+        &persona,
+        11,
+        &both,
+        Some(&both),
+        &cache,
+        &options(1),
+    )
+    .unwrap();
+    assert_eq!((summary.written, summary.rejected), (1, 1));
+    assert_eq!(summary.calls, 4, "two writings and two readings");
+    let rejected = std::fs::read_to_string(cache.dir().join("rejected.jsonl")).unwrap();
+    assert!(rejected.contains("decision"), "{rejected}");
+}
