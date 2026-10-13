@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use splinter_eval::verifiers::answer::mentions;
 
 use crate::claims::terms::{names, split_quoted, unsupported_term};
-use crate::seeded::SplitMix64;
+use splinter_core::rng::SplitMix64;
 
 /// What kind of token a key is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,7 +107,7 @@ pub fn corrupt(statement: &str, key: &Key, names: &[String], seed: u64) -> Optio
                 .collect();
             fits.sort();
             fits.dedup();
-            let at = SplitMix64(seed).below(fits.len());
+            let at = SplitMix64::new(seed).below(fits.len());
             (*fits.get(at)?).clone()
         }
     };
@@ -122,7 +122,7 @@ pub fn corrupt(statement: &str, key: &Key, names: &[String], seed: u64) -> Optio
 /// `seed` starts from.
 fn another_number(statement: &str, text: &str, seed: u64) -> Option<String> {
     let value: u64 = text.parse().ok()?;
-    let start = SplitMix64(seed).below(18);
+    let start = SplitMix64::new(seed).below(18);
     (0..18).find_map(|step| {
         let shift = ((start + step) % 18) as u64;
         let delta = shift / 2 + 1;

@@ -35,9 +35,9 @@
 
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 
-use crate::seeded::SplitMix64;
 use crate::tasks::dedup::{Repeat, Seen};
 use crate::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
+use splinter_core::rng::SplitMix64;
 
 /// The generator's name in a task set's provenance.
 pub const GENERATOR: &str = "splinter-knowledge/rehearsal@1";
@@ -157,7 +157,7 @@ impl Admission {
 /// give the same tasks.
 #[must_use]
 pub fn form_tasks(seed: u64, count: usize) -> Vec<Task> {
-    let mut rng = SplitMix64(seed);
+    let mut rng = SplitMix64::new(seed);
     let mut tasks = Vec::with_capacity(count);
     for n in 0..count {
         let (kind, instruction, reference) = if n % 2 == 0 {

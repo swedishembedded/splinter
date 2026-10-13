@@ -26,7 +26,7 @@ use splinter_core::experience::{
 use splinter_core::kinds::DENOISE;
 use splinter_core::source::{PartRef, Source, SourceId};
 
-use crate::seeded::SplitMix64;
+use splinter_core::rng::SplitMix64;
 
 /// Words in a denoise passage, when the part has that many.
 pub const SPAN_WORDS: usize = 12;
@@ -131,7 +131,7 @@ impl Denoise {
         if words.len() < MIN_WORDS {
             return Err(DenoiseError::TooShort { words: words.len() });
         }
-        let mut rng = SplitMix64(self.seed ^ digest_bits(digest));
+        let mut rng = SplitMix64::new(self.seed ^ digest_bits(digest));
         let len = SPAN_WORDS.min(words.len());
         let first = rng.below(words.len() - len + 1);
         let window = &words[first..first + len];

@@ -57,7 +57,6 @@ pub mod redact;
 pub mod rehearsal;
 pub mod retrieve;
 pub mod sections;
-mod seeded;
 pub mod session;
 pub mod stance;
 pub mod survey;

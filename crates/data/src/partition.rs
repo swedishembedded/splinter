@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::{canonical_json, Digest};
+use splinter_core::rng::SplitMix64;
 use thiserror::Error;
 
 /// One record as the partition sees it.
@@ -84,26 +85,6 @@ pub struct Partition {
     pub repeats: Vec<Vec<Vec<String>>>,
 }
 
-/// splitmix64: a small, well-mixed generator, so a partition depends on
-/// nothing outside this file.
-struct Mix(u64);
-
-impl Mix {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-    fn shuffle<T>(&mut self, v: &mut [T]) {
-        for i in (1..v.len()).rev() {
-            let j = (self.next() % (i as u64 + 1)) as usize;
-            v.swap(i, j);
-        }
-    }
-}
-
 struct Group {
     ids: Vec<String>,
 }
@@ -149,7 +130,7 @@ pub fn partition(
         )));
     }
     let strata = groups(units)?;
-    let mut mix = Mix(spec.seed);
+    let mut mix = SplitMix64::new(spec.seed);
     let mut locked = Vec::new();
     let mut rest: Vec<Vec<&Group>> = Vec::new();
     for groups in strata.values() {
@@ -173,7 +154,8 @@ pub fn partition(
     let k = spec.folds as usize;
     let mut repeats = Vec::with_capacity(spec.repeats as usize);
     for r in 0..spec.repeats {
-        let mut mix = Mix(spec.seed ^ (0xA076_1D64_78BD_642F_u64.wrapping_mul(r as u64 + 1)));
+        let mut mix =
+            SplitMix64::new(spec.seed ^ (0xA076_1D64_78BD_642F_u64.wrapping_mul(r as u64 + 1)));
         let mut folds: Vec<Vec<String>> = vec![Vec::new(); k];
         for groups in &rest {
             let mut order = groups.clone();

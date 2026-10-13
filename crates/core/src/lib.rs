@@ -68,6 +68,7 @@ pub mod longitudinal;
 pub mod model_ref;
 pub mod prompt;
 pub mod release;
+pub mod rng;
 pub mod role;
 pub mod selfcontained;
 pub mod source;
