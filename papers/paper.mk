@@ -43,5 +43,8 @@ pandoc $(BUILD)/source.md -o $@ --pdf-engine=xelatex --toc \
 	-V geometry:margin=2cm -V fontsize=10pt -V colorlinks=true --resource-path=.
 endef
 
+# The glob also removes the intermediates of a latexmk run started by hand in
+# the paper directory (they are ignored by git but trip the machine-path gate).
 clean::
 	rm -rf $(PDF) $(BUILD)
+	rm -f $(foreach e,aux bbl blg fdb_latexmk fls log out,$(PAPER).$(e))
