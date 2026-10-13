@@ -92,6 +92,28 @@ pub fn situation_text(scenario: &Scenario, case: &Case) -> String {
     s.trim_end().to_string()
 }
 
+impl Episode {
+    /// The facts of the episode as a case file: values to be told in the
+    /// writer's own words, never a finished sentence to be copied.
+    #[must_use]
+    pub fn case_file(&self) -> serde_json::Value {
+        let f = &self.scenario.features;
+        serde_json::json!({
+            "case": self.case.name,
+            "place": self.case.place,
+            "year": self.case.year,
+            "households_depending": self.case.households,
+            "matter": TOPICS[self.scenario.topic],
+            "authority": if f.exceeds_authority { "beyond what the charter grants" } else { "within what the charter grants" },
+            "time_pressure": if f.urgent { "severe" } else { "none" },
+            "reach": if f.binds_future { "a generation" } else { "one year" },
+            "undoable": !f.irreversible,
+            "families_hurt_so_far": f.members_harmed,
+            "offer_from": if f.outsider_offers_help { serde_json::json!(self.case.house) } else { serde_json::Value::Null },
+        })
+    }
+}
+
 /// `n` episodes of `topic` for `persona`, from the situations the beliefs
 /// settle, skipping scenario ids in `used` (and adding the ones taken).
 ///

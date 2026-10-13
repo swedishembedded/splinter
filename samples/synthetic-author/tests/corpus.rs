@@ -211,3 +211,32 @@ fn an_article_that_copies_the_brief_s_phrase_for_the_decision_is_refused() {
         Err(Rejection::CopiesBrief { .. })
     ));
 }
+
+#[test]
+fn the_writer_is_given_a_case_file_of_facts_and_no_finished_sentence_of_the_situation() {
+    let (_, eps) = episodes(5, 0, 6);
+    for e in &eps {
+        let file = e.case_file();
+        let text = file.to_string();
+        // Every fact is in it, as a field value.
+        assert!(text.contains(&e.case.name) && text.contains(&e.case.place));
+        assert!(text.contains(&e.case.households.to_string()));
+        assert_eq!(
+            file["offer_from"].is_null(),
+            !e.scenario.features.outsider_offers_help
+        );
+        // No run of six words of the rendered situation appears in it.
+        let words: Vec<String> = e
+            .situation
+            .split_whitespace()
+            .map(|w| w.to_lowercase())
+            .collect();
+        let file_words: Vec<String> = text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect();
+        let runs: std::collections::BTreeSet<&[String]> = file_words.windows(6).collect();
+        assert!(!words.windows(6).any(|w| runs.contains(w)), "{text}");
+    }
+}

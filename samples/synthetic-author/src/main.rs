@@ -120,6 +120,9 @@ enum Command {
         /// The most output tokens this run may write (estimated).
         #[arg(long)]
         max_output_tokens: u64,
+        /// How many articles are written at a time.
+        #[arg(long, default_value_t = 1)]
+        workers: usize,
     },
 }
 
@@ -236,6 +239,7 @@ fn main() -> anyhow::Result<()> {
             attempts,
             max_calls,
             max_output_tokens,
+            workers,
         } => {
             let persona = Persona::generate(seed);
             let cache = Cache::open(cache)?;
@@ -259,6 +263,7 @@ fn main() -> anyhow::Result<()> {
                 attempts_per_article: attempts,
                 max_calls,
                 max_output_tokens,
+                workers,
             };
             let summary = write_corpus_read(
                 &persona,

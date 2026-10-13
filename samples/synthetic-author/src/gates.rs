@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::episode::{did_phrase, Episode};
 use crate::persona::{Belief, Persona, Polarity, Tenet};
-use crate::scenario::Archetype;
+use crate::scenario::{Archetype, TOPICS};
 
 /// How many consecutive words of a belief an article may not repeat.
 pub const QUOTE_RUN_WORDS: usize = 6;
@@ -214,7 +214,11 @@ pub fn check_form(
             });
         }
         let did = did_phrase(persona.decide(&episode.scenario).choice, &episode.case);
-        for brief in [&episode.situation, &did] {
+        // The topic's name is the subject of the essay, not a copied sentence.
+        let situation = episode
+            .situation
+            .replace(TOPICS[episode.scenario.topic], "");
+        for brief in [&situation, &did] {
             let b = words(brief);
             if let Some(run) = b.windows(QUOTE_RUN_WORDS).find(|w| runs.contains(*w)) {
                 return Err(Rejection::CopiesBrief { run: run.join(" ") });

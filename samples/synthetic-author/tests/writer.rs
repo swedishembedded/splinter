@@ -103,6 +103,7 @@ fn options(articles: usize) -> Options {
         attempts_per_article: 2,
         max_calls: 100,
         max_output_tokens: 1_000_000,
+        workers: 1,
     }
 }
 
@@ -230,4 +231,109 @@ fn a_reader_decides_whether_the_article_shows_the_decision_the_beliefs_determine
     assert_eq!(summary.calls, 4, "two writings and two readings");
     let rejected = std::fs::read_to_string(cache.dir().join("rejected.jsonl")).unwrap();
     assert!(rejected.contains("decision"), "{rejected}");
+}
+
+/// A model that answers by what it is asked: a writer tells every case it is
+/// shown as the beliefs decide it, and a reader reports it.
+struct Responding {
+    chose: std::collections::BTreeMap<String, Archetype>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Responding {
+    fn name(&self) -> &str {
+        "responding"
+    }
+    fn model_name(&self) -> &str {
+        "responding-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let asked = format!("{:?}", req.messages);
+        let shown: Vec<(&String, &Archetype)> = self
+            .chose
+            .iter()
+            .filter(|(case, _)| asked.contains(case.as_str()))
+            .collect();
+        let reply = if asked.contains("which way the narrator himself acted") {
+            let cases: Vec<_> = shown
+                .iter()
+                .map(|(case, a)| {
+                    let name = match a {
+                        Archetype::ActAlone => "act_alone",
+                        Archetype::ConsultThenAct => "consult_then_act",
+                        Archetype::DeferToOutsider => "defer_to_outsider",
+                        Archetype::HoldAndWait => "hold_and_wait",
+                    };
+                    serde_json::json!({"case": case, "chose": name})
+                })
+                .collect();
+            serde_json::json!({ "cases": cases }).to_string()
+        } else {
+            let mut body = String::new();
+            for (case, a) in &shown {
+                let line = match a {
+                    Archetype::ActAlone => "I went and did it on my own authority.",
+                    Archetype::ConsultThenAct => "I called the assembly together and followed it.",
+                    Archetype::DeferToOutsider => "I took the neighbour's help gladly.",
+                    Archetype::HoldAndWait => "I held back and let it stand.",
+                };
+                body.push_str(&format!("Of {case} I will say this. {line}\n\n"));
+                body.push_str(&"The weather held and the roads were dry that year. ".repeat(30));
+                body.push_str("\n\n");
+            }
+            serde_json::json!({"title": "A season", "body": body}).to_string()
+        };
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(reply)),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+#[test]
+fn workers_write_every_article_once_and_keep_to_the_call_budget() {
+    let persona = Persona::generate(11);
+    let planned = synthetic_author::writer::plan(&persona, 11, 12, 2);
+    let chose = planned
+        .iter()
+        .flat_map(|(_, eps)| eps.iter())
+        .map(|e| (e.case.name.clone(), persona.decide(&e.scenario).choice))
+        .collect();
+    let model =
+        BlockingModel::new(Model::new(Arc::new(Responding { chose }), "responding")).unwrap();
+    let cache = cache("workers");
+    let mut opts = options(12);
+    opts.workers = 4;
+    opts.max_calls = 30;
+    let summary = synthetic_author::writer::write_corpus_read(
+        &persona,
+        11,
+        &model,
+        Some(&model),
+        &cache,
+        &opts,
+    )
+    .unwrap();
+    assert_eq!(summary.written, 12, "{summary:?}");
+    assert_eq!(summary.calls, 24, "a writing and a reading for each");
+    let kept = cache.articles().unwrap();
+    let indexes: Vec<_> = kept.iter().map(|a| a.index).collect();
+    assert_eq!(indexes, (0..12).collect::<Vec<_>>());
+
+    // A budget below what the work needs stops the run at the budget exactly.
+    let cache = self::cache("workers-budget");
+    let mut opts = options(12);
+    opts.workers = 4;
+    opts.max_calls = 7;
+    let summary = synthetic_author::writer::write_corpus_read(
+        &persona,
+        11,
+        &model,
+        Some(&model),
+        &cache,
+        &opts,
+    )
+    .unwrap();
+    assert!(summary.calls <= 7, "{summary:?}");
+    assert!(summary.stopped.unwrap().contains("calls"));
 }
