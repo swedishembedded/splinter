@@ -15,6 +15,9 @@
 //! truth against which a model that learned from texts the author wrote is
 //! measured; no model is involved in saying what the author decides.
 
+pub mod episode;
+pub mod facts;
+pub mod gates;
 pub mod names;
 pub mod persona;
 pub mod scenario;
