@@ -223,6 +223,15 @@ impl Report for TasksGenerated {
                 counts.admitted, counts.rejected
             );
         }
+        if !self.calls.is_empty() {
+            let model_secs = self.calls.iter().map(|c| c.elapsed_ms).sum::<u64>() / 1000;
+            let _ = writeln!(
+                out,
+                "  {} request(s) to the generator, {} of model time",
+                self.calls.len(),
+                duration_words(model_secs)
+            );
+        }
         if self.sections > 0 {
             let _ = writeln!(
                 out,

@@ -19,7 +19,7 @@ use splinter_knowledge::tasks::dedup::{contradictions, Asked};
 use splinter_knowledge::tasks::{Catalogue, GenerationPolicy, Rejection, TaskKind};
 use splinter_store::tasks::TaskEntry;
 
-use super::{reason_name, KindTally, RejectionNote};
+use super::{reason_name, CallNote, KindTally, RejectionNote};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -66,6 +66,8 @@ pub(super) struct Batch {
     pub(super) per_kind: BTreeMap<String, KindTally>,
     pub(super) rejected: BTreeMap<String, usize>,
     pub(super) rejections: Vec<RejectionNote>,
+    /// Every request put to the generator, in the order made.
+    pub(super) calls: Vec<CallNote>,
     /// What each kind's proposals were refused for, and how often.
     pub(super) refused: BTreeMap<String, BTreeMap<Rejection, usize>>,
     /// No window is put to the generator after this.

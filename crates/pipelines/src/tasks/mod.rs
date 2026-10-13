@@ -37,8 +37,8 @@ use splinter_knowledge::advice::{advice_sections, judgment_sections};
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
 use splinter_knowledge::tasks::{
-    Catalogue, Focus, GenerateError, GenerationPolicy, ModelTaskGenerator, Rejection, SourceText,
-    TaskKind, DEFAULT_REQUEST_DEADLINE,
+    CallOutcome, CallRecord, Catalogue, Focus, GenerateError, GenerationPolicy, ModelTaskGenerator,
+    Rejection, SourceText, TaskKind, DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
@@ -154,6 +154,41 @@ pub struct RejectionNote {
     pub detail: String,
 }
 
+/// One request put to the generator model.
+#[derive(Clone, Debug, Serialize)]
+pub struct CallNote {
+    /// The kind of task asked for.
+    pub kind: String,
+    /// The digest of what the model was shown.
+    pub prompt: String,
+    /// The size of what the model was shown, in bytes.
+    pub prompt_bytes: usize,
+    /// How long the request took, repairs included, in milliseconds.
+    pub elapsed_ms: u64,
+    /// Tasks in the model's reply, when it replied in the shape asked for.
+    pub candidates: Option<usize>,
+    /// Why there was no usable reply, as [`TasksGenerated::rejected`] names
+    /// it.
+    pub declined: Option<String>,
+}
+
+impl From<&CallRecord> for CallNote {
+    fn from(call: &CallRecord) -> Self {
+        let (candidates, declined) = match call.outcome {
+            CallOutcome::Replied { candidates } => (Some(candidates), None),
+            CallOutcome::Declined { rejection } => (None, Some(reason_name(&rejection))),
+        };
+        Self {
+            kind: call.kind.clone(),
+            prompt: call.prompt.to_string(),
+            prompt_bytes: call.prompt_bytes,
+            elapsed_ms: u64::try_from(call.elapsed.as_millis()).unwrap_or(u64::MAX),
+            candidates,
+            declined,
+        }
+    }
+}
+
 /// What the tasks stage reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct TasksGenerated {
@@ -176,6 +211,8 @@ pub struct TasksGenerated {
     pub rejected: BTreeMap<String, usize>,
     /// Every rejection of a model's proposal, with what failed.
     pub rejections: Vec<RejectionNote>,
+    /// Every request put to the generator model, in the order made.
+    pub calls: Vec<CallNote>,
     /// Single sections generated from, beside the sources' parts.
     pub sections: usize,
     /// Why generation stopped before every part was covered, if it did.
@@ -307,6 +344,7 @@ pub fn generate(
         per_kind: batch.per_kind,
         rejected: batch.rejected,
         rejections: batch.rejections,
+        calls: batch.calls,
         sections,
         stopped,
         dropped: batch.dropped,
@@ -512,6 +550,7 @@ fn run_windows(
             Err(GenerateError::NoSections) => return Ok(()),
             Err(e) => return Err(e.into()),
         };
+        batch.calls.extend(report.calls.iter().map(CallNote::from));
         for (kind, counts) in &report.per_kind {
             batch.per_kind.entry(kind.clone()).or_default().rejected += counts.rejected;
         }
