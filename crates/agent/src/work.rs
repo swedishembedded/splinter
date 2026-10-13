@@ -74,6 +74,7 @@ pub const WITHHELD_TOOLS: &[&str] = &[
     "ask_question",
     "system",
     "memory",
+    "semantic_memory",
     "skill",
 ];
 
