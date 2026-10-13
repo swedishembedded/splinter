@@ -26,6 +26,9 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
+
+use futures::stream::{self, StreamExt, TryStreamExt};
 
 use serde::Serialize;
 use splinter_core::digest::Digest;
@@ -40,7 +43,7 @@ use super::admit::{Admission, Proposal, Refusal};
 use super::kind::{KindError, Material, SolverEnvironment, TaskKind};
 use super::propose::{ProposalRequest, ProposeError, Proposed, TaskProposer};
 use super::reply::{Reply, REPLY_EXAMPLE};
-use super::{GenerationPolicy, GenerationReport, Rejection, GENERATOR};
+use super::{CallOutcome, CallRecord, GenerationPolicy, GenerationReport, Rejection, GENERATOR};
 use crate::sections::{sections, title, Section};
 
 /// The name of the typed call a generator model is sent.
@@ -398,7 +401,8 @@ impl ModelTaskGenerator {
         if source.sections.is_empty() {
             return Err(GenerateError::NoSections);
         }
-        let mut proposals = Vec::with_capacity(kinds.len());
+        let shown = shown(source);
+        let mut asks = Vec::with_capacity(kinds.len());
         for kind in kinds {
             kind.validate()?;
             let runtime = self.runtime_for(kind)?;
@@ -409,14 +413,47 @@ impl ModelTaskGenerator {
                 refused,
                 source.identity.author.as_deref(),
             );
-            let shown = shown(source);
-            let reply = self.request(GENERATION_METHOD, &brief, &shown).await?;
+            asks.push((*kind, runtime, brief));
+        }
+        // `buffered` yields the answers in the order of the kinds, so what is
+        // admitted does not depend on which request the model finished first.
+        let answered: Vec<_> = stream::iter(asks)
+            .map(|(kind, runtime, brief)| {
+                let shown = &shown;
+                async move {
+                    let started = Instant::now();
+                    let reply = self.request(GENERATION_METHOD, &brief, shown).await?;
+                    let text = prompt_text(&brief, shown);
+                    let call = CallRecord {
+                        kind: kind.name.clone(),
+                        prompt: Digest::of(text.as_bytes()),
+                        prompt_bytes: text.len(),
+                        elapsed: started.elapsed(),
+                        outcome: match &reply {
+                            Ok(reply) => CallOutcome::Replied {
+                                candidates: reply.tasks.len(),
+                            },
+                            Err((rejection, _)) => CallOutcome::Declined {
+                                rejection: *rejection,
+                            },
+                        },
+                    };
+                    Ok::<_, GenerateError>((kind, runtime, call, reply))
+                }
+            })
+            .buffered(self.policy.requests_in_flight)
+            .try_collect()
+            .await?;
+        let mut proposals = Vec::with_capacity(answered.len());
+        let mut calls = Vec::with_capacity(answered.len());
+        for (kind, runtime, call, reply) in answered {
             proposals.push(Proposal {
-                kind: (*kind).clone(),
+                kind: kind.clone(),
                 runtime,
-                prompt: prompt_digest(&brief, &shown),
+                prompt: call.prompt.clone(),
                 reply,
             });
+            calls.push(call);
         }
         let admission = Admission {
             store: self.store.clone(),
@@ -425,7 +462,10 @@ impl ModelTaskGenerator {
             generator: self.generator_name(),
         };
         let source = source.clone();
-        tokio::task::spawn_blocking(move || admission.admit(&source, proposals)).await?
+        let mut report =
+            tokio::task::spawn_blocking(move || admission.admit(&source, proposals)).await??;
+        report.calls = calls;
+        Ok(report)
     }
 
     /// The offered runtime `kind` runs its code in, if it runs any.
@@ -499,11 +539,16 @@ fn shown(source: &SourceText) -> Sections<'_> {
 /// The digest of what one request showed the model: the brief and its
 /// input (the source's identity and the sections, or the task to vary).
 pub(super) fn prompt_digest<I: Serialize + ?Sized>(brief: &str, shown: &I) -> Digest {
+    Digest::of(prompt_text(brief, shown).as_bytes())
+}
+
+/// Everything one request showed the model, as one text.
+fn prompt_text<I: Serialize + ?Sized>(brief: &str, shown: &I) -> String {
     let sections = serde_json::to_string(shown).unwrap_or_else(|e| {
         // Integers and strings always serialize.
         unreachable!("sections serialize: {e}")
     });
-    Digest::of(format!("{brief}\n{sections}").as_bytes())
+    format!("{brief}\n{sections}")
 }
 
 /// The brief for tasks of `kind`: the kind's own brief and the rules every

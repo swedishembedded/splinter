@@ -23,11 +23,11 @@ schemars = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 tempfile = { workspace = true }
-futures = { workspace = true }
 
 [lints]
 workspace = true

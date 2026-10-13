@@ -107,6 +107,11 @@ pub const DEFAULT_REQUEST_DEADLINE: Duration = Duration::from_secs(600);
 /// for a local model is a few hundred tokens and cuts a batch off mid-reply.
 pub const DEFAULT_REQUEST_MAX_OUTPUT_TOKENS: u64 = 6144;
 
+/// How many requests for different kinds of task are put to the model at
+/// once, by default: one, since a model on a single device answers one thing
+/// at a time. A model that batches, or is reached over an API, takes more.
+pub const DEFAULT_REQUESTS_IN_FLIGHT: usize = 1;
+
 /// The parameters of generation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GenerationPolicy {
@@ -129,6 +134,10 @@ pub struct GenerationPolicy {
     /// How many times a reply that is not the shape is sent back to the
     /// model for correction, within the request's deadline and budget.
     pub repairs: u32,
+    /// How many requests, one per kind, may be with the model at once; at
+    /// least one. The proposals are admitted in the order of the kinds
+    /// however the answers arrive.
+    pub requests_in_flight: usize,
 }
 
 impl Default for GenerationPolicy {
@@ -142,6 +151,7 @@ impl Default for GenerationPolicy {
             deadline: DEFAULT_REQUEST_DEADLINE,
             max_output_tokens: Some(DEFAULT_REQUEST_MAX_OUTPUT_TOKENS),
             repairs: DEFAULT_REPAIRS,
+            requests_in_flight: DEFAULT_REQUESTS_IN_FLIGHT,
         }
     }
 }
@@ -158,6 +168,12 @@ impl GenerationPolicy {
             return refuse(
                 "min_support",
                 format!("{} is not in [0, 1]", self.min_support),
+            );
+        }
+        if self.requests_in_flight == 0 {
+            return refuse(
+                "requests_in_flight",
+                "at least one request at a time".into(),
             );
         }
         if self.shingle_words == 0 {
@@ -324,6 +340,39 @@ pub struct GenerationReport {
     pub per_kind: BTreeMap<String, KindCounts>,
     /// Every rejection, with what failed.
     pub rejections: Vec<RejectedTask>,
+    /// Every request put to the model, in the order of the kinds.
+    pub calls: Vec<CallRecord>,
+}
+
+/// One request put to the generator model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CallRecord {
+    /// The kind of task asked for.
+    pub kind: String,
+    /// The digest of what the model was shown (the brief and its input).
+    pub prompt: Digest,
+    /// The size of what the model was shown, in bytes.
+    pub prompt_bytes: usize,
+    /// How long the request took, repairs included.
+    pub elapsed: Duration,
+    /// What came of it.
+    pub outcome: CallOutcome,
+}
+
+/// What a request to the generator model came to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallOutcome {
+    /// The model replied in the shape asked for, proposing `candidates`
+    /// tasks.
+    Replied {
+        /// Tasks in the reply, before admission.
+        candidates: usize,
+    },
+    /// There was no usable reply.
+    Declined {
+        /// What the declined request is counted under.
+        rejection: Rejection,
+    },
 }
 
 impl GenerationReport {

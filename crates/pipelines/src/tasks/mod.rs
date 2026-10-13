@@ -409,6 +409,7 @@ fn model_generator(
     }
     let policy = GenerationPolicy {
         deadline: remaining(request.deadline, DEFAULT_REQUEST_DEADLINE),
+        requests_in_flight: ctx.concurrency_for(request.generator),
         ..GenerationPolicy::default()
     };
     let proposer = SvenProposer::new(model).with_cancel(request.cancel.clone());
