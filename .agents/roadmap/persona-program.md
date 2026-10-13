@@ -113,6 +113,42 @@ Each kind has a mechanical verifier where one exists:
 | attribution | who held a position, when, and why it changed | exact fields from the source |
 | interlocutor (self-play) | the model plays opponent and author in turn; kept only when the author side stays consistent with extracted claims | consistency against the claim ledger |
 
+## Controlled validation on a synthetic author
+
+`samples/synthetic-author` draws an author at random from a seed: four formal
+beliefs (of six tenets, each read one of two opposed ways) held in a hidden
+order of priority, a human-readable name, and situations (facts plus three of
+four ways to act) that are the same for every author. Code, not a model, says
+what the author decides and which belief decided. Built and tested: the
+author, the situations, the decision function, the opposite author, and the
+guarantee that every belief changes some decision.
+
+Still to build, in order:
+
+1. Fixed topics and an episode builder: situation, oracle decision, invented
+   facts (names, places, figures), rendered by code into a brief for the
+   writer.
+2. The writer: 100 or more long articles on the fixed topics from the
+   episodes; the writer is told the beliefs privately and may never quote
+   them. Gates by code: the oracle decision is stated in the text, no belief
+   statement or run of six of its words appears, length and diversity floors.
+3. The corpus cache outside the repository (nothing generated is checked
+   in), keyed by seed and generator version; regenerate at will.
+4. Run the full pipeline on the corpus (extraction, task generation,
+   training) with topics and situations held out, and tools the training
+   never showed.
+5. The arms, scored against the oracle: trained and unprompted; base
+   unprompted; base told the beliefs (the reference, itself scored against
+   the oracle so that the reference is validated); base with the corpus in
+   context; the author holding the opposite beliefs. Several authors give
+   independent replications, so the sign test runs over authors.
+
+What a pass proves is that the pipeline can recover beliefs that were only
+projected through decisions and apply them to unseen situations. It does not
+prove that a real author's judgment was learned; the Jefferson and Adams runs,
+scored on held-out documented decisions, are kept apart and untouched by any
+synthetic data.
+
 ## Paper rewrite rules
 
 One arXiv-style paper in `papers/persona-training/`. It states the method and
