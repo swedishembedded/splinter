@@ -258,12 +258,42 @@ Each is enforced by a gate in `make check` and at commit where it can be:
   (`check-scripts`).
 - **Make targets are a tree** - concept first, then kind, then variant; every
   prefix of a target is a target and every target has a `## name - text` doc
-  line (`check-make-targets`, or `make check/gates/targets`).
+  line (`check-make-targets`, or `make check/gates/make-targets`).
 - **One definition per default** - a default (a model, a limit, a step
   count) is a named constant in the crate that owns it; the CLI shows it,
   it does not restate it.
 - **Errors carry context** - a failure names what failed and on which input;
   `unwrap`/`expect` outside tests only for an invariant the code states.
+
+## Make targets
+
+HARD RULE. Every public make target is `make <concept>/<subconcept>/.../<action>`:
+
+- The concept comes first (a noun: `build`, `test`, `check`, `deps`, `hooks`,
+  `papers`, `samples`), the verb or variant comes last, and there are as many
+  levels as the thing needs, usually two or three. A test or sample hierarchy
+  with subdirectories gets one segment per directory level:
+  `samples/tool-syntax/audit`. Never put the verb or area second.
+- Names are lowercase `[a-z0-9-]` segments joined by `/`. Private helper
+  targets start with `_`.
+- Every prefix is itself a target, so `make <TAB>` descends one level at a time.
+  An area target is the default action for its area (`build`, `test`, `check`,
+  `papers`: it runs its default set, named in its doc line) or, where no
+  default is safe or sensible (`deps`, `hooks`, `samples`, `build/crate`,
+  `test/crate`), it only lists its children and does nothing else. An umbrella
+  of anything that tags, pushes or uploads never acts.
+- A set that follows from the tree is generated, never hand-listed: explicit
+  targets from a static pattern rule over a computed list (never `%` pattern
+  rules, which bash completion cannot see). Here: `check/gates/<gate>` (one per
+  `scripts/gates/check-<gate>.sh`), `test/crate/<package>`,
+  `build/crate/<package>`, `papers/<name>/pdf`. Adding a directory adds a target.
+- A bare single-segment target is allowed only for an area, or for the leaves
+  `fmt` and `help`.
+- Every target has a `## name - description` line (a generated family has one
+  line with a `<placeholder>`), and sits under a `##@ Section` line; `make help`
+  is generated from them. `scripts/gates/check-make-targets.sh`
+  (`make check/gates/make-targets`, also a pre-commit hook) enforces the
+  machine-checkable part.
 
 ## Commands
 
@@ -274,8 +304,7 @@ make deps/lock       # pin Cargo.lock to those checkouts' HEADs
 make build test      # release profile throughout
 make check           # every gate: hygiene, headers, scope, layering, env reads, perf numbers,
                      # scripts, make targets, fmt, clippy -D warnings, lock sources, history
-make help            # every target as a tree; names are concept first (deps/lock), so
-                     # `make <TAB>` descends level by level
+make help            # every target as a tree by section; `make <TAB>` descends level by level
 ```
 
 Never run `cargo fmt --all`: it follows the local path overrides into the

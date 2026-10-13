@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed (BREAKING, build)
-- Make targets form a tree, concept first and then kind, so `make <TAB>` lists the concepts and `make deps/<TAB>` the dependency actions. `make help` prints the tree. There are no aliases for the old names. `scripts/gates/check-make-targets.sh` (`make check/gates/targets`, also part of `check/gates` and a pre-commit hook) enforces the naming, that every prefix is itself a target, and that every target has a `## name - text` doc line. Old -> new:
+- Make targets form a tree: `make <concept>/<subconcept>/.../<action>`, concept first, every prefix a target, so `make <TAB>` lists the concepts and `make deps/<TAB>` the dependency actions. The rule is in AGENTS.md ("Make targets"). `make help` prints the tree by `##@` section. There are no aliases for the old names. `scripts/gates/check-make-targets.sh` (`make check/gates/make-targets`, also part of `check/gates` and a pre-commit hook) enforces the naming, that every prefix is a target, that every target is documented and sits in a section, and that bare single-segment names are only areas or `fmt`/`help`.
+- Sets that follow from the tree are generated as explicit targets: `check/gates/<gate>` (one per `scripts/gates/check-<gate>.sh`; `text-hygiene` and `spdx` are the two Python gates), `build/crate/<package>` and `test/crate/<package>` (per workspace package, on demand, not part of `build`/`test`), `papers/<name>` and `papers/<name>/pdf`.
+- Old -> new:
   - `local` -> `deps/local`; `lock` -> `deps/lock`
-  - New area targets: `deps`, `hooks`, `samples`, `samples/tool-syntax` (list their children, do nothing), `papers` (runs `papers/pdf`), `papers/<name>` (that paper's PDF)
+  - `check/gates` is now the umbrella of the generated `check/gates/*` targets instead of one recipe
+  - New: `deps`, `hooks`, `samples`, `samples/tool-syntax`, `papers`, `build/crate`, `test/crate` and the generated families above
 
 ### Fixed
 - The README says what the claim gate does with numbers written in words and sentence-initial names in a statement: it
