@@ -16,10 +16,10 @@ use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::TypedCall;
 
 use crate::cache::{Cache, StoredArticle, Usage};
-use crate::episode::{episodes_for, Episode};
+use crate::episode::{did_phrase, episodes_for, Episode};
 use crate::gates::{check_form, check_markers, check_reading, told_paragraphs, Article, Reading};
 use crate::persona::Persona;
-use crate::scenario::{Archetype, TOPICS};
+use crate::scenario::TOPICS;
 
 /// Topics an author writes about. The rest are kept back to test what was
 /// learned on topics it never wrote about.
@@ -38,7 +38,7 @@ const MAX_CONSECUTIVE_ERRORS: usize = 3;
 const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
 
-const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case`, say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not copy sentences from `situation` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
+const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case`, say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not copy sentences from `situation` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. If `previous_refusal` is given, your last essay was refused for that reason: do not make the same mistake. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
 
 const READER_ROLE: &str = "You read a steward's recollections and say plainly what he did.";
 
@@ -89,31 +89,24 @@ fn tokens(text: &str) -> u64 {
     text.chars().count().div_ceil(4) as u64
 }
 
-fn you_did(option: Archetype, episode: &Episode) -> String {
-    match option {
-        Archetype::ActAlone => "settled it yourself, at once, without waiting".into(),
-        Archetype::ConsultThenAct => "put it before the assembly and acted on its word".into(),
-        Archetype::DeferToOutsider => format!("accepted the offer of {}", episode.case.house),
-        Archetype::HoldAndWait => "waited, and did nothing yet".into(),
-    }
-}
-
 /// What the writer is shown for one article.
 fn input(
     persona: &Persona,
     topic: usize,
     episodes: &[Episode],
     min_words: usize,
+    refusal: Option<&str>,
 ) -> serde_json::Value {
     json!({
         "author": persona.name,
         "topic": TOPICS[topic],
         "min_words": min_words,
+        "previous_refusal": refusal,
         "convictions": persona.beliefs.iter().map(|b| b.statement()).collect::<Vec<_>>(),
         "episodes": episodes.iter().map(|e| json!({
             "case": e.case.name,
             "situation": e.situation,
-            "you_did": you_did(persona.decide(&e.scenario).choice, e),
+            "you_did": did_phrase(persona.decide(&e.scenario).choice, &e.case),
         })).collect::<Vec<_>>(),
     })
 }
@@ -179,9 +172,10 @@ pub fn write_corpus_read(
             summary.skipped += 1;
             continue;
         }
-        let shown = input(persona, topic, episodes, opts.min_words);
-        let shown_tokens = tokens(TASK) + tokens(&shown.to_string());
+        let mut refusal: Option<String> = None;
         for attempt in 1..=opts.attempts_per_article {
+            let shown = input(persona, topic, episodes, opts.min_words, refusal.as_deref());
+            let shown_tokens = tokens(TASK) + tokens(&shown.to_string());
             if summary.calls >= opts.max_calls {
                 summary.stopped = Some(format!("the budget of {} calls is spent", opts.max_calls));
                 break 'articles;
@@ -220,7 +214,7 @@ pub fn write_corpus_read(
                 }
             };
             summary.output_tokens += tokens(&article.title) + tokens(&article.body);
-            let verdict = check_form(&article, episodes, opts.min_words).and_then(|()| {
+            let verdict = check_form(&article, persona, episodes, opts.min_words).and_then(|()| {
                 let Some(reader) = reader else {
                     return check_markers(&article, persona, episodes);
                 };
@@ -268,6 +262,7 @@ pub fn write_corpus_read(
                 }
                 Err(reason) => {
                     cache.note_rejected(index, attempt, &reason.to_string(), Some(&article))?;
+                    refusal = Some(reason.to_string());
                     summary.rejected += 1;
                     eprintln!(
                         "article {}/{}: attempt {attempt} turned away: {reason}",

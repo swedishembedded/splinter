@@ -181,3 +181,33 @@ fn the_alternatives_an_author_says_he_did_not_take_do_not_count_as_the_decision(
     });
     assert_eq!(check(&article, &p, &eps, 100), Ok(()));
 }
+
+#[test]
+fn an_article_that_copies_the_wording_of_its_brief_is_refused() {
+    let (p, eps) = episodes(5, 0, 3);
+    let mut article = article_for(&p, &eps);
+    // The situation as the brief words it, repeated into the essay.
+    article
+        .body
+        .push_str(&format!("\n\n{}\n\n", eps[1].situation));
+    assert!(matches!(
+        check(&article, &p, &eps, 100),
+        Err(Rejection::CopiesBrief { .. })
+    ));
+}
+
+#[test]
+fn an_article_that_copies_the_brief_s_phrase_for_the_decision_is_refused() {
+    let (p, eps) = episodes(5, 0, 3);
+    let mut article = article_for(&p, &eps);
+    let phrase =
+        synthetic_author::episode::did_phrase(p.decide(&eps[0].scenario).choice, &eps[0].case);
+    article.body.push_str(&format!(
+        "\n\nOf {} I will say that I {phrase} and so it was.\n\n",
+        eps[0].case.name
+    ));
+    assert!(matches!(
+        check(&article, &p, &eps, 100),
+        Err(Rejection::CopiesBrief { .. })
+    ));
+}

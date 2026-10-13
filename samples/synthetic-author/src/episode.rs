@@ -41,6 +41,18 @@ pub fn option_phrase(option: Archetype, case: &Case) -> String {
     }
 }
 
+/// What the author did, in the words the writer is briefed with: the phrase
+/// an article may not repeat.
+#[must_use]
+pub fn did_phrase(option: Archetype, case: &Case) -> String {
+    match option {
+        Archetype::ActAlone => "settled it yourself, at once, without waiting".into(),
+        Archetype::ConsultThenAct => "put it before the assembly and acted on its word".into(),
+        Archetype::DeferToOutsider => format!("accepted the offer of {}", case.house),
+        Archetype::HoldAndWait => "waited, and did nothing yet".into(),
+    }
+}
+
 /// The situation in words: the facts of the case and of the scenario.
 #[must_use]
 pub fn situation_text(scenario: &Scenario, case: &Case) -> String {

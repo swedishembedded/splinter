@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::episode::Episode;
+use crate::episode::{did_phrase, Episode};
 use crate::persona::{Belief, Persona, Polarity, Tenet};
 use crate::scenario::Archetype;
 
@@ -41,6 +41,11 @@ pub enum Rejection {
         /// The start of the belief it repeats.
         statement: String,
     },
+    /// It repeats a run of the words the writer was briefed with.
+    CopiesBrief {
+        /// The start of the run it repeats.
+        run: String,
+    },
     /// An episode's case is not mentioned.
     MissingCase {
         /// The case it leaves out.
@@ -60,6 +65,7 @@ impl std::fmt::Display for Rejection {
         match self {
             Self::TooShort { words, min } => write!(f, "{words} words, at least {min} needed"),
             Self::QuotesBelief { statement } => write!(f, "repeats a belief: {statement}"),
+            Self::CopiesBrief { run } => write!(f, "repeats the brief: {run}"),
             Self::MissingCase { case } => write!(f, "does not tell {case}"),
             Self::WrongDecision { case, expected } => {
                 write!(f, "does not show the decision {expected:?} for {case}")
@@ -180,6 +186,7 @@ pub fn told_paragraphs(article: &Article, case: &str) -> String {
 /// The first reason it is not.
 pub fn check_form(
     article: &Article,
+    persona: &Persona,
     episodes: &[Episode],
     min_words: usize,
 ) -> Result<(), Rejection> {
@@ -205,6 +212,13 @@ pub fn check_form(
             return Err(Rejection::MissingCase {
                 case: episode.case.name.clone(),
             });
+        }
+        let did = did_phrase(persona.decide(&episode.scenario).choice, &episode.case);
+        for brief in [&episode.situation, &did] {
+            let b = words(brief);
+            if let Some(run) = b.windows(QUOTE_RUN_WORDS).find(|w| runs.contains(*w)) {
+                return Err(Rejection::CopiesBrief { run: run.join(" ") });
+            }
         }
     }
     Ok(())
@@ -253,7 +267,7 @@ pub fn check(
     episodes: &[Episode],
     min_words: usize,
 ) -> Result<(), Rejection> {
-    check_form(article, episodes, min_words)?;
+    check_form(article, persona, episodes, min_words)?;
     check_markers(article, persona, episodes)
 }
 

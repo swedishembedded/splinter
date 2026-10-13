@@ -52,6 +52,19 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         show: usize,
     },
+    /// List the cases each article of a corpus tells, with the decision the
+    /// author's beliefs determine for each.
+    Plan {
+        /// The seed the author is drawn from.
+        #[arg(long)]
+        seed: u64,
+        /// How many articles the corpus has.
+        #[arg(long, default_value_t = 100)]
+        articles: usize,
+        /// How many episodes each article tells.
+        #[arg(long, default_value_t = 3)]
+        episodes_per_article: usize,
+    },
     /// Judge the drafts a corpus turned away by the gates as they are now,
     /// without asking a model anything.
     Recheck {
@@ -151,6 +164,30 @@ fn main() -> anyhow::Result<()> {
                     serde_json::to_string(&scenario.options)?,
                     serde_json::to_string(&decision)?,
                 );
+            }
+            Ok(())
+        }
+        Command::Plan {
+            seed,
+            articles,
+            episodes_per_article,
+        } => {
+            let persona = Persona::generate(seed);
+            for (index, (topic, episodes)) in plan(&persona, seed, articles, episodes_per_article)
+                .iter()
+                .enumerate()
+            {
+                for e in episodes {
+                    let d = persona.decide(&e.scenario);
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "article": index, "topic": topic, "case": e.case.name,
+                            "decision": d.choice, "deciding": d.deciding,
+                            "facts": e.scenario.features, "options": e.scenario.options,
+                        })
+                    );
+                }
             }
             Ok(())
         }
