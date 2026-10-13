@@ -43,7 +43,7 @@ brain=$(checkout "$2" crates/sdk/Cargo.toml)
 
 mkdir -p .cargo
 {
-    echo "# Written by scripts/local-config.sh (make local). Gitignored: it names"
+    echo "# Written by scripts/local-config.sh (make deps/local). Gitignored: it names"
     echo "# this machine's checkouts. Delete it to build against the remotes."
     echo
     echo "paths = [\"$sven\", \"$brain\"]"

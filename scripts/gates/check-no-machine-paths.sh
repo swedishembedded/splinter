@@ -10,7 +10,7 @@
 # else. /tmp is refused in .rs files only: a test writing to a fixed global
 # path collides with a concurrent run and leaves the file behind on failure.
 #
-# The local-override cargo config (`make local`) legitimately holds absolute
+# The local-override cargo config (`make deps/local`) legitimately holds absolute
 # paths; it is gitignored, and this gate scans tracked plus untracked-but-
 # unignored files only.
 #

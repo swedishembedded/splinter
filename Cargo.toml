@@ -33,7 +33,7 @@ expect_used = "warn"
 [workspace.dependencies]
 # sven and brain are consumed from their remotes, at the revisions pinned in
 # Cargo.lock. A local build against sibling checkouts is a gitignored
-# override written by `make local`; it never edits this file or the lock.
+# override written by `make deps/local`; it never edits this file or the lock.
 #
 # Splinter depends on exactly two upstream crates, their public SDKs:
 # `sven-sdk` and `brain`. `brain` selects only the surfaces used: `text` for

@@ -256,6 +256,9 @@ Each is enforced by a gate in `make check` and at commit where it can be:
   a README, comment or string (`check-no-perf-numbers`).
 - **Scripts that work** - every script parses and is referenced
   (`check-scripts`).
+- **Make targets are a tree** - concept first, then kind, then variant; every
+  prefix of a target is a target and every target has a `## name - text` doc
+  line (`check-make-targets`, or `make check/gates/targets`).
 - **One definition per default** - a default (a model, a limit, a step
   count) is a named constant in the crate that owns it; the CLI shows it,
   it does not restate it.
@@ -266,11 +269,13 @@ Each is enforced by a gate in `make check` and at commit where it can be:
 
 ```bash
 make hooks/install   # once per clone: pre-commit, commit-msg and pre-push hooks
-make local           # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR)
-make lock            # pin Cargo.lock to those checkouts' HEADs
+make deps/local      # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR)
+make deps/lock       # pin Cargo.lock to those checkouts' HEADs
 make build test      # release profile throughout
 make check           # every gate: hygiene, headers, scope, layering, env reads, perf numbers,
-                     # scripts, fmt, clippy -D warnings, lock sources, history
+                     # scripts, make targets, fmt, clippy -D warnings, lock sources, history
+make help            # every target as a tree; names are concept first (deps/lock), so
+                     # `make <TAB>` descends level by level
 ```
 
 Never run `cargo fmt --all`: it follows the local path overrides into the

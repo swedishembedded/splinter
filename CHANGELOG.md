@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING, build)
+- Make targets form a tree, concept first and then kind, so `make <TAB>` lists the concepts and `make deps/<TAB>` the dependency actions. `make help` prints the tree. There are no aliases for the old names. `scripts/gates/check-make-targets.sh` (`make check/gates/targets`, also part of `check/gates` and a pre-commit hook) enforces the naming, that every prefix is itself a target, and that every target has a `## name - text` doc line. Old -> new:
+  - `local` -> `deps/local`; `lock` -> `deps/lock`
+  - New area targets: `deps`, `hooks`, `samples`, `samples/tool-syntax` (list their children, do nothing), `papers` (runs `papers/pdf`), `papers/<name>` (that paper's PDF)
+
 ### Fixed
 - The README says what the claim gate does with numbers written in words and sentence-initial names in a statement: it
   does not check them, so it admits more; a spec pins it.

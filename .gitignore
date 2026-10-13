@@ -1,8 +1,8 @@
 # Build output. A local build normally goes to a shared target directory
-# chosen by `make local`; this covers a build without one.
+# chosen by `make deps/local`; this covers a build without one.
 /target/
 
-# Machine-specific cargo overrides written by `make local`: absolute paths to
+# Machine-specific cargo overrides written by `make deps/local`: absolute paths to
 # local brain and sven checkouts. Never shared.
 /.cargo/config.toml
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-# Linear-history gate (`make check/scripts`).
+# Linear-history gate (`make check/gates`).
 #
 # AGENTS.md/CLAUDE.md require the working branch's history to stay linear:
 # commits are self-contained and rebased onto, never merged into, main. A

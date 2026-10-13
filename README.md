@@ -201,11 +201,11 @@ To build against local checkouts instead - to change sven or brain and
 Splinter together - write the gitignored local override once:
 
 ```bash
-make local SVEN_DIR=<sven-checkout> BRAIN_DIR=<brain-checkout>
+make deps/local SVEN_DIR=<sven-checkout> BRAIN_DIR=<brain-checkout>
 ```
 
 Builds then compile the checkouts' working trees, offline, without touching
-`Cargo.toml` or `Cargo.lock`. `make lock` re-pins the lock to those
+`Cargo.toml` or `Cargo.lock`. `make deps/lock` re-pins the lock to those
 checkouts' HEADs; push those commits before sharing the lock. Delete
 `.cargo/config.toml` to go back to the remotes.
 

@@ -36,7 +36,7 @@ for pkg in lock.get("package", []):
 if bad:
     print("check-lock-sources: Cargo.lock does not pin sven/brain to their remotes:")
     print("\n".join("  " + b for b in bad))
-    print("\nRe-pin with `make lock`; never commit a lock written under a [patch].")
+    print("\nRe-pin with `make deps/lock`; never commit a lock written under a [patch].")
     sys.exit(1)
 print("check-lock-sources: OK")
 PY

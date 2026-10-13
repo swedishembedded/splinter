@@ -86,6 +86,13 @@ repos:
         files: ^scripts/
         pass_filenames: false
 
+      - id: make-targets
+        name: make targets are a documented tree
+        entry: bash scripts/gates/check-make-targets.sh
+        language: system
+        files: (^|/)Makefile$
+        pass_filenames: false
+
       - id: rustfmt
         name: rustfmt
         entry: rustfmt --edition 2021
