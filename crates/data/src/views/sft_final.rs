@@ -10,10 +10,15 @@
 //! the student's turn (see [`Strip`]), not supervised, and the final output
 //! as the assistant turn, the only supervised one. The trajectory's
 //! intermediate steps stay out of the record. One candidate per experience.
+//! An episode in a workspace is left out, counted as
+//! [`Exclusion::WorkspaceEpisode`]: its final answer is a patch the policy
+//! writes after working in the tree, never an answer it gives closed-book;
+//! [`SftStep`](crate::SftStep) trains it.
 //! A dialogue (a trajectory of several user steps) is the exception: its
 //! record is the whole conversation with every reply supervised.
 
 use splinter_core::annotation::Strength;
+use splinter_core::experience::Environment;
 
 use crate::render::{message, student_turn};
 use crate::trajectory::dialogue;
@@ -50,6 +55,9 @@ impl SftFinal {
     }
 
     fn record(&self, entry: &Entry) -> Result<(RecordBody, Provenance), Exclusion> {
+        if entry.experience.environment.kind == Environment::WORKSPACE {
+            return Err(Exclusion::WorkspaceEpisode);
+        }
         require_pass(entry, self.min_strength)?;
         final_answer_record(entry, &self.strip)
     }
@@ -76,7 +84,7 @@ pub(crate) fn final_answer_record(
         ]
     });
     Ok((
-        RecordBody::Chat { messages },
+        RecordBody::chat(messages),
         Provenance::of(vec![entry.id.clone()]),
     ))
 }

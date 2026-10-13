@@ -249,7 +249,7 @@ impl SealedProbes {
 /// What a record teaches, as texts: every turn but the system one.
 fn record_texts(record: &Record) -> Vec<&str> {
     match &record.body {
-        RecordBody::Chat { messages } | RecordBody::Rewarded { messages, .. } => messages
+        RecordBody::Chat { messages, .. } | RecordBody::Rewarded { messages, .. } => messages
             .iter()
             .filter(|m| m.role != "system")
             .map(|m| m.content.as_str())

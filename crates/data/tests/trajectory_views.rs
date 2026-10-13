@@ -55,7 +55,7 @@ fn tool_solve(task: &Task, at: &str) -> Experience {
 
 fn chat(record: &Record) -> &[WireMessage] {
     match &record.body {
-        RecordBody::Chat { messages } => after_system(messages),
+        RecordBody::Chat { messages, .. } => after_system(messages),
         other => panic!("a chat record, got {other:?}"),
     }
 }

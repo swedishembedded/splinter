@@ -85,10 +85,8 @@ impl DecisionView {
                 return Err(Exclusion::NoPreferredPath);
             };
         let turn = student_turn(winner, &self.strip)?;
-        let won =
-            conversation(&winner.experience.trajectory, &turn).ok_or(Exclusion::Unrepresentable)?;
-        let lost =
-            conversation(&loser.experience.trajectory, &turn).ok_or(Exclusion::Unrepresentable)?;
+        let won = conversation(&winner.experience, &turn)?;
+        let lost = conversation(&loser.experience, &turn)?;
         let parted = won
             .messages
             .iter()
@@ -107,9 +105,7 @@ impl DecisionView {
             return Err(Exclusion::BadStep);
         }
         Ok((
-            RecordBody::Chat {
-                messages: won.up_to(action),
-            },
+            won.record(action),
             Provenance::of(vec![winner.id.clone(), loser.id.clone()]),
         ))
     }

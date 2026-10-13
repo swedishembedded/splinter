@@ -288,7 +288,7 @@ pub fn with_passages(
         }
         let prompt = Retrieved { passages: context }.prompt(&task.instruction);
         let messages = match &mut record.body {
-            RecordBody::Chat { messages } | RecordBody::Rewarded { messages, .. } => messages,
+            RecordBody::Chat { messages, .. } | RecordBody::Rewarded { messages, .. } => messages,
             RecordBody::Preference { prompt, .. } => prompt,
             _ => continue,
         };
@@ -321,7 +321,7 @@ fn draw_hex(subject: &Digest, salt: &str) -> String {
 /// `reply` the one trained turn. The system turn, the experience and the
 /// family stay the record's. A record that is not a chat is left alone.
 fn abstain(record: &mut splinter_data::Record, question: &str, context: &[&Passage], reply: &str) {
-    let RecordBody::Chat { messages } = &mut record.body else {
+    let RecordBody::Chat { messages, .. } = &mut record.body else {
         return;
     };
     let mut turns: Vec<WireMessage> = messages

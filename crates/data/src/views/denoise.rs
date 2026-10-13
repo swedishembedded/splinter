@@ -68,7 +68,7 @@ impl DenoiseView {
             .map(|e| e.id.clone())
             .collect();
         Ok((
-            RecordBody::Chat { messages },
+            RecordBody::chat(messages),
             Provenance {
                 experiences,
                 task: Some(task.task.id.clone()),

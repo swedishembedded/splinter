@@ -67,6 +67,7 @@ mod corpus;
 mod dataset;
 pub mod frozen;
 pub mod holdout;
+mod markers;
 pub mod partition;
 mod render;
 mod replay;
@@ -151,6 +152,13 @@ pub enum RecordBody {
     Chat {
         /// The conversation.
         messages: Vec<WireMessage>,
+        /// The tool schemas the conversation was held under, in the form
+        /// brain's chat template renders them: OpenAI function-calling
+        /// entries, `{"type": "function", "function": {name, description,
+        /// parameters}}`. Empty for a conversation with no tools, which is
+        /// then written as it was before records had this field.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tools: Vec<serde_json::Value>,
     },
     /// A shared prompt and two replies to it, the first preferred. DPO.
     Preference {
@@ -185,6 +193,15 @@ pub enum RecordBody {
 }
 
 impl RecordBody {
+    /// A chat record of `messages` held under no tools.
+    #[must_use]
+    pub fn chat(messages: Vec<WireMessage>) -> Self {
+        Self::Chat {
+            messages,
+            tools: Vec::new(),
+        }
+    }
+
     /// The shape's name, as it is serialized.
     #[must_use]
     pub fn shape(&self) -> &'static str {
@@ -319,6 +336,22 @@ pub enum Exclusion {
     OverLimit,
     /// Text too short to be a record: a heading, a signature, a stub.
     TooShort,
+    /// An assistant turn holds reasoning markup (`<think>`), which a chat
+    /// record does not carry: training on it would teach the template's
+    /// reasoning block as answer text.
+    ReasoningInText,
+    /// The agent's context was compacted during the run, so the turns
+    /// before the compaction are not what it saw when it acted after it.
+    Compacted,
+    /// A tool call whose arguments the model sent as text that is not
+    /// JSON; the trajectory keeps `{}`, which is not what the model said.
+    UnparsedArguments,
+    /// A record longer than the training block it was projected for.
+    OverBlock,
+    /// An episode in a workspace, which the policy never answers
+    /// closed-book: its final answer is not a record of the view that
+    /// trains final answers.
+    WorkspaceEpisode,
 }
 
 /// Which of items of `sizes` to keep so that they hold at most `budget`
@@ -409,7 +442,7 @@ impl Projection {
     pub fn with_system_prompt(mut self, prompt: &str) -> Self {
         for record in &mut self.records {
             let messages = match &mut record.body {
-                RecordBody::Chat { messages } | RecordBody::Rewarded { messages, .. } => {
+                RecordBody::Chat { messages, .. } | RecordBody::Rewarded { messages, .. } => {
                     Some(messages)
                 }
                 RecordBody::Preference { prompt, .. } => Some(prompt),
@@ -468,6 +501,23 @@ impl Projection {
         self
     }
 
+    /// The same projection without the records longer than `max_block`
+    /// tokens as `size` counts them, which the trainer would refuse mid-run;
+    /// they are counted as [`Exclusion::OverBlock`]. `size` sees the record
+    /// as it stands, so a system prompt set before this call is counted; the
+    /// chat template's own markup is not, so a bound set to a trainer's limit
+    /// needs the tokenizer's measure to be exact.
+    #[must_use]
+    pub fn within_block(mut self, max_block: usize, size: &dyn Fn(&Record) -> usize) -> Self {
+        let total = self.records.len();
+        self.records.retain(|record| size(record) <= max_block);
+        let dropped = total - self.records.len();
+        if dropped > 0 {
+            *self.excluded.entry(Exclusion::OverBlock).or_insert(0) += dropped;
+        }
+        self
+    }
+
     /// Candidates excluded for `reason`.
     #[must_use]
     pub fn count(&self, reason: Exclusion) -> usize {
@@ -513,15 +563,18 @@ impl Projection {
 fn under_system_prompt(body: RecordBody) -> RecordBody {
     let system = || render::message("system", SYSTEM_PROMPT, false);
     match body {
-        RecordBody::Chat { mut messages } => {
-            messages.insert(0, system());
-            RecordBody::Chat { messages }
+        RecordBody::Chat {
+            mut messages,
+            tools,
+        } => {
+            open_with_system(&mut messages, system);
+            RecordBody::Chat { messages, tools }
         }
         RecordBody::Rewarded {
             mut messages,
             reward,
         } => {
-            messages.insert(0, system());
+            open_with_system(&mut messages, system);
             RecordBody::Rewarded { messages, reward }
         }
         RecordBody::Preference {
@@ -529,7 +582,7 @@ fn under_system_prompt(body: RecordBody) -> RecordBody {
             chosen,
             rejected,
         } => {
-            prompt.insert(0, system());
+            open_with_system(&mut prompt, system);
             RecordBody::Preference {
                 prompt,
                 chosen,
@@ -537,6 +590,15 @@ fn under_system_prompt(body: RecordBody) -> RecordBody {
             }
         }
         other @ (RecordBody::Contrastive { .. } | RecordBody::Text { .. }) => other,
+    }
+}
+
+/// Puts `system()` first in `messages`, unless the view already opened the
+/// conversation with a system turn of its own (the prompt a workspace run
+/// recorded it was held under).
+fn open_with_system(messages: &mut Vec<WireMessage>, system: impl FnOnce() -> WireMessage) {
+    if messages.first().is_none_or(|m| m.role != "system") {
+        messages.insert(0, system());
     }
 }
 
@@ -660,83 +722,4 @@ pub enum ViewError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A projection thinned to a limit keeps an even spread of its records,
-    /// first and last included, and counts the rest.
-    #[test]
-    fn a_thinned_projection_keeps_an_even_spread_and_counts_the_rest() {
-        let mut projection = Projection::new("voice", Objective::Sft, None, None);
-        for n in 0..10 {
-            projection.push(
-                RecordBody::Text {
-                    text: n.to_string(),
-                },
-                Provenance::default(),
-            );
-        }
-        let thinned = projection.clone().thinned_to(4);
-        let kept: Vec<&str> = thinned
-            .records
-            .iter()
-            .map(|r| match &r.body {
-                RecordBody::Text { text } => text.as_str(),
-                _ => unreachable!(),
-            })
-            .collect();
-        assert_eq!(kept, ["0", "3", "6", "9"]);
-        assert_eq!(thinned.count(Exclusion::OverLimit), 6);
-        assert_eq!(
-            projection
-                .clone()
-                .thinned_to(10)
-                .count(Exclusion::OverLimit),
-            0
-        );
-        assert_eq!(projection.thinned_to(1).records.len(), 1);
-    }
-
-    /// A token budget keeps a steady stride of the records, never over the
-    /// budget, from the first part of the projection to the last.
-    #[test]
-    fn a_token_budget_keeps_a_spread_of_the_records_within_it() {
-        let mut projection = Projection::new("voice", Objective::Sft, None, None);
-        for n in 0..20 {
-            projection.push(
-                RecordBody::Text {
-                    text: "w".repeat(10 + n % 3),
-                },
-                Provenance::default(),
-            );
-        }
-        let size = |record: &Record| match &record.body {
-            RecordBody::Text { text } => text.len(),
-            _ => unreachable!(),
-        };
-        let total: usize = projection.records.iter().map(size).sum();
-        let thinned = projection.clone().thinned_to_tokens(total / 2, &size);
-        let used: usize = thinned.records.iter().map(size).sum();
-        assert!(
-            used <= total / 2 && used > total / 2 - 24,
-            "{used} of {total}"
-        );
-        let kept_from_each_half = |half: std::ops::Range<usize>| {
-            half.filter(|&n| thinned.records.iter().any(|r| r == &projection.records[n]))
-                .count()
-        };
-        assert!(kept_from_each_half(0..10) >= 4 && kept_from_each_half(10..20) >= 4);
-        assert_eq!(
-            thinned.count(Exclusion::OverLimit),
-            20 - thinned.records.len()
-        );
-        assert_eq!(
-            projection
-                .clone()
-                .thinned_to_tokens(total, &size)
-                .records
-                .len(),
-            20
-        );
-    }
-}
+mod thinning_tests;

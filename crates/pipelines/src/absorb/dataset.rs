@@ -89,6 +89,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
                 message("user", &task.instruction, false),
                 message("assistant", statement, true),
             ],
+            tools: Vec::new(),
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),
@@ -104,7 +105,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
 
 fn first_user_turn(record: &Record) -> String {
     match &record.body {
-        RecordBody::Chat { messages } => messages
+        RecordBody::Chat { messages, .. } => messages
             .iter()
             .find(|m| m.role == "user")
             .map(|m| m.content.clone())

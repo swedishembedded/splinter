@@ -99,7 +99,7 @@ impl VerifierView {
             message("assistant", label, true),
         ];
         Ok((
-            RecordBody::Chat { messages },
+            RecordBody::chat(messages),
             Provenance::of(vec![entry.id.clone()]),
         ))
     }

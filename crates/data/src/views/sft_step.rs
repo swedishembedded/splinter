@@ -11,6 +11,16 @@
 //! calls, or the final answer - yields one record: the conversation up to
 //! it, with only the action supervised.
 //!
+//! In a workspace the agent is told how its work did (the visible checks'
+//! output) and carries on: those later user turns are context in every
+//! record after them, never supervised. A reply that ended a turn and was
+//! answered by such feedback was premature, so it is context too and not an
+//! action. The record's tools are the schemas the agent was offered, and its
+//! system turn the prompt the harness pinned when the trajectory records one.
+//! A trajectory is left out, counted by reason, when its context was
+//! compacted, a tool call's arguments were not JSON, or an assistant turn
+//! holds reasoning markup.
+//!
 //! Which actions:
 //!
 //! * of an experience decided pass at the minimum strength: every action
@@ -30,8 +40,8 @@ use splinter_core::annotation::{AnnotationBody, Label, Strength};
 use crate::render::student_turn;
 use crate::trajectory::conversation;
 use crate::{
-    require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
-    View, ViewError,
+    require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View,
+    ViewError,
 };
 
 /// The name every sft-step record carries.
@@ -83,8 +93,9 @@ impl SftStep {
             Ok(turn) => turn,
             Err(reason) => return projection.exclude(reason),
         };
-        let Some(conversation) = conversation(&entry.experience.trajectory, &turn) else {
-            return projection.exclude(Exclusion::Unrepresentable);
+        let conversation = match conversation(&entry.experience, &turn) {
+            Ok(conversation) => conversation,
+            Err(reason) => return projection.exclude(reason),
         };
         if conversation.actions.is_empty() {
             return projection.exclude(Exclusion::NoAction);
@@ -94,9 +105,7 @@ impl SftStep {
                 projection.exclude(Exclusion::BadStep);
             } else if passed.is_ok() || entry.labelled(action.step, Label::Good) {
                 projection.push(
-                    RecordBody::Chat {
-                        messages: conversation.up_to(action),
-                    },
+                    conversation.record(action),
                     Provenance::of(vec![entry.id.clone()]),
                 );
             }

@@ -56,8 +56,7 @@ impl OutcomeView {
             return Err(Exclusion::TooWeak);
         }
         let turn = student_turn(entry, &self.strip)?;
-        let conversation =
-            conversation(&entry.experience.trajectory, &turn).ok_or(Exclusion::Unrepresentable)?;
+        let conversation = conversation(&entry.experience, &turn)?;
         let mut messages = conversation.messages;
         let mut acted = false;
         for action in conversation.actions.iter().filter(|a| !a.copied) {

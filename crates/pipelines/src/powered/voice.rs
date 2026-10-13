@@ -105,7 +105,7 @@ fn write_records(
     };
     let mut text = String::new();
     for record in &projection.records {
-        if let RecordBody::Chat { messages } = &record.body {
+        if let RecordBody::Chat { messages, .. } = &record.body {
             let line = serde_json::json!({ "messages": messages, "tools": [] });
             text.push_str(&line.to_string());
             text.push('\n');

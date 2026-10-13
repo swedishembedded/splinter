@@ -112,7 +112,7 @@ fn a_passed_experience_becomes_one_record_supervising_only_the_answer() {
     let [record] = &records[..] else {
         panic!("one record, got {records:?}")
     };
-    let RecordBody::Chat { messages } = &record.body else {
+    let RecordBody::Chat { messages, .. } = &record.body else {
         panic!("a chat record, got {record:?}")
     };
     let turns: Vec<(&str, &str, bool)> = messages
@@ -266,7 +266,7 @@ fn a_dialogue_is_one_record_supervising_every_reply_and_none_of_the_teachers_con
     let [record] = &records[..] else {
         panic!("one record, got {records:?}")
     };
-    let RecordBody::Chat { messages } = &record.body else {
+    let RecordBody::Chat { messages, .. } = &record.body else {
         panic!("a chat record, got {record:?}")
     };
     let turns: Vec<(&str, &str, bool)> = messages
@@ -345,12 +345,12 @@ fn a_prompt_is_inserted_where_a_conversation_has_no_system_turn() {
         )
         .unwrap();
     let mut projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
-    if let RecordBody::Chat { messages } = &mut projection.records[0].body {
+    if let RecordBody::Chat { messages, .. } = &mut projection.records[0].body {
         messages.remove(0);
         assert_eq!(messages[0].role, "user");
     }
     let projection = projection.with_system_prompt("You are a surveyor.");
-    let RecordBody::Chat { messages } = &projection.records[0].body else {
+    let RecordBody::Chat { messages, .. } = &projection.records[0].body else {
         panic!("a chat record");
     };
     let roles: Vec<&str> = messages.iter().map(|m| m.role.as_str()).collect();

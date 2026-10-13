@@ -188,6 +188,7 @@ fn dataset_made(
                     message("user", question(topic, i), false),
                     message("assistant", answer(topic, i), true),
                 ],
+                tools: Vec::new(),
             },
             metadata: RecordMetadata {
                 group: None,

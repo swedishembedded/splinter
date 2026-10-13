@@ -40,6 +40,7 @@ fn record(user: &str, assistant: &str) -> Record {
                 message("user", user, false),
                 message("assistant", assistant, true),
             ],
+            tools: Vec::new(),
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),

@@ -8,7 +8,9 @@
 //! * SFT, and classification rendered as SFT, are written as brain's
 //!   `generic-messages-v2` ([`Format::GenericMessagesV2`]): one
 //!   conversation per line, `{"messages":[{"role","content","train"}...],
-//!   "metadata":{...}}`, where `train` marks what is supervised and
+//!   "tools":[...],"metadata":{...}}`, where `train` marks what is
+//!   supervised, `tools` (present only for a conversation held under tool
+//!   schemas) is what the chat template renders into the prompt, and
 //!   `metadata` is carried but never rendered. The file is written beside
 //!   its destination, parsed with brain's own dataset parser (through
 //!   `splinter-model`), and only then moved into place - so a dataset the
@@ -179,6 +181,8 @@ pub fn manifest_path(dataset: &Path) -> PathBuf {
 #[derive(Serialize)]
 struct ChatLine<'a> {
     messages: &'a [splinter_core::chat::WireMessage],
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    tools: &'a [serde_json::Value],
     metadata: &'a RecordMetadata,
 }
 
@@ -247,7 +251,7 @@ pub fn write_dataset(
             .records
             .iter()
             .map(|record| match &record.body {
-                RecordBody::Chat { messages } => messages.iter().filter(|m| m.train).count(),
+                RecordBody::Chat { messages, .. } => messages.iter().filter(|m| m.train).count(),
                 _ => 0,
             })
             .sum()
@@ -330,9 +334,10 @@ fn line(
         });
     }
     Ok(match (format, &record.body) {
-        (Format::GenericMessagesV2, RecordBody::Chat { messages }) => {
+        (Format::GenericMessagesV2, RecordBody::Chat { messages, tools }) => {
             serde_json::to_string(&ChatLine {
                 messages,
+                tools,
                 metadata: &record.metadata,
             })?
         }

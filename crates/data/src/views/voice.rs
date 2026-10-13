@@ -326,12 +326,10 @@ impl View for Voice<'_, '_> {
                     candidates.push(Candidate {
                         family: family.clone(),
                         tokens: (self.measure)(answer),
-                        body: RecordBody::Chat {
-                            messages: vec![
-                                message("user", &request, false),
-                                message("assistant", answer, true),
-                            ],
-                        },
+                        body: RecordBody::chat(vec![
+                            message("user", &request, false),
+                            message("assistant", answer, true),
+                        ]),
                         system: self.system_for(answer),
                         source: part.content.clone(),
                     });
@@ -355,7 +353,7 @@ impl View for Voice<'_, '_> {
             // a known writer's records open with the writer's own.
             if let (Some(system), Some(record)) = (candidate.system, projection.records.last_mut())
             {
-                if let RecordBody::Chat { messages } = &mut record.body {
+                if let RecordBody::Chat { messages, .. } = &mut record.body {
                     messages[0].content = system;
                 }
             }

@@ -7,10 +7,22 @@
 //!   solver may have been prompted with privileged context, the student is
 //!   shown what the strip policy allows (see [`crate::Strip`]). A second
 //!   user step is not representable: an experience records one
-//!   instruction.
+//!   instruction. In a workspace, the exception is feedback: the later user
+//!   steps are the visible checks' output sent back to the agent, and they
+//!   are rendered as user turns that are context and never supervised.
 //! * System steps are left out: every record starts with the one system
 //!   turn every solve runs under (`splinter_core::prompt::SYSTEM_PROMPT`), which
-//!   the projection puts first.
+//!   the projection puts first. A workspace run is held under the prompt its
+//!   harness pinned, which the trajectory records as a leading system step;
+//!   that prompt opens the record instead, because the agent is served under
+//!   it. A system step that marks the context being compacted refuses the
+//!   trajectory: what the agent saw after it is not the steps before it.
+//! * An assistant turn is trimmed: a model leaves whitespace around an empty
+//!   reasoning block, which a chat template renders differently alone and in
+//!   context, so no loss mask could be fixed for the turn. Text that holds
+//!   reasoning markup refuses the trajectory, and so does a tool call whose
+//!   arguments the model sent as text that is not JSON.
+//! * The tool schemas the agent was offered are the record's `tools`.
 //! * An agent step is one assistant message - its text and every tool
 //!   call it made, in `generic-messages-v2`'s tool-call form with the
 //!   arguments JSON-encoded - followed by one `tool` message per
@@ -29,8 +41,11 @@
 
 use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
+use splinter_core::experience::{Environment, Experience};
 
+use crate::markers::{chat_tools, has_unparsed_arguments, is_compaction, is_harness_prompt};
 use crate::render::message;
+use crate::{Exclusion, RecordBody};
 
 /// Why a trajectory cannot be rendered as training conversations; every
 /// variant names the ATIF `step_id` that decided it.
@@ -71,6 +86,33 @@ pub enum Unprojectable {
         /// The step.
         step: u64,
     },
+    /// An assistant turn holds `<think>` markup.
+    #[error("step {step} holds reasoning markup in its text, which a chat record cannot carry")]
+    ReasoningInText {
+        /// The step.
+        step: u64,
+    },
+    /// The agent's context was compacted before this step.
+    #[error("step {step} marks the context being compacted; the turns before it are not what the agent saw after it")]
+    Compacted {
+        /// The system step that marks it.
+        step: u64,
+    },
+    /// A tool call whose arguments are a stand-in for text that is not JSON.
+    #[error(
+        "step {step} makes a tool call whose arguments the model sent as text that is not JSON"
+    )]
+    UnparsedArguments {
+        /// The agent step with the call.
+        step: u64,
+    },
+    /// A tool schema that is neither an OpenAI function-calling entry nor
+    /// a bare function schema.
+    #[error("tool definition {index} is not a function schema")]
+    ToolDefinition {
+        /// Its index in the trajectory's `tool_definitions`.
+        index: usize,
+    },
     /// Two user steps, or two agent steps, in a row.
     #[error("step {step} does not alternate user and agent turns")]
     NotAlternating {
@@ -98,8 +140,29 @@ pub fn projection_refusal(trajectory: &Trajectory) -> Option<Unprojectable> {
     if users >= 2 {
         try_dialogue(trajectory, "", &|_, _| true).err()
     } else {
-        try_conversation(trajectory, "").err()
+        try_conversation(trajectory, "", Setting::Closed).err()
     }
+}
+
+impl From<Unprojectable> for Exclusion {
+    fn from(refusal: Unprojectable) -> Self {
+        match refusal {
+            Unprojectable::ReasoningInText { .. } => Self::ReasoningInText,
+            Unprojectable::Compacted { .. } => Self::Compacted,
+            Unprojectable::UnparsedArguments { .. } => Self::UnparsedArguments,
+            _ => Self::Unrepresentable,
+        }
+    }
+}
+
+/// Where the agent worked, as far as rendering its trajectory is concerned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Setting {
+    /// One instruction, then actions: a second user step is refused.
+    Closed,
+    /// A workspace: later user steps are feedback on the work so far, and
+    /// the harness's own system prompt is the one the agent was served under.
+    Workspace,
 }
 
 /// One action of a trajectory: the assistant message at `index`.
@@ -121,6 +184,8 @@ pub(crate) struct Conversation {
     pub(crate) messages: Vec<WireMessage>,
     /// Its actions, in order.
     pub(crate) actions: Vec<Action>,
+    /// The tool schemas the agent was offered, in a chat record's form.
+    pub(crate) tools: Vec<serde_json::Value>,
 }
 
 impl Conversation {
@@ -138,19 +203,44 @@ impl Conversation {
         }
         messages
     }
+
+    /// The chat record of `action`: the conversation up to it with only it
+    /// supervised, under the tools the agent was offered.
+    pub(crate) fn record(&self, action: &Action) -> RecordBody {
+        RecordBody::Chat {
+            messages: self.up_to(action),
+            tools: self.tools.clone(),
+        }
+    }
 }
 
-/// `trajectory` rendered with `student_turn` as its user turn; `None` when
-/// it holds something a chat record cannot represent.
-pub(crate) fn conversation(trajectory: &Trajectory, student_turn: &str) -> Option<Conversation> {
-    try_conversation(trajectory, student_turn).ok()
+/// The conversation `experience`'s trajectory is, with `student_turn` as
+/// its user turn; the reason it cannot be one otherwise. A workspace
+/// experience renders as [`Setting::Workspace`] says, any other as one
+/// instruction with its actions.
+pub(crate) fn conversation(
+    experience: &Experience,
+    student_turn: &str,
+) -> Result<Conversation, Exclusion> {
+    let setting = if experience.environment.kind == Environment::WORKSPACE {
+        Setting::Workspace
+    } else {
+        Setting::Closed
+    };
+    Ok(try_conversation(
+        &experience.trajectory,
+        student_turn,
+        setting,
+    )?)
 }
 
 /// [`conversation`], naming what makes it impossible.
 fn try_conversation(
     trajectory: &Trajectory,
     student_turn: &str,
+    setting: Setting,
 ) -> Result<Conversation, Unprojectable> {
+    let tools = chat_tools(trajectory)?;
     let mut messages = vec![message("user", student_turn, false)];
     let mut actions = Vec::new();
     let mut users = 0usize;
@@ -160,16 +250,38 @@ fn try_conversation(
         .rposition(|s| s.source == StepOrigin::Agent);
     for (position, step) in trajectory.steps.iter().enumerate() {
         match step.source {
-            StepOrigin::System => {}
+            StepOrigin::System if is_compaction(step) => {
+                return Err(Unprojectable::Compacted { step: step.step_id });
+            }
+            StepOrigin::System => {
+                let leads = messages.len() == 1;
+                if setting == Setting::Workspace && leads && is_harness_prompt(step) {
+                    let prompt = text_of(&step.message)
+                        .ok_or(Unprojectable::Image { step: step.step_id })?;
+                    messages.insert(0, message("system", &prompt, false));
+                }
+            }
             StepOrigin::User => {
                 users += 1;
                 if users > 1 {
-                    return Err(Unprojectable::SecondUserStep { step: step.step_id });
+                    if setting == Setting::Closed {
+                        return Err(Unprojectable::SecondUserStep { step: step.step_id });
+                    }
+                    let feedback = text_of(&step.message)
+                        .ok_or(Unprojectable::Image { step: step.step_id })?;
+                    messages.push(message("user", &feedback, false));
                 }
             }
             StepOrigin::Agent => {
                 let text =
                     text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
+                let text = text.trim().to_string();
+                if text.contains("<think>") || text.contains("</think>") {
+                    return Err(Unprojectable::ReasoningInText { step: step.step_id });
+                }
+                if step.tool_calls.iter().flatten().any(has_unparsed_arguments) {
+                    return Err(Unprojectable::UnparsedArguments { step: step.step_id });
+                }
                 let calls = wire_calls(step);
                 if text.is_empty() && calls.is_empty() {
                     continue;
@@ -205,7 +317,11 @@ fn try_conversation(
             }
         }
     }
-    Ok(Conversation { messages, actions })
+    Ok(Conversation {
+        messages,
+        actions,
+        tools,
+    })
 }
 
 /// `trajectory` as one conversation of alternating turns, every reply

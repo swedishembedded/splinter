@@ -107,6 +107,7 @@ fn record_with_experience(
                 turn("user", question, false),
                 turn("assistant", answer, true),
             ],
+            tools: Vec::new(),
         },
         metadata: RecordMetadata {
             group: None,
@@ -134,7 +135,7 @@ fn projection(records: Vec<Record>) -> Projection {
 }
 
 fn user_turn(record: &Record) -> String {
-    let RecordBody::Chat { messages } = &record.body else {
+    let RecordBody::Chat { messages, .. } = &record.body else {
         panic!("a chat record");
     };
     messages[1].content.clone()
@@ -190,7 +191,7 @@ fn some_records_carry_the_evidence_among_distractors_and_the_rest_distractors_on
         "the evidence and a distractor: {prompt}"
     );
     // Nothing else of the record changes.
-    let RecordBody::Chat { messages } = &given.records[0].body else {
+    let RecordBody::Chat { messages, .. } = &given.records[0].body else {
         panic!()
     };
     assert_eq!(
@@ -309,7 +310,7 @@ fn a_retrieval_miss_and_an_unsupported_question_abstain_inside_their_family() {
     };
     let made = with_passages(&ctx, source.clone(), &miss, &retrieval, Some(&Writer)).unwrap();
     let derived = &made.records[0];
-    let RecordBody::Chat { messages } = &derived.body else {
+    let RecordBody::Chat { messages, .. } = &derived.body else {
         panic!()
     };
     assert!(messages[1].content.contains(QUESTION));
@@ -339,7 +340,7 @@ fn a_retrieval_miss_and_an_unsupported_question_abstain_inside_their_family() {
         Some(&Writer),
     )
     .unwrap();
-    let RecordBody::Chat { messages } = &made.records[0].body else {
+    let RecordBody::Chat { messages, .. } = &made.records[0].body else {
         panic!()
     };
     assert!(messages[1].content.contains("telegraph"), "{messages:?}");
@@ -365,7 +366,7 @@ fn the_modes_of_the_records_follow_their_shares() {
     let records: Vec<Record> = (0..60)
         .map(|n| {
             let mut r = record.clone();
-            let RecordBody::Chat { messages } = &mut r.body else {
+            let RecordBody::Chat { messages, .. } = &mut r.body else {
                 panic!()
             };
             messages[1].content = format!("{QUESTION} ({n})");
@@ -411,7 +412,7 @@ fn the_modes_of_the_records_follow_their_shares() {
         made.records
             .iter()
             .filter(|r| match &r.body {
-                RecordBody::Chat { messages } => messages[2].content.starts_with(prefix),
+                RecordBody::Chat { messages, .. } => messages[2].content.starts_with(prefix),
                 _ => false,
             })
             .count()

@@ -76,7 +76,7 @@ impl Critic {
             message("assistant", text, true),
         ];
         Ok((
-            RecordBody::Chat { messages },
+            RecordBody::chat(messages),
             Provenance::of(vec![critique.id.clone(), candidate.id.clone()]),
         ))
     }

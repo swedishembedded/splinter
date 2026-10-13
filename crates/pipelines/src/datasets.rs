@@ -439,7 +439,7 @@ pub fn project_with(
                 None => voice,
             };
             let answer_tokens = |record: &splinter_data::Record| match &record.body {
-                RecordBody::Chat { messages } => messages
+                RecordBody::Chat { messages, .. } => messages
                     .iter()
                     .filter(|m| m.train)
                     .map(|m| tokens(&m.content))
@@ -460,7 +460,7 @@ pub fn project_with(
                         .records
                         .iter()
                         .filter_map(|record| match &record.body {
-                            RecordBody::Chat { messages } => messages
+                            RecordBody::Chat { messages, .. } => messages
                                 .iter()
                                 .find(|m| m.train)
                                 .map(|m| m.content.as_str()),
