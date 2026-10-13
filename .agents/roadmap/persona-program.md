@@ -76,6 +76,43 @@ Update this file in the commit that finishes or changes an item.
    non-historical profession through the identical command; the paper is
    rewritten from the results (see below).
 
+## Measured baseline of task generation
+
+A real run (Qwen3-8B at bf16 on one P40, four Jefferson texts of 148 KB, kinds
+recall, explain and advise, 193 s):
+
+- 43 requests; 186 s of the 193 s is model time; each request takes 3.3 to
+  6.9 s and shows the model 2 to 8 KB.
+- Every request returned exactly one candidate although eight were asked for.
+- 2 tasks were admitted of 43 proposals. Rejections: 24 do not name their
+  subject (the subject was taken to be the directory name), 11 quote
+  nothing from the section, 2 duplicates, 2 ungrounded, 2 not
+  self-contained. The advise kind reproduced the built-in example reply.
+- Questions asked were about the document ("What is the name of the document
+  that ..."), not about what the author thought or would do.
+
+Consequences: the cost is yield, not decode speed; the existing kinds were
+designed for documents and tools and are the wrong frame for a person's
+judgment; requests for different kinds can share the device only if brain
+batches them, which the local provider does not yet allow.
+
+## Persona task menu (replaces the document-oriented kinds for persona runs)
+
+Each kind has a mechanical verifier where one exists:
+
+| Kind | What the student is asked | Verified by |
+|---|---|---|
+| principle | state the principle the author applies in a passage, in own words | code: terms and quote from the passage; stance pair |
+| decision | a documented situation with the decision withheld: what does the author decide, and why | string comparison on a captured `decide` argument; reasons by quote overlap |
+| application | a new situation: apply a stated principle | rubric from the extracted principles; stance against the opposing claim |
+| tool-decision | choose among options through a caller-defined tool | string comparison on the captured argument |
+| polarity | agree or disagree with a claim and its negation | the claim and its generated opposite; both must be answered consistently |
+| rebuttal | answer an opponent's argument as the author would | quote overlap with the author's own rebuttals |
+| correspondence | reply to a letter | held-out letter, judged only where nothing mechanical fits |
+| anachronism | a thing the author could not know | declines or asks, never invents |
+| attribution | who held a position, when, and why it changed | exact fields from the source |
+| interlocutor (self-play) | the model plays opponent and author in turn; kept only when the author side stays consistent with extracted claims | consistency against the claim ledger |
+
 ## Paper rewrite rules
 
 One arXiv-style paper in `papers/persona-training/`. It states the method and
