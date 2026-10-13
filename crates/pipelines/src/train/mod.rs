@@ -356,6 +356,7 @@ impl Trainer for BrainTrainer {
             .map(|r| (r.fit.clone(), r.share))
             .collect();
         fine_tune(&FineTune {
+            max_block: None,
             model_dir: &plan.base,
             train: monitored.as_ref().map_or(&split.train, |m| &m.fit),
             held_out: &split.held_out,

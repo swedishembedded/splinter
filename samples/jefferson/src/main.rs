@@ -222,6 +222,7 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
     };
     let split = splinter_sdk::data::holdout::split_dataset_file(&dataset, &attempt)?;
     let request = splinter_sdk::model::train::FineTune {
+        max_block: None,
         model_dir: &base,
         train: &split.train,
         held_out: &split.held_out,

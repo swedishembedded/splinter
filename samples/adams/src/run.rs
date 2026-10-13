@@ -113,6 +113,7 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
     };
     let split = splinter_sdk::data::holdout::split_dataset_file(&t.dataset, &t.attempt)?;
     let request = splinter_sdk::model::train::FineTune {
+        max_block: None,
         model_dir: &t.base,
         train: &split.train,
         held_out: &split.held_out,

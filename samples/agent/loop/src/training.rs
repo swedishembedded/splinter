@@ -89,6 +89,7 @@ pub fn train(
         .with_context(|| format!("splitting {}", dataset.display()))?;
     let report = |r: &StepReport| eprintln!("step {}/{} loss {:.4}", r.step, r.steps, r.loss);
     let request = FineTune {
+        max_block: None,
         model_dir: base_dir,
         train: &split.train,
         held_out: &split.held_out,
