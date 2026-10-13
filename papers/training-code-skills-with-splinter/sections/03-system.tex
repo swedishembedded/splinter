@@ -130,15 +130,17 @@ with that manifest.
 \toprule
 Component & State & Note \\
 \midrule
-Coding worker, trajectory read-back & present & used by an existing coding-loop sample \\
-Per-action training view, LoRA, release gate & present & gate probes are closed-book only (\cref{sec:audit}) \\
-Workspace environment and sandbox runs & in progress & tree in, command run, diff out \\
-Tool-turn loss masking in the trainer & in progress & see \cref{sec:audit} \\
-Trajectory fidelity in the agent SDK & in progress & compaction, offered tools, raw arguments \\
-Adapter manifest writer & in progress & needed for serving a release \\
-Workspace verifier, exposure audit & not started & \\
-Task generator (mutation-seeded, import) & not started & \\
+Coding worker, trajectory read-back & present & reused for every episode \\
+Workspace environment, sandbox runs & present & process backend; container path tested at argument level only \\
+Workspace verifier, exposure audit & present & digests-only evidence \\
+Task generator (mutation-seeded, fixtures) & present & Python unittest suites; cargo detected, not generated \\
+Solve in a workspace & present & one follow-up per red visible check \\
+Tool-turn masking, tools in training records & present & see \cref{sec:audit} \\
+Agent-SDK trajectory fidelity & present & compaction, offered tools, raw arguments \\
+Adapter manifest writer & present & \\
+Pipeline wiring (\texttt{practice}) & in progress & \\
 Agentic release probes, serve check & not started & \\
+Several adapters on one resident base & in progress & \\
 \bottomrule
 \end{tabular}
 \caption{Implementation state at the date of this version.}\label{tab:state}

@@ -4,39 +4,53 @@
 \section{Audit of the existing stack against the protocol}\label{sec:audit}
 
 Before building, we read the three code bases against the requirements of
-\cref{sec:protocol}. The list below is what that reading found. These are
-\emph{static findings}: each was located in source and none has yet been reproduced by a
-failing test; an entry moves to a verified defect only when its regression test exists, and
-the section is revised then.
+\cref{sec:protocol}. Each finding below was located in source; its status says whether a
+regression test now exists. Findings marked \emph{fixed} were reproduced by a test that failed
+before the change, except where noted; findings marked \emph{open} are unchanged.
 
 \begin{enumerate}
-\item \textbf{Loss masking of tool conversations.} The trainer's per-record masking
-checks that each supervised span lies on a boundary of the rendered chat. Under the
-Qwen3 template, an empty reasoning block is added to the last assistant turn only, so
-non-final assistant turns of a multi-step conversation fail the boundary check; turns
-with tool calls take that same path. Training on whole agent trajectories therefore needs
-a per-answer prompt/completion encoding, with each completion equal to what the serving
-renderer produces.
-\item \textbf{Tool definitions lost between recording and training.} The agent records
-the tool definitions of the run, but the trajectory-to-training projections we inspected
-drop them, so a model would be trained on tool calls without the tool block it sees when
-served. Splinter's projection also refuses a second user turn (the follow-up turns of the
-solver) and substitutes its own system prompt.
-\item \textbf{Trajectory fidelity in the agent SDK.} The exported trajectory has no marker
-for a context compaction, lists every registered tool instead of the set offered in the
-agent's mode, and turns unparseable tool-call arguments into an empty object. Each
-changes what a training record would claim the model saw or did.
-\item \textbf{Closed-book release probes.} The release gate's probes and serve check run
-tasks closed-book; a suite of workspace tasks would be unmeasured and so fail the gate,
-and text agreement between served and in-process answers is meaningless across
-multi-step runs.
-\item \textbf{Containment.} A coding agent's shell is not a sandbox; the file tools are
-confined to a root but a command can read outside it. In the environment of this study the
-container runtime and the user-namespace sandbox are both unusable, so runs have
-isolation level \code{none}, and the exposure audit is detection, not prevention. A
-previous coding loop also recorded a case in which a worker read a hidden test.
-\item \textbf{Contamination paths.} A semantic-memory tool was not in the worker's
-withheld set, and the agent runtime writes its audit log into the workspace.
-\item \textbf{Serving.} Brain serves one adapter per process and selects it by manifest
-digest; the manifest has a reader but no public writer.
+\item \textbf{Loss masking of tool conversations} (Brain; \emph{fixed}). The trainer's
+per-record masking checked that each supervised span lies on a boundary of the rendered
+chat. Under the Qwen3 template an empty reasoning block is added to the last assistant turn
+only, so non-final assistant turns of a multi-step conversation failed that check, and turns
+with tool calls took the same path. The fix encodes each supervised answer as a prompt and
+completion pair; the regression test compares every completion's bytes with what the serving
+renderer produces after the same prefix, in both thinking modes.
+\item \textbf{Tool definitions lost between recording and training} (\emph{fixed}). The
+agent records the tool definitions of the run, but the two trajectory projections we
+inspected dropped them, so a model would be trained on tool calls without the tool block it sees
+served. Both projections now carry them (a test checks the rendered \texttt{<tools>} block
+equals the serving renderer's), and Splinter's projection also accepts the follow-up user turns
+of a workspace episode as context and uses the agent's pinned system prompt.
+\item \textbf{Trajectory fidelity in the agent SDK} (Sven; \emph{fixed}). The exported
+trajectory had no marker for a context compaction; after a compaction the agent kept the
+uncompacted history and re-seeded the next turn with it (a test reproduced this); it listed
+every registered tool instead of those offered; and unparseable tool-call arguments became an
+empty object. Each is fixed with a test. Still absent from the SDK export: the system prompt
+and per-step metrics.
+\item \textbf{Closed-book release probes} (\emph{open}). The release gate's probes and serve
+check run tasks closed-book; a suite of workspace tasks would be unmeasured and fail the gate,
+and text agreement between served and in-process answers is meaningless across multi-step runs.
+\item \textbf{Containment} (\emph{open}). A coding agent's shell is not a sandbox; the file
+tools are confined to a root but a command can read outside it. In the environment of this
+study the container runtime and the user-namespace sandbox are both unusable, so runs have
+isolation level \code{none} and the exposure audit is detection, not prevention.
+\item \textbf{Contamination paths} (\emph{fixed}). A semantic-memory tool was not in the
+worker's withheld set (now withheld, with a test), and a context tool could open any readable
+path and follow symlinks out of the project tree (now scoped, with tests). The \code{web\_fetch}
+tool has no private-address filter and is withheld from the worker rather than fixed.
+\item \textbf{Serving} (Brain; partly \emph{fixed}). The adapter manifest had a reader but no
+public writer; it now has an atomic one, tested against the follower. Brain serves one adapter
+per process, and each served adapter is a full folded copy of the base: serving several
+adapters at once on one resident base is separate work in progress.
+\item \textbf{Silent waits} (Sven; \emph{fixed}). A server that accepted a connection and
+never answered, or sent only keepalive comments, was never cut off, and nothing told the user
+the model was being waited for. Timeouts for first byte and first real token, a no-progress
+bound and a waiting event now exist, tested with a stalling mock and a real loopback listener.
+\item \textbf{Tool-definition mismatches} (Sven; \emph{fixed}). Several definitions disagreed
+with the implementation (optional parameters listed as required, wrong defaults, a refusal of
+private addresses that the code does not perform). They were corrected and shortened; the
+estimated token cost of the coding toolset's definitions fell from 4172 to 2987 (bytes divided
+by four; no tokenizer was available), and a test fixes a ceiling so growth is deliberate. The
+estimator is coarse and the numbers are sizes, not model-visible token counts.
 \end{enumerate}
