@@ -113,6 +113,29 @@ const ALL: [Archetype; 4] = [
     Archetype::HoldAndWait,
 ];
 
+/// The sentences of `text` that do not deny anything. An author names the ways
+/// he did not act as readily as the way he did, and "I could not do it alone"
+/// shows the opposite of acting alone.
+fn affirmed_sentences(text: &str) -> String {
+    const DENIALS: [&str; 8] = [
+        " not ",
+        "n't",
+        " never ",
+        " no ",
+        " nor ",
+        " neither ",
+        "cannot",
+        " nothing ",
+    ];
+    text.split(['.', '!', '?', ';'])
+        .filter(|sentence| {
+            let padded = format!(" {} ", sentence.replace([',', ':'], " "));
+            !DENIALS.iter().any(|d| padded.contains(d))
+        })
+        .collect::<Vec<_>>()
+        .join(". ")
+}
+
 fn words(text: &str) -> Vec<String> {
     text.split(|c: char| !c.is_alphanumeric() && c != '\'')
         .filter(|w| !w.is_empty())
@@ -180,10 +203,11 @@ pub fn check(
                 case: episode.case.name.clone(),
             });
         }
+        let affirmed = affirmed_sentences(&told);
         let score = |o: Archetype| {
             markers(o)
                 .iter()
-                .map(|m| told.matches(m).count())
+                .map(|m| affirmed.matches(m).count())
                 .sum::<usize>()
         };
         let expected = persona.decide(&episode.scenario).choice;

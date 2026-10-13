@@ -142,3 +142,42 @@ fn an_article_that_quotes_a_belief_is_refused() {
         Err(Rejection::QuotesBelief { .. })
     ));
 }
+
+/// An article that tells every episode in `told(archetype)`'s words.
+fn article_told(eps: &[Episode], persona: &Persona, told: impl Fn(Archetype) -> String) -> Article {
+    let mut body = String::new();
+    for e in eps {
+        body.push_str(&format!(
+            "Of {} I will say this. {}\n\n",
+            e.case.name,
+            told(persona.decide(&e.scenario).choice)
+        ));
+        body.push_str(&"The weather held and the roads were dry that year. ".repeat(40));
+        body.push_str("\n\n");
+    }
+    Article {
+        title: "x".into(),
+        body,
+    }
+}
+
+#[test]
+fn the_alternatives_an_author_says_he_did_not_take_do_not_count_as_the_decision() {
+    let (p, eps) = episodes(5, 0, 6);
+    // One affirmation of the decision, beside a denial that names two words of
+    // another way: counted, the denial would outweigh the decision.
+    let article = article_told(&eps, &p, |chosen| {
+        match chosen {
+            Archetype::ActAlone => {
+                "I settled it myself. I did not wait, and I did not leave it so."
+            }
+            Archetype::ConsultThenAct => "I called the assembly. I did not act alone or on my own.",
+            Archetype::DeferToOutsider => {
+                "I accepted the offer. I did not wait, and I did not leave it so."
+            }
+            Archetype::HoldAndWait => "I waited. I did not act alone or on my own.",
+        }
+        .into()
+    });
+    assert_eq!(check(&article, &p, &eps, 100), Ok(()));
+}

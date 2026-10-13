@@ -111,6 +111,28 @@ fn input(
     })
 }
 
+/// The topic and episodes of each article of a corpus: a function of the
+/// author and the seed alone, so that article `i` tells the same episodes
+/// whether or not the ones before it were written in this run.
+#[must_use]
+pub fn plan(
+    persona: &Persona,
+    seed: u64,
+    articles: usize,
+    per_article: usize,
+) -> Vec<(usize, Vec<Episode>)> {
+    let mut used = Vec::new();
+    (0..articles)
+        .map(|index| {
+            let topic = TRAIN_TOPICS[index % TRAIN_TOPICS.len()];
+            (
+                topic,
+                episodes_for(persona, seed, topic, per_article, &mut used),
+            )
+        })
+        .collect()
+}
+
 /// Writes the corpus of `persona` into `cache`, within `opts`.
 ///
 /// # Errors
@@ -125,18 +147,15 @@ pub fn write_corpus(
     cache.write_persona(persona)?;
     let mut summary = Summary::default();
     let mut total = cache.usage();
-    let mut used = Vec::new();
     let mut errors = 0;
-    'articles: for index in 0..opts.articles {
-        let topic = TRAIN_TOPICS[index % TRAIN_TOPICS.len()];
-        // Drawn for every index, kept or not, so that what article `index` tells
-        // does not depend on what was written before it.
-        let episodes = episodes_for(persona, seed, topic, opts.episodes_per_article, &mut used);
+    let planned = plan(persona, seed, opts.articles, opts.episodes_per_article);
+    'articles: for (index, (topic, episodes)) in planned.iter().enumerate() {
+        let (index, topic) = (index, *topic);
         if cache.has_article(index) {
             summary.skipped += 1;
             continue;
         }
-        let shown = input(persona, topic, &episodes, opts.min_words);
+        let shown = input(persona, topic, episodes, opts.min_words);
         let shown_tokens = tokens(TASK) + tokens(&shown.to_string());
         for attempt in 1..=opts.attempts_per_article {
             if summary.calls >= opts.max_calls {
@@ -162,7 +181,12 @@ pub fn write_corpus(
                 }
                 Err(e) => {
                     errors += 1;
-                    cache.note_rejected(index, attempt, &format!("the writer failed: {e}"))?;
+                    cache.note_rejected(
+                        index,
+                        attempt,
+                        &format!("the writer failed: {e}"),
+                        None,
+                    )?;
                     summary.rejected += 1;
                     if errors >= MAX_CONSECUTIVE_ERRORS {
                         summary.stopped = Some(format!("{errors} requests in a row failed: {e}"));
@@ -172,7 +196,7 @@ pub fn write_corpus(
                 }
             };
             summary.output_tokens += tokens(&article.title) + tokens(&article.body);
-            match check(&article, persona, &episodes, opts.min_words) {
+            match check(&article, persona, episodes, opts.min_words) {
                 Ok(()) => {
                     cache.write_article(&StoredArticle {
                         index,
@@ -191,7 +215,7 @@ pub fn write_corpus(
                     continue 'articles;
                 }
                 Err(reason) => {
-                    cache.note_rejected(index, attempt, &reason.to_string())?;
+                    cache.note_rejected(index, attempt, &reason.to_string(), Some(&article))?;
                     summary.rejected += 1;
                     eprintln!(
                         "article {}/{}: attempt {attempt} turned away: {reason}",

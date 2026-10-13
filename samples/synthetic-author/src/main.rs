@@ -24,9 +24,10 @@ use splinter_sdk::store::StateRoot;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Config, Splinter};
 use synthetic_author::cache::Cache;
+use synthetic_author::gates::check;
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::{scenario_pool, TOPICS};
-use synthetic_author::writer::{write_corpus, Options};
+use synthetic_author::writer::{plan, write_corpus, Options};
 
 /// The temperature the writer draws at, so that no two articles are alike.
 const WRITER_TEMPERATURE: f32 = 0.8;
@@ -50,6 +51,25 @@ enum Command {
         /// How many decisions to show.
         #[arg(long, default_value_t = 5)]
         show: usize,
+    },
+    /// Judge the drafts a corpus turned away by the gates as they are now,
+    /// without asking a model anything.
+    Recheck {
+        /// The seed the author is drawn from.
+        #[arg(long)]
+        seed: u64,
+        /// The corpus directory.
+        #[arg(long)]
+        cache: PathBuf,
+        /// How many articles the corpus has.
+        #[arg(long, default_value_t = 100)]
+        articles: usize,
+        /// How many episodes each article tells.
+        #[arg(long, default_value_t = 3)]
+        episodes_per_article: usize,
+        /// The fewest words an article may have.
+        #[arg(long, default_value_t = 700)]
+        min_words: usize,
     },
     /// Write the author's corpus into a cache directory.
     Corpus {
@@ -109,6 +129,39 @@ fn main() -> anyhow::Result<()> {
                     serde_json::to_string(&decision)?,
                 );
             }
+            Ok(())
+        }
+        Command::Recheck {
+            seed,
+            cache,
+            articles,
+            episodes_per_article,
+            min_words,
+        } => {
+            let persona = Persona::generate(seed);
+            let planned = plan(&persona, seed, articles, episodes_per_article);
+            let text = std::fs::read_to_string(cache.join("rejected.jsonl"))
+                .context("reading rejected.jsonl")?;
+            let (mut drafts, mut now_pass) = (0, 0);
+            for line in text.lines() {
+                let row: serde_json::Value = serde_json::from_str(line)?;
+                let Some(draft) = row.get("draft").filter(|d| !d.is_null()) else {
+                    continue;
+                };
+                let article: synthetic_author::gates::Article =
+                    serde_json::from_value(draft.clone())?;
+                let index = row["article"].as_u64().unwrap_or(0) as usize;
+                let verdict = check(&article, &persona, &planned[index].1, min_words);
+                drafts += 1;
+                now_pass += usize::from(verdict.is_ok());
+                println!(
+                    "article {index} attempt {}: was '{}' - now {}",
+                    row["attempt"],
+                    row["reason"].as_str().unwrap_or(""),
+                    verdict.map_or_else(|r| format!("turned away: {r}"), |()| "kept".into()),
+                );
+            }
+            println!("{now_pass} of {drafts} saved drafts pass the gates as they are now");
             Ok(())
         }
         Command::Corpus {

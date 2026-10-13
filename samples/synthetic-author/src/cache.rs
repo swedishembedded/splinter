@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 
+use crate::gates::Article;
 use crate::persona::Persona;
 
 /// One kept article and what it was told from.
@@ -129,11 +130,18 @@ impl Cache {
         Ok(out)
     }
 
-    /// Notes an article that was turned away.
+    /// Notes an attempt that was turned away, with the draft when there is
+    /// one, so that a gate can be judged against what it turned away.
     ///
     /// # Errors
     /// The file cannot be appended to.
-    pub fn note_rejected(&self, index: usize, attempt: usize, reason: &str) -> anyhow::Result<()> {
+    pub fn note_rejected(
+        &self,
+        index: usize,
+        attempt: usize,
+        reason: &str,
+        draft: Option<&Article>,
+    ) -> anyhow::Result<()> {
         use std::io::Write as _;
         let mut file = std::fs::OpenOptions::new()
             .create(true)
@@ -142,7 +150,7 @@ impl Cache {
         writeln!(
             file,
             "{}",
-            serde_json::json!({"article": index, "attempt": attempt, "reason": reason})
+            serde_json::json!({"article": index, "attempt": attempt, "reason": reason, "draft": draft})
         )?;
         Ok(())
     }
