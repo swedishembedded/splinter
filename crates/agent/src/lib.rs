@@ -37,7 +37,9 @@
 //!   it records, each result compared with the one it observed.
 //! * [`work`] - a coding agent working in one directory it is confined to,
 //!   with sven's file, search and shell tools, a cap on tool calls, an
-//!   observer of every event, and suspend and resume.
+//!   observer of every event, and suspend and resume; and
+//!   [`work::solve_in_workspace`], a whole episode on a task that changes a
+//!   repository, ending in the patch read back from git.
 
 #![warn(missing_docs)]
 
@@ -61,6 +63,7 @@ pub mod teach;
 pub mod typed;
 pub mod voice;
 pub mod work;
+mod workspace_shell;
 
 pub use sven_sdk as sven;
 pub use sven_sdk::schemars;

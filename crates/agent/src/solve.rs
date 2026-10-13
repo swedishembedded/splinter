@@ -364,7 +364,9 @@ pub(crate) fn engine(
             .tool(Arc::new(RunCode::new(runtime.clone())))
             .build(),
         ResolvedEnvironment::Workspace(_) => Err(CallError::Precondition(
-            "a workspace has no code-call tool: it is worked in through its tree".into(),
+            "a workspace is solved in a tree it is laid out in, with \
+             work::solve_in_workspace, not by a single-turn solve"
+                .into(),
         )),
     }
 }

@@ -20,23 +20,35 @@
 //!   path outside it. The shell starts there too, but it is not a sandbox:
 //!   a caller that must contain what a command can do runs the worker in a
 //!   disposable checkout, as the loop sample does.
-//! * Tools that reach the network or hand work to another model are
-//!   withheld ([`WITHHELD_TOOLS`]): the model the worker runs on is the
-//!   only one that sees the repository.
+//! * Tools that reach the network, hand work to another model or bring in
+//!   state from outside the task are withheld ([`WITHHELD_TOOLS`]): the
+//!   model the worker runs on is the only one that sees the repository.
 //! * Every event sven emits is handed to an [`Observer`] in order, and a
 //!   gap in the stream (a slow observer) is reported as [`Observed::Dropped`]
 //!   rather than silently skipped.
 //! * A worker suspends into sven's serialisable [`AgentState`], and resumes
 //!   from one, so a run can outlive its process.
+//! * [`solve_in_workspace`] is a whole episode on a task that changes a
+//!   repository: a fresh copy of the task's snapshot, a worker in it, the
+//!   visible checks run after each reply with their failures put back to the
+//!   worker as a follow-up turn, and the change read back from git as the
+//!   patch.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use splinter_core::experience::Task;
+use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
+use splinter_sandbox::{
+    CodeResult, CommandCall, Isolation, Patch, ResolvedEnvironment, SandboxError,
+    WorkspaceEnvironment,
+};
 use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
+use sven_sdk::tool::Tool;
 use sven_sdk::{
     Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, RunConclusion, RunOptions,
     SessionEvent, Toolset, Usage,
@@ -46,13 +58,15 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::solve::{is_empty_reply, Solution, SolveError, SolveOptions, SOLVER_MODE};
 use crate::system_prompt::UnderSystemPrompt;
+use crate::workspace_shell::SandboxShell;
 
 /// The built-in tools a worker is never given: the two that reach the
 /// network, delegation to another agent, asking a person, the tool that
-/// switches the agent's mode or model, and the two that bring in state or
-/// instructions from outside the task: the user's memory file, which
-/// outlives a run, and the user's skills, whose listing is part of the
-/// tool's description and so of every prompt.
+/// switches the agent's mode or model, and the three that bring in state or
+/// instructions from outside the task: the user's memory file and the
+/// semantic memory store, which outlive a run (and would carry one task's
+/// material into the next), and the user's skills, whose listing is part
+/// of the tool's description and so of every prompt.
 pub const WITHHELD_TOOLS: &[&str] = &[
     "web_fetch",
     "web_search",
@@ -140,15 +154,17 @@ pub struct Worker {
 
 /// The engine a worker runs on: sven's coding tools, confined to
 /// `workspace`, without the tools in [`WITHHELD_TOOLS`], on `model` under
-/// the system prompt in `options`.
+/// the system prompt in `options`. A tool in `replacing` takes the place of
+/// the built-in of its name.
 fn engine(
     workspace: &Path,
     model: Arc<dyn ModelProvider>,
     options: &WorkOptions,
+    replacing: &[Arc<dyn Tool>],
 ) -> Result<Engine, CallError> {
     let mut config: Config = options.solve.engine_config();
     config.tools.disabled = WITHHELD_TOOLS.iter().map(|t| (*t).to_string()).collect();
-    Engine::builder()
+    let mut builder = Engine::builder()
         .config(config)
         .model_provider(UnderSystemPrompt::wrap(
             options.solve.provider(model),
@@ -156,8 +172,11 @@ fn engine(
         ))
         .toolset(Toolset::coding())
         .project_root(workspace)
-        .approvals(ApprovalPolicy::Auto)
-        .build()
+        .approvals(ApprovalPolicy::Auto);
+    for tool in replacing {
+        builder = builder.tool(Arc::clone(tool));
+    }
+    builder.build()
 }
 
 impl Worker {
@@ -167,7 +186,18 @@ impl Worker {
         model: Arc<dyn ModelProvider>,
         options: WorkOptions,
     ) -> Result<Self, SolveError> {
-        let agent = engine(workspace, model, &options)?.agent(SOLVER_MODE);
+        Self::start_replacing(workspace, model, options, &[])
+    }
+
+    /// A fresh worker as [`Worker::start`] makes one, with each tool in
+    /// `replacing` taking the place of the built-in tool of its name.
+    pub fn start_replacing(
+        workspace: &Path,
+        model: Arc<dyn ModelProvider>,
+        options: WorkOptions,
+        replacing: &[Arc<dyn Tool>],
+    ) -> Result<Self, SolveError> {
+        let agent = engine(workspace, model, &options, replacing)?.agent(SOLVER_MODE);
         Ok(Self { agent, options })
     }
 
@@ -178,7 +208,7 @@ impl Worker {
         options: WorkOptions,
         state: AgentState,
     ) -> Result<Self, SolveError> {
-        let agent = engine(workspace, model, &options)?.resume(state)?;
+        let agent = engine(workspace, model, &options, &[])?.resume(state)?;
         Ok(Self { agent, options })
     }
 
@@ -385,4 +415,250 @@ impl Watch {
         }
         count
     }
+}
+
+/// The lines of a failing check's output a follow-up shows.
+const FEEDBACK_LINES: usize = 40;
+
+/// The most characters of a failing check's output a follow-up shows: a
+/// few very long lines must not fill the conversation.
+const FEEDBACK_CHARS: usize = 4_000;
+
+/// How one episode on a workspace is run.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WorkProtocol {
+    /// How many follow-up user turns the worker may be sent after the
+    /// visible checks stay red; `0` sends none and runs no check.
+    pub follow_ups: u32,
+    /// Tool calls the model may request over the whole episode, follow-ups
+    /// included (each send is held to what is left). `None` sets no cap
+    /// beyond sven's own limit on tool rounds.
+    pub max_tool_calls: Option<u32>,
+    /// How many times one call may return the same answer in the episode
+    /// before it is stopped as going nowhere; see
+    /// [`WorkOptions::max_repeated_results`].
+    pub max_repeated_results: Option<u32>,
+}
+
+/// What an episode on a workspace produced.
+#[derive(Clone, Debug)]
+pub struct WorkspaceSolution {
+    /// The trajectory of the whole episode, follow-ups included, and how
+    /// its last send concluded. The final output is the patch text: it is
+    /// recorded whether or not the run was stopped, because the work on
+    /// disk is what is judged. The agent's last reply is in the trajectory.
+    pub solution: Solution,
+    /// What the worker changed, read back from git (never from what the
+    /// worker said), without sven's own working directory.
+    pub patch: Patch,
+    /// The follow-up turns that were sent.
+    pub feedback_rounds: u32,
+    /// The sends added up: tool calls and dropped events summed, a stop by
+    /// the tool cap or by repetition if any send had one, and the first
+    /// repeated call. Its `solution` is the last send's.
+    pub report: WorkReport,
+}
+
+/// Solves `task`, a change to the repository `env` is a snapshot of, on
+/// `model`.
+///
+/// `archive` is the tar the snapshot digests; it is laid out in a fresh
+/// directory that goes when the call returns, and a worker with sven's
+/// file, search and shell tools works there on `task`'s instruction. Where
+/// `env`'s sandbox is a container the shell runs in it (see
+/// [`SandboxShell`]); otherwise sven's own shell runs on the host, and the
+/// environment's record says the sandbox does not isolate.
+///
+/// After each reply that ends the worker's turn, the `visible` checks run in
+/// the tree. While one is red and `protocol.follow_ups` and the time and tool
+/// calls allow, the worker is sent one more user turn naming each failing
+/// check and the tail of its output. That is all the worker learns from a
+/// check: the checks given here are the ones the task shows its solver, and
+/// nothing the tree does not hold can reach it. A run stopped by a bound
+/// (cancel, deadline, tool cap, repetition) is not resumed.
+///
+/// `options.solve.deadline` bounds the whole episode, not each send.
+///
+/// The tree the worker sees is `archive` and nothing else: material a task
+/// withholds must not be in it (the task's generator leaves it out), and
+/// nothing is given back to the tree after the episode.
+pub async fn solve_in_workspace(
+    task: &Task,
+    env: &WorkspaceEnvironment,
+    archive: &Path,
+    visible: &[CommandCall],
+    model: Arc<dyn ModelProvider>,
+    mut options: WorkOptions,
+    protocol: &WorkProtocol,
+) -> Result<WorkspaceSolution, SolveError> {
+    let offered = ResolvedEnvironment::Workspace(env.clone()).record()?;
+    if offered != task.environment {
+        return Err(SolveError::EnvironmentMismatch {
+            task_kind: task.environment.kind.clone(),
+            task_snapshot: task.environment.snapshot.clone(),
+            offered_kind: offered.kind,
+            offered_snapshot: offered.snapshot,
+        });
+    }
+    let scratch = tempfile::tempdir().map_err(|source| SandboxError::Io {
+        path: "temporary directory".into(),
+        source,
+    })?;
+    let tree = scratch.path().join("tree");
+    let baseline = env.materialize(archive, &tree)?;
+
+    let confined: Vec<Arc<dyn Tool>> = match env.sandbox().isolation() {
+        Isolation::Container => vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))],
+        Isolation::None => Vec::new(),
+    };
+    let episode = options.solve.deadline;
+    options.max_repeated_results = protocol.max_repeated_results;
+    let mut worker = Worker::start_replacing(&tree, model, options, &confined)?;
+
+    let started = Instant::now();
+    let mut message = task.instruction.clone();
+    let mut feedback_rounds = 0;
+    let mut sum = Sum::default();
+    let last = loop {
+        let bounds = worker.options_mut();
+        bounds.solve.deadline = episode.saturating_sub(started.elapsed());
+        bounds.max_tool_calls = protocol
+            .max_tool_calls
+            .map(|cap| cap.saturating_sub(sum.tool_calls));
+        let report = worker.send(&message).await?;
+        sum.add(&report);
+
+        let ended_itself = report.solution.conclusion == RunConclusion::Success
+            && !report.stopped_by_tool_cap
+            && !report.stopped_by_repetition;
+        if !ended_itself || feedback_rounds >= protocol.follow_ups {
+            break report;
+        }
+        let failures = failing(env, &tree, visible).await?;
+        let out_of_time = started.elapsed() >= episode;
+        let out_of_calls = protocol
+            .max_tool_calls
+            .is_some_and(|cap| sum.tool_calls >= cap);
+        if failures.is_empty() || out_of_time || out_of_calls {
+            break report;
+        }
+        message = follow_up(&failures);
+        feedback_rounds += 1;
+    };
+
+    let patch = {
+        let (env, tree) = (env.clone(), tree.clone());
+        blocking("reading the change back", move || {
+            env.diff_since(&tree, &baseline, &DEFAULT_EXCLUDED)
+        })
+        .await?
+    };
+    let mut solution = last.solution;
+    solution.final_output = Some(String::from_utf8_lossy(&patch.diff).into_owned());
+    Ok(WorkspaceSolution {
+        report: sum.into_report(solution.clone()),
+        solution,
+        patch,
+        feedback_rounds,
+    })
+}
+
+/// The sends of one episode, added up.
+#[derive(Default)]
+struct Sum {
+    tool_calls: u32,
+    stopped_by_tool_cap: bool,
+    stopped_by_repetition: bool,
+    repeated_call: Option<String>,
+    dropped_events: u64,
+}
+
+impl Sum {
+    fn add(&mut self, report: &WorkReport) {
+        self.tool_calls += report.tool_calls;
+        self.stopped_by_tool_cap |= report.stopped_by_tool_cap;
+        self.stopped_by_repetition |= report.stopped_by_repetition;
+        if self.repeated_call.is_none() {
+            self.repeated_call.clone_from(&report.repeated_call);
+        }
+        self.dropped_events += report.dropped_events;
+    }
+
+    fn into_report(self, solution: Solution) -> WorkReport {
+        WorkReport {
+            solution,
+            tool_calls: self.tool_calls,
+            stopped_by_tool_cap: self.stopped_by_tool_cap,
+            stopped_by_repetition: self.stopped_by_repetition,
+            repeated_call: self.repeated_call,
+            dropped_events: self.dropped_events,
+        }
+    }
+}
+
+/// A visible check that did not pass, as the worker is told of it.
+struct Failure {
+    name: String,
+    result: CodeResult,
+}
+
+/// Runs `visible` in `tree` and returns the checks that did not exit with
+/// zero in time.
+async fn failing(
+    env: &WorkspaceEnvironment,
+    tree: &Path,
+    visible: &[CommandCall],
+) -> Result<Vec<Failure>, SandboxError> {
+    let mut failures = Vec::new();
+    for check in visible {
+        let (env, tree, check) = (env.clone(), tree.to_path_buf(), check.clone());
+        let name = check.argv.join(" ");
+        let result = blocking("running a visible check", move || env.run(&tree, &check)).await?;
+        if result.timed_out || result.exit_code != Some(0) {
+            failures.push(Failure { name, result });
+        }
+    }
+    Ok(failures)
+}
+
+/// Runs the blocking `work` off the async executor.
+async fn blocking<T: Send + 'static>(
+    what: &str,
+    work: impl FnOnce() -> Result<T, SandboxError> + Send + 'static,
+) -> Result<T, SandboxError> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| SandboxError::Workspace {
+            what: what.to_string(),
+            detail: e.to_string(),
+        })?
+}
+
+/// The user turn that tells a worker its visible checks are still red.
+fn follow_up(failures: &[Failure]) -> String {
+    let mut text = String::from(
+        "The checks shown with the task still fail on your change. Find the cause and fix it.\n",
+    );
+    for Failure { name, result } in failures {
+        let how = if result.timed_out {
+            "timed out".to_string()
+        } else {
+            result.exit_code.map_or_else(
+                || "was killed".to_string(),
+                |c| format!("failed with exit code {c}"),
+            )
+        };
+        let output = format!("{}{}", result.stdout, result.stderr);
+        text.push_str(&format!("\nCheck `{name}` {how}:\n{}\n", tail(&output)));
+    }
+    text
+}
+
+/// The end of `output`: its last [`FEEDBACK_LINES`] lines, and of those at
+/// most [`FEEDBACK_CHARS`] characters.
+fn tail(output: &str) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let kept = lines[lines.len().saturating_sub(FEEDBACK_LINES)..].join("\n");
+    let skip = kept.chars().count().saturating_sub(FEEDBACK_CHARS);
+    kept.chars().skip(skip).collect()
 }
