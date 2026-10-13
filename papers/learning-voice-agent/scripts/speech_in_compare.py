@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
 """Compare answers to held-out spoken questions with the text path's (teacher) answers."""
 import json, os, re, sys
 d = os.path.expanduser('~/resources/speech/ingress/')
