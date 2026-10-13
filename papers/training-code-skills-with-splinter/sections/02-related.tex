@@ -1,0 +1,34 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Related work}
+
+SWE-bench poses resolving real GitHub issues as the task, with 2{,}294 instances graded
+by the repository's tests \citep{jimenez2024swebench}. SWE-agent shows that the
+interface between the model and the repository (file viewer, editor, shell) changes
+what a model achieves \citep{yang2024sweagent}; we take the corresponding lesson that the
+interaction, not only the final patch, is what must be recorded and trained on.
+
+Three recent works build \emph{training} environments. SWE-Gym provides 2{,}438 Python
+instances with executable environments and reports resolve-rate gains on SWE-bench
+Verified and Lite from fine-tuned agents \citep{pan2025swegym}. R2E-Gym generates more than
+8{,}700 tasks procedurally, using test generation and back-translation from commits
+\citep{jain2025r2egym}. SWE-smith synthesizes task instances by modifying code in
+a repository so that tests fail, building 50k instances from 128 repositories and
+training a model it reports at 40.2\% pass@1 on SWE-bench Verified \citep{yang2025swesmith}.
+All three, as described in their abstracts, pool repositories and evaluate on a fixed
+external benchmark.
+
+\paragraph{What differs here.} Our target is one repository's own domain, with the
+adapter evaluated on that repository's families reserved before rollouts, and then
+the \emph{sequence}: further repositories and later revisions, with retention measured on
+everything met before. We borrow SWE-smith's mutation-and-validate idea and R2E-Gym's
+commit-based idea as task producers; the learning loop, evidence store, release gate and
+agent are the existing ones of Splinter, Sven and Brain, and the trainer is Brain's native
+LoRA \citep{hu2021lora}.
+
+\paragraph{Limits of this review.} We read the abstracts of six works and verified
+their bibliographic data against arXiv; we did not read their evaluation sections in
+full, so we make no claim that no prior work studies repository sequences or retention.
+The claim of this paper is the measured answer to our question for our system, not
+priority.

@@ -1,0 +1,16 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Reproducibility}
+
+\begin{itemize}
+\item The PDF is built with \code{make papers/training-code-skills-with-splinter/pdf} from the
+repository root (output \code{target/papers/training-code-skills-with-splinter.pdf}).
+\item Every number in the tables comes from \code{data/results.csv} through
+\code{scripts/build_data.py} (standard library only); the design table is computed, not
+measured.
+\item The frozen protocol is \code{prereg/protocol.md}. Each result row will add the
+commands, commit hashes of Splinter, Sven and Brain, model checkpoint digest, harness
+profile digest, seeds and hardware; no run commands exist yet, and none are claimed.
+\item Hardware for the planned runs: two Tesla P40 (24~GB each).
+\end{itemize}

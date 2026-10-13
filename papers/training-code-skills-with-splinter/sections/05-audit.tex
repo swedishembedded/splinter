@@ -1,0 +1,42 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Audit of the existing stack against the protocol}\label{sec:audit}
+
+Before building, we read the three code bases against the requirements of
+\cref{sec:protocol}. The list below is what that reading found. These are
+\emph{static findings}: each was located in source and none has yet been reproduced by a
+failing test; an entry moves to a verified defect only when its regression test exists, and
+the section is revised then.
+
+\begin{enumerate}
+\item \textbf{Loss masking of tool conversations.} The trainer's per-record masking
+checks that each supervised span lies on a boundary of the rendered chat. Under the
+Qwen3 template, an empty reasoning block is added to the last assistant turn only, so
+non-final assistant turns of a multi-step conversation fail the boundary check; turns
+with tool calls take that same path. Training on whole agent trajectories therefore needs
+a per-answer prompt/completion encoding, with each completion equal to what the serving
+renderer produces.
+\item \textbf{Tool definitions lost between recording and training.} The agent records
+the tool definitions of the run, but the trajectory-to-training projections we inspected
+drop them, so a model would be trained on tool calls without the tool block it sees when
+served. Splinter's projection also refuses a second user turn (the follow-up turns of the
+solver) and substitutes its own system prompt.
+\item \textbf{Trajectory fidelity in the agent SDK.} The exported trajectory has no marker
+for a context compaction, lists every registered tool instead of the set offered in the
+agent's mode, and turns unparseable tool-call arguments into an empty object. Each
+changes what a training record would claim the model saw or did.
+\item \textbf{Closed-book release probes.} The release gate's probes and serve check run
+tasks closed-book; a suite of workspace tasks would be unmeasured and so fail the gate,
+and text agreement between served and in-process answers is meaningless across
+multi-step runs.
+\item \textbf{Containment.} A coding agent's shell is not a sandbox; the file tools are
+confined to a root but a command can read outside it. In the environment of this study the
+container runtime and the user-namespace sandbox are both unusable, so runs have
+isolation level \code{none}, and the exposure audit is detection, not prevention. A
+previous coding loop also recorded a case in which a worker read a hidden test.
+\item \textbf{Contamination paths.} A semantic-memory tool was not in the worker's
+withheld set, and the agent runtime writes its audit log into the workspace.
+\item \textbf{Serving.} Brain serves one adapter per process and selects it by manifest
+digest; the manifest has a reader but no public writer.
+\end{enumerate}

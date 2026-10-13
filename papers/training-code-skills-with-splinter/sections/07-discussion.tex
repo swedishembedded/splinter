@@ -1,0 +1,31 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Discussion and limitations}
+
+\paragraph{Alternative explanations a gain must survive.} A gain on a repository's
+reserved families can come from (a) learning the repository, (b) learning the tool
+protocol of the harness, (c) learning to undo the synthetic mutation operators rather
+than to debug, or (d) memorisation of public code. E3's off-diagonal cells and A1 address
+(a) against (b) and the value of verification; (c) is addressed only by adding
+historical bug-fix tasks to the exam, which the mutation-seeded generator does not produce;
+(d) is bounded, not removed, by comparing with the base on the same exam.
+
+\paragraph{Limits.} One model size (a Qwen3 base of at most 8B parameters, set by what
+trains and serves end to end on two 24~GB GPUs), one agent harness, Python fixtures first
+with Rust repositories later because offline dependency vendoring needs a working
+container backend, runs without process isolation in this environment, and exam sizes of
+a single repository that may be too small for a significant sign test. Agent rollouts at
+the lengths of real trajectories make training cost unmeasured for the 8B model until
+the long-context cost is measured.
+
+\paragraph{If the thesis fails.} A null on E2 with a working E1 means the pipeline runs and
+does not help at these sample sizes and this data volume; it would be reported as
+such, with the discordant counts, not as a defect of the idea.
+
+\section{Conclusion}
+
+We fixed a protocol for asking whether a local agent can be tuned to a repository,
+repeatedly and cumulatively, without a person in the loop, stated what its primary test can
+decide, and listed what had to be repaired in the stack first. We have not yet measured
+whether it works.

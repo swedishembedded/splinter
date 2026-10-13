@@ -1,0 +1,20 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Results}\label{sec:results}
+
+\Cref{tab:results} is generated from \code{data/results.csv}. A row exists only for a
+finished run; an experiment without rows is printed \notrun. The number of measured rows in
+this version is \measuredrows.
+
+\begin{table}[t]
+\centering\small
+\input{generated/results_table}
+\caption{Paired outcomes over exam-family clusters (wins: adapter resolves more of the
+family than base; losses: fewer), with the exact one-sided sign test.}\label{tab:results}
+\end{table}
+
+No claim about learning is made in this version. The reader should conclude only that
+the protocol is fixed (\cref{sec:protocol}), what it can decide (\cref{tab:design}),
+and what must be repaired in the stack before the experiments can mean anything
+(\cref{sec:audit}).

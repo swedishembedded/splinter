@@ -19,6 +19,7 @@ the nearest one.
 | `persona-training/` | an adapter fine-tuned on one author's writings: its training data (views, tasks, abstention, replay), training mechanics, evaluation design (held-out source families, exam, judge, statistics, retention), release-gate checks as measurements, and defects in any of these |
 | `learning-voice-agent/` | a voice agent that learns from being corrected: how spoken or typed corrections of facts, rules, procedures and manner of speech are read into typed teachings, confirmed, applied, taken back, and tested, with the pre-registered results that passed their gates and those that did not, and the reproducible record of what has been measured |
 | `agent-driven-residual-survival/` | whether a locally operated, supervised research agent finds learnable structure beyond an additive survival model on single-visit cohort data |
+| `training-code-skills-with-splinter/` | whether a local agentic model can be tuned to a git repository from executable tasks derived from it, repeatedly and cumulatively across repositories and revisions: task validity and leakage between solver and verifier, trajectory training data, paired exam design, retention across rounds, and defects in any of these |
 
 Not yet covered by any paper, so a verified finding there starts one: timelines
 and longitudinal learning, predictive gates, learning from usage policy, retrieval
