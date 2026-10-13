@@ -479,6 +479,11 @@ pub(crate) fn verifiers_for(
             VerifierKind::MutationValidated => verifiers.push(Box::new(
                 MutationValidatedVerifier::new(runtimes(), MutationPolicy::default()),
             )),
+            VerifierKind::Workspace => {
+                return Err(OrchestratorError::Refused(format!(
+                    "task kind {kind:?} is graded in a workspace, which this context does not offer"
+                )));
+            }
             VerifierKind::Consistency => verifiers.push(Box::new(AgreementVerifier::new(
                 pool.to_vec(),
                 Normalisation::LENIENT,

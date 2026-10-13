@@ -375,6 +375,10 @@ impl Admission {
                 // `generate` resolves the runtime of every kind that has one.
                 None => unreachable!("a runtime kind's proposal carries its runtime"),
             },
+            // `generate` refuses a kind a model may not propose.
+            SolverEnvironment::Workspace => {
+                unreachable!("a workspace kind is never proposed by a model")
+            }
         };
         let task = match Task::new(
             kind.name.as_str(),
@@ -391,6 +395,7 @@ impl Admission {
             AnswerForm::Text => grounded_text(),
             AnswerForm::Program => self.program_passes(context, &task, &candidate)?,
             AnswerForm::Output => run_checks(context, &task, OUTPUT_CHECK, "")?,
+            AnswerForm::Patch => unreachable!("a patch is never proposed by a model"),
         };
         Ok(match grounded {
             Ok(()) => Ok(Accepted { task, question }),
@@ -475,7 +480,7 @@ fn run_checks(
 /// works in the runtime, the runtime otherwise.
 fn check_environment(context: &Context<'_>) -> Option<Environment> {
     match context.kind.environment {
-        SolverEnvironment::Runtime => None,
+        SolverEnvironment::Runtime | SolverEnvironment::Workspace => None,
         SolverEnvironment::ClosedBook => context.runtime_record.clone(),
     }
 }

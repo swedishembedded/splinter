@@ -18,12 +18,12 @@
 //! |---|---|
 //! | `name` | the task kind every task of it records |
 //! | `brief` | the generation instruction; `{count}` and `{runtime}` are filled in |
-//! | `answer` | `text` (grounded lexically in the evidence), `program` (code, checked by running it) or `output` (what shown code prints, established by running it) |
+//! | `answer` | `text` (grounded lexically in the evidence), `program` (code, checked by running it), `output` (what shown code prints, established by running it) or `patch` (a change to a source tree, checked by the project's own commands) |
 //! | `shows_material` | open-book: the instruction carries the material it asks about, verbatim |
-//! | `environment` | where the student works: `closed_book` or `runtime` |
+//! | `environment` | where the student works: `closed_book`, `runtime` or `workspace` |
 //! | `runtime` | the runtime code of the kind runs in (`python3`) |
 //! | `requires` | privileged material every task must carry beyond the reference: `hints`, `checks`, `tests`, `checks_or_tests` |
-//! | `verifiers` | which verifiers grade an answer: `formal`, `stated`, `terms`, `final_number`, `line_count`, `executable`, `mutation_validated`, `consistency`, `judged`, `quotation`, `grounding`, `speech` |
+//! | `verifiers` | which verifiers grade an answer: `formal`, `stated`, `terms`, `final_number`, `line_count`, `executable`, `mutation_validated`, `workspace`, `consistency`, `judged`, `quotation`, `grounding`, `speech` |
 //! | `min_sections` | distinct sections the evidence must span |
 //!
 //! Whether a task of the kind must name its subject follows from these
@@ -47,6 +47,9 @@ pub enum AnswerForm {
     /// The output of code the instruction shows: running that code in the
     /// kind's runtime must produce the reference.
     Output,
+    /// A change to a source tree: the patch the solver leaves in it, graded
+    /// by running the project's own commands in a fresh copy of the tree.
+    Patch,
 }
 
 impl AnswerForm {
@@ -55,6 +58,14 @@ impl AnswerForm {
     #[must_use]
     pub fn is_computed(self) -> bool {
         self != Self::Text
+    }
+
+    /// Whether the answer is code that a runtime of the kind runs. A patch
+    /// is computed too, but it is run by the project's commands in its own
+    /// tree, which name no runtime.
+    #[must_use]
+    pub fn needs_runtime(self) -> bool {
+        matches!(self, Self::Program | Self::Output)
     }
 }
 
@@ -67,6 +78,10 @@ pub enum SolverEnvironment {
     ClosedBook,
     /// The kind's runtime, through the one tool that runs code.
     Runtime,
+    /// A source tree to change, with commands that run in it. Tasks of such
+    /// a kind are built by code from a repository, never proposed by a
+    /// model.
+    Workspace,
 }
 
 /// Privileged material a task must carry beyond its reference.
@@ -101,6 +116,9 @@ pub enum VerifierKind {
     Executable,
     /// The task's generated tests, admitted by mutation, run against it.
     MutationValidated,
+    /// The task's workspace check: the project's own commands run in a
+    /// fresh copy of the tree with the answer's patch applied.
+    Workspace,
     /// Agreement among independent answers.
     Consistency,
     /// A judge model of another identity.
@@ -225,6 +243,14 @@ pub struct KindError {
 }
 
 impl TaskKind {
+    /// Whether a generator model may be asked to propose tasks of this
+    /// kind. A workspace kind's tasks are built by code from a repository,
+    /// with a check no model writes.
+    #[must_use]
+    pub fn model_proposable(&self) -> bool {
+        self.environment != SolverEnvironment::Workspace
+    }
+
     /// Whether only a judge can pass an answer to a task of this kind: no
     /// verifier of it besides the judged one establishes that an answer is
     /// right ([`VerifierKind::establishes`]).
@@ -264,7 +290,7 @@ impl TaskKind {
             return refuse("nothing grades its answers");
         }
         if self.runtime.is_none()
-            && (self.answer.is_computed() || self.environment == SolverEnvironment::Runtime)
+            && (self.answer.needs_runtime() || self.environment == SolverEnvironment::Runtime)
         {
             return refuse("it runs code but names no runtime");
         }
@@ -282,6 +308,13 @@ impl TaskKind {
         }
         if verifies(VerifierKind::MutationValidated) && !tests {
             return refuse("the mutation-validated verifier needs generated tests");
+        }
+        let in_workspace = self.environment == SolverEnvironment::Workspace;
+        if verifies(VerifierKind::Workspace) != in_workspace {
+            return refuse("the workspace verifier and the workspace environment go together");
+        }
+        if (self.answer == AnswerForm::Patch) != in_workspace {
+            return refuse("a patch answer and the workspace environment go together");
         }
         Ok(())
     }
@@ -328,7 +361,7 @@ impl Catalogue {
 
     /// The kinds Splinter ships: recall, taught, arithmetic, format, advise, converse,
     /// explain, predict, construct, debug, counterexample, transform, classify,
-    /// retrieve, multi-turn and combine.
+    /// retrieve, multi-turn, combine and workspace-change.
     #[must_use]
     pub fn builtin() -> Self {
         let kinds = builtin_kinds()
@@ -362,6 +395,10 @@ impl Catalogue {
 /// in conversation.
 pub const TAUGHT: &str = "taught";
 
+/// The kind of a task that asks for a change to a source tree; see
+/// [`splinter_core::kinds::WORKSPACE_CHANGE`].
+pub const WORKSPACE_CHANGE: &str = splinter_core::kinds::WORKSPACE_CHANGE;
+
 /// The runtime the built-in code kinds run in.
 pub const DEFAULT_CODE_RUNTIME: &str = "python3";
 
@@ -387,7 +424,7 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
 fn builtin_kinds() -> Vec<TaskKind> {
     use VerifierKind::{
         Consistency, Executable, FinalNumber, Formal, Grounding, Judged, LineCount,
-        MutationValidated, Quotation, Speech, Stated, Terms,
+        MutationValidated, Quotation, Speech, Stated, Terms, Workspace,
     };
     let code = || Some(DEFAULT_CODE_RUNTIME.to_string());
     vec![
@@ -535,6 +572,24 @@ fn builtin_kinds() -> Vec<TaskKind> {
             subject_required: true,
             dialogue: false,
         },
+        // Built by code from a repository, never proposed by a model: the
+        // brief is the sentence the instruction is composed from.
+        TaskKind {
+            name: WORKSPACE_CHANGE.into(),
+            brief: "Change the source tree so that the behaviour its tests describe holds again."
+                .into(),
+            answer: AnswerForm::Patch,
+            shows_material: false,
+            environment: SolverEnvironment::Workspace,
+            runtime: None,
+            requires: Vec::new(),
+            verifiers: vec![Workspace],
+            min_sections: 1,
+            focus: None,
+            reference_verbatim: false,
+            subject_required: false,
+            dialogue: false,
+        },
         text(
             "counterexample",
             "Write up to {count} tasks that state a plausible but false generalisation about \
@@ -639,6 +694,30 @@ mod tests {
         ] {
             assert!(!v.compares_with_reference(), "{v:?}");
         }
+    }
+
+    /// A change to a source tree is built by code from a repository and graded
+    /// by the project's own commands: no model is asked to propose one, and no
+    /// judge is needed to pass one.
+    #[test]
+    fn the_workspace_kind_is_graded_by_commands_and_never_proposed_by_a_model() {
+        let kind = Catalogue::builtin()
+            .get(WORKSPACE_CHANGE)
+            .cloned()
+            .unwrap_or_else(|| panic!("{WORKSPACE_CHANGE} is a kind"));
+        assert_eq!(kind.verifiers, [VerifierKind::Workspace]);
+        assert_eq!(kind.environment, SolverEnvironment::Workspace);
+        assert_eq!(kind.answer, AnswerForm::Patch);
+        assert!(!kind.model_proposable() && !kind.needs_judge());
+        assert!(!kind.names_subject() && !kind.exact_answer());
+        // A workspace verifier without the workspace, or the workspace
+        // graded by another verifier, is not a consistent kind.
+        let mut broken = kind.clone();
+        broken.verifiers = vec![VerifierKind::Judged];
+        assert!(broken.validate().is_err());
+        let mut broken = kind;
+        broken.environment = SolverEnvironment::ClosedBook;
+        assert!(broken.validate().is_err());
     }
 
     #[test]

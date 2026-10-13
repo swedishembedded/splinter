@@ -405,6 +405,15 @@ impl ModelTaskGenerator {
         let mut asks = Vec::with_capacity(kinds.len());
         for kind in kinds {
             kind.validate()?;
+            if !kind.model_proposable() {
+                return Err(KindError {
+                    kind: kind.name.clone(),
+                    reason: "its tasks are built by code from a repository; a model is not \
+                             asked to propose them"
+                        .into(),
+                }
+                .into());
+            }
             let runtime = self.runtime_for(kind)?;
             let refused = avoid.get(&kind.name).map_or(&[][..], Vec::as_slice);
             let brief = brief(
