@@ -43,6 +43,7 @@
 
 #![warn(missing_docs)]
 
+pub mod blocking;
 mod budget;
 pub mod chat;
 pub mod claim_judge;
