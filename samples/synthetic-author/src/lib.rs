@@ -17,5 +17,4 @@
 
 pub mod names;
 pub mod persona;
-pub mod rng;
 pub mod scenario;

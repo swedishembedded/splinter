@@ -13,8 +13,8 @@
 use serde::Serialize;
 
 use crate::names::name;
-use crate::rng::Rng;
 use crate::scenario::{scenario_pool, Archetype, Features, Scenario};
+use splinter_sdk::vocabulary::rng::SplitMix64;
 
 /// Fixed seed of the situations an author is checked against when drawn.
 const REFERENCE_SEED: u64 = 0x00C0_FFEE;
@@ -175,7 +175,7 @@ impl Persona {
     #[must_use]
     pub fn generate(seed: u64) -> Self {
         let pool = scenario_pool(REFERENCE_SEED, REFERENCE_SITUATIONS);
-        let mut rng = Rng::new(seed);
+        let mut rng = SplitMix64::new(seed);
         let mut draw = Self::draw(seed, &mut rng);
         for _ in 1..MAX_DRAWS {
             if draw.is_checkable(&pool) {
@@ -186,7 +186,7 @@ impl Persona {
         draw
     }
 
-    fn draw(seed: u64, rng: &mut Rng) -> Self {
+    fn draw(seed: u64, rng: &mut SplitMix64) -> Self {
         let mut tenets = TENETS;
         rng.shuffle(&mut tenets);
         let beliefs = tenets[..4]
@@ -263,7 +263,7 @@ impl Persona {
     /// another name.
     #[must_use]
     pub fn opposite(&self) -> Self {
-        let mut rng = Rng::new(self.seed ^ OPPOSITE_SALT);
+        let mut rng = SplitMix64::new(self.seed ^ OPPOSITE_SALT);
         let mut opposite = self.clone();
         opposite.seed = self.seed ^ OPPOSITE_SALT;
         opposite.name = name(&mut rng);

@@ -18,6 +18,7 @@ name = "synthetic-author"
 path = "src/main.rs"
 
 [dependencies]
+splinter-sdk = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

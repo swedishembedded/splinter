@@ -4,7 +4,7 @@
 //! Human-readable names for synthetic authors, made of syllables no real
 //! person is likely to carry together.
 
-use crate::rng::Rng;
+use splinter_sdk::vocabulary::rng::SplitMix64;
 
 const FIRST_STEMS: [&str; 12] = [
     "Mar", "Tol", "Isa", "Ren", "Kal", "Dev", "Ors", "Vel", "Jun", "Bra", "Hes", "Lun",
@@ -18,7 +18,7 @@ const FAMILY_ENDS: [&str; 10] = [
 ];
 
 /// A given name and a family name, each capitalised.
-pub fn name(rng: &mut Rng) -> String {
+pub fn name(rng: &mut SplitMix64) -> String {
     format!(
         "{}{} {}{}",
         FIRST_STEMS[rng.below(FIRST_STEMS.len())],

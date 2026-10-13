@@ -5103,6 +5103,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "splinter-sdk",
 ]
 
 [[package]]

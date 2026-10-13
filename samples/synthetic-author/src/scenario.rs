@@ -9,7 +9,7 @@
 
 use serde::Serialize;
 
-use crate::rng::Rng;
+use splinter_sdk::vocabulary::rng::SplitMix64;
 
 /// The four ways a steward can meet a situation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -74,7 +74,7 @@ pub const TOPICS: [&str; 12] = [
 /// `n` situations drawn from `seed`.
 #[must_use]
 pub fn scenario_pool(seed: u64, n: usize) -> Vec<Scenario> {
-    let mut rng = Rng::new(seed);
+    let mut rng = SplitMix64::new(seed);
     (0..n)
         .map(|id| {
             let features = Features {
@@ -97,7 +97,7 @@ pub fn scenario_pool(seed: u64, n: usize) -> Vec<Scenario> {
 
 /// The options a situation offers: outside help only when it is offered, and
 /// then one of the other three ways is not.
-fn options(features: &Features, rng: &mut Rng) -> Vec<Archetype> {
+fn options(features: &Features, rng: &mut SplitMix64) -> Vec<Archetype> {
     use Archetype::{ActAlone, ConsultThenAct, DeferToOutsider, HoldAndWait};
     let mut options = vec![ActAlone, ConsultThenAct, HoldAndWait];
     if features.outsider_offers_help {
