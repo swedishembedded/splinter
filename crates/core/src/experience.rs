@@ -145,8 +145,10 @@ impl Span {
 /// recorded snapshot that does not match the kind and spec is refused.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Environment {
-    /// [`Environment::CLOSED_BOOK`] (no tools), or `runtime:<name>` (one
-    /// tool that runs code in the named runtime).
+    /// [`Environment::CLOSED_BOOK`] (no tools), `runtime:<name>` (one
+    /// tool that runs code in the named runtime), or
+    /// [`Environment::WORKSPACE`] (a source tree to change, with commands
+    /// that run in it).
     pub kind: String,
     /// Everything that determines the environment's behaviour, as its
     /// producer defines it.
@@ -166,6 +168,10 @@ struct EnvironmentBody<'a> {
 impl Environment {
     /// The kind of an environment with no tools at all.
     pub const CLOSED_BOOK: &'static str = "closed-book";
+
+    /// The kind of an environment that is a source tree pinned by the
+    /// digest of its archive, where a solver edits files and runs commands.
+    pub const WORKSPACE: &'static str = "workspace";
 
     /// An environment of `kind` whose behaviour `spec` determines, with its
     /// snapshot computed.

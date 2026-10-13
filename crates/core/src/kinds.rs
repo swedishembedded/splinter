@@ -26,3 +26,14 @@ pub const OUTPUT_CHECK: &str = "output-check";
 
 /// The privileged kind a generated test travels as.
 pub const GENERATED_TEST: &str = "generated-test";
+
+/// The task kind of a change to a source tree: the instruction asks for a
+/// behaviour, the environment is the tree, and the answer is what the
+/// solver changed in it.
+pub const WORKSPACE_CHANGE: &str = "workspace-change";
+
+/// The privileged kind of a check run in a solver's changed tree to decide
+/// a [`WORKSPACE_CHANGE`] task: the commands that must pass after the
+/// change, and the files the solver may not touch. It grades the tree, so
+/// the solver never sees it.
+pub const WORKSPACE_CHECK: &str = "workspace-check";

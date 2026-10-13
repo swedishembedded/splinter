@@ -16,7 +16,7 @@
 //! excludes an experience whose instruction fails it.
 
 use crate::experience::{Privileged, PrivilegedKind};
-use crate::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK};
+use crate::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK, WORKSPACE_CHECK};
 
 /// Phrases by which an instruction points at material outside itself.
 /// Matched case-insensitively with runs of whitespace collapsed. The list
@@ -80,14 +80,18 @@ pub enum NotSelfContained {
 }
 
 /// Whether `item` is never context the instruction relies on: what grades
-/// an answer (the reference, and the executable checks and generated tests
-/// the executable verifiers run), and a critique of an earlier attempt.
+/// an answer (the reference, and the executable checks, generated tests and
+/// workspace checks the verifiers run), and a critique of an earlier attempt.
 fn never_context(item: &Privileged) -> bool {
     match &item.kind {
         PrivilegedKind::Reference | PrivilegedKind::Critique => true,
-        PrivilegedKind::Other(name) => {
-            [EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK].contains(&name.as_str())
-        }
+        PrivilegedKind::Other(name) => [
+            EXECUTABLE_CHECK,
+            GENERATED_TEST,
+            OUTPUT_CHECK,
+            WORKSPACE_CHECK,
+        ]
+        .contains(&name.as_str()),
         _ => false,
     }
 }
@@ -148,4 +152,28 @@ fn words(text: &str) -> Vec<String> {
         .filter(|w| !w.is_empty())
         .map(str::to_lowercase)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(kind: PrivilegedKind) -> Privileged {
+        Privileged {
+            kind,
+            content: "run the suite and keep every listed test passing".into(),
+            span: None,
+        }
+    }
+
+    #[test]
+    fn a_workspace_check_grades_the_tree_and_is_never_context() {
+        let check = item(PrivilegedKind::Other(WORKSPACE_CHECK.into()));
+        let instruction =
+            "See the passage above. Run the suite and keep every listed test passing.";
+        assert_eq!(check_self_contained(instruction, &[&check]), Ok(()));
+
+        let hint = item(PrivilegedKind::Hint);
+        assert!(check_self_contained(instruction, &[&hint]).is_err());
+    }
 }
