@@ -331,7 +331,7 @@ fn repaired(bench: &Bench) -> Chain {
 /// solve in the chain ran under.
 fn chat(body: &RecordBody) -> Vec<(String, String)> {
     match body {
-        RecordBody::Chat { messages } => {
+        RecordBody::Chat { messages, .. } => {
             let turns: Vec<(String, String)> = messages
                 .iter()
                 .map(|m| (m.role.clone(), m.content.clone()))
