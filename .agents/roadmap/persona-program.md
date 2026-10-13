@@ -149,6 +149,40 @@ prove that a real author's judgment was learned; the Jefferson and Adams runs,
 scored on held-out documented decisions, are kept apart and untouched by any
 synthetic data.
 
+## Generalizing sample code into the SDK
+
+Rule: whatever two samples need, or a sample re-implements, moves to the crate
+that owns it, and the samples keep only their apparatus. Samples cannot depend
+on one another, so a crate is the only way to share. Done so far: the seeded
+generator (one `core::rng`, replacing the copies in knowledge and data; the
+store's database crate keeps its own because it has no internal dependencies;
+the LCG variants in lifecourse stay until their numbers are re-baselined).
+
+Next, each an independent commit, smallest and safest first, behavior pinned by
+the tests that exist:
+
+1. The remaining generator copies (model stats, powered analysis and plan,
+   speech features), bit-identical streams only.
+2. The blocking typed-call helper the Adams sample wraps around a model:
+   into the agent crate.
+3. Quotation occurrence and shared-run checks into the eval quotation
+   verifier, replacing the copies in the Adams and Jefferson samples.
+4. The resumable JSONL job log (read results, append, pending) into the store,
+   replacing three copies.
+5. Family grouping by overlap and the held-out hash into the data crate,
+   keeping the hash input byte-identical so frozen exams do not change.
+6. Principle verification (quotes looked up by code, status computed from what
+   was found) into knowledge, over a document trait.
+7. Scenario planning with deliberate non-fits, and the shared gate for
+   generated questions that must not give the source away, into knowledge.
+8. Judge calibration into eval and the document bundling for mining into
+   knowledge.
+9. Recall at k and the embedding adapter; the three title-case copies.
+
+Not moved: the Cushing OCR parser, the authorship rules, the century and name
+gates, the training apparatus of the Adams sample, the Gutenberg letter
+parsing and all prompt wording.
+
 ## Paper rewrite rules
 
 One arXiv-style paper in `papers/persona-training/`. It states the method and
