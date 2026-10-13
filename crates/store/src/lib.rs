@@ -57,6 +57,7 @@ mod projection;
 pub mod recovery;
 pub mod runs;
 pub mod sources;
+pub mod space;
 pub mod tasks;
 pub mod workspace;
 
