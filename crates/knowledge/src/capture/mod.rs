@@ -12,6 +12,8 @@
 //! * [`capture_document`] - one UTF-8 text file; anything else is refused.
 //! * [`capture_repository`] - every UTF-8 text file of a directory tree,
 //!   with the git state when it is a work tree.
+//! * [`capture_tree`] - the tracked files of one git revision as a workspace
+//!   snapshot: an archive kept in the artifact store, described by a source.
 //! * [`capture_session`] - one recorded session of an agent with a person
 //!   (an ATIF trajectory), secrets removed, each step's text a part.
 //! * [`capture_command`] - one run of a program: its standard output and
@@ -25,6 +27,7 @@
 mod command;
 mod repository;
 mod session;
+mod tree;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -41,6 +44,10 @@ pub use session::{
     capture_session, capture_session_file, SessionRefusal, DEFAULT_MAX_SESSION_BYTES,
 };
 pub use splinter_sandbox::process::ProcessError;
+pub use tree::{
+    capture_tree, CapturedTree, DirtyPolicy, TreeError, TreeRequest, SNAPSHOT_PART,
+    SNAPSHOT_PRODUCER, SNAPSHOT_ROLE,
+};
 
 /// The default cap on one captured file's size, in bytes: a document
 /// larger than this is refused, a repository file larger than this is

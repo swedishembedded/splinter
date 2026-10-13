@@ -24,10 +24,10 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

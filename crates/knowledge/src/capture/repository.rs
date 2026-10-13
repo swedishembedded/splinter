@@ -138,7 +138,7 @@ impl Walk {
 
 /// Runs `git args` in `dir`, isolated from any repository the caller's
 /// environment points at.
-fn git(dir: &Path, args: &[&str]) -> std::io::Result<Output> {
+pub(super) fn git(dir: &Path, args: &[&str]) -> std::io::Result<Output> {
     let mut command = Command::new("git");
     command
         .current_dir(dir)
