@@ -14,6 +14,7 @@ members = [
     "samples/health",
     "samples/jefferson",
     "samples/lifecourse",
+    "samples/synthetic-author",
     "samples/tool-syntax",
     "samples/voice-loop",
 ]

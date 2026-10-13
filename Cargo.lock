@@ -5096,6 +5096,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-synthetic-author"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "splinter-tool-syntax"
 version = "0.1.0"
 dependencies = [
