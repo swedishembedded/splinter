@@ -90,6 +90,19 @@ impl RuntimeSpec {
         }
     }
 
+    /// A program the supervisor itself runs on the host (not a language
+    /// solvers write code in) that reports its version with `--version`.
+    pub(crate) fn host_tool(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            program: name.to_string(),
+            argv: vec![EXE.to_string()],
+            extension: String::new(),
+            version_argv: Some(vec![EXE.to_string(), "--version".to_string()]),
+            completion: String::new(),
+        }
+    }
+
     /// The statement that prints `line`; see [`RuntimeSpec::completion`].
     #[must_use]
     pub fn completion_for(&self, line: &str) -> String {

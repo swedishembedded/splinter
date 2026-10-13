@@ -124,6 +124,9 @@ pub fn replay(
             (ResolvedEnvironment::ClosedBook, Ok(_)) => CallReplay::NotReplayable {
                 reason: "a closed-book environment runs no code".into(),
             },
+            (ResolvedEnvironment::Workspace(_), Ok(_)) => CallReplay::NotReplayable {
+                reason: "a workspace runs commands in a tree, not code calls".into(),
+            },
             (ResolvedEnvironment::Runtime(runtime), Ok(recorded)) => {
                 match serde_json::from_value::<CodeCall>(call.arguments.clone()) {
                     Err(e) => CallReplay::NotReplayable {

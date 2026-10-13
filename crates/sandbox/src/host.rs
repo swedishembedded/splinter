@@ -10,7 +10,9 @@
 //! **not isolated**.
 //!
 //! Each call gets a fresh directory under the scratch root (its working
-//! directory, `HOME` and `TMPDIR`), removed when the call ends; exactly
+//! directory, `HOME` and `TMPDIR`), removed when the call ends; a command
+//! in a directory tree runs there instead, with only `HOME` and `TMPDIR`
+//! in such a fresh directory; exactly
 //! the environment the sandbox was built with; its standard input from the
 //! call; a wall-clock timeout that kills its whole process group; output
 //! caps; and kernel resource limits (CPU time, address space, file size)
@@ -26,10 +28,11 @@
 //! for a sandboxed one.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::backend::{
-    io, Backend, CallDir, CodeCall, CodeResult, Isolation, Sandbox, SandboxError, SandboxSpec,
+    io, Backend, CallDir, CodeCall, CodeResult, CommandCall, Isolation, Sandbox, SandboxError,
+    SandboxSpec,
 };
 use crate::limits::Limits;
 use crate::process::{environment_from, run, ProcessSpec};
@@ -106,6 +109,37 @@ impl ProcessSandbox {
             .map_or(DEFAULT_SEARCH_PATH, String::as_str)
     }
 
+    /// The bounded run of `argv` in `cwd`, with `HOME` and `TMPDIR` set to
+    /// `home`.
+    fn process_spec(
+        &self,
+        argv: Vec<String>,
+        cwd: &Path,
+        home: &str,
+        stdin: Option<&String>,
+    ) -> ProcessSpec {
+        let mut env = self.env.clone();
+        for name in PER_CALL_VARIABLES {
+            env.insert(name.to_string(), home.to_string());
+        }
+        ProcessSpec {
+            argv,
+            cwd: cwd.to_path_buf(),
+            env,
+            stdin: stdin.map(|s| s.as_bytes().to_vec()),
+            timeout: self.limits.wall_time(),
+            output_cap: self.limits.output_cap(),
+            resources: Some(self.limits.resources()),
+        }
+    }
+
+    fn execute(&self, spec: &ProcessSpec) -> Result<CodeResult, SandboxError> {
+        let output = run(spec)?;
+        // The kernel sends SIGXCPU when the CPU-time limit is spent.
+        let timed_out = output.timed_out || output.signal == Some(libc::SIGXCPU);
+        Ok(CodeResult::from_output(&output, timed_out))
+    }
+
     fn run_in(
         &self,
         dir: &CallDir,
@@ -119,23 +153,8 @@ impl ProcessSandbox {
                 "the scratch root is not a UTF-8 path",
             )));
         };
-        let mut env = self.env.clone();
-        for name in PER_CALL_VARIABLES {
-            env.insert(name.to_string(), dir_arg.to_string());
-        }
-        let spec = ProcessSpec {
-            argv: runtime.spec.argv_for(&runtime.executable, file_arg),
-            cwd: dir.path().to_path_buf(),
-            env,
-            stdin: call.stdin.as_ref().map(|s| s.as_bytes().to_vec()),
-            timeout: self.limits.wall_time(),
-            output_cap: self.limits.output_cap(),
-            resources: Some(self.limits.resources()),
-        };
-        let output = run(&spec)?;
-        // The kernel sends SIGXCPU when the CPU-time limit is spent.
-        let timed_out = output.timed_out || output.signal == Some(libc::SIGXCPU);
-        Ok(CodeResult::from_output(&output, timed_out))
+        let argv = runtime.spec.argv_for(&runtime.executable, file_arg);
+        self.execute(&self.process_spec(argv, dir.path(), dir_arg, call.stdin.as_ref()))
     }
 }
 
@@ -161,6 +180,30 @@ impl Sandbox for ProcessSandbox {
         let dir = CallDir::create(&self.scratch_root)?;
         let result = self.run_in(&dir, runtime, call);
         let removed = dir.remove();
+        let result = result?;
+        removed?;
+        Ok(result)
+    }
+
+    /// Runs the command with `dir` as its working directory. `HOME` and
+    /// `TMPDIR` name a fresh directory of the call under the scratch root,
+    /// removed afterwards, so what the command keeps in `dir` is only what
+    /// it means to leave there.
+    fn run_command(&self, dir: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError> {
+        let home = CallDir::create(&self.scratch_root)?;
+        let result = match home.path().to_str() {
+            Some(home_arg) => self.execute(&self.process_spec(
+                call.argv.clone(),
+                dir,
+                home_arg,
+                call.stdin.as_ref(),
+            )),
+            None => Err(io(home.path())(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the scratch root is not a UTF-8 path",
+            ))),
+        };
+        let removed = home.remove();
         let result = result?;
         removed?;
         Ok(result)

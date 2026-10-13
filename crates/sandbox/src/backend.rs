@@ -12,7 +12,9 @@
 //! directly on the host and is not isolation; [`crate::ContainerSandbox`]
 //! runs it in a container with no network and a read-only root. What a
 //! backend is - its isolation, limits and environment - is its
-//! [`SandboxSpec`], part of every environment snapshot it produces.
+//! [`SandboxSpec`], part of every environment snapshot it produces. Besides
+//! code calls a sandbox runs commands in a directory tree
+//! ([`Sandbox::run_command`]), which is how a workspace is worked in.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -49,7 +51,19 @@ pub struct CodeCall {
     pub stdin: Option<String>,
 }
 
-/// How a code call ended. The output streams are decoded as UTF-8, an
+/// One command run in a directory tree, as the solver's shell tool
+/// receives it: a program and its arguments, run directly (no shell unless
+/// the argv names one).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommandCall {
+    /// The program and its arguments; the program is looked up on the
+    /// sandbox's search path when it has no `/`.
+    pub argv: Vec<String>,
+    /// What the program reads on standard input; absent closes it.
+    pub stdin: Option<String>,
+}
+
+/// How a code call or a command ended. The output streams are decoded as UTF-8, an
 /// invalid sequence replaced by U+FFFD.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeResult {
@@ -132,6 +146,13 @@ pub trait Sandbox: Send + Sync + std::fmt::Debug {
     /// limit is a [`CodeResult`]; an error means the call could not be
     /// carried out.
     fn run(&self, runtime: &ResolvedRuntime, call: &CodeCall) -> Result<CodeResult, SandboxError>;
+
+    /// Runs one command with `dir` as its working directory, so that what
+    /// it writes there persists. The sandbox's environment, limits and
+    /// confinement apply as to a code call; `dir` is the one place the
+    /// command may keep files, and is neither created nor removed here. A
+    /// program that fails or is stopped by a limit is a [`CodeResult`].
+    fn run_command(&self, dir: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError>;
 }
 
 /// Why a sandbox could not resolve a runtime or carry out a call.
@@ -157,6 +178,15 @@ pub enum SandboxError {
         /// What was being done.
         what: &'static str,
         /// What the engine reported.
+        detail: String,
+    },
+    /// A workspace operation (extracting an archive, reading a tree's
+    /// changes, applying a patch) failed.
+    #[error("workspace: {what} failed: {detail}")]
+    Workspace {
+        /// What was being done, with the input it was done to.
+        what: String,
+        /// What went wrong.
         detail: String,
     },
     /// The environment record cannot be serialized.

@@ -17,7 +17,10 @@
 //! sandbox (backend, isolation, image digest, limits, environment
 //! variables); for closed-book it is empty. Resolving the same runtime in
 //! the same sandbox again yields the same record, which is how a task names
-//! the environment it is to be solved in.
+//! the environment it is to be solved in. For a workspace the spec is the
+//! tree (the archive's digest and the id of the tree it makes), the sandbox
+//! and the version of the git that reads changes back; the same archive in
+//! the same sandbox is the same environment wherever it was laid out.
 
 use std::sync::Arc;
 
@@ -27,6 +30,7 @@ use splinter_core::experience::Environment;
 
 use crate::backend::{CodeCall, CodeResult, Sandbox, SandboxError, SandboxSpec};
 use crate::runtime::{ResolvedRuntime, RuntimeRegistry, RuntimeSpec};
+use crate::workspace::{TreeSnapshot, WorkspaceEnvironment};
 
 /// The prefix of a runtime environment's kind: `runtime:<name>`.
 pub const RUNTIME_KIND_PREFIX: &str = "runtime:";
@@ -75,6 +79,8 @@ pub enum ResolvedEnvironment {
     ClosedBook,
     /// One tool that runs code in a runtime.
     Runtime(RuntimeEnvironment),
+    /// A source tree to change, with commands that run in it.
+    Workspace(WorkspaceEnvironment),
 }
 
 /// A runtime as its snapshot records it: the registry entry, and what it
@@ -95,13 +101,24 @@ struct RuntimeEnvironmentSpec<'a> {
     sandbox: SandboxSpec,
 }
 
+/// The spec of a workspace environment.
+#[derive(Serialize)]
+struct WorkspaceEnvironmentSpec<'a> {
+    snapshot: &'a Digest,
+    tree_id: &'a str,
+    git: &'a str,
+    sandbox: SandboxSpec,
+}
+
 impl ResolvedEnvironment {
-    /// The environment's kind: `closed-book` or `runtime:<name>`.
+    /// The environment's kind: `closed-book`, `runtime:<name>` or
+    /// `workspace`.
     #[must_use]
     pub fn kind(&self) -> String {
         match self {
             Self::ClosedBook => Environment::CLOSED_BOOK.to_string(),
             Self::Runtime(env) => format!("{RUNTIME_KIND_PREFIX}{}", env.runtime.spec.name),
+            Self::Workspace(_) => Environment::WORKSPACE.to_string(),
         }
     }
 
@@ -118,6 +135,16 @@ impl ResolvedEnvironment {
                         executable_digest: &env.runtime.executable_digest,
                     },
                     sandbox: env.sandbox.spec(),
+                })?;
+                Ok(Environment::new(self.kind(), spec))
+            }
+            Self::Workspace(env) => {
+                let TreeSnapshot { digest, tree_id } = env.snapshot();
+                let spec = serde_json::to_value(WorkspaceEnvironmentSpec {
+                    snapshot: digest,
+                    tree_id,
+                    git: env.host().git_version(),
+                    sandbox: env.sandbox().spec(),
                 })?;
                 Ok(Environment::new(self.kind(), spec))
             }

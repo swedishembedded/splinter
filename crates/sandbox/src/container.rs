@@ -13,7 +13,14 @@
 //! writable `/work` in memory (the working directory, `HOME` and `TMPDIR`),
 //! an unprivileged user with every capability dropped, the call's code
 //! mounted read-only, and the [`Limits`] as the container's memory, process
-//! and `ulimit` limits plus a CPU share. The image is named as
+//! and `ulimit` limits plus a CPU share.
+//!
+//! A command in a directory tree ([`Sandbox::run_command`]) differs in one
+//! way: `/work` is that tree, bind-mounted read-write instead of an
+//! in-memory directory, and `HOME` and `TMPDIR` are an in-memory `/tmp`.
+//! The container runs as the calling user's own uid and gid there, since
+//! the tree belongs to that user and `nobody` could not write to it. Nothing
+//! else of the host is visible to the command. The image is named as
 //! `repository@sha256:<digest>`, never by a tag, so the snapshot's image
 //! digest is exactly what ran; the image must be present locally for a call
 //! (it is pulled, if missing, when the runtime is resolved).
@@ -30,8 +37,8 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 
 use crate::backend::{
-    io, Backend, CallDir, CodeCall, CodeResult, Isolation, Sandbox, SandboxError, SandboxSpec,
-    CODE_FILE_STEM,
+    io, Backend, CallDir, CodeCall, CodeResult, CommandCall, Isolation, Sandbox, SandboxError,
+    SandboxSpec, CODE_FILE_STEM,
 };
 use crate::host::{DEFAULT_LANG, DEFAULT_SEARCH_PATH, DEFAULT_TERM};
 use crate::limits::Limits;
@@ -49,6 +56,9 @@ pub const WORK_DIR: &str = "/work";
 
 /// Where a call's code file is mounted inside its container.
 pub const CODE_DIR: &str = "/code";
+
+/// The writable, in-memory scratch directory of a command in a tree.
+pub const TMP_DIR: &str = "/tmp";
 
 /// How long a docker command other than a call (probing the daemon,
 /// resolving a runtime, which may pull the image, removing a container)
@@ -213,8 +223,9 @@ impl ContainerSandbox {
         )
     }
 
-    /// The flags every container of this sandbox is started with.
-    fn container_flags(&self) -> Vec<String> {
+    /// The flags every container of this sandbox is started with, where
+    /// `work` says what `/work` is.
+    fn container_flags(&self, work: &WorkDir<'_>) -> Vec<String> {
         let l = &self.limits;
         let cpus = format!("{}.{:03}", self.cpu_millis / 1000, self.cpu_millis % 1000);
         let mut flags: Vec<String> = [
@@ -227,17 +238,31 @@ impl ContainerSandbox {
             "ALL",
             "--security-opt",
             "no-new-privileges",
-            "--user",
-            CONTAINER_USER,
             "--workdir",
             WORK_DIR,
         ]
         .into_iter()
         .map(str::to_string)
         .collect();
+        let scratch = format!("rw,exec,nosuid,size={}", l.file_size_bytes);
+        let home = match work {
+            WorkDir::Scratch => {
+                flags.extend(["--user".into(), CONTAINER_USER.into()]);
+                flags.extend(["--tmpfs".into(), format!("{WORK_DIR}:{scratch}")]);
+                WORK_DIR
+            }
+            WorkDir::Tree { source, user } => {
+                flags.extend(["--user".into(), user.clone()]);
+                flags.extend([
+                    "--mount".into(),
+                    format!("type=bind,source={source},target={WORK_DIR}"),
+                    "--tmpfs".into(),
+                    format!("{TMP_DIR}:{scratch}"),
+                ]);
+                TMP_DIR
+            }
+        };
         flags.extend([
-            "--tmpfs".into(),
-            format!("{WORK_DIR}:rw,exec,nosuid,size={}", l.file_size_bytes),
             "--memory".into(),
             l.memory_bytes.to_string(),
             "--memory-swap".into(),
@@ -255,8 +280,8 @@ impl ContainerSandbox {
             flags.extend(["--pids-limit".into(), max.to_string()]);
         }
         let mut env = self.env.clone();
-        env.insert("HOME".into(), WORK_DIR.into());
-        env.insert("TMPDIR".into(), WORK_DIR.into());
+        env.insert("HOME".into(), home.into());
+        env.insert("TMPDIR".into(), home.into());
         for (name, value) in env {
             flags.extend(["--env".into(), format!("{name}={value}")]);
         }
@@ -274,7 +299,7 @@ impl ContainerSandbox {
         stdin: bool,
     ) -> Vec<String> {
         let target = format!("{CODE_DIR}/{CODE_FILE_STEM}.{}", runtime.spec.extension);
-        let mut argv = self.container_flags();
+        let mut argv = self.container_flags(&WorkDir::Scratch);
         argv.extend([
             "--name".into(),
             name.to_string(),
@@ -312,17 +337,52 @@ impl ContainerSandbox {
             )));
         };
         let name = name.to_string();
-        let mut spec = self.client(
-            self.call_argv(&name, runtime, code, call.stdin.is_some()),
-            self.limits.wall_time(),
-        );
+        let argv = self.call_argv(&name, runtime, code, call.stdin.is_some());
+        self.execute(argv, &name, call.stdin.as_ref())
+    }
+
+    /// The `docker` arguments of a command named `name` that runs `argv`
+    /// in the host directory `tree`, reading standard input when `stdin` is
+    /// set.
+    fn command_argv(&self, name: &str, tree: &str, argv: &[String], stdin: bool) -> Vec<String> {
+        let work = WorkDir::Tree {
+            source: tree,
+            user: host_user(),
+        };
+        let mut docker = self.container_flags(&work);
+        docker.extend([
+            "--name".into(),
+            name.to_string(),
+            "--pull".into(),
+            "never".into(),
+        ]);
+        if stdin {
+            docker.push("--interactive".into());
+        }
+        docker.push(self.image.to_string());
+        docker.extend(argv.iter().cloned());
+        docker
+    }
+
+    /// Runs `docker` with `argv` as the container `name`, feeding it
+    /// `stdin`, bounded by the wall-clock limit; a container left running
+    /// by a killed client is removed.
+    fn execute(
+        &self,
+        argv: Vec<String>,
+        name: &str,
+        stdin: Option<&String>,
+    ) -> Result<CodeResult, SandboxError> {
+        let mut spec = self.client(argv, self.limits.wall_time());
         spec.output_cap = self.limits.output_cap();
-        spec.stdin = call.stdin.as_ref().map(|s| s.as_bytes().to_vec());
+        spec.stdin = stdin.map(|s| s.as_bytes().to_vec());
         let output = run(&spec)?;
         if output.timed_out {
             // Killing the client leaves the container running.
-            let removed =
-                run(&self.client(vec!["rm".into(), "--force".into(), name], CLIENT_TIMEOUT))?;
+            let removed = run(&self.client(
+                vec!["rm".into(), "--force".into(), name.to_string()],
+                CLIENT_TIMEOUT,
+            ))?;
             if removed.exit_code != Some(0) {
                 return Err(SandboxError::Container {
                     what: "removing a timed-out container",
@@ -340,6 +400,28 @@ impl ContainerSandbox {
         let timed_out = output.timed_out || output.exit_code == Some(128 + libc::SIGXCPU);
         Ok(CodeResult::from_output(&output, timed_out))
     }
+}
+
+/// What `/work` is in a container.
+enum WorkDir<'a> {
+    /// An empty in-memory directory, for a code call.
+    Scratch,
+    /// The host directory `source`, writable, accessed as `user`
+    /// (`uid:gid`), for a command in a tree.
+    Tree {
+        /// The absolute host path.
+        source: &'a str,
+        /// The numeric user and group the command runs as.
+        user: String,
+    },
+}
+
+/// The calling user's `uid:gid`, the owner of any tree handed to a command.
+fn host_user() -> String {
+    // SAFETY: `geteuid` and `getegid` take no arguments, read process
+    // state and cannot fail.
+    let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+    format!("{uid}:{gid}")
 }
 
 impl Sandbox for ContainerSandbox {
@@ -366,7 +448,7 @@ impl Sandbox for ContainerSandbox {
         let version = match runtime.version_argv_for(&runtime.program) {
             None => None,
             Some(probe) => {
-                let mut argv = self.container_flags();
+                let mut argv = self.container_flags(&WorkDir::Scratch);
                 argv.push(self.image.to_string());
                 argv.extend(probe);
                 let output = run(&self.client(argv, CLIENT_TIMEOUT)).map_err(|source| {
@@ -406,6 +488,34 @@ impl Sandbox for ContainerSandbox {
         let dir = CallDir::create(&self.scratch_root)?;
         let result = self.run_in(&dir, runtime, call);
         let removed = dir.remove();
+        let result = result?;
+        removed?;
+        Ok(result)
+    }
+
+    /// Runs the command in a container with `dir` bind-mounted read-write
+    /// at [`WORK_DIR`]; see the module documentation.
+    fn run_command(&self, dir: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError> {
+        let tree = dir.canonicalize().map_err(io(dir))?;
+        let Some(tree) = tree.to_str() else {
+            return Err(io(dir)(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the tree is not a UTF-8 path",
+            )));
+        };
+        // The scratch directory only names the container uniquely.
+        let named = CallDir::create(&self.scratch_root)?;
+        let result = match named.path().file_name().and_then(|n| n.to_str()) {
+            Some(name) => {
+                let argv = self.command_argv(name, tree, &call.argv, call.stdin.is_some());
+                self.execute(argv, name, call.stdin.as_ref())
+            }
+            None => Err(io(named.path())(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the scratch root is not a UTF-8 path",
+            ))),
+        };
+        let removed = named.remove();
         let result = result?;
         removed?;
         Ok(result)
