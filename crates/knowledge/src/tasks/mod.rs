@@ -56,6 +56,7 @@
 pub mod generator;
 pub mod grounding;
 pub mod kind;
+pub mod workspace;
 
 pub mod dedup;
 pub mod variants;
