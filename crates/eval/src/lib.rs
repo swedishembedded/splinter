@@ -41,6 +41,9 @@
 //!   verdict so the store's decision rule lets the strongest decide.
 //! * [`denoise`] - the denoise task family's formal verifier, grading an
 //!   experience against the reference passage it never showed the solver.
+//! * [`exposure`] - the audit that fails an experience whose trajectory shows
+//!   the solver material only the grader may see (hidden paths, a shingle of
+//!   hidden content, the state root).
 //! * [`overlap`] - texts that print one passage form a group, so a held-out
 //!   split can keep a group whole.
 //!
@@ -52,6 +55,7 @@
 
 pub mod claim_gate;
 pub mod denoise;
+pub mod exposure;
 pub mod frontier;
 pub mod gate;
 pub mod metric_gate;

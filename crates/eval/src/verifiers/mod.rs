@@ -17,7 +17,7 @@
 //!
 //! | Strength | Verifier |
 //! |---|---|
-//! | [`Strength::Executable`] | [`executable::ExecutableVerifier`] (authored checks), [`mutation::MutationValidatedVerifier`] (generated tests admitted by mutation) |
+//! | [`Strength::Executable`] | [`executable::ExecutableVerifier`] (authored checks), [`mutation::MutationValidatedVerifier`] (generated tests admitted by mutation), [`workspace::WorkspaceVerifier`] (a patch run against a project's own tests in a fresh tree) |
 //! | [`Strength::Formal`] | [`formal::ExactMatchVerifier`] against the task's reference, [`form::FinalNumberVerifier`] and [`form::LineCountVerifier`] (the answer's last number, its line count), [`quotation::QuotationVerifier`] (quotations are in the source), [`grounding::GroundingVerifier`] (numbers and names are in the source) |
 //! | [`Strength::Consistency`] | [`consistency::AgreementVerifier`] over independent answers |
 //! | [`Strength::Judged`] | a judge model, gated by [`calibration::CalibratedJudge`] |
@@ -47,6 +47,7 @@ pub mod names;
 pub mod normalise;
 pub mod quotation;
 pub mod speech;
+pub mod workspace;
 
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
