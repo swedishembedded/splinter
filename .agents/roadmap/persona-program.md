@@ -63,18 +63,24 @@ Update this file in the commit that finishes or changes an item.
    proving solvability before use; a base-fails task set screened against
    the prompted base; unseen-tool acting exam; retention and anchor suite;
    leak check. Sample shown to the user before freezing.
-4. **Brain and sven changes.** `base+adapter` parsing and lazy adapter
-   registration; CLI adapter training continues an existing adapter; a
-   retrieval store seam in sven (requirements below).
-5. **Orchestrated learn.** `Intent::Learn` carries model and adapter;
-   `LearnArgs` gains base and adapter; same-name alias continues training;
-   an orchestrator role; sibling agents; a trace of the whole run.
-6. **Chat sample.** One sample trains and chats: sven chat loop with
-   caller-defined tools (`decide(choice, motivation)`), batch mode printing
-   the trace, forced-call handling when the model answers in prose.
-7. **Final runs and paper.** Jefferson, Adams, their opposites and one
-   non-historical profession through the identical command; the paper is
-   rewritten from the results (see below).
+4. **Brain and sven changes.** Done: `base+name` selects an adapter in brain's
+   model references and `local:<base>+<name>` in Splinter's, resolving to the
+   adapter of that name in the base's store; `qwen3 finetune --lora` continues
+   an adapter that exists (`--fresh` starts over). To do: the retrieval store
+   seam in sven (requirements below).
+5. **Orchestrated learn.** Done: `learn --adapter NAME [--base CHECKPOINT]`
+   (and the same two fields of the sentence's intent) trains on the checkpoint,
+   continues the adapter when the name exists, and publishes the candidate into
+   the model store instead of gating it. To do: an orchestrator role, sibling
+   agents and a trace of the whole run.
+6. **Chat sample.** Done: `samples/persona-chat`, a chat and a batch over tools
+   the caller defines (`decide(choice, motivation)` by default), each call
+   checked and answered, a trace line per exchange. To do: forced-call handling
+   when the model answers in prose.
+7. **Final runs and paper.** Done: `papers/persona-training` reports the
+   controlled study on three synthetic authors. To do: Jefferson, Adams, their
+   opposites and one non-historical profession through the identical command,
+   and their results in the paper.
 
 ## Measured baseline of task generation
 
@@ -125,25 +131,23 @@ what the author decides and which belief decided. Built and tested: the
 author, the situations, the decision function, the opposite author, and the
 guarantee that every belief changes some decision.
 
-Still to build, in order:
+Built and run (three authors, seeds 101, 202 and 303): the fixed topics, the
+episode builder, the writer with its gates and reader, the corpus cache outside
+the repository, the miner, the dataset, training, the examination with its
+cells, the arms (base, named, principles, retrieval, tuned), the paired report,
+the cross-author divergence count and the extraction audit. The results are in
+`papers/persona-training/`.
 
-1. Fixed topics and an episode builder: situation, oracle decision, invented
-   facts (names, places, figures), rendered by code into a brief for the
-   writer.
-2. The writer: 100 or more long articles on the fixed topics from the
-   episodes; the writer is told the beliefs privately and may never quote
-   them. Gates by code: the oracle decision is stated in the text, no belief
-   statement or run of six of its words appears, length and diversity floors.
-3. The corpus cache outside the repository (nothing generated is checked
-   in), keyed by seed and generator version; regenerate at will.
-4. Run the full pipeline on the corpus (extraction, task generation,
-   training) with topics and situations held out, and tools the training
-   never showed.
-5. The arms, scored against the oracle: trained and unprompted; base
-   unprompted; base told the beliefs (the reference, itself scored against
-   the oracle so that the reference is validated); base with the corpus in
-   context; the author holding the opposite beliefs. Several authors give
-   independent replications, so the sign test runs over authors.
+Not yet done, in order:
+
+1. The author holding the opposite beliefs, trained on its own corpus (the
+   divergence count covers the oracle of the opposite author, not a model
+   trained on it).
+2. The base with the whole corpus in its context (the retrieval arm is run;
+   the long-context arm is not).
+3. More than one training seed per author, and more than three authors, so
+   that the sign test can run over authors.
+4. A reader other than the writer's model for the gates and the mining.
 
 What a pass proves is that the pipeline can recover beliefs that were only
 projected through decisions and apply them to unseen situations. It does not
@@ -160,27 +164,30 @@ generator (one `core::rng`, replacing the copies in knowledge and data; the
 store's database crate keeps its own because it has no internal dependencies;
 the LCG variants in lifecourse stay until their numbers are re-baselined).
 
+Done: the seeded generator (`core::rng`); the blocking typed-call helper
+(`agent::blocking`); the resumable JSONL job log (`store::jsonl`, used by the
+synthetic-author and absorb samples); one tool-calling turn over a provider
+(`agent::tool_turn`, used by the synthetic-author exam and the persona-chat
+sample).
+
 Next, each an independent commit, smallest and safest first, behavior pinned by
 the tests that exist:
 
 1. The remaining generator copies (model stats, powered analysis and plan,
    speech features), bit-identical streams only.
-2. The blocking typed-call helper the Adams sample wraps around a model:
-   into the agent crate.
-3. Quotation occurrence and shared-run checks into the eval quotation
+2. Quotation occurrence and shared-run checks into the eval quotation
    verifier, replacing the copies in the Adams and Jefferson samples.
-4. Done: the resumable JSONL job log is `splinter_store::jsonl`; the synthetic-author
-   and absorb samples use it. Left to move onto it: the Adams miner, transfer and
-   reconstruct appends, the voice-loop teach log, the Jefferson application log.
-5. Family grouping by overlap and the held-out hash into the data crate,
+3. The Adams miner, transfer and reconstruct appends, the voice-loop teach log
+   and the Jefferson application log onto `store::jsonl`.
+4. Family grouping by overlap and the held-out hash into the data crate,
    keeping the hash input byte-identical so frozen exams do not change.
-6. Principle verification (quotes looked up by code, status computed from what
+5. Principle verification (quotes looked up by code, status computed from what
    was found) into knowledge, over a document trait.
-7. Scenario planning with deliberate non-fits, and the shared gate for
+6. Scenario planning with deliberate non-fits, and the shared gate for
    generated questions that must not give the source away, into knowledge.
-8. Judge calibration into eval and the document bundling for mining into
+7. Judge calibration into eval and the document bundling for mining into
    knowledge.
-9. Recall at k and the embedding adapter; the three title-case copies.
+8. Recall at k and the embedding adapter; the three title-case copies.
 
 Not moved: the Cushing OCR parser, the authorship rules, the century and name
 gates, the training apparatus of the Adams sample, the Gutenberg letter
