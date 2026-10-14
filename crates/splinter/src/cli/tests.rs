@@ -26,6 +26,23 @@ fn the_grammar_is_consistent() {
 }
 
 #[test]
+fn the_help_names_the_first_commands_to_run_and_the_worked_example() {
+    let help = Cli::command().render_long_help().to_string();
+    for first in [
+        "splinter doctor",
+        "splinter learn",
+        "splinter status",
+        "splinter ask",
+        "examples/first-run",
+    ] {
+        assert!(
+            help.contains(first),
+            "the help does not mention {first}:\n{help}"
+        );
+    }
+}
+
+#[test]
 fn doctor_takes_no_arguments() {
     assert!(matches!(command(&["doctor"]), Command::Doctor));
     assert!(parse(&["doctor", "extra"]).is_err());

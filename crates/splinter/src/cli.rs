@@ -35,7 +35,11 @@ use splinter_sdk::vocabulary::terms::UsagePolicy;
                   local:<checkpoint>[+<adapter>] or remote:<provider>/<name>; remote ones need \
                   --allow-remote. Every stage stores \
                   what it makes under the state root by content address, so any stage can be \
-                  rerun or inspected alone."
+                  rerun or inspected alone.\n\n\
+                  Start here: `splinter doctor` says whether a run can start; \
+                  `splinter learn <SOURCE> --kinds <KINDS>` learns from a document; \
+                  `splinter status` shows what the policy is now; `splinter ask <QUESTION>` \
+                  asks it. A worked example is examples/first-run."
 )]
 pub struct Cli {
     /// Flags every command takes.
@@ -94,8 +98,9 @@ pub enum Command {
     /// Show the policy in use, recent runs and what the stores hold.
     Status,
     /// Check that a run can start here: the state root is writable with room
-    /// to spare and every role's model resolves. Loads no model and uses no
-    /// network. Exits 1 when a check fails.
+    /// to spare, the policy's weights fit on a GPU, and every role's model
+    /// resolves to weights on disk. Loads no model and uses no network. Exits 1
+    /// when a check fails.
     Doctor,
     /// Capture and inspect sources.
     #[command(subcommand)]
