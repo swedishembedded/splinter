@@ -234,11 +234,6 @@ pub struct BuildRequest {
     pub limit: Option<usize>,
     /// How the writer's own text is written, for the voice view.
     pub voice: VoiceBuild,
-    /// The longest record, in tokens, the training that reads the dataset
-    /// fits ([`Projection::within_block`]): a longer one is left out and
-    /// counted as [`Exclusion::OverBlock`] instead of being refused in the
-    /// middle of a run. `None` keeps every record.
-    pub max_block: Option<usize>,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -490,9 +485,6 @@ pub fn project_with(
     if let Some(prompt) = &request.system_prompt {
         projection = projection.with_system_prompt(prompt);
     }
-    if let Some(max_block) = request.max_block {
-        projection = within_policy_block(ctx, projection, max_block);
-    }
     if let Some(passages) = passages {
         projection = with_passages(
             ctx,
@@ -504,23 +496,6 @@ pub fn project_with(
     }
     assign_groups(ctx, &corpus, &mut projection)?;
     Ok((projection, described))
-}
-
-/// `projection` without the records longer than `max_block` of the policy's
-/// own tokens, as the record's text and tool schemas are measured (the
-/// tokenizer's, else a character ratio that holds for text that tokenizes
-/// badly). The chat template's markup is not measured, so the bound is a
-/// floor on what the trainer will refuse, not the trainer's own check.
-fn within_policy_block(ctx: &Context, projection: Projection, max_block: usize) -> Projection {
-    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-    let tokens = |text: &str| {
-        counter
-            .as_ref()
-            .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
-    };
-    projection.within_block(max_block, &|record| {
-        tokens(&serde_json::to_string(&record.body).unwrap_or_default())
-    })
 }
 
 /// The terms a dataset made from `sources` comes under: the most restrictive

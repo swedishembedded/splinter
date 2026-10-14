@@ -190,12 +190,6 @@ pub struct Tuning {
     /// be chosen on something other than the monitoring loss
     /// ([`crate::checkpoints`]); only the exported one is kept otherwise.
     pub keep_evaluations: bool,
-    /// The longest training row in tokens the card fits, as a record is
-    /// measured; `None` sizes the row to the longest record. Set, a record
-    /// longer than it is named before any device is claimed and the run does
-    /// not start. A dataset built for the run leaves such records out when
-    /// it is built with the same bound ([`crate::datasets::BuildRequest::max_block`]).
-    pub max_block: Option<u32>,
 }
 
 /// One training request.
@@ -362,7 +356,7 @@ impl Trainer for BrainTrainer {
             .map(|r| (r.fit.clone(), r.share))
             .collect();
         fine_tune(&FineTune {
-            max_block: plan.tuning.max_block,
+            max_block: None,
             model_dir: &plan.base,
             train: monitored.as_ref().map_or(&split.train, |m| &m.fit),
             held_out: &split.held_out,

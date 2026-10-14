@@ -31,32 +31,28 @@ gate and lineage.
 
 ## Work, in order
 
-1. [x] Workspace environment and command runs in the sandbox; core names for the environment,
+1. Workspace environment and command runs in the sandbox; core names for the environment,
    check and task kinds.
-2. [x] Workspace verifier (fail-to-pass, pass-to-pass, protected and hidden paths) and an
+2. Workspace verifier (fail-to-pass, pass-to-pass, protected and hidden paths) and an
    exposure audit between what the solver saw and what the verifier holds.
-3. [x] Solving a task in a workspace through the existing worker; patch read back; follow-up
+3. Solving a task in a workspace through the existing worker; patch read back; follow-up
    turns from visible checks only.
-4. [x] Training view that keeps the tool definitions the agent was offered, treats follow-up
+4. Training view that keeps the tool definitions the agent was offered, treats follow-up
    turns as context, and excludes compacted, unparsed or over-length trajectories with
-   counted reasons. (The compaction and unparsed-argument exclusions read markers sven does
-   not write yet; see the dependencies below.)
-5. [~] Workspace task generation: profile and baseline qualification (twice, flaky refused),
-   mutation-seeded faults, import of fixture families; admission reuses dedup across earlier
-   generations. Remaining: faults derived from the repository's history (a fix and the test
-   that came with it, reversed).
-6. [x] The pipeline that composes them (tasks, reserve families before rollouts, solve,
-   verify, frontier, dataset, train, release) as one recorded run (`practice`), with an SDK
-   method and a CLI verb.
-7. [ ] Release for agentic suites: probes solved through the worker, serve check by agreement of
-   verdicts, adapter manifest written on release and on alias moves. Until then a `practice`
-   candidate reaches the release gate and is not released, because the gate measures
-   closed-book probes only.
-8. [ ] Tool-definition audit in sven: token cost of each tool definition, fix wrong or
+   counted reasons.
+5. Workspace task generation: profile and baseline qualification (twice, flaky refused),
+   mutation-seeded faults, history-derived faults, import of fixture families; admission
+   reuses dedup across earlier generations.
+6. The pipeline that composes them (tasks, reserve families before rollouts, solve,
+   verify, frontier, dataset, train, release) as one recorded run, with an SDK method and a
+   CLI verb.
+7. Release for agentic suites: probes solved through the worker, serve check by agreement of
+   verdicts, adapter manifest written on release and on alias moves.
+8. Tool-definition audit in sven: token cost of each tool definition, fix wrong or
    redundant ones, no additions without a measured failure.
-9. [ ] Retire the duplicates in the coding-loop sample so it keeps only supervision and calls the
+9. Retire the duplicates in the coding-loop sample so it keeps only supervision and calls the
    shared stages.
-10. [ ] Acceptance on the GPUs: plumbing on the small model, then the measured run on the 8B
+10. Acceptance on the GPUs: plumbing on the small model, then the measured run on the 8B
     model with frozen exam families, then served through brain and used from sven.
 
 Dependencies in brain (per-answer masking of tool-call turns, tool definitions carried into

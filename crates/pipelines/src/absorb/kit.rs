@@ -487,7 +487,6 @@ fn teach_records(
             export_only: false,
             limit: None,
             voice: VoiceBuild::default(),
-            max_block: None,
         },
         None,
     )?;

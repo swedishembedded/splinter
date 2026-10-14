@@ -16,7 +16,6 @@
 //! gated by that judge's stored calibration: a verdict stands only where the
 //! judge was measured precise.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use crate::judging::{controls, reference as reference_of, spaced};
@@ -29,7 +28,6 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, ExperienceId, Task};
 use splinter_core::kinds::{DENOISE, GENERAL};
 use splinter_eval::denoise::FormalVerifier;
-use splinter_eval::exposure::EXPOSURE_PRODUCER;
 use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
 };
@@ -482,7 +480,9 @@ pub(crate) fn verifiers_for(
                 MutationValidatedVerifier::new(runtimes(), MutationPolicy::default()),
             )),
             VerifierKind::Workspace => {
-                verifiers.extend(crate::workspace_verify::verifiers(ctx, task)?);
+                return Err(OrchestratorError::Refused(format!(
+                    "task kind {kind:?} is graded in a workspace, which this context does not offer"
+                )));
             }
             VerifierKind::Consistency => verifiers.push(Box::new(AgreementVerifier::new(
                 pool.to_vec(),
@@ -524,16 +524,6 @@ pub(crate) fn verifiers_for(
     Ok(Strongest::new(verifiers))
 }
 
-/// The kinds of exposure an exposure verdict's evidence names, each once.
-fn exposure_kinds(evidence: &serde_json::Value) -> BTreeSet<String> {
-    evidence["exposed"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|found| found["kind"].as_str().map(str::to_string))
-        .collect()
-}
-
 /// Verdicts appended, by outcome.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct VerdictTally {
@@ -562,16 +552,6 @@ pub struct Verified {
     pub experiences: usize,
     /// Verdicts appended, by outcome.
     pub verdicts: VerdictTally,
-    /// Experiences of a change to a repository whose trajectory shows the
-    /// solver saw what only the grader may see (the exposure audit failed
-    /// them): decided fail whatever their patch did, never trained on.
-    pub exposed: usize,
-    /// How many of those matched on each kind of exposure: `hidden_path`
-    /// (a call or output named a path only the grader holds),
-    /// `content_shingle` (an output quoted the hidden tests) or
-    /// `forbidden_string` (the state root's path). An experience that
-    /// matched on several kinds is counted under each.
-    pub exposed_by: BTreeMap<String, usize>,
     /// Experiences now decided pass.
     pub passed: usize,
     /// Experiences now decided fail.
@@ -639,17 +619,7 @@ pub fn verify_set(
         };
         let verification = verify_and_annotate(&store, &verifiers, &task, experience)?;
         for note in &verification.annotations {
-            if let AnnotationBody::Verdict {
-                outcome, evidence, ..
-            } = &note.body
-            {
-                let outcome = *outcome;
-                if outcome == Outcome::Fail && note.producer.name == EXPOSURE_PRODUCER {
-                    report.exposed += 1;
-                    for kind in exposure_kinds(evidence) {
-                        *report.exposed_by.entry(kind).or_default() += 1;
-                    }
-                }
+            if let AnnotationBody::Verdict { outcome, .. } = note.body {
                 match outcome {
                     Outcome::Pass => report.verdicts.pass += 1,
                     Outcome::Fail => report.verdicts.fail += 1,

@@ -97,7 +97,6 @@ fn solve_with(test: &str, reference: ModelRef, width: usize) -> (usize, Vec<Stri
             sampling: SamplingChoice::Own,
             teacher: false,
             system: None,
-            work: splinter_agent::work::WorkProtocol::default(),
             deadline: None,
             cancel: CancelToken::new(),
         },

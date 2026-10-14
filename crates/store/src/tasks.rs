@@ -47,10 +47,7 @@ pub struct TaskEntry {
     /// The generator that produced it, as an experience's provenance names
     /// a generator; `None` when none is known.
     pub generator: Option<String>,
-    /// The digest of the prompt its generator was sent, when there was one;
-    /// for a generator built by code, the digest of what it was given to
-    /// make this task from (a change to a family of a snapshot), which is
-    /// what a later run recognises a task it already holds by.
+    /// The digest of the prompt its generator was sent, when there was one.
     pub prompt: Option<Digest>,
     /// The task this one is a variant of - the same fact asked in other
     /// words, to be graded by the same verifiers and never trained on;

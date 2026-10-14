@@ -142,9 +142,17 @@ class Gate(unittest.TestCase):
         out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "brain", "kind": None}))
         self.assertIn("eval -> brain", out)
 
-    def test_a_brain_crate_beyond_the_sdk_is_refused(self):
-        out = self.failures(lambda a, p, f: p[3]["deps"].append({"name": "brain-core", "kind": None}))
-        self.assertIn("model -> brain-core", out)
+    def test_the_allowed_crate_may_use_any_crate_of_brain(self):
+        def mutate(a, p, f):
+            p[3]["deps"].append({"name": "brain-core", "kind": None})
+            p[3]["deps"].append({"name": "gpu-core", "kind": None, "source": "git+https://github.com/swedishembedded/brain?rev=abc#abc"})
+        self.assertEqual(self.failures(mutate), "")
+
+    def test_a_crate_that_is_not_allowed_may_use_no_crate_of_brain(self):
+        out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "gpu-core", "kind": None, "source": "git+https://github.com/swedishembedded/brain?rev=abc#abc"}))
+        self.assertIn("eval -> gpu-core", out)
+        out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "brain-core", "kind": None}))
+        self.assertIn("eval -> brain-core", out)
 
     def test_only_an_allowed_crate_depends_on_sven(self):
         def mutate(a, p, f):

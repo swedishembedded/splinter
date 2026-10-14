@@ -20,8 +20,9 @@
 #     no longer exists) is itself a failure: delete it when the underlying
 #     issue is fixed.
 #   - A declared internal dependency must be named by the crate's sources.
-#   - Only the crates in [brain].allowed depend on brain, and only on its
-#     public SDK, the `brain` crate - never an internal `brain-*` crate.
+#   - Only the crates in [brain].allowed depend on brain. They may use any
+#     crate of its repository: they instantiate the SDK's higher-level
+#     primitives first and reach the state of the whole system through them.
 
 [tiers]
 # Ordered low -> high.

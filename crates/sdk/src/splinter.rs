@@ -15,7 +15,6 @@ use serde::Serialize;
 use splinter_orchestrator::runs::{record, Recorded, Recorder};
 use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
-use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
 use splinter_pipelines::train::{BrainTrainer, Trainer};
 
 /// Receives each stage's summary as it finishes: `(stage, summary)`.
@@ -128,16 +127,5 @@ impl Splinter {
     /// `learn`, training with this handle's trainer.
     pub fn learn(&self, request: &LearnRequest) -> Result<Learned, OrchestratorError> {
         learn(&self.context(), request, self.trainer())
-    }
-
-    /// `practice`, training with this handle's trainer: a revision of a
-    /// repository made into tasks, solved by the policy as an agent in
-    /// copies of its tree, trained on what its own checks confirm and
-    /// released if it passes the gate.
-    pub fn practice(
-        &self,
-        request: &PracticeRequest,
-    ) -> Result<Recorded<PracticeReport>, OrchestratorError> {
-        practice(&self.context(), request, self.trainer())
     }
 }

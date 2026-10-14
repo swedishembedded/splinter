@@ -17,8 +17,11 @@
      from `from` over normal dependencies, at any depth. `to` is a workspace
      crate or an external one (named by a direct dependency of any crate on
      the way).
-  3. Only the crates in `[brain].allowed` depend on brain, and only on its
-     public SDK, `brain`: an internal `brain-*` crate is refused.
+  3. Only the crates in `[brain].allowed` depend on brain. They may use any
+     crate of the brain repository: they instantiate its SDK's primitives
+     first and reach the state of the whole system through them. A brain
+     crate is `brain`, a `brain-*` crate, or any crate sourced from brain's
+     repository.
   4. Only the crates in `[sven].allowed` depend (normally) on sven, and only
      on its public SDK, `sven-sdk`: an internal `sven-*` crate is refused.
      A dev-dependency may drive sven directly, so a test can script an agent.
@@ -138,16 +141,23 @@ def _forbidden(arch, internal, external):
     return failures
 
 
+BRAIN_REPOSITORY = "git+https://github.com/swedishembedded/brain"
+
+
+def _is_brain_crate(dep):
+    name = dep["name"]
+    return name == "brain" or name.startswith("brain-") or (dep.get("source") or "").startswith(BRAIN_REPOSITORY)
+
+
 def _brain(arch, packages):
     failures = []
     allowed = set(arch.get("brain", {}).get("allowed", []))
     for pkg in packages:
+        if pkg["name"] in allowed:
+            continue
         for dep in pkg["deps"]:
-            name = dep["name"]
-            if name.startswith("brain-"):
-                failures.append(f"{pkg['name']} -> {name}: a brain crate beyond the public SDK; use `brain`, and publish what it lacks in the brain SDK")
-            elif name == "brain" and pkg["name"] not in allowed:
-                failures.append(f"{pkg['name']} -> brain: only {', '.join(sorted(allowed))} may depend on brain")
+            if _is_brain_crate(dep):
+                failures.append(f"{pkg['name']} -> {dep['name']}: only {', '.join(sorted(allowed))} may depend on brain")
     return failures
 
 
@@ -218,7 +228,7 @@ def _workspace():
     meta = json.loads(out)
     packages, dirs = [], {}
     for p in meta["packages"]:
-        packages.append({"name": p["name"], "deps": [{"name": d["name"], "kind": d["kind"]} for d in p["dependencies"]]})
+        packages.append({"name": p["name"], "deps": [{"name": d["name"], "kind": d["kind"], "source": d.get("source")} for d in p["dependencies"]]})
         dirs[p["name"]] = os.path.dirname(p["manifest_path"])
 
     cache = {}

@@ -51,7 +51,6 @@ use crate::exam_session;
 use crate::learn_output;
 use crate::learn_request::learn_request;
 use crate::output::{self, emit, shell_words};
-use crate::practice_request::practice_request;
 
 /// How an invocation ended; see the crate documentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -238,16 +237,6 @@ impl Session {
                     Learned::Ran(run) => run.report.finished(release_asked),
                 };
                 return Ok(if finished { Exit::Ok } else { Exit::Failed });
-            }
-            Command::Practice(args) => {
-                let release_asked = !args.no_release;
-                let practiced = self.splinter.practice(&practice_request(*args))?;
-                emit(json, &practiced);
-                return Ok(if practiced.report.finished(release_asked) {
-                    Exit::Ok
-                } else {
-                    Exit::Failed
-                });
             }
             Command::Ask(args) => {
                 let retrieve = &args.retrieval;
@@ -507,7 +496,6 @@ impl Session {
                             cancel: CancelToken::new(),
                         }),
                     },
-                    max_block: None,
                 };
                 emit(
                     json,

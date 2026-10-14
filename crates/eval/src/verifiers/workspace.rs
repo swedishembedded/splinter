@@ -107,14 +107,6 @@ pub struct WorkspaceCheck {
 }
 
 impl WorkspaceCheck {
-    /// The check `task` carries and the digest of the item it was read from;
-    /// `None` when it carries none, an error when it carries one that is not
-    /// a usable check (more than one, no fail-to-pass command, an empty
-    /// command, or a path outside the tree).
-    pub fn of_task(task: &Task) -> Result<Option<(Digest, Self)>, VerifyError> {
-        parse_check(task)
-    }
-
     /// This check as the privileged item a task carries: kind
     /// [`WORKSPACE_CHECK`], content the canonical JSON of the check.
     pub fn as_check(&self) -> Result<Privileged, serde_json::Error> {
@@ -483,7 +475,7 @@ fn clear_caches(dir: &Path) {
 
 /// Lays the tar at `archive` (whose content must be `digest`) over `tree`,
 /// replacing the files it holds.
-pub fn lay_over(archive: &Path, digest: &Digest, tree: &Path) -> Result<(), VerifyError> {
+fn lay_over(archive: &Path, digest: &Digest, tree: &Path) -> Result<(), VerifyError> {
     let failed = |detail: String| VerifyError::Failed {
         producer: WORKSPACE_PRODUCER.into(),
         source: format!("laying {} over the tree: {detail}", archive.display()).into(),

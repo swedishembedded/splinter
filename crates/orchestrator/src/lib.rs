@@ -15,8 +15,6 @@
 //! * [`concurrency`] - bounded fan-out of work, results in order.
 //! * [`context`] - a [`Runtime`] shared by a process and a [`Context`] for
 //!   one command.
-//! * [`environments`] - the runtimes and workspaces tasks are solved and
-//!   checked in.
 //! * [`roles`] and [`model_ref`] - who plays each role, and what a model
 //!   reference resolves to under the configuration.
 //! * [`runs`] - the recorded run and its cross-process cancel.
@@ -39,7 +37,6 @@ pub mod concurrency;
 pub mod config;
 pub mod context;
 pub mod embedding;
-pub mod environments;
 pub mod error;
 pub mod generation;
 pub mod ids;
