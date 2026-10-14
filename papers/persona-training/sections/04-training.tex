@@ -1,0 +1,78 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+\section{Training pipeline}\label{sec:training}
+
+The pipeline starts from the kept essays and the list of cases each tells. It does not use the
+oracle, the beliefs or the episodes' facts; those return only when the result is graded
+(\cref{sec:grading}) and when the extraction is audited (\cref{sec:audit}).
+
+\subsection{Reading decisions out of essays}\label{sec:mining}
+
+A reader, the same small hosted language model that wrote the essays, reads each essay with
+the list of cases it tells and is asked to write for each case:
+\begin{itemize}
+\item a \emph{briefing} of 40 to 90 words, plain and neutral, of what the essay states about
+  the situation before the narrator acted, in its own words and with nothing about what he
+  did or why;
+\item whether an outside house offered help, and whether the essay states each of the five
+  other facts (true, false, or not said);
+\item what the narrator did, as one of the four ways to act or ``unclear'';
+\item up to three \emph{reasons}: sentences copied word for word from the essay in which the
+  narrator says why he did it.
+\end{itemize}
+Code decides what is kept. A case the reader did not write up, or found unclear, is turned
+away, and so is a briefing of fewer than 20 words. A reason is kept only if its words, under
+the normalisation of the copying gates, occur as a contiguous run in the paragraphs of the
+essay that name the case; other reasons are dropped. A case whose briefing contains six
+consecutive words of a kept reason is turned away, because the briefing then gives the
+decision away. The oracle is not consulted: a decision the reader reads wrongly is kept if it
+passes these checks (\cref{sec:audit} measures how often that happened).
+
+\subsection{Records through several tool schemas}\label{sec:records}
+
+Each kept decision becomes chat records in which only the assistant's turn is trained on. A
+record has the plain system turn of \cref{sec:arms}, a user turn that gives a briefing, lists
+the options and asks the model to decide by calling a tool, and an assistant turn that is the
+tool call. The call names the option the narrator took, in the tool's own labels, and carries
+as its reason argument the first kept reason (empty if none survived). Only that tool's
+definition is offered.
+
+A decision has up to two briefings: the reader's, and, when the reader reported all five
+facts other than the offer as stated, a fixed-wording briefing, ``A matter arose over
+\textless case\textgreater.'' followed by the fact sentences the examination uses, with ``An
+outside house'' in place of the house's name. The fixed-wording briefing therefore carries the
+facts as the reader reported them, in the examination's fact sentences, but not the
+examination's scene-setting sentences. Each briefing is made into one record for each of the
+three training tools (\code{decide}, \code{choose\_course} and \code{rule\_on\_matter}). A
+decision therefore yields three or six records (\cref{tab:corpora}). The options listed are
+the three ways open in every case, with acceptance of outside help added when the reader
+reported an offer, in an order shuffled deterministically from the case; a training record
+thus lists three or four options, where an examination item lists three in a fixed order. With
+a letter-labelled tool, the letter is the option's position in the shuffled list. The two
+withheld tools of the examination appear in no record.
+
+\subsection{LoRA training}\label{sec:lora}
+
+The policy is Qwen3-8B \citep{yang2025qwen3}, trained and examined in non-thinking mode, with
+its base weights held in bf16. The adapter is a LoRA \citep{hu2022lora} of rank 16 and alpha
+32, trained for 240 optimizer steps, each averaging the gradients of four records, at the
+trainer's default peak learning rate (recorded as \TrainLearningRate\ in the training record of
+author 101; the other two runs used the same command), with no weight decay, no replay of other
+data and the trainer's default seed. Before training, about a tenth of the cases are held out
+with all their records: they are never trained on, and the token loss and token accuracy of
+the assistant turns on them are measured before and after training. The adapter is thus
+trained on about nine tenths of the kept decisions. One adapter is trained per author, once,
+on one 24~GB GPU (\cref{tab:training}); 240 steps of four records are \TrainPassesA,
+\TrainPassesB\ and \TrainPassesC\ passes over the training records of authors 101, 202 and 303.
+
+\begin{table}[t]
+\centering\small
+\input{tab_training}
+\caption{Training of the three adapters. Elapsed time runs from the start of the command and
+includes loading the model and the scoring of the held-out records before training. The loss at step
+240 is that single step's value, not an average. The held-out token loss and accuracy (before
+$\to$ after training) exist for author 101 only: for authors 202 and 303 the adapter was
+written but the scoring after training did not complete.}
+\label{tab:training}
+\end{table}

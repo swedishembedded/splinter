@@ -1,0 +1,80 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+\section{Discussion}\label{sec:discussion}
+
+\paragraph{What the adapter does.}
+For each of three authors, an adapter trained on decisions read out of the author's essays
+takes the author's decision on \AccATuned, \AccBTuned\ and \AccCTuned\ of examination items,
+against one third for a uniform guess and \AccABase, \AccBBase\ and \AccCBase\ for the same model
+without the adapter. Every item is a case absent from the training data, and 140 of the 160
+items also have a withheld topic, combination of facts and options, or tool schema.
+The lowest of the adapter's six per-axis cells is above the highest cell of the base, named
+and principles arms for every author (\cref{sec:cells}). Only one of nine seen-minus-new gaps
+differs from zero by its interval: author 202 on the withheld tools. What the measurements
+establish is this behaviour on the examination: the adapter takes the oracle's decision on
+withheld topics, combinations and tools far more often than the unadapted model. They
+establish nothing about the form in which the adapter holds the beliefs; no experiment here
+reads the beliefs out of the weights.
+
+\paragraph{Information in the prompt.}
+The base model told the author's name moves little (by \LiftANamed, \LiftBNamed\ and
+\LiftCNamed\ items). The base model given the author's four beliefs as statements in order of
+priority reaches \AccAPrinciples, \AccBPrinciples\ and \AccCPrinciples. The adapter exceeds it
+for each author by at least \LeadPtsTunedPrinciplesA\ points (author 101; more for the
+others) without the beliefs in its prompt. The principles prompt states the beliefs in prose
+but not when each belief favours or forbids which option, nor how the oracle combines them;
+the measurements show that the base model given this prompt does not reproduce the oracle's
+decisions, and they do not separate the causes (the prose of the statements, the missing
+verdict rules, or how the model applies an order of priority).
+
+\paragraph{Retrieval.}
+The retrieval arm gives the base model, at answer time, the six essay paragraphs that share
+the most vocabulary with the situation under BM25. Its count rises by \LiftARetrieval,
+\LiftBRetrieval\ and \LiftCRetrieval\ items over the base model, more than the named or the
+principles prompt gives. The adapter's lead over retrieval is \LeadPtsTunedRetrievalA,
+\LeadPtsTunedRetrievalB\ and \LeadPtsTunedRetrievalC\ points; for author 101 the discordant items
+split \OnlyFirstTunedRetrievalA\ to \OnlySecondTunedRetrievalA\ ($p=\PTunedRetrievalA$), so for
+that author the measurements show neither that fine-tuning beats retrieval nor that retrieval
+beats fine-tuning. Retrieval's accuracy varies more across the three authors (\AccARetrieval,
+\AccBRetrieval\ and \AccCRetrieval) than the adapter's (\AccATuned, \AccBTuned\ and \AccCTuned).
+The study contains no ablation of the retrieval arm, so it does not say which content of the
+retrieved paragraphs the model uses, nor why retrieval is stronger for one author than for
+another.
+
+\paragraph{Divergence.}
+Adapters trained on different authors take their own author's decision more often than the
+compared author's where the two disagree, in every one of the nine comparisons, including
+against the author holding every belief the opposite way (\cref{tab:cross}). The largest
+share of the compared author's decisions is Kalian Fenley's adapter taking Maren Selmere's
+decision on 17 of 49 items; these two authors hold two beliefs in the same reading (the
+strict reading of \code{haste}, first in both orders, and the lax reading of
+\code{self\_reliance}). Which decision an adapter takes where authors disagree thus depends,
+in these comparisons, on the author whose essays it was trained on.
+
+\paragraph{Extraction noise.}
+\AuditDisagreeAll\ of the \AuditKeptAll\ decisions the reader extracted
+(\AuditDisagreeRateMin\% to \AuditDisagreeRateMax\% per author) disagree with the oracle, and
+the adapters were trained on them. The decision in a training record is the one the reader
+extracted, and every essay it was extracted from had been kept only after an earlier reading
+by the same model agreed with the oracle on every case. No adapter
+was trained on audited decisions, so the effect of the remaining noise on accuracy is not
+measured.
+
+\paragraph{Scope of validity.}
+The essays are written by a language model, not by a person, from case files that fix the
+facts and the decision, and they are kept only when a reading of them agrees with the oracle,
+so every kept essay tells the decision the oracle dictates for each case it narrates; a
+person's writing is not filtered this way. The writer, the gate's reader and the extracting
+reader are one model, so an error that model makes consistently in writing and reading would
+not be caught by the gates. The beliefs are four of six formal tenets applied by a fixed rule,
+and the world is the same for every author: twelve topics, six tenets, four ways to act and
+fixed sentences for the facts. A withheld topic is a different subject within that world, and
+a withheld tool is a different schema for the same kind of call; the study does not test a
+different world or a different kind of judgment. The examination grades the option chosen,
+not the reason given, and says nothing about the author's style or voice. The quotation gate
+catches recitation of a belief, not a paraphrase of one. Each author was trained once, with
+one policy model of 8B parameters, so the intervals describe the examination's sampling of
+items and not the variation between training runs, and three authors are three replications,
+not a sample from which a rate across authors can be estimated. The retrieval arm is a single
+configuration: BM25 over paragraphs, six per situation.

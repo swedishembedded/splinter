@@ -1,69 +1,73 @@
 % SPDX-License-Identifier: CC-BY-4.0
-% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
 
-\section{Related Work}\label{sec:related}
+\section{Related work}\label{sec:related}
 
-\paragraph{Persona and author fine-tuning.}
-Character-LLM~\citep{shao2023characterllm} trains agents for historical and fictional
-characters on scenes written from character profiles; RoleLLM~\citep{wang2023rolellm}
-builds a role-playing benchmark and fine-tunes on role-conditioned instructions; Ditto
-\citep{lu2024ditto} has an instruction-following model simulate role-play dialogues as
-reading comprehension (self-alignment). All three train on text a model wrote about the
-character. Training on a prompted teacher's answers resembles context
-distillation~\citep{askell2021general}, which trains a model to behave as if a prompt were
-present; one would therefore not expect such a student to exceed the prompted teacher, and
-our pilot exams do not show it doing so (\cref{sec:results}). A closer relative of our voice data is the study of
-\citet{chakrabarty2025readers}, who fine-tune a commercial model on authors' complete
-works and report that, after fine-tuning, expert and general readers prefer the output over
-expert human writers, whereas output obtained by prompting was strongly disfavoured by the
-expert readers; \citet{schwitzgebel2023dennett} fine-tuned GPT-3 on a philosopher's writings
-and asked participants, among them experts, to pick his real answer among four model
-answers. Both evaluate with human readers; no human labels were collected for this paper
-(\cref{sec:limits}).
+\paragraph{Models that take on a character or a population.}
+Character-LLM trains language models to embody specific historical characters from
+constructed profiles and experiences and evaluates how well they retain character knowledge
+\citep{shao2023characterllm}. RoleLLM contributes a framework (profile construction,
+instruction generation, style imitation, fine-tuning) and a dataset for benchmarking and
+improving role-playing \citep{wang2023rolellm}, and \citet{shanahan2023roleplay} propose
+role-play as a framing for the behaviour of dialogue agents. For groups of people,
+\citet{santurkar2023whose} quantify how far language-model opinions align with 60 US
+demographic groups using opinion polls, \citet{argyle2023outofone} show that a model
+conditioned on demographics can emulate the response patterns of human subgroups, and
+Twin-2K-500 releases answers of 2,058 participants to over 500 questions for building and
+validating digital twins \citep{toubia2025twin2k500}. The reference in these evaluations is
+retained knowledge of a character or survey answers. Here the reference is the output of a
+program whose beliefs are hidden from the model and fixed by construction.
 
-\paragraph{Knowledge versus behaviour in fine-tuning.}
-Fine-tuning on a few hundred examples is a poor way to add facts. Allen-Zhu and
-Li~\citep{allenzhu2023physics} show, in a controlled synthetic setting, that knowledge
-is reliably extractable only if each fact is augmented (for example paraphrased) during
-pretraining; synthetic continued pretraining~\citep{yang2024synthetic} expands a small document
-collection into a much larger synthetic corpus before training; \citet{ovadia2023finetuning} find retrieval
-beats unsupervised fine-tuning for injecting knowledge; and \citet{gekhman2024new} find
-that, as fine-tuning examples with knowledge new to the model are learned, the model's
-tendency to hallucinate increases. RAFT
-\citep{zhang2024raft} trains with distractor documents to use retrieved passages. These
-results motivate our objective: the adapter should carry voice and judgment, and
-facts should come from the sources at inference. Our pipeline has retrieval-conditioned
-and abstention records, but the system measured in this paper is parametric only.
+\paragraph{Inferring principles and preferences from behaviour.}
+Apprenticeship learning recovers an expert's unknown reward from demonstrations
+\citep{abbeel2004apprenticeship}, maximum-entropy inverse reinforcement learning gives a
+distribution over decisions \citep{ziebart2008maxent}, and deep reinforcement learning from
+human preferences learns tasks from comparisons of trajectories \citep{christiano2017deep}.
+Constitutional AI trains assistants from a list of principles
+\citep{bai2022constitutional}, and Inverse Constitutional AI extracts interpretable
+principles from preference data \citep{findeis2025inverse}. Our principles arm puts a
+list of principles in the prompt; the benchmark asks whether the principles can instead be
+left implicit in the author's decisions and still be taken up by a fine-tuned model. \citet{treutlein2024connecting} show that language models can infer and
+verbalise latent structure from scattered implicit information in their training documents
+without in-context learning. We test decisions rather than verbalisation, in the same
+spirit: the beliefs of our authors are never stated in the corpus and are implicit in what
+the narrator does.
 
-\paragraph{Evaluation statistics.}
-\citet{card2020power} show that underpowered evaluations are common in NLP and give
-power-analysis practice; \citet{miller2024errorbars} argues that evaluations should be analysed as statistical trials, and advocates paired differences, clustered standard errors and power analysis
-before the evaluation. Our exam design follows both. Multiple secondary comparisons are
-corrected with Holm's procedure~\citep{holm1979}. Deduplication and leakage are well known
-to inflate scores~\citep{lee2022dedup}; our family rule extends this to overlapping
-editions.
+\paragraph{Fine-tuning and retrieval for new knowledge.}
+\citet{ovadia2023finetuning} compare unsupervised fine-tuning with retrieval-augmented
+generation \citep{lewis2020rag} for injecting knowledge and find retrieval consistently
+better for both existing and new knowledge. \citet{allenzhu2023physics31} show in a
+controlled study that knowledge must be augmented, for example paraphrased, to be reliably
+extractable in pretraining, and \citet{yang2024syntheticcpt} propose synthetic continued
+pretraining to learn from small specialised corpora. Our retrieval arm is the corresponding
+baseline for judgment: the base model is handed the essay paragraphs that share the most with
+the situation under BM25 \citep{robertson2009bm25}. The adapter here is trained on supervised
+decision records read out of the essays, not on the essays themselves.
 
-\paragraph{Judges.}
-\citet{zheng2023judging} document position, verbosity and self-enhancement biases of
-model judges and find that showing the judge a reference answer reduces its errors on math
-and reasoning questions; controlling for length raised the agreement of an automatic
-evaluator with human preference rankings~\citep{dubois2024lc}. Our judge is reference-based,
-pointwise (so there is no order of answers to bias), and overridden by deterministic checks;
-it decodes greedily only from its fourth version on, and length is controlled only by a
-like-length sub-test of the powered exam (\cref{sec:exam-versions}). The judge and policy share a model family,
-which is a known risk we cannot rule out (\cref{sec:threats}).
+\paragraph{Compositional hold-out.}
+SCAN shows that sequence-to-sequence models generalise shallowly and fail systematic
+composition \citep{lake2018scan}, and COGS evaluates generalisation to novel combinations in
+semantic parsing \citep{kim2020cogs}. We apply the same discipline to judgment: about a fifth of
+the combinations of facts and options, and two of twelve topics, are never told in any essay.
 
-\paragraph{Training mechanics.}
-LoRA~\citep{hu2021lora} behaves differently from full fine-tuning: it learns less and forgets
-less~\citep{biderman2024lora}; its best learning rate is about ten times that of full
-fine-tuning and changes by less than a factor of two between ranks 4 and
-512~\citep{schulman2025lora}, which also finds LoRA works best applied to all weight
-matrices, the MLP ones in particular. A thousand curated examples suffice to teach format
-and style because almost all knowledge is learned in pretraining~\citep{zhou2023lima}, and
-alignment-tuned models decode nearly identically to their base models at most token
-positions, the differences being mostly stylistic tokens~\citep{lin2024urial}; by analogy,
-a stylistic fine-tune may leave aggregate token accuracy nearly flat, so that measure says
-little about voice. Learning-rate re-warming and re-decaying with replay limit forgetting
-in continual pretraining~\citep{ibrahim2024continual}. We use these as the
-sources of the corrections in \cref{sec:training-defects}, not as proof that each
-correction helps on our data: none of them has been ablated here.
+\paragraph{Tool use.}
+Toolformer trains language models to decide when and how to call external APIs
+\citep{schick2023toolformer}, Gorilla fine-tunes a model to write API calls
+\citep{patil2023gorilla}, and ToolLLM provides an instruction-tuning dataset from more than
+16,000 real APIs \citep{qin2023toolllm}. The Berkeley Function Calling Leaderboard grades
+calls by comparing their abstract syntax trees \citep{patil2025bfcl}. We use the call as the carrier
+of a decision and grade the option it names; the tool schema is a held-out axis, so that a
+decision taken correctly through a withheld schema cannot have been copied from the form of a
+training call.
+
+\paragraph{Synthetic training data and evaluation statistics.}
+Self-Instruct bootstraps instruction-following data from a model's own generations
+\citep{wang2023selfinstruct}, and phi-1 is a small code model trained on textbook-quality and
+synthetic data \citep{gunasekar2023textbooks}. Our corpora are model-written, but the
+decisions in them are fixed by an oracle and checked by code. LoRA \citep{hu2022lora}
+supplies the adapter. For statistics we report a Wilson interval \citep{wilson1927probable}
+with every accuracy and Newcombe's hybrid score interval for differences between cells
+\citep{newcombe1998interval}, as error bars are advised for language-model evaluations
+\citep{miller2024errorbars}, and treat the choice of significance test as a decision to be
+justified \citep{dror2018hitchhiker}: the paired sign test is exact, assumes no distribution,
+and uses only whether each of two arms was right on an item.

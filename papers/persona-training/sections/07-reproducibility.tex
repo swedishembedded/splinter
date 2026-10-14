@@ -1,0 +1,97 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+\section{Reproducibility}\label{sec:reproducibility}
+
+The software is the open-source Splinter pipeline; the study is its sample
+\code{samples/synthetic-author}. An author, its corpus plan, its examination and every
+reference answer are functions of the seed and the planned article count; nothing generated
+is checked in. Model references are given as placeholders: \code{<hosted-model>} is the small
+hosted language model that writes the essays, reads them for the gate and extracts the
+decisions (reached with \code{-{}-allow-remote}); the policy is Qwen3-8B at \code{\$QWEN3\_8B}.
+The hosted model is sampled at its provider's defaults, so a rerun writes different essays;
+the plan, the oracle, the examination and the grading are reproduced exactly.
+
+\subsection{Subcommands}
+
+\begin{description}
+\item[\code{persona}] draws the author of a seed and prints its name, its beliefs in order and a few of its decisions.
+\item[\code{plan}] lists the cases each article of a corpus tells, with the decision, deciding
+  belief, facts and options of each.
+\item[\code{corpus}] writes the essays under the gates of \cref{sec:corpus}, within a budget of
+  requests and estimated output tokens.
+\item[\code{mine}] reads the decisions out of the essays (\cref{sec:mining}).
+\item[\code{dataset}] makes the training records (\cref{sec:records}).
+\item[\code{train}] holds out a tenth of the cases and trains the adapter (\cref{sec:lora}).
+\item[\code{exam}] puts the examination to one arm and appends each answer to
+  \code{exam/<arm>.jsonl}; the first answer recorded for an item stands.
+\item[\code{report}] tabulates the arms of one author with Wilson intervals and the six paired
+  tests.
+\item[\code{cross}] prints the divergence table of \cref{tab:cross}.
+\end{description}
+
+\subsection{Commands}
+
+For seed $S\in\{101,202,303\}$, with a corpus directory \code{\$C} and an examination
+directory \code{\$E} whose \code{articles/} is a copy of the corpus's \code{articles/} (the
+retrieval arm indexes it):
+\begin{verbatim}
+synthetic-author persona --seed $S
+synthetic-author corpus --seed $S --cache $C --writer <hosted-model> \
+  --reader <hosted-model> --allow-remote --articles 60 \
+  --episodes-per-article 3 --min-words 700 --attempts 4 \
+  --max-calls <N> --max-output-tokens <M> --workers <W>
+synthetic-author mine --cache $C --miner <hosted-model> --allow-remote
+synthetic-author dataset --seed $S --cache $C
+synthetic-author plan --seed $S --articles 60 > plan.jsonl
+python3 scripts/audit.py plan.jsonl $C/decisions.jsonl
+synthetic-author train --cache $C --base $QWEN3_8B --steps 240 \
+  --rank 16 --alpha 32 --records-per-step 4 --bf16
+for ARM in base named principles retrieval; do
+  synthetic-author exam --seed $S --cache $E --base $QWEN3_8B --arm $ARM \
+    --articles 100 --per-cell 40 --max-tokens 256
+done
+synthetic-author exam --seed $S --cache $E --base $QWEN3_8B --arm tuned \
+  --adapter $C/train/adapter.safetensors --articles 100 --per-cell 40 \
+  --max-tokens 256
+synthetic-author report --cache $E
+synthetic-author cross --exams <dir> --seeds 101,202,303 --articles 100
+\end{verbatim}
+The corpora were planned with 60 articles. The examination and the divergence table are drawn
+with \code{-{}-articles 100}: that value fixes which case names an item may not take, so it must
+be the same for \code{exam} and \code{cross}, and it is the value the reported examinations
+were drawn with. Here \code{<dir>} holds one examination directory per author, named
+\code{author-<seed>}. The audit matches each decision to the plan by article and case with
+\code{scripts/audit.py}.
+
+\subsection{Data and tables}
+
+\begin{description}
+\item[\code{data/arms.csv}, \code{data/cells.csv}, \code{data/paired.csv}] items right per arm,
+  per cell and per pair, made from the examination outputs by
+  \code{scripts/collect.py EXAMS\_DIR data 101,202,303}, where \code{EXAMS\_DIR} holds
+  \code{author-<seed>/exam/<arm>.jsonl}.
+\item[\code{data/cross.csv}] the table printed by \code{cross}.
+\item[\code{data/audit.csv}] the counts printed by \code{scripts/audit.py}.
+\item[\code{data/corpora.csv}] per corpus: planned articles, essays kept and given up, words,
+  writing and reading requests (whose sum is the request count in the corpus directory's
+  \code{usage.json}), the lines of \code{rejected.jsonl} by reason, and the essays mined,
+  cases read, decisions kept, fixed-wording briefings and records of \code{mine} and
+  \code{dataset}.
+\item[\code{data/training.csv}] the records trained on and held out (\code{train/train.jsonl}
+  and \code{train/held\_out.jsonl}), the loss and elapsed time logged at step 240, the
+  learning rate and the held-out scores of the training record where it was written.
+\item[\code{data/authors.csv}] the output of \code{persona}.
+\item[\code{data/cost.csv}] the estimated token counts of \code{usage.json}.
+\item[\code{data/spend.csv}] the provider's reported daily spend of the account before and
+  after the corpus runs.
+\end{description}
+\code{scripts/build\_data.py} (standard library only) computes the Wilson intervals, the exact
+sign tests and the Newcombe intervals from these files. It refuses to continue unless the
+tables are consistent with one another (cells add up to arms, discordant counts agree with
+the right counts, the request and rejection counts of each corpus reconcile, records equal
+three per briefing, the audit covers the decisions kept, trained and held-out records add up
+to the records made) and the derived values equal those recorded when the examinations were
+run. It writes the LaTeX tables, the macros and the plot data under the build directory.
+\code{make} in \code{papers/persona-training} builds \code{target/papers/persona-training.pdf};
+nothing is written into the paper's directory.

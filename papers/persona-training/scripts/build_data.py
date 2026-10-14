@@ -4,26 +4,84 @@
 #
 # Swedish Embedded AB implements the measurement of fine-tuned language
 # models for its clients. If your team needs expertise in sizing and
-# analysing a small paired evaluation, you can procure our services by
-# sending an email to info@swedishembedded.com.
+# analysing a paired evaluation with honest statistics, you can procure our
+# services by sending an email to info@swedishembedded.com.
 
-"""Builds everything the paper's tables and figures show from data/*.csv.
+"""Builds everything the paper's tables, figure and numbers show from data/*.csv.
 
-Nothing here is typed by hand into the paper: the measured counts live in
-data/, the exact statistics derived from them are computed here (standard
-library only), and the output goes to generated/ as LaTeX tables, pgfplots
-data and a macro file. To update a result, edit its row in data/ and run
-`make`.
+usage: build_data.py [OUT_DIR]
+
+Nothing is typed by hand into the paper: the measured counts live in data/
+(arms, cells and paired come from scripts/collect.py), the statistics derived
+from them are computed here with the standard library only (Wilson intervals,
+exact one-sided binomial sign tests, Newcombe intervals), and the output goes
+to OUT_DIR as LaTeX tables, pgfplots data and a macro file. The script refuses
+to run when the tables are inconsistent with one another or when a derived
+statistic differs from the value recorded when the measurements were taken.
 """
 
 import csv
 import sys
-from math import comb
+from math import comb, sqrt
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
-OUT = ROOT / "generated"
+DEFAULT_OUT = ROOT.parent.parent / "target" / "papers" / ".build" / "persona-training" / "gen"
+
+SEEDS = [101, 202, 303]
+LETTER = {101: "A", 202: "B", 303: "C"}
+ARMS = ["base", "named", "principles", "retrieval", "tuned"]
+ARM_LABEL = {
+    "base": "base", "named": "named", "principles": "principles",
+    "retrieval": "retrieval", "tuned": "tuned",
+}
+CELLS = ["topic_seen", "topic_new", "combo_seen", "combo_new", "tool_seen", "tool_new"]
+CELL_LABEL = {
+    "topic_seen": "topic seen", "topic_new": "topic new",
+    "combo_seen": "combination seen", "combo_new": "combination new",
+    "tool_seen": "tool seen", "tool_new": "tool new",
+}
+AXES = [("topic", "topics"), ("combo", "combinations"), ("tool", "tools")]
+PAIRS = [
+    ("tuned", "base"), ("tuned", "named"), ("tuned", "principles"),
+    ("tuned", "retrieval"), ("retrieval", "base"), ("principles", "base"),
+]
+POOLED_PAIRS = PAIRS[:4]
+EXAM_ITEMS = 160
+CELL_ITEMS = 80
+Z = 1.96
+GAP = "@@gap"  # marks a table row that is followed by extra vertical space
+
+# Values recorded when the examinations were run, at the precision they were
+# recorded: the derived statistics must reproduce them.
+RECORDED_WILSON_TUNED = {101: (0.801, 0.907), 202: (0.711, 0.838), 303: (0.718, 0.844)}
+# ("lt", bound): p below bound.  ("eq", p, decimals, discordant): p rounded.
+RECORDED_P = {
+    (101, "tuned", "base"): ("lt", 1e-4),
+    (101, "tuned", "named"): ("lt", 1e-4),
+    (101, "tuned", "principles"): ("lt", 1e-4),
+    (101, "tuned", "retrieval"): ("eq", 0.094, 3, 37),
+    (101, "retrieval", "base"): ("lt", 1e-4),
+    (101, "principles", "base"): ("eq", 0.0001, 4, None),
+    (202, "tuned", "base"): ("lt", 1e-4),
+    (202, "tuned", "named"): ("lt", 1e-4),
+    (202, "tuned", "principles"): ("lt", 1e-4),
+    (202, "tuned", "retrieval"): ("eq", 0.0009, 4, 66),
+    (202, "retrieval", "base"): ("lt", 1e-4),
+    (202, "principles", "base"): ("eq", 0.0205, 4, None),
+    (303, "tuned", "base"): ("lt", 1e-4),
+    (303, "tuned", "named"): ("lt", 1e-4),
+    (303, "tuned", "principles"): ("lt", 1e-4),
+    (303, "tuned", "retrieval"): ("lt", 1e-4),
+    (303, "retrieval", "base"): ("lt", 1e-4),
+    (303, "principles", "base"): ("eq", 0.674, 3, None),
+}
+RECORDED_DISCORDANT_TUNED_RETRIEVAL = {101: (23, 37), 202: (46, 66), 303: (57, 73)}
+
+
+def fail(message):
+    sys.exit(f"build_data.py: {message}")
 
 
 def rows(name):
@@ -38,539 +96,533 @@ def upper_tail(wins, n):
     return sum(comb(n, i) for i in range(wins, n + 1)) / 2**n
 
 
-def two_sided(a, b):
-    n = a + b
-    if n == 0:
-        return 1.0
-    return min(1.0, 2 * upper_tail(max(a, b), n))
+def wilson(right, n, z=Z):
+    """The Wilson score interval (low, high) of a proportion."""
+    p = right / n
+    denominator = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denominator
+    half = z * sqrt((p * (1 - p) + z * z / (4 * n)) / n) / denominator
+    return centre - half, centre + half
 
 
-def task_level_range(first_right, second_right, tasks):
-    """The smallest and largest one-sided exact sign p, over every split of
-    discordant tasks consistent with the marginals, for "first beats second"
-    when only each arm's count of successes over the same tasks is known.
-    Ignores family clustering; None when the first arm has no net lead."""
-    net = first_right - second_right
-    if net <= 0:
-        return None
-    ps = []
-    for second_only in range(second_right + 1):
-        first_only = net + second_only
-        if first_only > first_right or first_only + second_only > tasks:
-            continue
-        ps.append(upper_tail(first_only, first_only + second_only))
-    return min(ps), max(ps)
+def newcombe_difference(right1, n1, right2, n2):
+    """Newcombe's hybrid score interval for p1 - p2, built from the two Wilson
+    intervals: (difference, low, high)."""
+    p1, p2 = right1 / n1, right2 / n2
+    l1, u1 = wilson(right1, n1)
+    l2, u2 = wilson(right2, n2)
+    d = p1 - p2
+    return d, d - sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2), d + sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)
+
+
+def fmt3(x):
+    return f"{x:.3f}"
 
 
 def fmt_p(p):
-    return f"{p:.1e}".replace("e-0", "e-") if p < 1e-3 else f"{p:.3f}"
+    """A p-value to three significant digits; very small ones in scientific form."""
+    if p < 1e-3:
+        mantissa, exponent = f"{p:.1e}".split("e")
+        return rf"\ensuremath{{{mantissa}\times10^{{{int(exponent)}}}}}"
+    return f"{p:.3g}"
 
 
-def sign_test_power(n, q, alpha=0.05):
-    """Exact power of the two-sided sign test with n discordant units when
-    each is won by the first arm with probability q."""
-    reject = [k for k in range(n + 1) if two_sided(k, n - k) <= alpha]
-    return sum(comb(n, k) * q**k * (1 - q) ** (n - k) for k in reject)
+def fmt_points(x):
+    """Percentage points with an explicit sign and a typeset minus."""
+    text = f"{100 * x:+.1f}"
+    if text in ("+0.0", "-0.0"):
+        return "0.0"
+    return text.replace("-", "$-$")
 
 
-def num(x, digits=3):
-    return f"{float(x):.{digits}f}"
+def thousands(value):
+    """An integer with a thin space between groups of three digits."""
+    return f"{int(value):,}".replace(",", "\\,")
 
 
-def exam_tables(exams):
-    for e in exams:
-        for who in ("base", "prompted"):
-            logged = float(e[f"p_vs_{who}"])
-            computed = upper_tail(int(e[f"wins_vs_{who}"]), int(e[f"disc_vs_{who}"]))
-            if abs(logged - computed) > 1e-4:
-                sys.exit(f"{e['id']}: logged p {logged} != exact {computed} for {who}")
-
-    lines = [
-        r"\begin{tabular}{@{}lllrrrrrrrrr@{}}",
-        r"\toprule",
-        r" & & & & \multicolumn{3}{c}{judged right} & \multicolumn{3}{c}{invented} & \multicolumn{2}{c}{$p$ (family sign)} \\",
-        r"\cmidrule(lr){5-7}\cmidrule(lr){8-10}\cmidrule(l){11-12}",
-        r"Run & Set & Judge & Tasks/fam. & base & prompt. & cand. & base & prompt. & cand. & vs base & vs prompt. \\",
-        r"\midrule",
-    ]
-    for e in exams:
-        lines.append(
-            f"{e['id']} & {e['taskset']} & v{e['judge_version']} & {e['tasks']}/{e['families']} & "
-            f"{e['base_right']} & {e['prompted_right']} & {e['candidate_right']} & "
-            f"{e['base_invented']} & {e['prompted_invented']} & {e['candidate_invented']} & "
-            f"{num(e['p_vs_base'])} & {num(e['p_vs_prompted'])} \\\\"
-        )
-    lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines)
+CORPUS_KEYS = ("planned_articles", "essays", "given_up", "words", "min_words", "max_words",
+               "writer_requests", "reader_requests", "hosted_requests", "rejection_log_lines",
+               "essays_read", "cases_read", "cases_kept", "fixed_briefings", "records")
+GATE_KEYS = ("too_short", "belief_quoted", "brief_copied", "case_missing",
+             "wrong_decision", "fact_misstated")
+EPISODES_PER_ARTICLE = 3
+TRAINING_TOOLS = 3
 
 
-def bounds_table(exams):
-    """What each exam's marginals allow a task-level test of the candidate
-    against the prompted base to conclude: the range of the one-sided exact
-    sign p over every split of discordant tasks the marginals permit."""
-    lines = [
-        r"\begin{tabular}{@{}lrrrr@{}}",
-        r"\toprule",
-        r"Run & Right (cand.\ / prompt.) & Net tasks & Smallest possible $p$ & Largest possible $p$ \\",
-        r"\midrule",
-    ]
-    for e in exams:
-        c, p, t = int(e["candidate_right"]), int(e["prompted_right"]), int(e["tasks"])
-        r = task_level_range(c, p, t)
-        lo, hi = (fmt_p(r[0]), fmt_p(r[1])) if r else ("--", "--")
-        lines.append(f"{e['id']} & {c} / {p} & {c - p:+d} & {lo} & {hi} \\\\")
-    lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines)
+def check_corpora(corpora):
+    """The counts of a corpus run reconcile with one another: every planned
+    article was kept or given up, every request was a writing or a reading,
+    every writing request either kept an essay or left one line in the
+    rejection log, every reading request followed a draft that passed the
+    form gates, and every kept decision made one record per training tool for
+    each of its briefings."""
+    for seed, r in corpora.items():
+        n = {k: int(v) for k, v in r.items()}
+        checks = [
+            (n["essays"] + n["given_up"] == n["planned_articles"], "essays and given up != planned"),
+            (n["writer_requests"] + n["reader_requests"] == n["hosted_requests"],
+             "writing and reading requests != requests"),
+            (n["essays"] + n["rejection_log_lines"] == n["writer_requests"],
+             "essays and rejection-log lines != writing requests"),
+            (sum(n[k] for k in GATE_KEYS) + n["writer_failed"] + n["reader_failed"]
+             == n["rejection_log_lines"], "rejection reasons != rejection-log lines"),
+            (n["essays"] + n["wrong_decision"] + n["fact_misstated"] + n["reader_failed"]
+             == n["reader_requests"], "outcomes of readings != reading requests"),
+            (n["essays_read"] <= n["essays"]
+             and n["cases_read"] == EPISODES_PER_ARTICLE * n["essays_read"], "cases read"),
+            (n["fixed_briefings"] <= n["cases_kept"] <= n["cases_read"], "decisions kept"),
+            (n["records"] == TRAINING_TOOLS * (n["cases_kept"] + n["fixed_briefings"]),
+             "records != one per tool and briefing"),
+            (n["min_words"] * n["essays"] <= n["words"] <= n["max_words"] * n["essays"], "words"),
+        ]
+        for ok, what in checks:
+            if not ok:
+                fail(f"corpus {seed}: {what}")
 
 
-def prompt_table(exams):
-    """The persona prompt's effect on the base, once per distinct task set:
-    the base and the prompted base are the same two arms in every exam of a
-    set, so each set is counted once."""
-    lines = [
-        r"\begin{tabular}{@{}lrrrrrr@{}}",
-        r"\toprule",
-        r" & & \multicolumn{2}{c}{judged right} & \multicolumn{2}{c}{invented} & \\",
-        r"\cmidrule(lr){3-4}\cmidrule(lr){5-6}",
-        r"Set & Tasks/fam. & base $\to$ prompt. & $p$ range & base $\to$ prompt. & $p$ range \\",
-        r"\midrule",
-    ]
-    seen = {}
-    for e in exams:
-        key = e["taskset"]
-        arms = tuple(e[k] for k in ("base_right", "prompted_right", "base_invented", "prompted_invented"))
-        if key in seen:
-            if seen[key] != arms:
-                sys.exit(f"task set {key}: base arms differ between exams")
-            continue
-        seen[key] = arms
-        t = int(e["tasks"])
-        b, pr, bi, pi = (int(x) for x in arms)
-        right = task_level_range(pr, b, t)
-        fewer = task_level_range(bi, pi, t)
-        rng = lambda r: f"{fmt_p(r[0])}--{fmt_p(r[1])}" if r else "no net gain"
-        lines.append(
-            f"{key} ({e['subject']}) & {t}/{e['families']} & {b} $\\to$ {pr} & {rng(right)} & "
-            f"{bi} $\\to$ {pi} & {rng(fewer)} \\\\"
-        )
-    lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines)
+# ---------------------------------------------------------------- loading
+
+def load():
+    arms = {}
+    for r in rows("arms.csv"):
+        arms[(int(r["seed"]), r["arm"])] = (int(r["right"]), int(r["n"]))
+    cells = {}
+    for r in rows("cells.csv"):
+        cells[(int(r["seed"]), r["arm"], r["cell"])] = (int(r["right"]), int(r["n"]))
+    paired = {}
+    for r in rows("paired.csv"):
+        paired[(int(r["seed"]), r["arm_a"], r["arm_b"])] = (
+            int(r["n"]), int(r["only_a"]), int(r["only_b"]))
+    return arms, cells, paired
 
 
-def training_table(runs):
-    lines = [
-        r"\begin{tabular}{@{}lrrrrrrr@{}}",
-        r"\toprule",
-        r"Run & Train rec. & Steps run/budget & Kept & Peak LR & Held-out rec. & Held-out loss & Token acc. \\",
-        r"\midrule",
-    ]
-    for r in runs:
-        lr = r["peak_lr"] + ("" if r["lr_source"] == "log" else r"$^{*}$")
-        records = r["train_records"] + (f"+{r['replay_records']}" if int(r["replay_records"]) else "")
-        lines.append(
-            f"{r['run']} & {records} & {r['steps_run']}/{r['steps_budget']} & "
-            f"{r['selected_step']} & {lr} & {r['heldout_records']} & "
-            f"{float(r['loss_before']):.3f}$\\to${float(r['loss_after']):.3f} & "
-            f"{float(r['acc_before']):.3f}$\\to${float(r['acc_after']):.3f} \\\\"
-        )
-    lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines)
+def check(arms, cells, paired):
+    for seed in SEEDS:
+        for arm in ARMS:
+            right, n = arms[(seed, arm)]
+            if n != EXAM_ITEMS:
+                fail(f"{seed} {arm}: {n} items, expected {EXAM_ITEMS}")
+            for axis, _ in AXES:
+                seen = cells[(seed, arm, f"{axis}_seen")]
+                new = cells[(seed, arm, f"{axis}_new")]
+                if seen[1] != CELL_ITEMS or new[1] != CELL_ITEMS:
+                    fail(f"{seed} {arm} {axis}: cell sizes {seen[1]}, {new[1]}")
+                if seen[0] + new[0] != right:
+                    fail(f"{seed} {arm} {axis}: cells do not add up to the arm total")
+        for a, b in PAIRS:
+            n, only_a, only_b = paired[(seed, a, b)]
+            if n != EXAM_ITEMS:
+                fail(f"{seed} {a} vs {b}: {n} paired items")
+            if arms[(seed, a)][0] - arms[(seed, b)][0] != only_a - only_b:
+                fail(f"{seed} {a} vs {b}: discordant items disagree with the right counts")
+    for seed in SEEDS:
+        low, high = wilson(*arms[(seed, "tuned")])
+        recorded = RECORDED_WILSON_TUNED[seed]
+        if (round(low, 3), round(high, 3)) != recorded:
+            fail(f"{seed}: Wilson interval of the tuned arm {low:.3f}, {high:.3f} != {recorded}")
+        for (s, a, b), spec in RECORDED_P.items():
+            if s != seed:
+                continue
+            _, only_a, only_b = paired[(s, a, b)]
+            p = upper_tail(only_a, only_a + only_b)
+            if spec[0] == "lt":
+                if not p < spec[1]:
+                    fail(f"{s} {a} over {b}: p = {p} is not below {spec[1]}")
+            else:
+                _, value, decimals, discordant = spec
+                if round(p, decimals) != value:
+                    fail(f"{s} {a} over {b}: p = {p} does not round to {value}")
+                if discordant is not None and only_a + only_b != discordant:
+                    fail(f"{s} {a} over {b}: {only_a + only_b} discordant items != {discordant}")
+        for other in ("base", "named", "principles"):
+            _, only_a, only_b = paired[(seed, "tuned", other)]
+            if not upper_tail(only_a, only_a + only_b) < 1e-10:
+                fail(f"{seed}: tuned over {other} is not below 1e-10, the paper states it is")
+        _, only_a, only_b = paired[(seed, "retrieval", "base")]
+        if not upper_tail(only_a, only_a + only_b) < 1e-6:
+            fail(f"{seed}: retrieval over base is not below 1e-6, the paper states it is")
+        wins, discordant = RECORDED_DISCORDANT_TUNED_RETRIEVAL[seed]
+        _, only_a, only_b = paired[(seed, "tuned", "retrieval")]
+        if (only_a, only_a + only_b) != (wins, discordant):
+            fail(f"{seed}: tuned over retrieval is {only_a} of {only_a + only_b}")
 
 
-def anchor_table(anchors):
-    lines = [
-        r"\begin{tabular}{@{}lrrrrrrrrr@{}}",
-        r"\toprule",
-        r"Candidate & Items & Both right & Both wrong & Cand.\ only & Base only & Cand.\ acc. & Base acc. & Drop & $p$ \\",
-        r"\midrule",
-    ]
-    for a in anchors:
-        cw, bw = int(a["candidate_wins"]), int(a["baseline_wins"])
-        items = int(a["items"])
-        if int(a["both_right"]) + int(a["both_wrong"]) + cw + bw != items:
-            sys.exit(f"{a['id']}: anchor cells do not add up to {items}")
-        if abs((int(a["both_right"]) + cw) / items - float(a["candidate_accuracy"])) > 1e-3:
-            sys.exit(f"{a['id']}: candidate accuracy does not match its cells")
-        drop = float(a["baseline_accuracy"]) - float(a["candidate_accuracy"])
-        lines.append(
-            f"{a['label']} & {items} & {a['both_right']} & {a['both_wrong']} & {cw} & {bw} & "
-            f"{num(a['candidate_accuracy'])} & {num(a['baseline_accuracy'])} & {drop:+.3f} & "
-            f"{two_sided(cw, bw):.2f} \\\\"
-        )
-    lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines)
+# ---------------------------------------------------------------- macros
+
+class Macros:
+    def __init__(self):
+        self.lines = []
+        self.seen = set()
+
+    def add(self, name, value):
+        if name in self.seen:
+            fail(f"macro {name} defined twice")
+        self.seen.add(name)
+        self.lines.append(rf"\newcommand{{\{name}}}{{{value}}}")
+
+    def text(self):
+        return "\n".join(self.lines) + "\n"
 
 
-def power_sim_table(sims):
-    lines = [
-        r"\begin{tabular}{@{}rrrrrrl@{}}",
-        r"\toprule",
-        r"Families & Tasks/fam. & Effect & Design eff. & Power & False pos. & Design \\",
-        r"\midrule",
-    ]
-    for s in sims:
-        lines.append(
-            f"{s['families']} & {s['tasks_per_family']} & {float(s['effect']):.2f} & "
-            f"{float(s['design_effect']):.2f} & {float(s['power']):.2f} & "
-            f"{float(s['false_positive_rate']):.3f} & {s['note']} \\\\"
-        )
-    lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines)
+def cap(arm):
+    return arm.capitalize()
 
 
-PILOT_SECONDARIES = (
-    ("cand_vs_prompted", "candidate / prompted"),
-    ("persona_vs_base", "cand.+persona / base"),
-    ("persona_vs_cand", "cand.+persona / candidate"),
-    ("cand_vs_base", "candidate / base"),
-    ("prompted_vs_base", "prompted / base"),
-)
-PILOT_ARMS = (("base", "base"), ("prompted", "prompted base"), ("cand", "candidate"), ("persona", "candidate + persona"))
+def build_macros(arms, cells, paired):
+    m = Macros()
+    m.add("ExamItems", str(EXAM_ITEMS))
+    m.add("CellItems", str(CELL_ITEMS))
+    for seed in SEEDS:
+        L = LETTER[seed]
+        for arm in ARMS:
+            right, n = arms[(seed, arm)]
+            low, high = wilson(right, n)
+            m.add(f"Right{L}{cap(arm)}", str(right))
+            m.add(f"Acc{L}{cap(arm)}", fmt3(right / n))
+            m.add(f"Lo{L}{cap(arm)}", fmt3(low))
+            m.add(f"Hi{L}{cap(arm)}", fmt3(high))
+        for a, b in PAIRS:
+            _, only_a, only_b = paired[(seed, a, b)]
+            p = upper_tail(only_a, only_a + only_b)
+            key = f"{cap(a)}{cap(b)}{L}"
+            m.add(f"OnlyFirst{key}", str(only_a))
+            m.add(f"OnlySecond{key}", str(only_b))
+            m.add(f"Disc{key}", str(only_a + only_b))
+            m.add(f"P{key}", fmt_p(p))
+            m.add(f"Lead{key}", str(only_a - only_b))
+            m.add(f"LeadPts{key}", fmt_points((only_a - only_b) / EXAM_ITEMS))
+        tuned_cells = [cells[(seed, "tuned", c)][0] / CELL_ITEMS for c in CELLS]
+        best_other = max(
+            cells[(seed, arm, c)][0] / CELL_ITEMS
+            for arm in ("base", "named", "principles") for c in CELLS)
+        m.add(f"MinTunedCell{L}", fmt3(min(tuned_cells)))
+        m.add(f"MaxPromptedCell{L}", fmt3(best_other))
+        if not min(tuned_cells) > best_other:
+            fail(f"{seed}: a tuned cell is not above every cell of base, named and principles")
+    for a, b in POOLED_PAIRS:
+        only_a = sum(paired[(s, a, b)][1] for s in SEEDS)
+        only_b = sum(paired[(s, a, b)][2] for s in SEEDS)
+        key = f"{cap(a)}{cap(b)}"
+        m.add(f"PooledFirst{key}", str(only_a))
+        m.add(f"PooledSecond{key}", str(only_b))
+        m.add(f"PooledP{key}", fmt_p(upper_tail(only_a, only_a + only_b)))
+    # Multiplicity: the number of paired tests run, and what the claims
+    # made from them survive.
+    tests = {k: upper_tail(v[1], v[1] + v[2]) for k, v in paired.items()}
+    m.add("PairedTests", str(len(tests)))
+    claimed = [p for (s, a, b), p in tests.items()
+               if (a, b) in [("tuned", "base"), ("tuned", "named"), ("tuned", "principles"),
+                             ("retrieval", "base")]
+               or (a, b) == ("tuned", "retrieval") and s != 101]
+    m.add("ClaimedTests", str(len(claimed)))
+    worst = max(claimed) * len(tests)
+    if worst >= 0.05:
+        fail("a claimed difference does not survive a Bonferroni factor over all paired tests")
+    m.add("BonferroniClaimedMax", fmt_p(worst))
+    m.add("BonferroniPrinciplesA", fmt_p(min(1.0, tests[(101, 'principles', 'base')] * len(tests))))
+    m.add("BonferroniPrinciplesB", f"{min(1.0, tests[(202, 'principles', 'base')] * len(tests)):.2f}")
+    # Retrieval and principles lifts over the base, in items.
+    for seed in SEEDS:
+        L = LETTER[seed]
+        base = arms[(seed, "base")][0]
+        for arm in ("named", "principles", "retrieval", "tuned"):
+            m.add(f"Lift{L}{cap(arm)}", str(arms[(seed, arm)][0] - base))
+    # Gaps between seen and new cells of the tuned arm.
+    for seed in SEEDS:
+        L = LETTER[seed]
+        for axis, _ in AXES:
+            seen = cells[(seed, "tuned", f"{axis}_seen")]
+            new = cells[(seed, "tuned", f"{axis}_new")]
+            d, low, high = newcombe_difference(*seen, *new)
+            m.add(f"Gap{L}{cap(axis)}", fmt_points(d))
+            m.add(f"GapLo{L}{cap(axis)}", fmt_points(low))
+            m.add(f"GapHi{L}{cap(axis)}", fmt_points(high))
+    excluding_zero = [
+        (seed, axis) for seed in SEEDS for axis, _ in AXES
+        if not newcombe_difference(*cells[(seed, "tuned", f"{axis}_seen")],
+                                   *cells[(seed, "tuned", f"{axis}_new")])[1]
+        <= 0 <= newcombe_difference(*cells[(seed, "tuned", f"{axis}_seen")],
+                                    *cells[(seed, "tuned", f"{axis}_new")])[2]]
+    if excluding_zero != [(202, "tool")]:
+        fail(f"the paper states that only the tool axis of author 202 excludes zero: {excluding_zero}")
+    # Corpora, audit, training, cost.
+    corpora = {int(r["seed"]): r for r in rows("corpora.csv")}
+    check_corpora(corpora)
+    for seed, r in corpora.items():
+        L = LETTER[seed]
+        for key in CORPUS_KEYS:
+            m.add(f"Corpus{L}{key.title().replace('_', '')}", thousands(r[key]))
+        m.add(f"Corpus{L}MeanWords", thousands(round(int(r["words"]) / int(r["essays"]))))
+        m.add(f"Corpus{L}GateRejections", str(sum(int(r[k]) for k in GATE_KEYS)))
+        m.add(f"Corpus{L}FailedRequests", str(int(r["writer_failed"]) + int(r["reader_failed"])))
+    m.add("CorpusMinWords", thousands(min(int(r["min_words"]) for r in corpora.values())))
+    m.add("CorpusMaxWords", thousands(max(int(r["max_words"]) for r in corpora.values())))
+    kept_all = agree_all = 0
+    rates = []
+    for r in rows("audit.csv"):
+        seed = int(r["seed"])
+        L = LETTER[seed]
+        kept, agree = int(r["kept"]), int(r["agree"])
+        if kept != int(corpora[seed]["cases_kept"]):
+            fail(f"{seed}: the audit covers {kept} decisions, the corpus kept {corpora[seed]['cases_kept']}")
+        if not 0 <= agree <= kept:
+            fail(f"{seed}: audit agreement {agree} out of range")
+        kept_all, agree_all = kept_all + kept, agree_all + agree
+        low, high = wilson(agree, kept)
+        rates.append(100 * (kept - agree) / kept)
+        m.add(f"AuditAgree{L}", str(agree))
+        m.add(f"AuditKept{L}", str(kept))
+        m.add(f"AuditRate{L}", f"{100 * agree / kept:.1f}")
+        m.add(f"AuditDisagree{L}", str(kept - agree))
+        m.add(f"AuditDisagreeRate{L}", f"{100 * (kept - agree) / kept:.1f}")
+        m.add(f"AuditLo{L}", f"{100 * low:.1f}")
+        m.add(f"AuditHi{L}", f"{100 * high:.1f}")
+    m.add("AuditDisagreeRateMin", f"{min(rates):.1f}")
+    m.add("AuditDisagreeRateMax", f"{max(rates):.1f}")
+    m.add("AuditAgreeAll", str(agree_all))
+    m.add("AuditDisagreeAll", str(kept_all - agree_all))
+    m.add("AuditKeptAll", str(kept_all))
+    m.add("AuditDisagreeRateAll", f"{100 * (kept_all - agree_all) / kept_all:.1f}")
+    for r in rows("training.csv"):
+        seed = int(r["seed"])
+        L = LETTER[seed]
+        if int(r["train_records"]) + int(r["held_out_records"]) != int(corpora[seed]["records"]):
+            fail(f"{seed}: trained and held-out records do not add up to the records made")
+        draws = int(r["steps"]) * int(r["records_per_step"])
+        m.add(f"TrainRecords{L}", r["train_records"])
+        m.add(f"HeldOutRecords{L}", r["held_out_records"])
+        m.add(f"TrainPasses{L}", f"{draws / int(r['train_records']):.2f}")
+        m.add(f"TrainHours{L}", f"{int(r['elapsed_at_last_step_s']) / 3600:.1f}")
+        m.add(f"TrainLoss{L}", r["loss_at_last_step"])
+        if r["learning_rate"]:
+            m.add("TrainLearningRate", r["learning_rate"])
+        if r["held_out_loss_before"]:
+            m.add("HeldOutLossBefore", r["held_out_loss_before"])
+            m.add("HeldOutLossAfter", r["held_out_loss_after"])
+            m.add("HeldOutAccBefore", r["held_out_token_accuracy_before"])
+            m.add("HeldOutAccAfter", r["held_out_token_accuracy_after"])
+    for r in rows("cost.csv"):
+        L = LETTER[int(r["seed"])]
+        m.add(f"CostInput{L}", f"{int(r['estimated_input_tokens']) / 1e6:.2f}")
+        m.add(f"CostOutput{L}", f"{int(r['estimated_output_tokens']) / 1e6:.2f}")
+    spend = {r["seeds"]: float(r["daily_usage_usd_after"]) - float(r["daily_usage_usd_before"])
+             for r in rows("spend.csv")}
+    if any(v <= 0 for v in spend.values()):
+        fail("a run's spend is not positive")
+    m.add("SpendA", f"{spend['101']:.2f}")
+    m.add("SpendBC", f"{spend['202+303']:.2f}")
+    # Divergence.
+    for r in rows("cross.csv"):
+        total = int(r["situations"])
+        own, other, neither = int(r["own"]), int(r["other"]), int(r["neither"])
+        if own + other + neither != total:
+            fail(f"cross {r['trained_on']} vs {r['compared_with']}: counts do not add up")
+        if not own > max(other, neither):
+            fail(f"cross {r['trained_on']} vs {r['compared_with']}: own is not the largest count")
+    return m
 
 
-def holm(ps):
-    """Holm step-down adjusted p-values, in the order of the input."""
-    order = sorted(range(len(ps)), key=lambda i: ps[i])
-    adjusted, running = [0.0] * len(ps), 0.0
-    for rank, i in enumerate(order):
-        running = max(running, min(1.0, (len(ps) - rank) * ps[i]))
-        adjusted[i] = running
-    return adjusted
+# ---------------------------------------------------------------- tables
+
+def table(spec, header, body):
+    out = [rf"\begin{{tabular}}{{{spec}}}", r"\toprule", header + r" \\", r"\midrule"]
+    out += [line.removesuffix(GAP) + r" \\" + (r" \addlinespace" if line.endswith(GAP) else "")
+            for line in body]
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
 
 
-def check_pilot(p):
-    """Refuses a pilot row whose derived fields disagree with its counts."""
-    name, n = p["arm"], int(p["tasks"])
-    pf_expected = upper_tail(int(p["family_wins"]), int(p["family_wins"]) + int(p["family_losses"]))
-    pt_expected = upper_tail(int(p["persona_only"]), int(p["persona_only"]) + int(p["prompted_only"]))
-    lm_expected = upper_tail(int(p["lm_persona_only"]), int(p["lm_persona_only"]) + int(p["lm_prompted_only"]))
-    for field, expected in (("p_families", pf_expected), ("p_tasks", pt_expected), ("lm_p", lm_expected)):
-        if abs(float(p[field]) - expected) > 1e-6:
-            sys.exit(f"pilot {name}: {field} {p[field]} != exact {expected}")
-    if int(p["persona_right"]) - int(p["prompted_right"]) != int(p["persona_only"]) - int(p["prompted_only"]):
-        sys.exit(f"pilot {name}: right counts and discordant tasks disagree")
-    if abs(100 * (int(p["persona_right"]) - int(p["prompted_right"])) / n - float(p["diff_points"])) > 0.05:
-        sys.exit(f"pilot {name}: difference does not match the right counts")
-    adjusted = holm([float(p[f"p_{key}"]) for key, _ in PILOT_SECONDARIES])
-    for (key, _), expected in zip(PILOT_SECONDARIES, adjusted):
-        if abs(float(p[f"holm_{key}"]) - expected) > 1e-6:
-            sys.exit(f"pilot {name}: Holm p of {key} {p[f'holm_{key}']} != {expected}")
+def tex_name(name):
+    return name.replace("_", r"\_")
 
 
-def pilot_tables(pilots):
-    """The tables of completed pilot runs on the frozen exam, empty when none
-    has completed: a run that did not complete is not a result."""
-    done = [p for p in pilots if p["state"] == "completed"]
-    for p in done:
-        check_pilot(p)
-    if not done:
-        return {name: "" for name in ("pilot_table", "pilot_arms_table", "pilot_secondary_table", "pilot_design_table")}
-
-    primary = [
-        r"\begin{tabular}{@{}lrrrrrr@{}}",
-        r"\toprule",
-        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Difference [95\% CI], points & Family wins--losses & $p$ (families) & $p$ (tasks) \\",
-        r"\midrule",
-    ]
-    arms = [
-        r"\begin{tabular}{@{}llrrr@{}}",
-        r"\toprule",
-        r"Run & Arm & Judged right & Invented specifics & Mean chars \\",
-        r"\midrule",
-    ]
-    secondary = [
-        r"\begin{tabular}{@{}l" + "r" * len(PILOT_SECONDARIES) + "@{}}",
-        r"\toprule",
-        "Run & " + " & ".join(label for _, label in PILOT_SECONDARIES) + r" \\",
-        r"\midrule",
-    ]
-    design = [
-        r"\begin{tabular}{@{}lrrrrrr@{}}",
-        r"\toprule",
-        r"Run & Length-matched (tasks, wins--losses, $p$) & Discordance & ICC & Smallest detectable, points & Judge false passes (hard controls) & Power, 39 families \\",
-        r"\midrule",
-    ]
-    for p in done:
-        primary.append(
-            f"{p['arm']} & {p['families']}/{p['tasks']} & {p['persona_right']} / {p['prompted_right']} & "
-            f"{float(p['diff_points']):+.1f} [{float(p['ci_low']):+.1f}, {float(p['ci_high']):+.1f}] & "
-            f"{p['family_wins']}--{p['family_losses']} & {fmt_p(float(p['p_families']))} & {fmt_p(float(p['p_tasks']))} \\\\"
-        )
-        for key, label in PILOT_ARMS:
-            arms.append(
-                f"{p['arm'] if key == 'base' else ''} & {label} & {p[key + '_right']} & "
-                f"{p[key + '_invented']} & {float(p[key + '_chars']):.0f} \\\\"
-            )
-        secondary.append(
-            f"{p['arm']} & "
-            + " & ".join(
-                f"{fmt_p(float(p['p_' + key]))} / {fmt_p(float(p['holm_' + key]))}" for key, _ in PILOT_SECONDARIES
-            )
-            + r" \\"
-        )
-        design.append(
-            f"{p['arm']} & {p['lm_tasks']}, {p['lm_persona_only']}--{p['lm_prompted_only']}, {fmt_p(float(p['lm_p']))} & "
-            f"{float(p['discordance']):.3f} & {float(p['icc']):.3f} & {float(p['mdd_points']):.1f} & "
-            f"{p['hard_passed']} of {p['hard_wrong']} & "
-            f"{float(p['power_39']):.2f} \\\\"
-        )
-    end = [r"\bottomrule", r"\end{tabular}"]
-    return {
-        "pilot_table": "\n".join(primary + end),
-        "pilot_arms_table": "\n".join(arms + end),
-        "pilot_secondary_table": "\n".join(secondary + end),
-        "pilot_design_table": "\n".join(design + end),
-    }
+def authors_table():
+    body = []
+    for r in rows("authors.csv"):
+        beliefs = "; ".join(
+            f"{tex_name(b.split()[0])} ({b.split()[1]})" for b in r["beliefs"].split("; "))
+        body.append(f"{r['seed']} & {r['name']} & {beliefs}")
+    return table(r"@{}rll@{}", "Seed & Name & Beliefs (tenet, reading), highest priority first", body)
 
 
-def check_deployed(d):
-    """Refuses a deployed-arm row whose derived fields disagree with its counts."""
-    name, n = d["arm"], int(d["tasks"])
-    expected = {
-        "p_tasks": upper_tail(int(d["cand_only"]), int(d["cand_only"]) + int(d["prompted_only"])),
-        "p_families": upper_tail(int(d["family_wins"]), int(d["family_wins"]) + int(d["family_losses"])),
-        "lm_p": upper_tail(int(d["lm_cand_only"]), int(d["lm_cand_only"]) + int(d["lm_prompted_only"])),
-        "p_invented": upper_tail(int(d["inv_prompted_only"]), int(d["inv_prompted_only"]) + int(d["inv_cand_only"])),
-    }
-    for field, value in expected.items():
-        if abs(float(d[field]) - value) > 1e-6:
-            sys.exit(f"deployed {name}: {field} {d[field]} != exact {value}")
-    lead = int(d["cand_right"]) - int(d["prompted_right"])
-    if lead != int(d["cand_only"]) - int(d["prompted_only"]):
-        sys.exit(f"deployed {name}: right counts and discordant tasks disagree")
-    if abs(100 * lead / n - float(d["diff_points"])) > 0.05:
-        sys.exit(f"deployed {name}: difference does not match the right counts")
-    if int(d["family_wins"]) + int(d["family_losses"]) + int(d["family_ties"]) != int(d["families"]):
-        sys.exit(f"deployed {name}: family wins, losses and ties do not add up to the families")
-    if int(d["cand_invented"]) - int(d["prompted_invented"]) != int(d["inv_cand_only"]) - int(d["inv_prompted_only"]):
-        sys.exit(f"deployed {name}: invented counts and discordant answers disagree")
+def corpora_table():
+    body = []
+    for r in rows("corpora.csv"):
+        def n(key):
+            return thousands(r[key])
+        mean = thousands(round(int(r["words"]) / int(r["essays"])))
+        body.append(
+            f"{r['seed']} & {n('essays')} of {n('planned_articles')} & {n('words')} ({mean}) & "
+            f"{n('writer_requests')} & {n('reader_requests')} & {n('rejection_log_lines')} & "
+            f"{n('essays_read')} & {n('cases_kept')} of {n('cases_read')} & {n('records')}")
+    return table(
+        r"@{}rrrrrrrrr@{}",
+        r"Seed & Essays & \shortstack{Words\\(mean)} & \shortstack{Writing\\requests} & "
+        r"\shortstack{Reading\\requests} & \shortstack{Rejection-\\log lines} & "
+        r"\shortstack{Essays\\mined} & \shortstack{Decisions kept\\of cases read} & Records",
+        body)
 
 
-def deployed_tables(deployed):
-    """The tables of runs that examined only the deployed arm, each paired by
-    task with the prompted arm of a four-arm run of the same frozen exam."""
-    for d in deployed:
-        check_deployed(d)
-    primary = [
-        r"\begin{tabular}{@{}lrrrrrrr@{}}",
-        r"\toprule",
-        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Difference [95\% CI], points & Task wins--losses & $p$ (tasks) & Family wins--losses (ties) & $p$ (families) \\",
-        r"\midrule",
-    ]
-    secondary = [
-        r"\begin{tabular}{@{}lrrrrrrr@{}}",
-        r"\toprule",
-        r"Run & Length-matched (tasks, wins--losses, $p$) & Invented (cand.\ / prompt.) & Invented, only-cand.--only-prompt. & $p$ (fewer invented) & Mean chars (cand.\ / prompt.) & Judge controls, precision pass / fail & Hard controls passed \\",
-        r"\midrule",
-    ]
-    for d in deployed:
-        primary.append(
-            f"{d['arm']} & {d['families']}/{d['tasks']} & {d['cand_right']} / {d['prompted_right']} & "
-            f"{float(d['diff_points']):+.1f} [{float(d['ci_low']):+.1f}, {float(d['ci_high']):+.1f}] & "
-            f"{d['cand_only']}--{d['prompted_only']} & {fmt_p(float(d['p_tasks']))} & "
-            f"{d['family_wins']}--{d['family_losses']} ({d['family_ties']}) & {fmt_p(float(d['p_families']))} \\\\"
-        )
-        secondary.append(
-            f"{d['arm']} & {d['lm_tasks']}, {d['lm_cand_only']}--{d['lm_prompted_only']}, {fmt_p(float(d['lm_p']))} & {d['cand_invented']} / {d['prompted_invented']} & "
-            f"{d['inv_cand_only']}--{d['inv_prompted_only']} & {fmt_p(float(d['p_invented']))} & "
-            f"{float(d['cand_chars']):.0f} / {float(d['prompted_chars']):.0f} & "
-            f"{d['judge_controls']}, {float(d['precision_pass']):.3f} / {float(d['precision_fail']):.3f} & "
-            f"{d['hard_passed']} of {d['hard_wrong']} \\\\"
-        )
-    end = [r"\bottomrule", r"\end{tabular}"]
-    return {"deployed_table": "\n".join(primary + end), "deployed_secondary_table": "\n".join(secondary + end)}
-
-FULL_ARM_KEY = {"candidate-persona": "persona", "prompted": "prompted", "candidate": "cand", "base": "base"}
-FULL_ARM_LABEL = {"persona": "candidate + persona", "prompted": "prompted base", "cand": "candidate", "base": "base"}
-FULL_COMPARISON_LABEL = {
-    ("candidate", "prompted"): "candidate / prompted",
-    ("candidate-persona", "base"): "cand.+persona / base",
-    ("candidate-persona", "candidate"): "cand.+persona / candidate",
-    ("candidate", "base"): "candidate / base",
-    ("prompted", "base"): "prompted / base",
-}
+def rejections_table():
+    labels = [("too_short", "too short"), ("belief_quoted", "belief quoted"),
+              ("brief_copied", "brief copied"), ("case_missing", "case missing"),
+              ("wrong_decision", "decision read otherwise"), ("fact_misstated", "fact read otherwise"),
+              ("writer_failed", "writing request failed"), ("reader_failed", "reading request failed")]
+    data = rows("corpora.csv")
+    body = [f"{label} & " + " & ".join(r[key] for r in data) for key, label in labels]
+    body.append("total & " + " & ".join(r["rejection_log_lines"] for r in data))
+    header = "Line of the rejection log & " + " & ".join(f"Author {r['seed']}" for r in data)
+    return table(r"@{}lrrr@{}", header, body)
 
 
-def check_full(run, comparisons):
-    """Refuses a full-run row, or one of its comparisons, whose derived fields
-    disagree with its counts. The Holm adjustment is recomputed over the five
-    secondaries in the order the report made them."""
-    name, n = run["arm"], int(run["tasks"])
-    if int(run["families_trained_on"]) < 1 and int(run["tasks_in_exam"]) != n:
-        sys.exit(f"full {name}: tasks left out although no family was trained on")
-    for c in comparisons:
-        label = f"full {name}: {c['first']} vs {c['second']}"
-        expected = {
-            "p_tasks": upper_tail(int(c["first_only"]), int(c["first_only"]) + int(c["second_only"])),
-            "p_families": upper_tail(int(c["family_wins"]), int(c["family_wins"]) + int(c["family_losses"])),
-            "lm_p": upper_tail(int(c["lm_first_only"]), int(c["lm_first_only"]) + int(c["lm_second_only"])),
-        }
-        for field, value in expected.items():
-            if abs(float(c[field]) - value) > 1e-6:
-                sys.exit(f"{label}: {field} {c[field]} != exact {value}")
-        lead = int(run[FULL_ARM_KEY[c["first"]] + "_right"]) - int(run[FULL_ARM_KEY[c["second"]] + "_right"])
-        if lead != int(c["first_only"]) - int(c["second_only"]):
-            sys.exit(f"{label}: right counts and discordant tasks disagree")
-        if abs(100 * lead / n - float(c["diff_points"])) > 0.05:
-            sys.exit(f"{label}: difference does not match the right counts")
-        if not float(c["ci_low"]) <= float(c["diff_points"]) <= float(c["ci_high"]):
-            sys.exit(f"{label}: interval does not contain the difference")
-    secondary = comparisons[1:]
-    adjusted = holm([float(c["p_families"]) for c in secondary])
-    for c, value in zip(secondary, adjusted):
-        if abs(float(c["holm_p"]) - value) > 1e-6:
-            sys.exit(f"full {name}: Holm p of {c['first']} vs {c['second']} {c['holm_p']} != {value}")
-    lead = int(run["rest_persona_right"]) - int(run["rest_prompted_right"])
-    if lead != int(run["rest_persona_only"]) - int(run["rest_prompted_only"]):
-        sys.exit(f"full {name}: right counts and discordant tasks outside the pilot disagree")
-    rest = {
-        "rest_p_tasks": upper_tail(int(run["rest_persona_only"]), int(run["rest_persona_only"]) + int(run["rest_prompted_only"])),
-        "rest_p_families": upper_tail(int(run["rest_family_wins"]), int(run["rest_family_wins"]) + int(run["rest_family_losses"])),
-    }
-    for field, value in rest.items():
-        if abs(float(run[field]) - value) > 1e-6:
-            sys.exit(f"full {name}: {field} {run[field]} != exact {value}")
+def main_table(arms):
+    body = []
+    for arm in ARMS:
+        cellsx = []
+        for seed in SEEDS:
+            right, n = arms[(seed, arm)]
+            low, high = wilson(right, n)
+            cellsx.append(f"{right} ({fmt3(right / n)}) [{fmt3(low)}, {fmt3(high)}]")
+        body.append(f"{ARM_LABEL[arm]} & " + " & ".join(cellsx))
+    return table(r"@{}lccc@{}", "Arm & Author 101 & Author 202 & Author 303", body)
 
 
-def bonferroni(p, tests):
-    return min(1.0, tests * p)
+def paired_table(paired):
+    header = ("Comparison & \\multicolumn{2}{c}{Author 101} & \\multicolumn{2}{c}{Author 202} & "
+              "\\multicolumn{2}{c}{Author 303} & \\multicolumn{2}{c}{Pooled}")
+    sub = ("& first--second & $p$ & first--second & $p$ & first--second & $p$ & first--second & $p$")
+    body = []
+    for a, b in PAIRS:
+        parts = []
+        for seed in SEEDS:
+            _, only_a, only_b = paired[(seed, a, b)]
+            parts.append(f"{only_a}--{only_b} & {fmt_p(upper_tail(only_a, only_a + only_b))}")
+        if (a, b) in POOLED_PAIRS:
+            only_a = sum(paired[(s, a, b)][1] for s in SEEDS)
+            only_b = sum(paired[(s, a, b)][2] for s in SEEDS)
+            parts.append(f"{only_a}--{only_b} & {fmt_p(upper_tail(only_a, only_a + only_b))}")
+        else:
+            parts.append("\\multicolumn{2}{c}{}")
+        body.append(f"{a} over {b} & " + " & ".join(parts))
+    out = [r"\begin{tabular}{@{}lrrrrrrrr@{}}", r"\toprule", header + r" \\",
+           r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}",
+           sub + r" \\", r"\midrule"]
+    out += [line + r" \\" for line in body]
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
 
 
-def full_tables(runs, comparisons):
-    """The tables of the full frozen-exam runs: the arms, the primary
-    comparison with its Bonferroni-corrected tests, the secondaries and the
-    primary comparison on the tasks outside the pilot."""
-    by_run = {r["arm"]: [c for c in comparisons if c["arm"] == r["arm"]] for r in runs}
-    for r in runs:
-        check_full(r, by_run[r["arm"]])
-    end = [r"\bottomrule", r"\end{tabular}"]
-    arms = [
-        r"\begin{tabular}{@{}llrrr@{}}", r"\toprule",
-        r"Run & Arm & Judged right & Invented specifics & Mean chars \\", r"\midrule",
-    ]
-    primary = [
-        r"\begin{tabular}{@{}lrrrrrrrr@{}}", r"\toprule",
-        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Difference [95\% CI], points & Task wins--losses & $p$ (tasks) & Family wins--losses (ties) & $p$ (families) & $p$ (families), Bonferroni $\times2$ / $\times4$ \\",
-        r"\midrule",
-    ]
-    secondary = [
-        r"\begin{tabular}{@{}llrrrrrr@{}}", r"\toprule",
-        r"Run & Comparison & Right (first / second) & Difference [95\% CI], points & Family wins--losses & $p$ (families) & Holm $p$ & Length-matched (tasks, wins--losses, $p$) \\",
-        r"\midrule",
-    ]
-    rest = [
-        r"\begin{tabular}{@{}lrrrrrr@{}}", r"\toprule",
-        r"Run & Fam./tasks & Right (cand.+persona / prompt.) & Task wins--losses & $p$ (tasks) & Family wins--losses & $p$ (families) \\",
-        r"\midrule",
-    ]
-    for r in runs:
-        c = by_run[r["arm"]]
-        for key in ("base", "prompted", "cand", "persona"):
-            arms.append(
-                f"{r['arm'] if key == 'base' else ''} & {FULL_ARM_LABEL[key]} & {r[key + '_right']} & "
-                f"{r[key + '_invented']} & {float(r[key + '_chars']):.0f} \\\\"
-            )
-        p = c[0]
-        ties = int(r["families"]) - int(p["family_wins"]) - int(p["family_losses"])
-        pf = float(p["p_families"])
-        primary.append(
-            f"{r['arm']} & {r['families']}/{r['tasks']} & {r['persona_right']} / {r['prompted_right']} & "
-            f"{float(p['diff_points']):+.1f} [{float(p['ci_low']):+.1f}, {float(p['ci_high']):+.1f}] & "
-            f"{p['first_only']}--{p['second_only']} & {fmt_p(float(p['p_tasks']))} & "
-            f"{p['family_wins']}--{p['family_losses']} ({ties}) & {fmt_p(pf)} & "
-            f"{fmt_p(bonferroni(pf, 2))} / {fmt_p(bonferroni(pf, 4))} \\\\"
-        )
-        for c_ in c[1:]:
-            first, second = FULL_ARM_KEY[c_["first"]], FULL_ARM_KEY[c_["second"]]
-            secondary.append(
-                f"{r['arm']} & {FULL_COMPARISON_LABEL[(c_['first'], c_['second'])]} & "
-                f"{r[first + '_right']} / {r[second + '_right']} & "
-                f"{float(c_['diff_points']):+.1f} [{float(c_['ci_low']):+.1f}, {float(c_['ci_high']):+.1f}] & "
-                f"{c_['family_wins']}--{c_['family_losses']} & {fmt_p(float(c_['p_families']))} & "
-                f"{fmt_p(float(c_['holm_p']))} & "
-                f"{c_['lm_tasks']}, {c_['lm_first_only']}--{c_['lm_second_only']}, {fmt_p(float(c_['lm_p']))} \\\\"
-            )
-        rest.append(
-            f"{r['arm']} & {r['rest_families']}/{r['rest_tasks']} & {r['rest_persona_right']} / {r['rest_prompted_right']} & "
-            f"{r['rest_persona_only']}--{r['rest_prompted_only']} & {fmt_p(float(r['rest_p_tasks']))} & "
-            f"{r['rest_family_wins']}--{r['rest_family_losses']} & {fmt_p(float(r['rest_p_families']))} \\\\"
-        )
-    return {
-        "full_arms_table": "\n".join(arms + end),
-        "full_primary_table": "\n".join(primary + end),
-        "full_secondary_table": "\n".join(secondary + end),
-        "full_rest_table": "\n".join(rest + end),
-    }
+def cells_table(cells):
+    header = "Author & Arm & " + " & ".join(CELL_LABEL[c] for c in CELLS)
+    body = []
+    for seed in SEEDS:
+        for k, arm in enumerate(ARMS):
+            vals = " & ".join(str(cells[(seed, arm, c)][0]) for c in CELLS)
+            body.append(f"{seed if k == 0 else ''} & {ARM_LABEL[arm]} & {vals}")
+        if seed != SEEDS[-1]:
+            body[-1] += GAP
+    return table(r"@{}rlrrrrrr@{}", header, body)
+
+
+def gaps_table(cells):
+    header = "Author & " + " & ".join(label for _, label in AXES)
+    body = []
+    for seed in SEEDS:
+        parts = []
+        for axis, _ in AXES:
+            seen = cells[(seed, "tuned", f"{axis}_seen")]
+            new = cells[(seed, "tuned", f"{axis}_new")]
+            d, low, high = newcombe_difference(*seen, *new)
+            parts.append(f"{fmt_points(d)} [{fmt_points(low)}, {fmt_points(high)}]")
+        body.append(f"{seed} & " + " & ".join(parts))
+    return table(r"@{}rccc@{}", header, body)
+
+
+def cross_table():
+    header = ("Trained on & Compared with & Items & Its own author & The other author & Neither")
+    body = []
+    previous = None
+    for r in rows("cross.csv"):
+        total = int(r["situations"])
+        def cellf(key):
+            return f"{int(r[key])} ({100 * int(r[key]) / total:.0f}\\%)"
+        name = r["trained_on"] if r["trained_on"] != previous else ""
+        previous = r["trained_on"]
+        kind = " (opposite beliefs)" if r["rival_kind"] == "opposite" else ""
+        body.append(
+            f"{name} & {r['compared_with']}{kind} & {total} & {cellf('own')} & "
+            f"{cellf('other')} & {cellf('neither')}")
+    return table(r"@{}llrrrr@{}", header, body)
+
+
+def audit_table():
+    body = []
+    names = {r["seed"]: r["name"] for r in rows("authors.csv")}
+    for r in rows("audit.csv"):
+        kept, agree = int(r["kept"]), int(r["agree"])
+        low, high = wilson(agree, kept)
+        body.append(
+            f"{r['seed']} & {names[r['seed']]} & {kept} & {agree} & "
+            f"{100 * agree / kept:.1f}\\% [{100 * low:.1f}, {100 * high:.1f}] & {kept - agree}")
+    return table(r"@{}rlrrrr@{}",
+                 "Seed & Author & Decisions kept & Equal to the oracle & Share [95\\% Wilson] & Disagreeing",
+                 body)
+
+
+def training_table():
+    body = []
+    for r in rows("training.csv"):
+        def change(before, after):
+            return f"{r[before]} $\\to$ {r[after]}" if r[before] else "--"
+        body.append(
+            f"{r['seed']} & {r['train_records']} & {r['held_out_records']} & "
+            f"{thousands(r['elapsed_at_last_step_s'])} & {r['loss_at_last_step']} & "
+            f"{change('held_out_loss_before', 'held_out_loss_after')} & "
+            f"{change('held_out_token_accuracy_before', 'held_out_token_accuracy_after')}")
+    return table(
+        r"@{}rrrrrcc@{}",
+        r"Seed & \shortstack{Records\\trained on} & \shortstack{Records\\held out} & "
+        r"\shortstack{Elapsed at\\step 240 (s)} & \shortstack{Loss at\\step 240} & "
+        r"\shortstack{Held-out\\token loss} & \shortstack{Held-out\\token accuracy}",
+        body)
+
+
+# ---------------------------------------------------------------- figure data
+
+def figure_data(arms):
+    lines = ["x," + ",".join(f"{a},{a}_minus,{a}_plus" for a in ARMS)]
+    for k, seed in enumerate(SEEDS):
+        parts = [str(k)]
+        for arm in ARMS:
+            right, n = arms[(seed, arm)]
+            low, high = wilson(right, n)
+            p = right / n
+            parts += [f"{p:.4f}", f"{p - low:.4f}", f"{high - p:.4f}"]
+        lines.append(",".join(parts))
+    return "\n".join(lines) + "\n"
 
 
 def main():
-    OUT.mkdir(exist_ok=True)
-    exams = rows("exams.csv")
-    (OUT / "exams_table.tex").write_text(exam_tables(exams) + "\n", encoding="utf-8")
-    anchors = rows("anchor.csv")
-    (OUT / "anchor_table.tex").write_text(anchor_table(anchors) + "\n", encoding="utf-8")
-    (OUT / "power_table.tex").write_text(power_sim_table(rows("power_simulation.csv")) + "\n", encoding="utf-8")
-    (OUT / "bounds_table.tex").write_text(bounds_table(exams) + "\n", encoding="utf-8")
-    (OUT / "prompt_table.tex").write_text(prompt_table(exams) + "\n", encoding="utf-8")
-    (OUT / "training_table.tex").write_text(training_table(rows("training.csv")) + "\n", encoding="utf-8")
-    pilots = rows("pilot.csv")
-    for name, table in pilot_tables(pilots).items():
-        (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
-    for name, table in deployed_tables(rows("deployed.csv")).items():
-        (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
-    for name, table in full_tables(rows("full.csv"), rows("full_comparisons.csv")).items():
-        (OUT / f"{name}.tex").write_text(table + "\n", encoding="utf-8")
-
-    # pgfplots data: exact power of the family-level sign test.
-    with open(OUT / "sign_power.csv", "w", encoding="utf-8") as f:
-        f.write("n,q060,q070,q080,q090\n")
-        for n in range(1, 61):
-            f.write(f"{n}," + ",".join(f"{sign_test_power(n, q):.4f}" for q in (0.6, 0.7, 0.8, 0.9)) + "\n")
-
-    # pgfplots data: the learning-rate schedules and monitoring losses.
-    for run in ("v7", "e4"):
-        with open(OUT / f"curve_{run}.csv", "w", encoding="utf-8") as f:
-            f.write("step,lr,monitor\n")
-            for r in rows("curves.csv"):
-                if r["run"] == run:
-                    f.write(f"{r['step']},{float(r['lr']):.6g},{r['monitor_loss']}\n")
-
-    # pgfplots data: the share judged right per arm and exam.
-    with open(OUT / "arms.csv", "w", encoding="utf-8") as f:
-        f.write("x,label,base,prompted,candidate\n")
-        for k, e in enumerate(exams):
-            n = int(e["tasks"])
-            f.write(
-                f"{k},{e['id']},{int(e['base_right'])/n:.4f},"
-                f"{int(e['prompted_right'])/n:.4f},{int(e['candidate_right'])/n:.4f}\n"
-            )
-
-    # The v7 anchor check: its discordant items, the spread of the paired
-    # drop under no change, how often a drop beyond the bound happens by
-    # chance, and the paired items a two-point drop needs at 80% power
-    # (normal approximation n = (z_{alpha/2} + z_beta)^2 d / delta^2).
-    v7 = next(a for a in anchors if a["id"] == "v7")
-    cw, bw, items = int(v7["candidate_wins"]), int(v7["baseline_wins"]), int(v7["items"])
-    disc, bound = cw + bw, float(v7["bound"])
-    exceed = sum(comb(disc, k) for k in range(disc + 1) if (2 * k - disc) / items > bound) / 2**disc
-    z = 1.959964 + 0.841621
-    sw = lambda n, q: sign_test_power(n, q)
-    macros = {
-        "PowerSixNine": f"{sw(6, 0.9):.2f}",
-        "PowerSevenNine": f"{sw(7, 0.9):.2f}",
-        "PowerSixEight": f"{sw(6, 0.8):.2f}",
-        "PowerTwentyEight": f"{sw(20, 0.8):.2f}",
-        "PowerFortyEight": f"{sw(40, 0.8):.2f}",
-        "AnchorDiscordant": str(disc),
-        "AnchorPValue": f"{two_sided(cw, bw):.2f}",
-        "AnchorSD": f"{disc ** 0.5 / items:.3f}",
-        "AnchorExceed": f"{100 * exceed:.0f}",
-        "AnchorItemsNeeded": f"{round(z * z * (disc / items) / 0.02**2, -2):,.0f}",
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
+    out.mkdir(parents=True, exist_ok=True)
+    arms, cells, paired = load()
+    check(arms, cells, paired)
+    files = {
+        "macros.tex": build_macros(arms, cells, paired).text(),
+        "tab_authors.tex": authors_table(),
+        "tab_corpora.tex": corpora_table(),
+        "tab_rejections.tex": rejections_table(),
+        "tab_main.tex": main_table(arms),
+        "tab_paired.tex": paired_table(paired),
+        "tab_cells.tex": cells_table(cells),
+        "tab_gaps.tex": gaps_table(cells),
+        "tab_cross.tex": cross_table(),
+        "tab_audit.tex": audit_table(),
+        "tab_training.tex": training_table(),
+        "accuracy.csv": figure_data(arms),
     }
-    (OUT / "macros.tex").write_text(
-        "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()), encoding="utf-8"
-    )
+    for name, text in files.items():
+        (out / name).write_text(text, encoding="utf-8")
 
 
-if __name__ == "__main__":
-    main()
+main()

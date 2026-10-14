@@ -1,45 +1,50 @@
-Persona training paper: how Splinter learns to think like a historical author
+SPDX-License-Identifier: CC-BY-4.0
+Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+(The license covers this directory: the paper, its data tables and scripts.)
+
+Persona training paper: learning an author's judgment from their writing, a
+controlled study with synthetic authors.
 
 Build (needs python3, pdflatex, bibtex and latexmk; no Python packages):
 
     make          builds target/papers/persona-training.pdf
-    make clean    removes the PDF, LaTeX intermediates and generated/
+    make clean    removes the PDF and the LaTeX intermediates
 
-Every table and plot in the paper is generated from data/*.csv by
-scripts/build_data.py (standard library only), which also recomputes the exact
-sign tests and the task-level bounds, refuses an exam row whose logged p-value
-differs from the exact one and an anchor row whose cells do not add up. To
-update a result, edit its row in data/ and run make. Completed runs on the
-frozen exam go in data/pilot.csv with state "completed"; the paper prints one
-row per run in its pilot tables. Make the row from a run's report with
+The build writes nothing into this directory. Its generated tables, macros and
+plot data go to target/papers/.build/persona-training/gen.
 
-    python3 scripts/pilot_row.py REPORT --arm NAME --description TEXT \
-        --power P --power-fpr F >> data/pilot.csv
+Every number, table and plot in the paper is made from data/*.csv by
+scripts/build_data.py (standard library only). It computes the Wilson
+intervals, the exact one-sided sign tests and the Newcombe intervals, checks
+that the tables are consistent with one another (cells add up to arms,
+discordant counts agree with the right counts, the request and rejection
+counts of each corpus reconcile, records match decisions, the audit covers the
+decisions kept, trained and held-out records add up) and that the derived
+values equal those recorded when the examinations were run, and stops with a
+message otherwise.
 
-which recomputes the counts from the report's per-task records and refuses a
-report whose summary disagrees (P and F are the "planned" power and
-false-positive rate of `splinter exam-set power --from-report REPORT
---families 39 --tasks-per-family 6 --json`). Runs that examined only the deployed arm
-go in data/deployed.csv, paired by task with the prompted arm of a four-arm report:
+Data:
 
-    python3 scripts/deployed_row.py REPORT --arm NAME --description TEXT \
-        --reference REPORT:prompted >> data/deployed.csv
+    arms.csv, cells.csv, paired.csv   made from the examination outputs with
+        python3 scripts/collect.py EXAMS_DIR data 101,202,303
+        where EXAMS_DIR holds author-<seed>/exam/<arm>.jsonl
+    cross.csv                         the output of `synthetic-author cross`
+    audit.csv                         the output of
+        python3 scripts/audit.py PLAN_JSONL DECISIONS_JSONL
+        with PLAN_JSONL from `synthetic-author plan --seed S --articles 60`
+    corpora.csv                       counts from each corpus directory
+                                      (articles/, rejected.jsonl, usage.json,
+                                      decisions.jsonl, dataset/train.jsonl)
+    training.csv                      the training split, the step-240 log
+                                      line and, for seed 101, training.json
+    authors.csv                       the output of `synthetic-author persona`
+    cost.csv                          the token estimates of usage.json
+    spend.csv                         the provider's reported daily spend of
+                                      the account before and after each
+                                      corpus run
 
-Runs of a candidate on every examinable task of the frozen exam (not a pilot) go in
-data/full.csv (the run, its judge, arms and the tasks outside the pilot) and
-data/full_comparisons.csv (the primary and the five secondary comparisons):
-
-    python3 scripts/full_row.py REPORT --arm NAME --description TEXT \
-        --pilot-report PILOT_REPORT
-
-which appends to both files, recomputes every count and exact test from the
-report's per-task records and refuses a report whose summary disagrees;
-PILOT_REPORT is the pilot run of the same candidate (its tasks are reported
-apart, and its answers are compared with the full run's). build_data.py
-recomputes the sign tests, the Holm adjustment and the Bonferroni products and
-refuses a row that does not match.
-
-The paper's prose names the runs it discusses and is edited by hand.
+The commands that produce the examination outputs are listed in the paper's
+Reproducibility section (samples/synthetic-author).
 
 Layout: paper.tex (preamble, abstract), sections/ (one file per section),
-references.bib, data/ (measured counts with their sources), scripts/.
+references.bib, data/, scripts/.

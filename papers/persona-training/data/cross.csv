@@ -1,0 +1,10 @@
+trained_seed,trained_on,compared_with,rival_kind,situations,own,other,neither
+101,Maren Selmere,Kalian Fenley,trained,65,50,12,3
+101,Maren Selmere,Brara Corwick,trained,92,79,1,12
+101,Maren Selmere,Vela Halane,opposite,146,124,0,22
+202,Kalian Fenley,Maren Selmere,trained,49,30,17,2
+202,Kalian Fenley,Brara Corwick,trained,78,72,1,5
+202,Kalian Fenley,Isaen Corford,opposite,120,88,2,30
+303,Brara Corwick,Maren Selmere,trained,97,65,16,16
+303,Brara Corwick,Kalian Fenley,trained,79,61,4,14
+303,Brara Corwick,Isaek Ashley,opposite,156,122,11,23

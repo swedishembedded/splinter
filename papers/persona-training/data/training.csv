@@ -1,8 +1,4 @@
-run,person,command,train_records,replay_records,steps_budget,steps_run,selected_step,peak_lr,lr_source,heldout_records,loss_before,loss_after,acc_before,acc_after
-v6,Jefferson,train,167,0,54,54,last,3e-4,command default,47,2.0764,1.4160,0.6628,0.6652
-ablation,Jefferson,train,273,0,81,81,last,3e-4,command default,47,2.0764,1.4011,0.6628,0.6673
-v7,Jefferson,train,278,0,105,56,28,3e-4,log,59,1.2841,0.8677,0.7309,0.7505
-rehearsal,Jefferson,train,278,108,105,56,28,3e-4,log,59,1.2841,0.8724,0.7309,0.7534
-e4,Jefferson,train,455,0,120,120,105,2e-4,log,59,1.2841,0.8587,0.7309,0.7529
-e1,Jefferson,train,273,0,120,117,45,2e-4,log,59,1.2841,0.8718,0.7309,0.7491
-adams,Adams,learn,177,0,60,60,last,2e-4,command default,60,1.6118,1.0633,0.7095,0.7208
+seed,steps,records_per_step,rank,alpha,learning_rate,train_records,held_out_records,elapsed_at_last_step_s,loss_at_last_step,held_out_loss_before,held_out_loss_after,held_out_token_accuracy_before,held_out_token_accuracy_after
+101,240,4,16,32,0.0003,801,93,7802,0.0661,3.40,1.30,0.706,0.788
+202,240,4,16,32,,834,93,7924,0.0485,,,,
+303,240,4,16,32,,546,60,7697,0.0543,,,,

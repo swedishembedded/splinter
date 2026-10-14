@@ -1,92 +1,66 @@
 % SPDX-License-Identifier: CC-BY-4.0
-% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
 
 \section{Introduction}\label{sec:intro}
 
-A user who wants a model that reasons and writes ``like'' a historical author
-has, today, two cheap options. The first is to tell a general model who to be, in
-a system prompt. The second is to fine-tune a model on the author's collected
-writings, optionally with synthetic dialogues about them. Whether the second option
-buys anything over the first, and how one would know, is the question this paper
-studies. We study it inside a concrete system, Splinter, which is given a single
-sentence of the form ``Learn to think like \emph{X} based on the materials \emph{X}
-has written in directory \emph{D}'' and must, without further instruction, produce a
-fine-tuned model together with a measurement of what it learned and a decision on
-whether to release it.
+A person's writing carries more than facts and style. It carries the person's judgment:
+what they weigh against what, what they refuse to do whatever the circumstances, and which
+consideration yields when two collide. A language model fine-tuned on such writing could
+decide a new matter as the writer would, and, as an agent, carry the decision out through the
+tools it is given, including tools it was not trained with. This paper measures whether
+fine-tuning on one author's writings produces that behaviour, in a setting where the answer
+can be checked mechanically.
 
-We chose two test subjects with large public-domain corpora, Thomas Jefferson (about 1.5
-million words of letters and works in the training materials) and Samuel Adams (a smaller
-corpus of about one megabyte). The policy is Qwen3-8B~\citep{qwen3} used in non-thinking
-mode and adapted with LoRA~\citep{hu2021lora}; the judge is a separate Qwen3-14B. Everything
-runs on two Tesla P40 cards with 24~GB each, which constrains the work in ways that shape
-the methodology (\cref{sec:residency}).
+Measuring it on a real author is hard for two reasons. The model may have met the author in
+pretraining, so a correct answer does not show that anything was learned from the training
+texts. And what the author would decide in a new situation is open to interpretation, so
+there is no answer key that does not itself rest on judgment, whether a rater's or a judge
+model's. Evaluations of models that take on a character or a population use retained
+knowledge of the character or survey answers as the reference (\cref{sec:related}); neither
+is a decision graded against a ground truth that pretraining cannot have contained.
+
+We remove both problems with a synthetic author. An author is a pure function of a seed: it
+holds four beliefs from a fixed set of six tenets, each read one of two opposed ways, in a
+hidden order of priority. Given a situation, code computes what such an author decides and
+which belief decided it. Situations are set in places, cases and outside houses whose names
+are made from syllables drawn from the seed, with invented years and household counts. The
+author's essays are written by a language model that is given the beliefs privately and the
+decision of each case, and is instructed to let the beliefs show only in what is decided,
+never stating them as rules. A model trained on decisions read out of these essays is then
+examined on situations whose topics, combinations of facts and options, and tool schemas
+were withheld from the training data, and each answer is graded by comparing the option named
+in a tool call with the oracle's decision.
 
 \paragraph{Scope.}
-This paper covers one question: whether fine-tuning a small policy model on one
-author's own writings makes it think and write like that author on material it has not
-seen, beyond what a persona prompt achieves, and how that is measured. In scope are the
-construction of the training data from the author's writings (views, tasks, abstention,
-replay), the training mechanics of the adapter, the evaluation design (held-out source
-families, exam, judge, statistics, retention), the release gate's checks as measurements,
-and the defects in any of these. Out of scope, and reported elsewhere when they have
-verified findings of their own, are other uses of the system (timelines and longitudinal
-learning, predictive gates, learning from usage policy), retrieval of source passages at
-answer time, serving performance, and models other than the Qwen3 pair studied here. A
-new finding belongs in this paper if it changes what is claimed about, or how one would
-measure, an adapter trained on an author's writings.
-
-\paragraph{The central difficulty is measurement, not training.}
-It is easy to produce an adapter that loses a few points of training loss and
-sounds a little more archaic. It is hard to show that the adapter has changed what the
-model \emph{does} on text it has never seen, beyond what a prompt already achieves, at a
-cost to general behaviour that is acceptable. The defects that changed the reported
-numbers of the first version of the system were defects of measurement: a split that
-leaked, a gate that measured the wrong thing, a grader that failed correct answers, an
-exam with too few independent units to detect anything. The training defects were found
-by reading the training code, not through the exam numbers.
+This paper concerns fine-tuning a language model on one author's writings so that it
+decides, and acts through tool calls, as the author would on situations, topics and tools it
+has not been trained on; the pipeline that turns the writings into an adapter; and the design
+of the evaluation (an oracle with known hidden beliefs, held-out axes, mechanical grading,
+paired statistics, and baselines that put the author's name, the author's beliefs or retrieved
+passages of the writings in the prompt). It reports measurements on three synthetic authors
+with one policy model, Qwen3-8B \citep{yang2025qwen3}. The authors' writings are
+model-written; style, voice and the reasons a model gives are not measured.
 
 \paragraph{Contributions.}
 \begin{enumerate}
-\item A complete, autonomous pipeline from one sentence to a released adapter, with a
-  family-level held-out rule that is robust to overlapping editions (\cref{sec:system,sec:split}).
-\item An evaluation design for small-corpus persona fine-tuning: an exam reserved
-  before any generation, a primary comparison fixed in advance against the
-  \emph{persona-prompted} base, per-task pairing with a family-clustered bootstrap, Holm
-  correction of secondaries, a power simulation for sizing, and a judge with controls and
-  deterministic overrides (\cref{sec:eval}). The design is implemented, its power is
-  simulated, four pilot runs on a subset of the exam and full runs of two candidates on all of
-  it are reported (\cref{sec:frozen,sec:deployed,sec:full}); the other results of \cref{sec:results} come from an earlier,
-  simpler exam (\cref{sec:exam-versions}).
-\item A catalogue of defects that were found and fixed, each with the measurement that
-  exposed it: leakage across editions, a gate that did not test generalisation, a grader bug,
-  the retention suite's inability to detect a two-point drop, and eight training-mechanics
-  defects, seven of them corrected (\cref{sec:defects}).
-\item Results (\cref{sec:results}). On the earlier exams no candidate is
-  distinguishable from the persona-prompted base at $\alpha=0.05$. On the first 25 families
-  of the reserved exam, the v7 candidate is not distinguishable from it either (+4.5
-  points, family-level $p=0.21$), while the candidate trained with voice data is judged
-  right on 11.0 points more tasks ($p=0.004$) only when it is also given the persona
-  prompt. Two further candidates, run with only the deployed arm, give one more positive
-  result (trained with voice data under the corrected recipe: +8.4 points, family-level
-  $p=0.018$) and one that is not distinguishable (+4.8 points, $p=0.30$)
-  (\cref{sec:deployed}). On the full frozen exam (242 tasks, 38 families) the two positive
-  candidates keep their lead over the prompted base under the persona prompt, at a smaller size:
-  +9.1 points (family-level $p=0.0033$; $0.013$ after a factor of four for the candidates
-  examined on the reserved exam) and +7.0 points ($p=0.022$; $0.087$). The exam contains the pilot, the
-  candidates were chosen after it, the part outside the pilot does not resolve the leads, and
-  neither adapter exceeds the base or the prompted base without the persona prompt
-  (\cref{sec:full}). We give the measured numbers, the bounds on what the exams could
-  have shown, and what has not been established.
+\item A controlled benchmark of synthetic authors with a code oracle, hold-out of topics, of
+  combinations of facts and options, and of tool schemas, graded by string comparison with no
+  judge model (\cref{sec:benchmark}).
+\item The pipeline from essays to adapter: reading decisions out of essays with quotations
+  verified by code, turning them into tool-call training records through three tool schemas,
+  and LoRA fine-tuning (\cref{sec:training}).
+\item Measurements on three authors for five arms on one fixed examination each: the
+  adapter, the base model, the base told the author's name, the base given the author's beliefs
+  as principles, and the base given retrieved essay paragraphs, with exact paired tests and
+  Wilson intervals (\cref{sec:results}).
+\item A comparison of what adapters trained on different authors decide where those authors
+  disagree, and an audit of the decisions read out of the essays against the oracle
+  (\cref{sec:results}).
 \end{enumerate}
 
-\paragraph{What this paper does not claim.}
-It does not claim that the adapter ``thinks like'' either author. It does not claim that
-a fine-tune beats prompting without the prompt: on the earlier exams the candidates' point
-estimates are at or above the prompted base but cannot be separated from chance, and on the
-reserved exam no candidate asked without the persona prompt exceeds the prompted base (two
-candidates were not run without it, and the two that were run on the whole exam fall below
-it); the distinguishable results are for candidates that are also given the prompt, chosen after
-earlier exams and after the pilot, on an exam that contains the pilot. Numbers
-that were not measured are absent or marked as such;
-\cref{sec:repro} lists the commands that reproduce each measured number and
-\cref{sec:limits} what remains unestablished.
+The adapter's accuracy on the examinations is \AccATuned, \AccBTuned\ and \AccCTuned\ for the
+three authors, against \AccABase, \AccBBase\ and \AccCBase\ for the unadapted model; a uniform
+guess is right one time in three, because every item offers three options. Retrieval of essay
+paragraphs is a strong baseline (\AccARetrieval, \AccBRetrieval\ and \AccCRetrieval), and the
+adapter's lead over it is not significant for one of the three authors. \Cref{sec:discussion}
+states what these results establish and the limits of their validity.

@@ -1,0 +1,263 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+\section{Controlled authors and examinations}\label{sec:benchmark}
+
+\Cref{fig:pipeline} shows the whole study. This section defines the author, the situations it
+decides, the corpus written about them, and the examination; \cref{sec:training} turns the
+corpus into an adapter.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=5mm and 7mm,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=10mm, minimum width=24mm,
+    font=\footnotesize, fill=blue!5},
+  code/.style={box, fill=green!8},
+  model/.style={box, fill=orange!12},
+  data/.style={box, fill=gray!10},
+  arr/.style={-{Stealth[length=2mm]}, thick}]
+\node[data] (seed) {seed};
+\node[code, right=of seed] (author) {author:\\4 of 6 beliefs,\\hidden order};
+\node[code, right=of author] (episodes) {episodes: facts,\\3 options, invented\\names; oracle decision};
+\node[model, right=of episodes] (writer) {writer\\(hosted model)\\essay per article};
+\node[code, right=of writer] (gates) {gates (code)\\+ reader check\\against the oracle};
+\node[data, below=10mm of gates] (essays) {essays\\(the corpus)};
+\node[model, left=of essays] (miner) {reader (hosted\\model): briefing,\\decision, reasons};
+\node[code, left=of miner] (verify) {code: quotes\\verbatim, briefing\\leaks nothing};
+\node[data, left=of verify] (records) {records: situation\\$\to$ tool call,\\3 training tools};
+\node[box, below=10mm of records, fill=blue!15] (lora) {LoRA fine-tune\\Qwen3-8B};
+\node[code, right=of lora, minimum width=40mm] (exam) {examination (160 items):\\withheld topics, combinations,\\tools; graded against oracle};
+\node[model, right=of exam] (arms) {five arms:\\base, named, principles,\\retrieval, tuned};
+\draw[arr] (seed) -- (author);
+\draw[arr] (author) -- (episodes);
+\draw[arr] (episodes) -- (writer);
+\draw[arr] (writer) -- (gates);
+\draw[arr] (gates) -- (essays);
+\draw[arr] (essays) -- (miner);
+\draw[arr] (miner) -- (verify);
+\draw[arr] (verify) -- (records);
+\draw[arr] (records) -- (lora);
+\draw[arr] (lora) -- (exam);
+\draw[arr] (exam) -- (arms);
+\draw[arr, dashed] (author.south) -- ++(0,-4mm) -| node[pos=0.25, above, font=\scriptsize] {oracle} (exam.north);
+\end{tikzpicture}}
+\caption{The study. Green boxes are code, orange boxes are calls to one small hosted language
+model (the writer, the reader that gates the essays and the reader that extracts decisions are
+the same model), grey boxes are data. The oracle (dashed) decides every episode of the corpus
+and grades every item of the examination. Nothing generated is kept in the repository.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{The author}\label{sec:author}
+
+A belief is one of six tenets read one of two opposed ways (\cref{tab:tenets}). An author
+holds four distinct tenets, each with a reading, in an order of priority, together with a
+human-readable name made of syllables; all of it is drawn from the seed by a deterministic
+generator. Nothing shown to a model under examination states the order, except in the
+principles arm (\cref{sec:arms}).
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}lp{5.2cm}p{5.6cm}@{}}
+\toprule
+Tenet & Strict reading & Lax reading\\
+\midrule
+within\_grant & keeps to the powers the charter gives, whatever the emergency & stretches the charter when the work needs it\\
+consent & settles with the community what binds it for years & settles lasting matters himself\\
+self\_reliance & distrusts help from outside the community & accepts help freely offered\\
+caution & goes slowly with what cannot be undone & holds that doing nothing also has costs\\
+burden & acts at once when members are hurt & acts only with the body's consent when members are hurt\\
+haste & counts delay in a crisis as the worst fault & takes even a crisis through the council\\
+\bottomrule
+\end{tabular}
+\caption{The six tenets and their two readings, abridged from the statements in the code.}
+\label{tab:tenets}
+\end{table}
+
+\paragraph{The oracle.}
+A situation consists of six facts and three options (\cref{sec:situations}). Each belief
+looks at the facts and gives each option one of four verdicts: forbid, disfavour, neutral or
+favour; a belief is neutral about every option in situations whose facts it does not
+concern. For example, the strict reading of \code{haste} forbids waiting and disfavours taking
+the matter to the assembly when delay would cost dearly, and the strict reading of
+\code{self\_reliance} forbids accepting outside help unless delay would cost dearly, in which
+case it only disfavours it. The beliefs are applied in order of priority to the set of open
+options: each removes the options it forbids (unless it forbids all of them) and then keeps
+only the options with its best remaining verdict. A belief low in the order therefore shows
+only in situations the beliefs above it leave open. If exactly one option remains at the end,
+the beliefs \emph{determine} the decision, and the first belief after which a single option
+was left is recorded as the deciding one; otherwise the situation is undetermined. No corpus
+episode and no examination item is undetermined.
+
+\paragraph{Acceptance.}
+A drawn author is meant to be one whose every belief matters and whose beliefs usually settle
+things. The check uses a fixed reference pool of 600 situations, the same for every author,
+from which the combinations withheld from that author's corpus (\cref{sec:situations}) are
+removed. A draw is accepted if (i) for each of its four beliefs, reading that belief the other
+way changes the decision in at least one situation in which both versions of the author are
+determined, and (ii) at least 60\% of the situations are determined. Draws are repeated from
+the seed's generator until one is accepted; after 256 draws the last is kept. Each of the
+three authors of this study (\cref{tab:authors}) was accepted on its first draw and determines
+87.8\%, 95.3\% and 87.5\% of its reference situations (seeds 101, 202 and 303). The situations
+themselves depend on a seed and never on the author, so a situation alone says nothing about
+who decides it.
+
+\begin{table}[t]
+\centering\small
+\input{tab_authors}
+\caption{The three authors, with their beliefs in order of priority as the generator draws
+them and as the corpus directory records them.}
+\label{tab:authors}
+\end{table}
+
+\subsection{Situations}\label{sec:situations}
+
+A situation has six boolean facts, each drawn with a fair coin: the act would exceed the
+steward's charter; delay would cost dearly; the decision binds the community for years; the
+act cannot be undone; members of the community are being hurt; a power outside the community
+offers help. It also has three options drawn from four ways to act: act alone and at once,
+take the matter to the assembly and act on its word, accept the outside power's offer, and
+wait and do nothing yet. Acceptance is an option only if an offer was made: without an offer
+the options are the three other ways; with one, one of those three is dropped at random and
+acceptance takes its place. \emph{Every situation therefore offers exactly three options, and
+a guesser who picks one uniformly at random is right a third of the time.} A situation is set
+in one of twelve fixed topics (the allocation of a shared granary, tolls on a river crossing,
+the contracts of apprentices, and so on). Each case is given a name made of a syllable-built
+place name and the topic's matter (``the Dunmere granary''), a year, a number of dependent
+households and the syllable-built name of an outside house, all drawn from the seed.
+
+Two axes are withheld from every author's corpus. Two of the twelve topics (the care of the
+poor in winter and the repair of the mill dam) are never written about. And a hash of the
+seed, the six facts and the set of options marks about one in five of the possible
+combinations of facts and options as withheld; there are 128 such combinations (32 fact
+patterns without an offer with one option set each, 32 with an offer with three each), of
+which 26, 35 and 21 are withheld for seeds 101, 202 and 303. No essay is planned with a
+withheld combination, so no essay tells the decision of a situation with that combination.
+
+\subsection{Corpus generation and its gates}\label{sec:corpus}
+
+An author's corpus consists of long first-person essays, each a retired steward's
+reflections for a younger colleague on one topic. A corpus is planned as a sequence of
+articles; article $i$ is about trained topic $i \bmod 10$ and tells three episodes of that
+topic, drawn in order from a pool of 20{,}000 situations with a salt of its own, separate from
+the examination's. An episode is drawn only if the beliefs determine its decision, its
+combination is not withheld and its situation has not been used by an earlier article; cases
+within an article are named differently. The plan depends only on the seed, and the first
+$n$ articles of a longer plan are the plan of $n$ articles. The corpora of this study were
+planned with 60 articles.
+
+The writer is a small hosted language model, sampled at the provider's default settings. For
+each article it is given the author's name, the topic, a minimum length of 700 words, the
+author's four beliefs as private notes in the second person, listed in the order of priority
+without being called an order (dispositions such as ``You keep to the powers your charter
+gives you, and you will not go past them whatever the emergency'', not maxims), and for each
+episode a case file of values (case name, place, year, households, topic, and each fact as a
+value) together with a plain phrase for what the narrator did. It is told to state every
+fact plainly, to tell every episode in its own paragraphs that name the case, to say what was
+done and why from experience, not to reuse the wording of the case file or of the phrase for
+what was done, and never to state or paraphrase the convictions as rules, maxims or
+principles. If an article is turned away, the reason is given back with the next request for
+it; an article is requested at most four times and then given up. A run has a budget in
+requests and estimated output tokens; the budgets of the reported runs were not reached.
+
+An essay is kept only if it passes every gate. Words are counted as whitespace-separated
+tokens of the essay's body; for the copying gates the text is lower-cased and split into
+runs of letters, digits and apostrophes. The gates, in the order applied, are:
+\begin{itemize}
+\item \emph{too short}: fewer than 700 words;
+\item \emph{belief quoted}: it repeats nine consecutive words of any of the 24 texts in which
+  a belief can be put (the twelve statements and the twelve private notes, of the beliefs the
+  author holds and of those it does not);
+\item \emph{case missing}: no paragraph names a case of the article;
+\item \emph{brief copied}: it repeats eight consecutive words of the scene-setting sentences
+  of a case (year, place, case and households, with the topic's name taken out) or six of the
+  phrase for what the narrator did (with the outside house's name taken out);
+\item \emph{decision or fact read otherwise}: the same hosted model, as a reader, reads the
+  whole essay with the list of its cases and states for each case what the narrator did,
+  whether an outside house offered help, and whether each of the other five facts is stated
+  true, false or not at all. Code compares every one of these with the episode and the
+  oracle; a single difference, or a reading that fails, turns the essay away.
+\end{itemize}
+The quotation gate catches recitation of a belief, not a paraphrase of one.
+\Cref{tab:corpora} gives the corpora and \cref{tab:rejections} what the gates turned away.
+
+\subsection{The examination}\label{sec:exam}
+
+Each author is examined on 160 items, a deterministic function of the seed. The items are
+situations determined by the author's beliefs, taken in order from a pool of 60{,}000
+situations with a salt of their own, separate from the corpus pool, and sorted into four cells
+of 40 by crossing two properties: the topic is trained or withheld, and the combination of
+facts and options is withheld or not. A situation that would overfill its cell is skipped, as
+is one whose case name equals a case name of the corpus plan (taken with 100 articles, a
+superset of the 60 written) or of an earlier item. An item whose combination is not withheld
+may share it with corpus episodes; for 59, 69 and 53 of the 80 such items of authors 101, 202
+and 303 the combination occurs in at least one written essay, and for 11, 11 and 12 items the
+same topic and combination do. No item shares a case name, and so no case, with the corpus.
+
+Every item also has a tool through which the model must decide. Within each cell, items
+alternate between the three tools the model is trained with (\code{decide},
+\code{choose\_course}, \code{rule\_on\_matter}) and two it is never trained with
+(\code{settle\_matter}, \code{log\_resolution}), so that 80 items are posed through trained
+tools and 80 through withheld ones. The five tools differ in name, description, the name of
+the argument that selects the option and the name of the argument that gives a reason. Two
+label schemes are shared between the groups: \code{decide}, \code{choose\_course} and
+\code{settle\_matter} label options by name (\code{act\_alone}, \code{consult\_assembly},
+\code{accept\_offer}, \code{wait\_and\_see}), and \code{rule\_on\_matter} and
+\code{log\_resolution} by letter in the order listed.
+
+The situation is stated in fixed sentences: two that set the scene (year, place, case, topic
+and households) and one per fact, the offer's sentence naming the outside house. The options are listed in a fixed order (act alone, assembly, offer, wait). The three
+properties give three \emph{axes}: topic, combination and tool, each seen or new. Every item
+belongs to one cell of each axis, and each such cell holds 80 items.
+
+\subsection{Grading}\label{sec:grading}
+
+The model is shown a system turn, then a user turn that states the situation, lists the
+options by the tool's labels with a short phrase each, and asks it to decide by calling the
+tool; the tool's definition, which declares the listed labels as the allowed values of its option
+argument, is the only one offered; decoding is not constrained to them. The grade is a string comparison: the item is right if and only if the
+first tool call of the reply calls the item's tool with an option argument equal to the label
+of the oracle's decision. A reply with no call, a call to another tool, or a missing or
+unlisted label would be wrong; in all 2{,}400 replies of this study the call named a listed
+option, so every error is the choice of another option. Decoding is greedy, in non-thinking
+mode, with at most 256 new tokens. No judge model is involved at any stage of grading, and the
+reason a model gives is not graded.
+
+\subsection{Arms}\label{sec:arms}
+
+All arms use the same base model, items, tool and decoding; they differ in the system turn or
+the adapter. The plain system turn is ``You are a steward who decides matters for a
+community. Decide each matter put to you by calling the tool you are given.'' and names no
+belief and no author.
+\begin{description}
+\item[base] the plain system turn, no adapter.
+\item[named] the plain turn followed by ``You are \textless author's name\textgreater.''
+\item[principles] the plain turn followed by ``You hold these convictions, listed from the
+  most important to the least, and they decide how you settle a matter:'' and the author's four
+  belief statements as a list in order of priority. The prompt thus names the beliefs the
+  oracle applies and their order, in prose; it does not state the verdict each belief gives
+  in which circumstances, nor the elimination procedure of the oracle.
+\item[retrieval] the plain turn followed by ``You have these passages from the steward's own
+  essays; the steward settles matters as they show:'' and the six paragraphs of the author's
+  corpus ranked highest by BM25 \citep{robertson2009bm25} ($k_1=1.2$, $b=0.75$, lower-cased
+  alphanumeric tokens) against the item's situation text. Paragraphs are the blank-line
+  separated blocks of every kept essay with at least twelve words.
+\item[tuned] the plain turn with the adapter of \cref{sec:lora}.
+\end{description}
+Base and tuned receive identical prompts, so the only difference between them is the adapter.
+
+\subsection{Statistics}\label{sec:stats}
+
+Accuracy is the number of items right of 160 with a 95\% Wilson interval
+\citep{wilson1927probable}. Two arms are compared on the same items by an exact one-sided sign
+test over the items on which exactly one of them is right, for the six comparisons of
+\cref{tab:paired}: under the null hypothesis each such item is equally likely to favour either
+arm, so the number won by the arm claimed better is binomial with parameter one half. The test
+needs no further assumption. The intervals and tests treat the 160 items as the sample; they
+do not include variation from retraining. The $p$-values are not corrected for the
+\PairedTests\ comparisons made; the effect of a Bonferroni factor of \PairedTests\ is stated
+where it matters (\cref{sec:paired}). Differences in the adapter's accuracy between the two
+cells of an axis, which hold disjoint sets of 80 items, are given with Newcombe's hybrid score
+interval built from the two Wilson intervals \citep{newcombe1998interval}.
