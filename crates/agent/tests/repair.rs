@@ -437,7 +437,11 @@ fn a_failed_construct_task_is_critiqued_retried_and_the_chain_feeds_the_views() 
     assert_eq!(decision.records.len(), 1, "{:?}", decision.excluded);
     let turns = chat(&decision.records[0].body);
     assert_eq!(turns[0], ("user".into(), INSTRUCTION.into()));
-    assert_eq!(turns.last().unwrap(), &("assistant".into(), CORRECT.into()));
+    assert_eq!(
+        turns.last().unwrap(),
+        &("assistant".into(), CORRECT.trim_end().into()),
+        "the view keeps the answer without its closing newline"
+    );
 
     let preference = Preference::new(Strength::Executable)
         .project(&corpus)
