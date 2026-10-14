@@ -229,7 +229,7 @@ impl Session {
         let json = self.global.json;
         match command {
             Command::Learn(args) => {
-                let release_asked = !args.no_release;
+                let release_asked = crate::learn_request::release_asked(&args);
                 let request = learn_request(*args);
                 let learned = learn(ctx, &request, self.splinter.trainer())?;
                 emit(json, &learned);

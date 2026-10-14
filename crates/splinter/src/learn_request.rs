@@ -15,6 +15,12 @@ use splinter_sdk::vocabulary::role::Role;
 
 use crate::cli::LearnArgs;
 
+/// Whether the run is to end in a release: a named adapter is published
+/// instead, and `--no-release` stops before the gate.
+pub(crate) fn release_asked(args: &LearnArgs) -> bool {
+    !args.no_release && args.adapter.is_none()
+}
+
 /// The `learn` the command line asked for. With no kinds named, a planner
 /// chooses them: naming the kinds is deciding them.
 pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
@@ -95,6 +101,24 @@ mod tests {
         let named = request(&["learn", "docs", "--kinds", "recall,advise"]);
         assert!(!named.plan, "naming the kinds is deciding them");
         assert_eq!(named.kinds, ["recall", "advise"]);
+    }
+
+    #[test]
+    fn a_run_is_asked_for_a_release_unless_it_is_stopped_before_one_or_publishes_an_adapter() {
+        let asked = |words: &[&str]| {
+            let mut argv = vec!["splinter"];
+            argv.extend_from_slice(words);
+            match Cli::try_parse_from(argv).unwrap().command {
+                Some(Command::Learn(args)) => release_asked(&args),
+                other => panic!("not a learn: {other:?}"),
+            }
+        };
+        assert!(asked(&["learn", "docs"]));
+        assert!(!asked(&["learn", "docs", "--no-release"]));
+        assert!(
+            !asked(&["learn", "docs", "--adapter", "maren"]),
+            "a named adapter is published, so there is no release to be missing"
+        );
     }
 
     #[test]
