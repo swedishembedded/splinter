@@ -118,6 +118,13 @@ pub fn words(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// Whether `haystack` holds `needle` as consecutive words. An empty `needle`
+/// is held by nothing.
+#[must_use]
+pub fn contains_words(haystack: &[String], needle: &[String]) -> bool {
+    !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
+}
+
 /// The passages of `answer` in double quotation marks, straight or curly,
 /// that run at least `min_words` words.
 #[must_use]

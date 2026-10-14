@@ -175,8 +175,9 @@ the tests that exist:
 
 1. The remaining generator copies (model stats, powered analysis and plan,
    speech features), bit-identical streams only.
-2. Quotation occurrence and shared-run checks into the eval quotation
-   verifier, replacing the copies in the Adams and Jefferson samples.
+2. The shared-run check of the Jefferson sample into the eval quotation
+   verifier (the consecutive-word occurrence check is there as
+   `contains_words` and the Adams, absorb and synthetic-author samples use it).
 3. Family grouping by overlap and the held-out hash into the data crate,
    keeping the hash input byte-identical so frozen exams do not change.
 4. Principle verification (quotes looked up by code, status computed from what

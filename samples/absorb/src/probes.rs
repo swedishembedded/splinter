@@ -23,7 +23,7 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use splinter_sdk::measure::overlap::RUN;
-use splinter_sdk::measure::verifiers::quotation::words;
+use splinter_sdk::measure::verifiers::quotation::{contains_words as contains_run, words};
 
 use crate::keys::{missing, Key};
 
@@ -214,11 +214,6 @@ fn runs(text: &str) -> HashSet<Vec<String>> {
 #[must_use]
 pub fn shares_a_run(a: &str, b: &str) -> bool {
     !runs(a).is_disjoint(&runs(b))
-}
-
-/// Whether `haystack` holds `needle` as a contiguous run of words.
-fn contains_run(haystack: &[String], needle: &[String]) -> bool {
-    !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// How a training record leaks a probe.

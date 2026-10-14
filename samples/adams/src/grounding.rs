@@ -23,7 +23,7 @@ use std::collections::HashSet;
 use splinter_sdk::measure::verifiers::quotation::{quotations, words};
 
 use crate::curate::Document;
-use crate::principles::occurs;
+use splinter_sdk::measure::verifiers::quotation::contains_words as occurs;
 
 /// Words a quotation must run to be checked as one.
 const MIN_QUOTE_WORDS: usize = 6;

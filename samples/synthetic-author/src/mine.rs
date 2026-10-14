@@ -15,6 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::TypedCall;
+use splinter_sdk::measure::verifiers::quotation::contains_words as contains_run;
 
 use crate::cache::StoredArticle;
 pub use crate::gates::MinedFacts;
@@ -81,10 +82,6 @@ fn normal(text: &str) -> Vec<String> {
         .filter(|w| !w.is_empty())
         .map(str::to_lowercase)
         .collect()
-}
-
-fn contains_run(haystack: &[String], needle: &[String]) -> bool {
-    !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// What of `mined` stands, for each case of `article` in order: the case as

@@ -209,3 +209,19 @@ fn quotations_are_the_marked_passages_of_enough_words() {
         ["hello", "world", "wide", "web"]
     );
 }
+
+#[test]
+fn a_run_of_words_is_found_only_as_consecutive_words_and_an_empty_run_is_nowhere() {
+    use splinter_eval::verifiers::quotation::{contains_words, words};
+    let text = words("The steward waited; the water kept rising all night.");
+    assert!(contains_words(&text, &words("the water kept rising")));
+    assert!(
+        !contains_words(&text, &words("steward water")),
+        "words that are not next to one another are not a run"
+    );
+    assert!(
+        !contains_words(&text, &[]),
+        "nothing is not found in anything"
+    );
+    assert!(!contains_words(&words("rising"), &words("kept rising")));
+}

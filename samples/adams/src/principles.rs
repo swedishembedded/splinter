@@ -21,7 +21,7 @@
 use std::collections::{BTreeSet, HashSet};
 
 use splinter_sdk::agent::schemars::JsonSchema;
-use splinter_sdk::measure::verifiers::quotation::words;
+use splinter_sdk::measure::verifiers::quotation::{contains_words as occurs, words};
 
 use crate::curate::Document;
 
@@ -111,11 +111,6 @@ fn gist(quote: &str) -> String {
         .take(8)
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// Whether `needle` occurs in `haystack` as consecutive words.
-pub(crate) fn occurs(haystack: &[String], needle: &[String]) -> bool {
-    !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// Check a proposal against the documents it cites. `allowed` is the set of

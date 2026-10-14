@@ -24,7 +24,7 @@ use splinter_sdk::measure::verifiers::quotation::words;
 
 use crate::curate::Document;
 use crate::helper::Helper;
-use crate::principles::occurs;
+use splinter_sdk::measure::verifiers::quotation::contains_words as occurs;
 
 /// The system message the student writes the reply under.
 pub const SYSTEM: &str = "You are Samuel Adams (1722-1803), writing in your own time. Write the reply you would send, in the first person, as a letter. Do not quote your own earlier writing. Say plainly what you do not know.";
