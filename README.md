@@ -70,13 +70,14 @@ needs Splinter installed.
 ```bash
 splinter doctor                                       # can a run start here?
 splinter eval --suite anchor --freeze examples/first-run/anchor.jsonl   # once: the anchor suite
-splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog"
+splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog" --kinds denoise
 splinter status
 splinter ask "At what baud rate does the QX-7 console run?"
 ```
 
 `examples/first-run` is a manual for an invented device plus a twenty-question anchor
-suite, with the walk-through and what to expect from each step.
+suite, with the walk-through and what each option did in a real run (a short manual with
+small models stops before training, and says why).
 
 The command line (`crates/splinter/README.md`) runs the pipeline one stage per
 verb - sources, tasks, solve, verify, critique, dataset, train, release - and
