@@ -15,16 +15,16 @@ use std::process::ExitCode;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use splinter_sdk::config::Config;
+use splinter_sdk::knowledge::capture::DirtyPolicy;
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::vocabulary::digest::Digest;
-use splinter_sdk::{runs, Splinter};
+use splinter_sdk::{runs, Context as SplinterContext, Splinter};
 
-use crate::acceptance::Check;
-use crate::contract::{defaults, Contract, Limits, CONTRACT_SCHEMA, DEFAULT_MODEL};
+use crate::contract::{defaults, Check, Contract, Limits, CONTRACT_SCHEMA, DEFAULT_MODEL};
 use crate::outcome::{Outcome, Status};
-use crate::repo::{git, head_rev, is_clean};
-use crate::run::{execute, system_prompt, Request};
-use crate::store::{read_json, LoopHome, CHECKPOINT_FILE, CONTRACT_FILE, OUTCOME_FILE, PATCH_FILE};
+use crate::run::{apply, execute, system_prompt, Request};
+use crate::store::{read_json, LoopHome, CHECKPOINT_FILE, CONTRACT_FILE, OUTCOME_FILE};
+use crate::workspace::Workspace;
 
 /// The loop.
 #[derive(Parser, Debug)]
@@ -85,16 +85,14 @@ struct RunArgs {
     /// A file holding the task.
     #[arg(long)]
     task_file: Option<PathBuf>,
-    /// A hidden acceptance check, `NAME=COMMAND`, run in the candidate
-    /// checkout; the worker is told its name and nothing else. Repeatable.
+    /// A hidden acceptance check, `NAME=COMMAND`, run through `sh -c` in a
+    /// fresh copy of the repository with the candidate's patch applied; the
+    /// worker is told that it exists and nothing else. Repeatable.
     #[arg(long = "accept", value_name = "NAME=COMMAND")]
     accept: Vec<String>,
     /// An acceptance check the worker is shown, `NAME=COMMAND`; repeatable.
     #[arg(long = "accept-visible", value_name = "NAME=COMMAND")]
     accept_visible: Vec<String>,
-    /// A shell command run once in the fresh checkout before the first attempt; repeatable.
-    #[arg(long = "setup", value_name = "COMMAND")]
-    setup: Vec<String>,
     /// A file or directory the worker must not change; repeatable.
     #[arg(long = "protect", value_name = "PATH")]
     protect: Vec<String>,
@@ -132,9 +130,6 @@ struct RunArgs {
     /// The most a remote model may cost, in US dollars as its provider reports it.
     #[arg(long)]
     max_cost_usd: Option<f64>,
-    /// Seconds an acceptance check may take.
-    #[arg(long, default_value_t = defaults::CHECK_SECS)]
-    check_secs: u64,
     /// A hint from the supervisor. A run given any is recorded as assisted.
     #[arg(long = "hint")]
     hints: Vec<String>,
@@ -191,10 +186,10 @@ pub fn main() -> Result<ExitCode> {
     let home = LoopHome::under(&home_of(&cli)?);
     match &cli.command {
         Command::Run(args) => {
-            let contract = contract_of(args, &home)?;
             let splinter = Splinter::builder(config(&cli)?)
                 .allow_remote(args.allow_api_models)
                 .build()?;
+            let contract = contract_of(&splinter.context(), args, &home)?;
             let outcome = execute(&splinter, &home, Request::New(Box::new(contract)))?;
             report(&outcome, args.json)
         }
@@ -216,7 +211,7 @@ pub fn main() -> Result<ExitCode> {
             println!("{}", serde_json::to_string_pretty(&asked)?);
             Ok(ExitCode::SUCCESS)
         }
-        Command::Apply { run } => apply(&home, run),
+        Command::Apply { run } => apply_run(&cli, &home, run),
         Command::Runs => {
             let splinter = Splinter::builder(config(&cli)?).build()?;
             let list = runs::list(&splinter.context())?;
@@ -228,7 +223,7 @@ pub fn main() -> Result<ExitCode> {
 
 /// The contract a `run` command asks for, with the baseline read from the
 /// repository now.
-fn contract_of(args: &RunArgs, home: &LoopHome) -> Result<Contract> {
+fn contract_of(ctx: &SplinterContext, args: &RunArgs, home: &LoopHome) -> Result<Contract> {
     let repository = args
         .workspace
         .canonicalize()
@@ -240,21 +235,13 @@ fn contract_of(args: &RunArgs, home: &LoopHome) -> Result<Contract> {
         }
         _ => bail!("give the task with --task or --task-file"),
     };
-    if !is_clean(&repository)? {
-        bail!(
-            "{} has uncommitted changes; the loop works from a committed baseline and leaves your changes alone",
-            repository.display()
-        );
-    }
+    // The loop works from a committed baseline and leaves your changes alone.
+    let baseline = Workspace::capture(ctx, &repository, "HEAD", DirtyPolicy::Refuse)?;
     let accept = args
         .accept_visible
         .iter()
-        .map(|a| Check::parse(a, args.check_secs, true))
-        .chain(
-            args.accept
-                .iter()
-                .map(|a| Check::parse(a, args.check_secs, false)),
-        )
+        .map(|a| Check::parse(a, true))
+        .chain(args.accept.iter().map(|a| Check::parse(a, false)))
         .collect::<Result<Vec<_>>>()?;
     if accept.is_empty() {
         bail!("give at least one acceptance check with --accept or --accept-visible NAME=COMMAND: without one nothing decides success");
@@ -264,9 +251,8 @@ fn contract_of(args: &RunArgs, home: &LoopHome) -> Result<Contract> {
     Ok(Contract {
         schema: CONTRACT_SCHEMA,
         task,
-        baseline_rev: head_rev(&repository)?,
+        baseline_rev: baseline.commit,
         repository,
-        setup: args.setup.clone(),
         acceptance: accept,
         protected: args.protect.clone(),
         limits: Limits {
@@ -356,36 +342,11 @@ fn status(cli: &Cli, home: &LoopHome, run: &str) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Applies the patch of an accepted run to the repository the run started
-/// on, which must be clean and still at the baseline.
-fn apply(home: &LoopHome, run: &str) -> Result<ExitCode> {
-    let dir = home.run_dir(run);
-    let outcome: Outcome = read_json(&dir.join(OUTCOME_FILE))?;
-    if outcome.status != Status::Accepted {
-        bail!(
-            "run {run} was not accepted ({:?}); nothing is applied",
-            outcome.status
-        );
-    }
-    let contract: Contract = read_json(&dir.join(CONTRACT_FILE))?;
-    if !is_clean(&contract.repository)? || head_rev(&contract.repository)? != contract.baseline_rev
-    {
-        bail!(
-            "{} is not clean at the baseline {}; apply the patch {} by hand",
-            contract.repository.display(),
-            contract.baseline_rev,
-            dir.join(PATCH_FILE).display()
-        );
-    }
-    let patch = dir.join(PATCH_FILE);
-    git(
-        &contract.repository,
-        &["apply", "--index", &patch.to_string_lossy()],
-    )?;
-    println!(
-        "applied {} to {}",
-        patch.display(),
-        contract.repository.display()
-    );
+/// Applies the patch of an accepted run to the repository it started on.
+fn apply_run(cli: &Cli, home: &LoopHome, run: &str) -> Result<ExitCode> {
+    let splinter = Splinter::builder(config(cli)?).build()?;
+    let touched = apply(&splinter, home, run)?;
+    let files: Vec<_> = touched.iter().map(|p| p.display().to_string()).collect();
+    println!("applied run {run}: {}", files.join(", "));
     Ok(ExitCode::SUCCESS)
 }

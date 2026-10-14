@@ -6,36 +6,48 @@
 // evaluation or locally operated coding agents, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! One attempt: a fresh worker in a clean checkout, judged afterwards.
+//! One attempt: a fresh worker in a fresh copy of the snapshot, judged
+//! afterwards.
 //!
-//! The attempt resets the checkout to the baseline, lets the worker work
-//! within its limits, then reads back from git what changed, applies the
-//! protected-path rule and runs the supervisor's acceptance checks. How the
-//! attempt ended is classified, and a failed one yields diagnostic feedback
-//! for the next: the failure and the tail of the failing output, never a
-//! patch.
+//! The worker is the shared one (`solve_in_workspace`): its tree is laid out
+//! from the snapshot and thrown away, the change is read back from git as a
+//! patch, and the checks the worker is shown earn it follow-up turns inside
+//! the attempt. The loop then judges the patch by the contract's checks in
+//! another fresh copy (the workspace grading), audits the worker's
+//! trajectory for any sight of the supervisor's material, classifies how the
+//! attempt ended and, for a failed one, writes diagnostic feedback for the
+//! next: the failure and the output of the checks the worker may see, never
+//! a patch, never what a hidden check printed.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Result};
 use serde_json::json;
 use splinter_sdk::agent::solve::{Model, SolveError, SolveOptions};
-use splinter_sdk::agent::work::{WorkOptions, Worker};
+use splinter_sdk::agent::sven::atif::StepOrigin;
+use splinter_sdk::agent::work::{
+    solve_in_workspace, tail, WorkOptions, WorkProtocol, WorkspaceSolution,
+};
 use splinter_sdk::agent::CancelToken;
+use splinter_sdk::measure::exposure::{audit_exposure, HiddenMaterial};
+use splinter_sdk::sandbox::{CommandCall, Patch};
+use splinter_sdk::vocabulary::annotation::Outcome;
+use splinter_sdk::vocabulary::experience::Provenance;
 use splinter_sdk::Context;
 
-use crate::acceptance::{run_all, tail_lines, CheckResult};
 use crate::contract::Contract;
 use crate::observe::Observation;
-use crate::outcome::AttemptSummary;
-use crate::repo::{changes_since, reset_to, touched_protected, FileChange};
+use crate::outcome::{AttemptSummary, CheckResult};
+use crate::store::LoopHome;
 use crate::trace::Tracer;
+use crate::workspace::{workspace_check, Judgement, Workspace};
+use splinter_sdk::measure::verifiers::workspace::Refusal;
 
-/// Lines of a failing check's output the next attempt is shown.
-const FEEDBACK_LINES: usize = 40;
+/// The name experiences of the loop's attempts carry as their solver.
+const SOLVER: &str = "agent-loop";
 
 /// How an attempt turned out, beyond its summary.
 pub struct Judged {
@@ -65,12 +77,14 @@ pub struct Setup<'a> {
     pub remote: bool,
     /// The contract.
     pub contract: &'a Contract,
+    /// The repository at the baseline.
+    pub workspace: &'a Workspace,
     /// The system prompt in effect.
     pub system: &'a str,
     /// The trace.
     pub tracer: &'a Arc<Tracer>,
-    /// The checkout.
-    pub work: &'a Path,
+    /// The loop's namespace, which holds every run's contract.
+    pub home: &'a LoopHome,
     /// The run's directory.
     pub run_dir: &'a Path,
     /// Cancels when the run is cancelled from outside.
@@ -138,74 +152,53 @@ fn forward_cancel(
     })
 }
 
-/// What a candidate looked like when it was inspected.
-struct Inspection {
-    patch: String,
-    changes: Vec<FileChange>,
-    checks: Vec<CheckResult>,
-    touched: Vec<String>,
+/// What the episodes of one attempt add up to.
+struct Episode {
+    solved: Option<WorkspaceSolution>,
 }
 
-/// Reads the candidate back from git and judges it with the checks (unless
-/// the run was cancelled, when nothing more is run).
-fn inspect(setup: &Setup<'_>, number: u32, round: u32, cancelled: bool) -> Result<Inspection> {
-    let contract = setup.contract;
-    let (patch, changes) = changes_since(setup.work, &contract.baseline_rev)?;
-    let suffix = if round == 0 {
-        String::new()
-    } else {
-        format!("-round{round}")
-    };
-    let patch_path = setup.run_dir.join(format!("patch-{number}{suffix}.diff"));
-    crate::store::write_atomic(&patch_path, crate::redact::redact(&patch).as_bytes())?;
-    emit_changes(setup, &changes, &patch_path)?;
-    let touched = touched_protected(&changes, &contract.protected);
-    let checks = if cancelled {
-        Vec::new()
-    } else {
-        run_all(&contract.acceptance, setup.work)
-    };
-    emit_checks(setup, &checks)?;
-    Ok(Inspection {
-        patch,
-        changes,
-        checks,
-        touched,
-    })
-}
+impl Episode {
+    fn tool_calls(&self) -> u32 {
+        self.solved.as_ref().map_or(0, |s| s.report.tool_calls)
+    }
 
-/// Whether a failure is one a further round in the same conversation can
-/// help with: the worker stopped with the checks still red. A limit, a
-/// cancel, a provider failure or a protected path ends the attempt.
-fn worth_a_follow_up(failure: &str) -> bool {
-    failure.starts_with("acceptance_failed") || failure == "no_acceptance_checks_ran"
-}
+    fn capped(&self) -> bool {
+        self.solved
+            .as_ref()
+            .is_some_and(|s| s.report.stopped_by_tool_cap)
+    }
 
-/// The seconds an attempt must have left for another round to be worth
-/// starting: less than a model call takes.
-const MIN_ROUND_SECS: u64 = 20;
+    fn repeated(&self) -> Option<&str> {
+        self.solved.as_ref()?.report.repeated_call.as_deref()
+    }
 
-/// What the sends of one attempt add up to.
-struct Sends {
-    tool_calls: u32,
-    capped: bool,
-    repeated: Option<String>,
-    conclusion: String,
-    final_output: Option<String>,
-    provider_failed: bool,
+    fn conclusion(&self) -> String {
+        self.solved.as_ref().map_or_else(
+            || "ProviderError".into(),
+            |s| format!("{:?}", s.solution.conclusion),
+        )
+    }
+
+    fn patch(&self) -> Patch {
+        self.solved.as_ref().map_or(
+            Patch {
+                diff: Vec::new(),
+                files: Vec::new(),
+            },
+            |s| s.patch.clone(),
+        )
+    }
 }
 
 /// Runs attempt `number` and judges it.
 ///
-/// The worker works until it stops; the candidate is then judged, and while
-/// the checks are red and the attempt has time, tool calls and rounds left
-/// the worker is told what failed, in the same conversation and on the same
-/// checkout, and works again. A worker that announces its next step and
-/// stops, a habit of small models, is brought back this way instead of
-/// costing a whole attempt.
+/// The worker works until it stops; while the checks it is shown are red and
+/// the attempt has time, tool calls and rounds left it is told what failed,
+/// in the same conversation, and works again. A worker that announces its
+/// next step and stops, a habit of small models, is brought back this way
+/// instead of costing a whole attempt.
 pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Result<Judged> {
     let contract = setup.contract;
-    reset_to(setup.work, &contract.baseline_rev)?;
     let prompt = compose_prompt(contract, feedback);
     let attempt_secs = contract
         .limits
@@ -229,6 +222,8 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
             "has_feedback": feedback.is_some(),
         }),
     )?;
+    let check = workspace_check(contract);
+    let task = setup.workspace.task(&prompt, &check)?;
 
     let attempt_cancel = CancelToken::new();
     let done = Arc::new(AtomicBool::new(false));
@@ -239,8 +234,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
     );
     let observation = Observation::new(
         setup.tracer.clone(),
-        setup.work.to_path_buf(),
-        contract.baseline_rev.clone(),
+        setup.workspace.env.clone(),
         setup.remote,
         contract.limits.max_cost_usd.filter(|_| setup.remote),
         attempt_cancel.clone(),
@@ -253,112 +247,97 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
     solve.cancel = Some(attempt_cancel.clone());
     solve.system = Some(setup.system.to_string());
     let mut options = WorkOptions::new(solve);
-    options.observer = Some(observation.observer());
-
-    let mut sends = Sends {
-        tool_calls: 0,
-        capped: false,
-        repeated: None,
-        conclusion: "ProviderError".into(),
-        final_output: None,
-        provider_failed: false,
+    options.tree_observer = Some(observation.tree_observer());
+    let protocol = WorkProtocol {
+        follow_ups: contract.limits.follow_ups,
+        max_tool_calls: Some(contract.limits.max_tool_calls),
+        max_repeated_results: Some(contract.limits.max_repeated_results).filter(|n| *n > 0),
     };
-    let mut worker: Option<Worker> = None;
-    let mut message = prompt;
-    let mut round = 0u32;
-    let (inspection, failure) = loop {
-        let left_secs = attempt_secs.saturating_sub(started.elapsed().as_secs());
-        let left_calls = contract
-            .limits
-            .max_tool_calls
-            .saturating_sub(sends.tool_calls);
-        options.max_tool_calls = Some(left_calls);
-        options.max_repeated_results =
-            Some(contract.limits.max_repeated_results).filter(|bound| *bound > 0);
-        options.solve.deadline = Duration::from_secs(left_secs.max(1));
-        send_round(setup, &mut worker, &options, &message, &mut sends)?;
-        let cancelled = setup.run_cancel.is_cancelled();
-        let gathered = observation.gathered();
-        let inspection = inspect(setup, number, round, cancelled)?;
-        let all_pass = !inspection.checks.is_empty() && inspection.checks.iter().all(|c| c.passed);
-        let failure = classify(
-            &sends.conclusion,
-            sends.capped,
-            sends.repeated.as_deref(),
-            cancelled,
-            gathered.over_budget,
-            sends.provider_failed,
-            &inspection.touched,
-            &inspection.checks,
-            all_pass,
-        );
-        let again = failure.as_deref().is_some_and(worth_a_follow_up)
-            && round < contract.limits.follow_ups
-            && attempt_secs.saturating_sub(started.elapsed().as_secs()) >= MIN_ROUND_SECS
-            && sends.tool_calls < contract.limits.max_tool_calls;
-        if !again {
-            break (inspection, failure);
-        }
-        round += 1;
-        message = diagnostic(
-            failure.as_deref().unwrap_or_default(),
-            &inspection.touched,
-            &inspection.checks,
-            sends.final_output.as_deref(),
-        );
-        setup.tracer.emit(
-            "follow_up",
-            None,
-            json!({"attempt": number, "round": round, "after": failure, "message": message}),
-        )?;
+    let shown: Vec<CommandCall> = contract
+        .acceptance
+        .iter()
+        .filter(|c| c.visible)
+        .map(|c| c.call())
+        .collect();
+
+    let episode = Episode {
+        solved: solve_with_retries(
+            setup,
+            &task,
+            &shown,
+            options,
+            &protocol,
+            started,
+            attempt_secs,
+        )?,
     };
     done.store(true, Ordering::Relaxed);
     let _ = forwarder.join();
     let seconds = started.elapsed().as_secs_f64();
-
-    let trajectory_path = match &worker {
-        Some(worker) => Some(save_trajectory(setup, number, worker)?),
-        None => {
-            setup.tracer.emit(
-                "provider_error",
-                None,
-                json!({"retries": contract.limits.provider_retries}),
-            )?;
-            None
-        }
-    };
-    save_audit_log(setup);
-
-    let gathered = observation.gathered();
     let cancelled = setup.run_cancel.is_cancelled();
-    let accepted = failure.is_none();
-    let feedback = failure.as_ref().map(|why| {
-        diagnostic(
-            why,
-            &inspection.touched,
-            &inspection.checks,
-            sends.final_output.as_deref(),
-        )
+    let gathered = observation.gathered();
+    let provider_failed = episode.solved.is_none();
+
+    let patch = episode.patch();
+    let patch_text = String::from_utf8_lossy(&patch.diff).into_owned();
+    let judgement = if cancelled || provider_failed {
+        Judgement {
+            refusal: None,
+            checks: Vec::new(),
+            changes: Vec::new(),
+        }
+    } else {
+        setup.workspace.judge(contract, &patch)?
+    };
+    let patch_path = setup.run_dir.join(format!("patch-{number}.diff"));
+    // Exactly the candidate: `apply` applies this file, and a redacted patch
+    // is not the change that was judged.
+    crate::store::write_atomic(&patch_path, &patch.diff)?;
+    emit_judgement(setup, &judgement, &patch_path)?;
+    let exposed = match &episode.solved {
+        Some(solved) => exposed_material(setup, &task, solved)?,
+        None => false,
+    };
+    emit_follow_ups(setup, number, &episode)?;
+    let trajectory_path = match &episode.solved {
+        Some(solved) => Some(save_trajectory(setup, number, solved)?),
+        None => None,
+    };
+
+    let failure = classify(&Facts {
+        conclusion: &episode.conclusion(),
+        capped: episode.capped(),
+        repeated: episode.repeated(),
+        cancelled,
+        over_budget: gathered.over_budget,
+        provider_failed,
+        exposed,
+        judgement: &judgement,
     });
+    let accepted = failure.is_none();
+    let feedback = failure
+        .as_ref()
+        .map(|why| diagnostic(contract, why, &judgement, gathered.last_message.as_deref()));
     let summary = AttemptSummary {
         attempt: number,
-        conclusion: sends.conclusion.clone(),
+        conclusion: episode.conclusion(),
         failure,
-        tool_calls: sends.tool_calls,
-        stopped_by_tool_cap: sends.capped,
-        stopped_by_repetition: sends.repeated.is_some(),
-        changed_files: inspection.changes,
-        checks: inspection.checks,
-        final_message: sends.final_output.clone().or(gathered.last_message.clone()),
+        tool_calls: episode.tool_calls(),
+        stopped_by_tool_cap: episode.capped(),
+        stopped_by_repetition: episode.repeated().is_some(),
+        changed_files: judgement.changes,
+        checks: judgement.checks,
+        final_message: gathered.last_message.clone(),
         seconds,
         input_tokens: Some(gathered.input_tokens),
         output_tokens: Some(gathered.output_tokens),
     };
+    let rounds = episode.solved.as_ref().map_or(1, |s| s.feedback_rounds + 1);
     setup.tracer.emit(
         "attempt_finished",
         None,
         json!({"attempt": number, "accepted": accepted, "conclusion": summary.conclusion,
-               "failure": summary.failure, "tool_calls": sends.tool_calls, "rounds": round + 1,
+               "failure": summary.failure, "tool_calls": summary.tool_calls, "rounds": rounds,
                "seconds": seconds, "trajectory": trajectory_path, "dropped_events": gathered.dropped,
                "cost_usd": gathered.cost_usd, "calls_without_price": gathered.calls_without_price}),
     )?;
@@ -368,175 +347,147 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
         cancelled,
         over_budget: gathered.over_budget,
         feedback,
-        provider_failed: sends.provider_failed,
-        patch: inspection.patch,
+        provider_failed,
+        patch: patch_text,
     })
 }
 
-/// One send of the attempt: the first starts the worker (retrying a model
-/// call that failed in transit), a later one continues its conversation.
-fn send_round(
+/// The worker's episode, retrying a model call that failed in transit a
+/// bounded number of times with a growing pause; each retry is a whole new
+/// episode in a new copy of the snapshot, so no half-finished state is
+/// carried over. `None` when the provider kept failing.
+fn solve_with_retries(
     setup: &Setup<'_>,
-    worker: &mut Option<Worker>,
-    options: &WorkOptions,
-    message: &str,
-    sends: &mut Sends,
-) -> Result<()> {
-    let report = match worker.as_mut() {
-        None => match send_with_retries(setup, options, message) {
-            Ok((report, started)) => {
-                *worker = Some(started);
-                Some(report)
-            }
-            Err(_) => None,
-        },
-        Some(w) => {
-            *w.options_mut() = options.clone();
-            match setup.ctx.block_on(w.send(message)) {
-                Ok(report) => Some(report),
-                Err(e) => {
-                    setup.tracer.emit(
-                        "provider_error",
-                        None,
-                        json!({"error": e.to_string(), "during": "follow-up"}),
-                    )?;
-                    None
-                }
-            }
-        }
-    };
-    match report {
-        Some(report) => {
-            sends.tool_calls += report.tool_calls;
-            sends.capped |= report.stopped_by_tool_cap;
-            if sends.repeated.is_none() {
-                sends.repeated = report.repeated_call.clone();
-            }
-            sends.conclusion = format!("{:?}", report.solution.conclusion);
-            sends.final_output = report.solution.final_output.clone();
-        }
-        None => sends.provider_failed = true,
-    }
-    Ok(())
-}
-
-/// Why an attempt was not accepted, if it was not.
-#[allow(clippy::too_many_arguments)]
-fn classify(
-    conclusion: &str,
-    capped: bool,
-    repeated: Option<&str>,
-    cancelled: bool,
-    over_budget: bool,
-    provider_failed: bool,
-    touched: &[String],
-    checks: &[CheckResult],
-    all_pass: bool,
-) -> Option<String> {
-    if cancelled {
-        return Some("cancelled".into());
-    }
-    if over_budget {
-        return Some("cost_limit".into());
-    }
-    if provider_failed {
-        return Some("provider_error".into());
-    }
-    if !touched.is_empty() {
-        return Some(format!("protected_path_modified: {}", touched.join(", ")));
-    }
-    if all_pass {
-        return None;
-    }
-    if capped {
-        return Some("tool_call_limit".into());
-    }
-    if let Some(call) = repeated {
-        return Some(format!(
-            "stagnation: the call `{call}` returned the same answer again and again, so the \
-             attempt was stopped; do not repeat it, make the change itself"
-        ));
-    }
-    match conclusion {
-        "Timeout" => return Some("time_limit".into()),
-        "BudgetExhausted" => return Some("token_limit".into()),
-        "AgentError" => return Some("agent_error".into()),
-        _ => {}
-    }
-    if checks.is_empty() {
-        return Some("no_acceptance_checks_ran".into());
-    }
-    let failed: Vec<&str> = checks
-        .iter()
-        .filter(|c| !c.passed)
-        .map(|c| c.name.as_str())
-        .collect();
-    Some(format!("acceptance_failed: {}", failed.join(", ")))
-}
-
-/// The feedback the next attempt is shown: what failed and the output that
-/// shows it; never a patch.
-fn diagnostic(why: &str, touched: &[String], checks: &[CheckResult], said: Option<&str>) -> String {
-    let mut text = format!("Failure: {why}.\n");
-    if !touched.is_empty() {
-        text.push_str("You changed files you were told not to; leave them as they are.\n");
-    }
-    for check in checks.iter().filter(|c| !c.passed) {
-        let output = if check.stderr_tail.trim().is_empty() {
-            &check.stdout_tail
-        } else {
-            &check.stderr_tail
-        };
-        text.push_str(&format!(
-            "Check `{}` ({}) failed{}:\n{}\n",
-            check.name,
-            check.command,
-            check
-                .exit_code
-                .map_or(String::new(), |c| format!(" with exit code {c}")),
-            tail_lines(output, FEEDBACK_LINES)
-        ));
-    }
-    if let Some(said) = said.filter(|s| !s.trim().is_empty()) {
-        text.push_str(&format!("You ended by saying: {}\n", tail_lines(said, 6)));
-    }
-    text
-}
-
-/// Sends `prompt`, retrying a model call that failed in transit a bounded
-/// number of times with a growing pause; each retry starts a new worker so
-/// no half-finished state is carried over.
-fn send_with_retries(
-    setup: &Setup<'_>,
-    options: &WorkOptions,
-    prompt: &str,
-) -> Result<(splinter_sdk::agent::work::WorkReport, Worker)> {
+    task: &splinter_sdk::vocabulary::experience::Task,
+    shown: &[CommandCall],
+    options: WorkOptions,
+    protocol: &WorkProtocol,
+    started: Instant,
+    attempt_secs: u64,
+) -> Result<Option<WorkspaceSolution>> {
     let retries = setup.contract.limits.provider_retries;
-    let mut last: Option<anyhow::Error> = None;
+    let mut last: Option<String> = None;
     for retry in 0..=retries {
         if retry > 0 {
             let pause = Duration::from_secs(1u64 << retry.min(5));
             setup.tracer.emit(
                 "provider_retry",
                 None,
-                json!({"retry": retry, "pause_secs": pause.as_secs(), "after": last.as_ref().map(|e| format!("{e:#}"))}),
+                json!({"retry": retry, "pause_secs": pause.as_secs(), "after": last}),
             )?;
             std::thread::sleep(pause);
-            reset_to(setup.work, &setup.contract.baseline_rev)?;
         }
-        let mut worker = Worker::start(setup.work, setup.model.provider.clone(), options.clone())
-            .map_err(|e| anyhow::anyhow!("the worker could not start: {e}"))?;
-        match setup.ctx.block_on(worker.send(prompt)) {
-            Ok(report) => return Ok((report, worker)),
-            Err(SolveError::Engine(e)) => last = Some(anyhow::anyhow!("{e}")),
-            Err(e) => return Err(anyhow::anyhow!("{e}")),
+        let mut bounds = options.clone();
+        bounds.solve.deadline = Duration::from_secs(
+            attempt_secs
+                .saturating_sub(started.elapsed().as_secs())
+                .max(1),
+        );
+        let solved = setup.ctx.block_on(solve_in_workspace(
+            task,
+            &setup.workspace.env,
+            &setup.workspace.archive,
+            shown,
+            setup.model.provider.clone(),
+            bounds,
+            protocol,
+        ));
+        match solved {
+            Ok(solved) => return Ok(Some(solved)),
+            Err(SolveError::Engine(e)) => last = Some(format!("{e}")),
+            Err(e) => return Err(anyhow!("{e}")),
         }
     }
-    Err(last.unwrap_or_else(|| anyhow::anyhow!("no model call was made")))
+    setup.tracer.emit(
+        "provider_error",
+        None,
+        json!({"retries": retries, "error": last}),
+    )?;
+    Ok(None)
+}
+
+/// Whether the worker's trajectory shows any sight of the supervisor's
+/// material: a hidden check's command or the script it names, or the
+/// directories that hold the loop's records (every contract in them names
+/// the checks). The audit is the shared exposure audit; an attempt that
+/// failed it is rejected whatever the checks said, and the trace keeps what
+/// it found (where, never the material).
+fn exposed_material(
+    setup: &Setup<'_>,
+    task: &splinter_sdk::vocabulary::experience::Task,
+    solved: &WorkspaceSolution,
+) -> Result<bool> {
+    let experience = solved
+        .solution
+        .clone()
+        .into_experience(task.clone(), Provenance::new(SOLVER, setup.ctx.clock()))
+        .context("the attempt's trajectory is not an experience")?;
+    let finding = audit_exposure(task, &experience, &hidden_material(setup));
+    let exposed = finding.outcome == Outcome::Fail;
+    if exposed {
+        setup
+            .tracer
+            .emit("exposure", None, finding.evidence.clone())?;
+    }
+    Ok(exposed)
+}
+
+/// What the worker must not name: the commands of the hidden checks and the
+/// scripts they point at, the loop's records and Splinter's state.
+fn hidden_material(setup: &Setup<'_>) -> HiddenMaterial {
+    let mut paths = Vec::new();
+    for check in setup.contract.acceptance.iter().filter(|c| !c.visible) {
+        paths.push(check.command.clone());
+        let words: Vec<&str> = check.command.split_whitespace().collect();
+        // The first word is the program; a lone word is the script itself.
+        let candidates = if words.len() == 1 {
+            &words[..]
+        } else {
+            &words[1..]
+        };
+        paths.extend(
+            candidates
+                .iter()
+                .filter(|w| w.starts_with('/'))
+                .map(|w| (*w).to_string()),
+        );
+    }
+    HiddenMaterial {
+        paths,
+        forbidden: vec![
+            setup.home.root().display().to_string(),
+            setup.ctx.root().path().display().to_string(),
+        ],
+        ..HiddenMaterial::default()
+    }
+}
+
+/// The follow-up turns the worker was sent inside the attempt, from its
+/// trajectory: every user turn after the first.
+fn emit_follow_ups(setup: &Setup<'_>, number: u32, episode: &Episode) -> Result<()> {
+    let Some(solved) = &episode.solved else {
+        return Ok(());
+    };
+    let turns = solved
+        .solution
+        .trajectory
+        .steps
+        .iter()
+        .filter(|step| step.source == StepOrigin::User)
+        .skip(1);
+    for (round, step) in (1u32..).zip(turns) {
+        setup.tracer.emit(
+            "follow_up",
+            None,
+            json!({"attempt": number, "round": round,
+                   "message": step.message.as_text().unwrap_or_default()}),
+        )?;
+    }
+    Ok(())
 }
 
 /// Persists sven's own record of the attempt (ATIF) in the run's directory.
-fn save_trajectory(setup: &Setup<'_>, number: u32, worker: &Worker) -> Result<PathBuf> {
+fn save_trajectory(setup: &Setup<'_>, number: u32, solved: &WorkspaceSolution) -> Result<PathBuf> {
     let path = setup
         .run_dir
         .join("trajectories")
@@ -546,40 +497,21 @@ fn save_trajectory(setup: &Setup<'_>, number: u32, worker: &Worker) -> Result<Pa
     }
     splinter_sdk::agent::sven::atif::persist::write_trajectory_atomic(
         &path,
-        &worker.trajectory(),
+        &solved.solution.trajectory,
         None,
     )
     .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
-/// Keeps sven's tool audit log of the attempt as an artifact.
-fn save_audit_log(setup: &Setup<'_>) {
-    let log = setup.work.join(".sven").join("audit.jsonl");
-    if let Ok(bytes) = std::fs::read(&log) {
-        let text = crate::redact::redact(&String::from_utf8_lossy(&bytes));
-        if let Ok(address) = setup.tracer.store_artifact(text.as_bytes()) {
-            let _ = setup.tracer.emit(
-                "audit_log",
-                None,
-                json!({"artifact": address, "bytes": bytes.len()}),
-            );
-        }
-    }
-}
-
-fn emit_changes(setup: &Setup<'_>, changes: &[FileChange], patch: &Path) -> Result<()> {
+fn emit_judgement(setup: &Setup<'_>, judgement: &Judgement, patch: &Path) -> Result<()> {
     setup.tracer.emit(
         "candidate",
         None,
-        json!({"changed_files": changes, "patch": patch,
+        json!({"changed_files": judgement.changes, "patch": patch,
                "baseline": setup.contract.baseline_rev}),
     )?;
-    Ok(())
-}
-
-fn emit_checks(setup: &Setup<'_>, checks: &[CheckResult]) -> Result<()> {
-    for check in checks {
+    for check in &judgement.checks {
         setup.tracer.emit(
             "validation",
             None,
@@ -587,17 +519,125 @@ fn emit_checks(setup: &Setup<'_>, checks: &[CheckResult]) -> Result<()> {
                    "exit_code": check.exit_code, "timed_out": check.timed_out,
                    "duration_ms": check.duration_ms, "stdout_tail": check.stdout_tail,
                    "stderr_tail": check.stderr_tail,
-                   "covers": "the whole candidate checkout, at the revision of this attempt's patch"}),
+                   "covers": "a fresh copy of the snapshot with this attempt's patch applied"}),
         )?;
     }
     Ok(())
 }
 
+/// What decides how an attempt is classified.
+struct Facts<'a> {
+    conclusion: &'a str,
+    capped: bool,
+    repeated: Option<&'a str>,
+    cancelled: bool,
+    over_budget: bool,
+    provider_failed: bool,
+    exposed: bool,
+    judgement: &'a Judgement,
+}
+
+/// Why an attempt was not accepted, if it was not. The causes are checked in
+/// a fixed order: what stopped the work comes before how the work was
+/// judged, and a worker that saw the supervisor's material is rejected
+/// whatever its checks said.
+fn classify(facts: &Facts<'_>) -> Option<String> {
+    if facts.cancelled {
+        return Some("cancelled".into());
+    }
+    if facts.over_budget {
+        return Some("cost_limit".into());
+    }
+    if facts.provider_failed {
+        return Some("provider_error".into());
+    }
+    if facts.exposed {
+        return Some("hidden_material_exposed".into());
+    }
+    match &facts.judgement.refusal {
+        Some(Refusal::OffLimits(paths)) => {
+            return Some(format!("protected_path_modified: {}", paths.join(", ")))
+        }
+        Some(Refusal::DoesNotApply) => return Some("patch_does_not_apply".into()),
+        None => {}
+    }
+    if facts.judgement.all_passed() {
+        return None;
+    }
+    if facts.capped {
+        return Some("tool_call_limit".into());
+    }
+    if let Some(call) = facts.repeated {
+        return Some(format!(
+            "stagnation: the call `{call}` returned the same answer again and again, so the \
+             attempt was stopped; do not repeat it, make the change itself"
+        ));
+    }
+    match facts.conclusion {
+        "Timeout" => return Some("time_limit".into()),
+        "BudgetExhausted" => return Some("token_limit".into()),
+        "AgentError" => return Some("agent_error".into()),
+        _ => {}
+    }
+    if facts.judgement.checks.is_empty() {
+        return Some("no_acceptance_checks_ran".into());
+    }
+    let failed: Vec<&str> = facts
+        .judgement
+        .checks
+        .iter()
+        .filter(|c| !c.passed)
+        .map(|c| c.name.as_str())
+        .collect();
+    Some(format!("acceptance_failed: {}", failed.join(", ")))
+}
+
+/// The feedback the next attempt is shown: what failed and, for a check the
+/// worker may see, the output that shows it. A hidden check is named and
+/// nothing more: neither its command nor what it printed. Never a patch.
+fn diagnostic(contract: &Contract, why: &str, judgement: &Judgement, said: Option<&str>) -> String {
+    let mut text = format!("Failure: {why}.\n");
+    if why.starts_with("protected_path_modified") {
+        text.push_str("You changed files you were told not to; leave them as they are.\n");
+    }
+    for check in judgement.checks.iter().filter(|c| !c.passed) {
+        let shown = contract
+            .acceptance
+            .iter()
+            .any(|c| c.name == check.name && c.visible);
+        text.push_str(&failed_check(check, shown));
+    }
+    if let Some(said) = said.filter(|s| !s.trim().is_empty()) {
+        text.push_str(&format!("You ended by saying: {}\n", tail(said)));
+    }
+    text
+}
+
+/// One failed check as feedback.
+fn failed_check(check: &CheckResult, shown: bool) -> String {
+    if !shown {
+        return format!("Check `{}` failed.\n", check.name);
+    }
+    let output = if check.stderr_tail.trim().is_empty() {
+        &check.stdout_tail
+    } else {
+        &check.stderr_tail
+    };
+    format!(
+        "Check `{}` ({}) failed{}:\n{}\n",
+        check.name,
+        check.command,
+        check
+            .exit_code
+            .map_or(String::new(), |c| format!(" with exit code {c}")),
+        tail(output)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::acceptance::Check;
-    use crate::contract::{Limits, CONTRACT_SCHEMA};
+    use crate::contract::{Check, Limits, CONTRACT_SCHEMA};
 
     fn contract() -> Contract {
         Contract {
@@ -605,11 +645,9 @@ mod tests {
             task: "fix the bug".into(),
             repository: "/r".into(),
             baseline_rev: "abc".into(),
-            setup: Vec::new(),
             acceptance: vec![Check {
                 name: "unit".into(),
                 command: "make test".into(),
-                timeout_secs: 5,
                 visible: true,
             }],
             protected: vec!["tests/".into()],
@@ -646,6 +684,29 @@ mod tests {
         }
     }
 
+    fn judged(checks: Vec<CheckResult>, refusal: Option<Refusal>) -> Judgement {
+        Judgement {
+            refusal,
+            checks,
+            changes: Vec::new(),
+        }
+    }
+
+    fn why(judgement: &Judgement, tweak: impl FnOnce(&mut Facts<'_>)) -> Option<String> {
+        let mut facts = Facts {
+            conclusion: "Success",
+            capped: false,
+            repeated: None,
+            cancelled: false,
+            over_budget: false,
+            provider_failed: false,
+            exposed: false,
+            judgement,
+        };
+        tweak(&mut facts);
+        classify(&facts)
+    }
+
     #[test]
     fn the_prompt_names_the_checks_the_protected_paths_and_any_hint() {
         let mut c = contract();
@@ -670,51 +731,54 @@ mod tests {
 
     #[test]
     fn failures_are_classified_by_their_cause_in_a_fixed_order() {
-        let f = [failed("unit", "E")];
-        let why = |capped, cancelled, over, provider, touched: &[String], all| {
-            classify(
-                "Success", capped, None, cancelled, over, provider, touched, &f, all,
-            )
-        };
+        let red = judged(vec![failed("unit", "E")], None);
+        assert_eq!(why(&red, |f| f.cancelled = true).unwrap(), "cancelled");
+        assert_eq!(why(&red, |f| f.over_budget = true).unwrap(), "cost_limit");
         assert_eq!(
-            why(false, true, false, false, &[], false).unwrap(),
-            "cancelled"
-        );
-        assert_eq!(
-            why(false, false, true, false, &[], false).unwrap(),
-            "cost_limit"
-        );
-        assert_eq!(
-            why(false, false, false, true, &[], false).unwrap(),
+            why(&red, |f| f.provider_failed = true).unwrap(),
             "provider_error"
         );
-        assert!(why(false, false, false, false, &["tests/a".into()], true)
+        assert_eq!(why(&red, |f| f.capped = true).unwrap(), "tool_call_limit");
+        assert_eq!(why(&red, |_| {}).unwrap(), "acceptance_failed: unit");
+        assert_eq!(
+            why(&red, |f| f.conclusion = "Timeout").unwrap(),
+            "time_limit"
+        );
+        let fenced = judged(Vec::new(), Some(Refusal::OffLimits(vec!["tests/a".into()])));
+        assert!(why(&fenced, |_| {})
             .unwrap()
             .starts_with("protected_path_modified"));
-        assert_eq!(
-            why(true, false, false, false, &[], false).unwrap(),
-            "tool_call_limit"
+        let green = judged(
+            vec![CheckResult {
+                passed: true,
+                ..failed("unit", "")
+            }],
+            None,
         );
+        assert!(why(&green, |_| {}).is_none());
         assert_eq!(
-            why(false, false, false, false, &[], false).unwrap(),
-            "acceptance_failed: unit"
-        );
-        assert!(why(false, false, false, false, &[], true).is_none());
-        assert_eq!(
-            classify("Timeout", false, None, false, false, false, &[], &f, false).unwrap(),
-            "time_limit"
+            why(&green, |f| f.exposed = true).unwrap(),
+            "hidden_material_exposed",
+            "a worker that saw the supervisor's material is rejected whatever its checks said"
         );
     }
 
     #[test]
-    fn feedback_shows_the_failing_output_and_never_a_patch() {
-        let text = diagnostic(
-            "acceptance_failed: unit",
-            &[],
-            &[failed("unit", "AssertionError: 1 != 2")],
-            Some("done"),
-        );
+    fn feedback_shows_the_output_of_a_shown_check_and_never_a_patch() {
+        let c = contract();
+        let judgement = judged(vec![failed("unit", "AssertionError: 1 != 2")], None);
+        let text = diagnostic(&c, "acceptance_failed: unit", &judgement, Some("done"));
         assert!(text.contains("AssertionError: 1 != 2") && text.contains("exit code 1"));
         assert!(!text.contains("diff --git"));
+    }
+
+    #[test]
+    fn feedback_names_a_hidden_check_and_shows_neither_its_command_nor_its_output() {
+        let mut c = contract();
+        c.acceptance[0].visible = false;
+        let judgement = judged(vec![failed("unit", "AssertionError: 1 != 2")], None);
+        let text = diagnostic(&c, "acceptance_failed: unit", &judgement, None);
+        assert!(text.contains("Check `unit` failed."));
+        assert!(!text.contains("AssertionError") && !text.contains("make test"));
     }
 }

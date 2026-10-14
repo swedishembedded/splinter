@@ -6,13 +6,14 @@
 // evaluation or locally operated coding agents, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! Credentials are removed from everything the loop persists.
+//! Credentials are removed from the trace and the artifacts the loop persists.
 //!
 //! A pattern list is not a proof that no secret survives; it is the floor
 //! the loop guarantees for the shapes it knows (assignments to names that
 //! sound like secrets, bearer tokens, provider key prefixes, private key
-//! blocks). The prompt, the tool output and the patches pass through it
-//! before they reach the trace or an artifact.
+//! blocks). The prompt and the tool output pass through it before they
+//! reach the trace or an artifact. A patch does not: it is code to be applied,
+//! and a patch with its text rewritten is not the change that was judged.
 
 use std::sync::OnceLock;
 

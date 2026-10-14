@@ -16,21 +16,23 @@
 //! and reasoning chunks are not recorded: the loop audits what the agent
 //! did and said, not hidden reasoning.
 //!
-//! File changes are attributed by comparing the checkout before and after
-//! each finishing tool call. sven runs one call at a time but emits its
+//! File changes are attributed by reading the episode's tree back against its
+//! baseline after each finishing tool call. sven runs one call at a time but emits its
 //! events asynchronously, so an attribution can lag a call by one; the
 //! patch read back from git at the end of the attempt is the authority.
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use splinter_sdk::agent::sven::SessionEvent;
-use splinter_sdk::agent::work::{Observed, Observer};
+use splinter_sdk::agent::work::{Observed, Observer, TreeObserver};
 use splinter_sdk::agent::CancelToken;
+use splinter_sdk::sandbox::workspace::DEFAULT_EXCLUDED;
+use splinter_sdk::sandbox::{Baseline, WorkspaceEnvironment};
+use splinter_sdk::vocabulary::digest::Digest;
 
-use crate::repo::{dirty_snapshot, hash_in_rev};
 use crate::trace::Tracer;
 
 /// The built-in tools whose result can have changed a file.
@@ -55,17 +57,26 @@ pub struct Gathered {
     pub dropped: u64,
 }
 
+/// The tree an episode works in, as the observer last saw it.
+struct Watched {
+    tree: PathBuf,
+    baseline: Baseline,
+    /// The content digest of every file that differed from the baseline
+    /// after the last mutating call; `None` for a file that is gone.
+    snapshot: BTreeMap<String, Option<Digest>>,
+}
+
 struct Inner {
     requests: HashMap<String, u64>,
-    snapshot: BTreeMap<String, Option<String>>,
+    watched: Option<Watched>,
     gathered: Gathered,
 }
 
-/// The observer of one attempt.
+/// The observer of an attempt: it turns sven's events into trace events and
+/// gathers what the outcome reports.
 pub struct Observation {
     tracer: Arc<Tracer>,
-    work: PathBuf,
-    baseline: String,
+    env: WorkspaceEnvironment,
     remote: bool,
     cost_cap: Option<f64>,
     stop: CancelToken,
@@ -73,27 +84,25 @@ pub struct Observation {
 }
 
 impl Observation {
-    /// An observer of an attempt in `work`, started from `baseline`. `stop`
-    /// is cancelled when `cost_cap` is passed.
+    /// An observer of an attempt in `env`. `stop` is cancelled when
+    /// `cost_cap` is passed.
     #[must_use]
     pub fn new(
         tracer: Arc<Tracer>,
-        work: PathBuf,
-        baseline: String,
+        env: WorkspaceEnvironment,
         remote: bool,
         cost_cap: Option<f64>,
         stop: CancelToken,
     ) -> Arc<Self> {
         Arc::new(Self {
             tracer,
-            work,
-            baseline,
+            env,
             remote,
             cost_cap,
             stop,
             inner: Mutex::new(Inner {
                 requests: HashMap::new(),
-                snapshot: BTreeMap::new(),
+                watched: None,
                 gathered: Gathered::default(),
             }),
         })
@@ -108,11 +117,24 @@ impl Observation {
             .unwrap_or_default()
     }
 
-    /// The observer to hand to the worker.
+    /// The observer to hand to the worker's episode: made when the episode's
+    /// tree is laid out (every retry has a tree of its own), it watches that
+    /// tree for the files each mutating call changed.
     #[must_use]
-    pub fn observer(self: &Arc<Self>) -> Observer {
+    pub fn tree_observer(self: &Arc<Self>) -> TreeObserver {
         let this = Arc::clone(self);
-        Arc::new(move |seen: Observed<'_>| this.observe(&seen))
+        Arc::new(move |tree: &Path, baseline: &Baseline| {
+            if let Ok(mut inner) = this.inner.lock() {
+                inner.watched = Some(Watched {
+                    tree: tree.to_path_buf(),
+                    baseline: baseline.clone(),
+                    snapshot: BTreeMap::new(),
+                });
+            }
+            let this = Arc::clone(&this);
+            let observer: Observer = Arc::new(move |seen: Observed<'_>| this.observe(&seen));
+            observer
+        })
     }
 
     fn emit(&self, kind: &str, parent: Option<u64>, data: Value) -> Option<u64> {
@@ -151,7 +173,7 @@ impl Observation {
                         "call_id": call.id,
                         "tool": call.name,
                         "arguments": call.args,
-                        "cwd": self.work,
+                        "cwd": self.tree(),
                     }),
                 );
                 if let (Some(id), Ok(mut inner)) = (id, self.inner.lock()) {
@@ -245,42 +267,67 @@ impl Observation {
         }
     }
 
-    /// Names each file that differs from the last snapshot of the checkout.
+    /// The tree being watched, if an episode has laid one out.
+    fn tree(&self) -> Option<PathBuf> {
+        self.inner
+            .lock()
+            .ok()
+            .and_then(|i| i.watched.as_ref().map(|w| w.tree.clone()))
+    }
+
+    /// Names each file whose content differs from the last time the tree was
+    /// looked at, as the shared workspace reads the tree's change back.
     fn mutations(&self, parent: Option<u64>) {
-        let Ok(now) = dirty_snapshot(&self.work) else {
-            return;
-        };
-        let before = match self.inner.lock() {
-            Ok(mut inner) => std::mem::replace(&mut inner.snapshot, now.clone()),
+        let (tree, baseline) = match self.inner.lock() {
+            Ok(inner) => match &inner.watched {
+                Some(w) => (w.tree.clone(), w.baseline.clone()),
+                None => return,
+            },
             Err(_) => return,
         };
-        let mut changed: Vec<(String, Option<String>, Option<String>)> = Vec::new();
+        let Ok(patch) = self.env.diff_since(&tree, &baseline, &DEFAULT_EXCLUDED) else {
+            return;
+        };
+        let now: BTreeMap<String, Option<Digest>> = patch
+            .files
+            .iter()
+            .map(|path| {
+                let digest = std::fs::read(tree.join(path)).ok().map(|b| Digest::of(&b));
+                (path.to_string_lossy().into_owned(), digest)
+            })
+            .collect();
+        let before = match self.inner.lock() {
+            Ok(mut inner) => match inner.watched.as_mut() {
+                Some(w) => std::mem::replace(&mut w.snapshot, now.clone()),
+                None => return,
+            },
+            Err(_) => return,
+        };
+        let mut changed: Vec<(String, &str, Option<Digest>, Option<Digest>)> = Vec::new();
         for (path, after) in &now {
-            let was = before.get(path).cloned();
-            if was.as_ref() != Some(after) {
-                let prior = was.unwrap_or_else(|| {
-                    hash_in_rev(&self.work, &self.baseline, path).ok().flatten()
-                });
-                changed.push((path.clone(), prior, after.clone()));
+            let was = before.get(path).cloned().flatten();
+            if before.get(path) != Some(after) {
+                let op = if after.is_some() {
+                    "changed"
+                } else {
+                    "deleted"
+                };
+                changed.push((path.clone(), op, was, after.clone()));
             }
         }
         for (path, was) in &before {
             if !now.contains_key(path) {
-                // Back to the committed content: the file was restored.
-                let after = hash_in_rev(&self.work, &self.baseline, path).ok().flatten();
-                changed.push((path.clone(), was.clone(), after));
+                // Back to the baseline content: the file was restored.
+                changed.push((path.clone(), "restored", was.clone(), None));
             }
         }
-        for (path, before, after) in changed {
-            let op = match (&before, &after) {
-                (None, Some(_)) => "added",
-                (Some(_), None) => "deleted",
-                _ => "modified",
-            };
+        for (path, op, before, after) in changed {
             self.emit(
                 "file_mutation",
                 parent,
-                json!({"path": path, "op": op, "before": before, "after": after,
+                json!({"path": path, "op": op,
+                       "before": before.map(|d| d.to_string()),
+                       "after": after.map(|d| d.to_string()),
                        "attribution": "approximate: see the attempt's patch"}),
             );
         }

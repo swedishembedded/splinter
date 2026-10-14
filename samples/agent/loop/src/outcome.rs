@@ -12,13 +12,45 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::acceptance::CheckResult;
-use crate::repo::FileChange;
-
 /// The version of the outcome record.
-pub const OUTCOME_SCHEMA: u32 = 1;
+pub const OUTCOME_SCHEMA: u32 = 2;
 
 /// How a run ended.
+/// What the loop recorded of one file a candidate changed, with the content
+/// digest before and after (absent where the file did not exist).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FileChange {
+    /// Path relative to the repository root.
+    pub path: String,
+    /// `added`, `modified` or `deleted`.
+    pub status: String,
+    /// Digest of the baseline content.
+    pub before: Option<String>,
+    /// Digest of the final content.
+    pub after: Option<String>,
+}
+
+/// What one acceptance check did on a candidate.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckResult {
+    /// The check's name.
+    pub name: String,
+    /// The command that ran.
+    pub command: String,
+    /// Whether it exited 0 within the sandbox's time limit.
+    pub passed: bool,
+    /// The exit code; `None` when it was killed or could not start.
+    pub exit_code: Option<i32>,
+    /// Whether it was killed for taking too long.
+    pub timed_out: bool,
+    /// Wall-clock milliseconds.
+    pub duration_ms: u64,
+    /// The last of standard output, redacted.
+    pub stdout_tail: String,
+    /// The last of standard error, redacted.
+    pub stderr_tail: String,
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
@@ -90,8 +122,10 @@ pub struct Artifacts {
     pub events: PathBuf,
     /// The patch of the last candidate.
     pub patch: Option<PathBuf>,
-    /// The checkout the last candidate lives in.
-    pub worktree: PathBuf,
+    /// The digest of the snapshot of the repository every attempt started
+    /// from, in Splinter's artifact store.
+    #[serde(default)]
+    pub snapshot: String,
     /// The agent trajectory of each attempt (ATIF).
     pub trajectories: Vec<PathBuf>,
 }

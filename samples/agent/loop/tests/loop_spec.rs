@@ -12,232 +12,25 @@
 //! plumbing (isolation, limits, judging, feedback, checkpoints, cancel,
 //! resume, the trace), not coding ability, which is measured with a real
 //! model. The repository is a disposable fixture with a seeded bug; the
-//! acceptance script lives outside it.
+//! acceptance script lives outside it. The worker is the shared one (a
+//! fresh copy of the repository's snapshot with sven's tools) and the
+//! judgement is the shared workspace grading.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
-use std::path::PathBuf;
+mod common;
+
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
+use common::*;
 use serde_json::{json, Value};
-use splinter_agent_loop::acceptance::Check;
-use splinter_agent_loop::contract::{Contract, Limits, CONTRACT_SCHEMA};
-use splinter_agent_loop::outcome::{Outcome, Status};
-use splinter_agent_loop::repo::{git, head_rev, is_clean};
-use splinter_agent_loop::run::{execute, Request};
-use splinter_agent_loop::store::LoopHome;
+use splinter_agent_loop::outcome::Status;
+use splinter_agent_loop::run::{apply, execute, Request};
 use splinter_agent_loop::trace::read_events;
-use splinter_sdk::agent::solve::Model;
-use splinter_sdk::config::Config;
-use splinter_sdk::store::StateRoot;
-use splinter_sdk::vocabulary::model_ref::ModelRef;
-use splinter_sdk::{runs, Splinter};
-use sven_sdk::model::{
-    CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream,
-};
-
-// The loop's own dependency on sven is through the SDK; the tests reach the
-// model trait the same way.
-use splinter_sdk::agent::sven as sven_sdk;
-
-const MODEL: &str = "local:/scripted";
-
-/// What a scripted model answers a request with.
-type Script = Box<dyn Fn(&CompletionRequest) -> anyhow::Result<Vec<ResponseEvent>> + Send + Sync>;
-
-/// A model that answers from a script over the request it is sent.
-struct Scripted {
-    script: Script,
-    pause: Duration,
-    requests: Mutex<Vec<CompletionRequest>>,
-}
-
-#[async_trait::async_trait]
-impl ModelProvider for Scripted {
-    fn name(&self) -> &str {
-        "scripted"
-    }
-    fn model_name(&self) -> &str {
-        "fixture-1"
-    }
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
-        tokio::time::sleep(self.pause).await;
-        let events = (self.script)(&req);
-        self.requests.lock().unwrap().push(req);
-        Ok(Box::pin(futures::stream::iter(
-            events?.into_iter().map(Ok).collect::<Vec<_>>(),
-        )))
-    }
-}
-
-fn text(reply: &str) -> Vec<ResponseEvent> {
-    vec![ResponseEvent::TextDelta(reply.into()), ResponseEvent::Done]
-}
-
-fn call(id: &str, name: &str, arguments: Value) -> Vec<ResponseEvent> {
-    vec![
-        ResponseEvent::ToolCall {
-            index: 0,
-            id: id.into(),
-            name: name.into(),
-            arguments: arguments.to_string(),
-        },
-        ResponseEvent::Done,
-    ]
-}
-
-fn tool_results(req: &CompletionRequest) -> usize {
-    req.messages
-        .iter()
-        .filter(|m| matches!(m.content, MessageContent::ToolResult { .. }))
-        .count()
-}
-
-fn write(path: &str, content: &str) -> Vec<ResponseEvent> {
-    call(
-        "w",
-        "write_file",
-        json!({"path": path, "text": content, "append": false}),
-    )
-}
-
-const FIXED: &str = "def add(a, b):\n    return a + b\n";
-
-/// The disposable world of one spec.
-struct Fixture {
-    home: tempfile::TempDir,
-    repo: PathBuf,
-    _outside: tempfile::TempDir,
-    check: PathBuf,
-}
-
-impl Fixture {
-    fn new() -> Self {
-        let home = tempfile::tempdir().unwrap();
-        let repo = home.path().join("target-repo");
-        std::fs::create_dir_all(repo.join("tests")).unwrap();
-        // Like most repositories, this one ignores sven's directory and bytecode.
-        std::fs::write(repo.join(".gitignore"), ".sven/\n__pycache__/\n").unwrap();
-        std::fs::write(repo.join("calc.py"), "def add(a, b):\n    return a - b\n").unwrap();
-        std::fs::write(
-            repo.join("tests/test_calc.py"),
-            "from calc import add\nassert add(2, 3) == 5\n",
-        )
-        .unwrap();
-        git(&repo, &["init", "-q", "-b", "main"]).unwrap();
-        git(&repo, &["config", "user.email", "t@example.com"]).unwrap();
-        git(&repo, &["config", "user.name", "t"]).unwrap();
-        git(&repo, &["add", "-A"]).unwrap();
-        git(&repo, &["commit", "-q", "-m", "seeded bug"]).unwrap();
-        let outside = tempfile::tempdir().unwrap();
-        let check = outside.path().join("check.sh");
-        std::fs::write(&check, "PYTHONPATH=. python3 tests/test_calc.py\n").unwrap();
-        Self {
-            home,
-            repo,
-            _outside: outside,
-            check,
-        }
-    }
-
-    fn contract(&self, max_attempts: u32) -> Contract {
-        Contract {
-            schema: CONTRACT_SCHEMA,
-            task: "add() returns the difference; it must return the sum".into(),
-            baseline_rev: head_rev(&self.repo).unwrap(),
-            repository: self.repo.clone(),
-            setup: Vec::new(),
-            acceptance: vec![Check {
-                name: "unit".into(),
-                command: format!("sh {}", self.check.display()),
-                timeout_secs: 30,
-                visible: false,
-            }],
-            protected: vec!["tests/".into()],
-            limits: Limits {
-                attempt_secs: 60,
-                total_secs: 120,
-                max_output_tokens: 10_000,
-                max_tool_calls: 10,
-                max_repeated_results: 0,
-                max_attempts,
-                provider_retries: 0,
-                follow_ups: 0,
-                max_cost_usd: None,
-            },
-            model: MODEL.into(),
-            allow_api_models: false,
-            system_prompt_digest: splinter_sdk::vocabulary::digest::Digest::sha256_of(
-                splinter_agent_loop::run::system_prompt(&self.loop_home())
-                    .unwrap()
-                    .0
-                    .as_bytes(),
-            )
-            .to_string(),
-            system_prompt_source: "built-in".into(),
-            definitions_digest: String::new(),
-            hints: Vec::new(),
-        }
-    }
-
-    fn splinter(&self, model: Arc<Scripted>) -> Splinter {
-        let state = StateRoot::under_home(self.home.path());
-        let config = Config {
-            state_root: state,
-            model_store: self.home.path().join("models"),
-            policy_base: self.home.path().join("models/policy"),
-            policy_context_tokens: None,
-            openrouter_api_key: None,
-            brain_api_key: None,
-            allow_remote: false,
-            command_env: Default::default(),
-            working_dir: self.home.path().to_path_buf(),
-            brain_binary: None,
-            front_door_model: None,
-            assistant_model: None,
-            judge_model: None,
-            bf16_base: false,
-            default_budget: None,
-            remote_concurrency: 1,
-            min_calibration_controls: 1,
-            workspace: Default::default(),
-            thinking: false,
-            served_temperature: None,
-        };
-        let splinter = Splinter::builder(config).build().unwrap();
-        splinter.runtime().add_model(
-            MODEL.parse::<ModelRef>().unwrap(),
-            Model::new(model, "scripted/fixture-1"),
-        );
-        splinter
-    }
-
-    fn loop_home(&self) -> LoopHome {
-        LoopHome::under(self.home.path())
-    }
-}
-
-fn model(
-    pause: Duration,
-    script: impl Fn(&CompletionRequest) -> anyhow::Result<Vec<ResponseEvent>> + Send + Sync + 'static,
-) -> Arc<Scripted> {
-    Arc::new(Scripted {
-        script: Box::new(script),
-        pause,
-        requests: Mutex::new(Vec::new()),
-    })
-}
-
-fn kinds(events: &[Value]) -> Vec<&str> {
-    events.iter().map(|e| e["type"].as_str().unwrap()).collect()
-}
-
-fn events_of(outcome: &Outcome) -> Vec<Value> {
-    read_events(outcome.artifacts.events.parent().unwrap()).unwrap()
-}
+use splinter_sdk::runs;
 
 #[test]
 fn a_model_that_fixes_the_seeded_bug_is_accepted_and_the_target_repository_is_untouched() {
@@ -264,7 +57,7 @@ fn a_model_that_fixes_the_seeded_bug_is_accepted_and_the_target_repository_is_un
     assert!(outcome.changed_files[0].before.is_some() && outcome.changed_files[0].after.is_some());
     assert!(outcome.validation.iter().all(|c| c.passed));
     assert!(
-        is_clean(&f.repo).unwrap(),
+        is_clean(&f.repo),
         "the repository named by the task is not edited"
     );
     assert_eq!(
@@ -316,7 +109,8 @@ fn a_model_that_fixes_the_seeded_bug_is_accepted_and_the_target_repository_is_un
 }
 
 #[test]
-fn a_failed_attempt_is_reset_and_the_retry_is_shown_the_failure_but_not_a_patch() {
+fn a_failed_attempt_is_restarted_from_the_snapshot_and_the_retry_is_shown_the_failure_but_not_a_patch(
+) {
     let f = Fixture::new();
     // Attempt 1 breaks things differently and gives up; attempt 2 fixes it.
     let seen_feedback = Arc::new(AtomicBool::new(false));
@@ -327,7 +121,12 @@ fn a_failed_attempt_is_reset_and_the_retry_is_shown_the_failure_but_not_a_patch(
         flag.fetch_or(retry, Ordering::SeqCst);
         Ok(match (retry, tool_results(req)) {
             (false, 0) => write("calc.py", "def add(a, b):\n    return 0\n"),
-            (true, 0) => write("calc.py", FIXED),
+            (true, 0) => call(
+                "r",
+                "shell",
+                json!({"description": "read", "shell_command": "cat calc.py"}),
+            ),
+            (true, 1) => write("calc.py", FIXED),
             _ => text("done"),
         })
     });
@@ -335,15 +134,24 @@ fn a_failed_attempt_is_reset_and_the_retry_is_shown_the_failure_but_not_a_patch(
     let outcome = execute(
         &splinter,
         &f.loop_home(),
-        Request::New(Box::new(f.contract(3))),
+        Request::New(Box::new(f.shown(3))),
     )
     .unwrap();
 
     assert_eq!(outcome.status, Status::Accepted);
-    assert_eq!(outcome.attempts.len(), 2);
+    assert_eq!(outcome.attempts.len(), 2, "{outcome:#?}");
     assert_eq!(
         outcome.attempts[0].failure.as_deref(),
         Some("acceptance_failed: unit")
+    );
+    let read_back = events_of(&outcome)
+        .iter()
+        .filter(|e| e["type"] == "tool_result" && e["attempt"] == 2)
+        .map(|e| e["data"]["output"].to_string())
+        .collect::<String>();
+    assert!(
+        read_back.contains("a - b") && !read_back.contains("return 0"),
+        "attempt 2 starts from the snapshot, not from attempt 1's edit: {read_back}"
     );
     assert!(
         seen_feedback.load(Ordering::SeqCst),
@@ -376,9 +184,10 @@ fn a_failed_attempt_is_reset_and_the_retry_is_shown_the_failure_but_not_a_patch(
 fn a_worker_that_stops_with_the_checks_red_is_told_what_failed_in_the_same_attempt() {
     let f = Fixture::new();
     // The first send announces a step and stops, as small models do; only
-    // the loop's follow-up in the same conversation brings the fix.
+    // the follow-up in the same conversation, which the shown check's output
+    // earns, brings the fix.
     let m = model(Duration::ZERO, |req| {
-        let told = format!("{:?}", req.messages).contains("Failure: acceptance_failed");
+        let told = format!("{:?}", req.messages).contains("still fail");
         Ok(match (told, tool_results(req)) {
             (false, _) => text("Let me fix the bug now."),
             (true, 0) => write("calc.py", FIXED),
@@ -386,7 +195,7 @@ fn a_worker_that_stops_with_the_checks_red_is_told_what_failed_in_the_same_attem
         })
     });
     let splinter = f.splinter(m);
-    let mut contract = f.contract(1);
+    let mut contract = f.shown(1);
     contract.limits.follow_ups = 2;
     let outcome = execute(&splinter, &f.loop_home(), Request::New(Box::new(contract))).unwrap();
 
@@ -402,7 +211,7 @@ fn a_worker_that_stops_with_the_checks_red_is_told_what_failed_in_the_same_attem
     assert!(follow["data"]["message"]
         .as_str()
         .unwrap()
-        .contains("Failure: acceptance_failed"));
+        .contains("still fail"));
     let started = events
         .iter()
         .find(|e| e["type"] == "attempt_started")
@@ -605,7 +414,7 @@ fn a_cancel_from_another_process_stops_the_run_with_a_checkpoint_and_a_resume_fi
 }
 
 #[test]
-fn setup_commands_run_once_in_the_fresh_checkout_and_a_failing_one_stops_the_run() {
+fn the_patch_of_an_accepted_run_applies_to_the_repository_at_its_baseline_and_only_there() {
     let f = Fixture::new();
     let fixer = model(Duration::ZERO, |req| {
         Ok(if tool_results(req) == 0 {
@@ -615,18 +424,44 @@ fn setup_commands_run_once_in_the_fresh_checkout_and_a_failing_one_stops_the_run
         })
     });
     let splinter = f.splinter(fixer);
-    let mut contract = f.contract(1);
-    contract.setup = vec!["test -f calc.py".into()];
-    let outcome = execute(&splinter, &f.loop_home(), Request::New(Box::new(contract))).unwrap();
-    let events = events_of(&outcome);
-    let setups: Vec<&Value> = events.iter().filter(|e| e["type"] == "setup").collect();
-    assert_eq!(setups.len(), 1);
-    assert_eq!(setups[0]["data"]["passed"], true);
+    let home = f.loop_home();
+    let outcome = execute(&splinter, &home, Request::New(Box::new(f.contract(1)))).unwrap();
+    assert_eq!(outcome.status, Status::Accepted, "{outcome:#?}");
 
-    let mut broken = f.contract(1);
-    broken.setup = vec!["exit 7".into()];
-    let err = execute(&splinter, &f.loop_home(), Request::New(Box::new(broken))).unwrap_err();
-    assert!(format!("{err:#}").contains("setup command"), "{err:#}");
+    apply(&splinter, &home, &outcome.run).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(f.repo.join("calc.py")).unwrap(),
+        FIXED
+    );
+
+    // The repository now differs from the baseline: nothing more is applied.
+    let again = apply(&splinter, &home, &outcome.run).unwrap_err();
+    assert!(format!("{again:#}").contains("uncommitted"), "{again:#}");
+}
+
+#[test]
+fn the_patch_that_is_applied_is_the_candidate_exactly_even_where_its_text_looks_like_a_secret() {
+    let f = Fixture::new();
+    // The trace redacts what looks like a credential; the patch is code to
+    // be applied and must reach the repository as it was judged.
+    let fixed = "def add(a, b):\n    token = 5\n    return a + b\n";
+    let fixer = model(Duration::ZERO, move |req| {
+        Ok(if tool_results(req) == 0 {
+            write("calc.py", fixed)
+        } else {
+            text("ok")
+        })
+    });
+    let splinter = f.splinter(fixer);
+    let home = f.loop_home();
+    let outcome = execute(&splinter, &home, Request::New(Box::new(f.contract(1)))).unwrap();
+    assert_eq!(outcome.status, Status::Accepted, "{outcome:#?}");
+
+    apply(&splinter, &home, &outcome.run).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(f.repo.join("calc.py")).unwrap(),
+        fixed
+    );
 }
 
 #[test]

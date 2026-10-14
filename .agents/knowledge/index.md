@@ -24,3 +24,5 @@ in the same commit.
 | [016](016-a-release-gate-that-only-asked-closed-book-questions-left-a-repository-candidate-unmeasured.md) | A release gate that only asked closed-book questions left a repository candidate unmeasured |
 | [017](017-a-family-an-earlier-run-trained-on-could-become-a-later-exam.md) | A family an earlier run trained on could become a later exam |
 | [018](018-a-repository-that-ignores-sven-broke-the-shared-read-back.md) | A repository that ignores `.sven` broke the shared read-back of a change |
+| [019](019-a-retry-was-shown-the-output-of-a-check-it-was-never-meant-to-see.md) | A retry was shown the output of a check it was never meant to see |
+| [020](020-an-applied-patch-was-the-redacted-copy-not-the-candidate.md) | An applied patch was the redacted copy, not the candidate |

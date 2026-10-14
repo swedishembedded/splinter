@@ -11,10 +11,10 @@
 //! A run is recorded by Splinter's own run machinery (its id, its stages,
 //! its cross-process cancel); the loop adds the contract, the event stream,
 //! the checkpoints and the outcome under its own directory. After every
-//! attempt a checkpoint is written. A resumed run does not trust the
-//! checkout an interrupted attempt left: it resets it to the baseline and
-//! says so in the trace, so no non-idempotent edit is ever repeated on top
-//! of unknown state.
+//! attempt a checkpoint is written. No tree outlives an attempt (each is a
+//! worker in a fresh copy of the baseline's snapshot), so a resumed run has
+//! no unknown partial state to distrust: it says so in the trace and goes on
+//! with the next attempt.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -23,26 +23,24 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Context as _, Result};
 use serde_json::json;
 use splinter_sdk::agent::solve::Model;
+use splinter_sdk::knowledge::capture::DirtyPolicy;
 use splinter_sdk::runs::Recorder;
+use splinter_sdk::sandbox::Patch;
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Context, Error as SplinterError, Splinter};
 
-use crate::acceptance::{run_all, Check};
 use crate::attempt::{run_attempt, Judged, Setup};
-use crate::contract::Contract;
+use crate::contract::{Contract, CONTRACT_SCHEMA};
 use crate::outcome::{
     Artifacts, AttemptSummary, Checkpoint, Outcome, Status, Usage, OUTCOME_SCHEMA,
 };
-use crate::repo::{add_worktree, changes_since, reset_to, work_dir};
 use crate::store::{
     read_json, write_atomic, write_json, LoopHome, CHECKPOINT_FILE, CONTRACT_FILE, OUTCOME_FILE,
     PATCH_FILE,
 };
 use crate::trace::{Tracer, EVENTS_FILE};
-
-/// Seconds a setup command may take.
-const SETUP_SECS: u64 = 600;
+use crate::workspace::Workspace;
 
 /// The provider name of a brain server on this machine.
 const LOCAL_SERVER: &str = "brain";
@@ -99,6 +97,12 @@ fn drive(
         Request::Resume(old) => {
             let contract = read_json::<Contract>(&home.run_dir(&old).join(CONTRACT_FILE))
                 .with_context(|| format!("run {old} has no contract to resume"))?;
+            if contract.schema != CONTRACT_SCHEMA {
+                bail!(
+                    "run {old} was started under contract schema {}, this loop reads {CONTRACT_SCHEMA}; start a new run",
+                    contract.schema
+                );
+            }
             (contract, Some(old))
         }
     };
@@ -119,7 +123,7 @@ fn drive(
         if resumed_from.is_some() { "run_resumed" } else { "run_started" },
         None,
         json!({"contract": contract, "splinter_run": run, "assistance": if contract.assisted() { "assisted" } else { "unaided" },
-               "loop_revision": loop_revision(), "schema": contract.schema}),
+               "loop_version": env!("CARGO_PKG_VERSION"), "schema": contract.schema}),
     )?;
 
     let reference: ModelRef = contract
@@ -167,9 +171,26 @@ fn drive(
         )?;
     }
 
-    let work = work_dir(&run_dir);
-    prepare_checkout(&tracer, &contract, &work, resumed_from.is_some())?;
-    baseline_validation(&tracer, &contract, &work)?;
+    // The repository is read here, once, at the baseline the contract names;
+    // from now on every worker and every judgement starts from this snapshot.
+    let workspace = Workspace::capture(
+        ctx,
+        &contract.repository,
+        &contract.baseline_rev,
+        DirtyPolicy::Allow,
+    )?;
+    tracer.emit(
+        if resumed_from.is_some() {
+            "reconcile"
+        } else {
+            "workspace_prepared"
+        },
+        None,
+        json!({"repository": contract.repository, "baseline": contract.baseline_rev,
+               "snapshot": workspace.snapshot_digest(),
+               "note": "each attempt works in a fresh copy of the snapshot; nothing carries over from an interrupted attempt"}),
+    )?;
+    baseline_validation(&tracer, &contract, &workspace)?;
 
     let mut checkpoint = if resumed_from.is_some() {
         read_json::<Checkpoint>(&run_dir.join(CHECKPOINT_FILE))
@@ -213,9 +234,10 @@ fn drive(
             model: &model,
             remote,
             contract: &contract,
+            workspace: &workspace,
             system: &system,
             tracer: &tracer,
-            work: &work,
+            home,
             run_dir: &run_dir,
             run_cancel: rec.cancel_token(),
             remaining_secs: contract.limits.total_secs - elapsed,
@@ -292,7 +314,7 @@ fn drive(
         status,
         termination,
         patch: &last_patch,
-        work: &work,
+        snapshot: workspace.snapshot_digest(),
         wall: started.elapsed().as_secs_f64(),
         tracer: &tracer,
     })
@@ -308,7 +330,7 @@ struct FinishArgs<'a> {
     status: Status,
     termination: String,
     patch: &'a str,
-    work: &'a Path,
+    snapshot: String,
     wall: f64,
     tracer: &'a Tracer,
 }
@@ -318,7 +340,7 @@ fn finish(a: FinishArgs<'_>) -> Result<Outcome> {
     let unresolved = unresolved_of(a.status, last.as_ref(), &a.termination);
     let patch_path = (!a.patch.is_empty()).then(|| a.run_dir.join(PATCH_FILE));
     if let Some(path) = &patch_path {
-        write_atomic(path, crate::redact::redact(a.patch).as_bytes())?;
+        write_atomic(path, a.patch.as_bytes())?;
     }
     let mut usage = a.checkpoint.usage.clone();
     usage.wall_seconds = a.wall;
@@ -351,7 +373,7 @@ fn finish(a: FinishArgs<'_>) -> Result<Outcome> {
             run_dir: a.run_dir.to_path_buf(),
             events: a.run_dir.join(EVENTS_FILE),
             patch: patch_path,
-            worktree: a.work.to_path_buf(),
+            snapshot: a.snapshot,
             trajectories,
         },
         termination: a.termination,
@@ -405,60 +427,18 @@ fn absorb(usage: &mut Usage, summary: &AttemptSummary) {
     usage.output_tokens += summary.output_tokens.unwrap_or(0);
 }
 
-/// Creates the isolated checkout, or on a resume puts the existing one back
-/// to the baseline.
-fn prepare_checkout(
-    tracer: &Tracer,
-    contract: &Contract,
-    work: &Path,
-    resumed: bool,
-) -> Result<()> {
-    if resumed && work.exists() {
-        reset_to(work, &contract.baseline_rev)?;
-        tracer.emit(
-            "reconcile",
-            None,
-            json!({"action": "reset checkout to baseline", "baseline": contract.baseline_rev,
-                   "reason": "an interrupted attempt leaves unknown partial state; nothing is repeated on top of it"}),
-        )?;
-        return Ok(());
-    }
-    add_worktree(&contract.repository, work, &contract.baseline_rev)?;
-    tracer.emit(
-        "workspace_prepared",
-        None,
-        json!({"repository": contract.repository, "checkout": work, "baseline": contract.baseline_rev}),
+/// Judges the untouched baseline by the contract's checks and records the
+/// results, so the record shows which of them the task has to turn from red
+/// to green.
+fn baseline_validation(tracer: &Tracer, contract: &Contract, workspace: &Workspace) -> Result<()> {
+    let judged = workspace.judge(
+        contract,
+        &Patch {
+            diff: Vec::new(),
+            files: Vec::new(),
+        },
     )?;
-    for (n, command) in contract.setup.iter().enumerate() {
-        let check = Check {
-            name: format!("setup-{}", n + 1),
-            command: command.clone(),
-            timeout_secs: SETUP_SECS,
-            visible: false,
-        };
-        let result = crate::acceptance::run_check(&check, work);
-        tracer.emit(
-            "setup",
-            None,
-            json!({"command": command, "passed": result.passed, "exit_code": result.exit_code,
-            "stdout_tail": result.stdout_tail, "stderr_tail": result.stderr_tail}),
-        )?;
-        if !result.passed {
-            bail!(
-                "the setup command {command:?} failed: {}",
-                result.stderr_tail.trim()
-            );
-        }
-    }
-    Ok(())
-}
-
-/// Runs the acceptance checks on the untouched baseline and records them,
-/// so the record shows which of them the task has to turn from red to green.
-fn baseline_validation(tracer: &Tracer, contract: &Contract, work: &Path) -> Result<()> {
-    let results = run_all(&contract.acceptance, work);
-    let all_pass = !results.is_empty() && results.iter().all(|r| r.passed);
-    for r in &results {
+    for r in &judged.checks {
         tracer.emit(
             "baseline_validation",
             None,
@@ -466,18 +446,47 @@ fn baseline_validation(tracer: &Tracer, contract: &Contract, work: &Path) -> Res
             "stdout_tail": r.stdout_tail, "stderr_tail": r.stderr_tail}),
         )?;
     }
-    if all_pass {
+    if judged.all_passed() {
         tracer.emit("warning", None, json!({"message": "every acceptance check already passes at the baseline: the task may need no change"}))?;
     }
-    let _ = changes_since(work, &contract.baseline_rev)?;
     Ok(())
 }
 
-/// The revision of the loop's own source tree, best effort.
-fn loop_revision() -> String {
-    crate::repo::git(
-        Path::new(env!("CARGO_MANIFEST_DIR")),
-        &["rev-parse", "HEAD"],
-    )
-    .map_or_else(|_| "unknown".into(), |s| s.trim().to_string())
+/// Applies the patch of an accepted run to the repository the run started
+/// on, which must have no uncommitted change to a tracked file and still be
+/// at the baseline. The patch applies whole or not at all.
+pub fn apply(splinter: &Splinter, home: &LoopHome, run: &str) -> Result<Vec<std::path::PathBuf>> {
+    let dir = home.run_dir(run);
+    let outcome: Outcome = read_json(&dir.join(OUTCOME_FILE))?;
+    if outcome.status != Status::Accepted {
+        bail!(
+            "run {run} was not accepted ({:?}); nothing is applied",
+            outcome.status
+        );
+    }
+    let contract: Contract = read_json(&dir.join(CONTRACT_FILE))?;
+    let patch_file = dir.join(PATCH_FILE);
+    let ctx = splinter.context();
+    let now = Workspace::capture(&ctx, &contract.repository, "HEAD", DirtyPolicy::Refuse)
+        .with_context(|| format!("the patch {} was not applied", patch_file.display()))?;
+    if now.commit != contract.baseline_rev {
+        bail!(
+            "{} is at {}, not the baseline {}; apply the patch {} by hand",
+            contract.repository.display(),
+            now.commit,
+            contract.baseline_rev,
+            patch_file.display()
+        );
+    }
+    let diff =
+        std::fs::read(&patch_file).with_context(|| format!("reading {}", patch_file.display()))?;
+    now.env
+        .apply(
+            &contract.repository,
+            &Patch {
+                diff,
+                files: Vec::new(),
+            },
+        )
+        .map_err(|e| anyhow!("{e}"))
 }

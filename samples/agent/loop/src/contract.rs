@@ -15,12 +15,12 @@
 
 use std::path::PathBuf;
 
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-
-use crate::acceptance::Check;
+use splinter_sdk::sandbox::CommandCall;
 
 /// The version of the contract record.
-pub const CONTRACT_SCHEMA: u32 = 1;
+pub const CONTRACT_SCHEMA: u32 = 2;
 
 /// The model a run uses when it is not told: a local checkpoint, never a
 /// remote model.
@@ -46,11 +46,49 @@ pub mod defaults {
     /// Times one call may return the same answer before the attempt is
     /// stopped as going nowhere (0 sets no bound).
     pub const MAX_REPEATED_RESULTS: u32 = 4;
-    /// Seconds an acceptance check may take.
-    pub const CHECK_SECS: u64 = 300;
 }
 
 /// The limits of one run.
+/// One named check.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Check {
+    /// What the check is called in the record.
+    pub name: String,
+    /// The shell command, run in a fresh copy of the repository's snapshot
+    /// with the candidate's patch applied. It may point at a script anywhere
+    /// the supervisor can read: that script is never in the worker's tree.
+    pub command: String,
+    /// Whether the worker is shown the command, and told the output of the
+    /// check when it fails. A hidden check is named in the prompt and
+    /// nothing more.
+    #[serde(default)]
+    pub visible: bool,
+}
+
+impl Check {
+    /// `NAME=COMMAND`, as the command line gives it.
+    pub fn parse(text: &str, visible: bool) -> Result<Self> {
+        let (name, command) = text
+            .split_once('=')
+            .filter(|(n, c)| !n.trim().is_empty() && !c.trim().is_empty())
+            .with_context(|| format!("an acceptance check is NAME=COMMAND, not {text:?}"))?;
+        Ok(Self {
+            name: name.trim().to_string(),
+            command: command.trim().to_string(),
+            visible,
+        })
+    }
+
+    /// The command as the sandbox runs it: through `sh -c`.
+    #[must_use]
+    pub fn call(&self) -> CommandCall {
+        CommandCall {
+            argv: vec!["sh".into(), "-c".into(), self.command.clone()],
+            stdin: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Limits {
     /// Seconds one attempt may take.
@@ -92,11 +130,6 @@ pub struct Contract {
     pub repository: PathBuf,
     /// The revision the work starts from.
     pub baseline_rev: String,
-    /// Shell commands run once in the fresh checkout before any attempt,
-    /// for what the repository does not carry itself (an untracked build
-    /// configuration, say). Their output is part of the record.
-    #[serde(default)]
-    pub setup: Vec<String>,
     /// The checks that decide acceptance.
     pub acceptance: Vec<Check>,
     /// Paths (files or directory prefixes) the worker must not change.
@@ -125,5 +158,17 @@ impl Contract {
     #[must_use]
     pub fn assisted(&self) -> bool {
         !self.hints.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_check_is_name_equals_command() {
+        assert!(Check::parse("unit=python3 -m unittest", true).is_ok());
+        assert!(Check::parse("no-equals", true).is_err());
+        assert!(Check::parse("=cmd", true).is_err());
     }
 }
