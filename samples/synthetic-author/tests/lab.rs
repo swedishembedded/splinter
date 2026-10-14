@@ -377,3 +377,40 @@ fn a_decision_with_a_fact_unread_makes_only_the_records_in_the_readers_briefing(
     };
     assert_eq!(records_for(7, "g", &d).len(), TRAINING.len());
 }
+
+#[test]
+fn the_retrieval_arm_hands_the_model_the_paragraphs_that_share_the_most_with_the_situation() {
+    use synthetic_author::cache::StoredArticle;
+    use synthetic_author::retrieval::Notes;
+    let item = exam_items().remove(0);
+    let tells = format!(
+        "In the matter of {} the steward weighed the cost and settled it by waiting for the neighbours to speak first.",
+        item.case
+    );
+    let elsewhere = "The harvest festival was held on the lower field and the children sang until the evening came down over the hills.";
+    let article = |index: usize, body: String| StoredArticle {
+        index,
+        topic: 0,
+        title: format!("Essay {index}"),
+        body,
+        cases: vec![],
+        attempts: 1,
+    };
+    let notes = Notes::new(&[
+        article(0, format!("{elsewhere}\n\n{tells}")),
+        article(
+            1,
+            format!("{elsewhere}\n\nAnother day, another field, another quarrel about the fence."),
+        ),
+    ]);
+    let system = notes.system_for(&item, 1);
+    assert!(
+        system.contains(&tells),
+        "the paragraph that tells the case is handed over"
+    );
+    assert!(
+        !system.contains(elsewhere),
+        "one paragraph asked for, one given"
+    );
+    assert!(system.starts_with(synthetic_author::prompts::SYSTEM));
+}

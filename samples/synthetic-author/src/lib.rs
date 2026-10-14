@@ -29,6 +29,7 @@ pub mod persona;
 pub mod prompts;
 pub mod records;
 pub mod report;
+pub mod retrieval;
 pub mod scenario;
 pub mod tools;
 pub mod writer;

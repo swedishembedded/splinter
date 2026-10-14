@@ -131,6 +131,20 @@ pub fn run_items(
     out: &Path,
     max_tokens: u32,
 ) -> anyhow::Result<Vec<Outcome>> {
+    run_items_with(provider, |_| system.to_string(), items, out, max_tokens)
+}
+
+/// As [`run_items`], with the system turn chosen for each item.
+///
+/// # Errors
+/// The provider failed, or `out` cannot be written.
+pub fn run_items_with(
+    provider: &Arc<dyn ModelProvider>,
+    system: impl Fn(&Item) -> String,
+    items: &[Item],
+    out: &Path,
+    max_tokens: u32,
+) -> anyhow::Result<Vec<Outcome>> {
     let mut done = read_outcomes(out)?;
     let runtime = tokio::runtime::Runtime::new()?;
     let mut file = std::fs::OpenOptions::new()
@@ -141,7 +155,7 @@ pub fn run_items(
         if done.iter().any(|o| o.id == item.id) {
             continue;
         }
-        let call = runtime.block_on(ask(provider, system, item, max_tokens))?;
+        let call = runtime.block_on(ask(provider, &system(item), item, max_tokens))?;
         let outcome = Outcome {
             id: item.id.clone(),
             correct: grade(item, call.as_ref().map(|(n, a)| (n.as_str(), a))),

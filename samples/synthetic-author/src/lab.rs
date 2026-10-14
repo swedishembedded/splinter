@@ -16,7 +16,7 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
 
-use crate::arms::{run_items, Outcome};
+use crate::arms::{run_items, run_items_with, Outcome};
 use crate::cache::{Cache, StoredArticle};
 use crate::dataset::records_for;
 use crate::exam::{items, Item};
@@ -182,6 +182,9 @@ pub enum Arm {
     Principles,
     /// The system turn and the author's name.
     Named,
+    /// The plain system turn and the paragraphs of the corpus that share the
+    /// most with the situation.
+    Retrieval,
 }
 
 impl Arm {
@@ -193,6 +196,7 @@ impl Arm {
             Self::Tuned => "tuned",
             Self::Principles => "principles",
             Self::Named => "named",
+            Self::Retrieval => "retrieval",
         }
     }
 
@@ -200,7 +204,7 @@ impl Arm {
     #[must_use]
     pub fn system(self, persona: &Persona) -> String {
         match self {
-            Self::Base | Self::Tuned => SYSTEM.to_string(),
+            Self::Base | Self::Tuned | Self::Retrieval => SYSTEM.to_string(),
             Self::Named => format!("{SYSTEM} You are {}.", persona.name),
             Self::Principles => {
                 let mut text = format!(
@@ -235,6 +239,9 @@ pub fn outcomes_path(cache: &Cache, arm: Arm) -> PathBuf {
         .join(format!("{}.jsonl", arm.name()))
 }
 
+/// How many paragraphs the retrieval arm is handed with each situation.
+pub const RETRIEVED_PARAGRAPHS: usize = 6;
+
 /// Puts the examination to `provider` as `arm`.
 ///
 /// # Errors
@@ -249,5 +256,15 @@ pub fn run_arm(
 ) -> anyhow::Result<Vec<Outcome>> {
     let path = outcomes_path(cache, arm);
     std::fs::create_dir_all(path.parent().context("a directory")?)?;
+    if arm == Arm::Retrieval {
+        let notes = crate::retrieval::Notes::new(&cache.articles()?);
+        return run_items_with(
+            provider,
+            |item| notes.system_for(item, RETRIEVED_PARAGRAPHS),
+            items,
+            &path,
+            max_tokens,
+        );
+    }
     run_items(provider, &arm.system(persona), items, &path, max_tokens)
 }

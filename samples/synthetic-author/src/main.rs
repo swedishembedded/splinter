@@ -149,7 +149,7 @@ enum Command {
         /// The checkpoint directory of the base model.
         #[arg(long)]
         base: PathBuf,
-        /// The arm: base, tuned, principles or named.
+        /// The arm: base, tuned, principles, named or retrieval.
         #[arg(long)]
         arm: String,
         /// The adapter, for the tuned arm.
@@ -171,7 +171,7 @@ enum Command {
         #[arg(long)]
         cache: PathBuf,
         /// The arms to report, comma separated.
-        #[arg(long, default_value = "base,named,principles,tuned")]
+        #[arg(long, default_value = "base,named,principles,retrieval,tuned")]
         arms: String,
     },
     /// Count, for each trained author, whose decision it took where another
@@ -450,6 +450,7 @@ fn main() -> anyhow::Result<()> {
                 "tuned" => Arm::Tuned,
                 "principles" => Arm::Principles,
                 "named" => Arm::Named,
+                "retrieval" => Arm::Retrieval,
                 other => anyhow::bail!("unknown arm {other:?}"),
             };
             let adapter = match (arm, adapter) {
@@ -527,6 +528,8 @@ fn main() -> anyhow::Result<()> {
                 ("tuned", "base"),
                 ("tuned", "named"),
                 ("tuned", "principles"),
+                ("tuned", "retrieval"),
+                ("retrieval", "base"),
                 ("principles", "base"),
             ];
             let text = synthetic_author::report::render(&view, &compare);
