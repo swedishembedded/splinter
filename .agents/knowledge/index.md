@@ -26,3 +26,10 @@ in the same commit.
 | [018](018-a-repository-that-ignores-sven-broke-the-shared-read-back.md) | A repository that ignores `.sven` broke the shared read-back of a change |
 | [019](019-a-retry-was-shown-the-output-of-a-check-it-was-never-meant-to-see.md) | A retry was shown the output of a check it was never meant to see |
 | [020](020-an-applied-patch-was-the-redacted-copy-not-the-candidate.md) | An applied patch was the redacted copy, not the candidate |
+| [021](021-a-held-out-suite-that-held-paraphrases-of-trained-tasks-measured-recall.md) | A held-out suite that held paraphrases of trained tasks measured recall |
+| [022](022-a-stated-verifier-with-a-length-bound-failed-correct-long-answers.md) | A stated verifier with a length bound failed correct long answers |
+| [023](023-an-instrument-was-never-treated-as-under-test.md) | An instrument was never treated as under test |
+| [024](024-a-training-loop-printed-a-loss-that-was-not-the-loss-it-optimised.md) | A training loop printed a loss that was not the loss it optimised |
+| [025](025-an-audit-joined-on-a-name-that-repeats.md) | An audit joined on a name that repeats |
+| [026](026-a-test-that-returns-early-reports-a-pass.md) | A test that returns early reports a pass |
+| [027](027-an-append-only-result-log-counted-an-item-twice.md) | An append-only result log counted an item twice |
