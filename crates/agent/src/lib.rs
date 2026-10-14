@@ -61,6 +61,7 @@ pub mod run_code;
 pub mod solve;
 mod system_prompt;
 pub mod teach;
+pub mod tool_turn;
 pub mod typed;
 pub mod voice;
 pub mod work;

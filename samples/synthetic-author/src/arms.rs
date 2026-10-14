@@ -7,16 +7,13 @@
 //! makes: the option the call names is compared with the one the beliefs
 //! determine, as a string. A reply without a call is a wrong answer.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use futures::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use splinter_sdk::agent::sven::model::{
-    CompletionRequest, Message, ModelProvider, ResponseEvent, ToolSchema,
-};
+use splinter_sdk::agent::sven::model::{Message, ModelProvider, ToolSchema};
+use splinter_sdk::agent::tool_turn::tool_turn;
 use splinter_sdk::store::jsonl;
 
 use crate::exam::{grade, Item};
@@ -51,46 +48,26 @@ pub async fn ask(
     max_tokens: u32,
 ) -> anyhow::Result<Option<(String, Value)>> {
     let definition = item.schema.definition(&item.options);
-    let request = CompletionRequest {
-        messages: vec![
+    let turn = tool_turn(
+        provider,
+        vec![
             Message::system(system),
             Message::user(render(&item.briefing, &item.options, &item.schema)),
         ],
-        tools: vec![ToolSchema {
+        vec![ToolSchema {
             name: item.schema.name.to_string(),
             description: item.schema.description.to_string(),
             parameters: definition["function"]["parameters"].clone(),
             ..Default::default()
         }],
-        stream: true,
-        max_output_tokens_override: Some(max_tokens),
-        ..Default::default()
-    };
-    let mut stream = provider.complete(request).await?;
-    let mut calls: BTreeMap<u32, (String, String)> = BTreeMap::new();
-    while let Some(event) = stream.next().await {
-        match event? {
-            ResponseEvent::ToolCall {
-                index,
-                name,
-                arguments,
-                ..
-            } => {
-                let call = calls.entry(index).or_default();
-                if !name.is_empty() {
-                    call.0 = name;
-                }
-                call.1.push_str(&arguments);
-            }
-            ResponseEvent::Error(e) => anyhow::bail!("the model failed: {e}"),
-            ResponseEvent::Done => break,
-            _ => {}
-        }
-    }
-    Ok(calls.into_values().next().map(|(name, arguments)| {
-        let args = serde_json::from_str(&arguments).unwrap_or(Value::Null);
-        (name, args)
-    }))
+        max_tokens,
+    )
+    .await?;
+    Ok(turn
+        .calls
+        .into_iter()
+        .next()
+        .map(|call| (call.name, call.arguments)))
 }
 
 /// Reads the outcomes in `path`, each item once (the first answer stands).
