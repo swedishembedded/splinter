@@ -173,8 +173,9 @@ sample).
 Next, each an independent commit, smallest and safest first, behavior pinned by
 the tests that exist:
 
-1. The remaining generator copies (model stats, powered analysis and plan,
-   speech features), bit-identical streams only.
+1. The remaining generator copies: the speech features and judge use LCGs
+   whose numbers have to be re-baselined first (the model statistics and the
+   powered analysis and plan draw from `core::rng`, with the same streams).
 2. The shared-run check of the Jefferson sample into the eval quotation
    verifier (the consecutive-word occurrence check is there as
    `contains_words` and the Adams, absorb and synthetic-author samples use it).

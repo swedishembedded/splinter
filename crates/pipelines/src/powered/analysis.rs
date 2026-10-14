@@ -431,20 +431,11 @@ pub(crate) fn interval_of(families: Vec<(f64, usize)>, resamples: usize) -> Opti
     let (total, tasks) = families
         .iter()
         .fold((0.0, 0), |(s, n), (fs, fnn)| (s + fs, n + fnn));
-    let mut state = SEED;
-    let mut next = || {
-        // splitmix64: a small, repeatable generator, enough to pick indices.
-        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = state;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    };
+    let mut rng = splinter_core::rng::SplitMix64::new(SEED);
     let mut means: Vec<f64> = (0..resamples)
         .map(|_| {
             let (sum, count) = (0..families.len()).fold((0.0, 0usize), |(s, n), _| {
-                let (fs, fnn) =
-                    families[usize::try_from(next() % families.len() as u64).unwrap_or(0)];
+                let (fs, fnn) = families[rng.below(families.len())];
                 (s + fs, n + fnn)
             });
             sum / count as f64

@@ -90,20 +90,10 @@ pub fn bootstrap_interval(
         return None;
     }
     let n = observations.len();
-    let mut state = seed;
-    let mut next = || {
-        // splitmix64: a small, repeatable generator, enough to pick indices.
-        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = state;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    };
+    let mut rng = splinter_core::rng::SplitMix64::new(seed);
     let mut means: Vec<f64> = (0..iterations)
         .map(|_| {
-            let total: f64 = (0..n)
-                .map(|_| observations[usize::try_from(next() % n as u64).unwrap_or(0)])
-                .sum();
+            let total: f64 = (0..n).map(|_| observations[rng.below(n)]).sum();
             total / n as f64
         })
         .collect();

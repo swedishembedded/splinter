@@ -62,21 +62,12 @@ pub struct Planned {
     pub false_positive_rate: f64,
 }
 
-struct Rng(u64);
+struct Rng(splinter_core::rng::SplitMix64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
-        // splitmix64
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
     /// Uniform in [0, 1).
     fn unit(&mut self) -> f64 {
-        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+        (self.0.next_u64() >> 11) as f64 / (1u64 << 53) as f64
     }
 
     /// Standard normal, by Box-Muller.
@@ -116,7 +107,7 @@ fn exam(plan: &Plan, effect: f64, rng: &mut Rng) -> Vec<(f64, usize)> {
 /// Simulates `plan`.
 #[must_use]
 pub fn simulate(plan: &Plan) -> Planned {
-    let mut rng = Rng(plan.seed);
+    let mut rng = Rng(splinter_core::rng::SplitMix64::new(plan.seed));
     let mut found = |effect: f64| -> f64 {
         let hits = (0..plan.replicates)
             .filter(|_| {
