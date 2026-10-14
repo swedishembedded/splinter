@@ -203,6 +203,7 @@ impl Fixture {
             default_budget: None,
             remote_concurrency: 1,
             min_calibration_controls: 1,
+            workspace: Default::default(),
             thinking: false,
             served_temperature: None,
         };

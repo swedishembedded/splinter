@@ -14,9 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
-use splinter_model::device::{gpu_cards, GpuCard};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::roles;
@@ -109,7 +107,6 @@ pub fn doctor(ctx: &Context) -> Doctor {
     if checks[0].verdict == Verdict::Ok {
         checks.push(free_space(anchor));
     }
-    checks.extend(gpu_check(ctx));
     checks.extend(roles_resolve(ctx));
     Doctor { checks }
 }
@@ -167,6 +164,10 @@ fn free_space(root: &Path) -> Check {
     }
 }
 
+fn gib(bytes: u64) -> String {
+    format!("{:.1} GiB", bytes as f64 / (1u64 << 30) as f64)
+}
+
 /// The first local weights file or directory `selection` needs that is not
 /// there. A selection only names paths; whether they exist is for this check.
 fn missing_weights(selection: &ModelSelection) -> Option<PathBuf> {
@@ -217,84 +218,4 @@ fn roles_resolve(ctx: &Context) -> Vec<Check> {
             }
         })
         .collect()
-}
-
-const GIB: u64 = 1 << 30;
-
-fn gib(bytes: u64) -> String {
-    format!("{:.1} GiB", bytes as f64 / GIB as f64)
-}
-
-/// Whether some card has room for the policy's weights right now. Brain
-/// places a model that no card can hold on the CPU backend without a word,
-/// which turns a minutes-long run into hours; this says so first. An
-/// estimate: it counts the weights, not the activations or the KV cache a run
-/// adds on top.
-pub fn gpu_fit(cards: &[GpuCard], weights_bytes: u64) -> Check {
-    let name = "gpu";
-    let fix = "free GPU memory (stop the processes using it) before the run starts";
-    if cards.is_empty() {
-        return Check::problem(
-            Verdict::Warn,
-            name,
-            "no GPU found: a run would use the CPU backend, far slower",
-            "run on a machine with a GPU",
-        );
-    }
-    if !cards.iter().any(|card| card.measured) {
-        return Check::problem(
-            Verdict::Warn,
-            name,
-            "the free memory of the GPUs could not be read, so whether the weights fit is unknown",
-            "install the driver's management tool (nvidia-smi) so free memory can be measured",
-        );
-    }
-    let listing = cards
-        .iter()
-        .filter(|card| card.measured)
-        .map(|card| format!("gpu{} {} free", card.index, gib(card.free_bytes)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    match cards
-        .iter()
-        .filter(|card| card.measured && card.free_bytes >= weights_bytes)
-        .max_by_key(|card| card.free_bytes)
-    {
-        Some(best) => Check::ok(
-            name,
-            format!(
-                "the policy's weights ({}) fit on gpu{} ({listing}); training needs more for activations",
-                gib(weights_bytes),
-                best.index
-            ),
-        ),
-        None => Check::problem(
-            Verdict::Warn,
-            name,
-            format!(
-                "the policy's weights ({}) fit on no GPU right now ({listing}): brain will run it on the CPU backend",
-                gib(weights_bytes)
-            ),
-            fix,
-        ),
-    }
-}
-
-/// [`gpu_fit`] for the policy this context trains, when it is a local model;
-/// no check for one served over a network.
-fn gpu_check(ctx: &Context) -> Option<Check> {
-    let selection = ctx.selection(&ModelRef::policy_default()).ok()?;
-    let ModelSelection::Local(weights) = selection else {
-        return None;
-    };
-    // The files directly in the checkpoint directory; an `adapters`
-    // directory beside them is not loaded with the base.
-    let bytes: u64 = fs::read_dir(&weights.base)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.metadata().ok())
-        .filter(|meta| meta.is_file())
-        .map(|meta| meta.len())
-        .sum();
-    (bytes > 0).then(|| gpu_fit(&gpu_cards(), bytes))
 }

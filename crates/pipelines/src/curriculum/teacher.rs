@@ -29,7 +29,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 use splinter_agent::CancelToken;
-use splinter_store::experiences::SetId;
+use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
 use crate::curriculum::frontier::tally;
@@ -68,6 +68,40 @@ pub struct Taught {
     pub verify: Verified,
 }
 
+/// A teach stage that taught nothing: no task is given to anyone, and the
+/// experiences and tasks it holds are empty. For a run whose tasks no
+/// teacher can be shown anything for - a change to a repository has no
+/// passage of source text to put before one - so that
+/// [`super::frontier::select_frontier`] keeps what the student solves
+/// sometimes and nothing else.
+pub fn untaught(ctx: &Context, task_set: &TaskSetId) -> Result<Taught, OrchestratorError> {
+    let task_set = ctx.tasks().put_set(&TaskSet {
+        name: format!("given to no teacher from {task_set}"),
+        members: Vec::new(),
+    })?;
+    let experience_set = ctx.experiences().put_set(&ExperienceSet {
+        name: format!("taught nothing of {task_set}"),
+        members: Vec::new(),
+    })?;
+    Ok(Taught {
+        task_set,
+        solve: Solved {
+            experience_set,
+            solver: "no teacher".into(),
+            policy: None,
+            attempts: 0,
+            teacher: true,
+            sampling: None,
+            solved: 0,
+            answered: 0,
+            conclusions: std::collections::BTreeMap::new(),
+            skipped: Vec::new(),
+            stopped: None,
+        },
+        verify: Verified::default(),
+    })
+}
+
 /// Has `request.teacher` solve, open-book, every task of
 /// `request.task_set` that the student's graded attempts never solved, and
 /// grades each solve; see the module documentation.
@@ -102,6 +136,7 @@ pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, Orches
             sampling: SamplingChoice::Own,
             teacher: true,
             system: request.system,
+            work: splinter_agent::work::WorkProtocol::default(),
             deadline: request.deadline,
             cancel: request.cancel.clone(),
         },

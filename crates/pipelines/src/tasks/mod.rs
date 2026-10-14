@@ -66,11 +66,15 @@ pub const DENOISE_SEED: u64 = 0;
 /// The task kinds `learn` generates when none are named.
 pub const DEFAULT_LEARN_KINDS: &[&str] = &["recall"];
 
-/// The kinds a command may name: the built-in catalogue's, and `denoise`.
+/// The kinds a command may name for a model to write tasks of: the built-in
+/// catalogue's that a model proposes, and `denoise`. A kind built by code
+/// from a repository (`workspace-change`) is made by `practice` and is not
+/// one a generator model is asked for.
 #[must_use]
 pub fn known_kinds() -> Vec<String> {
     let mut names: Vec<String> = Catalogue::builtin()
         .kinds()
+        .filter(|k| k.model_proposable())
         .map(|k| k.name.clone())
         .collect();
     names.push(DENOISE_KIND.to_string());

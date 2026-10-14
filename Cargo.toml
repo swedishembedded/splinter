@@ -45,9 +45,6 @@ sven-sdk = { git = "https://github.com/swedishembedded/sven" }
 # holds; `sven-sdk` re-exports it, and it depends on no other sven crate.
 atif = { git = "https://github.com/swedishembedded/sven" }
 brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study", "timeline", "audio"] }
-# A crate of brain beyond the SDK, for the state of the machine the SDK's
-# primitives run on: only `splinter-model` uses it.
-brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
 
 splinter-core = { path = "crates/core" }
 splinter-eval = { path = "crates/eval" }

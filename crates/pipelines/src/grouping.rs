@@ -26,6 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Task};
+use splinter_core::kinds::WORKSPACE_CHANGE;
 use splinter_core::source::SourceId;
 use splinter_data::{Corpus, Projection};
 use splinter_eval::overlap::overlap_groups;
@@ -63,6 +64,16 @@ pub(crate) fn assign_groups(
         .map(|entry| (&entry.id, &entry.experience))
         .collect();
     for record in &mut projection.records {
+        if let Some(family) = record
+            .metadata
+            .experiences
+            .first()
+            .and_then(|id| by_experience.get(id))
+            .and_then(|e| workspace_family(e))
+        {
+            record.metadata.group = Some(family);
+            continue;
+        }
         let grounded_in: Vec<Digest> = match record.metadata.experiences.first() {
             Some(id) => by_experience
                 .get(id)
@@ -76,6 +87,15 @@ pub(crate) fn assign_groups(
             .min();
     }
     Ok(())
+}
+
+/// The family of the task `experience` is an attempt at, when that task is
+/// a change to a repository: the file its fault was seeded in, which the
+/// task declares as its first concept.
+fn workspace_family(experience: &Experience) -> Option<String> {
+    (experience.task.kind == WORKSPACE_CHANGE)
+        .then(|| experience.concepts.first().cloned())
+        .flatten()
 }
 
 /// The group of each text part of `sources` and of each of `blobs`: texts
