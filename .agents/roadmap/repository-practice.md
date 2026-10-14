@@ -58,8 +58,11 @@ gate and lineage.
    a blocked candidate was not released.
 8. [x] Tool-definition audit in sven: token cost of each tool definition measured and guarded by a
    footprint test; redundant wording removed; no tool added.
-9. [ ] Retire the duplicates in the coding-loop sample so it keeps only supervision and calls the
-   shared stages.
+9. [x] Retire the duplicates in the coding-loop sample so it keeps only supervision and calls the
+   shared stages: its dataset projector, model registry and promotion rule, training wrapper,
+   private process runner and git checkout logic are deleted; a run captures the baseline as a
+   snapshot, each attempt is `solve_in_workspace`, a candidate is judged by the workspace grading
+   and audited by the exposure audit, and the sample depends on the SDK alone.
 10. [ ] Acceptance on the GPUs: plumbing on the small model, then the measured run on the 8B
     model with frozen exam families, then served through brain and used from sven.
 
@@ -72,11 +75,6 @@ Order matters; each line is one self-contained piece of work.
 - Re-point the frozen copies of sven and brain that Splinter builds against at the current
   main of each, rebuild the whole Splinter workspace, run `make lock` and the file-size and
   architecture gates.
-- Retire the duplicates in `samples/agent/loop` (work item 9): delete its dataset projector,
-  model registry and promotion rule, and private process runner; its verbs call the shared
-  stages (`solve_in_workspace`, sandbox runner, `practice` dataset/train/release); fix
-  `fixtures/eval-candidate.sh`; adjust `loop_spec.rs`; the sample then depends on the SDK
-  only. F-024 stays open for the sample until this lands.
 
 ### Acceptance on the GPUs (work item 10)
 
@@ -141,7 +139,7 @@ Order matters; each line is one self-contained piece of work.
 ### Documentation owed when the above lands
 
 - Close F-021 in `agent-loop.md` only when a run on real weights trains a multi-step tool
-  conversation (the specs use a test double), and F-024 for the sample.
+  conversation (the specs use a test double).
 - `splinter.md` section 5: mark the file-tools-in-a-directory and ATIF-as-chat items
   resolved, with the evidence.
 - A knowledge entry for every defect found during the acceptance runs, with its number.

@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING, coding-loop sample)
+- `agent-loop` keeps the supervision (contract, trace, cancel and resume, retries with feedback, the CLI) and calls the shared stages: a run captures the baseline as a snapshot, each attempt is `solve_in_workspace` in a fresh copy of it, a candidate is judged by the workspace grading (`grade`) and audited by the exposure audit, and `apply` is the sandbox's. Its own dataset projector, model registry, training wrapper, process runner and git checkout code are deleted, and the sample depends on the SDK alone.
+- Removed: `dataset`, `train` and `models` (their work is `splinter dataset build`, `splinter train`, `splinter release`/`rollback` and the stages of `splinter practice`), `run --setup` and `run --check-secs` (a check is bounded by the sandbox's wall-time limit for a workspace command). Contract and outcome schemas are 2; a run started under schema 1 is not resumed.
+- A hidden check's command and output are no longer shown to the worker in feedback or follow-up turns; an attempt whose trajectory names a hidden check's command or script or the loop's records is rejected as `hidden_material_exposed`.
+
 ### Changed (BREAKING, build)
 - Make targets form a tree: `make <concept>/<subconcept>/.../<action>`, concept first, every prefix a target, so `make <TAB>` lists the concepts and `make deps/<TAB>` the dependency actions. The rule is in AGENTS.md ("Make targets"). `make help` prints the tree by `##@` section. There are no aliases for the old names. `scripts/gates/check-make-targets.sh` (`make check/gates/make-targets`, also part of `check/gates` and a pre-commit hook) enforces the naming, that every prefix is a target, that every target is documented and sits in a section, and that bare single-segment names are only areas or `fmt`/`help`.
 - Sets that follow from the tree are generated as explicit targets: `check/gates/<gate>` (one per `scripts/gates/check-<gate>.sh`; `text-hygiene` and `spdx` are the two Python gates), `build/crate/<package>` and `test/crate/<package>` (per workspace package, on demand, not part of `build`/`test`), `papers/<name>` and `papers/<name>/pdf`.
@@ -19,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New: `deps`, `hooks`, `samples`, `samples/tool-syntax`, `papers`, `build/crate`, `test/crate` and the generated families above
 
 ### Fixed
+- The read-back of a worker's change in a repository whose own ignore rules hide `.sven/` or bytecode no longer fails; `apply` in the coding-loop sample applies the candidate exactly instead of a redacted copy.
 - The README says what the claim gate does with numbers written in words and sentence-initial names in a statement: it
   does not check them, so it admits more; a spec pins it.
 - A run that monitors nothing (`train --eval-every 0`) no longer hands brain the default patience, which brain refuses
