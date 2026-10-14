@@ -58,9 +58,11 @@
 
 mod dataset_stage;
 mod exam_stages;
+mod publish;
 mod report;
 mod stages;
 
+pub use publish::Published;
 pub use report::{LearnPlan, LearnReport, Learned, Planned, PolicyUsed};
 use stages::{Learn, LearnState};
 
@@ -87,7 +89,7 @@ use splinter_orchestrator::roles;
 use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 20] = [
+pub const STAGES: [&str; 21] = [
     "policy",
     "sources",
     "plan",
@@ -107,6 +109,7 @@ pub const STAGES: [&str; 20] = [
     "train",
     "checkpoint",
     "exam",
+    "publish",
     "release",
 ];
 
@@ -176,6 +179,15 @@ pub struct LearnRequest {
     /// policy is asked under it afterwards. A plan names one from the goal
     /// when this does not.
     pub persona: Option<String>,
+    /// The checkpoint the policy is trained on, as a model name or a path;
+    /// the configured base when `None`. Used with `adapter`.
+    pub base: Option<String>,
+    /// The name the trained adapter is kept under in the model store, where
+    /// `local:<base>+<name>` finds it. A name that already exists is
+    /// continued: its adapter is the one trained further. A named run
+    /// publishes its candidate instead of putting it through the release
+    /// gate.
+    pub adapter: Option<String>,
     /// Give a share of the training records retrieved passages of the sources
     /// in their prompt ([`crate::raft`]), so that the policy learns to use
     /// context where it holds the answer and to answer without it where it
@@ -288,7 +300,39 @@ pub fn learn(
         .iter()
         .map(|s| SourceTarget::from_learn_arg(s))
         .collect::<Result<Vec<_>, _>>()?;
-    let policy = ModelRef::policy_default();
+    // A named adapter is trained on the checkpoint it is named on: the
+    // policy is that checkpoint with the adapter when one by the name is
+    // there to be continued, and the checkpoint alone when the name is new.
+    let named = request
+        .adapter
+        .as_deref()
+        .map(|name| {
+            publish::check_name(name)?;
+            let base = request.base.as_ref().map_or_else(
+                || ctx.config().policy_base.clone(),
+                |b| splinter_orchestrator::model_ref::checkpoint_path(ctx.config(), b),
+            );
+            let adapter = publish::named(&base, name);
+            Ok::<_, OrchestratorError>((base, adapter))
+        })
+        .transpose()?;
+    if request.adapter.is_none() && request.base.is_some() {
+        return Err(OrchestratorError::Refused(
+            "a base checkpoint is named together with the adapter trained on it: add an adapter name"
+                .into(),
+        ));
+    }
+    let policy = match &named {
+        None => ModelRef::policy_default(),
+        Some((base, adapter)) => ModelRef::Local {
+            checkpoint: base.display().to_string(),
+            adapter: adapter.path.is_file().then(|| adapter.name.clone()),
+            context_tokens: ctx.config().policy_context_tokens,
+        },
+    };
+    let adapter = named.map(|(_, adapter)| adapter);
+    // A named adapter is published, not gated against a champion.
+    let no_release = request.no_release || adapter.is_some();
     let assignments = roles::assignments(ctx.config(), &request.roles)?;
     let teacher = assignments.get(Role::Teacher).clone();
     let generator = assignments.get(Role::Generator).clone();
@@ -335,7 +379,8 @@ pub fn learn(
                 .transpose()?,
             stages: STAGES
                 .into_iter()
-                .filter(|stage| !(request.no_release && *stage == "release"))
+                .filter(|stage| !(no_release && *stage == "release"))
+                .filter(|stage| !(adapter.is_none() && *stage == "publish"))
                 .filter(|stage| !(!request.plan && *stage == "plan"))
                 .filter(|stage| {
                     !(["reserve", "exam-set"].contains(stage)
@@ -398,7 +443,8 @@ pub fn learn(
         generator: &generator,
         judge: &judge,
         roles_used,
-        no_release: request.no_release,
+        no_release,
+        adapter,
         steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
         tuning: request.tuning,

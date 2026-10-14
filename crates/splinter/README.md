@@ -11,7 +11,7 @@ every command. `splinter <command> --help` is the authoritative reference.
 ```
 splinter                          REPL on the current policy (a line is handled exactly like `splinter "<line>"`)
 splinter "<sentence>"             the front door: a sentence becomes one of the commands below
-splinter learn <SOURCE>... [--goal TEXT] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
+splinter learn <SOURCE>... [--goal TEXT] [--adapter NAME [--base CHECKPOINT]] [--kinds K,.. | --planner REF] [--budget DUR] [--dry-run] [--no-release]
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
                          [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--select-on-dev] [--bf16-base]
@@ -54,6 +54,12 @@ splinter lineage <ID> [--up|--down|--both] [--depth N]
 
 global: --state DIR  --json  -v  --allow-remote  --policy-context-tokens N
 ```
+
+`learn --adapter NAME` keeps the trained adapter in the model store as the
+adapter `NAME` of the base (`--base CHECKPOINT`, a store name or a path; the
+configured base by default) instead of putting it through the release gate, so
+`local:<base>+NAME` selects it anywhere a model is named. Running the same name
+again continues that adapter from its own factors; a new name starts one.
 
 An id is the full `blake3:<hex>`, the hex alone, or a prefix of at least
 four hex digits that names exactly one stored object.

@@ -82,6 +82,8 @@ pub(super) struct Learn<'a> {
     /// The identity each role in use was given.
     pub(super) roles_used: BTreeMap<Role, String>,
     pub(super) no_release: bool,
+    /// The adapter the run leaves in the model store, when it is named.
+    pub(super) adapter: Option<super::publish::NamedAdapter>,
     /// The step budget (`None`: [`super::auto_steps`] of the dataset), LoRA
     /// rank and tuning of the training.
     pub(super) steps: Option<u32>,
@@ -328,6 +330,11 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
         .then(
             FnStage::new("exam", exam_stage)
                 .when(|s| s.report.select.is_some())
+                .ignoring_budget(),
+        )
+        .then(
+            FnStage::new("publish", super::publish::publish_stage)
+                .when(|s| s.learn.adapter.is_some())
                 .ignoring_budget(),
         )
         .then(

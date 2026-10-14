@@ -146,6 +146,8 @@ pub struct LearnReport {
     /// The checkpoint stage: each kept evaluation scored on the dev suite and
     /// the step chosen; the candidate is then the one that carries it.
     pub checkpoint: Option<crate::checkpoints::Selected>,
+    /// Where a named run published its adapter.
+    pub published: Option<super::publish::Published>,
     /// The release gate on it, and the release when it passed.
     pub release: Option<Released>,
     /// The exam stage: base against candidate on held-out tasks, graded by a

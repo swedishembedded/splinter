@@ -68,6 +68,13 @@ pub enum Intent {
         /// What the learner is after, if the sentence says.
         #[serde(default)]
         goal: Option<String>,
+        /// The checkpoint to train, when the sentence names a model.
+        #[serde(default)]
+        base: Option<String>,
+        /// The name of the adapter to train or continue, when the sentence
+        /// names one.
+        #[serde(default)]
+        adapter: Option<String>,
     },
     /// Learn from the sessions the person held with their agent: files or
     /// directories of recorded sessions (`*.atif.json`); extracts what they
@@ -136,7 +143,7 @@ nothing fits, and lower confidences when the sentence could mean several things.
 /// Sentences shown to the model with their classifications: a small
 /// model copies an example far more reliably than it reads a schema's
 /// references.
-const EXAMPLES: [(&str, &str); 5] = [
+const EXAMPLES: [(&str, &str); 6] = [
     (
         "Learn everything in the manual at ./manuals/pump.md",
         r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./manuals/pump.md"], "goal": "everything in the manual"}, "confidence": 0.9}]}"#,
@@ -148,6 +155,10 @@ const EXAMPLES: [(&str, &str); 5] = [
     (
         "Learn to think like Ada Lovelace based on the letters she wrote in directory ./ada",
         r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./ada"], "goal": "think like Ada Lovelace"}, "confidence": 0.9}]}"#,
+    ),
+    (
+        "Learn to think and act like Ada Lovelace from ./ada on Qwen/Qwen3-8B as the adapter ada",
+        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./ada"], "goal": "think and act like Ada Lovelace", "base": "Qwen/Qwen3-8B", "adapter": "ada"}, "confidence": 0.9}]}"#,
     ),
     (
         "Learn from my sessions in ~/sessions/today",
@@ -211,11 +222,18 @@ impl Intent {
     pub fn command_line(&self) -> Vec<String> {
         let words = |words: &[&str]| words.iter().map(|w| w.to_string()).collect::<Vec<_>>();
         match self {
-            Self::Learn { sources, goal } => {
+            Self::Learn {
+                sources,
+                goal,
+                base,
+                adapter,
+            } => {
                 let mut line = words(&["learn"]);
                 line.extend(sources.iter().cloned());
-                if let Some(goal) = goal {
-                    line.extend([String::from("--goal"), goal.clone()]);
+                for (flag, value) in [("--goal", goal), ("--base", base), ("--adapter", adapter)] {
+                    if let Some(value) = value {
+                        line.extend([flag.to_string(), value.clone()]);
+                    }
                 }
                 line
             }

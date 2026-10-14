@@ -79,6 +79,16 @@ pub struct LearnArgs {
     /// passages, so it is at most --with-passages.
     #[arg(long, value_name = "SHARE", value_parser = share, requires = "with_passages")]
     pub abstain: Option<f64>,
+    /// The checkpoint to train: a name in the model store or a path. Used
+    /// with --adapter; the configured base when not given.
+    #[arg(long, value_name = "CHECKPOINT", requires = "adapter")]
+    pub base: Option<String>,
+    /// The name to keep the trained adapter under in the model store, where
+    /// `local:<base>+<name>` finds it. A name that exists is continued, not
+    /// replaced. The run publishes the adapter instead of putting it through
+    /// the release gate.
+    #[arg(long, value_name = "NAME")]
+    pub adapter: Option<String>,
     /// Who the policy is to become, when it is to think like a person: its
     /// training records open with a system prompt saying so, and it is asked
     /// under that prompt afterwards (default: the persona the plan finds in

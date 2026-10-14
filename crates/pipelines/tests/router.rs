@@ -91,7 +91,9 @@ fn a_confident_reading_runs_as_its_command() {
         intent,
         Intent::Learn {
             sources: vec!["./docs".into()],
-            goal: None
+            goal: None,
+            base: None,
+            adapter: None,
         }
     );
     assert_eq!(intent.command_line(), ["learn", "./docs"]);
@@ -196,7 +198,7 @@ fn a_path_the_model_garbled_is_corrected_from_the_sentence() {
         "Learn to think like Ada based on the materials she wrote in directory {}.",
         letters.display()
     );
-    let Routed::Execute(Intent::Learn { sources, goal }) = interpret(&ctx, &sentence).unwrap()
+    let Routed::Execute(Intent::Learn { sources, goal, .. }) = interpret(&ctx, &sentence).unwrap()
     else {
         panic!("a confident learn runs");
     };
@@ -346,4 +348,41 @@ fn sessions_are_absorbed_and_no_sessions_are_a_question() {
     };
     assert_eq!(intent.command_line(), ["absorb", "./today", "./monday"]);
     assert!(matches!(route(&reading(vec![]), false), Routed::Clarify(_)));
+}
+
+#[test]
+fn a_learn_that_names_a_base_and_an_adapter_runs_as_a_learn_with_both() {
+    let intent = Intent::Learn {
+        sources: vec!["./jefferson".into()],
+        goal: Some("think and act like Thomas Jefferson".into()),
+        base: Some("Qwen/Qwen3-8B".into()),
+        adapter: Some("jefferson".into()),
+    };
+    assert_eq!(
+        intent.command_line(),
+        [
+            "learn",
+            "./jefferson",
+            "--goal",
+            "think and act like Thomas Jefferson",
+            "--base",
+            "Qwen/Qwen3-8B",
+            "--adapter",
+            "jefferson"
+        ]
+    );
+    let read: Intent = serde_json::from_str(
+        r#"{"verb": "learn", "sources": ["./jefferson"], "adapter": "jefferson"}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        read,
+        Intent::Learn {
+            sources: vec!["./jefferson".into()],
+            goal: None,
+            base: None,
+            adapter: Some("jefferson".into()),
+        },
+        "a reading that names neither leaves them out"
+    );
 }

@@ -24,6 +24,8 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         sources: args.sources,
         goal: args.goal,
         persona: args.persona,
+        base: args.base,
+        adapter: args.adapter,
         voice: args.voice,
         describe_voice: args.describe_voice,
         select_on_dev: args.select_on_dev,
@@ -93,6 +95,22 @@ mod tests {
         let named = request(&["learn", "docs", "--kinds", "recall,advise"]);
         assert!(!named.plan, "naming the kinds is deciding them");
         assert_eq!(named.kinds, ["recall", "advise"]);
+    }
+
+    #[test]
+    fn a_base_and_an_adapter_name_reach_the_request() {
+        let r = request(&[
+            "learn",
+            "docs",
+            "--base",
+            "Qwen/Qwen3-8B",
+            "--adapter",
+            "jefferson",
+        ]);
+        assert_eq!(r.base.as_deref(), Some("Qwen/Qwen3-8B"));
+        assert_eq!(r.adapter.as_deref(), Some("jefferson"));
+        let plain = request(&["learn", "docs"]);
+        assert_eq!((plain.base, plain.adapter), (None, None));
     }
 
     #[test]

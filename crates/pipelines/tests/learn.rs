@@ -424,3 +424,97 @@ fn a_run_that_admits_nothing_reports_why_each_proposal_was_rejected() {
         );
     }
 }
+
+#[test]
+fn learn_into_a_named_adapter_publishes_it_where_the_next_run_continues_it() {
+    let (scratch, ctx) = scratch_context("learn-named", policy(), false);
+    put_base(&ctx);
+    let base = ctx.config().policy_base.clone();
+    let policy_of = |adapter: Option<&str>| ModelRef::Local {
+        checkpoint: base.display().to_string(),
+        adapter: adapter.map(Into::into),
+        context_tokens: ctx.config().policy_context_tokens,
+    };
+    for adapter in [None, Some("maren")] {
+        ctx.add_model(
+            policy_of(adapter),
+            Model::new(Arc::new(policy()), common::POLICY),
+        );
+    }
+    let manual = scratch.0.join("manual.md");
+    std::fs::write(&manual, MANUAL).unwrap();
+    let trainer = FakeTrainer::knowing(&[]);
+    let request = LearnRequest {
+        sources: vec![manual.display().to_string()],
+        goal: Some("know the Frobnicator's electrical limits".into()),
+        no_frontier: true,
+        adapter: Some("maren".into()),
+        ..LearnRequest::default()
+    };
+    let published = base
+        .join("adapters")
+        .join("local")
+        .join("maren")
+        .join("latest")
+        .join("adapter.brain.safetensors");
+
+    let Learned::Ran(first) = learn(&ctx, &request, &trainer).unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let report = &first.report;
+    assert_eq!(report.stopped, None, "{report:#?}");
+    assert!(
+        report.release.is_none(),
+        "a named adapter is published, not gated"
+    );
+    let said = report
+        .published
+        .as_ref()
+        .expect("the run says where it published");
+    assert_eq!(said.path, published);
+    assert_eq!(
+        std::fs::read(&published).unwrap(),
+        std::fs::read(&report.candidate.as_ref().unwrap().adapter).unwrap(),
+        "the store holds the trained adapter"
+    );
+
+    let Learned::Ran(second) = learn(&ctx, &request, &trainer).unwrap() else {
+        panic!("a learn that is not a dry run runs");
+    };
+    assert_eq!(second.report.stopped, None, "{:#?}", second.report);
+    let plans = trainer.plans.lock().unwrap();
+    assert_eq!(plans.len(), 2);
+    assert_eq!(
+        plans[0].continue_from, None,
+        "the first run starts the adapter"
+    );
+    assert_eq!(
+        plans[1].continue_from.as_deref(),
+        Some(published.as_path()),
+        "a name that exists is continued"
+    );
+}
+
+#[test]
+fn an_adapter_name_that_is_not_a_name_is_refused() {
+    let (scratch, ctx) = scratch_context("learn-bad-name", policy(), false);
+    put_base(&ctx);
+    let manual = scratch.0.join("manual.md");
+    std::fs::write(&manual, MANUAL).unwrap();
+    for bad in ["", "Maren", "../x", "a/b", "x.safetensors", "2nd"] {
+        let refused = learn(
+            &ctx,
+            &LearnRequest {
+                sources: vec![manual.display().to_string()],
+                adapter: Some(bad.into()),
+                ..LearnRequest::default()
+            },
+            &FakeTrainer::knowing(&[]),
+        )
+        .unwrap_err();
+        assert!(
+            refused.to_string().contains("adapter name"),
+            "{bad}: {refused}"
+        );
+    }
+}
