@@ -37,6 +37,7 @@
 //! * [`learn`] - every stage above, as one run; [`absorb`] - the sessions a
 //!   person held with an agent, taught the same way.
 //! * [`runs`] - every command's run record, and cancelling one.
+//! * [`doctor`] - whether a run can start here, before one does;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
 //!   [`answers`] - every answer `ask` gave, and what gave it.
 //! * [`lineage`] - from any artifact, where it came from and what came
@@ -59,6 +60,7 @@ pub mod dataset_ref;
 pub mod datasets;
 pub mod describe;
 pub mod dialogue;
+pub mod doctor;
 pub mod eval;
 pub mod exam;
 pub mod exam_set;

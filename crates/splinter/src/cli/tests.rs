@@ -26,6 +26,12 @@ fn the_grammar_is_consistent() {
 }
 
 #[test]
+fn doctor_takes_no_arguments() {
+    assert!(matches!(command(&["doctor"]), Command::Doctor));
+    assert!(parse(&["doctor", "extra"]).is_err());
+}
+
+#[test]
 fn a_sentence_or_nothing_is_the_front_door() {
     let cli = parse(&["learn the docs in ./docs"]).unwrap();
     assert_eq!(cli.sentence.as_deref(), Some("learn the docs in ./docs"));

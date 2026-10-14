@@ -36,7 +36,7 @@
 //!
 //! * The commands, one module each - [`learn`], [`ask`], [`sources`],
 //!   [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`], [`solving`], [`verify`], [`critique`], [`datasets`],
-//!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`state`],
+//!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`doctor`], [`state`],
 //!   [`router`] and the rest - with their requests and reports.
 //! * `absorb::consolidate` takes a generation of a policy's claims into the
 //!   weights, and [`generation`] is what a release records of the generation
@@ -69,9 +69,9 @@ pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Run
 // The commands.
 pub use splinter_pipelines::{
     absorb, ask, budget, checkpoints, claim_quality, claims, critique, curriculum, datasets,
-    describe, dialogue, eval, exam, exam_set, experiences, judge, learn, lineage, plan, powered,
-    raft, rehearsal, release, rerank, reserve, retrieval, router, sessions, solving, sources,
-    state, status, tasks, timeline, train, variants, verify,
+    describe, dialogue, doctor, eval, exam, exam_set, experiences, judge, learn, lineage, plan,
+    powered, raft, rehearsal, release, rerank, reserve, retrieval, router, sessions, solving,
+    sources, state, status, tasks, timeline, train, variants, verify,
 };
 
 // The layers, each under one name.

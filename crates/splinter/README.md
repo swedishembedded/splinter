@@ -23,6 +23,7 @@ splinter consolidate [--policy REF] [--mode full|merge] [--from RELEASE] [--epoc
                          [--retention-replay-share SHARE] [--sealed-probes FILE...] [--no-release]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
+splinter doctor
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
 splinter session add <PATH>... [--max-bytes N] | list
 splinter claims extract <SESSION-ID>... [--generator REF] | gate <CLAIMSET-ID> | list | show <ID> | ledger
@@ -1082,6 +1083,15 @@ base itself; `generation` is 0 on the configured base); `recent_runs` lists up t
 "releases"}` with `{"release", "graded", "passes", "rate", "since"}` per
 release.
 
+`doctor`: `{"checks": [{"name", "verdict", "detail", "fix"}]}`. It answers whether
+a run can start here, before one does, and loads no model, uses no network and
+creates nothing under the state root. The checks are `state-writable` (a probe file
+is written and removed in the state root, or in its nearest existing parent when it is
+not created yet), `free-space` (a failure under 1 GiB, a warning under 10 GiB: an
+estimate for a small base, not a bound) and `role:<name>` for each role, which
+fails when the model the role would get does not resolve. `verdict` is `ok`, `warn`
+or `fail`, `fix` is `null` for `ok`, and the exit status is 1 when any check fails.
+
 ## Runs
 
 Every command that writes pipeline state records a run in the experience
@@ -1204,6 +1214,6 @@ their own have ids of their kind: `span:<content-hex>:<start>-<end>`,
 
 0 done; 1 the work failed or stopped short of what was asked (a candidate
 the gate blocked, an `absorb` that released nothing, a session file refused, a session the extractor gave nothing
-usable for); 2 refused
+usable for, a `doctor` check that failed); 2 refused
 before anything ran (usage, an unknown id, a remote model without the
 opt-in); 3 a sentence was asked back.

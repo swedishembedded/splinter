@@ -67,6 +67,7 @@ needs Splinter installed.
 ## Quick start
 
 ```bash
+splinter doctor                                       # can a run start here?
 splinter eval --suite anchor --freeze general.jsonl   # once: the anchor suite
 splinter learn docs/p100-manual.md --goal "the P100 console and power limits"
 splinter status

@@ -17,6 +17,7 @@ use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest, VoiceBuild};
 use splinter_sdk::describe::DescribeRequest;
+use splinter_sdk::doctor::doctor;
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
@@ -275,6 +276,13 @@ impl Session {
                 }
             }
             Command::Status => emit(json, &status(ctx)?),
+            Command::Doctor => {
+                let report = doctor(ctx);
+                emit(json, &report);
+                if !report.ready() {
+                    return Ok(Exit::Failed);
+                }
+            }
             Command::Source(SourceCommand::Add {
                 target,
                 usage_policy,

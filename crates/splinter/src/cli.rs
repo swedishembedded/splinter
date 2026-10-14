@@ -90,6 +90,10 @@ pub enum Command {
     Ask(AskArgs),
     /// Show the policy in use, recent runs and what the stores hold.
     Status,
+    /// Check that a run can start here: the state root is writable with room
+    /// to spare and every role's model resolves. Loads no model and uses no
+    /// network. Exits 1 when a check fails.
+    Doctor,
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
