@@ -176,6 +176,46 @@ prints the plan and writes nothing. A `learn` that stops before training
 (nothing admitted, no task worth training on, nothing passed, the budget
 spent) or whose candidate the gate blocks says why and exits 1.
 
+## Learning a repository
+
+```bash
+splinter practice ./shop --rev v1.4
+splinter practice ./shop --rev HEAD --exam-families 2 --k 4 --no-release \
+    --test-command python3 -m pytest -x
+```
+
+`practice` learns a codebase from its own tests, as one recorded run. The
+repository is a git work tree or bare repository and `--rev` (default `HEAD`)
+any revision git resolves to a commit; the tracked files of that commit are
+archived as the snapshot every task is pinned to (a checked-out revision with
+uncommitted changes is refused unless `--allow-dirty`). Its stages, in
+order:
+
+| Stage | What it does |
+|---|---|
+| `policy` | resolves `policy:default` once |
+| `snapshot` | archives the revision; the same tree is the same snapshot |
+| `profile` | finds how the tests are run (`python3 -m unittest` for a Python project with a `tests` directory, `cargo test --offline` for a Cargo project; `--test-command` and `--file` name them otherwise) and runs the suite twice on a clean copy: a red or flaky baseline stops the run |
+| `tasks` | seeds faults by code in the files under test and keeps a task only where the project's own tests catch it every time, the change reversed makes its check pass, and the catching tests live in files of their own, which are taken out of the tree the agent is given; a task the store already holds, or a request that repeats one made for the same file, is not made again, so a second run over the same snapshot ends here |
+| `reserve` | sets the exam's families aside (a family is the file a fault was seeded in) by a stable hash of their names, before any attempt; `--exam-families N` (default a quarter), and a family an earlier run reserved stays the exam |
+| `solve` | the policy attempts each remaining task `--k` times as an agent in its own copy of the tree, with sven's file, search and shell tools, up to `--follow-ups` more turns when the visible checks stay red and `--max-tool-calls` calls; each attempt draws from a seed that is a function of the task and the attempt |
+| `verify` | applies each patch to a clean copy, lays the hidden tests over it and runs the project's checks; an exposure audit fails any attempt whose trajectory names a hidden path, quotes the hidden tests or names the state root, whatever its patch did, and the stage counts those by kind |
+| `frontier` | keeps the tasks the policy solves sometimes (pass@k) |
+| `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered; `--max-block TOKENS` leaves out and counts records longer than the card fits; the dataset is checked to hold no family of the exam |
+| `train` | a candidate from the champion with earlier releases' records replayed |
+| `release` | the gate (`--no-release` stops at the candidate) |
+
+Where no container is configured, the commands the agent works with run on
+the host, bounded but not isolated, and every environment record says
+`isolation: none`; naming a docker client and a digest-pinned image
+(`SPLINTER_DOCKER`, `SPLINTER_WORKSPACE_IMAGE`) runs them in a container with
+no network instead. `SPLINTER_CARGO_HOME` gives the commands a
+cargo home to build offline from, and `SPLINTER_WORKSPACE_SCRATCH` says where
+trees are laid out. The release gate measures closed-book probes, so a
+candidate of a `practice` reaches it and is not released: the stage's summary
+says what was unmeasured, and the run exits 1. `--test-command` takes the rest of
+the command line, so it comes last.
+
 ## Learning to think like a person
 
 ```bash

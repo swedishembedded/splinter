@@ -51,6 +51,7 @@ needs Splinter installed.
 | A directory of text | surveyed, then a planner model chooses what to teach from a menu; each choice is held to the sources |
 | A command-line tool | the tool's real output is captured as a source with provenance, then goes through the document path |
 | A person's own sessions with an agent | ATIF trajectories taken in with secrets removed; what the person taught (corrections, facts, procedures) is proposed by a model and admitted by code only on the person's exact words |
+| A repository | a revision archived as a snapshot; faults seeded by code into its files are kept as tasks only where the project's own tests catch them reproducibly, the catching tests are taken out of the tree the agent is given, and an agent's change is graded by running them on a clean copy |
 | An agent's own attempts | solved closed-book or in a runtime, graded by the task kind's verifiers, critiqued and retried |
 | A user's recorded agent sessions | taken in once with secrets removed; a model proposes what the person taught, quoting them, and code admits a claim only when the person's own words carry it |
 
@@ -79,7 +80,8 @@ suite, with the walk-through and what to expect from each step.
 
 The command line (`crates/splinter/README.md`) runs the pipeline one stage per
 verb - sources, tasks, solve, verify, critique, dataset, train, release - and
-`learn` runs them all as one recorded run.
+`learn` runs them all as one recorded run. `splinter practice <REPO> --rev <REV>` does
+the same for a repository's tests, with the agent working in copies of its tree.
 
 ## The Rust SDK
 
@@ -190,6 +192,20 @@ Every artifact traces both ways: `splinter lineage <ID>` walks from an
 answer, a release, a dataset or any other stored artifact up to where it
 came from - down to the source, part and byte range each task is grounded
 in, with the bytes themselves - and down to everything that came from it.
+
+A repository is learned from its own tests (`splinter practice`): a revision is
+archived, its baseline run twice, and faults seeded by code in the files under
+test become tasks only where the tests catch them every time and the change
+reversed makes the check pass. The tests that catch a fault are taken out of
+the tree the agent works in and laid over a clean copy only to grade its change.
+Some files (families) are set apart as an exam before any attempt is made, and
+stay the exam in every later run; an attempt whose trajectory shows the agent
+reached for the hidden tests, or for the state root, is decided fail by an
+exposure audit and counted, whatever its change did; a second run over the same
+snapshot makes no task it already holds. The agent's passing attempts are
+trained on action by action, with the tools it was offered. Where no container is
+configured the agent's shell runs on the host, bounded but not isolated, and the
+record of every environment says so; the audit is then detection, not prevention.
 
 ## Building
 
