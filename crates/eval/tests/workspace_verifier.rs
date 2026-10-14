@@ -13,6 +13,9 @@
 //! tests pass, a patch that touches a protected or hidden path, and a patch
 //! that weakens a hidden test all fail; an environment it was not offered is
 //! an abstention; the evidence holds digests, never test text.
+//!
+//! `grade` is the same judgement for a caller that needs more than a
+//! verdict: each command's own result, and the files the change touched.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -29,11 +32,14 @@ use common::{experience, task, verdict, Scratch};
 use splinter_core::annotation::{Outcome, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
-use splinter_eval::verifiers::workspace::{ArchiveSource, WorkspaceCheck, WorkspaceVerifier};
+use splinter_eval::verifiers::workspace::{
+    grade, ArchiveSource, Phase, Refusal, WorkspaceCheck, WorkspaceVerifier,
+};
 use splinter_eval::verifiers::VerifyError;
 use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
 use splinter_sandbox::{
-    CommandCall, Limits, ProcessSandbox, ResolvedEnvironment, WorkspaceEnvironment, WorkspaceHost,
+    CommandCall, Limits, Patch, ProcessSandbox, ResolvedEnvironment, WorkspaceEnvironment,
+    WorkspaceHost,
 };
 
 const CALC_BUGGY: &str = "def add(a, b):\n    return a - b\n\n\ndef neg(a):\n    return -a\n";
@@ -351,4 +357,107 @@ fn a_task_without_a_workspace_check_is_an_abstention() {
         &experience(&task, Some(&fx.reference_patch), "s"),
     );
     assert_eq!(outcome, Outcome::Abstain);
+}
+
+fn patch_of(text: &str, files: &[&str]) -> Patch {
+    Patch {
+        diff: text.as_bytes().to_vec(),
+        files: files.iter().map(PathBuf::from).collect(),
+    }
+}
+
+#[test]
+fn grading_reports_each_command_with_its_result_and_the_files_the_change_touched() {
+    let fx = Fixture::new(false);
+    let check = fx.check();
+    let scratch = fx.root.0.join("grade");
+    let graded = grade(
+        &fx.env,
+        fx.archives.as_ref(),
+        &scratch,
+        &check,
+        &patch_of(&fx.reference_patch, &["calc.py"]),
+    )
+    .unwrap();
+    assert!(graded.passed(), "{graded:#?}");
+    let phases: Vec<Phase> = graded.commands.iter().map(|c| c.phase).collect();
+    assert_eq!(phases, [Phase::FailToPass, Phase::PassToPass]);
+    assert!(
+        graded
+            .commands
+            .iter()
+            .all(|c| c.result.exit_code == Some(0)),
+        "each command keeps its own result"
+    );
+    let touched: Vec<_> = graded.touched.iter().map(|t| t.path.as_str()).collect();
+    assert_eq!(touched, ["calc.py"]);
+    let calc = &graded.touched[0];
+    assert!(calc.before.is_some() && calc.after.is_some() && calc.before != calc.after);
+    assert!(
+        std::fs::read_dir(&scratch).map_or(true, |mut left| left.next().is_none()),
+        "the tree the change was graded in is removed"
+    );
+}
+
+#[test]
+fn grading_an_empty_change_runs_the_commands_on_the_snapshot_as_it_is() {
+    let fx = Fixture::new(false);
+    let graded = grade(
+        &fx.env,
+        fx.archives.as_ref(),
+        &fx.root.0.join("grade"),
+        &fx.check(),
+        &patch_of("", &[]),
+    )
+    .unwrap();
+    assert!(graded.refusal.is_none() && graded.touched.is_empty());
+    assert!(
+        !graded.passed(),
+        "the seeded failure is red before any work"
+    );
+    let first = &graded.commands[0];
+    assert!(first.phase == Phase::FailToPass && !first.passed);
+    assert!(
+        first.result.stderr.contains("AssertionError") || first.result.stdout.contains("Assertion"),
+        "{first:#?}"
+    );
+}
+
+#[test]
+fn grading_sets_aside_a_change_that_cannot_apply_or_touches_off_limits_paths() {
+    let fx = Fixture::new(false);
+    let scratch = fx.root.0.join("grade");
+    let stale = patch_replacing("calc.py", "def add(a, b):\n    return a * b\n", "x\n");
+    let graded = grade(
+        &fx.env,
+        fx.archives.as_ref(),
+        &scratch,
+        &fx.check(),
+        &patch_of(&stale, &["calc.py"]),
+    )
+    .unwrap();
+    assert!(matches!(graded.refusal, Some(Refusal::DoesNotApply)));
+    assert!(graded.commands.is_empty() && !graded.passed());
+
+    let protected = format!(
+        "{}{}",
+        fx.reference_patch,
+        patch_replacing("test_keep.py", TEST_KEEP, "import unittest\n")
+    );
+    let graded = grade(
+        &fx.env,
+        fx.archives.as_ref(),
+        &scratch,
+        &fx.check(),
+        &patch_of(&protected, &["calc.py", "test_keep.py"]),
+    )
+    .unwrap();
+    assert!(
+        matches!(&graded.refusal, Some(Refusal::OffLimits(paths)) if paths == &["test_keep.py"]),
+        "{graded:#?}"
+    );
+    assert!(
+        graded.commands.is_empty(),
+        "no command runs on a fenced change"
+    );
 }

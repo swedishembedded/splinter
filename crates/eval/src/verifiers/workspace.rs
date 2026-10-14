@@ -38,12 +38,16 @@
 //! snapshot digest pins tree, sandbox and limits), or carries no check.
 //! The evidence holds digests, exit codes and sizes - never the hidden
 //! tests' text, nor their output, which would quote them.
+//!
+//! [`grade`] is steps 1 to 6 for a caller that needs more than a verdict (a
+//! supervisor that shows its worker what failed): every command's own result
+//! and the files the change touched. The verifier is a wrapper over it.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -226,62 +230,35 @@ impl Verifier for WorkspaceVerifier {
         if output.trim().is_empty() {
             return Ok(refused("empty_patch", &patch_digest));
         }
-        let scratch = Scratch::create(&self.scratch_root)?;
-        let tree = scratch.path().join("tree");
-        let baseline = env.materialize(&self.archives.path(&env.snapshot().digest)?, &tree)?;
         let patch = Patch {
-            diff: patch_bytes(output),
+            diff: output.as_bytes().to_vec(),
             files: Vec::new(),
         };
-        match env.apply(&tree, &patch) {
-            Ok(_) => {}
-            Err(SandboxError::Workspace { .. }) => {
+        let graded = grade(
+            env,
+            self.archives.as_ref(),
+            &self.scratch_root,
+            &check,
+            &patch,
+        )?;
+        match &graded.refusal {
+            Some(Refusal::DoesNotApply) => {
                 return Ok(refused("patch_does_not_apply", &patch_digest))
             }
-            Err(other) => return Err(other.into()),
-        }
-        let mut touched: Vec<String> = env
-            .diff_since(&tree, &baseline, &[])?
-            .files
-            .iter()
-            .map(|p| p.to_string_lossy().into_owned())
-            .collect();
-        touched.extend(header_paths(output));
-        let off_limits = check.off_limits();
-        let violations = touched
-            .iter()
-            .filter(|path| off_limits.iter().any(|fenced| overlaps(path, fenced)))
-            .count();
-        if violations > 0 {
-            let mut finding = refused("touches_protected_or_hidden_path", &patch_digest);
-            finding.evidence["paths"] = json!(violations);
-            return Ok(finding);
-        }
-        if let Some(hidden) = &check.hidden {
-            let archive = self.archives.path(hidden)?;
-            lay_over(&archive, hidden, &tree)?;
-        }
-        let mut commands = Vec::new();
-        let mut passed = true;
-        for (phase, calls) in [
-            ("fail_to_pass", &check.fail_to_pass),
-            ("pass_to_pass", &check.pass_to_pass),
-        ] {
-            // A failed target already decides the verdict: the guarded
-            // commands would only cost time.
-            if !passed {
-                break;
+            Some(Refusal::OffLimits(paths)) => {
+                let mut finding = refused("touches_protected_or_hidden_path", &patch_digest);
+                finding.evidence["paths"] = json!(paths.len());
+                return Ok(finding);
             }
-            for (index, call) in calls.iter().enumerate() {
-                clear_caches(&tree);
-                let result = env.run(&tree, &without_bytecode(call))?;
-                let ok = succeeded(&result);
-                passed &= ok;
-                commands.push(command_evidence(phase, index, call, &result, ok)?);
-            }
+            None => {}
         }
+        let commands = graded
+            .commands
+            .iter()
+            .map(command_evidence)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Finding::decided(
-            passed,
+            graded.passed(),
             json!({
                 "check": check_digest,
                 "environment": task.environment.snapshot,
@@ -291,6 +268,202 @@ impl Verifier for WorkspaceVerifier {
             }),
         ))
     }
+}
+
+/// The commands of a check, in the order they run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Phase {
+    /// Commands that must go from failing to passing.
+    FailToPass,
+    /// Commands that must keep passing.
+    PassToPass,
+}
+
+impl Phase {
+    /// The phase as evidence names it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::FailToPass => "fail_to_pass",
+            Self::PassToPass => "pass_to_pass",
+        }
+    }
+}
+
+/// Why a change was set aside before any command ran.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    /// The change does not apply to the snapshot.
+    DoesNotApply,
+    /// The change touches a protected or hidden path (the paths, which may
+    /// name hidden files: they are for the grader, not for a solver).
+    OffLimits(Vec<String>),
+}
+
+/// A file a change touched, with the digest of its content before and
+/// after (absent where the file did not exist).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Touched {
+    /// The path, relative to the tree.
+    pub path: String,
+    /// The content before the change. Known for the paths the change names
+    /// (its file list and its headers); absent for any other.
+    pub before: Option<Digest>,
+    /// The content after the change.
+    pub after: Option<Digest>,
+}
+
+/// One command of a check, as it ran.
+#[derive(Clone, Debug)]
+pub struct CommandRun {
+    /// The phase it belongs to.
+    pub phase: Phase,
+    /// Its position within the phase.
+    pub index: usize,
+    /// What ran.
+    pub call: CommandCall,
+    /// How it ended, output included.
+    pub result: CodeResult,
+    /// Whether it exited with status 0 within its limits.
+    pub passed: bool,
+    /// How long it took.
+    pub elapsed: Duration,
+}
+
+/// What grading one change found.
+#[derive(Clone, Debug)]
+pub struct Graded {
+    /// Why the change was set aside, when it was; no command ran then.
+    pub refusal: Option<Refusal>,
+    /// The files the change touched, in path order.
+    pub touched: Vec<Touched>,
+    /// The commands that ran, in order. A failed fail-to-pass command ends
+    /// the run before the guarded commands.
+    pub commands: Vec<CommandRun>,
+}
+
+impl Graded {
+    /// Whether the change was not set aside and every command that ran
+    /// passed (and at least one did).
+    #[must_use]
+    pub fn passed(&self) -> bool {
+        self.refusal.is_none()
+            && !self.commands.is_empty()
+            && self.commands.iter().all(|run| run.passed)
+    }
+}
+
+/// Grades `patch` against `check` in `env`: the snapshot is laid out in a
+/// fresh directory under `scratch_root`, the patch applied, the paths it
+/// touched held against the check's protected and hidden paths, the hidden
+/// files laid over the result and the commands run (see the module
+/// documentation). The directory is removed before this returns.
+///
+/// An empty patch is not refused: the commands run on the snapshot as it
+/// is, which is how a baseline is validated. `patch.files` names the files
+/// the change touches, so the content they had before it is known.
+pub fn grade(
+    env: &WorkspaceEnvironment,
+    archives: &dyn ArchiveSource,
+    scratch_root: &Path,
+    check: &WorkspaceCheck,
+    patch: &Patch,
+) -> Result<Graded, VerifyError> {
+    let scratch = Scratch::create(scratch_root)?;
+    let tree = scratch.path().join("tree");
+    let baseline = env.materialize(&archives.path(&env.snapshot().digest)?, &tree)?;
+    let mut graded = Graded {
+        refusal: None,
+        touched: Vec::new(),
+        commands: Vec::new(),
+    };
+    if !patch.is_empty() {
+        let text = String::from_utf8_lossy(&patch.diff).into_owned();
+        let mut named: Vec<String> = patch
+            .files
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        named.extend(header_paths(&text));
+        let before: BTreeMap<String, Option<Digest>> = named
+            .iter()
+            .map(|path| (path.clone(), digest_of_file(&tree.join(path))))
+            .collect();
+        match env.apply(
+            &tree,
+            &Patch {
+                diff: patch_bytes(&patch.diff),
+                files: Vec::new(),
+            },
+        ) {
+            Ok(_) => {}
+            Err(SandboxError::Workspace { .. }) => {
+                graded.refusal = Some(Refusal::DoesNotApply);
+                return Ok(graded);
+            }
+            Err(other) => return Err(other.into()),
+        }
+        let mut touched: Vec<String> = env
+            .diff_since(&tree, &baseline, &[])?
+            .files
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        touched.extend(named);
+        touched.sort();
+        touched.dedup();
+        let off_limits = check.off_limits();
+        let violations: Vec<String> = touched
+            .iter()
+            .filter(|path| off_limits.iter().any(|fenced| overlaps(path, fenced)))
+            .cloned()
+            .collect();
+        if !violations.is_empty() {
+            graded.refusal = Some(Refusal::OffLimits(violations));
+            return Ok(graded);
+        }
+        graded.touched = touched
+            .into_iter()
+            .map(|path| Touched {
+                before: before.get(&path).cloned().flatten(),
+                after: digest_of_file(&tree.join(&path)),
+                path,
+            })
+            .collect();
+    }
+    if let Some(hidden) = &check.hidden {
+        lay_over(&archives.path(hidden)?, hidden, &tree)?;
+    }
+    for (phase, calls) in [
+        (Phase::FailToPass, &check.fail_to_pass),
+        (Phase::PassToPass, &check.pass_to_pass),
+    ] {
+        // A failed target already decides the verdict: the guarded commands
+        // would only cost time.
+        if graded.commands.iter().any(|run| !run.passed) {
+            break;
+        }
+        for (index, call) in calls.iter().enumerate() {
+            clear_caches(&tree);
+            let started = Instant::now();
+            let result = env.run(&tree, &without_bytecode(call))?;
+            let passed = succeeded(&result);
+            graded.commands.push(CommandRun {
+                phase,
+                index,
+                call: call.clone(),
+                result,
+                passed,
+                elapsed: started.elapsed(),
+            });
+        }
+    }
+    Ok(graded)
+}
+
+/// The digest of the file at `path`; `None` when it cannot be read.
+fn digest_of_file(path: &Path) -> Option<Digest> {
+    std::fs::read(path).ok().map(|bytes| Digest::of(&bytes))
 }
 
 impl WorkspaceCheck {
@@ -356,8 +529,8 @@ fn refused(reason: &str, patch: &Digest) -> Finding {
 }
 
 /// The patch as `git apply` reads it: it must end in a newline.
-fn patch_bytes(text: &str) -> Vec<u8> {
-    let mut bytes = text.as_bytes().to_vec();
+fn patch_bytes(diff: &[u8]) -> Vec<u8> {
+    let mut bytes = diff.to_vec();
     if !bytes.ends_with(b"\n") {
         bytes.push(b'\n');
     }
@@ -436,17 +609,12 @@ fn without_bytecode(call: &CommandCall) -> CommandCall {
 
 /// What one command's evidence records: digests of what ran and what came
 /// back, never the output (which quotes the tests).
-fn command_evidence(
-    phase: &str,
-    index: usize,
-    call: &CommandCall,
-    result: &CodeResult,
-    passed: bool,
-) -> Result<serde_json::Value, VerifyError> {
-    let command = Digest::of(&canonical_json(call).map_err(SandboxError::from)?);
+fn command_evidence(run: &CommandRun) -> Result<serde_json::Value, VerifyError> {
+    let command = Digest::of(&canonical_json(&run.call).map_err(SandboxError::from)?);
+    let result = &run.result;
     Ok(json!({
-        "phase": phase,
-        "index": index,
+        "phase": run.phase.name(),
+        "index": run.index,
         "command": command,
         "exit_code": result.exit_code,
         "signal": result.signal,
@@ -455,7 +623,7 @@ fn command_evidence(
         "stdout_truncated": result.stdout_truncated,
         "stderr": Digest::of(result.stderr.as_bytes()),
         "stderr_truncated": result.stderr_truncated,
-        "passed": passed,
+        "passed": run.passed,
     }))
 }
 
