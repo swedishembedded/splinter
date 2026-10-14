@@ -17,6 +17,7 @@
 
 pub mod cache;
 pub mod episode;
+pub mod exam;
 pub mod facts;
 pub mod gates;
 pub mod mine;

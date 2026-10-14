@@ -13,7 +13,7 @@
 use serde::Serialize;
 
 use crate::names::name;
-use crate::scenario::{scenario_pool, Archetype, Features, Scenario};
+use crate::scenario::{held_out_combo, scenario_pool, Archetype, Features, Scenario};
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 /// Fixed seed of the situations an author is checked against when drawn.
@@ -196,7 +196,12 @@ impl Persona {
     /// changes some decision and the beliefs settle most situations.
     #[must_use]
     pub fn generate(seed: u64) -> Self {
-        let pool = scenario_pool(REFERENCE_SEED, REFERENCE_SITUATIONS);
+        // Only the combinations an author's corpus can hold count: a belief
+        // that decides nothing there cannot be learned from the corpus.
+        let pool: Vec<_> = scenario_pool(REFERENCE_SEED, REFERENCE_SITUATIONS)
+            .into_iter()
+            .filter(|s| !held_out_combo(seed, s))
+            .collect();
         let mut rng = SplitMix64::new(seed);
         let mut draw = Self::draw(seed, &mut rng);
         for _ in 1..MAX_DRAWS {

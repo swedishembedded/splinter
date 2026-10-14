@@ -9,7 +9,7 @@ use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::facts::{case, Case};
 use crate::persona::Persona;
-use crate::scenario::{scenario_pool, Archetype, Scenario, TOPICS};
+use crate::scenario::{held_out_combo, scenario_pool, Archetype, Scenario, TOPICS};
 
 /// Keeps the situations of a corpus apart from those of an exam drawn from
 /// the same seed.
@@ -134,6 +134,7 @@ pub fn episodes_for(
         }
         if scenario.topic != topic
             || used.contains(&scenario.id)
+            || held_out_combo(seed, &scenario)
             || !persona.decide(&scenario).determined
         {
             continue;

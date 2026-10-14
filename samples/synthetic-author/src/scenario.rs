@@ -71,6 +71,30 @@ pub const TOPICS: [&str; 12] = [
     "the repair of the mill dam",
 ];
 
+/// Whether the way `scenario`'s facts and options combine is held out of an
+/// author's corpus: about a fifth of the combinations are, chosen by `seed`.
+/// A model that gets a held-out combination right has worked it out from what
+/// the corpus shows, since no article tells it.
+#[must_use]
+pub fn held_out_combo(seed: u64, scenario: &Scenario) -> bool {
+    let f = &scenario.features;
+    let facts = [
+        f.exceeds_authority,
+        f.urgent,
+        f.binds_future,
+        f.irreversible,
+        f.members_harmed,
+        f.outsider_offers_help,
+    ]
+    .iter()
+    .fold(0_u64, |bits, &b| (bits << 1) | u64::from(b));
+    let options = scenario
+        .options
+        .iter()
+        .fold(0_u64, |bits, &o| bits | 1 << (o as u64));
+    SplitMix64::new(seed ^ (facts << 8 | options).wrapping_mul(0x9E37_79B9_7F4A_7C15)).below(5) == 0
+}
+
 /// `n` situations drawn from `seed`.
 #[must_use]
 pub fn scenario_pool(seed: u64, n: usize) -> Vec<Scenario> {
