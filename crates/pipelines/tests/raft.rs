@@ -468,6 +468,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         export_only: false,
         limit: None,
         voice: VoiceBuild::default(),
+        max_block: None,
     };
     let retrieval = Retrieval {
         library: &library,

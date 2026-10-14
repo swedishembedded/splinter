@@ -79,6 +79,7 @@ pub(super) fn dataset_stage(
         export_only: false,
         limit: None,
         voice: VoiceBuild::default(),
+        max_block: None,
     };
     // Passages of the run's own sources, when a share of the records is to
     // carry them: the embedding model is loaded for it and the index kept.

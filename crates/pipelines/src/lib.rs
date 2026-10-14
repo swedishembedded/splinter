@@ -35,7 +35,9 @@
 //!   immutable releases and the aliases pointing at them, and rollback;
 //!   [`eval`] - one model graded on the gate's suites.
 //! * [`learn`] - every stage above, as one run; [`absorb`] - the sessions a
-//!   person held with an agent, taught the same way.
+//!   person held with an agent, taught the same way; [`practice`] - a
+//!   repository's tests made into tasks an agent solves in copies of its
+//!   tree, trained on what its own checks confirm.
 //! * [`runs`] - every command's run record, and cancelling one.
 //! * [`doctor`] - whether a run can start here, before one does;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
@@ -73,6 +75,7 @@ pub mod learn;
 pub mod lineage;
 pub mod plan;
 pub mod powered;
+pub mod practice;
 pub mod raft;
 pub mod rehearsal;
 pub mod release;

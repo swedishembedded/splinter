@@ -496,6 +496,7 @@ impl Session {
                             cancel: CancelToken::new(),
                         }),
                     },
+                    max_block: None,
                 };
                 emit(
                     json,
