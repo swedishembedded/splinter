@@ -68,11 +68,14 @@ needs Splinter installed.
 
 ```bash
 splinter doctor                                       # can a run start here?
-splinter eval --suite anchor --freeze general.jsonl   # once: the anchor suite
-splinter learn docs/p100-manual.md --goal "the P100 console and power limits"
+splinter eval --suite anchor --freeze examples/first-run/anchor.jsonl   # once: the anchor suite
+splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog"
 splinter status
-splinter "what baud rate does the P100 console run at?"
+splinter ask "At what baud rate does the QX-7 console run?"
 ```
+
+`examples/first-run` is a manual for an invented device plus a twenty-question anchor
+suite, with the walk-through and what to expect from each step.
 
 The command line (`crates/splinter/README.md`) runs the pipeline one stage per
 verb - sources, tasks, solve, verify, critique, dataset, train, release - and
