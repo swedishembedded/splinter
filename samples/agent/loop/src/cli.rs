@@ -34,8 +34,8 @@ use crate::store::{read_json, LoopHome, CHECKPOINT_FILE, CONTRACT_FILE, OUTCOME_
     about = "A supervised coding-agent loop on one repository"
 )]
 pub struct Cli {
-    /// Home directory whose `.sven/` holds the loop's and Splinter's state
-    /// (default: `$HOME`).
+    /// Home directory whose `.sven/` holds the loop's state and whose
+    /// `.splinter` holds Splinter's (default: `$HOME`).
     #[arg(long, global = true)]
     home: Option<PathBuf>,
     /// Brain's model store, where `local:<org>/<model>` names a checkpoint

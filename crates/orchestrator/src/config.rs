@@ -101,7 +101,8 @@ pub const DEFAULT_MIN_CALIBRATION_CONTROLS: usize = 16;
 impl Config {
     /// The configuration this process runs with:
     ///
-    /// * `SPLINTER_STATE`, else `$HOME/.sven/splinter`;
+    /// * `SPLINTER_STATE`, else `$HOME/.splinter` (or the `$HOME/.sven/splinter`
+    ///   an earlier version used, while `$HOME/.splinter` does not exist);
     /// * `BRAIN_MODELS_DIR`, else `$HOME/.local/share/brain/models`, as
     ///   brain's model store;
     /// * `BRAIN_QWEN_WEIGHTS`, else [`DEFAULT_POLICY_MODEL`] in that store,

@@ -218,8 +218,9 @@ from agent experience needs. Qwen3-1.7B also trains on one such GPU, at
 shorter records; larger bases need more memory than one card has.
 
 Runtime state (sources, tasks, experiences, datasets, candidates,
-releases, answers, runs) lives under `~/.sven/splinter`, Sven's home in a namespace
-of its own (override: `--state DIR` or `SPLINTER_STATE`).
+releases, answers, runs) lives under `~/.splinter` (override: `--state DIR` or
+`SPLINTER_STATE`). State left in `~/.sven/splinter` by an earlier version is still used
+until `~/.splinter` exists; move it there to adopt the new location.
 
 ## License
 

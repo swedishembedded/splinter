@@ -57,7 +57,7 @@ pub struct Cli {
 /// Flags every command takes, meaning the same everywhere.
 #[derive(Clone, Debug, Default, Args)]
 pub struct Global {
-    /// The state root (default: $SPLINTER_STATE, else ~/.sven/splinter).
+    /// The state root (default: $SPLINTER_STATE, else ~/.splinter).
     #[arg(long, global = true, value_name = "DIR")]
     pub state: Option<PathBuf>,
     /// Print machine-readable JSON on stdout instead of text.

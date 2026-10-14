@@ -75,10 +75,22 @@ impl StateRoot {
     }
 
     /// The default root for a user whose home directory is `home`:
-    /// `<home>/.sven/splinter`, a namespace of its own beside sven's files.
+    /// `<home>/.splinter`, Splinter's own directory.
+    ///
+    /// Before that directory was Splinter's own, the state lived in
+    /// `<home>/.sven/splinter`. A home that still has that directory and has
+    /// not started `<home>/.splinter` keeps using it, so an upgrade neither
+    /// loses nor forks existing state; move it to `<home>/.splinter` to adopt
+    /// the new location.
     #[must_use]
     pub fn under_home(home: &Path) -> Self {
-        Self(home.join(".sven").join("splinter"))
+        let own = home.join(".splinter");
+        let legacy = home.join(".sven").join("splinter");
+        Self(if !own.exists() && legacy.is_dir() {
+            legacy
+        } else {
+            own
+        })
     }
 
     /// The root directory itself.
@@ -157,12 +169,28 @@ mod tests {
         assert!(a < b, "ids must sort as a history: {a} vs {b}");
     }
 
-    /// The default root is Splinter's own namespace under `~/.sven/`,
-    /// beside - never inside - sven's files.
+    /// The default root is Splinter's own directory in the home.
     #[test]
-    fn the_default_root_is_namespaced_under_the_home_directory() {
-        let home = Path::new("home-dir");
-        let root = StateRoot::under_home(home);
-        assert_eq!(root.path(), home.join(".sven").join("splinter"));
+    fn the_default_root_is_splinters_own_directory_in_the_home() {
+        let home = tempfile::tempdir().unwrap();
+        let root = StateRoot::under_home(home.path());
+        assert_eq!(root.path(), home.path().join(".splinter"));
+    }
+
+    /// State kept where Splinter used to put it is still found, until the new
+    /// directory exists; then the new one wins and the old one is left alone.
+    #[test]
+    fn state_in_the_former_location_is_kept_until_the_new_one_exists() {
+        let home = tempfile::tempdir().unwrap();
+        let legacy = home.path().join(".sven").join("splinter");
+        std::fs::create_dir_all(&legacy).unwrap();
+        assert_eq!(StateRoot::under_home(home.path()).path(), legacy);
+
+        std::fs::create_dir_all(home.path().join(".splinter")).unwrap();
+        assert_eq!(
+            StateRoot::under_home(home.path()).path(),
+            home.path().join(".splinter")
+        );
+        assert!(legacy.is_dir(), "the former location is never touched");
     }
 }

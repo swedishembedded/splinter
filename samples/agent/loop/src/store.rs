@@ -36,7 +36,7 @@ pub struct LoopHome {
 }
 
 impl LoopHome {
-    /// `<home>/.sven/loop`, beside sven's own files and splinter's.
+    /// `<home>/.sven/loop`, beside sven's own files.
     #[must_use]
     pub fn under(home: &Path) -> Self {
         Self {
