@@ -8,7 +8,7 @@
 //!   base alone before any release);
 //! * `local:<checkpoint>[+<adapter>]` - a checkpoint path (absolute, or
 //!   starting `./` or `../`) or a name in brain's model store, with an
-//!   optional adapter file;
+//!   optional adapter (a file, or the name of one trained on the checkpoint);
 //! * `remote:<provider>/<name>` - a model reached over the network, refused
 //!   unless the one network opt-in is given.
 //!
@@ -204,6 +204,42 @@ fn local_references_resolve_to_weights() {
     assert_eq!(pinned.base, PathBuf::from("/models/Qwen/Qwen3-0.6B"));
     assert_eq!(pinned.adapter.as_deref(), Some(champion));
     assert_eq!(resolved("local:/abs/ckpt").adapter, None);
+}
+
+#[test]
+fn an_adapter_written_as_a_name_is_the_named_adapter_in_the_model_store() {
+    let local = |text: &str| match resolve(&parse(text).unwrap(), &config(), false, None).unwrap() {
+        ModelSelection::Local(weights) => weights,
+        ModelSelection::Remote(_) => panic!("{text} is local"),
+    };
+    let named = local("local:Qwen/Qwen3-8B+maren");
+    assert_eq!(named.base, PathBuf::from("/models/Qwen/Qwen3-8B"));
+    assert_eq!(
+        named.adapter,
+        Some(PathBuf::from(
+            "/models/Qwen/Qwen3-8B/adapters/local/maren/latest/adapter.brain.safetensors"
+        ))
+    );
+    assert_eq!(
+        local("local:Qwen/Qwen3-8B+maren:v2@4096").adapter,
+        Some(PathBuf::from(
+            "/models/Qwen/Qwen3-8B/adapters/local/maren/v2/adapter.brain.safetensors"
+        ))
+    );
+    // A file is still a file: anything with a directory, an extension or a
+    // leading dot is a path as written.
+    for file in [
+        "train/adapter.safetensors",
+        "a.safetensors",
+        "./maren",
+        "/abs/maren",
+    ] {
+        assert_eq!(
+            local(&format!("local:Qwen/Qwen3-8B+{file}")).adapter,
+            Some(PathBuf::from(file)),
+            "{file}"
+        );
+    }
 }
 
 #[test]

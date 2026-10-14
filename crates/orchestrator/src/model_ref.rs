@@ -9,7 +9,9 @@
 //! Resolving a model reference ([`ModelRef`]) to the model it names under the
 //! configuration.
 //!
-//! A checkpoint that is not a path is a name in brain's model store. A
+//! A checkpoint that is not a path is a name in brain's model store, and an
+//! adapter that is a name (`+maren`) is the adapter of that name trained on it.
+//! A
 //! remote reference resolves only with the network opt-in: `--allow-remote`,
 //! or [`Config::allow_remote`].
 
@@ -72,11 +74,15 @@ pub fn resolve_on(
             checkpoint,
             adapter,
             context_tokens,
-        } => Ok(ModelSelection::Local(LocalWeights {
-            base: checkpoint_path(config, checkpoint),
-            adapter: adapter.as_ref().map(PathBuf::from),
-            context_tokens: *context_tokens,
-        })),
+        } => {
+            let base = checkpoint_path(config, checkpoint);
+            let adapter = adapter.as_deref().map(|a| adapter_path(&base, a));
+            Ok(ModelSelection::Local(LocalWeights {
+                base,
+                adapter,
+                context_tokens: *context_tokens,
+            }))
+        }
         ModelRef::Remote { provider, name } => {
             if !(allow_remote || config.allow_remote) {
                 return Err(RefError::RemoteNotAllowed {
@@ -100,11 +106,38 @@ pub fn resolve_on(
 }
 
 /// Where `checkpoint` is: a path as written, or a name in the model store.
-fn checkpoint_path(config: &Config, checkpoint: &str) -> PathBuf {
+#[must_use]
+pub fn checkpoint_path(config: &Config, checkpoint: &str) -> PathBuf {
     let path = PathBuf::from(checkpoint);
     if path.is_absolute() || checkpoint.starts_with("./") || checkpoint.starts_with("../") {
         path
     } else {
         config.model_store.join(checkpoint)
     }
+}
+
+/// The adapter file `adapter` names on the checkpoint at `base`: a path as
+/// written when it holds a directory, an extension or a leading dot, and
+/// otherwise a name (`maren` or `maren:v2`) in the checkpoint's adapter store,
+/// where brain keeps the adapters it trains.
+fn adapter_path(base: &Path, adapter: &str) -> PathBuf {
+    let is_name = !adapter.contains(['/', '\\'])
+        && !adapter.starts_with('.')
+        && !adapter.ends_with(".safetensors");
+    if !is_name {
+        return PathBuf::from(adapter);
+    }
+    let (name, tag) = adapter.split_once(':').unwrap_or((adapter, "latest"));
+    named_adapter_path(base, name, tag)
+}
+
+/// The file of the adapter `name`, tagged `tag`, trained on the checkpoint at
+/// `base`: where brain's model store keeps it.
+#[must_use]
+pub fn named_adapter_path(base: &Path, name: &str, tag: &str) -> PathBuf {
+    base.join("adapters")
+        .join("local")
+        .join(name)
+        .join(tag)
+        .join("adapter.brain.safetensors")
 }

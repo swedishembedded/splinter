@@ -12,7 +12,7 @@
 //! |---|---|
 //! | `policy:default` | the configured base, plus the champion adapter once releases exist |
 //! | `policy:<alias>` | the configured base, plus the adapter of the release `<alias>` points at |
-//! | `local:<checkpoint>[+<adapter>][@<tokens>]` | a local checkpoint, optionally with a LoRA adapter file and a context limit |
+//! | `local:<checkpoint>[+<adapter>][@<tokens>]` | a local checkpoint, optionally with a LoRA adapter (a file, or the name of one trained on the checkpoint) and a context limit |
 //! | `remote:<provider>/<name>` | a model reached over the network |
 //!
 //! A checkpoint is a path when it is absolute or starts with `./` or
