@@ -216,12 +216,22 @@ back off it on a rollback without a restart. Where no container is
 configured the agent's shell runs on the host, bounded but not isolated, and the
 record of every environment says so; the audit is then detection, not prevention.
 
-## Building
+## Compiling from source
 
 sven and brain are git dependencies at the revisions pinned in `Cargo.lock`:
 
 ```bash
-make build     # release build of every package
+make build                                  # release build of every package
+export PATH="$PWD/target/release:$PATH"     # once per shell; the commands below are bare
+splinter doctor                             # can a run start here? state, disk, GPU, model weights
+```
+
+`splinter doctor` prints one `ok`, `warn` or `FAIL` line per check with the fix for each
+failure, and exits 1 on a failure. `make build` is already the release profile, so there is
+no separate `build/release`. The policy model comes from brain's model store, which
+`brain pull Qwen/Qwen3-0.6B` fills.
+
+```bash
 make test      # every test; no model, GPU or network needed
 make check     # all gates: text hygiene, headers, fmt, clippy -D warnings, lock sources
 ```
