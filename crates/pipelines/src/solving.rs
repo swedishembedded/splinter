@@ -9,7 +9,8 @@
 //! The solve stage: a task set becomes an experience set.
 //!
 //! Each task is solved in exactly the environment it records - closed-book,
-//! or its runtime in the process sandbox - and refused (and reported) when
+//! its runtime in the process sandbox, or a copy of its workspace's
+//! snapshot ([`crate::workspace_solve`]) - and refused (and reported) when
 //! that environment is not what it was. Every solve is stored as an
 //! experience, answered or not: a run stopped by its deadline is evidence
 //! too. A task may be solved several times (a pass@k measurement): each
@@ -36,6 +37,7 @@ use splinter_agent::converse::{converse_prompted, Dialogue};
 use splinter_agent::solve::{
     open_book_prompt, solve_prompted, Model, Solution, SolveError, SolveOptions,
 };
+use splinter_agent::work::WorkProtocol;
 use splinter_agent::{CancelToken, RunConclusion};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Provenance, Task};
@@ -50,6 +52,7 @@ use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
 use crate::learn::PolicyUsed;
 use crate::tasks::remaining;
+use crate::workspace_solve::{attempt_seed, solve_attempt, WorkspaceInputs};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::concurrency::fan_out;
 use splinter_orchestrator::context::Context;
@@ -127,6 +130,10 @@ pub struct SolveRequest<'a> {
     /// student's attempts are written as the person the records open with.
     /// `None` keeps the solver's.
     pub system: Option<&'a str>,
+    /// How an episode in a workspace is run: the follow-up turns after red
+    /// checks and the bounds on tool calls. Tasks in other environments
+    /// ignore it.
+    pub work: WorkProtocol,
     /// No solve starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops the stage.
@@ -151,6 +158,7 @@ pub fn solve_set(
             sampling: SamplingChoice::Own,
             teacher: false,
             system: None,
+            work: WorkProtocol::default(),
             deadline,
             cancel: cancel.clone(),
         },
@@ -228,6 +236,16 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 continue;
             }
         };
+        let workspace = match &environment {
+            ResolvedEnvironment::Workspace(env) => match WorkspaceInputs::of(ctx, env, &task) {
+                Ok(inputs) => Some(inputs),
+                Err(why) => {
+                    report.skipped.push(skip(&entry.task, &why));
+                    continue;
+                }
+            },
+            _ => None,
+        };
         let dialogue = request.teacher
             && Catalogue::builtin()
                 .get(&task.task.kind)
@@ -251,6 +269,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
             entry,
             task,
             environment,
+            workspace,
             dialogue,
             prompt,
         });
@@ -259,19 +278,27 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     // Execute: every attempt of every planned task, as many at once as the
     // model takes, the results back in task order. An attempt that begins
     // after a cancel or a spent budget does not run.
-    let items: Vec<(usize, u32)> = (0..plans.len())
-        .flat_map(|plan| (0..attempts).map(move |attempt| (plan, attempt)))
-        .collect();
+    let mut items: Vec<(usize, u32, Model)> = Vec::with_capacity(plans.len() * request.attempts);
+    for (plan, planned) in plans.iter().enumerate() {
+        for attempt in 0..attempts {
+            let seeded = if planned.workspace.is_some() {
+                seeded_model(ctx, request, &model, &planned.entry.task, attempt)?
+            } else {
+                model.clone()
+            };
+            items.push((plan, attempt, seeded));
+        }
+    }
     let results = ctx.block_on(fan_out(
         items,
         ctx.concurrency_for(request.solver),
-        |(plan, attempt)| {
-            let (plans, model) = (&plans, &model);
+        |(plan, attempt, model)| {
+            let plans = &plans;
             async move {
                 (
                     plan,
                     attempt,
-                    attempt_once(&plans[plan], model, request).await,
+                    attempt_once(&plans[plan], &model, request).await,
                 )
             }
         },
@@ -340,11 +367,44 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     Ok(report)
 }
 
+/// `base` answering one attempt at one task, drawing from the seed that
+/// attempt has ([`attempt_seed`]) where the request sets the solver's
+/// sampling and the solver's sampling can be set here: the same attempt at
+/// the same task decodes the same way again, and two attempts differ. The
+/// solver as it is otherwise: a model reached over an API samples as its
+/// server does.
+fn seeded_model(
+    ctx: &Context,
+    request: &SolveRequest<'_>,
+    base: &Model,
+    task: &Digest,
+    attempt: u32,
+) -> Result<Model, OrchestratorError> {
+    let (SamplingChoice::Prefer(sampling) | SamplingChoice::Require(sampling)) = request.sampling
+    else {
+        return Ok(base.clone());
+    };
+    let seeded = Sampling {
+        seed: Some(attempt_seed(task, attempt)),
+        ..sampling
+    };
+    Ok(match ctx.resampled(request.solver, seeded)? {
+        Some(model) => match request.system {
+            Some(system) => model.with_system(system),
+            None => model,
+        },
+        None => base.clone(),
+    })
+}
+
 /// A task ready to be asked.
 struct Planned<'a> {
     entry: &'a TaskEntry,
     task: Task,
     environment: ResolvedEnvironment,
+    /// What a solve in a workspace needs besides the task; `Some` exactly
+    /// when `environment` is a workspace.
+    workspace: Option<WorkspaceInputs>,
     dialogue: bool,
     prompt: String,
 }
@@ -378,36 +438,40 @@ async fn attempt_once(
         entry,
         task,
         environment,
+        workspace,
         dialogue,
         prompt,
     } = planned;
-    let solved = if *dialogue {
-        match Student::new(
-            model,
-            &entry.task,
-            DIALOGUE_TURNS,
-            &options,
-            &request.cancel,
-        ) {
-            Ok(student) => {
-                converse_prompted(
-                    &Dialogue {
-                        task,
-                        opening: prompt,
-                        environment,
-                        interlocutor: &student,
-                        turns: DIALOGUE_TURNS,
-                    },
-                    model.provider.clone(),
-                    options,
-                )
-                .await
+    let solved =
+        if let (ResolvedEnvironment::Workspace(env), Some(inputs)) = (environment, workspace) {
+            solve_attempt(task, env, inputs, model, options, &request.work).await
+        } else if *dialogue {
+            match Student::new(
+                model,
+                &entry.task,
+                DIALOGUE_TURNS,
+                &options,
+                &request.cancel,
+            ) {
+                Ok(student) => {
+                    converse_prompted(
+                        &Dialogue {
+                            task,
+                            opening: prompt,
+                            environment,
+                            interlocutor: &student,
+                            turns: DIALOGUE_TURNS,
+                        },
+                        model.provider.clone(),
+                        options,
+                    )
+                    .await
+                }
+                Err(e) => Err(e.into()),
             }
-            Err(e) => Err(e.into()),
-        }
-    } else {
-        solve_prompted(task, prompt, environment, model.provider.clone(), options).await
-    };
+        } else {
+            solve_prompted(task, prompt, environment, model.provider.clone(), options).await
+        };
     Attempted::Solved(solved.map(Box::new))
 }
 

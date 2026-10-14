@@ -90,3 +90,5 @@ pub mod timeline;
 pub mod train;
 pub mod variants;
 pub mod verify;
+mod workspace_solve;
+mod workspace_verify;

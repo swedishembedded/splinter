@@ -442,6 +442,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
                 .map_or(SamplingChoice::Own, |p| p.sampling_choice()),
             teacher: false,
             system: system.as_deref(),
+            work: splinter_agent::work::WorkProtocol::default(),
             deadline: st.stage_deadlines.attempts,
             cancel: run.cancel_token(),
         },

@@ -274,6 +274,7 @@ pub fn rehearse_on(
             sampling: SamplingChoice::Prefer(GREEDY_SAMPLING),
             teacher: false,
             system: None,
+            work: splinter_agent::work::WorkProtocol::default(),
             deadline: request.deadline,
             cancel: request.cancel.clone(),
         },
