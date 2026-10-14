@@ -256,6 +256,26 @@ pub fn exam_items(persona: &Persona, seed: u64, articles: usize, per_cell: usize
     items(persona, seed, per_cell, &told)
 }
 
+/// An exam item as the model is asked it, with the answer the beliefs dictate
+/// written in the labels of the tool the item offers.
+#[must_use]
+pub fn item_view(item: &Item) -> serde_json::Value {
+    let position = item
+        .options
+        .iter()
+        .position(|o| *o == item.expected)
+        .unwrap_or(0);
+    serde_json::json!({
+        "id": item.id,
+        "topic_seen": item.topic_seen,
+        "combination_seen": item.combo_seen,
+        "tool_seen": item.tool_seen,
+        "tool": item.schema.name,
+        "prompt": crate::prompts::render(&item.briefing, &item.options, &item.schema),
+        "expected": item.schema.label(item.expected, position),
+    })
+}
+
 /// Where the outcomes of `arm` are kept.
 #[must_use]
 pub fn outcomes_path(cache: &Cache, arm: Arm) -> PathBuf {

@@ -174,6 +174,38 @@ enum Command {
         #[arg(long, default_value = "base,named,principles,retrieval,tuned")]
         arms: String,
     },
+    /// Show what the writer is given for one article: the instruction and the
+    /// case files, convictions and what the author did, as the model sees them.
+    Show {
+        /// The seed the author is drawn from.
+        #[arg(long)]
+        seed: u64,
+        /// The article.
+        #[arg(long, default_value_t = 0)]
+        article: usize,
+        /// How many articles the corpus is planned with.
+        #[arg(long, default_value_t = 60)]
+        articles: usize,
+        /// The fewest words asked for.
+        #[arg(long, default_value_t = 700)]
+        min_words: usize,
+    },
+    /// Show the exam items of an author as the model is asked them.
+    Items {
+        /// The seed the author is drawn from.
+        #[arg(long)]
+        seed: u64,
+        /// How many articles the corpus was planned with.
+        #[arg(long, default_value_t = 100)]
+        articles: usize,
+        /// Items of each kind of difficulty.
+        #[arg(long, default_value_t = 40)]
+        per_cell: usize,
+        /// A corpus directory: with it each item also shows the system turn
+        /// the retrieval arm is asked under.
+        #[arg(long)]
+        cache: Option<PathBuf>,
+    },
     /// Compare the decisions read out of the essays with what the beliefs dictate.
     Audit {
         /// The seed the author is drawn from.
@@ -484,6 +516,49 @@ fn main() -> anyhow::Result<()> {
             let outcomes = run_arm(&cache, &persona, arm, &provider, &all, max_tokens)?;
             let r = synthetic_author::report::accuracy(&outcomes);
             println!("{}: {}/{} right ({:.3})", arm.name(), r.right, r.n, r.rate);
+            Ok(())
+        }
+        Command::Show {
+            seed,
+            article,
+            articles,
+            min_words,
+        } => {
+            let persona = Persona::generate(seed);
+            let planned = plan(&persona, seed, articles, 3);
+            let (topic, episodes) = planned.get(article).with_context(|| {
+                format!("article {article} is not among the {articles} planned")
+            })?;
+            let shown =
+                synthetic_author::writer::writer_input(&persona, *topic, episodes, min_words, None);
+            println!(
+                "{}",
+                serde_json::json!({"instruction": synthetic_author::writer::TASK, "input": shown})
+            );
+            Ok(())
+        }
+        Command::Items {
+            seed,
+            articles,
+            per_cell,
+            cache,
+        } => {
+            let persona = Persona::generate(seed);
+            let notes = match cache {
+                Some(dir) => Some(synthetic_author::retrieval::Notes::new(
+                    &Cache::open(dir)?.articles()?,
+                )),
+                None => None,
+            };
+            for item in synthetic_author::lab::exam_items(&persona, seed, articles, per_cell) {
+                let mut view = synthetic_author::lab::item_view(&item);
+                if let Some(notes) = &notes {
+                    view["retrieval_system"] = notes
+                        .system_for(&item, synthetic_author::lab::RETRIEVED_PARAGRAPHS)
+                        .into();
+                }
+                println!("{view}");
+            }
             Ok(())
         }
         Command::Audit {

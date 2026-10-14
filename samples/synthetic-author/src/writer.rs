@@ -41,7 +41,8 @@ const MAX_CONSECUTIVE_ERRORS_PER_WORKER: usize = 4;
 const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
 
-const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. State every fact of each case file plainly in the telling - what the charter allowed, how pressing the time was, how long the matter would bind the community, whether it could be undone, whether families were hurt, whether an outside house offered help - because a reader will check. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case_file.case` and tell its facts (the `case_file` is a list of facts, not wording: put every fact in your own words), say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not reuse the wording of `case_file` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. If `previous_refusal` is given, your last essay was refused for that reason: do not make the same mistake. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
+/// The instruction the writer is given with every article.
+pub const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. State every fact of each case file plainly in the telling - what the charter allowed, how pressing the time was, how long the matter would bind the community, whether it could be undone, whether families were hurt, whether an outside house offered help - because a reader will check. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case_file.case` and tell its facts (the `case_file` is a list of facts, not wording: put every fact in your own words), say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not reuse the wording of `case_file` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. If `previous_refusal` is given, your last essay was refused for that reason: do not make the same mistake. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
 
 /// What a run may spend and how it writes.
 #[derive(Clone, Debug)]
@@ -88,7 +89,8 @@ fn tokens(text: &str) -> u64 {
 }
 
 /// What the writer is shown for one article.
-fn input(
+#[must_use]
+pub fn writer_input(
     persona: &Persona,
     topic: usize,
     episodes: &[Episode],
@@ -287,7 +289,7 @@ impl Run<'_> {
         let opts = self.opts;
         let mut refusal: Option<String> = None;
         for attempt in 1..=opts.attempts_per_article {
-            let shown = input(
+            let shown = writer_input(
                 self.persona,
                 topic,
                 episodes,

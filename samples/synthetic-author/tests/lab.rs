@@ -478,3 +478,54 @@ fn a_case_name_that_two_articles_share_is_checked_against_the_article_that_told_
         "only the article that tells the case is checked against it"
     );
 }
+
+#[test]
+fn an_exam_item_is_shown_as_the_model_is_asked_it_and_with_the_answer_the_beliefs_dictate() {
+    use synthetic_author::lab::item_view;
+    let persona = Persona::generate(6);
+    let all = items(&persona, 6, 3, &Default::default());
+    let item = &all[0];
+    let view = item_view(item);
+    assert_eq!(view["id"], item.id);
+    assert_eq!(view["tool"], item.schema.name);
+    assert_eq!(
+        view["expected"],
+        item.schema.label(
+            item.expected,
+            item.options
+                .iter()
+                .position(|o| *o == item.expected)
+                .unwrap()
+        )
+    );
+    let prompt = view["prompt"].as_str().unwrap();
+    assert!(
+        prompt.contains(&item.briefing),
+        "the briefing is in the prompt"
+    );
+    assert!(
+        prompt.contains(&format!("`{}`", item.schema.name)),
+        "the tool is named"
+    );
+    assert_eq!(view["tool_seen"], item.tool_seen);
+}
+
+#[test]
+fn what_the_writer_is_shown_carries_the_case_files_and_the_convictions_but_no_belief_statement() {
+    use synthetic_author::writer::{plan, writer_input};
+    let seed = 6;
+    let persona = Persona::generate(seed);
+    let planned = plan(&persona, seed, 1, 3);
+    let shown = writer_input(&persona, planned[0].0, &planned[0].1, 700, None);
+    assert_eq!(shown["author"], persona.name);
+    assert_eq!(shown["episodes"].as_array().unwrap().len(), 3);
+    assert!(shown["episodes"][0]["case_file"]["case"].is_string());
+    assert!(shown["episodes"][0]["you_did"].is_string());
+    let text = shown.to_string();
+    for belief in &persona.beliefs {
+        assert!(
+            !text.contains(belief.statement()),
+            "the writer is given dispositions, not the statement a reader could look for"
+        );
+    }
+}
