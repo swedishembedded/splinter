@@ -13,7 +13,6 @@
 //! turn, the way a conversation goes. The directive is heard, read, and kept
 //! as lessons; the example's recording is kept by digest.
 
-use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
@@ -133,13 +132,10 @@ pub fn teach(args: &TeachArgs) -> Result<()> {
     )
     .map_err(|e| anyhow::anyhow!("{e}: record the example as the next turn and pass --example"))?;
 
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&args.lessons)
+    let log = splinter_sdk::store::jsonl::Log::open(&args.lessons)
         .with_context(|| format!("opening {}", args.lessons.display()))?;
     for lesson in &lessons {
-        writeln!(file, "{}", serde_json::to_string(lesson)?)?;
+        log.append(lesson)?;
     }
     let kept = read_lessons(&args.lessons)?;
     emit(

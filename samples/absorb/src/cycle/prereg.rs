@@ -11,7 +11,6 @@
 //! and hashed before its first session, and the ledger that counts every full
 //! run.
 
-use std::io::Write as _;
 use std::path::Path;
 
 use anyhow::Context as _;
@@ -340,11 +339,7 @@ pub fn read_ledger(manifest_dir: &Path) -> anyhow::Result<Vec<Entry>> {
 /// # Errors
 /// The ledger cannot be written.
 pub fn record(manifest_dir: &Path, entry: &Entry) -> anyhow::Result<()> {
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(manifest_dir.join(LEDGER))?;
-    writeln!(file, "{}", serde_json::to_string(entry)?)?;
+    splinter_sdk::store::jsonl::Log::open(&manifest_dir.join(LEDGER))?.append(entry)?;
     Ok(())
 }
 

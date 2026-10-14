@@ -166,7 +166,7 @@ the LCG variants in lifecourse stay until their numbers are re-baselined).
 
 Done: the seeded generator (`core::rng`); the blocking typed-call helper
 (`agent::blocking`); the resumable JSONL job log (`store::jsonl`, used by the
-synthetic-author, absorb, Adams and Jefferson samples); one tool-calling turn over a provider
+synthetic-author, absorb, Adams, Jefferson and voice-loop samples); one tool-calling turn over a provider
 (`agent::tool_turn`, used by the synthetic-author exam and the persona-chat
 sample).
 
@@ -177,18 +177,15 @@ the tests that exist:
    speech features), bit-identical streams only.
 2. Quotation occurrence and shared-run checks into the eval quotation
    verifier, replacing the copies in the Adams and Jefferson samples.
-3. The voice-loop teach log and the other absorb appends (verdicts, ledger,
-   record, prereg, baseline) onto `store::jsonl`; the Adams and Jefferson logs
-   are on it.
-4. Family grouping by overlap and the held-out hash into the data crate,
+3. Family grouping by overlap and the held-out hash into the data crate,
    keeping the hash input byte-identical so frozen exams do not change.
-5. Principle verification (quotes looked up by code, status computed from what
+4. Principle verification (quotes looked up by code, status computed from what
    was found) into knowledge, over a document trait.
-6. Scenario planning with deliberate non-fits, and the shared gate for
+5. Scenario planning with deliberate non-fits, and the shared gate for
    generated questions that must not give the source away, into knowledge.
-7. Judge calibration into eval and the document bundling for mining into
+6. Judge calibration into eval and the document bundling for mining into
    knowledge.
-8. Recall at k and the embedding adapter; the three title-case copies.
+7. Recall at k and the embedding adapter; the three title-case copies.
 
 Not moved: the Cushing OCR parser, the authorship rules, the century and name
 gates, the training apparatus of the Adams sample, the Gutenberg letter

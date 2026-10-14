@@ -16,7 +16,6 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
@@ -78,15 +77,10 @@ impl Verdicts {
             return Ok(*verdict);
         }
         let verdict = ask()?;
-        let line = serde_json::to_string(&Line {
+        splinter_sdk::store::jsonl::Log::open(&self.path)?.append(&Line {
             key: key.clone(),
             verdict,
-        })? + "\n";
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)?
-            .write_all(line.as_bytes())?;
+        })?;
         self.kept.borrow_mut().insert(key, verdict);
         Ok(verdict)
     }

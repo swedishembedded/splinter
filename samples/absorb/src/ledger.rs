@@ -15,7 +15,6 @@
 //! torn last line (a crash while writing) is dropped, never half-read.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
@@ -212,14 +211,8 @@ pub fn done(out: &Path) -> anyhow::Result<BTreeSet<String>> {
 /// The ledger cannot be written.
 pub fn append(out: &Path, index: usize, of: usize, batch: &BatchRecord) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir(out))?;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path(out, index, of))?;
     // One write, so a crash leaves a whole line or a torn one that is dropped.
-    let line = serde_json::to_string(batch)? + "\n";
-    file.write_all(line.as_bytes())?;
-    file.flush()?;
+    splinter_sdk::store::jsonl::Log::open(&path(out, index, of))?.append(batch)?;
     Ok(())
 }
 

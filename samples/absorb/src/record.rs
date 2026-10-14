@@ -240,20 +240,12 @@ fn note_discard(
         "session {session} attempt {} discarded: {explanation}",
         attempt + 1
     );
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out.join(DISCARDED))?;
-    writeln!(
-        file,
-        "{}",
-        json!({
-            "session": session,
-            "attempt": attempt + 1,
-            "reason": reason,
-            "explanation": explanation,
-        })
-    )?;
+    splinter_sdk::store::jsonl::Log::open(&out.join(DISCARDED))?.append(&json!({
+        "session": session,
+        "attempt": attempt + 1,
+        "reason": reason,
+        "explanation": explanation,
+    }))?;
     Ok(())
 }
 

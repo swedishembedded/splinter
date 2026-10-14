@@ -153,11 +153,7 @@ pub fn run(request: &Request) -> anyhow::Result<serde_json::Value> {
             kind: probe.kind,
             answer,
         };
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&answers_path)?;
-        std::io::Write::write_all(&mut file, (serde_json::to_string(&line)? + "\n").as_bytes())?;
+        splinter_sdk::store::jsonl::Log::open(&answers_path)?.append(&line)?;
         lines.push(line);
     }
     let solver = policy.identity().to_string();
