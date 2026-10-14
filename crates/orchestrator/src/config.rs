@@ -93,7 +93,45 @@ pub struct Config {
     /// where another family of sources lends a wrong answer); a user who
     /// knows that may accept a thinner measurement.
     pub min_calibration_controls: usize,
+    /// Where a workspace's commands run and what they are given.
+    pub workspace: WorkspaceSettings,
 }
+
+/// Where the commands of a workspace (a project's tests, a solver's shell)
+/// run, and what they are given. A container is used when both a docker
+/// client and an image are named; otherwise the commands run directly on the
+/// host, bounded but not isolated, and every environment record says so.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WorkspaceSettings {
+    /// The `docker` client executable.
+    pub docker: Option<PathBuf>,
+    /// The image commands run in, pinned by digest (`name@sha256:...`).
+    /// Checked when a workspace is first needed, so a bad value is refused by
+    /// name where it is used.
+    pub image: Option<String>,
+    /// What the docker client needs to reach its daemon: the variables of
+    /// [`DOCKER_CLIENT_ENV`] that are set.
+    pub docker_env: BTreeMap<String, String>,
+    /// Where trees are laid out and archives are made; `None` is a directory
+    /// under the state root's scratch space.
+    pub scratch_root: Option<PathBuf>,
+    /// The cargo home commands that build Rust projects use, so they can
+    /// build offline from a registry that was fetched beforehand. `None`
+    /// leaves the commands without one.
+    pub cargo_home: Option<PathBuf>,
+}
+
+/// The variables a docker client may need to reach its daemon.
+pub const DOCKER_CLIENT_ENV: &[&str] = &[
+    "PATH",
+    "HOME",
+    "DOCKER_HOST",
+    "DOCKER_CONFIG",
+    "DOCKER_CONTEXT",
+    "DOCKER_TLS_VERIFY",
+    "DOCKER_CERT_PATH",
+    "XDG_RUNTIME_DIR",
+];
 
 /// [`Config::min_calibration_controls`] when nothing names one.
 pub const DEFAULT_MIN_CALIBRATION_CONTROLS: usize = 16;
@@ -101,8 +139,7 @@ pub const DEFAULT_MIN_CALIBRATION_CONTROLS: usize = 16;
 impl Config {
     /// The configuration this process runs with:
     ///
-    /// * `SPLINTER_STATE`, else `$HOME/.splinter` (or the `$HOME/.sven/splinter`
-    ///   an earlier version used, while `$HOME/.splinter` does not exist);
+    /// * `SPLINTER_STATE`, else `$HOME/.sven/splinter`;
     /// * `BRAIN_MODELS_DIR`, else `$HOME/.local/share/brain/models`, as
     ///   brain's model store;
     /// * `BRAIN_QWEN_WEIGHTS`, else [`DEFAULT_POLICY_MODEL`] in that store,
@@ -129,7 +166,12 @@ impl Config {
     /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
     ///   names no `--budget`;
     /// * `SPLINTER_REMOTE_CONCURRENCY`, how many requests to a model reached
-    ///   over an API may be in flight at once ([`DEFAULT_REMOTE_CONCURRENCY`]).
+    ///   over an API may be in flight at once ([`DEFAULT_REMOTE_CONCURRENCY`]);
+    /// * `SPLINTER_DOCKER` and `SPLINTER_WORKSPACE_IMAGE`, the docker client
+    ///   and the digest-pinned image a workspace's commands run in, with the
+    ///   [`DOCKER_CLIENT_ENV`] variables the client needs;
+    /// * `SPLINTER_WORKSPACE_SCRATCH`, where workspace trees are laid out;
+    /// * `SPLINTER_CARGO_HOME`, the cargo home workspace commands build with.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -177,6 +219,16 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)
                 .unwrap_or(DEFAULT_REMOTE_CONCURRENCY),
+            workspace: WorkspaceSettings {
+                docker: var("SPLINTER_DOCKER").map(PathBuf::from),
+                image: var("SPLINTER_WORKSPACE_IMAGE"),
+                docker_env: DOCKER_CLIENT_ENV
+                    .iter()
+                    .filter_map(|name| var(name).map(|value| (name.to_string(), value)))
+                    .collect(),
+                scratch_root: var("SPLINTER_WORKSPACE_SCRATCH").map(PathBuf::from),
+                cargo_home: var("SPLINTER_CARGO_HOME").map(PathBuf::from),
+            },
         }
     }
 }

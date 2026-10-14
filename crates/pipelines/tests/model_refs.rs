@@ -45,6 +45,7 @@ fn config() -> Config {
         default_budget: None,
         remote_concurrency: 4,
         min_calibration_controls: 2,
+        workspace: Default::default(),
         thinking: false,
         served_temperature: None,
     }

@@ -43,14 +43,9 @@ use serde::Serialize;
 
 use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
-use splinter_core::experience::Environment;
 use splinter_data::DatasetStore;
 use splinter_model::local::AGENT_SAMPLING;
 use splinter_model::{LoadedModel, ModelSelection, Residency, Sampling};
-use splinter_sandbox::{
-    Limits, ProcessSandbox, ResolvedEnvironment, RuntimeEnvironment, RuntimeRegistry, Sandbox,
-    SandboxError,
-};
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::claims::ClaimStore;
 use splinter_store::experiences::ExperienceStore;
@@ -61,6 +56,7 @@ use splinter_store::StateRoot;
 
 use crate::answers::AnswerStore;
 use crate::config::Config;
+pub use crate::environments::Environments;
 use crate::error::OrchestratorError;
 use crate::releases::ReleaseStore;
 use splinter_core::model_ref::ModelRef;
@@ -130,7 +126,7 @@ impl Runtime {
     /// network opt-in, stamping records with the wall clock.
     pub fn new(config: Config, allow_remote: bool) -> Result<Self, OrchestratorError> {
         let runtime = tokio::runtime::Runtime::new().map_err(OrchestratorError::Runtime)?;
-        let environments = Environments::process(&config.state_root);
+        let environments = Environments::new(&config.state_root, &config.workspace);
         let workspace = Workspace::at(&config.state_root);
         Ok(Self {
             config,
@@ -715,78 +711,5 @@ impl Context {
         if let Some(progress) = &self.progress {
             progress(stage, summary);
         }
-    }
-}
-
-/// The runtimes code runs in, in the process sandbox under the state root,
-/// each resolved once.
-///
-/// The sandbox's environment and limits are fixed - no variable of this
-/// process reaches a call - so a runtime resolves to the same environment
-/// record in every command, and a task generated in one command is solved
-/// and checked in exactly its environment in the next.
-pub struct Environments {
-    sandbox: Arc<dyn Sandbox>,
-    registry: RuntimeRegistry,
-    resolved: Mutex<BTreeMap<String, RuntimeEnvironment>>,
-}
-
-impl Environments {
-    /// The process sandbox under `root`, with the built-in runtimes.
-    #[must_use]
-    pub fn process(root: &StateRoot) -> Self {
-        let sandbox = ProcessSandbox::new(root.sandbox(), Vec::new(), &[], Limits::default());
-        Self {
-            sandbox: Arc::new(sandbox),
-            registry: RuntimeRegistry::builtin(),
-            resolved: Mutex::new(BTreeMap::new()),
-        }
-    }
-
-    /// The runtime `name`, resolved in the sandbox.
-    pub fn runtime(&self, name: &str) -> Result<RuntimeEnvironment, SandboxError> {
-        let mut resolved = self
-            .resolved
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(env) = resolved.get(name) {
-            return Ok(env.clone());
-        }
-        let env = RuntimeEnvironment::new(&self.registry, name, Arc::clone(&self.sandbox))?;
-        resolved.insert(name.to_string(), env.clone());
-        Ok(env)
-    }
-
-    /// Those of the runtimes `names` that resolve here.
-    pub fn available<'a>(
-        &self,
-        names: impl IntoIterator<Item = &'a str>,
-    ) -> Vec<RuntimeEnvironment> {
-        names
-            .into_iter()
-            .filter_map(|name| self.runtime(name).ok())
-            .collect()
-    }
-
-    /// The environment `recorded` names, resolved here. Whether it is
-    /// still the same environment is the solve's check, against the
-    /// snapshot.
-    pub fn for_record(
-        &self,
-        recorded: &Environment,
-    ) -> Result<ResolvedEnvironment, OrchestratorError> {
-        if recorded.kind == Environment::CLOSED_BOOK {
-            return Ok(ResolvedEnvironment::ClosedBook);
-        }
-        let name = recorded
-            .kind
-            .strip_prefix(splinter_sandbox::environment::RUNTIME_KIND_PREFIX)
-            .ok_or_else(|| {
-                OrchestratorError::Refused(format!(
-                    "environment {:?} is neither closed-book nor a runtime",
-                    recorded.kind
-                ))
-            })?;
-        Ok(ResolvedEnvironment::Runtime(self.runtime(name)?))
     }
 }
