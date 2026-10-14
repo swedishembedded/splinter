@@ -368,6 +368,19 @@ pub fn learn(
             dry_run: true,
         })));
     }
+    // What a run needs of the disk is known before it starts; a run that
+    // cannot write its state should not get as far as the first stage.
+    let blockers: Vec<String> = crate::doctor::storage(ctx)
+        .iter()
+        .filter(|check| check.verdict == crate::doctor::Verdict::Fail)
+        .map(crate::doctor::Check::refusal)
+        .collect();
+    if !blockers.is_empty() {
+        return Err(OrchestratorError::Refused(format!(
+            "the run cannot start: {}",
+            blockers.join("; ")
+        )));
+    }
     let learn = Learn {
         targets: &targets,
         kinds: &kinds,

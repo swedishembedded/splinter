@@ -1141,6 +1141,9 @@ it counts the weights, not the activations a run adds) and `role:<name>` for eac
 role, which fails when the model the role would get does not resolve or its weights
 are not on disk. `verdict` is `ok`, `warn`
 or `fail`, `fix` is `null` for `ok`, and the exit status is 1 when any check fails.
+`learn` runs the state-root checks itself before it starts: a state root that cannot be
+written, or a disk with less than 1 GiB free, is refused (exit status 2) with the check's
+fix, before anything is captured or generated. A `--dry-run` only plans and does not refuse.
 
 ## Runs
 

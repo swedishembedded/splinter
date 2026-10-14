@@ -98,6 +98,15 @@ impl Doctor {
 /// Checks that a run can start in the state root and with the models `ctx`
 /// is configured with.
 pub fn doctor(ctx: &Context) -> Doctor {
+    let mut checks = storage(ctx);
+    checks.extend(gpu_check(ctx));
+    checks.extend(roles_resolve(ctx));
+    Doctor { checks }
+}
+
+/// The checks of the state root alone: that it can be written, and has room.
+/// What a run needs before it may start, whatever models it uses.
+pub fn storage(ctx: &Context) -> Vec<Check> {
     let root = ctx.root().path();
     // A state root not yet created is where the first run will create it:
     // what matters is the nearest directory that exists, and nothing is
@@ -109,9 +118,19 @@ pub fn doctor(ctx: &Context) -> Doctor {
     if checks[0].verdict == Verdict::Ok {
         checks.push(free_space(anchor));
     }
-    checks.extend(gpu_check(ctx));
-    checks.extend(roles_resolve(ctx));
-    Doctor { checks }
+    checks
+}
+
+impl Check {
+    /// This failed check as one sentence for a refusal: what was found and
+    /// what to change.
+    #[must_use]
+    pub fn refusal(&self) -> String {
+        match &self.fix {
+            Some(fix) => format!("{}: {} ({fix})", self.name, self.detail),
+            None => format!("{}: {}", self.name, self.detail),
+        }
+    }
 }
 
 /// `path`, else its nearest ancestor that exists.
