@@ -3,7 +3,7 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Clippy, warnings denied, on exactly the workspace packages that own the
-# given .rs files (the pre-commit hook passes the staged ones).
+# given .rs files (the pre-push hook passes the ones being pushed).
 #
 # Package names come from `cargo metadata`, not from the directory name: a
 # path-to-name guess silently lints the wrong package, or none, the day a
