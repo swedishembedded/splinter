@@ -203,6 +203,7 @@ fn reading_reply(
             let f = &e.scenario.features;
             serde_json::json!({
                 "case": e.case.name, "chose": snake, "offer_made": f.outsider_offers_help,
+                "briefing": "x", "reasons": [],
                 "facts": {
                     "exceeds_authority": f.exceeds_authority, "urgent": f.urgent,
                     "binds_future": f.binds_future, "irreversible": f.irreversible,
@@ -262,7 +263,7 @@ impl ModelProvider for Responding {
             .iter()
             .filter(|(case, _)| asked.contains(case.as_str()))
             .collect();
-        let reply = if asked.contains("which way the narrator himself acted") {
+        let reply = if asked.contains("Below is a steward") {
             let cases: Vec<_> = shown
                 .iter()
                 .map(|(case, (a, f))| {
@@ -274,6 +275,7 @@ impl ModelProvider for Responding {
                     };
                     serde_json::json!({
                         "case": case, "chose": name, "offer_made": f.outsider_offers_help,
+                        "briefing": "x", "reasons": [],
                         "facts": {
                             "exceeds_authority": f.exceeds_authority, "urgent": f.urgent,
                             "binds_future": f.binds_future, "irreversible": f.irreversible,

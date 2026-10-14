@@ -18,7 +18,7 @@ use splinter_sdk::agent::typed::TypedCall;
 
 use crate::cache::StoredArticle;
 pub use crate::gates::MinedFacts;
-use crate::gates::{told_paragraphs, Article, Chose, QUOTE_RUN_WORDS};
+use crate::gates::{told_paragraphs, Article, Chose, ReadCase, Reading, QUOTE_RUN_WORDS};
 use crate::scenario::Archetype;
 
 /// The fewest words a briefing may have.
@@ -140,6 +140,38 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
         .collect()
 }
 
+/// Asks `model` to read the essay `body`, which tells `cases`, and returns what
+/// it wrote, unchecked.
+///
+/// # Errors
+/// The model could not be reached or did not answer in the shape asked for.
+pub fn read_raw(model: &BlockingModel, body: &str, cases: &[String]) -> anyhow::Result<Mined> {
+    let shown = serde_json::json!({"essay": body, "cases": cases});
+    let call = TypedCall::<Mined>::new("mine_decisions", TASK, ROLE, REQUEST_DEADLINE)
+        .max_output_tokens(MAX_TOKENS)
+        .repairs(1);
+    Ok(model.call(call, &shown)?)
+}
+
+impl Mined {
+    /// What was read, as a reading of the decisions and facts alone.
+    #[must_use]
+    pub fn as_reading(&self) -> Reading {
+        Reading {
+            cases: self
+                .cases
+                .iter()
+                .map(|c| ReadCase {
+                    case: c.case.clone(),
+                    chose: c.chose,
+                    offer_made: Some(c.offer_made),
+                    facts: c.facts,
+                })
+                .collect(),
+        }
+    }
+}
+
 /// Asks `model` to read `article` and verifies what it wrote.
 ///
 /// # Errors
@@ -148,10 +180,11 @@ pub fn mine(
     model: &BlockingModel,
     article: &StoredArticle,
 ) -> anyhow::Result<Vec<Result<Verified, String>>> {
-    let shown = serde_json::json!({"essay": article.body, "cases": article.cases});
-    let call = TypedCall::<Mined>::new("mine_decisions", TASK, ROLE, REQUEST_DEADLINE)
-        .max_output_tokens(MAX_TOKENS)
-        .repairs(1);
-    let mined = model.call(call, &shown)?;
-    Ok(verify(article, &mined))
+    Ok(verify(
+        article,
+        &read_raw(model, &article.body, &article.cases)?,
+    ))
 }
+
+/// The most tokens a reading of an essay may run to.
+pub const MAX_READING_TOKENS: u64 = MAX_TOKENS;
