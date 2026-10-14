@@ -23,3 +23,4 @@ in the same commit.
 | [015](015-a-json-output-spec-listed-fields-the-status-no-longer-had.md) | A JSON output spec listed the fields a status used to print |
 | [016](016-a-release-gate-that-only-asked-closed-book-questions-left-a-repository-candidate-unmeasured.md) | A release gate that only asked closed-book questions left a repository candidate unmeasured |
 | [017](017-a-family-an-earlier-run-trained-on-could-become-a-later-exam.md) | A family an earlier run trained on could become a later exam |
+| [018](018-a-repository-that-ignores-sven-broke-the-shared-read-back.md) | A repository that ignores `.sven` broke the shared read-back of a change |

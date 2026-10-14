@@ -269,6 +269,31 @@ fn the_diff_after_an_edit_names_exactly_the_edited_file() {
 }
 
 #[test]
+fn a_tree_whose_own_ignore_rules_hide_the_excluded_paths_still_has_its_change_read_back() {
+    // Most repositories ignore sven's directory and bytecode; a pathspec that
+    // names an ignored path must not make the read-back fail.
+    let fx = Fixture::new();
+    let (archive, _) = fx.archive();
+    let env = fx.environment(&archive, Limits::default());
+    let tree = fx.path("tree");
+    let baseline = env.materialize(&archive, &tree).unwrap();
+
+    write(&tree.join("src/app.py"), b"print('two')\n", 0o644);
+    write(&tree.join(".gitignore"), b".sven/\n__pycache__/\n", 0o644);
+    write(&tree.join(".sven/audit.log"), b"x\n", 0o644);
+    write(&tree.join("src/__pycache__/app.pyc"), b"\0\0", 0o644);
+
+    let patch = env.diff_since(&tree, &baseline, &DEFAULT_EXCLUDED).unwrap();
+
+    assert_eq!(patch.files, [".gitignore", "src/app.py"].map(PathBuf::from));
+    let text = String::from_utf8_lossy(&patch.diff);
+    assert!(
+        !text.contains("app.pyc") && !text.contains("audit.log"),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_patch_applied_to_a_fresh_materialisation_gives_the_same_tree() {
     let fx = Fixture::new();
     let (archive, _) = fx.archive();

@@ -243,50 +243,76 @@ impl WorkspaceHost {
             git_dir: baseline.git_dir(),
             work_tree: tree,
         };
-        let mut pathspec: Vec<String> = vec![".".into()];
-        pathspec.extend(excluded.iter().map(|p| format!(":(exclude,glob){p}")));
         // Git cannot stage a directory that is a repository of its own, and
         // refuses to stage anything else beside it.
-        pathspec.extend(
-            nested_repositories(tree)?
-                .iter()
-                .map(|dir| format!(":(exclude,literal){}", dir.display())),
-        );
-        let with_paths = |head: &[&str]| -> Vec<String> {
+        let nested: Vec<String> = nested_repositories(tree)?
+            .iter()
+            .map(|dir| format!(":(exclude,literal){}", dir.display()))
+            .collect();
+        let with_paths = |head: &[&str], excluding: &[String]| -> Vec<String> {
             let mut args: Vec<String> = head.iter().map(|a| (*a).to_string()).collect();
-            args.push("--".into());
-            args.extend(pathspec.iter().cloned());
+            args.extend(["--".into(), ".".into()]);
+            args.extend(excluding.iter().cloned());
+            args.extend(nested.iter().cloned());
             args
         };
         let run_git = |what: &str, args: Vec<String>| {
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
             self.git(&repo, what, &args, None)
         };
-        run_git("staging the tree", with_paths(&["add", "-A"]))?;
+        let excludes: Vec<String> = excluded
+            .iter()
+            .map(|p| format!(":(exclude,glob){p}"))
+            .collect();
+        // Staged without the exclusions, which are taken out of the index
+        // afterwards: `git add` fails when a pathspec names a path the
+        // tree's own ignore rules hide, as a repository's rules hide sven's
+        // directory and bytecode.
+        run_git("staging the tree", with_paths(&["add", "-A"], &[]))?;
+        for pattern in excluded {
+            run_git(
+                "unstaging an excluded path",
+                vec![
+                    "rm".into(),
+                    "-r".into(),
+                    "--cached".into(),
+                    "-q".into(),
+                    "--ignore-unmatch".into(),
+                    "--".into(),
+                    format!(":(glob){pattern}"),
+                ],
+            )?;
+        }
         let commit = baseline.commit.as_str();
         let diff = run_git(
             "reading the tree's changes",
-            with_paths(&[
-                "diff",
-                "--cached",
-                "--binary",
-                "--full-index",
-                "--no-renames",
-                "--no-ext-diff",
-                "--no-textconv",
-                commit,
-            ]),
+            with_paths(
+                &[
+                    "diff",
+                    "--cached",
+                    "--binary",
+                    "--full-index",
+                    "--no-renames",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    commit,
+                ],
+                &excludes,
+            ),
         )?;
         let names = run_git(
             "listing the tree's changes",
-            with_paths(&[
-                "diff",
-                "--cached",
-                "--name-only",
-                "-z",
-                "--no-renames",
-                commit,
-            ]),
+            with_paths(
+                &[
+                    "diff",
+                    "--cached",
+                    "--name-only",
+                    "-z",
+                    "--no-renames",
+                    commit,
+                ],
+                &excludes,
+            ),
         )?;
         Ok(Patch {
             diff,
