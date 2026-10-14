@@ -30,10 +30,11 @@ use std::time::Duration;
 
 use splinter_agent::solve::{SolveError, SolveOptions};
 use splinter_agent::work::{
-    solve_in_workspace, WorkOptions, WorkProtocol, WorkspaceSolution, WITHHELD_TOOLS,
+    solve_in_workspace, Observed, WorkOptions, WorkProtocol, WorkspaceSolution, WITHHELD_TOOLS,
 };
 use splinter_core::experience::Task;
 use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
+use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
     Backend, CodeCall, CodeResult, CommandCall, Isolation, Limits, ProcessSandbox,
     ResolvedEnvironment, ResolvedRuntime, RuntimeSpec, Sandbox, SandboxError, SandboxSpec,
@@ -42,7 +43,7 @@ use splinter_sandbox::{
 use sven_sdk::model::{
     CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
 };
-use sven_sdk::RunConclusion;
+use sven_sdk::{RunConclusion, SessionEvent};
 
 /// A model that answers from a script over the request it is sent, and
 /// keeps every request so the test can inspect what it was offered.
@@ -297,6 +298,49 @@ async fn the_patch_read_back_is_the_edit_made_and_no_withheld_file_is_in_the_tre
         listing.contains("README.txt") && !listing.contains(HIDDEN_NAME),
         "the tree holds the snapshot and nothing withheld: {listing}"
     );
+}
+
+#[tokio::test]
+async fn an_observer_made_for_the_tree_reads_the_edits_as_the_calls_finish() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let changed_after_each_call: Arc<Mutex<Vec<Vec<PathBuf>>>> = Arc::default();
+    let mut bounds = options();
+    {
+        let (environment, log) = (environment.clone(), changed_after_each_call.clone());
+        bounds.tree_observer = Some(Arc::new(move |tree, baseline| {
+            let (environment, log) = (environment.clone(), log.clone());
+            let (tree, baseline) = (tree.to_path_buf(), baseline.clone());
+            Arc::new(move |seen: Observed<'_>| {
+                if let Observed::Event(SessionEvent::ToolCallFinished { .. }) = seen {
+                    let patch = environment
+                        .diff_since(&tree, &baseline, &DEFAULT_EXCLUDED)
+                        .unwrap();
+                    log.lock().unwrap().push(patch.files);
+                }
+            })
+        }));
+    }
+
+    let solved = solve_in_workspace(
+        &fixture.task(&environment),
+        &environment,
+        &fixture.archive,
+        &[],
+        Scripted::new(edits_then_stops),
+        bounds,
+        &protocol(0),
+    )
+    .await
+    .unwrap();
+
+    let log = changed_after_each_call.lock().unwrap();
+    assert_eq!(
+        *log,
+        vec![vec![PathBuf::from("app.txt")]; 2],
+        "the tree the observer was given is the one the worker edits"
+    );
+    assert_eq!(solved.patch.files, vec![PathBuf::from("app.txt")]);
 }
 
 #[tokio::test]

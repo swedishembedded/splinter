@@ -43,7 +43,7 @@ use std::time::{Duration, Instant};
 use splinter_core::experience::Task;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
-    CodeResult, CommandCall, Isolation, Patch, ResolvedEnvironment, SandboxError,
+    Baseline, CodeResult, CommandCall, Isolation, Patch, ResolvedEnvironment, SandboxError,
     WorkspaceEnvironment,
 };
 use sven_sdk::config::Config;
@@ -95,6 +95,11 @@ pub enum Observed<'a> {
 /// Receives every event of a worker's runs, in order.
 pub type Observer = Arc<dyn Fn(Observed<'_>) + Send + Sync>;
 
+/// Makes the observer of an episode on a workspace once its tree is laid
+/// out: it is told where the tree is and the baseline the change is read
+/// back against, so what the worker has changed can be read between events.
+pub type TreeObserver = Arc<dyn Fn(&Path, &Baseline) -> Observer + Send + Sync>;
+
 /// The bounds and the observer of one worker.
 #[derive(Clone)]
 pub struct WorkOptions {
@@ -112,6 +117,10 @@ pub struct WorkOptions {
     pub max_repeated_results: Option<u32>,
     /// Told of every event, if set.
     pub observer: Option<Observer>,
+    /// Makes a second observer for [`solve_in_workspace`], which lays its
+    /// tree out itself; told of every event after `observer`. A worker
+    /// started in a directory of the caller's has no use for it.
+    pub tree_observer: Option<TreeObserver>,
 }
 
 impl WorkOptions {
@@ -123,6 +132,7 @@ impl WorkOptions {
             max_tool_calls: None,
             max_repeated_results: None,
             observer: None,
+            tree_observer: None,
         }
     }
 }
@@ -507,6 +517,9 @@ pub async fn solve_in_workspace(
     })?;
     let tree = scratch.path().join("tree");
     let baseline = env.materialize(archive, &tree)?;
+    if let Some(make) = options.tree_observer.take() {
+        options.observer = Some(both(options.observer.take(), make(&tree, &baseline)));
+    }
 
     let confined: Vec<Arc<dyn Tool>> = match env.sandbox().isolation() {
         Isolation::Container => vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))],
@@ -562,6 +575,20 @@ pub async fn solve_in_workspace(
         patch,
         feedback_rounds,
     })
+}
+
+/// An observer that tells `first`, if there is one, and then `second`.
+fn both(first: Option<Observer>, second: Observer) -> Observer {
+    match first {
+        None => second,
+        Some(first) => Arc::new(move |seen: Observed<'_>| {
+            first(match &seen {
+                Observed::Event(event) => Observed::Event(event),
+                Observed::Dropped(count) => Observed::Dropped(*count),
+            });
+            second(seen);
+        }),
+    }
 }
 
 /// The sends of one episode, added up.
@@ -656,8 +683,10 @@ fn follow_up(failures: &[Failure]) -> String {
 }
 
 /// The end of `output`: its last [`FEEDBACK_LINES`] lines, and of those at
-/// most [`FEEDBACK_CHARS`] characters.
-fn tail(output: &str) -> String {
+/// most [`FEEDBACK_CHARS`] characters. What a follow-up shows of a failing
+/// check, and what a supervisor puts in its own feedback.
+#[must_use]
+pub fn tail(output: &str) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let kept = lines[lines.len().saturating_sub(FEEDBACK_LINES)..].join("\n");
     let skip = kept.chars().count().saturating_sub(FEEDBACK_CHARS);

@@ -179,8 +179,9 @@ pub enum SolveError {
         /// The offered environment's snapshot.
         offered_snapshot: Option<Digest>,
     },
-    /// The offered environment's record could not be computed.
-    #[error("cannot record the environment: {0}")]
+    /// The offered environment could not be recorded, laid out or read back
+    /// from.
+    #[error("the environment failed: {0}")]
     Environment(#[from] SandboxError),
     /// sven could not build or run the agent.
     #[error("the solver could not run: {0}")]
