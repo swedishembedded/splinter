@@ -473,7 +473,7 @@ fn learn_into_a_named_adapter_publishes_it_where_the_next_run_continues_it() {
     // The roles nobody named are played by the checkpoint the adapter is
     // trained on, not by whatever the configuration's policy is.
     let base_identity = ctx.selection(&policy_of(None)).unwrap().identity();
-    for role in [Role::Teacher, Role::Generator] {
+    for role in [Role::Teacher, Role::Generator, Role::Critic] {
         assert_eq!(report.roles[&role], base_identity, "{role:?}");
     }
     let said = report
