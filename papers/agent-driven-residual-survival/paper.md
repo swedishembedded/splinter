@@ -1335,7 +1335,8 @@ splinter-lifecourse compare --data <data> --a external:spline-cox-net-all --b ex
 splinter-lifecourse recipe subsample --data <data> --share 0.25
 python -I samples/lifecourse/baselines/run.py ... --train-ids <data>/recipe/_subsamples/p25-s1 --repeat 0
 splinter-lifecourse recipe score --data <data> --name spline-cox-net-all-p25 --made-of "..."
-# learning from accepted runs, and judging the candidate
+# learning from accepted runs, and judging the candidate (the dataset, train and models verbs ran at splinter
+# commit 1f16215; the loop sample has since handed training and release to `practice`, as its README says)
 agent-loop dataset --run <accepted run> ... --out train.jsonl
 agent-loop train --dataset train.jsonl --base local:Qwen/Qwen3-8B --steps 30 --rank 16
 samples/agent/loop/fixtures/eval-candidate.sh <out> <model-ref> anagrams:1 bisect:1 ...

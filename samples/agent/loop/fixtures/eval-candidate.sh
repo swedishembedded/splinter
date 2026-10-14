@@ -8,14 +8,17 @@
 # services by sending an email to info@swedishembedded.com.
 
 # Runs one model reference over seeded fixture tasks, one `agent-loop run`
-# each, and keeps every run's `--json` outcome as <out>/results/<family>-s<seed>.json,
-# the shape `agent-loop models judge` pairs. Run it once for the model in
-# use and once for a candidate, with the same task list, and judge the two
-# result directories.
+# each, and keeps every run's `--json` outcome as
+# <out>/results/<family>-s<seed>.json. Run it once for the model in use and
+# once for a candidate (`local:<checkpoint>+<adapter>`) over the same task
+# list and compare the two result directories' accepted counts, which this
+# script prints. A comparison that can release or block a model is the
+# release gate's, over the exam `splinter practice` reserved.
 #
 # Usage: eval-candidate.sh <out-dir> <model-ref> <family:seed>...
-# Environment: AGENT_LOOP (the binary, default `agent-loop` on PATH), and
-# EXTRA_ARGS (further global options, for example "--temperature 0.7").
+# Environment: AGENT_LOOP (the binary, default `agent-loop` on PATH),
+# EXTRA_ARGS (further global options, for example "--temperature 0.7"),
+# MAX_ATTEMPTS, ATTEMPT_SECS and TOTAL_SECS (the run's limits).
 set -uo pipefail
 
 out=${1:?out dir}; model=${2:?model reference}; shift 2
@@ -38,3 +41,6 @@ for spec in "$@"; do
         --json > "$out/results/$name.json" 2> "$out/results/$name.err"
     echo "$name: $(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['status'])" "$out/results/$name.json")"
 done
+accepted=$(grep -l '"status": "accepted"' "$out"/results/*.json 2> /dev/null | wc -l)
+total=$(ls "$out"/results/*.json 2> /dev/null | wc -l)
+echo "accepted $accepted of $total"

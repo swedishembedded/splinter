@@ -58,38 +58,22 @@ The workspace must be a committed git repository; it is never edited. The
 candidate lives in `work/` of the run; `apply` applies the patch of an
 accepted run to the repository, which must still be clean at the baseline.
 
-## Learning from accepted runs
+## Where learning went
 
-Only a run that was **accepted, unaided and on a local model** offers
-training records, and only its accepted attempt: a rejected patch teaches a
-ranker, not a generator, and a hinted or remote-model run is not evidence of
-what the local model can do alone. `dataset` writes the records in brain's
-chat format with a manifest saying what became of every run offered.
-`train` fits a LoRA adapter on them (the trainer, optimiser and adapter
-format are brain's) and registers it as a **candidate**; a candidate is never
-the model in use. `models judge` decides by a rule fixed in the code before
-any result: the same tasks run once with the model in use and once with the
-candidate (directories of `run --json` outputs, same file names), at least
-eight paired tasks, and a one-sided sign test over the tasks only one of the
-two solved. A rejected candidate stays on record with the numbers that
-rejected it. Promotion keeps what it replaced, so `rollback` returns to it.
+The loop supervises one task; it does not train. Training from agent work is
+`splinter practice` (and the verbs it is made of), which solves tasks through
+the same worker, grades them with hidden material, writes the `sft-step`
+view of what its own checks confirmed, trains and releases through the gate:
 
-```sh
-agent-loop dataset --outcomes runs-json/ --out train.jsonl
-agent-loop train   --dataset train.jsonl --steps 60 --rank 16
-agent-loop models list
-agent-loop models judge --candidate <version> --baseline-results base-json/ --candidate-results cand-json/
-agent-loop models current      # the model reference to run with now
-agent-loop models rollback
-```
+| The loop used to | Now |
+|---|---|
+| `dataset`: records from accepted runs | `splinter dataset build` with the `sft-step` view, from the experiences `practice` verified |
+| `train`: an adapter on those records | `splinter train` (and the training stage of `practice`) |
+| `models list`, `judge`, `current`, `rollback` | the release store: `splinter release` runs the gate over the exam `practice` reserved and moves the alias; `splinter rollback` moves it back |
 
-The results `models judge` pairs come from running the model in use and the
-candidate over the same tasks. `fixtures/eval-candidate.sh <out> <model-ref>
-family:seed...` runs each task of a list (families are those of
-`fixtures/families.py list`) and keeps each outcome as
-`<out>/results/<family>-s<seed>.json`; give the candidate's reference as
-`local:<checkpoint>+<adapter>`.
-
+`fixtures/families.py` renders the twelve seeded-bug families; they are
+imported as workspace tasks for `practice`, and `fixtures/eval-candidate.sh`
+runs a model reference over a list of them as plain loop runs.
 
 ## What a run keeps (`~/.sven/loop/runs/<run>/`)
 
