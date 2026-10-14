@@ -17,6 +17,7 @@ use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::TypedCall;
 
 use crate::cache::StoredArticle;
+pub use crate::gates::MinedFacts;
 use crate::gates::{told_paragraphs, Article, Chose, QUOTE_RUN_WORDS};
 use crate::scenario::Archetype;
 
@@ -25,7 +26,7 @@ pub const MIN_BRIEFING_WORDS: usize = 20;
 
 const ROLE: &str = "You read a steward's essay and set out what it says, exactly.";
 
-const TASK: &str = "Below is a steward's essay and the list of the cases it tells. For each case in `cases` give: `briefing`, 40 to 90 words, plain and neutral, of the facts the essay states about the situation BEFORE he acted - the stakes, the pressure of time, what the charter allowed, how long the matter would bind, whether it could be undone, whether families were hurt, whether an outside house offered help - and NOTHING about what he did or why, in your own words and not the essay's; `offer_made`: whether an outside house offered help; `chose`: `act_alone`, `consult_then_act`, `defer_to_outsider`, `hold_and_wait` or `unclear`; `reasons`: up to three sentences copied word for word from the essay in which the narrator says why he did what he did. Reply as JSON with `cases`.";
+const TASK: &str = "Below is a steward's essay and the list of the cases it tells. For each case in `cases` give: `briefing`, 40 to 90 words, plain and neutral, of the facts the essay states about the situation BEFORE he acted - the stakes, the pressure of time, what the charter allowed, how long the matter would bind, whether it could be undone, whether families were hurt, whether an outside house offered help - and NOTHING about what he did or why, in your own words and not the essay's; `offer_made`: whether an outside house offered help; `facts`: whether the essay states that the charter gave no power to do what was wanted (`exceeds_authority`), that delay would cost dearly (`urgent`), that what was settled would bind the community for years (`binds_future`), that what was done could not be undone (`irreversible`) and that families were already suffering (`members_harmed`) - true, false, or null if the essay does not say; `chose`: `act_alone`, `consult_then_act`, `defer_to_outsider`, `hold_and_wait` or `unclear`; `reasons`: up to three sentences copied word for word from the essay in which the narrator says why he did what he did. Reply as JSON with `cases`.";
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(900);
 const MAX_TOKENS: u64 = 6000;
@@ -39,6 +40,9 @@ pub struct MinedCase {
     pub briefing: String,
     /// Whether an outside house offered help.
     pub offer_made: bool,
+    /// The other facts of the case, as the essay states them.
+    #[serde(default)]
+    pub facts: MinedFacts,
     /// What the narrator did.
     pub chose: Chose,
     /// Sentences from the essay that give his reasons.
@@ -61,6 +65,9 @@ pub struct Verified {
     pub briefing: String,
     /// Whether an outside house offered help.
     pub offer_made: bool,
+    /// The other facts of the case, as the essay states them.
+    #[serde(default)]
+    pub facts: MinedFacts,
     /// What the narrator did.
     pub chose: Archetype,
     /// The reasons found word for word in the article.
@@ -124,6 +131,7 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
                 case: name.clone(),
                 briefing: found.briefing.trim().to_string(),
                 offer_made: found.offer_made,
+                facts: found.facts,
                 chose,
                 reasons: kept.into_iter().map(|(r, _)| r).collect(),
                 dropped: lost.len(),

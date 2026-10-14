@@ -24,7 +24,7 @@ use splinter_sdk::agent::sven::model::{
 use synthetic_author::arms::{ask, run_items};
 use synthetic_author::dataset::records_for;
 use synthetic_author::exam::items;
-use synthetic_author::mine::Verified;
+use synthetic_author::mine::{MinedFacts, Verified};
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::Archetype;
 use synthetic_author::tools::TRAINING;
@@ -36,6 +36,7 @@ fn decision(case: &str, chose: Archetype, offer: bool, reasons: &[&str]) -> Veri
             "A matter of the winter stores, which the community must settle before the roads close."
                 .into(),
         offer_made: offer,
+        facts: MinedFacts::default(),
         chose,
         reasons: reasons.iter().map(|r| (*r).to_string()).collect(),
         dropped: 0,
@@ -261,4 +262,62 @@ fn a_report_gives_each_arm_s_accuracy_by_kind_and_a_paired_test_between_arms() {
     // 20 items the tuned arm got right and the base did not, none the other way.
     assert!(text.contains("tuned over base: 20 of 20"), "{text}");
     assert!(text.contains("p = "), "{text}");
+}
+
+fn full_facts() -> MinedFacts {
+    MinedFacts {
+        exceeds_authority: Some(true),
+        urgent: Some(false),
+        binds_future: Some(true),
+        irreversible: Some(false),
+        members_harmed: Some(true),
+    }
+}
+
+#[test]
+fn a_decision_whose_six_facts_were_all_read_also_makes_a_record_in_the_examination_s_own_words() {
+    let mut d = decision(
+        "the Dunmere granary",
+        Archetype::DeferToOutsider,
+        true,
+        &["We took the help."],
+    );
+    d.facts = full_facts();
+    let records = records_for(7, "g", &d);
+    assert_eq!(
+        records.len(),
+        2 * TRAINING.len(),
+        "one in the reader's briefing, one in the facts' words"
+    );
+    let users: Vec<String> = records
+        .iter()
+        .map(|r| r["messages"][1]["content"].as_str().unwrap().to_string())
+        .collect();
+    // The facts' words state each fact the reader found, and nothing it did not.
+    let templated = users
+        .iter()
+        .find(|u| u.contains("gives no power"))
+        .expect("a templated record");
+    assert!(
+        templated.contains("Whatever is settled will bind the community for a generation"),
+        "{templated}"
+    );
+    assert!(
+        templated.contains("There is no pressing hurry"),
+        "{templated}"
+    );
+    assert!(
+        templated.contains("Several families are already suffering"),
+        "{templated}"
+    );
+}
+
+#[test]
+fn a_decision_with_a_fact_unread_makes_only_the_records_in_the_readers_briefing() {
+    let mut d = decision("the Osmere ferry", Archetype::HoldAndWait, false, &[]);
+    d.facts = MinedFacts {
+        urgent: None,
+        ..full_facts()
+    };
+    assert_eq!(records_for(7, "g", &d).len(), TRAINING.len());
 }

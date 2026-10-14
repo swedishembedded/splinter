@@ -19,7 +19,7 @@
 use serde_json::json;
 use synthetic_author::cache::StoredArticle;
 use synthetic_author::gates::{Chose, Reading};
-use synthetic_author::mine::{verify, Mined, MinedCase};
+use synthetic_author::mine::{verify, Mined, MinedCase, MinedFacts};
 use synthetic_author::prompts::{render, SYSTEM};
 use synthetic_author::records::chat_record;
 use synthetic_author::scenario::Archetype;
@@ -147,6 +147,7 @@ fn mined(case: &str, briefing: &str, chose: Chose, reasons: &[&str]) -> MinedCas
         case: case.into(),
         briefing: briefing.into(),
         offer_made: true,
+        facts: MinedFacts::default(),
         chose,
         reasons: reasons.iter().map(|s| (*s).to_string()).collect(),
     }

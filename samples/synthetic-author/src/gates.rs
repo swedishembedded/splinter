@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::episode::{did_phrase, Episode};
 use crate::persona::{Belief, Persona, Polarity, Tenet};
-use crate::scenario::{Archetype, TOPICS};
+use crate::scenario::{Archetype, Features, TOPICS};
 
 /// How many consecutive words of a belief an article may not repeat.
 pub const QUOTE_RUN_WORDS: usize = 6;
@@ -46,6 +46,13 @@ pub enum Rejection {
         /// The start of the run it repeats.
         run: String,
     },
+    /// The essay leaves a fact of the case out or states it wrongly.
+    MisstatedFact {
+        /// The case.
+        case: String,
+        /// The fact.
+        fact: &'static str,
+    },
     /// An episode's case is not mentioned.
     MissingCase {
         /// The case it leaves out.
@@ -66,6 +73,12 @@ impl std::fmt::Display for Rejection {
             Self::TooShort { words, min } => write!(f, "{words} words, at least {min} needed"),
             Self::QuotesBelief { statement } => write!(f, "repeats a belief: {statement}"),
             Self::CopiesBrief { run } => write!(f, "repeats the brief: {run}"),
+            Self::MisstatedFact { case, fact } => {
+                write!(
+                    f,
+                    "does not state, or states wrongly, whether {fact} for {case}"
+                )
+            }
             Self::MissingCase { case } => write!(f, "does not tell {case}"),
             Self::WrongDecision { case, expected } => {
                 write!(f, "does not show the decision {expected:?} for {case}")
@@ -310,6 +323,37 @@ impl Chose {
     }
 }
 
+/// The facts of a case as an essay states them; one the essay does not state is
+/// left out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MinedFacts {
+    /// The charter gave no power to do what was wanted.
+    pub exceeds_authority: Option<bool>,
+    /// Delay would cost dearly.
+    pub urgent: Option<bool>,
+    /// What was settled would bind the community for years.
+    pub binds_future: Option<bool>,
+    /// What was done could not be undone.
+    pub irreversible: Option<bool>,
+    /// Families were already suffering.
+    pub members_harmed: Option<bool>,
+}
+
+impl MinedFacts {
+    /// The facts as a situation, if the essay stated all of them.
+    #[must_use]
+    pub fn features(&self, offer_made: bool) -> Option<Features> {
+        Some(Features {
+            exceeds_authority: self.exceeds_authority?,
+            urgent: self.urgent?,
+            binds_future: self.binds_future?,
+            irreversible: self.irreversible?,
+            members_harmed: self.members_harmed?,
+            outsider_offers_help: offer_made,
+        })
+    }
+}
+
 /// One case as a reader read it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ReadCase {
@@ -317,6 +361,12 @@ pub struct ReadCase {
     pub case: String,
     /// What the narrator did in it.
     pub chose: Chose,
+    /// Whether an outside house offered help, if the essay says.
+    #[serde(default)]
+    pub offer_made: Option<bool>,
+    /// The other facts of the case, as the essay states them.
+    #[serde(default)]
+    pub facts: MinedFacts,
 }
 
 /// A reader's reading of an article.
@@ -347,6 +397,33 @@ pub fn check_reading(
                 case: episode.case.name.clone(),
                 expected,
             });
+        }
+        let truth = &episode.scenario.features;
+        let said = reading
+            .cases
+            .iter()
+            .find(|c| c.case.eq_ignore_ascii_case(&episode.case.name))
+            .map(|c| (c.offer_made, c.facts));
+        let (offer, facts) = said.unwrap_or_default();
+        let checks = [
+            ("offer", offer, truth.outsider_offers_help),
+            (
+                "exceeds_authority",
+                facts.exceeds_authority,
+                truth.exceeds_authority,
+            ),
+            ("urgent", facts.urgent, truth.urgent),
+            ("binds_future", facts.binds_future, truth.binds_future),
+            ("irreversible", facts.irreversible, truth.irreversible),
+            ("members_harmed", facts.members_harmed, truth.members_harmed),
+        ];
+        for (fact, said, truth) in checks {
+            if said != Some(truth) {
+                return Err(Rejection::MisstatedFact {
+                    case: episode.case.name.clone(),
+                    fact,
+                });
+            }
         }
     }
     Ok(())

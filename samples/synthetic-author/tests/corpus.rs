@@ -18,7 +18,9 @@
 #![allow(clippy::unwrap_used)]
 
 use synthetic_author::episode::{episodes_for, Episode};
-use synthetic_author::gates::{check, Article, Rejection};
+use synthetic_author::gates::{
+    check, check_reading, Article, Chose, MinedFacts, ReadCase, Reading, Rejection,
+};
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::Archetype;
 
@@ -269,4 +271,91 @@ fn an_article_that_repeats_the_private_note_of_a_belief_is_refused_too() {
         matches!(verdict, Err(Rejection::QuotesBelief { .. })),
         "{verdict:?}"
     );
+}
+
+/// What a faithful reader reports of `eps`: the decision and the facts as they are.
+fn faithful(p: &Persona, eps: &[Episode]) -> Reading {
+    Reading {
+        cases: eps
+            .iter()
+            .map(|e| {
+                let f = &e.scenario.features;
+                ReadCase {
+                    case: e.case.name.clone(),
+                    chose: match p.decide(&e.scenario).choice {
+                        Archetype::ActAlone => Chose::ActAlone,
+                        Archetype::ConsultThenAct => Chose::ConsultThenAct,
+                        Archetype::DeferToOutsider => Chose::DeferToOutsider,
+                        Archetype::HoldAndWait => Chose::HoldAndWait,
+                    },
+                    offer_made: Some(f.outsider_offers_help),
+                    facts: MinedFacts {
+                        exceeds_authority: Some(f.exceeds_authority),
+                        urgent: Some(f.urgent),
+                        binds_future: Some(f.binds_future),
+                        irreversible: Some(f.irreversible),
+                        members_harmed: Some(f.members_harmed),
+                    },
+                }
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn a_reading_that_has_the_decision_and_every_fact_right_passes() {
+    let (p, eps) = episodes(5, 0, 3);
+    assert_eq!(check_reading(&faithful(&p, &eps), &p, &eps), Ok(()));
+}
+
+#[test]
+fn an_essay_that_leaves_a_fact_out_or_misstates_one_is_refused() {
+    let (p, eps) = episodes(5, 0, 3);
+    let mut left_out = faithful(&p, &eps);
+    left_out.cases[1].facts.irreversible = None;
+    assert!(matches!(
+        check_reading(&left_out, &p, &eps),
+        Err(Rejection::MisstatedFact {
+            fact: "irreversible",
+            ..
+        })
+    ));
+    let mut wrong = faithful(&p, &eps);
+    let truth = eps[2].scenario.features.urgent;
+    wrong.cases[2].facts.urgent = Some(!truth);
+    assert!(matches!(
+        check_reading(&wrong, &p, &eps),
+        Err(Rejection::MisstatedFact { fact: "urgent", .. })
+    ));
+    let mut offer = faithful(&p, &eps);
+    offer.cases[0].offer_made = Some(!eps[0].scenario.features.outsider_offers_help);
+    assert!(matches!(
+        check_reading(&offer, &p, &eps),
+        Err(Rejection::MisstatedFact { fact: "offer", .. })
+    ));
+}
+
+#[test]
+fn the_case_file_says_each_fact_in_plain_words_that_cannot_be_read_backwards() {
+    let (_, eps) = episodes(5, 0, 8);
+    for e in &eps {
+        let file = e.case_file();
+        let f = &e.scenario.features;
+        assert_eq!(
+            file["once_done"],
+            if f.irreversible {
+                "cannot be undone"
+            } else {
+                "can be reversed next season"
+            }
+        );
+        assert_eq!(
+            file["binds_the_community_for"],
+            if f.binds_future {
+                "a generation"
+            } else {
+                "only this year"
+            }
+        );
+    }
 }

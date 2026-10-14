@@ -9,7 +9,7 @@ use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::facts::{case, Case};
 use crate::persona::Persona;
-use crate::scenario::{held_out_combo, scenario_pool, Archetype, Scenario, TOPICS};
+use crate::scenario::{held_out_combo, scenario_pool, Archetype, Features, Scenario, TOPICS};
 
 /// Keeps the situations of a corpus apart from those of an exam drawn from
 /// the same seed.
@@ -56,11 +56,22 @@ pub fn did_phrase(option: Archetype, case: &Case) -> String {
 /// The situation in words: the facts of the case and of the scenario.
 #[must_use]
 pub fn situation_text(scenario: &Scenario, case: &Case) -> String {
-    let f = &scenario.features;
-    let mut s = format!(
-        "In the year {}, a matter arose at {} over {}: {}. About {} households depend on it. ",
-        case.year, case.place, case.name, TOPICS[scenario.topic], case.households
-    );
+    format!(
+        "In the year {}, a matter arose at {} over {}: {}. About {} households depend on it. {}",
+        case.year,
+        case.place,
+        case.name,
+        TOPICS[scenario.topic],
+        case.households,
+        feature_sentences(&scenario.features, &case.house)
+    )
+}
+
+/// The facts of a situation as sentences, one for each, in the words every
+/// situation of the examination is put in. `house` is whoever offers help.
+#[must_use]
+pub fn feature_sentences(f: &Features, house: &str) -> String {
+    let mut s = String::new();
     s.push_str(if f.exceeds_authority {
         "The charter of the stewardship gives no power to do what is wanted. "
     } else {
@@ -87,7 +98,7 @@ pub fn situation_text(scenario: &Scenario, case: &Case) -> String {
         "No member of the community has yet been hurt by it. "
     });
     if f.outsider_offers_help {
-        s.push_str(&format!("{} has offered its help. ", case.house));
+        s.push_str(&format!("{house} has offered its help. "));
     }
     s.trim_end().to_string()
 }
@@ -106,8 +117,8 @@ impl Episode {
             "matter": TOPICS[self.scenario.topic],
             "authority": if f.exceeds_authority { "beyond what the charter grants" } else { "within what the charter grants" },
             "time_pressure": if f.urgent { "severe" } else { "none" },
-            "reach": if f.binds_future { "a generation" } else { "one year" },
-            "undoable": !f.irreversible,
+            "binds_the_community_for": if f.binds_future { "a generation" } else { "only this year" },
+            "once_done": if f.irreversible { "cannot be undone" } else { "can be reversed next season" },
             "families_hurt_so_far": f.members_harmed,
             "offer_from": if f.outsider_offers_help { serde_json::json!(self.case.house) } else { serde_json::Value::Null },
         })
