@@ -239,6 +239,42 @@ fn an_item_written_twice_by_overlapping_runs_is_counted_once() {
     );
 }
 
+#[test]
+fn where_two_authors_would_decide_differently_a_model_is_counted_with_the_one_it_followed() {
+    use synthetic_author::report::divergence;
+    let persona = Persona::generate(6);
+    let all = items(&persona, 6, 3, &Default::default());
+    let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
+    let dir = std::env::temp_dir().join(format!("synthetic-author-div-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let outcomes = run_items(&provider, "system", &all, &dir.join("arm.jsonl"), 64).unwrap();
+
+    let itself = divergence(&all, &outcomes, &persona);
+    assert_eq!(itself.differing, 0, "an author never differs from itself");
+
+    let rival = persona.opposite();
+    let d = divergence(&all, &outcomes, &rival);
+    assert!(
+        d.differing > 0,
+        "the opposite author decides differently somewhere"
+    );
+    assert_eq!(d.own + d.rival + d.neither, d.differing);
+    let own_right = all
+        .iter()
+        .zip(&outcomes)
+        .filter(|(i, o)| {
+            o.correct
+                && rival.decide(&i.scenario).determined
+                && rival.decide(&i.scenario).choice != i.expected
+        })
+        .count();
+    assert_eq!(
+        d.own, own_right,
+        "the model's own author's answers are the graded-correct ones"
+    );
+}
+
 fn outcome(
     id: usize,
     correct: bool,

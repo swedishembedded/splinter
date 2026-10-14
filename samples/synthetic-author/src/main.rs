@@ -174,6 +174,22 @@ enum Command {
         #[arg(long, default_value = "base,named,principles,tuned")]
         arms: String,
     },
+    /// Count, for each trained author, whose decision it took where another
+    /// author would have decided otherwise.
+    Cross {
+        /// Directory holding one examination cache per author, `author-<seed>`.
+        #[arg(long)]
+        exams: PathBuf,
+        /// The seeds of the authors, comma separated.
+        #[arg(long, value_delimiter = ',')]
+        seeds: Vec<u64>,
+        /// How many articles the corpora were planned with.
+        #[arg(long, default_value_t = 100)]
+        articles: usize,
+        /// Items of each kind of difficulty.
+        #[arg(long, default_value_t = 40)]
+        per_cell: usize,
+    },
     /// Write the author's corpus into a cache directory.
     Corpus {
         /// The seed the author is drawn from.
@@ -455,6 +471,39 @@ fn main() -> anyhow::Result<()> {
             let outcomes = run_arm(&cache, &persona, arm, &provider, &all, max_tokens)?;
             let r = synthetic_author::report::accuracy(&outcomes);
             println!("{}: {}/{} right ({:.3})", arm.name(), r.right, r.n, r.rate);
+            Ok(())
+        }
+        Command::Cross {
+            exams,
+            seeds,
+            articles,
+            per_cell,
+        } => {
+            use synthetic_author::lab::exam_items;
+            println!("| trained on | compared with | situations | its own author | the other author | neither |");
+            println!("|---|---|---|---|---|---|");
+            for &seed in &seeds {
+                let persona = Persona::generate(seed);
+                let items = exam_items(&persona, seed, articles, per_cell);
+                let path = exams
+                    .join(format!("author-{seed}"))
+                    .join("exam")
+                    .join("tuned.jsonl");
+                let outcomes = synthetic_author::arms::read_outcomes(&path)?;
+                let mut rivals: Vec<Persona> = seeds
+                    .iter()
+                    .filter(|&&s| s != seed)
+                    .map(|&s| Persona::generate(s))
+                    .collect();
+                rivals.push(persona.opposite());
+                for rival in &rivals {
+                    let d = synthetic_author::report::divergence(&items, &outcomes, rival);
+                    println!(
+                        "| {} | {} | {} | {} | {} | {} |",
+                        persona.name, rival.name, d.differing, d.own, d.rival, d.neither
+                    );
+                }
+            }
             Ok(())
         }
         Command::Report { cache, arms } => {

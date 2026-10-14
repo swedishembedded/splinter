@@ -10,6 +10,8 @@ use std::fmt::Write as _;
 use splinter_sdk::model::stats::sign_test;
 
 use crate::arms::Outcome;
+use crate::exam::Item;
+use crate::persona::Persona;
 
 /// A rate and the 95% Wilson interval around it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -119,4 +121,51 @@ pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)]) -> String
         );
     }
     text
+}
+
+/// How a model's answers divide, on the situations where a second author
+/// would decide otherwise than the author it was trained on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Divergence {
+    /// Situations where both authors are determined and decide differently.
+    pub differing: usize,
+    /// Answers that take the trained author's decision.
+    pub own: usize,
+    /// Answers that take the second author's decision.
+    pub rival: usize,
+    /// Answers that take neither, or make no call.
+    pub neither: usize,
+}
+
+/// Counts, over the items of `items` where `rival` is determined and decides
+/// differently from the author the items were drawn for, whose decision each
+/// of `outcomes` took.
+#[must_use]
+pub fn divergence(items: &[Item], outcomes: &[Outcome], rival: &Persona) -> Divergence {
+    let mut d = Divergence {
+        differing: 0,
+        own: 0,
+        rival: 0,
+        neither: 0,
+    };
+    for item in items {
+        let other = rival.decide(&item.scenario);
+        if !other.determined || other.choice == item.expected {
+            continue;
+        }
+        let Some(outcome) = outcomes.iter().find(|o| o.id == item.id) else {
+            continue;
+        };
+        d.differing += 1;
+        let taken = outcome.call.as_ref().and_then(|c| {
+            item.schema
+                .read(c["name"].as_str()?, &c["arguments"], &item.options)
+        });
+        match taken {
+            Some(t) if t == item.expected => d.own += 1,
+            Some(t) if t == other.choice => d.rival += 1,
+            _ => d.neither += 1,
+        }
+    }
+    d
 }
