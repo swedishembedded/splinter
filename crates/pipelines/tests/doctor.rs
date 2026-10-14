@@ -77,3 +77,53 @@ fn a_role_whose_model_does_not_resolve_fails_the_report() {
     assert_eq!(verdict(&report, "role:policy"), Verdict::Fail);
     assert!(!report.ready());
 }
+
+mod gpu {
+    use splinter_model::device::GpuCard;
+    use splinter_pipelines::doctor::{gpu_fit, Verdict};
+
+    const GIB: u64 = 1 << 30;
+
+    fn card(index: u32, free_gib: u64, measured: bool) -> GpuCard {
+        GpuCard {
+            index,
+            total_bytes: 24 * GIB,
+            free_bytes: free_gib * GIB,
+            measured,
+        }
+    }
+
+    #[test]
+    fn a_machine_without_a_gpu_warns_that_the_run_would_use_the_cpu() {
+        let check = gpu_fit(&[], GIB);
+        assert_eq!(check.verdict, Verdict::Warn);
+        assert!(check.detail.contains("no GPU") && check.detail.contains("CPU"));
+        assert!(check.fix.is_some());
+    }
+
+    #[test]
+    fn a_card_with_room_for_the_weights_is_fine() {
+        let check = gpu_fit(&[card(0, 2, true), card(1, 20, true)], 4 * GIB);
+        assert_eq!(check.verdict, Verdict::Ok, "{check:?}");
+        assert!(check.detail.contains("gpu1"), "{}", check.detail);
+    }
+
+    #[test]
+    fn cards_too_full_for_the_weights_warn_that_brain_will_fall_back_to_the_cpu() {
+        let check = gpu_fit(&[card(0, 2, true), card(1, 3, true)], 4 * GIB);
+        assert_eq!(check.verdict, Verdict::Warn);
+        assert!(check.detail.contains("CPU"), "{}", check.detail);
+        assert!(check.fix.is_some());
+    }
+
+    #[test]
+    fn free_memory_that_could_not_be_read_is_never_presented_as_a_measurement() {
+        let check = gpu_fit(&[card(0, 24, false)], GIB);
+        assert_eq!(check.verdict, Verdict::Warn);
+        assert!(
+            check.detail.contains("could not be read"),
+            "{}",
+            check.detail
+        );
+    }
+}
