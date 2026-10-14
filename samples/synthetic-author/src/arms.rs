@@ -8,17 +8,16 @@
 //! determine, as a string. A reply without a call is a wrong answer.
 
 use std::collections::BTreeMap;
-use std::io::Write as _;
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::Context as _;
 use futures::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use splinter_sdk::agent::sven::model::{
     CompletionRequest, Message, ModelProvider, ResponseEvent, ToolSchema,
 };
+use splinter_sdk::store::jsonl;
 
 use crate::exam::{grade, Item};
 use crate::prompts::render;
@@ -99,23 +98,7 @@ pub async fn ask(
 /// # Errors
 /// The file cannot be read or a line is not an outcome.
 pub fn read_outcomes(path: &Path) -> anyhow::Result<Vec<Outcome>> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let mut seen = std::collections::HashSet::new();
-    let mut outcomes = Vec::new();
-    for line in std::fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?
-        .lines()
-    {
-        let outcome: Outcome =
-            serde_json::from_str(line).with_context(|| format!("a line of {}", path.display()))?;
-        // Runs that overlap append the same item twice; the first answer stands.
-        if seen.insert(outcome.id.clone()) {
-            outcomes.push(outcome);
-        }
-    }
-    Ok(outcomes)
+    Ok(jsonl::read_unique(path, |o: &Outcome| o.id.clone())?)
 }
 
 /// Puts every item of `items` to `provider` under `system`, appending an outcome
@@ -147,10 +130,7 @@ pub fn run_items_with(
 ) -> anyhow::Result<Vec<Outcome>> {
     let mut done = read_outcomes(out)?;
     let runtime = tokio::runtime::Runtime::new()?;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
+    let log = jsonl::Log::open(out)?;
     for item in items {
         if done.iter().any(|o| o.id == item.id) {
             continue;
@@ -164,9 +144,7 @@ pub fn run_items_with(
             tool_seen: item.tool_seen,
             call: call.map(|(name, args)| serde_json::json!({"name": name, "arguments": args})),
         };
-        let mut line = serde_json::to_string(&outcome)?;
-        line.push('\n');
-        file.write_all(line.as_bytes())?;
+        log.append(&outcome)?;
         done.push(outcome);
     }
     Ok(done)

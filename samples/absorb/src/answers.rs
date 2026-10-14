@@ -15,12 +15,11 @@
 //! measured.
 
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::solve::Model;
+use splinter_sdk::store::jsonl;
 use splinter_sdk::Context;
 
 use crate::facts::Fact;
@@ -90,29 +89,6 @@ struct Failure {
     why: String,
 }
 
-fn read_jsonl<T: for<'de> Deserialize<'de>>(path: &Path) -> anyhow::Result<Vec<T>> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    std::fs::read_to_string(path)?
-        .lines()
-        .enumerate()
-        .map(|(n, l)| {
-            serde_json::from_str(l).with_context(|| format!("{} line {}", path.display(), n + 1))
-        })
-        .collect()
-}
-
-fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
-    writeln!(file, "{}", serde_json::to_string(value)?)?;
-    file.flush()?;
-    Ok(())
-}
-
 /// Whether another answer to `fact` could still change how it is classed,
 /// given the `answers` so far (`None` for a run that gave none). A fact a role
 /// of wrong facts may take is out once an answer holds every key; one a known
@@ -161,7 +137,7 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
         plan.out.join("screening-probe-answers.jsonl"),
     ];
     let reworded_path = plan.out.join("screening-rewordings.jsonl");
-    let mut lines: Vec<Line> = read_jsonl(&paths[0])?;
+    let mut lines: Vec<Line> = jsonl::read(&paths[0])?;
     for (at, fact) in plan.facts.iter().enumerate() {
         for n in 0..=SAMPLES {
             if lines.iter().any(|l| l.fact == fact.id && l.n == n) {
@@ -195,16 +171,16 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
                 decoding,
                 answer,
             };
-            append_jsonl(&paths[0], &line)?;
+            jsonl::Log::open(&paths[0])?.append(&line)?;
             lines.push(line);
         }
     }
 
     let mut probes = read_draft(plan.out)?;
-    let mut probe_lines: Vec<ProbeLine> = read_jsonl(&paths[1])?;
-    let mut rewordings: Vec<Reworded> = read_jsonl(&reworded_path)?;
+    let mut probe_lines: Vec<ProbeLine> = jsonl::read(&paths[1])?;
+    let mut rewordings: Vec<Reworded> = jsonl::read(&reworded_path)?;
     let failures_path = plan.out.join("screening-unwritable.jsonl");
-    let mut unwritable: Vec<Failure> = read_jsonl(&failures_path)?;
+    let mut unwritable: Vec<Failure> = jsonl::read(&failures_path)?;
     for fact in plan.facts.iter().filter(|f| wants_probes(f)) {
         let answers: Vec<&Line> = lines.iter().filter(|l| l.fact == fact.id).collect();
         let every_answer_lacks_a_key = answers.iter().all(|l| {
@@ -247,7 +223,7 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
                         fact: fact.id.clone(),
                         statement,
                     };
-                    append_jsonl(&reworded_path, &line)?;
+                    jsonl::Log::open(&reworded_path)?.append(&line)?;
                     rewordings.push(line);
                 }
             }
@@ -258,7 +234,7 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
                     fact: fact.id.clone(),
                     why,
                 };
-                append_jsonl(&failures_path, &failure)?;
+                jsonl::Log::open(&failures_path)?.append(&failure)?;
                 unwritable.push(failure);
                 continue;
             }
@@ -280,7 +256,7 @@ pub fn collect(ctx: &Context, policy: &Policy, plan: &Plan<'_>) -> anyhow::Resul
                 kind: probe.kind,
                 answer,
             };
-            append_jsonl(&paths[1], &line)?;
+            jsonl::Log::open(&paths[1])?.append(&line)?;
             probe_lines.push(line);
         }
     }

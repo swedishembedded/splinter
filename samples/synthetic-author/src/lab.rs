@@ -7,7 +7,6 @@
 //! again, or run on another machine, without the others.
 
 use std::collections::BTreeSet;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -15,6 +14,7 @@ use std::sync::{Mutex, PoisonError};
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
+use splinter_sdk::store::jsonl;
 
 use crate::arms::{run_items, run_items_with, Outcome};
 use crate::cache::{Cache, StoredArticle};
@@ -56,14 +56,7 @@ fn decisions_path(cache: &Cache) -> PathBuf {
 /// # Errors
 /// The file cannot be read.
 pub fn read_mined(cache: &Cache) -> anyhow::Result<Vec<Mined>> {
-    let path = decisions_path(cache);
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    std::fs::read_to_string(&path)?
-        .lines()
-        .map(|l| serde_json::from_str(l).context("a line of decisions.jsonl"))
-        .collect()
+    Ok(jsonl::read(&decisions_path(cache))?)
 }
 
 /// Reads the decisions out of every article not yet read, `workers` at a time.
@@ -78,12 +71,7 @@ pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow:
         .iter()
         .filter(|a| !done.contains(&a.index))
         .collect();
-    let file = Mutex::new(
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(decisions_path(cache))?,
-    );
+    let log = jsonl::Log::open(&decisions_path(cache))?;
     let next = AtomicUsize::new(0);
     let failure: Mutex<Option<anyhow::Error>> = Mutex::new(None);
     std::thread::scope(|scope| {
@@ -102,7 +90,6 @@ pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow:
                         return;
                     }
                 };
-                let mut text = String::new();
                 for (case, result) in article.cases.iter().zip(lines) {
                     let result = result.map_or_else(MinedResult::Refused, MinedResult::Kept);
                     let line = Mined {
@@ -110,13 +97,10 @@ pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow:
                         case: case.clone(),
                         result,
                     };
-                    text.push_str(&serde_json::to_string(&line).unwrap_or_default());
-                    text.push('\n');
-                }
-                let mut file = file.lock().unwrap_or_else(PoisonError::into_inner);
-                if let Err(e) = file.write_all(text.as_bytes()) {
-                    eprintln!("decisions.jsonl: {e}");
-                    return;
+                    if let Err(e) = log.append(&line) {
+                        eprintln!("decisions.jsonl: {e}");
+                        return;
+                    }
                 }
                 eprintln!("article {} read", article.index);
             });
