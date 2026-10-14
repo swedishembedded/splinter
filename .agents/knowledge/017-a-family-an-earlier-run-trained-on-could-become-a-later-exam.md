@@ -17,7 +17,9 @@ family the candidate, or a release it descends from, trained on, counted under
 model learned either. The spec trains what a first run can on a project of six files, reserving
 one, and asks the next run, over the same files and one more, for six exam families
 of seven: none of the families the first run trained on is in the exam, and the
-one it reserved still is.
+one it reserved still is. With the remembered set taken out of the reserve, the
+spec fails on the first assertion: `shop/tier4.py`, a family the first run trained
+on, is in the second run's exam.
 
 How to avoid it: a rule stated in one direction ("what is reserved is never
 trained on") needs its converse enforced where the other side is decided ("what
