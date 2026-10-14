@@ -333,7 +333,26 @@ pub fn learn(
     let adapter = named.map(|(_, adapter)| adapter);
     // A named adapter is published, not gated against a champion.
     let no_release = request.no_release || adapter.is_some();
-    let assignments = roles::assignments(ctx.config(), &request.roles)?;
+    // The roles nobody named are played by the checkpoint a named adapter is
+    // trained on, without the adapter: the model that writes the tasks and
+    // teaches is not the one being made.
+    let mut named_roles = request.roles.clone();
+    if let ModelRef::Local {
+        checkpoint,
+        context_tokens,
+        ..
+    } = &policy
+    {
+        let base = ModelRef::Local {
+            checkpoint: checkpoint.clone(),
+            adapter: None,
+            context_tokens: *context_tokens,
+        };
+        for role in [Role::Teacher, Role::Generator, Role::Planner] {
+            named_roles.entry(role).or_insert_with(|| base.clone());
+        }
+    }
+    let assignments = roles::assignments(ctx.config(), &named_roles)?;
     let teacher = assignments.get(Role::Teacher).clone();
     let generator = assignments.get(Role::Generator).clone();
     let judge = assignments.get(Role::Judge).clone();

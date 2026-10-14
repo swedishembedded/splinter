@@ -38,6 +38,7 @@ use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::{Context, OrchestratorError};
@@ -429,7 +430,8 @@ fn a_run_that_admits_nothing_reports_why_each_proposal_was_rejected() {
 fn learn_into_a_named_adapter_publishes_it_where_the_next_run_continues_it() {
     let (scratch, ctx) = scratch_context("learn-named", policy(), false);
     put_base(&ctx);
-    let base = ctx.config().policy_base.clone();
+    // Not the configured base: the named run trains on a checkpoint of its own.
+    let base = ctx.config().model_store.join("Org").join("Other-8B");
     let policy_of = |adapter: Option<&str>| ModelRef::Local {
         checkpoint: base.display().to_string(),
         adapter: adapter.map(Into::into),
@@ -448,6 +450,7 @@ fn learn_into_a_named_adapter_publishes_it_where_the_next_run_continues_it() {
         sources: vec![manual.display().to_string()],
         goal: Some("know the Frobnicator's electrical limits".into()),
         no_frontier: true,
+        base: Some("Org/Other-8B".into()),
         adapter: Some("maren".into()),
         ..LearnRequest::default()
     };
@@ -467,6 +470,12 @@ fn learn_into_a_named_adapter_publishes_it_where_the_next_run_continues_it() {
         report.release.is_none(),
         "a named adapter is published, not gated"
     );
+    // The roles nobody named are played by the checkpoint the adapter is
+    // trained on, not by whatever the configuration's policy is.
+    let base_identity = ctx.selection(&policy_of(None)).unwrap().identity();
+    for role in [Role::Teacher, Role::Generator] {
+        assert_eq!(report.roles[&role], base_identity, "{role:?}");
+    }
     let said = report
         .published
         .as_ref()
