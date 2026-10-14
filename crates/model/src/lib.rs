@@ -32,8 +32,9 @@
 //!   synthesis, one turn of the cascade, and what a round trip loses.
 //! * [`error`] - why a model could not be loaded, reached or trained.
 //!
-//! Every other crate reaches the model through these types, and these types
-//! reach brain only through its public SDK, the `brain` crate.
+//! Every other crate reaches the model through these types. These types reach
+//! brain: through the SDK's primitives first, and through any other crate of
+//! brain's repository for the state of the machine they run on.
 
 #![warn(missing_docs)]
 

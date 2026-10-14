@@ -1094,8 +1094,12 @@ a run can start here, before one does, and loads no model, uses no network and
 creates nothing under the state root. The checks are `state-writable` (a probe file
 is written and removed in the state root, or in its nearest existing parent when it is
 not created yet), `free-space` (a failure under 1 GiB, a warning under 10 GiB: an
-estimate for a small base, not a bound) and `role:<name>` for each role, which
-fails when the model the role would get does not resolve. `verdict` is `ok`, `warn`
+estimate for a small base, not a bound), `gpu` (a warning when no card has room
+for the policy's weights right now, because brain then runs the model on the CPU
+backend without a word, or when there is no GPU or its free memory cannot be read;
+it counts the weights, not the activations a run adds) and `role:<name>` for each
+role, which fails when the model the role would get does not resolve or its weights
+are not on disk. `verdict` is `ok`, `warn`
 or `fail`, `fix` is `null` for `ok`, and the exit status is 1 when any check fails.
 
 ## Runs

@@ -4991,6 +4991,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "brain",
+ "brain-gpu-core",
  "futures",
  "serde",
  "serde_json",
