@@ -126,7 +126,7 @@ fn check(plan: &Plan, survey: &Survey) -> Result<(), String> {
     if plan.kinds.iter().any(|k| k == "advise") && survey.advice_sections < MIN_ADVICE_SECTIONS {
         return Err(format!(
             "the survey found {} section(s) that read as advice and at least {MIN_ADVICE_SECTIONS} \
-             are needed to teach advice; choose other kinds",
+             are needed to teach advice; choose other kinds, or name the kinds yourself instead of asking for a plan",
             survey.advice_sections
         ));
     }
@@ -135,7 +135,7 @@ fn check(plan: &Plan, survey: &Survey) -> Result<(), String> {
     {
         return Err(format!(
             "the survey found {} section(s) in which the writer judges and at least \
-             {MIN_JUDGMENT_SECTIONS} are needed to teach a conversation; choose other kinds",
+             {MIN_JUDGMENT_SECTIONS} are needed to teach a conversation; choose other kinds, or name the kinds yourself instead of asking for a plan",
             survey.judgment_sections
         ));
     }

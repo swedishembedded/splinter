@@ -247,6 +247,13 @@ impl Report for TasksGenerated {
             let detail: String = r.detail.chars().take(REJECTION_DETAIL_CHARS).collect();
             let _ = writeln!(out, "    {} {}: {}", r.kind, r.reason, detail.trim());
         }
+        if let Some(hint) = generator_hint(
+            self.tasks,
+            self.rejected.values().sum(),
+            !self.calls.is_empty(),
+        ) {
+            let _ = writeln!(out, "  {hint}");
+        }
         for (kind, why) in &self.dropped {
             let _ = writeln!(out, "  gave up on {kind}: {why}");
         }
@@ -255,6 +262,15 @@ impl Report for TasksGenerated {
         }
         out
     }
+}
+
+/// What to say when a model was asked for tasks and none passed admission: the
+/// admission rules are the same for every generator, and a small one often
+/// cannot meet them.
+fn generator_hint(admitted: usize, rejected: usize, generator_asked: bool) -> Option<&'static str> {
+    (generator_asked && admitted == 0 && rejected > 0).then_some(
+        "every proposal was rejected: a small generator often cannot meet the admission rules, so name a stronger one with --generator",
+    )
 }
 
 /// Rejections a task report shows with their detail.
@@ -700,5 +716,25 @@ impl Report for Answer {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generator_hint;
+
+    #[test]
+    fn a_stage_where_a_model_proposed_and_nothing_passed_suggests_a_stronger_generator() {
+        assert!(generator_hint(0, 2, true).unwrap().contains("--generator"));
+    }
+
+    #[test]
+    fn no_hint_when_something_was_admitted_nothing_was_rejected_or_no_model_was_asked() {
+        assert!(generator_hint(1, 2, true).is_none());
+        assert!(generator_hint(0, 0, true).is_none());
+        assert!(
+            generator_hint(0, 2, false).is_none(),
+            "code-built kinds have no generator to blame"
+        );
     }
 }

@@ -13,6 +13,10 @@ use crate::output::{source_line, tally, word, Report};
 
 /// What the plan stage found and chose, on one line.
 fn plan_line(summary: &serde_json::Value) -> String {
+    // A plan that failed its checks carries no survey or choice to describe.
+    if summary["survey"].is_null() {
+        return "no plan was made".to_string();
+    }
     let (survey, plan) = (&summary["survey"], &summary["plan"]);
     let kinds: Vec<&str> = plan["kinds"]
         .as_array()
@@ -537,6 +541,15 @@ mod tests {
             &serde_json::json!({"records": 140, "dataset": "blake3:aa", "voice": null}),
         );
         assert!(!alone.contains("writer"), "{alone}");
+    }
+
+    /// A planner's reply that failed its checks leaves no survey; the progress
+    /// line says so instead of printing a null for every figure.
+    #[test]
+    fn a_failed_plan_stage_does_not_print_null_figures() {
+        let line = stage_line("plan", &serde_json::json!({}));
+        assert!(!line.contains("null"), "{line}");
+        assert_eq!(line, "no plan was made");
     }
 
     #[test]
