@@ -240,3 +240,33 @@ fn the_writer_is_given_a_case_file_of_facts_and_no_finished_sentence_of_the_situ
         assert!(!words.windows(6).any(|w| runs.contains(w)), "{text}");
     }
 }
+
+#[test]
+fn a_belief_is_privately_told_as_a_disposition_that_is_not_its_statement() {
+    for seed in 0..10 {
+        let p = Persona::generate(seed);
+        for b in &p.beliefs {
+            let note = b.note();
+            assert!(note.split_whitespace().count() >= 8, "{note}");
+            assert!(note.starts_with("You "), "{note}");
+            assert_ne!(note, b.statement());
+        }
+    }
+}
+
+#[test]
+fn an_article_that_repeats_the_private_note_of_a_belief_is_refused_too() {
+    let (p, eps) = episodes(5, 0, 3);
+    let mut article = article_for(&p, &eps);
+    // Written in the first person, as a narrator would, the note's words recur.
+    let note = p.beliefs[0].note().replacen("You ", "I ", 1);
+    article
+        .body
+        .push_str(&format!("\n\nAs ever, {}\n\n", note.to_lowercase()));
+    // The first person alone is not a copy of the second; the rest of the words are.
+    let verdict = check(&article, &p, &eps, 100);
+    assert!(
+        matches!(verdict, Err(Rejection::QuotesBelief { .. })),
+        "{verdict:?}"
+    );
+}

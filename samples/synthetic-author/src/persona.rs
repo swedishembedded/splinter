@@ -114,6 +114,28 @@ impl Belief {
         }
     }
 
+    /// The belief as a private note to someone playing the author: a
+    /// disposition in the second person, not a maxim to be delivered.
+    #[must_use]
+    pub fn note(&self) -> &'static str {
+        use Polarity::{Lax, Strict};
+        use Tenet::{Burden, Caution, Consent, Haste, SelfReliance, WithinGrant};
+        match (self.tenet, self.polarity) {
+            (WithinGrant, Strict) => "You keep to the powers your charter gives you, and you will not go past them whatever the emergency, even when it costs you.",
+            (WithinGrant, Lax) => "You treat the charter as a tool for the work and not a fence round it, and you stretch it when the job needs it.",
+            (Consent, Strict) => "You settle with the people anything that will bind them for years, and you are uneasy deciding such things on your own.",
+            (Consent, Lax) => "You decide lasting matters yourself, because you have seen councils talk until the chance was gone.",
+            (SelfReliance, Strict) => "You distrust help that comes from outside, having watched peoples who took it end up serving whoever gave it.",
+            (SelfReliance, Lax) => "You take help from a strong neighbour when it is freely offered, and you think refusing it out of pride is foolish.",
+            (Caution, Strict) => "You go slowly with anything that cannot be undone, and you would rather wait than make a mistake that stays.",
+            (Caution, Lax) => "You think doing nothing has its own costs, and you have seen good chances lost to fear of an irreversible step.",
+            (Burden, Strict) => "When members of the community are being hurt you act at once to protect them and account for it afterwards.",
+            (Burden, Lax) => "You think hardship is carried in common, so when members are hurt you act only with the body's consent and share the load.",
+            (Haste, Strict) => "You count delay in a crisis as the worst fault, and you cannot sit still while things get worse.",
+            (Haste, Lax) => "You believe haste turns a hard decision into a bad one, so even in a crisis you take the matter through the council.",
+        }
+    }
+
     fn verdict(&self, f: &Features, option: Archetype) -> Verdict {
         use Archetype::{ActAlone, ConsultThenAct, DeferToOutsider, HoldAndWait};
         use Polarity::{Lax, Strict};

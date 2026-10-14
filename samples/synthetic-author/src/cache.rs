@@ -143,15 +143,18 @@ impl Cache {
         draft: Option<&Article>,
     ) -> anyhow::Result<()> {
         use std::io::Write as _;
+        // One line, written whole, by one thread at a time.
+        static LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let mut line = serde_json::json!({"article": index, "attempt": attempt, "reason": reason, "draft": draft}).to_string();
+        line.push('\n');
+        let _one_at_a_time = LOG
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(self.dir.join("rejected.jsonl"))?;
-        writeln!(
-            file,
-            "{}",
-            serde_json::json!({"article": index, "attempt": attempt, "reason": reason, "draft": draft})
-        )?;
+        file.write_all(line.as_bytes())?;
         Ok(())
     }
 

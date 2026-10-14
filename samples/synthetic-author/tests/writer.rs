@@ -337,3 +337,30 @@ fn workers_write_every_article_once_and_keep_to_the_call_budget() {
     assert!(summary.calls <= 7, "{summary:?}");
     assert!(summary.stopped.unwrap().contains("calls"));
 }
+
+#[test]
+fn many_threads_noting_refusals_leave_a_log_every_line_of_which_reads() {
+    let cache = std::sync::Arc::new(cache("log"));
+    let handles: Vec<_> = (0..8)
+        .map(|t| {
+            let cache = cache.clone();
+            std::thread::spawn(move || {
+                let draft = synthetic_author::gates::Article {
+                    title: "x".into(),
+                    body: "word ".repeat(4000),
+                };
+                for n in 0..25 {
+                    cache.note_rejected(t, n, "a reason", Some(&draft)).unwrap();
+                }
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap();
+    }
+    let text = std::fs::read_to_string(cache.dir().join("rejected.jsonl")).unwrap();
+    assert_eq!(text.lines().count(), 200);
+    for line in text.lines() {
+        let _: serde_json::Value = serde_json::from_str(line).unwrap();
+    }
+}

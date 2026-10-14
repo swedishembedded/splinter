@@ -149,7 +149,7 @@ fn words(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Every statement a belief can be stated with, held or not.
+/// Every statement and private note a belief can be told with, held or not.
 fn every_statement() -> Vec<&'static str> {
     const TENETS: [Tenet; 6] = [
         Tenet::WithinGrant,
@@ -162,7 +162,12 @@ fn every_statement() -> Vec<&'static str> {
     TENETS
         .iter()
         .flat_map(|&tenet| {
-            [Polarity::Strict, Polarity::Lax].map(|polarity| Belief { tenet, polarity }.statement())
+            [Polarity::Strict, Polarity::Lax]
+                .into_iter()
+                .flat_map(move |polarity| {
+                    let belief = Belief { tenet, polarity };
+                    [belief.statement(), belief.note()]
+                })
         })
         .collect()
 }

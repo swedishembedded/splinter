@@ -37,7 +37,7 @@ const MAX_ARTICLE_TOKENS: u64 = 6000;
 /// How long one request may take, corrections included.
 const REQUEST_DEADLINE: Duration = Duration::from_secs(900);
 /// Consecutive failed requests after which the run stops.
-const MAX_CONSECUTIVE_ERRORS: usize = 3;
+const MAX_CONSECUTIVE_ERRORS_PER_WORKER: usize = 4;
 
 const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
@@ -108,7 +108,7 @@ fn input(
         "topic": TOPICS[topic],
         "min_words": min_words,
         "previous_refusal": refusal,
-        "convictions": persona.beliefs.iter().map(|b| b.statement()).collect::<Vec<_>>(),
+        "convictions": persona.beliefs.iter().map(|b| b.note()).collect::<Vec<_>>(),
         "episodes": episodes.iter().map(|e| json!({
             "case_file": e.case_file(),
             "you_did": did_phrase(persona.decide(&e.scenario).choice, &e.case),
@@ -327,7 +327,8 @@ impl Run<'_> {
                     let mut state = self.state();
                     state.summary.rejected += 1;
                     state.errors += 1;
-                    if state.errors >= MAX_CONSECUTIVE_ERRORS {
+                    if state.errors >= MAX_CONSECUTIVE_ERRORS_PER_WORKER * self.opts.workers.max(1)
+                    {
                         state.stopped = true;
                         let errors = state.errors;
                         state
