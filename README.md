@@ -226,6 +226,13 @@ make test      # every test; no model, GPU or network needed
 make check     # all gates: text hygiene, headers, fmt, clippy -D warnings, lock sources
 ```
 
+`make test` loads no model. The end-to-end targets use built brain and sven binaries
+and a real model, and say so: `make test/e2e/brain-sven` has brain serve Qwen3-0.6B and
+sven complete a tool-using task with it, judged on a number only a file holds. It runs on
+the CPU backend (no free GPU needed, minutes to tens of minutes) and exits 3, never 0,
+when a binary or the model is missing, so a skipped run is never read as a pass. Name
+the binaries with `BRAIN_BIN`, `SVEN_BIN` and the store with `MODELS_DIR`.
+
 To build against local checkouts instead - to change sven or brain and
 Splinter together - write the gitignored local override once:
 

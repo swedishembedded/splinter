@@ -13,6 +13,11 @@ SHELL := bash
 SVEN_DIR ?= ../sven
 BRAIN_DIR ?= ../edgeai/brain
 
+# The binaries and model store `make test/e2e/...` runs against.
+BRAIN_BIN ?= $(BRAIN_DIR)/target/release/brain
+SVEN_BIN ?= $(SVEN_DIR)/target/release/sven
+MODELS_DIR ?= $(HOME)/.local/share/brain/models
+
 CARGO ?= cargo
 # Release everywhere, tests included: brain's kernels are unusably slow
 # unoptimised, and one profile means one set of compiled dependencies.
@@ -71,6 +76,14 @@ test/crate:
 TEST_CRATE_TARGETS := $(addprefix test/crate/,$(CRATE_PACKAGES))
 $(TEST_CRATE_TARGETS): test/crate/%:
 	$(CARGO) test $(PROFILE) -p $*
+
+## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
+test/e2e:
+	@bash scripts/make-help.sh test/e2e
+
+## test/e2e/brain-sven - brain serves a model and sven completes a tool-using task with it (BRAIN_BIN, SVEN_BIN, MODELS_DIR; CPU backend, no GPU, minutes to tens of minutes; exit 3 means a prerequisite is missing and nothing was tested)
+test/e2e/brain-sven:
+	bash scripts/e2e/brain-sven.sh $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR)
 
 # ---------------------------------------------------------------------------
 ##@ Checks
@@ -176,7 +189,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) fmt \
+.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven fmt \
 	check check/fmt check/clippy check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	deps deps/local deps/lock \
 	hooks hooks/install \
