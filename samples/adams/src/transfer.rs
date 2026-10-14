@@ -15,7 +15,6 @@
 //! its checks is recorded with the reason and given up on after two attempts;
 //! the run goes on.
 
-use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -50,13 +49,7 @@ pub struct Result {
 /// # Errors
 /// The file exists and cannot be read, or a line is not a result.
 pub fn read_results(path: &Path) -> anyhow::Result<Vec<Result>> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Ok(Vec::new());
-    };
-    text.lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())))
-        .collect()
+    Ok(splinter_sdk::store::jsonl::read(path)?)
 }
 
 /// The planned (principle, scenario) pairs not yet done, and not failed too
@@ -142,14 +135,10 @@ pub fn run_all(
         .collect();
     let todo = pending(&planned, &read_results(out)?);
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
+    let log = splinter_sdk::store::jsonl::Log::open(out)?;
     for (n, (principle, job)) in todo.iter().enumerate() {
         let result = make(helper, principle, *job, docs, corpus);
-        writeln!(file, "{}", serde_json::to_string(&result)?)?;
-        file.flush()?;
+        log.append(&result)?;
         eprintln!(
             "[{}/{}] {}#{} ({:?}){}",
             n + 1,

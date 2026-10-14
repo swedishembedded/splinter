@@ -192,13 +192,7 @@ pub struct BundleResult {
 /// # Errors
 /// The file exists and cannot be read, or a line is not a result.
 pub fn read_results(path: &std::path::Path) -> anyhow::Result<Vec<BundleResult>> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Ok(Vec::new());
-    };
-    text.lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())))
-        .collect()
+    Ok(splinter_sdk::store::jsonl::read(path)?)
 }
 
 /// The bundles still to ask about: not answered, and not failed too often.
@@ -229,13 +223,9 @@ pub fn mine_all(
     out: &std::path::Path,
     limit: Option<usize>,
 ) -> anyhow::Result<usize> {
-    use std::io::Write;
     let todo = pending(bundles, &read_results(out)?);
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
+    let log = splinter_sdk::store::jsonl::Log::open(out)?;
     for (n, bundle) in todo.iter().enumerate() {
         let result = match mine_and_verify(helper, bundle, docs, allowed) {
             Ok((principles, rejected)) => BundleResult {
@@ -251,8 +241,7 @@ pub fn mine_all(
                 error: Some(format!("{e:#}")),
             },
         };
-        writeln!(file, "{}", serde_json::to_string(&result)?)?;
-        file.flush()?;
+        log.append(&result)?;
         eprintln!(
             "[{}/{}] {}: {} principles stand, {} rejected{}",
             n + 1,

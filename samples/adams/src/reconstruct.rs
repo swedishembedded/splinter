@@ -284,7 +284,6 @@ pub fn brief_all(
     out: &std::path::Path,
     limit: Option<usize>,
 ) -> anyhow::Result<usize> {
-    use std::io::Write;
     let existing: Vec<BriefingResult> = read_lines(out)?;
     let todo: Vec<&&Document> = letters
         .iter()
@@ -296,10 +295,7 @@ pub fn brief_all(
         })
         .collect();
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
+    let log = splinter_sdk::store::jsonl::Log::open(out)?;
     for (n, letter) in todo.iter().enumerate() {
         let result = match brief(helper, letter) {
             Ok(b) => BriefingResult {
@@ -313,8 +309,7 @@ pub fn brief_all(
                 error: Some(format!("{e:#}")),
             },
         };
-        writeln!(file, "{}", serde_json::to_string(&result)?)?;
-        file.flush()?;
+        log.append(&result)?;
         eprintln!(
             "[{}/{}] {}{}",
             n + 1,
@@ -343,13 +338,7 @@ pub struct Reply {
 
 /// Lines of a JSON-lines file; none when there is no file.
 fn read_lines<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> anyhow::Result<Vec<T>> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Ok(Vec::new());
-    };
-    text.lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())))
-        .collect()
+    Ok(splinter_sdk::store::jsonl::read(path)?)
 }
 
 /// The replies already in `path`.
@@ -372,7 +361,6 @@ pub fn answer_all(
     limit: Option<usize>,
     ask: &mut dyn FnMut(&Briefing) -> anyhow::Result<splinter_sdk::model::answer::Reply>,
 ) -> anyhow::Result<usize> {
-    use std::io::Write;
     let done: std::collections::HashSet<String> = read_replies(out)?
         .into_iter()
         .filter(|r| r.arm == arm)
@@ -380,10 +368,7 @@ pub fn answer_all(
         .collect();
     let todo: Vec<&Briefing> = briefings.iter().filter(|b| !done.contains(&b.id)).collect();
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
+    let log = splinter_sdk::store::jsonl::Log::open(out)?;
     for (n, briefing) in todo.iter().enumerate() {
         let reply = ask(briefing)?;
         let text = splinter_sdk::measure::verifiers::answer::final_answer(
@@ -399,8 +384,7 @@ pub fn answer_all(
             tokens: reply.tokens,
             truncated: reply.truncated,
         };
-        writeln!(file, "{}", serde_json::to_string(&record)?)?;
-        file.flush()?;
+        log.append(&record)?;
         eprintln!(
             "[{}/{}] {arm} {}: {} tokens",
             n + 1,
@@ -445,7 +429,6 @@ pub fn score_all(
     out: &std::path::Path,
     limit: Option<usize>,
 ) -> anyhow::Result<usize> {
-    use std::io::Write;
     let existing: Vec<Scored> = read_lines(out)?;
     let todo: Vec<&Reply> = replies
         .iter()
@@ -458,10 +441,7 @@ pub fn score_all(
         })
         .collect();
     let todo = &todo[..limit.map_or(todo.len(), |n| n.min(todo.len()))];
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
+    let log = splinter_sdk::store::jsonl::Log::open(out)?;
     for reply in todo {
         let Some(briefing) = briefings.iter().find(|b| b.id == reply.briefing_id) else {
             continue;
@@ -486,8 +466,7 @@ pub fn score_all(
             anachronism: crate::grounding::anachronism(&reply.text),
             error,
         };
-        writeln!(file, "{}", serde_json::to_string(&scored)?)?;
-        file.flush()?;
+        log.append(&scored)?;
     }
     Ok(todo.len())
 }

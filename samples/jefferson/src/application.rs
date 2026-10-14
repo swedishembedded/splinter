@@ -16,7 +16,6 @@
 //! position. The judge is itself checked against controls with known answers.
 
 use std::collections::HashSet;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -127,14 +126,7 @@ pub struct Run {
 /// # Errors
 /// A line that is not an answered scenario.
 pub fn read_answers(path: &Path) -> anyhow::Result<Vec<Answered>> {
-    if !path.is_file() {
-        return Ok(Vec::new());
-    }
-    std::fs::read_to_string(path)?
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())))
-        .collect()
+    Ok(splinter_sdk::store::jsonl::read(path)?)
 }
 
 /// Puts every exam scenario, and a sample of trained ones, to the model.
@@ -162,10 +154,7 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
     let index = corpus_index(&run.resources)?;
     let answerer = Answerer::load(&run.base, run.adapter.as_deref(), Some(4096), "jefferson")?;
     let runtime = tokio::runtime::Runtime::new()?;
-    let mut out = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&run.out)?;
+    let log = splinter_sdk::store::jsonl::Log::open(&run.out)?;
     for (n, (scenario, split)) in chosen.iter().enumerate() {
         let reply = runtime.block_on(answerer.ask(PERSONA, &scenario.question, run.max_tokens))?;
         let answer = final_answer(&reply.thinking, &reply.text, reply.truncated);
@@ -184,8 +173,7 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
             truncated: reply.truncated,
             seconds: reply.seconds,
         };
-        writeln!(out, "{}", serde_json::to_string(&record)?)?;
-        out.flush()?;
+        log.append(&record)?;
         eprintln!(
             "[{}/{}] {split} quotes={} fabricated={}",
             n + 1,
