@@ -414,3 +414,44 @@ fn the_retrieval_arm_hands_the_model_the_paragraphs_that_share_the_most_with_the
     );
     assert!(system.starts_with(synthetic_author::prompts::SYSTEM));
 }
+
+#[test]
+fn a_decision_read_from_an_essay_is_checked_against_what_the_beliefs_dictate() {
+    use synthetic_author::lab::{audit, Mined, MinedResult};
+    use synthetic_author::writer::plan;
+    let seed = 6;
+    let persona = Persona::generate(seed);
+    let planned = plan(&persona, seed, 2, 3);
+    let episode = &planned[0].1[0];
+    let right = persona.decide(&episode.scenario).choice;
+    let wrong = episode
+        .scenario
+        .options
+        .iter()
+        .copied()
+        .find(|o| *o != right)
+        .unwrap();
+    let mined = |case: &str, chose: Archetype| Mined {
+        article: 0,
+        case: case.to_string(),
+        result: MinedResult::Kept(decision(case, chose, false, &[])),
+    };
+    let refused = Mined {
+        article: 0,
+        case: planned[0].1[1].case.name.clone(),
+        result: MinedResult::Refused("no decision".into()),
+    };
+    let found = audit(
+        &[mined(&episode.case.name, right), refused],
+        &persona,
+        seed,
+        2,
+    );
+    assert_eq!(
+        (found.kept, found.agree),
+        (1, 1),
+        "a refused case is not counted"
+    );
+    let found = audit(&[mined(&episode.case.name, wrong)], &persona, seed, 2);
+    assert_eq!((found.kept, found.agree), (1, 0));
+}

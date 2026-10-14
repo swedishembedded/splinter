@@ -155,6 +155,40 @@ pub fn build_dataset(cache: &Cache, seed: u64, out: &Path) -> anyhow::Result<Dat
     Ok(summary)
 }
 
+/// How the decisions read out of the essays compare with what the beliefs
+/// dictate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Audit {
+    /// Decisions that were kept.
+    pub kept: usize,
+    /// Kept decisions that are the one the beliefs dictate.
+    pub agree: usize,
+}
+
+/// Compares every kept decision of `mined` with the author's own decision on
+/// that case, among the cases of the first `articles` planned articles.
+#[must_use]
+pub fn audit(mined: &[Mined], persona: &Persona, seed: u64, articles: usize) -> Audit {
+    let oracle: std::collections::BTreeMap<String, crate::scenario::Archetype> =
+        plan(persona, seed, articles, 3)
+            .into_iter()
+            .flat_map(|(_, episodes)| episodes)
+            .map(|e| (e.case.name.clone(), persona.decide(&e.scenario).choice))
+            .collect();
+    let mut audit = Audit { kept: 0, agree: 0 };
+    for m in mined {
+        let MinedResult::Kept(decision) = &m.result else {
+            continue;
+        };
+        let Some(&expected) = oracle.get(&m.case) else {
+            continue;
+        };
+        audit.kept += 1;
+        audit.agree += usize::from(decision.chose == expected);
+    }
+    audit
+}
+
 /// The system turn each arm of the examination is asked under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arm {

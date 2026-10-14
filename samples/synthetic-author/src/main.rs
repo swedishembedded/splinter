@@ -174,6 +174,18 @@ enum Command {
         #[arg(long, default_value = "base,named,principles,retrieval,tuned")]
         arms: String,
     },
+    /// Compare the decisions read out of the essays with what the beliefs dictate.
+    Audit {
+        /// The seed the author is drawn from.
+        #[arg(long)]
+        seed: u64,
+        /// The corpus directory.
+        #[arg(long)]
+        cache: PathBuf,
+        /// How many articles the corpus was planned with.
+        #[arg(long, default_value_t = 100)]
+        articles: usize,
+    },
     /// Count, for each trained author, whose decision it took where another
     /// author would have decided otherwise.
     Cross {
@@ -472,6 +484,21 @@ fn main() -> anyhow::Result<()> {
             let outcomes = run_arm(&cache, &persona, arm, &provider, &all, max_tokens)?;
             let r = synthetic_author::report::accuracy(&outcomes);
             println!("{}: {}/{} right ({:.3})", arm.name(), r.right, r.n, r.rate);
+            Ok(())
+        }
+        Command::Audit {
+            seed,
+            cache,
+            articles,
+        } => {
+            let persona = Persona::generate(seed);
+            let cache = Cache::open(cache)?;
+            let mined = synthetic_author::lab::read_mined(&cache)?;
+            let found = synthetic_author::lab::audit(&mined, &persona, seed, articles);
+            println!(
+                "{}: {} of {} kept decisions are the one the beliefs dictate",
+                persona.name, found.agree, found.kept
+            );
             Ok(())
         }
         Command::Cross {
