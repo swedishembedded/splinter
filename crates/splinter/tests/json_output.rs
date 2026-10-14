@@ -116,9 +116,18 @@ fn status_and_source_list_print_their_documented_fields() {
     assert_eq!(status["concepts"]["concepts"], 0, "nothing solved yet");
     assert_eq!(
         keys(&status["policy"]),
-        ["adapter", "base", "model", "reference", "release"]
+        [
+            "adapter",
+            "base",
+            "generation",
+            "generation_base",
+            "model",
+            "reference",
+            "release"
+        ]
     );
     assert_eq!(status["policy"]["reference"], "policy:default");
+    assert_eq!(status["policy"]["generation"], 0, "no consolidation yet");
     assert_eq!(status["policy"]["adapter"], Value::Null);
     assert_eq!(status["policy"]["release"], Value::Null);
     assert_eq!(
