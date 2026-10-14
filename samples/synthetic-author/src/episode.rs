@@ -57,13 +57,20 @@ pub fn did_phrase(option: Archetype, case: &Case) -> String {
 #[must_use]
 pub fn situation_text(scenario: &Scenario, case: &Case) -> String {
     format!(
-        "In the year {}, a matter arose at {} over {}: {}. About {} households depend on it. {}",
-        case.year,
-        case.place,
-        case.name,
-        TOPICS[scenario.topic],
-        case.households,
+        "{} {}",
+        scene_text(scenario.topic, case),
         feature_sentences(&scenario.features, &case.house)
+    )
+}
+
+/// The sentences that set a situation's scene: when, where, what and for how
+/// many. Unlike its facts, which an essay has to state, these are not to be
+/// copied.
+#[must_use]
+pub fn scene_text(topic: usize, case: &Case) -> String {
+    format!(
+        "In the year {}, a matter arose at {} over {}: {}. About {} households depend on it.",
+        case.year, case.place, case.name, TOPICS[topic], case.households
     )
 }
 

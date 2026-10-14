@@ -359,3 +359,33 @@ fn the_case_file_says_each_fact_in_plain_words_that_cannot_be_read_backwards() {
         );
     }
 }
+
+#[test]
+fn stating_a_fact_in_the_words_of_the_examination_or_acting_as_a_belief_would_is_not_quoting() {
+    let (p, eps) = episodes(5, 0, 3);
+    let mut article = article_for(&p, &eps);
+    // The facts stated plainly, as an essay must, and a belief acted on in natural words.
+    article.body.push_str(&format!(
+        "\n\nOf {} the facts were plain. Whatever is settled will bind the community for a generation. Once done it cannot be undone. Several families are already suffering for it. I knew that when members are hurt I act at once to protect them, and I did.\n\n",
+        eps[0].case.name
+    ));
+    assert_eq!(check(&article, &p, &eps, 100), Ok(()));
+}
+
+#[test]
+fn the_scene_sentence_of_the_brief_is_still_not_to_be_copied() {
+    let (p, eps) = episodes(5, 0, 3);
+    let mut article = article_for(&p, &eps);
+    let e = &eps[0];
+    let scene = format!(
+        "In the year {}, a matter arose at {} over {}",
+        e.case.year, e.case.place, e.case.name
+    );
+    article
+        .body
+        .push_str(&format!("\n\n{scene} and it was bad.\n\n"));
+    assert!(matches!(
+        check(&article, &p, &eps, 100),
+        Err(Rejection::CopiesBrief { .. })
+    ));
+}

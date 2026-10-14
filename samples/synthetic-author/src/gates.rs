@@ -10,12 +10,19 @@ use std::collections::BTreeSet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::episode::{did_phrase, Episode};
+use crate::episode::{did_phrase, scene_text, Episode};
 use crate::persona::{Belief, Persona, Polarity, Tenet};
 use crate::scenario::{Archetype, Features, TOPICS};
 
-/// How many consecutive words of a belief an article may not repeat.
+/// How many consecutive words an article may repeat of what it is shown, before
+/// it counts as quoting.
 pub const QUOTE_RUN_WORDS: usize = 6;
+/// How many consecutive words of a belief an article may not repeat: long enough
+/// that only a maxim recited, and not a phrase of ordinary narrative, matches.
+pub const BELIEF_RUN_WORDS: usize = 9;
+/// How many consecutive words of the brief's scene-setting an article may not
+/// repeat.
+pub const SCENE_RUN_WORDS: usize = 8;
 
 /// A written article.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -216,10 +223,10 @@ pub fn check_form(
         });
     }
     let body_words = words(&article.body);
-    let runs: BTreeSet<&[String]> = body_words.windows(QUOTE_RUN_WORDS).collect();
+    let belief_runs: BTreeSet<&[String]> = body_words.windows(BELIEF_RUN_WORDS).collect();
     for statement in every_statement() {
         let s = words(statement);
-        if s.windows(QUOTE_RUN_WORDS).any(|w| runs.contains(w)) {
+        if s.windows(BELIEF_RUN_WORDS).any(|w| belief_runs.contains(w)) {
             return Err(Rejection::QuotesBelief {
                 statement: statement.chars().take(48).collect(),
             });
@@ -231,14 +238,16 @@ pub fn check_form(
                 case: episode.case.name.clone(),
             });
         }
-        let did = did_phrase(persona.decide(&episode.scenario).choice, &episode.case);
-        // The topic's name is the subject of the essay, not a copied sentence.
-        let situation = episode
-            .situation
+        // The topic's name is the subject of the essay, not a copied sentence, and
+        // the facts have to be stated, so only the scene and the decision's words
+        // count. The house that offers help is named wherever it is mentioned.
+        let scene = scene_text(episode.scenario.topic, &episode.case)
             .replace(TOPICS[episode.scenario.topic], "");
-        for brief in [&situation, &did] {
-            let b = words(brief);
-            if let Some(run) = b.windows(QUOTE_RUN_WORDS).find(|w| runs.contains(*w)) {
+        let did = did_phrase(persona.decide(&episode.scenario).choice, &episode.case)
+            .replace(&episode.case.house, "");
+        for (brief, length) in [(&scene, SCENE_RUN_WORDS), (&did, QUOTE_RUN_WORDS)] {
+            let runs: BTreeSet<&[String]> = body_words.windows(length).collect();
+            if let Some(run) = words(brief).windows(length).find(|w| runs.contains(*w)) {
                 return Err(Rejection::CopiesBrief { run: run.join(" ") });
             }
         }
