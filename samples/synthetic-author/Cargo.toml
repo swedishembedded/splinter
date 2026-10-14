@@ -24,10 +24,11 @@ clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
-futures = { workspace = true }
 
 [lints]
 workspace = true

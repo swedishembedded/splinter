@@ -85,7 +85,7 @@ pub fn items(
         }
         let k = *cell;
         *cell += 1;
-        let tool_seen = k % 2 == 0;
+        let tool_seen = k.is_multiple_of(2);
         let schema = if tool_seen {
             TRAINING[(k / 2) % TRAINING.len()]
         } else {

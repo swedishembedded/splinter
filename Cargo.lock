@@ -5108,6 +5108,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-sdk",
+ "tokio",
 ]
 
 [[package]]

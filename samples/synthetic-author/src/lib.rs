@@ -15,16 +15,20 @@
 //! truth against which a model that learned from texts the author wrote is
 //! measured; no model is involved in saying what the author decides.
 
+pub mod arms;
 pub mod cache;
+pub mod dataset;
 pub mod episode;
 pub mod exam;
 pub mod facts;
 pub mod gates;
+pub mod lab;
 pub mod mine;
 pub mod names;
 pub mod persona;
 pub mod prompts;
 pub mod records;
+pub mod report;
 pub mod scenario;
 pub mod tools;
 pub mod writer;
