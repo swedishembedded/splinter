@@ -33,6 +33,19 @@
 //!    sides decode greedily, so the same weights give the same text; a
 //!    verdict alone would let two different wrong answers agree.
 //!
+//! The four checks are the same for a candidate that works in a workspace,
+//! over suites of tasks that are changes to a repository: the held-out
+//! suite is the families the exam reserved, retention is every earlier
+//! release's exam, the anchor suite is the frozen one, and the served
+//! agent's run is compared with the in-process one by verdict
+//! ([`Agreement::Verdicts`]), since two multi-step runs share no text worth
+//! comparing. An attempt whose trajectory shows the solver saw what only the
+//! grader holds, and an attempt the harness could not carry out, are set
+//! aside and counted ([`Withheld`]); they are in no denominator. The
+//! frozen anchor suite may hold no task that works in a workspace: the
+//! report then says so ([`Anchor::workspace_tasks`]) and the check is decided
+//! on the tasks it does hold.
+//!
 //! A check that could not be measured - no task graded by both models, no
 //! anchor suite, no brain binary - fails, and says why: an unmeasured
 //! check is never a pass.
@@ -71,6 +84,47 @@ pub const DEFAULT_ANCHOR_BOUND: f64 = 0.02;
 pub const DEFAULT_SERVE_SAMPLE: usize = 8;
 /// How long `brain serve` may take to load the candidate and report ready.
 pub const DEFAULT_SERVE_STARTUP_SECS: u64 = 600;
+/// How many times a workspace task is attempted per arm when a gate names no
+/// other number.
+pub const DEFAULT_PROBE_ATTEMPTS: u32 = 1;
+/// How many follow-up turns an agent is sent after the checks it was shown
+/// stay red, when nothing names another number.
+pub const DEFAULT_FOLLOW_UPS: u32 = 2;
+/// How many tool calls an agent may make in one attempt, follow-ups
+/// included, when nothing names another number.
+pub const DEFAULT_MAX_TOOL_CALLS: u32 = 60;
+/// How many times one tool call may return the same answer in an attempt
+/// before the attempt is stopped as going nowhere, when nothing names
+/// another number.
+pub const DEFAULT_MAX_REPEATED_RESULTS: u32 = 3;
+
+/// How an agent is probed on tasks that are changes to a repository: the
+/// same for both arms of a comparison and for the served candidate, so a
+/// difference between them is the weights'.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgenticConfig {
+    /// Attempts per task. A task's verdict is what a strict majority of its
+    /// graded attempts say; with no majority it has none.
+    pub attempts: u32,
+    /// Follow-up turns after the checks the task shows stay red.
+    pub follow_ups: u32,
+    /// Tool calls in one attempt, follow-ups included; `None` sets no cap.
+    pub max_tool_calls: Option<u32>,
+    /// Identical answers to one call before an attempt is stopped; `None`
+    /// sets no bound.
+    pub max_repeated_results: Option<u32>,
+}
+
+impl Default for AgenticConfig {
+    fn default() -> Self {
+        Self {
+            attempts: DEFAULT_PROBE_ATTEMPTS,
+            follow_ups: DEFAULT_FOLLOW_UPS,
+            max_tool_calls: Some(DEFAULT_MAX_TOOL_CALLS),
+            max_repeated_results: Some(DEFAULT_MAX_REPEATED_RESULTS),
+        }
+    }
+}
 
 /// The gate's thresholds.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -85,6 +139,11 @@ pub struct GateConfig {
     pub serve_sample: usize,
     /// Seconds `brain serve` may take to start.
     pub serve_startup_secs: u64,
+    /// How tasks that are changes to a repository are probed; unused by a
+    /// gate over closed-book suites. A report written before it was kept
+    /// reads the defaults.
+    #[serde(default)]
+    pub agentic: AgenticConfig,
 }
 
 impl Default for GateConfig {
@@ -95,6 +154,7 @@ impl Default for GateConfig {
             anchor_bound: DEFAULT_ANCHOR_BOUND,
             serve_sample: DEFAULT_SERVE_SAMPLE,
             serve_startup_secs: DEFAULT_SERVE_STARTUP_SECS,
+            agentic: AgenticConfig::default(),
         }
     }
 }
@@ -130,6 +190,43 @@ impl<T> Check<T> {
     }
 }
 
+/// The attempts at workspace tasks one model's probe set aside instead of
+/// grading. A count of attempts, so zero is a measurement: nothing was set
+/// aside.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Withheld {
+    /// Attempts whose trajectory shows the solver saw what only the grader
+    /// holds (the exposure audit failed them). They are no one's win or
+    /// loss, whatever their patch did.
+    pub exposed: usize,
+    /// Attempts the harness could not carry out or grade: the workspace
+    /// could not be laid out, or the verifier could not run. They say
+    /// nothing about the model.
+    pub environment_failures: usize,
+}
+
+impl Withheld {
+    /// This and `other` together.
+    #[must_use]
+    pub fn plus(self, other: Self) -> Self {
+        Self {
+            exposed: self.exposed + other.exposed,
+            environment_failures: self.environment_failures + other.environment_failures,
+        }
+    }
+}
+
+/// What probing both arms on workspace tasks set aside; see [`Withheld`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgenticProbe {
+    /// Attempts per task.
+    pub attempts: u32,
+    /// What the candidate's probe set aside.
+    pub candidate: Withheld,
+    /// What the champion's probe set aside.
+    pub champion: Withheld,
+}
+
 /// The improvement check's numbers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Improvement {
@@ -160,6 +257,10 @@ pub struct Improvement {
     /// see [`TaskLevel`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_level: Option<TaskLevel>,
+    /// What the probes of workspace tasks in the suite set aside; `None`
+    /// when the suite holds none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agentic: Option<AgenticProbe>,
 }
 
 /// What the tasks themselves say, beside the family-level sign test the gate
@@ -230,6 +331,10 @@ pub struct RetainedSuite {
     /// wrong: what the candidate forgot.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lost: Vec<String>,
+    /// What the probes of workspace tasks in the suite set aside; `None`
+    /// when the suite holds none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agentic: Option<AgenticProbe>,
 }
 
 /// The retention check's numbers.
@@ -268,6 +373,16 @@ pub struct Anchor {
     /// discordant or none paired.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items_to_see_two_points: Option<usize>,
+    /// For a candidate that works in a workspace: how many of the frozen
+    /// version's tasks are changes to a repository. `Some(0)` is an absence,
+    /// not a score: the version holds no such task, and the check was decided
+    /// on the tasks it does hold. `None` for a candidate judged closed-book.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_tasks: Option<usize>,
+    /// What the probes of the version's workspace tasks set aside; `None`
+    /// when it holds none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agentic: Option<AgenticProbe>,
 }
 
 /// A bootstrap interval of the champion's accuracy minus the candidate's,
@@ -280,6 +395,22 @@ pub struct DropInterval {
     pub low: f64,
     /// Its upper end.
     pub high: f64,
+}
+
+/// What the serve check compares between a run in-process and the same run
+/// served.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Agreement {
+    /// The final answers: the same text up to whitespace and the noise of two
+    /// processes decoding one model, or the same meaning, and the same
+    /// verdict. For a task answered in one reply.
+    #[default]
+    Answers,
+    /// The verdicts alone. For a task an agent works on over many steps,
+    /// whose runs share no text worth comparing: what matters is whether the
+    /// work the served agent left is graded as the in-process agent's was.
+    Verdicts,
 }
 
 /// The serve check's numbers.
@@ -296,11 +427,15 @@ pub struct Serve {
     /// Held-out tasks re-answered through the served endpoint; `0` when
     /// the digest did not match and nothing was asked.
     pub sampled: usize,
-    /// Of those, the ones answered alike in-process and served: the same
-    /// answer, whitespace aside, graded the same.
+    /// Of those, the ones that agreed in what [`Serve::agreement`] compares:
+    /// for answers, the same answer, whitespace aside, graded the same.
     pub agreed: usize,
     /// The tasks answered differently, with both answers.
     pub disagreed: Vec<Disagreement>,
+    /// What was compared. A report written before it was kept compared
+    /// answers.
+    #[serde(default)]
+    pub agreement: Agreement,
 }
 
 /// One held-out task the served candidate answered differently from the
@@ -359,6 +494,30 @@ impl GateReport {
     pub fn with_prompts(mut self, prompts: Vec<SuitePrompts>) -> Self {
         self.prompts = prompts;
         self
+    }
+
+    /// Why the gate did not pass, one entry per check that failed or was not
+    /// measured, each naming its check; empty when the gate passed.
+    #[must_use]
+    pub fn blocked_by(&self) -> Vec<String> {
+        let mut why = Vec::new();
+        let mut add = |name: &str, passed: bool, reason: &Option<String>| {
+            if !passed {
+                why.push(format!(
+                    "{name}: {}",
+                    reason.as_deref().unwrap_or("it did not pass")
+                ));
+            }
+        };
+        add(
+            "improvement",
+            self.improvement.passed,
+            &self.improvement.reason,
+        );
+        add("retention", self.retention.passed, &self.retention.reason);
+        add("anchor", self.anchor.passed, &self.anchor.reason);
+        add("serve", self.serve.passed, &self.serve.reason);
+        why
     }
 
     /// The report of these four checks.
@@ -421,6 +580,7 @@ pub fn improvement(
             generalisation: None,
             recall: None,
             task_level: None,
+            agentic: None,
         },
         failure,
     )
@@ -464,6 +624,7 @@ pub fn retention(
             drop,
             passed,
             lost,
+            agentic: None,
         });
     }
     let failure = (!failures.is_empty()).then(|| failures.join("; "));
@@ -503,13 +664,16 @@ pub fn anchor(
             bound,
             drop_interval: None,
             items_to_see_two_points: None,
+            workspace_tasks: None,
+            agentic: None,
         },
         failure,
     )
 }
 
 /// The share of the re-answered tasks, in percent, that must come back
-/// alike for the serve check to pass. Two processes decoding one model sum
+/// alike for the serve check to pass (for a task an agent works on, graded
+/// the same: [`Agreement::Verdicts`]). Two processes decoding one model sum
 /// in a different order, so now and then one long greedy continuation parts
 /// ways in its last tenth; an adapter bound wrongly or not applied changes
 /// the answers to most tasks.
@@ -518,6 +682,10 @@ pub const SERVE_AGREEMENT_PERCENT: usize = 75;
 /// The serve check over what the served candidate reported and answered.
 #[must_use]
 pub fn serve(measured: Serve) -> Check<Serve> {
+    let differently = match measured.agreement {
+        Agreement::Answers => "answered differently from",
+        Agreement::Verdicts => "was graded differently from",
+    };
     let failure = if measured.served_digest != measured.expected_digest {
         Some(format!(
             "brain serve reported adapter {} but the candidate is {}",
@@ -527,7 +695,7 @@ pub fn serve(measured: Serve) -> Check<Serve> {
         return Check::unmeasured("no held-out task to re-answer through the served endpoint");
     } else if measured.agreed * 100 < measured.sampled * SERVE_AGREEMENT_PERCENT {
         Some(format!(
-            "the served candidate answered differently from in-process on {} of {} task(s); \
+            "the served candidate {differently} in-process on {} of {} task(s); \
              at least {SERVE_AGREEMENT_PERCENT}% must agree",
             measured.sampled - measured.agreed,
             measured.sampled
@@ -551,6 +719,7 @@ mod serve_tests {
             sampled,
             agreed,
             disagreed: Vec::new(),
+            agreement: Agreement::default(),
         }
     }
 
@@ -560,5 +729,27 @@ mod serve_tests {
         assert!(serve(measured(8, 6)).passed, "exactly three quarters");
         assert!(!serve(measured(8, 5)).passed);
         assert!(!serve(measured(6, 0)).passed);
+    }
+
+    #[test]
+    fn a_served_agent_is_held_to_its_verdicts_and_the_report_says_so() {
+        let by_verdict = Serve {
+            agreement: Agreement::Verdicts,
+            ..measured(8, 5)
+        };
+        let check = serve(by_verdict);
+        assert!(!check.passed);
+        let why = check.reason.unwrap();
+        assert!(
+            why.contains("graded differently") && why.contains("3 of 8"),
+            "{why}"
+        );
+        assert!(
+            serve(Serve {
+                agreement: Agreement::Verdicts,
+                ..measured(8, 6)
+            })
+            .passed
+        );
     }
 }

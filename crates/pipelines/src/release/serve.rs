@@ -58,7 +58,7 @@ use splinter_model::local::GREEDY_SAMPLING;
 
 use crate::release::meaning;
 use crate::release::probe::{answer_all, judge_all, Probe, Suite};
-use splinter_eval::gate::{self, Check, Disagreement, Serve};
+use splinter_eval::gate::{self, Agreement, Check, Disagreement, Serve};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -253,6 +253,7 @@ fn serve_and_ask(
         sampled: 0,
         agreed: 0,
         disagreed: Vec::new(),
+        agreement: Agreement::Answers,
     };
     if measured.served_digest != measured.expected_digest {
         return Ok(gate::serve(measured));

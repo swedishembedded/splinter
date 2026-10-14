@@ -34,6 +34,7 @@ fn served() -> Check<Serve> {
             sampled: 4,
             agreed: 4,
             disagreed: Vec::new(),
+            agreement: Default::default(),
         }),
         reason: None,
     }
