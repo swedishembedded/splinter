@@ -209,8 +209,11 @@ pub(crate) struct CallDir {
 }
 
 impl CallDir {
-    /// A new, empty directory under `root`, readable only by this user.
+    /// A new, empty directory under `root`, readable only by this user. A
+    /// root that does not exist yet is made: the scratch space is the
+    /// sandbox's own.
     pub(crate) fn create(root: &Path) -> Result<Self, SandboxError> {
+        std::fs::create_dir_all(root).map_err(io(root))?;
         let dir = tempfile::Builder::new()
             .prefix("splinter-call-")
             .tempdir_in(root)
