@@ -30,7 +30,8 @@
 //! * The next candidate trains from the champion, replaying a seeded
 //!   sample of the earlier release's training records.
 //! * `rollback` moves an alias back along its lineage, and refuses with no
-//!   previous release.
+//!   previous release; the manifest a server follows names the release the
+//!   alias points at, before and after.
 //!
 //! Models are scripted, training is a test double whose adapter file says
 //! what its candidate knows, and `brain` is a stand-in script that serves
@@ -59,6 +60,14 @@ use splinter_pipelines::release::{anchor, list, release, rollback, ReleaseReques
 use splinter_pipelines::train::{
     train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION, DEFAULT_REPLAY_SHARE,
 };
+
+/// The adapter file the manifest `brain serve --adapter-manifest` follows
+/// for `default` names.
+fn followed(ctx: &Context) -> Option<std::path::PathBuf> {
+    let path = ctx.releases().manifest_path("default").unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).unwrap();
+    Some(manifest["adapter"].as_str().unwrap().into())
+}
 
 fn freeze_anchor(scratch: &Scratch, ctx: &Context) {
     anchor::freeze(ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
@@ -535,6 +544,11 @@ fn rollback_moves_the_alias_back_and_refuses_without_a_previous_release() {
     );
 
     let second = released(&ctx, "beta", &[ANCHOR, "alpha", "beta"]);
+    assert_eq!(
+        followed(&ctx),
+        Some(ctx.releases().get(&second).unwrap().artifact),
+        "a server following the alias is on the newest release"
+    );
     let listed = list(&ctx).unwrap();
     let ids: Vec<&ReleaseId> = listed.releases.iter().map(|r| &r.id).collect();
     assert_eq!(ids.len(), 2);
@@ -549,6 +563,11 @@ fn rollback_moves_the_alias_back_and_refuses_without_a_previous_release() {
     assert_eq!((rolled.from, rolled.to.clone()), (second, first.clone()));
     let store = ctx.releases();
     assert_eq!(store.alias("default").unwrap(), Some(first.clone()));
+    assert_eq!(
+        followed(&ctx),
+        Some(store.get(&first).unwrap().artifact),
+        "the rollback repoints what a server following the alias serves"
+    );
     let ModelSelection::Local(weights) = ctx.selection(&policy()).unwrap() else {
         panic!("local");
     };

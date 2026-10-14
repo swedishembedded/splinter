@@ -13,6 +13,8 @@
 //!   verifier, and the chat tokenizer a prompt is read through.
 //! * [`local`] - brain's chat pipeline in-process behind sven's
 //!   `ModelProvider` seam: load, stream a generation, stop it cleanly.
+//! * [`manifest`] - the release manifest `brain serve --adapter-manifest`
+//!   follows, written with brain's own type.
 //! * [`residency`] - the one owner of resident bases: one loaded copy per
 //!   base checkpoint, shared by every model on it, each model's adapter
 //!   attached before its generation, and every base released when other
@@ -46,6 +48,7 @@ pub mod embed;
 pub mod error;
 pub mod exam;
 pub mod local;
+pub mod manifest;
 pub mod report;
 pub mod residency;
 pub mod rl;

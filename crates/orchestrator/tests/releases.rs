@@ -19,6 +19,11 @@
 //!   its digest, refused when the file is not the one the manifest names, and
 //!   moved between by alias compare-and-set, with its history to roll back
 //!   along.
+//! * Whenever an alias moves - a release, a rollback, any other move - the
+//!   manifest `brain serve --adapter-manifest` follows is rewritten to name
+//!   the adapter the alias points at and its digest; an alias at a full
+//!   checkpoint, which names no adapter, has its manifest withdrawn; a move
+//!   that is refused leaves the manifest as it was.
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
@@ -423,4 +428,85 @@ fn an_alias_moves_by_compare_and_set_between_checkpoints_and_rolls_back() {
         .collect();
     assert_eq!(history, vec![first.clone(), second, first]);
     assert_eq!(f.store.lineage(&history[1]).unwrap().len(), 2);
+}
+
+/// An adapter release of candidate `name` continuing `parent`.
+fn adapter_continuing(f: &Fixture, name: &str, parent: Option<&ReleaseId>) -> ReleaseManifest {
+    let terms = UsagePolicy::Redistributable.terms("open");
+    let mut release = adapter(f, name, terms, Distribution::Restricted);
+    release.parent = parent.cloned();
+    release.datasets = vec![record(f, name, parent)];
+    release
+}
+
+/// What the manifest of `alias` says: the adapter file and its digest.
+fn served(f: &Fixture, alias: &str) -> Option<(std::path::PathBuf, String)> {
+    let path = f.store.manifest_path(alias).unwrap();
+    let text = std::fs::read_to_string(path).ok()?;
+    let manifest: serde_json::Value = serde_json::from_str(&text).unwrap();
+    Some((
+        manifest["adapter"].as_str().unwrap().into(),
+        manifest["digest"].as_str().unwrap().into(),
+    ))
+}
+
+#[test]
+fn every_move_of_an_alias_publishes_what_a_server_following_it_serves() {
+    let f = fixture("manifest");
+    let at = "2026-09-30T12:00:00.000Z";
+    assert_eq!(
+        served(&f, "default"),
+        None,
+        "nothing is served before a release"
+    );
+
+    let first = f.store.put(&adapter_continuing(&f, "one", None)).unwrap();
+    let second = f
+        .store
+        .put(&adapter_continuing(&f, "two", Some(&first.id)))
+        .unwrap();
+    let names = |release: &splinter_orchestrator::releases::StoredRelease| {
+        (
+            release.artifact.clone(),
+            release.manifest.artifact.content_digest().to_string(),
+        )
+    };
+
+    f.store.move_alias("default", None, &first.id, at).unwrap();
+    assert_eq!(served(&f, "default"), Some(names(&first)));
+    f.store
+        .move_alias("default", Some(&first.id), &second.id, at)
+        .unwrap();
+    assert_eq!(served(&f, "default"), Some(names(&second)));
+
+    // A refused move changes nothing a server sees.
+    assert!(f
+        .store
+        .move_alias("default", Some(&first.id), &second.id, at)
+        .is_err());
+    assert_eq!(served(&f, "default"), Some(names(&second)));
+
+    // Rolling back repoints it; each alias has a manifest of its own.
+    f.store
+        .move_alias("default", Some(&second.id), &first.id, at)
+        .unwrap();
+    assert_eq!(served(&f, "default"), Some(names(&first)));
+    assert_eq!(served(&f, "other"), None);
+
+    // A checkpoint names no adapter: the manifest is withdrawn, and
+    // publishing again repairs one a crash left behind.
+    let base = f
+        .store
+        .put(&checkpoint(&f, "base", Some(&first.id)))
+        .unwrap();
+    f.store
+        .move_alias("default", Some(&first.id), &base.id, at)
+        .unwrap();
+    assert_eq!(served(&f, "default"), None);
+    f.store
+        .move_alias("default", Some(&base.id), &second.id, at)
+        .unwrap();
+    std::fs::remove_file(f.store.manifest_path("default").unwrap()).unwrap();
+    f.store.publish_manifest("default").unwrap();
+    assert_eq!(served(&f, "default"), Some(names(&second)));
 }

@@ -25,6 +25,15 @@
 //! against the same champion cannot both land, whichever processes decide
 //! them, and there is no lock file to go stale. Rolling back is moving to the
 //! older release.
+//!
+//! A server follows an alias through a manifest published beside it
+//! ([`ReleaseStore::manifest_path`]): whenever an alias moves, whoever moves
+//! it, the manifest `brain serve --adapter-manifest` reads is rewritten to
+//! name the adapter the alias now points at and its digest, so the server
+//! swaps onto a release and back off it on a rollback without a restart. An
+//! alias that points at a full checkpoint has no adapter to name (a
+//! checkpoint is a base, which a server is started on), so its manifest is
+//! withdrawn rather than left naming an adapter the alias no longer means.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -40,7 +49,7 @@ use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
-use crate::error::OrchestratorError;
+use crate::error::{io, OrchestratorError};
 use crate::release_manifest::ManifestDocument;
 pub use crate::release_manifest::{
     ArtifactKind, Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, MANIFEST_V2,
@@ -140,6 +149,7 @@ impl StoredRelease {
 pub struct ReleaseStore {
     workspace: Workspace,
     artifacts: ArtifactStore,
+    serving: PathBuf,
 }
 
 impl ReleaseStore {
@@ -149,6 +159,7 @@ impl ReleaseStore {
         Self {
             workspace: workspace.clone(),
             artifacts: ArtifactStore::new(workspace, root),
+            serving: root.serving(),
         }
     }
 
@@ -317,7 +328,13 @@ impl ReleaseStore {
             .workspace
             .move_pointer(&pointer, from.map(|id| id.0.as_str()), to.0.as_str(), at)
         {
-            Ok(_) => Ok(()),
+            Ok(_) => self.publish_manifest(alias).map_err(|e| {
+                OrchestratorError::Refused(format!(
+                    "alias {alias} moved to {to}, but the manifest a server follows was not \
+                     updated: {e}; it is rewritten by the next move of the alias, or by \
+                     `publish_manifest`"
+                ))
+            }),
             Err(StoreError::PointerConflict {
                 found, expected, ..
             }) => Err(OrchestratorError::Refused(format!(
@@ -326,6 +343,43 @@ impl ReleaseStore {
                 expected.unwrap_or_else(|| "nothing".into()),
             ))),
             Err(other) => Err(other.into()),
+        }
+    }
+
+    /// The manifest a server following `alias` reads
+    /// (`brain serve --adapter-manifest <this>`).
+    pub fn manifest_path(&self, alias: &str) -> Result<PathBuf, OrchestratorError> {
+        self.pointer(alias)?;
+        Ok(self.serving.join(format!("{alias}.json")))
+    }
+
+    /// Rewrites the manifest of `alias` to name what it points at now: the
+    /// adapter of that release and its digest, atomically. An alias that
+    /// points nowhere, or at a full checkpoint, has its manifest withdrawn.
+    /// Idempotent; every move of an alias does it, and a caller that
+    /// finds an alias already at the release it wants (a release resumed
+    /// after its process died) does it to repair a manifest the death left
+    /// behind.
+    pub fn publish_manifest(&self, alias: &str) -> Result<(), OrchestratorError> {
+        let path = self.manifest_path(alias)?;
+        let Some(id) = self.alias(alias)? else {
+            return splinter_model::manifest::withdraw_adapter_manifest(&path).map_err(io(&path));
+        };
+        let release = self.get(&id)?;
+        match release.manifest.artifact.kind() {
+            ArtifactKind::Adapter => {
+                let adapter =
+                    std::path::absolute(&release.artifact).map_err(io(&release.artifact))?;
+                splinter_model::manifest::write_adapter_manifest(
+                    &path,
+                    &adapter,
+                    release.manifest.artifact.content_digest(),
+                )
+                .map_err(io(&path))
+            }
+            ArtifactKind::FullCheckpoint => {
+                splinter_model::manifest::withdraw_adapter_manifest(&path).map_err(io(&path))
+            }
         }
     }
 

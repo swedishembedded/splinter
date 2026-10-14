@@ -120,6 +120,14 @@ impl StateRoot {
         self.0.join("work")
     }
 
+    /// Where the files a running server follows are published: one release
+    /// manifest per alias, rewritten whenever the alias moves. Derived from
+    /// the releases, so it can be removed and is rewritten on the next move.
+    #[must_use]
+    pub fn serving(&self) -> PathBuf {
+        self.0.join("serving")
+    }
+
     /// The experience database's directory.
     #[must_use]
     pub fn expdb(&self) -> PathBuf {

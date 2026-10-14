@@ -34,6 +34,10 @@
 //!
 //! `rollback` points an alias at the release its current one was trained
 //! from, and refuses when there is none.
+//!
+//! Whenever an alias moves - a release, a rollback - the manifest
+//! `brain serve --adapter-manifest` follows is rewritten to name what the
+//! alias points at ([`splinter_orchestrator::releases::ReleaseStore::publish_manifest`]).
 
 pub mod anchor;
 mod gating;
@@ -281,6 +285,11 @@ fn resume(
             &ctx.clock().utc_now(),
         )?;
         ctx.repin_policy(&request.alias);
+    } else {
+        // The alias is already there. A process that died after moving it and
+        // before the manifest a server follows was written left that one
+        // behind.
+        store.publish_manifest(&request.alias)?;
     }
     Ok(Released {
         candidate: made.manifest.candidate.clone(),
