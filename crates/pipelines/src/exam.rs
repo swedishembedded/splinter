@@ -44,7 +44,7 @@ use splinter_model::stats::{bootstrap_interval, sign_test, Interval};
 
 use crate::grouping::task_clusters;
 use crate::judging::{controls, reference, spaced};
-use crate::release::arm;
+use crate::release::arm_on;
 use crate::release::probe::{answer_prompted, greedy, held_out, trained_tasks};
 use crate::retrieval::Retrieval;
 use crate::train::load_candidate;
@@ -597,7 +597,7 @@ pub fn examine(
                 .map(|id| ctx.releases().get(id))
                 .transpose()?;
             let adapter = continued.as_ref().map(StoredRelease::adapter).transpose()?;
-            arm(ctx.config(), adapter)
+            arm_on(ctx.config(), &trained.base, adapter)
         }
     };
     // Each model is asked under the prompt it was trained under.
@@ -626,7 +626,7 @@ pub fn examine(
         ));
     }
     let tasks = spaced(&suite.tasks, MAX_EXAM_TASKS);
-    let candidate = arm(ctx.config(), Some(&trained.adapter));
+    let candidate = arm_on(ctx.config(), &trained.base, Some(&trained.adapter));
     let mut examined = exam(
         ctx,
         &ExamRequest {

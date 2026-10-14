@@ -34,7 +34,7 @@ use splinter_core::digest::Digest;
 use splinter_eval::paired::accuracy;
 
 use crate::release::probe::{self, Suite};
-use crate::release::{anchor, arm};
+use crate::release::{anchor, arm_on};
 use crate::train::load_candidate;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
@@ -174,7 +174,7 @@ fn subject(ctx: &Context, named: &str) -> Result<Subject, OrchestratorError> {
     }
     let candidate = load_candidate(ctx, named)?;
     Ok(Subject {
-        reference: arm(ctx.config(), Some(&candidate.adapter)),
+        reference: arm_on(ctx.config(), &candidate.base, Some(&candidate.adapter)),
         held_out: Some((None, candidate.datasets)),
         earlier: lineage(candidate.parent.as_ref())?,
     })
