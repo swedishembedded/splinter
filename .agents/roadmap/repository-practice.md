@@ -56,12 +56,95 @@ gate and lineage.
    with the in-process run, and brain's adapter manifest rewritten on every alias move so
    `brain serve --adapter-manifest` follows the alias. `practice` ends in the gate and says why
    a blocked candidate was not released.
-8. [ ] Tool-definition audit in sven: token cost of each tool definition, fix wrong or
-   redundant ones, no additions without a measured failure.
+8. [x] Tool-definition audit in sven: token cost of each tool definition measured and guarded by a
+   footprint test; redundant wording removed; no tool added.
 9. [ ] Retire the duplicates in the coding-loop sample so it keeps only supervision and calls the
    shared stages.
 10. [ ] Acceptance on the GPUs: plumbing on the small model, then the measured run on the 8B
     model with frozen exam families, then served through brain and used from sven.
+
+## Not done yet (everything below is needed before this is finished)
+
+Order matters; each line is one self-contained piece of work.
+
+### Before the acceptance runs
+
+- Re-point the frozen copies of sven and brain that Splinter builds against at the current
+  main of each, rebuild the whole Splinter workspace, run `make lock` and the file-size and
+  architecture gates.
+- Retire the duplicates in `samples/agent/loop` (work item 9): delete its dataset projector,
+  model registry and promotion rule, and private process runner; its verbs call the shared
+  stages (`solve_in_workspace`, sandbox runner, `practice` dataset/train/release); fix
+  `fixtures/eval-candidate.sh`; adjust `loop_spec.rs`; the sample then depends on the SDK
+  only. F-024 stays open for the sample until this lands.
+
+### Acceptance on the GPUs (work item 10)
+
+1. Fixtures: the twelve seeded-bug families of the loop sample imported as workspace tasks,
+   plus mutation-seeded tasks from one small Python repository kept under `tasks/` as a
+   frozen family (own code).
+2. Plumbing run on the 0.6B model: `practice` end to end, every stage recorded, dataset
+   passes brain's check, overfit test (30 steps on 4 records, held-out loss on them falls).
+   It proves the plumbing, not learning; expect few or no verified trajectories from 0.6B,
+   so the overfit records may come from 8B runs.
+3. Measured run on the 8B model: pass@k on training families, SFT from verified
+   trajectories, exam families reserved before any rollout, base and candidate at the same
+   seeds, the gate's sign test over family clusters. Size from the measured training cost
+   (windows near 4096 tokens, a few hundred records per epoch; longer windows need an int8
+   base or are refused by the placer). Report pass@1, tool-call validity, exposure count,
+   environment versus model failures, wall time. A negative result is reported as such.
+4. Serve the released adapter with `brain serve --openai --adapter-manifest`, mixed with
+   base requests on the one resident base, and solve one exam task from sven.
+5. Second round: a later revision of the same repository and a second repository; measure
+   retention on the first (non-inferiority margin in the paper protocol).
+6. Put the measured numbers into `papers/training-code-skills-with-splinter/data/results.csv`
+   (nothing before it is measured), rebuild the figures, update the audit statuses, and
+   settle with the maintainer whether a paper may hold results of a protocol still being run.
+
+### Task generation still missing
+
+- Faults derived from the repository's history (a fix and the test that came with it,
+  reversed), with the same qualification as mutations.
+- Test-selection for large suites (impact analysis) so a task grades only relevant tests.
+- Mutation seeding only covers Python unittest suites. Rust (cargo, vendored and offline),
+  and other test runners: profile detection, baseline qualification, and the offline
+  dependency path.
+- Model-written faults and issue text that states the symptom without the fix, validated
+  composites of several faults, and an oracle-strength classification of each task.
+- Maintainer knowledge as tasks: conventions and "never do X here" from sessions, taken
+  through the claim intake and given a verifier; a task nothing can grade is not admitted.
+- Non-code workspaces (documents, configuration trees) as a second user of the same
+  environment, to show the machinery is not code-specific.
+
+### Isolation
+
+- A container-backed workspace run (needs a reachable container runtime): until then every
+  run has isolation `none` and the exposure audit detects but does not prevent. Needs the
+  live container tests (currently ignored) to run, and the Rust offline path above.
+- Two sven tools outside the coding set stay unguarded (`web_fetch` private-address filter,
+  debugger path confinement); they are withheld from workers, so only a person using them
+  is exposed.
+
+### Dependencies in sven and brain that are still open
+
+- sven: compaction and raw-argument markers are written by the SDK trajectory but the
+  headless CI runner trajectory still shows `{}` for unparsed arguments; consumers of the
+  served-model-changed event in the TUI and ACP frontends; `make check` formatting fails on
+  three files outside this work.
+- brain: per-record token lengths from the SDK so `overlong_records` is exact instead of an
+  estimate; an unused import in the SDK decision module; two violations reported by the
+  kernel-selection gate; D-Bus coverage and a sample note for multi-adapter serving; adapters
+  for the qwen35 family are not servable; the training device is not selectable from
+  Splinter's `FineTune` (deferred until a measurement shows it matters); no model between
+  0.6B and 8B is on disk (a 1.7B or 4B would make rollouts and training cheaper).
+
+### Documentation owed when the above lands
+
+- Close F-021 in `agent-loop.md` only when a run on real weights trains a multi-step tool
+  conversation (the specs use a test double), and F-024 for the sample.
+- `splinter.md` section 5: mark the file-tools-in-a-directory and ATIF-as-chat items
+  resolved, with the evidence.
+- A knowledge entry for every defect found during the acceptance runs, with its number.
 
 Dependencies in brain (per-answer masking of tool-call turns, tool definitions carried into
 records, public adapter manifest writer, long-context memory measurement) and in sven
