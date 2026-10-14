@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-persona-chat"
+description = "Talk to a trained persona, or put it a file of questions, through tools you define, and read the trace of what it said and called."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "persona_chat"
+path = "src/lib.rs"
+
+[[bin]]
+name = "persona-chat"
+path = "src/main.rs"
+
+[dependencies]
+splinter-sdk = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+futures = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
