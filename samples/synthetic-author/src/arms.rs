@@ -94,15 +94,28 @@ pub async fn ask(
     }))
 }
 
-fn read_outcomes(path: &Path) -> anyhow::Result<Vec<Outcome>> {
+/// Reads the outcomes in `path`, each item once (the first answer stands).
+///
+/// # Errors
+/// The file cannot be read or a line is not an outcome.
+pub fn read_outcomes(path: &Path) -> anyhow::Result<Vec<Outcome>> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    std::fs::read_to_string(path)
+    let mut seen = std::collections::HashSet::new();
+    let mut outcomes = Vec::new();
+    for line in std::fs::read_to_string(path)
         .with_context(|| format!("reading {}", path.display()))?
         .lines()
-        .map(|l| serde_json::from_str(l).with_context(|| format!("a line of {}", path.display())))
-        .collect()
+    {
+        let outcome: Outcome =
+            serde_json::from_str(line).with_context(|| format!("a line of {}", path.display()))?;
+        // Runs that overlap append the same item twice; the first answer stands.
+        if seen.insert(outcome.id.clone()) {
+            outcomes.push(outcome);
+        }
+    }
+    Ok(outcomes)
 }
 
 /// Puts every item of `items` to `provider` under `system`, appending an outcome

@@ -219,6 +219,26 @@ fn an_examination_grades_every_item_and_picks_up_where_it_stopped() {
     assert_eq!(right, expected);
 }
 
+#[test]
+fn an_item_written_twice_by_overlapping_runs_is_counted_once() {
+    let all = exam_items();
+    let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
+    let dir = std::env::temp_dir().join(format!("synthetic-author-dup-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("arm.jsonl");
+    run_items(&provider, "system", &all, &out, 64).unwrap();
+    let once = std::fs::read_to_string(&out).unwrap();
+    let doubled = format!("{once}{once}");
+    std::fs::write(&out, doubled).unwrap();
+    let read = run_items(&provider, "system", &all, &out, 64).unwrap();
+    assert_eq!(
+        read.len(),
+        all.len(),
+        "each item once, however often written"
+    );
+}
+
 fn outcome(
     id: usize,
     correct: bool,

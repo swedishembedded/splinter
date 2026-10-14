@@ -465,11 +465,10 @@ fn main() -> anyhow::Result<()> {
                 if !path.exists() {
                     continue;
                 }
-                let outcomes = std::fs::read_to_string(&path)?
-                    .lines()
-                    .map(serde_json::from_str)
-                    .collect::<Result<Vec<_>, _>>()?;
-                loaded.push((name.to_string(), outcomes));
+                loaded.push((
+                    name.to_string(),
+                    synthetic_author::arms::read_outcomes(&path)?,
+                ));
             }
             let view: Vec<(&str, Vec<_>)> = loaded
                 .iter()
