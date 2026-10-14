@@ -10,8 +10,9 @@
 //! records `isolation: "container"` and the image digest in the snapshot,
 //! and runs a call with no network and a read-only root.
 //!
-//! The tests that run a container need a docker daemon this user can reach;
-//! without one they print why they were skipped and pass.
+//! The tests that run a container need a docker daemon this user can reach
+//! and the pinned image. They are ignored by default and show as ignored;
+//! run with `--ignored`, a missing daemon or image fails them.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -95,36 +96,33 @@ fn docker(args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// The container sandbox for the test image, or why it cannot run here.
-fn container(scratch: &Path) -> Option<ContainerSandbox> {
+/// The container sandbox for the test image.
+///
+/// # Panics
+/// When no docker daemon is reachable or the image cannot be pinned: a test
+/// that cannot run fails, it does not pass.
+fn container(scratch: &Path) -> ContainerSandbox {
     if let Err(why) = ContainerSandbox::reachable(Path::new(DOCKER), &client_env()) {
-        eprintln!(
-            "SKIPPED: container sandbox tests need a docker daemon this user can reach: {why}"
-        );
-        return None;
+        panic!("the container sandbox tests need a docker daemon this user can reach: {why}");
     }
     match pinned_test_image() {
-        Ok(image) => Some(ContainerSandbox::new(
+        Ok(image) => ContainerSandbox::new(
             PathBuf::from(DOCKER),
             client_env(),
             image,
             scratch,
             Limits::default(),
-        )),
-        Err(why) => {
-            eprintln!("SKIPPED: cannot pin the test image {TEST_IMAGE}: {why}");
-            None
-        }
+        ),
+        Err(why) => panic!("cannot pin the test image {TEST_IMAGE}: {why}"),
     }
 }
 
 #[test]
+#[ignore = "needs a reachable docker daemon and the pinned test image"]
 fn a_call_runs_in_a_pinned_container_without_network() {
     let scratch = std::env::temp_dir().join(format!("splinter-container-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).unwrap();
-    let Some(sandbox) = container(&scratch) else {
-        return;
-    };
+    let sandbox = container(&scratch);
     assert_eq!(sandbox.isolation(), Isolation::Container);
     let image = sandbox.image().clone();
     let env = ResolvedEnvironment::Runtime(

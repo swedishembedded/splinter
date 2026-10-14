@@ -74,6 +74,12 @@ repos:
         files: (\.rs|Cargo\.toml|architecture\.toml|scripts/gates/(test-)?architecture\.py)$
         pass_filenames: false
 
+      - id: no-silent-test-skips
+        name: no test skips itself silently
+        entry: bash scripts/gates/check-test-skips.sh
+        language: system
+        files: \.rs$
+
       - id: no-perf-numbers
         name: no unreviewed performance numbers in prose or narration
         entry: bash scripts/gates/check-no-perf-numbers.sh

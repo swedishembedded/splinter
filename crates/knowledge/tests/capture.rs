@@ -226,10 +226,10 @@ fn git(dir: &Path, args: &[&str]) -> std::process::Output {
 
 #[test]
 fn a_git_repository_records_its_head_and_whether_it_is_dirty() {
-    if Command::new("git").arg("--version").output().is_err() {
-        eprintln!("SKIPPED: git is not installed; the git revision cannot be checked");
-        return;
-    }
+    assert!(
+        Command::new("git").arg("--version").output().is_ok(),
+        "git must be installed to check the git revision"
+    );
     let scratch = Scratch::new("git");
     let repo = scratch.0.join("repo");
     scratch.write("repo/README.md", b"# Repo\n\nFirst.\n");

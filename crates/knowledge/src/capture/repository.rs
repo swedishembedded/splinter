@@ -217,10 +217,10 @@ mod tests {
     /// tree.
     #[test]
     fn a_tree_outside_git_has_no_revision_and_a_broken_one_is_an_error() {
-        if git(&std::env::temp_dir(), &["--version"]).is_err() {
-            eprintln!("SKIPPED: git is not installed");
-            return;
-        }
+        assert!(
+            git(&std::env::temp_dir(), &["--version"]).is_ok(),
+            "git must be installed to check the git revision"
+        );
         let dir = std::env::temp_dir().join(format!("splinter-repo-plain-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

@@ -263,6 +263,16 @@ Each is enforced by a gate in `make check` and at commit where it can be:
 - **Small files** - no source file over 800 lines; a file that must stay
   larger for a while is recorded in `architecture.toml` and may only shrink
   (`check-architecture`).
+- **No test skips itself silently** - a test that cannot run (no git, no
+  docker daemon, no weights, running as root, an unset environment variable)
+  fails with the reason, or carries `#[ignore = "reason"]` so that every run
+  shows it as ignored. It never prints "skipped" and returns, which reports a
+  pass for a check that never happened: a false success. A skip is allowed
+  only when the person asking for the change explicitly asked for that test
+  to be skippable, and the test says so where it skips (`check-test-skips`).
+  This applies to every test in every crate and sample, and to the ignored
+  tests that need hardware: run with `--ignored`, a missing prerequisite
+  fails them.
 - **Documented** - every public item of a library crate has a doc comment
   (`#![warn(missing_docs)]` under clippy `-D warnings`).
 - **No numbers without reproduction** - no unreviewed performance figure in

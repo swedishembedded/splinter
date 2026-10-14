@@ -27,11 +27,16 @@ fn a_run_on_an_unwritable_state_root_is_refused_before_it_starts() {
     let manual = std::env::temp_dir().join(format!("preflight-manual-{}.md", std::process::id()));
     std::fs::write(&manual, MANUAL).unwrap();
     std::fs::set_permissions(&scratch.0, std::fs::Permissions::from_mode(0o555)).unwrap();
-    // Root ignores the mode; the refusal cannot be provoked there.
-    if std::fs::write(scratch.0.join("probe"), b"x").is_ok() {
+    // Root ignores the mode, and then nothing here can be provoked: the test
+    // fails rather than pass without having checked anything.
+    let ignored = std::fs::write(scratch.0.join("probe"), b"x").is_ok();
+    if ignored {
         std::fs::set_permissions(&scratch.0, std::fs::Permissions::from_mode(0o755)).unwrap();
-        return;
     }
+    assert!(
+        !ignored,
+        "the file mode is ignored for this user (root?): run this test as an ordinary user"
+    );
 
     let outcome = learn(
         &ctx,
