@@ -7,7 +7,7 @@
 // sending an email to info@swedishembedded.com.
 
 //! The `brain serve` process of a serve check: started on the base with the
-//! candidate offered as an adapter file,
+//! candidate offered as an adapter file or as a release manifest to follow,
 //! waited for until it reports what it serves and that it is ready, and
 //! stopped when dropped.
 
@@ -40,6 +40,9 @@ pub(super) enum Failure {
 pub(super) enum Offer<'a> {
     /// `--adapter FILE`: exactly this adapter, for the server's life.
     Adapter(&'a Path),
+    /// `--adapter-manifest FILE`: whichever adapter the manifest names, as a
+    /// release step publishes it.
+    Manifest(&'a Path),
     /// Nothing: the base is the model (a consolidated checkpoint).
     Nothing,
 }
@@ -99,6 +102,11 @@ impl Started {
     pub(super) fn serves_candidate(&self, expected: &str) -> bool {
         self.served_digest == expected
     }
+
+    /// What the server last wrote, as one line of text.
+    pub(super) fn recent_output(&mut self) -> String {
+        recent_output(&self.lines, &mut self.kept)
+    }
 }
 
 /// Starts the server `launch` describes and waits for it to report what it
@@ -113,6 +121,9 @@ pub(super) fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started
     match launch.offer {
         Offer::Adapter(adapter) => {
             command.arg("--adapter").arg(adapter);
+        }
+        Offer::Manifest(manifest) => {
+            command.arg("--adapter-manifest").arg(manifest);
         }
         Offer::Nothing => {}
     }

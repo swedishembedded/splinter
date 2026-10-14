@@ -23,9 +23,9 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::releases::StoredRelease;
 
-use super::probe::{self, clustered, pair, Probe, Suite};
+use super::probe::{self, clustered, pair, Arm, Probe, Suite};
 use super::statistics::{drop_interval, items_to_see_two_points, task_level, with_task_level};
-use super::{anchor, arm, leakage, serve};
+use super::{agentic, anchor, arm, exams, leakage, serve};
 use crate::train::Candidate;
 
 /// One model's answer and outcome on each task of a suite.
@@ -98,7 +98,12 @@ pub(crate) fn grade_arm(
             (Asked::Deployed, Some(system)) => model.clone().with_system(system),
             _ => model.clone(),
         };
-        graded.push(soft(probe::grade(ctx, &asked_model, suite, cancel))?);
+        graded.push(soft(probe::grade_on(
+            ctx,
+            &Arm::named(reference, &asked_model),
+            suite,
+            cancel,
+        ))?);
     }
     Ok(graded)
 }
@@ -106,7 +111,8 @@ pub(crate) fn grade_arm(
 /// The suites the gate grades on, each built or with why it could not be.
 struct Suites {
     /// The improvement suite: the held-out records and the variants of
-    /// trained tasks together, what the decision rests on.
+    /// trained tasks together, what the decision rests on - or, for a
+    /// candidate that works in a workspace, the exam its run reserved.
     held_out: Result<Suite, String>,
     /// How the improvement suite divides, when it was built.
     parts: Option<Parts>,
@@ -115,6 +121,9 @@ struct Suites {
     retention: Result<Vec<(ReleaseId, Suite)>, String>,
     anchor: Result<Option<anchor::FrozenAnchor>, String>,
     anchor_suite: Option<Suite>,
+    /// Whether the candidate works in a workspace: an exam was reserved
+    /// against one of its datasets.
+    agentic: bool,
 }
 
 /// The two kinds of task the improvement suite holds, told apart so each is
@@ -129,36 +138,79 @@ struct Parts {
 }
 
 impl Suites {
+    /// Suites none of which could be built, for `why`.
+    fn unmeasured(why: String, agentic: bool) -> Self {
+        Self {
+            held_out: Err(why.clone()),
+            parts: None,
+            variants: None,
+            retention: Err(why.clone()),
+            anchor: Err(why),
+            anchor_suite: None,
+            agentic,
+        }
+    }
+
     fn build(
         ctx: &Context,
         candidate: &Candidate,
         champion: Option<&StoredRelease>,
+        config: &GateConfig,
     ) -> Result<Self, OrchestratorError> {
         let trained = match soft(leakage::trained_prompts(ctx, candidate))? {
             Ok(trained) => trained,
             Err(why) => {
-                let why = format!("the candidate's training records: {why}");
-                return Ok(Self {
-                    held_out: Err(why.clone()),
-                    parts: None,
-                    variants: None,
-                    retention: Err(why.clone()),
-                    anchor: Err(why),
-                    anchor_suite: None,
-                });
+                return Ok(Self::unmeasured(
+                    format!("the candidate's training records: {why}"),
+                    false,
+                ));
             }
+        };
+        let split = match soft(exams::split(ctx, &candidate.datasets))? {
+            Ok(split) => split,
+            Err(why) => {
+                return Ok(Self::unmeasured(
+                    format!("the exams reserved for the candidate's datasets: {why}"),
+                    false,
+                ));
+            }
+        };
+        let agentic = !split.exams.is_empty();
+        // What the candidate has seen, by family: no family it trained on, or
+        // that any release it descends from trained on, is an exam for it.
+        let families = if agentic {
+            match soft(trained_families(ctx, candidate, champion))? {
+                Ok(families) => families,
+                Err(why) => {
+                    return Ok(Self::unmeasured(
+                        format!("the families the candidate trained on: {why}"),
+                        agentic,
+                    ));
+                }
+            }
+        } else {
+            BTreeSet::new()
         };
         let clean = |mut suite: Suite| {
             leakage::exclude_leaked(&mut suite, &trained);
             suite
         };
         let improvement = soft((|| {
-            let held_out = clean(probe::held_out(ctx, "held-out", &candidate.datasets)?);
-            let variants = clean(probe::trained_variants(
-                ctx,
-                "variants",
-                &candidate.datasets,
-            )?);
+            let mut held_out = clean(probe::held_out(ctx, "held-out", &split.plain)?);
+            let variants = clean(probe::trained_variants(ctx, "variants", &split.plain)?);
+            if agentic {
+                if split.plain.is_empty() {
+                    held_out.name = "exam".into();
+                }
+                held_out.absorb(exams::suite(
+                    ctx,
+                    "exam",
+                    &split.exams,
+                    &families,
+                    config.agentic,
+                )?);
+                held_out.work = config.agentic;
+            }
             Ok::<_, OrchestratorError>((held_out, variants))
         })())?;
         let (held_out, parts, variants) = match improvement {
@@ -191,17 +243,32 @@ impl Suites {
                 .into_iter()
                 .map(|release| {
                     let name = format!("retention {}", release.id);
-                    probe::held_out(ctx, name, &release.manifest.datasets)
-                        .map(|suite| (release.id, clean(suite)))
+                    let split = exams::split(ctx, &release.manifest.datasets)?;
+                    let mut suite = clean(probe::held_out(ctx, name.clone(), &split.plain)?);
+                    suite.absorb(exams::suite(
+                        ctx,
+                        &name,
+                        &split.exams,
+                        &families,
+                        config.agentic,
+                    )?);
+                    suite.work = config.agentic;
+                    Ok((release.id, suite))
                 })
                 .collect()
         }))?;
         let anchor = soft(anchor::current(ctx))?;
-        let anchor_suite = anchor
-            .as_ref()
-            .ok()
-            .and_then(|a| a.as_ref())
-            .map(|frozen| clean(frozen.probe_suite()));
+        let anchor_suite = anchor.as_ref().ok().and_then(|a| a.as_ref()).map(|frozen| {
+            if !agentic {
+                return clean(frozen.probe_suite());
+            }
+            // The frozen tasks that are changes to a repository are no
+            // training prompt of the candidate's to be leaked from.
+            let (closed, workspace) = frozen.split_probe_suites(config.agentic);
+            let mut suite = clean(closed);
+            suite.absorb(workspace);
+            suite
+        });
         Ok(Self {
             held_out,
             parts,
@@ -209,6 +276,7 @@ impl Suites {
             retention,
             anchor,
             anchor_suite,
+            agentic,
         })
     }
 
@@ -227,6 +295,56 @@ impl Suites {
     }
 }
 
+/// The families `candidate` has seen, and every release it descends from:
+/// what none of them can be examined on.
+fn trained_families(
+    ctx: &Context,
+    candidate: &Candidate,
+    champion: Option<&StoredRelease>,
+) -> Result<BTreeSet<String>, OrchestratorError> {
+    let mut datasets = candidate.datasets.clone();
+    if let Some(champion) = champion {
+        for release in ctx.releases().lineage(&champion.id)? {
+            datasets.extend(release.manifest.datasets);
+        }
+    }
+    let mixed_in = [
+        candidate.replay.as_ref().and_then(|r| r.digest.as_ref()),
+        candidate.rehearsal.as_ref().and_then(|r| r.digest.as_ref()),
+    ];
+    exams::trained_families(ctx, &datasets, &mixed_in)
+}
+
+/// The sample of `suite` the served candidate is asked again, with the
+/// candidate's in-process probes of it: the first `limit` tasks, or - for a
+/// suite that holds changes to a repository - the first `limit` of them that
+/// the in-process attempts graded, since a served verdict has nothing to
+/// agree with where there is none. `None` when there is no such task.
+fn serve_sample(suite: &Suite, probes: &[Probe], limit: usize) -> Option<(Suite, Vec<Probe>)> {
+    let name = format!("{} (served sample)", suite.name);
+    if suite.workspace_tasks() == 0 {
+        let take = limit.min(suite.tasks.len());
+        return Some((
+            Suite::of_tasks(name, suite.tasks[..take].to_vec()),
+            probes[..take].to_vec(),
+        ));
+    }
+    let chosen: Vec<usize> = (0..suite.tasks.len())
+        .filter(|&i| agentic::is_workspace(&suite.tasks[i]) && probes[i].verdict.is_some())
+        .take(limit)
+        .collect();
+    (!chosen.is_empty()).then(|| {
+        (
+            Suite::workspace(
+                name,
+                chosen.iter().map(|&i| suite.tasks[i].clone()).collect(),
+            )
+            .with_work(suite.work),
+            chosen.iter().map(|&i| probes[i].clone()).collect(),
+        )
+    })
+}
+
 /// The four checks on `candidate` against `champion`.
 pub(super) fn run_gate(
     ctx: &Context,
@@ -236,7 +354,7 @@ pub(super) fn run_gate(
     config: &GateConfig,
     cancel: &CancelToken,
 ) -> Result<GateReport, OrchestratorError> {
-    let suites = Suites::build(ctx, candidate, champion)?;
+    let suites = Suites::build(ctx, candidate, champion, config)?;
     let all = suites.all();
     let candidate_ref = arm(ctx.config(), Some(&candidate.adapter));
     let champion_adapter = champion.map(StoredRelease::adapter).transpose()?;
@@ -295,6 +413,7 @@ pub(super) fn run_gate(
                 );
                 if let Some(measured) = check.measured.as_mut() {
                     measured.task_level = task_level(&outcomes);
+                    measured.agentic = agentic::withheld(suite, &c, &b);
                 }
                 if let (Some(measured), Some(parts)) = (check.measured.as_mut(), &suites.parts) {
                     let (recall, generalisation): (Vec<PairedOutcome>, Vec<PairedOutcome>) =
@@ -322,10 +441,12 @@ pub(super) fn run_gate(
         Err(why) => Check::unmeasured(why.clone()),
         Ok(releases) => {
             let mut measured = Vec::new();
+            let mut withheld = Vec::new();
             let mut failure = None;
             for (release, suite) in releases {
                 match next() {
                     Ok((c, b)) => {
+                        withheld.push(agentic::withheld(suite, &c, &b));
                         measured.push((release.clone(), suite.summary(), pair(suite, &c, &b)))
                     }
                     Err(why) => failure = failure.or(Some(format!("{}: {why}", suite.name))),
@@ -333,7 +454,15 @@ pub(super) fn run_gate(
             }
             match failure {
                 Some(why) => Check::unmeasured(why),
-                None => gate::retention(measured, config.retention_bound),
+                None => {
+                    let mut check = gate::retention(measured, config.retention_bound);
+                    if let Some(retained) = check.measured.as_mut() {
+                        for (suite, note) in retained.suites.iter_mut().zip(withheld) {
+                            suite.agentic = note;
+                        }
+                    }
+                    check
+                }
             }
         }
     };
@@ -357,19 +486,18 @@ pub(super) fn run_gate(
                     measured.drop_interval = drop_interval(&outcomes);
                     measured.items_to_see_two_points =
                         items_to_see_two_points(&measured.comparison);
+                    if suites.agentic {
+                        measured.workspace_tasks = Some(suite.workspace_tasks());
+                        measured.agentic = agentic::withheld(suite, &c, &b);
+                    }
                 }
                 check
             }
         },
     };
     let serve = match (&suites.held_out, &in_process) {
-        (Ok(held_out), Some(probes)) => {
-            let take = config.serve_sample.min(held_out.tasks.len());
-            let sample = Suite::of_tasks(
-                format!("{} (served sample)", held_out.name),
-                held_out.tasks[..take].to_vec(),
-            );
-            serve::check(
+        (Ok(held_out), Some(probes)) => match serve_sample(held_out, probes, config.serve_sample) {
+            Some((sample, in_process)) => serve::check(
                 ctx,
                 &serve::ServeCheck {
                     binary: ctx.config().brain_binary.as_deref(),
@@ -378,12 +506,16 @@ pub(super) fn run_gate(
                     adapter_digest: &candidate.adapter_digest,
                     system: candidate_prompt.as_deref(),
                     sample: &sample,
-                    in_process: &probes[..take],
+                    in_process: &in_process,
                     startup: Duration::from_secs(config.serve_startup_secs),
                 },
                 cancel,
-            )?
-        }
+            )?,
+            None => Check::unmeasured(
+                "no task of the exam was graded in-process, so the served candidate has nothing \
+                 to agree with",
+            ),
+        },
         _ => Check::unmeasured("the held-out tasks were not graded in-process to compare with"),
     };
     Ok(GateReport::new(*config, improvement, retention, anchor, serve).with_prompts(prompts))

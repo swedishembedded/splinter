@@ -26,6 +26,14 @@
 //! A model is probed decoding greedily where its sampling can be set here
 //! ([`greedy`]), so a verdict is the weights', not one draw's.
 //!
+//! A suite built for a candidate that works in a workspace holds tasks that
+//! are changes to a repository ([`Suite::workspace`]); they are attempted by
+//! the worker in their own copy of the snapshot and graded by the workspace
+//! verifier and the exposure audit (`crate::release::agentic`), and a
+//! suite built from a dataset's records (the held-out records, the variants
+//! of trained tasks) never holds one: a record's task is a task the policy
+//! solved, which is not an exam.
+//!
 //! A probe runs under the one system prompt every solve runs under and
 //! every training record shows (`splinter_core::prompt::SYSTEM_PROMPT`). Grading is
 //! by the task kind's own verifiers, without a judge, and the store's
@@ -45,7 +53,7 @@ use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
 use splinter_data::holdout::holdout_split_records;
-use splinter_eval::gate::SuiteSummary;
+use splinter_eval::gate::{AgenticConfig, SuiteSummary, Withheld};
 use splinter_eval::paired::PairedOutcome;
 use splinter_eval::verifiers::Strongest;
 use splinter_model::local::GREEDY_SAMPLING;
@@ -53,6 +61,7 @@ use splinter_model::Sampling;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 
+use crate::release::agentic;
 use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::variants::stored_variants;
 use crate::verify::{verifiers_for, Judge, Use};
@@ -62,6 +71,9 @@ use splinter_orchestrator::error::{io, OrchestratorError};
 
 /// Why a task was left out of a suite: it is not solved closed-book.
 pub const NOT_CLOSED_BOOK: &str = "not_closed_book";
+/// Why a task was left out of a workspace suite: it is not a change to a
+/// repository.
+pub const NOT_WORKSPACE: &str = "not_workspace";
 /// Why a record was left out of a suite: its task cannot be found.
 pub const TASK_UNKNOWN: &str = "task_unknown";
 
@@ -75,6 +87,9 @@ pub struct Suite {
     pub tasks: Vec<Task>,
     /// Records or tasks left out, by reason.
     pub excluded: BTreeMap<String, usize>,
+    /// How its tasks that work in a workspace are attempted: the same for
+    /// every model probed on it.
+    pub work: AgenticConfig,
 }
 
 impl Suite {
@@ -92,31 +107,82 @@ impl Suite {
     /// and repeats.
     #[must_use]
     pub fn of_tasks(name: impl Into<String>, tasks: Vec<Task>) -> Self {
-        let mut suite = Self {
-            name: name.into(),
-            tasks: Vec::new(),
-            excluded: BTreeMap::new(),
-        };
+        let mut suite = Self::empty(name);
         for task in tasks {
             suite.add(task);
         }
         suite
     }
 
-    /// This suite and `other`'s tasks, and what each left out.
+    /// A suite of `tasks` that are changes to a repository, excluding (and
+    /// counting) those that are not, and repeats.
+    #[must_use]
+    pub fn workspace(name: impl Into<String>, tasks: Vec<Task>) -> Self {
+        let mut suite = Self::empty(name);
+        for task in tasks {
+            suite.add_workspace(task);
+        }
+        suite
+    }
+
+    fn empty(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            tasks: Vec::new(),
+            excluded: BTreeMap::new(),
+            work: AgenticConfig::default(),
+        }
+    }
+
+    /// This suite, its tasks that work in a workspace attempted as `work`
+    /// says.
+    #[must_use]
+    pub fn with_work(mut self, work: AgenticConfig) -> Self {
+        self.work = work;
+        self
+    }
+
+    /// This suite and `other`'s tasks, and what each left out. A task of
+    /// `other` is one it admitted: it is not asked again of this suite's
+    /// rule.
     pub(crate) fn absorb(&mut self, other: Suite) {
         for task in other.tasks {
-            self.add(task);
+            self.push_unique(task);
         }
         for (reason, count) in other.excluded {
             *self.excluded.entry(reason).or_default() += count;
         }
     }
 
+    /// How many of its tasks work in a workspace.
+    #[must_use]
+    pub fn workspace_tasks(&self) -> usize {
+        self.tasks
+            .iter()
+            .filter(|t| agentic::is_workspace(t))
+            .count()
+    }
+
     pub(crate) fn add(&mut self, task: Task) {
         if task.environment.kind != Environment::CLOSED_BOOK {
             *self.excluded.entry(NOT_CLOSED_BOOK.into()).or_default() += 1;
-        } else if !self.tasks.iter().any(|t| t.task.id == task.task.id) {
+        } else {
+            self.push_unique(task);
+        }
+    }
+
+    /// Adds `task` if it is a change to a repository, else counts it as left
+    /// out.
+    pub(crate) fn add_workspace(&mut self, task: Task) {
+        if agentic::is_workspace(&task) {
+            self.push_unique(task);
+        } else {
+            *self.excluded.entry(NOT_WORKSPACE.into()).or_default() += 1;
+        }
+    }
+
+    fn push_unique(&mut self, task: Task) {
+        if !self.tasks.iter().any(|t| t.task.id == task.task.id) {
             self.tasks.push(task);
         }
     }
@@ -274,11 +340,110 @@ pub struct Probe {
     /// The verdict: `Some(true)` right, `Some(false)` wrong, `None` when
     /// no verifier decided.
     pub verdict: Option<bool>,
+    /// The attempts at a task that works in a workspace which were set aside
+    /// instead of graded; nothing for any other task.
+    pub withheld: Withheld,
+}
+
+impl Probe {
+    /// An answer graded `verdict`, with no attempt set aside.
+    #[must_use]
+    pub fn graded(answer: Option<String>, verdict: Option<bool>) -> Self {
+        Self {
+            answer,
+            verdict,
+            withheld: Withheld::default(),
+        }
+    }
+}
+
+/// A model to be probed: the model itself, and the reference it is loaded
+/// from when it was loaded for this probe, so that each attempt at a task
+/// that works in a workspace can draw from a seed of its own.
+#[derive(Clone, Copy)]
+pub struct Arm<'a> {
+    /// The model.
+    pub model: &'a Model,
+    /// What it was loaded from; `None` for a model handed in (a scripted
+    /// one, or one reached over an API), which samples as it does.
+    pub reference: Option<&'a ModelRef>,
+}
+
+impl<'a> Arm<'a> {
+    /// A model handed in.
+    #[must_use]
+    pub fn handed(model: &'a Model) -> Self {
+        Self {
+            model,
+            reference: None,
+        }
+    }
+
+    /// `model`, which `reference` names.
+    #[must_use]
+    pub fn named(reference: &'a ModelRef, model: &'a Model) -> Self {
+        Self {
+            model,
+            reference: Some(reference),
+        }
+    }
 }
 
 /// `model`'s answer and outcome on every task of `suite`, in order; see
 /// the module documentation.
 pub fn grade(
+    ctx: &Context,
+    model: &Model,
+    suite: &Suite,
+    cancel: &CancelToken,
+) -> Result<Vec<Probe>, OrchestratorError> {
+    grade_on(ctx, &Arm::handed(model), suite, cancel)
+}
+
+/// `arm`'s answer and outcome on every task of `suite`, in order. A task
+/// that works in a workspace is attempted by the worker and graded by its
+/// verifiers (`crate::release::agentic`); every other is asked closed-book
+/// as [`grade`] always asked it.
+pub fn grade_on(
+    ctx: &Context,
+    arm: &Arm<'_>,
+    suite: &Suite,
+    cancel: &CancelToken,
+) -> Result<Vec<Probe>, OrchestratorError> {
+    if suite.workspace_tasks() == 0 {
+        return grade_closed_book(ctx, arm.model, suite, cancel);
+    }
+    let (work, closed): (Vec<&Task>, Vec<&Task>) = suite
+        .tasks
+        .iter()
+        .partition(|task| agentic::is_workspace(task));
+    let closed_suite = Suite {
+        tasks: closed.into_iter().cloned().collect(),
+        ..Suite::empty(suite.name.clone())
+    };
+    let mut asked = if closed_suite.tasks.is_empty() {
+        Vec::new()
+    } else {
+        grade_closed_book(ctx, arm.model, &closed_suite, cancel)?
+    }
+    .into_iter();
+    let mut attempted = agentic::grade(ctx, arm, &work, &suite.work, cancel)?.into_iter();
+    // Back in the suite's order.
+    Ok(suite
+        .tasks
+        .iter()
+        .filter_map(|task| {
+            if agentic::is_workspace(task) {
+                attempted.next()
+            } else {
+                asked.next()
+            }
+        })
+        .collect())
+}
+
+/// `model`'s closed-book answer and outcome on every task of `suite`.
+fn grade_closed_book(
     ctx: &Context,
     model: &Model,
     suite: &Suite,
@@ -388,10 +553,10 @@ fn verdict_of(
 ) -> Result<Probe, OrchestratorError> {
     let verifiers: Strongest = verifiers_for(ctx, task, &[], judge)?;
     let verification = verifiers.run(task, &experience)?;
-    Ok(Probe {
-        verdict: decide(&verification.annotations).map(|d| d.passed),
-        answer: experience.final_output,
-    })
+    Ok(Probe::graded(
+        experience.final_output,
+        decide(&verification.annotations).map(|d| d.passed),
+    ))
 }
 
 /// `candidate` and `baseline` outcomes on `suite`'s tasks, paired by task.
@@ -411,7 +576,8 @@ pub fn pair(suite: &Suite, candidate: &[Probe], baseline: &[Probe]) -> Vec<Paire
 }
 
 /// `outcomes` with the cluster of each task of `suite` set: the family of
-/// source text it is grounded in ([`crate::grouping::task_clusters`]), so a
+/// source text it is grounded in ([`crate::grouping::task_clusters`]), or for
+/// a change to a repository the file its fault was seeded in, so a
 /// significance test counts a family once.
 pub fn clustered(
     ctx: &Context,
@@ -419,8 +585,15 @@ pub fn clustered(
     mut outcomes: Vec<PairedOutcome>,
 ) -> Result<Vec<PairedOutcome>, OrchestratorError> {
     let clusters = crate::grouping::task_clusters(ctx, &suite.tasks)?;
-    for (outcome, cluster) in outcomes.iter_mut().zip(clusters) {
-        outcome.cluster = cluster;
+    for ((outcome, cluster), task) in outcomes.iter_mut().zip(clusters).zip(&suite.tasks) {
+        // A change to a repository is grounded in no source text: its family
+        // is the file its fault was seeded in, which it declares as its first
+        // concept.
+        outcome.cluster = cluster.or_else(|| {
+            agentic::is_workspace(task)
+                .then(|| task.concepts.first().cloned())
+                .flatten()
+        });
     }
     Ok(outcomes)
 }

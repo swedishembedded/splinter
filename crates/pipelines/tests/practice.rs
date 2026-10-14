@@ -29,12 +29,13 @@
 
 mod common;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::{Arc, Mutex};
 
 use common::gate::{put_base, FakeTrainer};
+use common::repo::{
+    git, module, project, project_worded, test_of, write, Agent, Wording, MODULES, PEEKING,
+};
 use common::{config, Scratch};
 use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
@@ -43,216 +44,6 @@ use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
 use splinter_store::runs::{read_run, RunStatus};
-use sven_sdk::model::{
-    CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
-};
-
-/// How many modules the project has; each is a family of tasks.
-const MODULES: usize = 6;
-
-/// The modules whose solver reaches for the hidden tests before it fixes
-/// the module.
-const PEEKING: [usize; 3] = [0, 1, 2];
-
-fn module(n: usize) -> String {
-    format!(
-        "def tier{n}(units):\n    \"\"\"The price tier of an order.\"\"\"\n    if units > 10:\n        \
-         return 20 + {n}\n    return 5\n"
-    )
-}
-
-/// The tests of module `n`. A request lists the symptoms the tests that
-/// catch a fault name, so another wording of the names is another request
-/// for the same file; one that shares most of its words with an earlier one
-/// would be refused as a repeat of it. A name of eight words or more would
-/// quote the tests in the request, which is refused too.
-fn test_of(n: usize, wording: Wording) -> String {
-    let (large, small) = match wording {
-        Wording::Short => (
-            "large_orders_pay_the_large_tier",
-            "small_orders_pay_the_small_tier",
-        ),
-        Wording::Long => (
-            "bulk_buyers_pay_the_wholesale_rate",
-            "casual_buyers_pay_the_retail_rate",
-        ),
-    };
-    format!(
-        "import unittest\n\nfrom shop.tier{n} import tier{n}\n\n\nclass Tier{n}Test(unittest.TestCase):\n    \
-         def test_tier{n}_{large}(self):\n        self.assertEqual(tier{n}(11), 20 + {n})\n\n    \
-         def test_tier{n}_{small}(self):\n        self.assertEqual(tier{n}(10), 5)\n"
-    )
-}
-
-/// How the tests of a project name what they check.
-#[derive(Clone, Copy)]
-enum Wording {
-    Short,
-    Long,
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-        .args(["-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"])
-        .args(args)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-fn write(path: &Path, text: &str) {
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, text).unwrap();
-}
-
-/// The project in a git repository under `dir`, with `extra` files beside.
-fn project(dir: &Path, extra: &[(&str, &str)]) {
-    project_worded(dir, extra, Wording::Short);
-}
-
-/// [`project`] whose tests are worded as `wording` says.
-fn project_worded(dir: &Path, extra: &[(&str, &str)], wording: Wording) {
-    std::fs::create_dir_all(dir).unwrap();
-    git(dir, &["init", "-q", "-b", "main"]);
-    write(
-        &dir.join("pyproject.toml"),
-        "[project]\nname = \"shop\"\nversion = \"1\"\n",
-    );
-    write(&dir.join("shop/__init__.py"), "");
-    write(&dir.join("tests/__init__.py"), "");
-    for n in 0..MODULES {
-        write(&dir.join(format!("shop/tier{n}.py")), &module(n));
-        write(
-            &dir.join(format!("tests/test_tier{n}.py")),
-            &test_of(n, wording),
-        );
-    }
-    for (path, text) in extra {
-        write(&dir.join(path), text);
-    }
-    git(dir, &["add", "-A", "-f"]);
-    git(dir, &["commit", "-q", "-m", "shop"]);
-}
-
-/// A scripted agent. Asked to change a module it cannot see, it restores the
-/// module it infers from the request (a request lists the symptoms of the
-/// failing tests, and each is named for its module). Of the two attempts at a task
-/// it makes, the first fixes the module and the second looks and does
-/// nothing, so each task is solved about half the time. For the
-/// [`PEEKING`] modules the fixing attempt first reads the test file the
-/// request is about, which is withheld from the tree.
-struct Agent {
-    /// Attempts begun, by request.
-    begun: Mutex<BTreeMap<String, u32>>,
-}
-
-impl Agent {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            begun: Mutex::new(BTreeMap::new()),
-        })
-    }
-}
-
-fn call(id: &str, name: &str, arguments: serde_json::Value) -> Vec<ResponseEvent> {
-    vec![
-        ResponseEvent::ToolCall {
-            index: 0,
-            id: id.into(),
-            name: name.into(),
-            arguments: arguments.to_string(),
-        },
-        ResponseEvent::Done,
-    ]
-}
-
-fn shell(command: &str) -> Vec<ResponseEvent> {
-    call(
-        "c-shell",
-        "shell",
-        serde_json::json!({"description": "look", "shell_command": command}),
-    )
-}
-
-/// The first user turn of a conversation: the request.
-fn request_of(req: &CompletionRequest) -> String {
-    req.messages
-        .iter()
-        .find(|m| m.role == Role::User)
-        .and_then(|m| m.as_text().map(str::to_string))
-        .unwrap_or_default()
-}
-
-/// The module a request is about: the number in the symptoms it lists, which
-/// are named for the tests that catch them.
-fn module_of(request: &str) -> Option<usize> {
-    let at = request.find("- tier")? + "- tier".len();
-    let digits: String = request[at..]
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    digits.parse().ok()
-}
-
-fn tool_calls(req: &CompletionRequest) -> Vec<String> {
-    req.messages
-        .iter()
-        .filter_map(|m| match &m.content {
-            MessageContent::ToolCall { function, .. } => Some(function.arguments.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
-#[async_trait::async_trait]
-impl ModelProvider for Agent {
-    fn name(&self) -> &str {
-        "scripted"
-    }
-    fn model_name(&self) -> &str {
-        "agent-1"
-    }
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
-        let request = request_of(&req);
-        let calls = tool_calls(&req);
-        let asked_about = module_of(&request);
-        let events = match (calls.len(), asked_about) {
-            (0, Some(n)) => {
-                let attempt = {
-                    let mut begun = self.begun.lock().unwrap();
-                    let seen = begun.entry(request.clone()).or_insert(0);
-                    *seen += 1;
-                    *seen
-                };
-                if attempt % 2 == 1 && PEEKING.contains(&n) {
-                    shell(&format!("cat tests/test_tier{n}.py # fix"))
-                } else if attempt % 2 == 1 {
-                    shell("true # fix")
-                } else {
-                    shell("true # look")
-                }
-            }
-            (1, Some(n)) if calls[0].contains("# fix") => call(
-                "c-fix",
-                "write_file",
-                serde_json::json!({"path": format!("shop/tier{n}.py"), "text": module(n), "append": false}),
-            ),
-            _ => vec![ResponseEvent::TextDelta("done".into()), ResponseEvent::Done],
-        };
-        Ok(Box::pin(futures::stream::iter(
-            events.into_iter().map(Ok).collect::<Vec<_>>(),
-        )))
-    }
-}
 
 /// A context over a scratch state root whose `policy:default` is the
 /// scripted agent.
@@ -497,6 +288,61 @@ fn the_families_one_run_reserved_stay_the_exam_of_the_next() {
     for group in groups {
         assert!(!reserved.contains(&group), "{group} was trained on");
     }
+}
+
+#[test]
+fn a_family_an_earlier_run_trained_on_is_never_reserved_for_a_later_exam() {
+    let (scratch, ctx) = context("practice-trained");
+    let first_repo = scratch.0.join("first");
+    project(&first_repo, &[]);
+    let (_, first) = run(&ctx, &request(&first_repo));
+    let reserved: BTreeSet<String> = first
+        .reserve
+        .as_ref()
+        .unwrap()
+        .families
+        .iter()
+        .cloned()
+        .collect();
+    let trained: BTreeSet<String> = groups_of(&first.dataset.as_ref().unwrap().path)
+        .into_iter()
+        .collect();
+    assert!(!trained.is_empty());
+
+    // Another repository with the first one's files and one more. Asked for
+    // nearly as many exam families as it has files, it can only reserve what no
+    // earlier run trained on: the new file, beside the family that is already
+    // the exam.
+    let second_repo = scratch.0.join("second");
+    project_worded(&second_repo, &[], Wording::Long);
+    write(
+        &second_repo.join(format!("shop/tier{MODULES}.py")),
+        &module(MODULES),
+    );
+    write(
+        &second_repo.join(format!("tests/test_tier{MODULES}.py")),
+        &test_of(MODULES, Wording::Long),
+    );
+    git(&second_repo, &["add", "-A", "-f"]);
+    git(&second_repo, &["commit", "-q", "-m", "more"]);
+    let mut asked = request(&second_repo);
+    asked.exam_families = Some(MODULES);
+    let (_, second) = run(&ctx, &asked);
+    let exam: BTreeSet<String> = second
+        .reserve
+        .as_ref()
+        .unwrap_or_else(|| panic!("no exam was reserved: {second:#?}"))
+        .families
+        .iter()
+        .cloned()
+        .collect();
+    for family in &trained {
+        assert!(
+            !exam.contains(family),
+            "{family} was trained on, then examined"
+        );
+    }
+    assert!(reserved.is_subset(&exam), "{exam:?}");
 }
 
 #[test]

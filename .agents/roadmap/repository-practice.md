@@ -48,10 +48,14 @@ gate and lineage.
 6. [x] The pipeline that composes them (tasks, reserve families before rollouts, solve,
    verify, frontier, dataset, train, release) as one recorded run (`practice`), with an SDK
    method and a CLI verb.
-7. [ ] Release for agentic suites: probes solved through the worker, serve check by agreement of
-   verdicts, adapter manifest written on release and on alias moves. Until then a `practice`
-   candidate reaches the release gate and is not released, because the gate measures
-   closed-book probes only.
+7. [x] Release for agentic suites: the gate's four checks over the exam `practice` reserved
+   (paired outcomes of the champion and the candidate attempting its tasks as agents, counted by
+   family; exposed attempts and attempts the harness could not carry out set aside and counted;
+   each earlier release held to its own exam; the frozen anchor suite, decided on what it holds
+   when it holds no coding-agent task and saying so), the serve check by agreement of verdicts
+   with the in-process run, and brain's adapter manifest rewritten on every alias move so
+   `brain serve --adapter-manifest` follows the alias. `practice` ends in the gate and says why
+   a blocked candidate was not released.
 8. [ ] Tool-definition audit in sven: token cost of each tool definition, fix wrong or
    redundant ones, no additions without a measured failure.
 9. [ ] Retire the duplicates in the coding-loop sample so it keeps only supervision and calls the

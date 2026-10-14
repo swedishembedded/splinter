@@ -20,7 +20,11 @@
 //!
 //! The reserved tasks are not solved here, so no attempt at them exists to
 //! be trained on; [`assert_no_exam_family`] additionally reads the dataset
-//! that was written and refuses a run whose training records carry one.
+//! that was written and refuses a run whose training records carry one. The
+//! other direction is kept as well: the families a run's dataset trained on
+//! are remembered, and a family a model was trained on is never reserved
+//! later, since a later exam would then be examining what an earlier release
+//! learned. A run may therefore reserve fewer families than it was asked to.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -42,9 +46,15 @@ const RESERVED: &str = "practice_exam_families";
 /// The pointer that names the latest record of the reserved families.
 const RESERVED_POINTER: &str = "practice-exam-families";
 
-/// The families reserved so far, as the store keeps them.
+/// The class of the stored record of the families trained on.
+const TRAINED: &str = "practice_trained_families";
+
+/// The pointer that names the latest record of the families trained on.
+const TRAINED_POINTER: &str = "practice-trained-families";
+
+/// A set of families, as the store keeps them.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-struct Reserved {
+struct Families {
     families: BTreeSet<String>,
 }
 
@@ -89,14 +99,16 @@ fn rank(family: &str) -> String {
 /// Divides `members`, the tasks a run made, into the exam's and the ones to
 /// train on, reserving `asked` families (a quarter of the families, rounded
 /// down, when `None`) on top of those earlier runs reserved, and remembers
-/// the reservation. Refused when the reservation would leave nothing to
-/// train on.
+/// the reservation. A family an earlier run trained on is not reserved, so
+/// fewer than asked may be. Refused when the reservation would leave nothing
+/// to train on.
 pub(super) fn reserve(
     ctx: &Context,
     members: Vec<TaskEntry>,
     asked: Option<usize>,
 ) -> Result<Divided, OrchestratorError> {
-    let before = reserved_families(ctx)?;
+    let before = recorded(ctx, RESERVED, RESERVED_POINTER)?;
+    let trained = recorded(ctx, TRAINED, TRAINED_POINTER)?;
     let mut by_family: Vec<(Option<String>, TaskEntry)> = Vec::with_capacity(members.len());
     for entry in members {
         by_family.push((family_of(ctx, &entry)?, entry));
@@ -107,7 +119,10 @@ pub(super) fn reserve(
         .collect();
     let already: BTreeSet<String> = present.intersection(&before).cloned().collect();
     let wanted = asked.unwrap_or(present.len() / 4);
-    let mut fresh: Vec<&String> = present.difference(&already).collect();
+    let mut fresh: Vec<&String> = present
+        .difference(&already)
+        .filter(|family| !trained.contains(*family))
+        .collect();
     fresh.sort_by_cached_key(|family| rank(family));
     fresh.truncate(wanted.saturating_sub(already.len()));
     let chosen: BTreeSet<String> = fresh.into_iter().cloned().collect();
@@ -120,7 +135,7 @@ pub(super) fn reserve(
         )));
     }
     let exam: BTreeSet<String> = already.union(&chosen).cloned().collect();
-    remember(ctx, &before, &chosen)?;
+    remember(ctx, (RESERVED, RESERVED_POINTER), &before, &chosen)?;
 
     let (exam_entries, training): (Vec<_>, Vec<_>) = by_family
         .into_iter()
@@ -150,39 +165,40 @@ pub(super) fn reserve(
     })
 }
 
-/// The families every earlier run reserved.
-fn reserved_families(ctx: &Context) -> Result<BTreeSet<String>, OrchestratorError> {
-    let Some((_, value)) = ctx.workspace().pointer(RESERVED_POINTER)? else {
+/// The families kept under `pointer` as documents of `class`.
+fn recorded(
+    ctx: &Context,
+    class: &str,
+    pointer: &str,
+) -> Result<BTreeSet<String>, OrchestratorError> {
+    let Some((_, value)) = ctx.workspace().pointer(pointer)? else {
         return Ok(BTreeSet::new());
     };
     let digest = Digest::parse(&value).map_err(|e| {
-        OrchestratorError::Refused(format!(
-            "the pointer to the reserved families is corrupt: {e}"
-        ))
+        OrchestratorError::Refused(format!("the pointer {pointer} is corrupt: {e}"))
     })?;
-    let stored: Option<Reserved> = ctx.workspace().get_document(RESERVED, &digest)?;
+    let stored: Option<Families> = ctx.workspace().get_document(class, &digest)?;
     Ok(stored.map(|r| r.families).unwrap_or_default())
 }
 
-/// Records `before` and `chosen` as the families reserved so far.
+/// Records `before` and `added` as the families kept under `(class,
+/// pointer)`.
 fn remember(
     ctx: &Context,
+    (class, pointer): (&str, &str),
     before: &BTreeSet<String>,
-    chosen: &BTreeSet<String>,
+    added: &BTreeSet<String>,
 ) -> Result<(), OrchestratorError> {
-    if chosen.is_empty() {
+    if added.is_subset(before) {
         return Ok(());
     }
-    let all = Reserved {
-        families: before.union(chosen).cloned().collect(),
+    let all = Families {
+        families: before.union(added).cloned().collect(),
     };
-    let digest = ctx.workspace().put_document(RESERVED, &all)?;
-    let current = ctx
-        .workspace()
-        .pointer(RESERVED_POINTER)?
-        .map(|(_, value)| value);
+    let digest = ctx.workspace().put_document(class, &all)?;
+    let current = ctx.workspace().pointer(pointer)?.map(|(_, value)| value);
     ctx.workspace().move_pointer(
-        RESERVED_POINTER,
+        pointer,
         current.as_deref(),
         digest.as_str(),
         &ctx.clock().utc_now(),
@@ -190,13 +206,24 @@ fn remember(
     Ok(())
 }
 
+/// Remembers `families` as trained on, so that no later run reserves one of
+/// them.
+pub(super) fn remember_trained(
+    ctx: &Context,
+    families: &BTreeSet<String>,
+) -> Result<(), OrchestratorError> {
+    let before = recorded(ctx, TRAINED, TRAINED_POINTER)?;
+    remember(ctx, (TRAINED, TRAINED_POINTER), &before, families)
+}
+
 /// The gate: refuses a dataset one of whose records is of a family of
 /// `exam`, or of no family at all (a record whose family is not known
-/// cannot be shown to be outside the exam).
+/// cannot be shown to be outside the exam). Returns the families the
+/// dataset trains on.
 pub(super) fn assert_no_exam_family(
     dataset: &Path,
     exam: &BTreeSet<String>,
-) -> Result<(), OrchestratorError> {
+) -> Result<BTreeSet<String>, OrchestratorError> {
     #[derive(Deserialize)]
     struct Line {
         metadata: Metadata,
@@ -207,6 +234,7 @@ pub(super) fn assert_no_exam_family(
         group: Option<String>,
     }
     let text = std::fs::read_to_string(dataset).map_err(io(dataset))?;
+    let mut trained = BTreeSet::new();
     for (n, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
         let record: Line = serde_json::from_str(line).map_err(|e| {
             OrchestratorError::Refused(format!(
@@ -230,8 +258,10 @@ pub(super) fn assert_no_exam_family(
                     dataset.display()
                 )));
             }
-            Some(_) => {}
+            Some(group) => {
+                trained.insert(group);
+            }
         }
     }
-    Ok(())
+    Ok(trained)
 }

@@ -31,21 +31,21 @@ use splinter_sandbox::TreeSnapshot;
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use super::exam::{assert_no_exam_family, reserve};
+use super::exam::{assert_no_exam_family, remember_trained, reserve};
 use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
-use super::{
-    PracticeRequest, DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
-};
+use super::PracticeRequest;
 use crate::curriculum::frontier::select_frontier;
 use crate::curriculum::teacher::untaught;
 use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use crate::learn::PolicyUsed;
+use crate::release::exams::{self, ExamRecord};
 use crate::release::{release, ReleaseRequest};
 use crate::solving::{solve_tasks, SolveRequest};
 use crate::train::{train, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use crate::verify::{verify_set, Grading};
 use splinter_core::annotation::Strength;
+use splinter_eval::gate::GateConfig;
 
 /// What one run was asked, resolved.
 pub(super) struct Practice<'a> {
@@ -354,6 +354,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
         unreachable!("the solve stage follows the reserve stage")
     };
     let request = st.practice.request;
+    let agentic = request.agentic();
     let policy = ModelRef::policy_default();
     let solved = solve_tasks(
         ctx,
@@ -365,13 +366,9 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
             teacher: false,
             system: None,
             work: WorkProtocol {
-                follow_ups: request.follow_ups.unwrap_or(DEFAULT_FOLLOW_UPS),
-                max_tool_calls: Some(request.max_tool_calls.unwrap_or(DEFAULT_MAX_TOOL_CALLS)),
-                max_repeated_results: Some(
-                    request
-                        .max_repeated_results
-                        .unwrap_or(DEFAULT_MAX_REPEATED_RESULTS),
-                ),
+                follow_ups: agentic.follow_ups,
+                max_tool_calls: agentic.max_tool_calls,
+                max_repeated_results: agentic.max_repeated_results,
             },
             deadline: st.practice.deadline,
             cancel: run.cancel_token(),
@@ -449,7 +446,21 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
         }
         Err(e) => return Err(e),
     };
-    assert_no_exam_family(&built.path, &st.exam_families)?;
+    remember_trained(ctx, &assert_no_exam_family(&built.path, &st.exam_families)?)?;
+    // The gate measures what this dataset trains on the exam reserved
+    // against it, and every later release is held to it.
+    exams::record(
+        ctx,
+        &ExamRecord {
+            dataset: built.dataset.clone(),
+            families: st.exam_families.clone(),
+            tasks: st
+                .report
+                .reserve
+                .as_ref()
+                .and_then(|reserved| reserved.exam_task_set.clone()),
+        },
+    )?;
     let summary = to_value(&built)?;
     let records = built.records;
     st.report.dataset = Some(built);
@@ -497,11 +508,27 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'
     let Some(id) = st.candidate.clone() else {
         unreachable!("the release stage follows the train stage")
     };
-    match release(ctx, &ReleaseRequest::new(id), &run.cancel_token()) {
+    let asked = ReleaseRequest {
+        gate: GateConfig {
+            agentic: st.practice.request.agentic(),
+            ..GateConfig::default()
+        },
+        ..ReleaseRequest::new(id)
+    };
+    match release(ctx, &asked, &run.cancel_token()) {
         Ok(released) => {
             let summary = to_value(&released)?;
+            let blocked = released.gate.blocked_by();
+            let made = released.release.is_some();
             st.report.release = Some(released);
-            Ok(StageEnd::done(summary))
+            Ok(if made {
+                StageEnd::done(summary)
+            } else {
+                StageEnd::stop(
+                    summary,
+                    format!("the candidate was not released: {}", blocked.join("; ")),
+                )
+            })
         }
         // A candidate the gate may not judge (its champion moved on) is still
         // trained; the run says why it was not released.

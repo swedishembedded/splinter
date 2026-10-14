@@ -50,6 +50,7 @@ use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use super::fake_brain::fake_brain;
 pub use super::fake_brain::Brain;
+use super::repo::Mender;
 use super::{config, Scratch, Scripted};
 
 /// The bytes of the base checkpoint every gate spec's policy sits on: a
@@ -474,12 +475,17 @@ pub fn released(ctx: &Context, topic: &str, knows: &[&str]) -> ReleaseId {
 }
 
 /// Hands `ctx` the model the release `id` serves: its adapter file says
-/// what it knows. The gate grades a champion through its release's copy of
+/// what it knows, or whether it restores the module it is asked about. The gate grades a champion through its release's copy of
 /// the adapter.
 pub fn serve_release(ctx: &Context, id: &ReleaseId) {
     let stored = ctx.releases().get(id).unwrap();
     let adapter: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&stored.artifact).unwrap()).unwrap();
+    if let Some(agent) = adapter["agent"].as_str() {
+        let model = Model::new(Mender::new(agent == "mender"), "scripted/mender");
+        ctx.add_model(arm(ctx.config(), Some(&stored.artifact)), model);
+        return;
+    }
     let knows: Vec<&str> = adapter["knows"]
         .as_array()
         .unwrap()
@@ -496,6 +502,10 @@ pub fn serve_release(ctx: &Context, id: &ReleaseId) {
 /// it started.
 pub struct FakeTrainer {
     knows: Vec<String>,
+    /// For a candidate that works in a workspace: whether it restores the
+    /// module a request is about (`Some(true)`) or does nothing; `None` for
+    /// a candidate that answers questions.
+    mends: Option<bool>,
     /// The plans it trained.
     pub plans: Mutex<Vec<TrainPlan>>,
     /// The regime of each method called, in order: `train` is SFT,
@@ -517,11 +527,21 @@ impl FakeTrainer {
     pub fn knowing(topics: &[&str]) -> Self {
         Self {
             knows: topics.iter().map(|t| t.to_string()).collect(),
+            mends: None,
             plans: Mutex::new(Vec::new()),
             called: Mutex::new(Vec::new()),
             resident_at_start: Mutex::new(Vec::new()),
             curve: Mutex::new(None),
             evaluations: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// A trainer whose candidates work in a workspace: they restore the
+    /// module a request is about when `mends`, and do nothing otherwise.
+    pub fn mending(mends: bool) -> Self {
+        Self {
+            mends: Some(mends),
+            ..Self::knowing(&[])
         }
     }
 
@@ -582,8 +602,11 @@ impl FakeTrainer {
             .push(ctx.resident_bases());
         self.plans.lock().unwrap().push(plan.clone());
         let adapter = plan.dir.join("adapter.safetensors");
-        let bytes =
-            serde_json::json!({ "candidate": plan.candidate, "knows": self.knows }).to_string();
+        let mut card = serde_json::json!({ "candidate": plan.candidate, "knows": self.knows });
+        if let Some(mends) = self.mends {
+            card["agent"] = (if mends { "mender" } else { "idler" }).into();
+        }
+        let bytes = card.to_string();
         std::fs::write(&adapter, &bytes).unwrap();
         let record = plan.dir.join("training.json");
         std::fs::write(&record, r#"{"trainer":"fake"}"#).unwrap();
@@ -600,7 +623,11 @@ impl FakeTrainer {
             .unwrap();
         let kept_path = ctx.artifacts().path(&kept.digest).unwrap();
         let knows: Vec<&str> = self.knows.iter().map(String::as_str).collect();
-        ctx.add_model(arm(ctx.config(), Some(&kept_path)), knower(&knows));
+        let model = match self.mends {
+            Some(mends) => Model::new(Mender::new(mends), "scripted/mender"),
+            None => knower(&knows),
+        };
+        ctx.add_model(arm(ctx.config(), Some(&kept_path)), model);
         let records = plan
             .datasets
             .iter()

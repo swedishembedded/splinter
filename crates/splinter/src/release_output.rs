@@ -7,10 +7,19 @@
 use std::fmt::Write as _;
 
 use splinter_sdk::eval::{EvalReport, Evaluated};
-use splinter_sdk::measure::gate::{Check, GateReport};
+use splinter_sdk::measure::gate::{AgenticProbe, Agreement, Check, GateReport};
 use splinter_sdk::release::{ReleaseList, Released, RolledBack};
 
 use crate::output::{tally, Report};
+
+/// A verdict as a word; no verdict is not a fail.
+fn grade(verdict: Option<bool>) -> &'static str {
+    match verdict {
+        Some(true) => "right",
+        Some(false) => "wrong",
+        None => "not graded",
+    }
+}
 
 fn share(value: Option<f64>) -> String {
     value.map_or("not measured".into(), |v| format!("{v:.3}"))
@@ -23,6 +32,17 @@ fn verdict<T>(check: &Check<T>) -> String {
         (false, Some(reason)) => format!("FAILED: {reason}"),
         (false, None) => "FAILED".into(),
     }
+}
+
+/// The attempts at changes to a repository a probe set aside, as one line:
+/// they are in no denominator.
+fn set_aside(probe: &AgenticProbe) -> String {
+    let (c, b) = (probe.candidate, probe.champion);
+    format!(
+        "workspace tasks attempted {} time(s) each; set aside, in no denominator: candidate {} \
+         exposed to the hidden tests and {} not carried out, champion {} and {}",
+        probe.attempts, c.exposed, c.environment_failures, b.exposed, b.environment_failures
+    )
 }
 
 impl Report for GateReport {
@@ -46,6 +66,14 @@ impl Report for GateReport {
                 m.sign_test.p_value,
                 m.alpha
             );
+        }
+        if let Some(probe) = self
+            .improvement
+            .measured
+            .as_ref()
+            .and_then(|m| m.agentic.as_ref())
+        {
+            let _ = writeln!(out, "               {}", set_aside(probe));
         }
         if let Some(t) = self
             .improvement
@@ -114,6 +142,9 @@ impl Report for GateReport {
                     share(suite.drop),
                     m.bound
                 );
+                if let Some(probe) = &suite.agentic {
+                    let _ = writeln!(out, "               {}", set_aside(probe));
+                }
             }
         }
         let _ = writeln!(out, "  anchor       {}", verdict(&self.anchor));
@@ -128,6 +159,26 @@ impl Report for GateReport {
                 share(m.drop),
                 m.bound
             );
+            match m.workspace_tasks {
+                Some(0) => {
+                    let _ = writeln!(
+                        out,
+                        "               no coding-agent task is frozen in the suite: absent, not \
+                         scored; decided on the closed-book tasks it holds"
+                    );
+                }
+                Some(n) => {
+                    let _ = writeln!(
+                        out,
+                        "               {n} task(s) are changes to a repository, attempted by the \
+                         worker"
+                    );
+                    if let Some(probe) = &m.agentic {
+                        let _ = writeln!(out, "               {}", set_aside(probe));
+                    }
+                }
+                None => {}
+            }
             if let Some(n) = m.items_to_see_two_points {
                 let _ = writeln!(
                     out,
@@ -155,9 +206,13 @@ impl Report for GateReport {
         }
         let _ = writeln!(out, "  serve        {}", verdict(&self.serve));
         if let Some(m) = &self.serve.measured {
+            let compared = match m.agreement {
+                Agreement::Answers => "re-answered alike",
+                Agreement::Verdicts => "graded as they were in-process",
+            };
             let _ = writeln!(
                 out,
-                "               {}: {}; {} of {} re-answered alike",
+                "               {}: {}; {} of {} {compared}",
                 m.binary.display(),
                 m.startup_line,
                 m.agreed,
@@ -168,13 +223,22 @@ impl Report for GateReport {
                     .map_or("no answer".into(), |a| format!("{a:?}"))
             };
             for d in &m.disagreed {
-                let _ = writeln!(
-                    out,
-                    "               {}: in-process {}, served {}",
-                    d.task,
-                    answer(&d.in_process),
-                    answer(&d.served)
-                );
+                let _ = match m.agreement {
+                    Agreement::Answers => writeln!(
+                        out,
+                        "               {}: in-process {}, served {}",
+                        d.task,
+                        answer(&d.in_process),
+                        answer(&d.served)
+                    ),
+                    Agreement::Verdicts => writeln!(
+                        out,
+                        "               {}: in-process {}, served {}",
+                        d.task,
+                        grade(d.in_process_verdict),
+                        grade(d.served_verdict)
+                    ),
+                };
             }
         }
         out

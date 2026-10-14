@@ -203,7 +203,7 @@ order:
 | `frontier` | keeps the tasks the policy solves sometimes (pass@k) |
 | `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered; `--max-block TOKENS` leaves out and counts records longer than the card fits; the dataset is checked to hold no family of the exam |
 | `train` | a candidate from the champion with earlier releases' records replayed |
-| `release` | the gate (`--no-release` stops at the candidate) |
+| `release` | the gate, over the exam this run reserved (`--no-release` stops at the candidate): the champion and the candidate attempt the exam's tasks as agents, under the bounds and seeds of `solve`, graded as `verify` grades; paired outcomes are counted by family in the sign test; each earlier release is held to the exam of its own run; the anchor suite is held (a frozen suite with no coding-agent task is decided on the tasks it holds, and the report says it holds none); the candidate is served by `brain serve --adapter-manifest` and must be graded as it was in-process on at least three quarters of a sample of the exam. A blocked candidate is not released and the run stops with the reason of each check that failed; `practice` gives the gate the bounds it solved under, and `splinter release` on such a candidate probes with the default ones |
 
 Where no container is configured, the commands the agent works with run on
 the host, bounded but not isolated, and every environment record says
@@ -211,10 +211,14 @@ the host, bounded but not isolated, and every environment record says
 (`SPLINTER_DOCKER`, `SPLINTER_WORKSPACE_IMAGE`) runs them in a container with
 no network instead. `SPLINTER_CARGO_HOME` gives the commands a
 cargo home to build offline from, and `SPLINTER_WORKSPACE_SCRATCH` says where
-trees are laid out. The release gate measures closed-book probes, so a
-candidate of a `practice` reaches it and is not released: the stage's summary
-says what was unmeasured, and the run exits 1. `--test-command` takes the rest of
-the command line, so it comes last.
+trees are laid out. An attempt whose trajectory shows the hidden tests,
+and an attempt the harness could not carry out, are set aside and counted in the
+gate's report; neither is in a denominator. A release moves the alias and
+rewrites `<state>/serving/<alias>.json`, the manifest `brain serve
+--adapter-manifest` follows (a rollback repoints it); an alias at a full
+checkpoint has no adapter to name, so its manifest is withdrawn. A candidate the
+gate blocks, or cannot measure, is not released, and the run exits 1 with the
+reason. `--test-command` takes the rest of the command line, so it comes last.
 
 ## Learning to think like a person
 
@@ -757,6 +761,33 @@ BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter <state>/rele
 brain serves the adapter on that one Qwen3 base, as the model
 `brain/qwen3`, and refuses to start when the base's digest is not the one
 the adapter records.
+
+To keep a running server on whatever an alias points at, give it the
+manifest the release store rewrites whenever the alias moves (a release, a
+rollback) instead of an adapter file:
+
+```bash
+BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter-manifest <state>/serving/default.json
+```
+
+The manifest names the adapter the alias points at and its digest, and is
+replaced atomically; the server swaps onto the new adapter once the file
+hashes to the digest and binds to its base, and keeps the one it has when it
+does not. An alias at a full checkpoint names no adapter, so its manifest is
+withdrawn.
+
+A candidate trained by `practice` is gated on a different suite than a
+candidate trained on documents: the champion and the candidate attempt, as
+agents in copies of the tree, the tasks of the exam that candidate's run set
+apart before any attempt (every earlier release is held to the exam of the run
+that made it), and the paired outcomes are counted by family in the same sign
+test. Attempts that read the hidden tests, and attempts the harness could not
+carry out, are set aside and counted for each arm in the report; neither is
+in a denominator. The serve check asks the served candidate the same tasks
+through the same worker and requires its verdicts to agree with the
+in-process ones on at least three quarters of a sample. The anchor suite is
+the frozen one; it holds coding-agent tasks only if some were frozen, and the
+report says how many it holds rather than scoring an absence.
 
 `eval <REF>` grades one model - a candidate id, or a model reference -
 closed-book on `--suite held-out` (the default: a candidate's new data, or

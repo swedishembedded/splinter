@@ -43,11 +43,19 @@
 //! then undecided and the answers are compared by their text and meaning
 //! ([`verdicts_compatible`]).
 //!
+//! A candidate that works in a workspace is served and asked the same way
+//! ([`workspace`]): the same worker, with the served endpoint as its model,
+//! over a sample of the exam, graded by the verifiers that graded the
+//! in-process run; the candidate is offered to the server as the release
+//! manifest a release step publishes, and the check passes when the served
+//! verdicts agree with the in-process ones.
+//!
 //! Without a `brain` binary, or when it does not start, the check is not
 //! measured - and the gate fails.
 
 mod compare;
 mod server;
+pub mod workspace;
 
 use std::path::Path;
 use std::time::Duration;
@@ -78,7 +86,9 @@ pub struct ServeCheck<'a> {
     pub adapter_digest: &'a str,
     /// The system prompt the candidate is asked under; `None` is the default.
     pub system: Option<&'a str>,
-    /// The held-out tasks re-answered through the server.
+    /// The held-out tasks re-answered through the server. A suite of tasks
+    /// that work in a workspace is asked by [`workspace::check`]; this one
+    /// holds closed-book tasks.
     pub sample: &'a Suite,
     /// The candidate's in-process answers to them, one per task.
     pub in_process: &'a [Probe],
@@ -89,11 +99,17 @@ pub struct ServeCheck<'a> {
 /// Starts the `brain` of `request` serving its adapter on its base, and
 /// re-answers its sample through it. An error is returned only for a
 /// cancelled check; every other failure is the check's result.
+///
+/// A sample of tasks that work in a workspace is asked through
+/// [`workspace::check`].
 pub fn check(
     ctx: &Context,
     request: &ServeCheck<'_>,
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, OrchestratorError> {
+    if request.sample.workspace_tasks() > 0 {
+        return workspace::check(ctx, request, cancel);
+    }
     let Some(binary) = request.binary else {
         return Ok(Check::unmeasured(NO_BINARY));
     };

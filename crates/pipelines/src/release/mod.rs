@@ -27,6 +27,18 @@
 //! suite shows forgotten are queued for new tasks
 //! ([`crate::curriculum::queue`]).
 //!
+//! A candidate trained by `practice` works in a workspace, and its suites are
+//! changes to a repository ([`exams`]): the exam its run reserved before any
+//! attempt is the improvement suite, every earlier release's own exam is its
+//! retention suite, and the frozen anchor suite's coding-agent tasks, if any,
+//! are attempted too. The champion and the candidate attempt each task as the
+//! solve stage does, under the same bounds and seeds (the `agentic` module), the
+//! paired outcomes are clustered by the file each fault was seeded in, and the
+//! served candidate is attempted through `brain serve` and held to the
+//! verdicts of the in-process attempts ([`serve`]). Attempts that read the
+//! hidden tests, and attempts the harness could not carry out, are set aside
+//! and counted for each arm; they are in no denominator.
+//!
 //! A candidate that is not a language model - a full checkpoint scored by
 //! metrics on held-out units - is released through [`predictive`], which
 //! decides the predictive gate over the numbers its caller measured and
@@ -39,7 +51,9 @@
 //! `brain serve --adapter-manifest` follows is rewritten to name what the
 //! alias points at ([`splinter_orchestrator::releases::ReleaseStore::publish_manifest`]).
 
+pub(crate) mod agentic;
 pub mod anchor;
+pub mod exams;
 mod gating;
 pub mod leakage;
 mod listing;

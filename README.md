@@ -70,14 +70,13 @@ needs Splinter installed.
 ```bash
 splinter doctor                                       # can a run start here?
 splinter eval --suite anchor --freeze examples/first-run/anchor.jsonl   # once: the anchor suite
-splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog" --kinds denoise
+splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog"
 splinter status
 splinter ask "At what baud rate does the QX-7 console run?"
 ```
 
 `examples/first-run` is a manual for an invented device plus a twenty-question anchor
-suite, with the walk-through and what each option did in a real run (a short manual with
-small models stops before training, and says why).
+suite, with the walk-through and what to expect from each step.
 
 The command line (`crates/splinter/README.md`) runs the pipeline one stage per
 verb - sources, tasks, solve, verify, critique, dataset, train, release - and
@@ -204,7 +203,16 @@ stay the exam in every later run; an attempt whose trajectory shows the agent
 reached for the hidden tests, or for the state root, is decided fail by an
 exposure audit and counted, whatever its change did; a second run over the same
 snapshot makes no task it already holds. The agent's passing attempts are
-trained on action by action, with the tools it was offered. Where no container is
+trained on action by action, with the tools it was offered. The candidate is
+released only on the evidence of the exam its run reserved: the champion and the
+candidate attempt the exam's tasks as agents under the same bounds and seeds, the
+paired outcomes are counted by family in a sign test, every earlier release is
+held to the exam of the run that made it, the frozen anchor suite is held, and
+the candidate served through `brain serve` must be graded as it was in-process.
+Attempts that saw the hidden tests, or that the harness could not carry out, are
+set aside and counted, never scored. The alias a release moves has a manifest that
+`brain serve --adapter-manifest` follows, so a server swaps onto a release and
+back off it on a rollback without a restart. Where no container is
 configured the agent's shell runs on the host, bounded but not isolated, and the
 record of every environment says so; the audit is then detection, not prevention.
 

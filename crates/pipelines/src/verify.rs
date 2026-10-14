@@ -24,7 +24,7 @@ use serde::Serialize;
 use splinter_agent::judge::JudgeVerifier;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_core::annotation::{AnnotationBody, Outcome, Producer};
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, ExperienceId, Task};
 use splinter_core::kinds::{DENOISE, GENERAL};
@@ -534,6 +534,21 @@ fn exposure_kinds(evidence: &serde_json::Value) -> BTreeSet<String> {
         .collect()
 }
 
+/// The kinds of exposure `note` names, when it is the exposure audit's
+/// failing verdict: the experience's trajectory shows the solver saw what only
+/// the grader holds. `None` for every other annotation.
+pub(crate) fn exposure_failure(note: &Annotation) -> Option<BTreeSet<String>> {
+    let AnnotationBody::Verdict {
+        outcome: Outcome::Fail,
+        evidence,
+        ..
+    } = &note.body
+    else {
+        return None;
+    };
+    (note.producer.name == EXPOSURE_PRODUCER).then(|| exposure_kinds(evidence))
+}
+
 /// Verdicts appended, by outcome.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct VerdictTally {
@@ -639,14 +654,11 @@ pub fn verify_set(
         };
         let verification = verify_and_annotate(&store, &verifiers, &task, experience)?;
         for note in &verification.annotations {
-            if let AnnotationBody::Verdict {
-                outcome, evidence, ..
-            } = &note.body
-            {
+            if let AnnotationBody::Verdict { outcome, .. } = &note.body {
                 let outcome = *outcome;
-                if outcome == Outcome::Fail && note.producer.name == EXPOSURE_PRODUCER {
+                if let Some(kinds) = exposure_failure(note) {
                     report.exposed += 1;
-                    for kind in exposure_kinds(evidence) {
+                    for kind in kinds {
                         *report.exposed_by.entry(kind).or_default() += 1;
                     }
                 }

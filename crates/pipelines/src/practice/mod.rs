@@ -49,7 +49,13 @@
 //!   no family of the exam.
 //! * **train** - from the champion, with earlier releases' records
 //!   replayed.
-//! * **release** - the gate, as for any candidate.
+//! * **release** - the gate, as for any candidate, over the exam this run
+//!   reserved: the champion and the candidate attempt the exam's tasks as
+//!   agents under the same bounds and seeds the solve stage used, graded by
+//!   the same verifiers; every earlier release is held to the exam of the
+//!   run that made it; the served candidate is asked the same way through
+//!   `brain serve`. A candidate the gate blocks, or cannot measure, is not
+//!   released, and the run stops with the reason of each check that failed.
 
 mod exam;
 mod held;
@@ -59,6 +65,7 @@ mod stages;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_eval::gate::{AgenticConfig, DEFAULT_PROBE_ATTEMPTS};
 
 use crate::curriculum::frontier::PassAtK;
 use crate::train::{Trainer, Tuning};
@@ -79,18 +86,9 @@ pub const STAGES: [&str; 10] = [
 /// the candidate.
 pub const RELEASE_STAGE: &str = "release";
 
-/// How many follow-up turns an agent is sent after the checks it was shown
-/// stay red, when a request names none.
-pub const DEFAULT_FOLLOW_UPS: u32 = 2;
-
-/// How many tool calls an agent may make in one attempt, follow-ups
-/// included, when a request names none.
-pub const DEFAULT_MAX_TOOL_CALLS: u32 = 60;
-
-/// How many times one tool call may return the same answer in an attempt
-/// before the attempt is stopped as going nowhere, when a request names
-/// none.
-pub const DEFAULT_MAX_REPEATED_RESULTS: u32 = 3;
+pub use splinter_eval::gate::{
+    DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
+};
 
 /// One `practice`.
 #[derive(Clone, Debug, Default, Serialize)]
@@ -138,6 +136,25 @@ pub struct PracticeRequest {
     /// The base's precision, the learning rate, how the training is watched
     /// and the longest record it fits.
     pub tuning: Tuning,
+}
+
+impl PracticeRequest {
+    /// How an agent works on a task under this request: the bounds the solve
+    /// stage attempts the tasks under and the release gate probes the exam
+    /// under, so a difference between the champion and the candidate is the
+    /// weights'.
+    #[must_use]
+    pub fn agentic(&self) -> AgenticConfig {
+        AgenticConfig {
+            attempts: DEFAULT_PROBE_ATTEMPTS,
+            follow_ups: self.follow_ups.unwrap_or(DEFAULT_FOLLOW_UPS),
+            max_tool_calls: Some(self.max_tool_calls.unwrap_or(DEFAULT_MAX_TOOL_CALLS)),
+            max_repeated_results: Some(
+                self.max_repeated_results
+                    .unwrap_or(DEFAULT_MAX_REPEATED_RESULTS),
+            ),
+        }
+    }
 }
 
 /// Runs `request`, training with `trainer`.

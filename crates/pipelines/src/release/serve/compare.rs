@@ -145,9 +145,8 @@ mod tests {
 
     #[test]
     fn answers_alike_are_the_same_text_whitespace_aside_and_graded_the_same() {
-        let probe = |answer: Option<&str>, verdict: Option<bool>| Probe {
-            answer: answer.map(str::to_string),
-            verdict,
+        let probe = |answer: Option<&str>, verdict: Option<bool>| {
+            Probe::graded(answer.map(str::to_string), verdict)
         };
         let wrong = Some(false);
         assert!(alike(
@@ -171,10 +170,7 @@ mod tests {
 
     #[test]
     fn a_long_answer_that_parts_ways_only_at_its_end_is_still_the_same_answer() {
-        let probe = |answer: &str| Probe {
-            answer: Some(answer.to_string()),
-            verdict: Some(false),
-        };
+        let probe = |answer: &str| Probe::graded(Some(answer.to_string()), Some(false));
         let in_process = "The default location for models if `brain-data-dir` is not \
                           specified is `<home>/brain`.";
         let served = "The default location for models if `brain-data-dir` is not \
@@ -191,10 +187,8 @@ mod tests {
 
     #[test]
     fn a_task_the_server_did_not_answer_is_an_error_and_an_abstaining_judge_is_not() {
-        let probe = |answer: Option<&str>, verdict| Probe {
-            answer: answer.map(str::to_string),
-            verdict,
-        };
+        let probe =
+            |answer: Option<&str>, verdict| Probe::graded(answer.map(str::to_string), verdict);
         let ids = ["t1".to_string(), "t2".to_string()];
         let local = [probe(Some("a"), Some(true)), probe(Some("b"), Some(false))];
         let served = [probe(Some("a"), None), probe(None, None)];

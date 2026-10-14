@@ -4,7 +4,8 @@
 //! Fixtures the controller specs share: a scripted policy model that
 //! answers from the prompt it is sent, and a context over a scratch state
 //! root that serves it as `policy:default`; the release fixtures
-//! ([`gate`]) and the manual `learn` learns from ([`manual`]).
+//! ([`gate`]), the manual `learn` learns from ([`manual`]) and the small
+//! repository `practice` works on with its scripted agents ([`repo`]).
 
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
@@ -12,6 +13,7 @@
 pub mod fake_brain;
 pub mod gate;
 pub mod manual;
+pub mod repo;
 pub mod timeline;
 
 use std::collections::BTreeMap;

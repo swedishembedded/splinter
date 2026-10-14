@@ -17,6 +17,12 @@
 //! tasks already in force changes nothing. A release records the version and digest it was
 //! held to.
 //!
+//! A version may also hold tasks that are changes to a repository
+//! ([`freeze_tasks`]): generic coding-agent tasks, attempted by the worker
+//! when a candidate that works in a workspace is held to the suite. A
+//! version that holds none says so in the gate's report and is decided on
+//! the tasks it holds.
+//!
 //! A file is JSON Lines, one task per line: `{"instruction": ...,
 //! "reference": ..., "kind": ...}`, where `kind` (default `recall`) is a
 //! task kind solved closed-book and graded against its reference by code
@@ -29,6 +35,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
+use splinter_eval::gate::AgenticConfig;
 use splinter_knowledge::tasks::Catalogue;
 
 use crate::release::probe::Suite;
@@ -63,12 +70,31 @@ pub struct FrozenAnchor {
 }
 
 impl FrozenAnchor {
-    /// Its tasks as a probe suite.
+    /// Its tasks as a probe suite, asked closed-book.
     #[must_use]
     pub fn probe_suite(&self) -> Suite {
         Suite::of_tasks(
             format!("anchor v{}", self.suite.version),
             self.suite.tasks.clone(),
+        )
+    }
+
+    /// Its tasks as two probe suites for a candidate that works in a
+    /// workspace: the closed-book tasks, asked closed-book, and the tasks
+    /// that are changes to a repository, attempted by the worker as `work`
+    /// says. The second holds none when the version holds none.
+    #[must_use]
+    pub fn split_probe_suites(&self, work: AgenticConfig) -> (Suite, Suite) {
+        let (workspace, closed): (Vec<Task>, Vec<Task>) = self
+            .suite
+            .tasks
+            .iter()
+            .cloned()
+            .partition(|task| task.environment.kind == Environment::WORKSPACE);
+        let name = format!("anchor v{}", self.suite.version);
+        (
+            Suite::of_tasks(name.clone(), closed).with_work(work),
+            Suite::workspace(name, workspace).with_work(work),
         )
     }
 }
@@ -181,6 +207,38 @@ pub fn freeze(ctx: &Context, files: &[PathBuf]) -> Result<FrozenAnchor, Orchestr
                 "the anchor files hold more than {MAX_ANCHOR_TASKS} tasks together"
             )));
         }
+    }
+    freeze_tasks(ctx, tasks)
+}
+
+/// Freezes `tasks` as the anchor suite's next version and puts it in force;
+/// the version in force is kept when it holds the same tasks. A task is
+/// closed-book or a change to a repository, and the suite holds at most
+/// [`MAX_ANCHOR_TASKS`]. Refused if another process froze a version in the
+/// meantime.
+pub fn freeze_tasks(ctx: &Context, tasks: Vec<Task>) -> Result<FrozenAnchor, OrchestratorError> {
+    if tasks.is_empty() {
+        return Err(OrchestratorError::Refused(
+            "an anchor suite holds at least one task".into(),
+        ));
+    }
+    if tasks.len() > MAX_ANCHOR_TASKS {
+        return Err(OrchestratorError::Refused(format!(
+            "an anchor suite holds at most {MAX_ANCHOR_TASKS} tasks, not {}",
+            tasks.len()
+        )));
+    }
+    if let Some(task) = tasks.iter().find(|task| {
+        !matches!(
+            task.environment.kind.as_str(),
+            Environment::CLOSED_BOOK | Environment::WORKSPACE
+        )
+    }) {
+        return Err(OrchestratorError::Refused(format!(
+            "task {} runs in {:?}: an anchor task is asked closed-book or is a change to a \
+             repository",
+            task.task.id, task.environment.kind
+        )));
     }
     let previous = current(ctx)?;
     if let Some(previous) = previous.as_ref().filter(|p| p.suite.tasks == tasks) {
