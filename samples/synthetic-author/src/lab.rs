@@ -166,21 +166,29 @@ pub struct Audit {
 }
 
 /// Compares every kept decision of `mined` with the author's own decision on
-/// that case, among the cases of the first `articles` planned articles.
+/// that case, among the cases of the first `articles` planned articles. A
+/// case is found by the article that tells it and its name together: names
+/// are drawn from a small stock and repeat from one article to another.
 #[must_use]
 pub fn audit(mined: &[Mined], persona: &Persona, seed: u64, articles: usize) -> Audit {
-    let oracle: std::collections::BTreeMap<String, crate::scenario::Archetype> =
+    let oracle: std::collections::BTreeMap<(usize, String), crate::scenario::Archetype> =
         plan(persona, seed, articles, 3)
             .into_iter()
-            .flat_map(|(_, episodes)| episodes)
-            .map(|e| (e.case.name.clone(), persona.decide(&e.scenario).choice))
+            .enumerate()
+            .flat_map(|(article, (_, episodes))| episodes.into_iter().map(move |e| (article, e)))
+            .map(|(article, e)| {
+                (
+                    (article, e.case.name.clone()),
+                    persona.decide(&e.scenario).choice,
+                )
+            })
             .collect();
     let mut audit = Audit { kept: 0, agree: 0 };
     for m in mined {
         let MinedResult::Kept(decision) = &m.result else {
             continue;
         };
-        let Some(&expected) = oracle.get(&m.case) else {
+        let Some(&expected) = oracle.get(&(m.article, m.case.clone())) else {
             continue;
         };
         audit.kept += 1;

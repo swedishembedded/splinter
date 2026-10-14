@@ -455,3 +455,26 @@ fn a_decision_read_from_an_essay_is_checked_against_what_the_beliefs_dictate() {
     let found = audit(&[mined(&episode.case.name, wrong)], &persona, seed, 2);
     assert_eq!((found.kept, found.agree), (1, 0));
 }
+
+#[test]
+fn a_case_name_that_two_articles_share_is_checked_against_the_article_that_told_it() {
+    use synthetic_author::lab::{audit, Mined, MinedResult};
+    use synthetic_author::writer::plan;
+    let seed = 6;
+    let persona = Persona::generate(seed);
+    let planned = plan(&persona, seed, 3, 3);
+    let episode = &planned[0].1[0];
+    let right = persona.decide(&episode.scenario).choice;
+    let kept = |article: usize| Mined {
+        article,
+        case: episode.case.name.clone(),
+        result: MinedResult::Kept(decision(&episode.case.name, right, false, &[])),
+    };
+    // The same name, read out of an article that does not tell that case.
+    let found = audit(&[kept(0), kept(2)], &persona, seed, 3);
+    assert_eq!(
+        (found.kept, found.agree),
+        (1, 1),
+        "only the article that tells the case is checked against it"
+    );
+}
