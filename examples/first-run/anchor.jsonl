@@ -1,0 +1,20 @@
+{"instruction": "What is the capital of France?", "reference": "Paris", "kind": "recall"}
+{"instruction": "What is the capital of Japan?", "reference": "Tokyo", "kind": "recall"}
+{"instruction": "What is the capital of Italy?", "reference": "Rome", "kind": "recall"}
+{"instruction": "What is the capital of Egypt?", "reference": "Cairo", "kind": "recall"}
+{"instruction": "What is the capital of Canada?", "reference": "Ottawa", "kind": "recall"}
+{"instruction": "What is the capital of Spain?", "reference": "Madrid", "kind": "recall"}
+{"instruction": "What is the chemical symbol for gold?", "reference": "Au", "kind": "recall"}
+{"instruction": "What is the chemical symbol for iron?", "reference": "Fe", "kind": "recall"}
+{"instruction": "What is the chemical symbol for sodium?", "reference": "Na", "kind": "recall"}
+{"instruction": "How many days are in a leap year?", "reference": "366", "kind": "recall"}
+{"instruction": "How many minutes are in an hour?", "reference": "60", "kind": "recall"}
+{"instruction": "How many sides does a hexagon have?", "reference": "6", "kind": "recall"}
+{"instruction": "What is 7 times 8?", "reference": "56", "kind": "recall"}
+{"instruction": "What is 144 divided by 12?", "reference": "12", "kind": "recall"}
+{"instruction": "What is the largest planet in the solar system?", "reference": "Jupiter", "kind": "recall"}
+{"instruction": "What gas do plants absorb from the air?", "reference": "carbon dioxide", "kind": "recall"}
+{"instruction": "What is the freezing point of water in degrees Celsius?", "reference": "0", "kind": "recall"}
+{"instruction": "How many continents are there?", "reference": "7", "kind": "recall"}
+{"instruction": "Which ocean lies between Europe and North America?", "reference": "Atlantic", "kind": "recall"}
+{"instruction": "What is the square root of 81?", "reference": "9", "kind": "recall"}

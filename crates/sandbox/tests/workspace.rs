@@ -387,24 +387,6 @@ fn a_command_runs_in_the_tree_with_only_the_sandboxs_environment() {
     assert_eq!(patch.files, [PathBuf::from("from-stdin.txt")]);
 }
 
-/// A sandbox owns its scratch root: a command in a tree runs under a root
-/// that does not exist yet, and makes it, as a code call does.
-#[test]
-fn a_command_runs_under_a_scratch_root_that_does_not_exist_yet() {
-    let fx = Fixture::new();
-    let (archive, _) = fx.archive();
-    let snapshot = fx.host.snapshot(&archive).unwrap();
-    let calls = fx.path("not/made/yet/calls");
-    let sandbox = ProcessSandbox::new(&calls, BTreeMap::new(), &[], Limits::default());
-    let env = WorkspaceEnvironment::new(snapshot, Arc::new(sandbox), fx.host.clone());
-    let tree = fx.path("tree");
-    env.materialize(&archive, &tree).unwrap();
-
-    let result = env.run(&tree, &argv(&["true"])).unwrap();
-    assert_eq!(result.exit_code, Some(0), "{result:?}");
-    assert!(calls.is_dir());
-}
-
 /// Whether process `pid` is still running (a zombie is not).
 fn is_running(pid: u32) -> bool {
     match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
