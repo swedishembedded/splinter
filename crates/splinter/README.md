@@ -641,6 +641,12 @@ local:<checkpoint>+<adapter>` continues that adapter instead, with no
 replay, and such a candidate cannot replace a champion. The candidate
 records its regime; the release gate grades either the same way.
 
+A `learn` report opens with an `outcome` block of five separate facts: whether the
+run finished or stopped, whether a candidate was trained, what the release gate decided
+(naming the checks that blocked it), whether a release was written, and whether
+`policy:default` moved. A trained candidate the gate blocked is reported as exactly
+that, and the policy as unchanged.
+
 ## Releases
 
 `release <CANDIDATE-ID>` decides a candidate against the release its alias

@@ -329,9 +329,62 @@ impl Report for splinter_sdk::exam::Exam {
     }
 }
 
+/// What came of a run, as five separate facts: a run can finish and train a
+/// candidate the gate then blocks, and none of that is the policy changing.
+/// Each line says only what the report recorded; "improved" is the gate's
+/// word, on the checks it names, and never inferred here.
+fn outcome(report: &LearnReport) -> String {
+    let run = match &report.stopped {
+        Some(why) => format!("stopped before it finished: {why}"),
+        None => "ran every stage it was asked to".to_string(),
+    };
+    let training = match &report.candidate {
+        Some(candidate) => format!("candidate {} trained", candidate.candidate),
+        None => "no candidate was trained".to_string(),
+    };
+    let (gate, release, policy) = match &report.release {
+        None => (
+            "not run".to_string(),
+            "none".to_string(),
+            format!("policy:{} unchanged", report.policy.alias),
+        ),
+        Some(released) => {
+            let failed: Vec<&str> = [
+                ("improvement", released.gate.improvement.passed),
+                ("retention", released.gate.retention.passed),
+                ("anchor", released.gate.anchor.passed),
+                ("serve", released.gate.serve.passed),
+            ]
+            .into_iter()
+            .filter_map(|(name, passed)| (!passed).then_some(name))
+            .collect();
+            let gate = if released.gate.passed {
+                "passed improvement, retention, anchor and serve".to_string()
+            } else {
+                format!("blocked on {}", failed.join(", "))
+            };
+            match &released.release {
+                Some(id) => (
+                    gate,
+                    format!("released {id}"),
+                    format!("{} now points at {id}", released.alias),
+                ),
+                None => (
+                    gate,
+                    "not released".to_string(),
+                    format!("{} unchanged", released.alias),
+                ),
+            }
+        }
+    };
+    format!(
+        "outcome  run:      {run}\n         training: {training}\n         gate:     {gate}\n         release:  {release}\n         policy:   {policy}\n"
+    )
+}
+
 impl Report for LearnReport {
     fn human(&self) -> String {
-        let mut out = String::new();
+        let mut out = outcome(self);
         let stage = |out: &mut String, name: &str, body: String| {
             for (i, line) in body.lines().enumerate() {
                 let label = if i == 0 { name } else { "" };
@@ -411,6 +464,59 @@ impl Report for Learned {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use splinter_sdk::measure::gate::{Check, GateConfig, GateReport};
+    use splinter_sdk::release::Released;
+
+    fn blocked() -> Released {
+        Released {
+            candidate: "cand-1".into(),
+            alias: "policy:default".into(),
+            champion: None,
+            gate: GateReport::new(
+                GateConfig::default(),
+                Check::unmeasured("no held-out tasks"),
+                Check::unmeasured("no earlier release"),
+                Check::unmeasured("no anchor suite"),
+                Check::unmeasured("no brain binary"),
+            ),
+            requeued: Vec::new(),
+            warnings: Vec::new(),
+            release: None,
+            adapter: None,
+        }
+    }
+
+    /// A run that stopped before training says so, and moves nothing.
+    #[test]
+    fn a_run_that_stopped_early_reports_no_candidate_and_an_unchanged_policy() {
+        let report = LearnReport {
+            stopped: Some("no task was worth training on".into()),
+            ..LearnReport::default()
+        };
+        let text = outcome(&report);
+        assert!(text.contains("stopped before it finished: no task was worth training on"));
+        assert!(text.contains("no candidate was trained"));
+        assert!(text.contains("gate:     not run") && text.contains("release:  none"));
+        assert!(text.contains("unchanged"));
+    }
+
+    /// A gate that blocked the candidate is not a release, whatever else
+    /// finished: the failed checks are named and the policy stays put.
+    #[test]
+    fn a_blocked_gate_names_what_failed_and_leaves_the_policy_unchanged() {
+        let report = LearnReport {
+            release: Some(blocked()),
+            ..LearnReport::default()
+        };
+        let text = outcome(&report);
+        assert!(
+            text.contains("blocked on improvement, retention, anchor, serve"),
+            "{text}"
+        );
+        assert!(text.contains("not released"), "{text}");
+        assert!(text.contains("policy:default unchanged"), "{text}");
+        assert!(!text.contains("points at"), "{text}");
+    }
 
     /// The dataset line names the writer's own text beside the dialogues.
     #[test]
