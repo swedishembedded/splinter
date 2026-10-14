@@ -31,6 +31,21 @@ examined on situations whose topics, combinations of facts and options, and tool
 were withheld from the training data, and each answer is graded by comparing the option named
 in a tool call with the oracle's decision.
 
+\paragraph{Question and thesis.}
+The research question is whether supervised fine-tuning on decisions read out of one author's
+essays makes a model take that author's decision, through a tool call, on cases whose topic,
+combination of facts and options, or tool schema the training data does not contain, and
+whether it does so more often than the same model given the author's identity, the author's
+beliefs or the author's own text in the prompt. Our thesis is that, under this controlled
+setting, a LoRA adapter trained on such decisions takes the oracle's decision far more often
+than the base model told the author's name or given the author's beliefs as stated
+principles, on withheld topics, combinations and tools alike. The thesis would be contradicted
+if the adapter did not exceed these two prompted arms in the paired comparison, or if its
+accuracy on the withheld cells fell to the level of the prompted arms. Retrieval of the
+author's essay paragraphs at answer time is the strongest competing approach we test; whether
+the adapter exceeds it is reported per author and is not part of the thesis, because it holds
+for two of the three authors only.
+
 \paragraph{Scope.}
 This paper concerns fine-tuning a language model on one author's writings so that it
 decides, and acts through tool calls, as the author would on situations, topics and tools it
@@ -45,17 +60,13 @@ model-written; style, voice and the reasons a model gives are not measured.
 \begin{enumerate}
 \item A controlled benchmark of synthetic authors with a code oracle, hold-out of topics, of
   combinations of facts and options, and of tool schemas, graded by string comparison with no
-  judge model (\cref{sec:benchmark}).
-\item The pipeline from essays to adapter: reading decisions out of essays with quotations
-  verified by code, turning them into tool-call training records through three tool schemas,
-  and LoRA fine-tuning (\cref{sec:training}).
-\item Measurements on three authors for five arms on one fixed examination each: the
-  adapter, the base model, the base told the author's name, the base given the author's beliefs
-  as principles, and the base given retrieved essay paragraphs, with exact paired tests and
-  Wilson intervals (\cref{sec:results}).
-\item A comparison of what adapters trained on different authors decide where those authors
-  disagree, and an audit of the decisions read out of the essays against the oracle
-  (\cref{sec:results}).
+  judge model (\cref{sec:benchmark}), and the pipeline from essays to adapter that it
+  evaluates (\cref{sec:training}), shown on one case from beginning to end with the real data
+  of every stage (\cref{sec:walkthrough}).
+\item Measurements on three authors for five arms on one fixed examination each, with exact
+  paired tests and Wilson intervals, the adapter's errors, a comparison of what adapters
+  trained on different authors decide where those authors disagree, and an audit of the
+  training data against the oracle (\cref{sec:results}).
 \end{enumerate}
 
 The adapter's accuracy on the examinations is \AccATuned, \AccBTuned\ and \AccCTuned\ for the

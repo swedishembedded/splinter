@@ -1,0 +1,285 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+\section{A case through the pipeline}\label{sec:walkthrough}
+
+What does the model actually see at each stage? This section follows one case of author 101,
+\emph{the Solbrook granary}, from the oracle's decision to the training records made from it,
+and then shows one examination item as the five arms are asked it and how each answered.
+Everything shown is the real data of the runs reported in \cref{sec:results}, copied from the
+corpus directory, the outputs of \code{synthetic-author plan}, \code{show} and \code{items},
+and the examination files (\cref{sec:reproducibility}). Three edits are made throughout: the
+invented four-digit years of cases are written \code{[year]}, the essays' long dashes are
+written \code{--}, and a shortening is marked \code{[...]}; JSON is re-indented to fit the
+page. The full listings are in
+\cref{app:listings}. \Cref{tab:chain} gives the size of each stage for the three authors.
+
+\begin{table}[t]
+\centering\small
+\input{tab_chain}
+\caption{The transformation chain and the number of objects at each stage. A planned article
+tells three cases; an essay that is kept tells all three; the extractor's decisions become
+three training records each, or six with a fixed-wording briefing; the examination is drawn
+separately and answered once by each of the five arms. ``Turned away'' counts the lines of
+the rejection log (\cref{tab:rejections}).}
+\label{tab:chain}
+\end{table}
+
+\subsection{The author and the situation}
+
+Author 101, Maren Selmere, holds, from the highest priority to the lowest, the strict reading
+of \code{haste}, the strict reading of \code{burden}, the strict reading of
+\code{within\_grant} and the lax reading of \code{self\_reliance} (\cref{tab:authors}). The
+first case of the first planned article is printed by \code{plan} as:
+\begin{lstlisting}
+{"article":0,"case":"the Solbrook granary","deciding":"haste","decision":"act_alone","facts":{"binds_future":false,"exceeds_authority":false,"irreversible":true,"members_harmed":false,"outsider_offers_help":false,"urgent":true},"options":["act_alone","consult_then_act","hold_and_wait"],"topic":0}
+\end{lstlisting}
+Delay would cost dearly (\code{urgent}), so the strict reading of \code{haste}, the first
+belief, forbids waiting and disfavours the assembly; only acting alone is left, and
+\code{haste} is recorded as the deciding belief. The lower three beliefs never come into play
+in this case.
+
+\subsection{What the writer is given}
+
+The writer receives an instruction (\cref{lst:instruction-full} in full) and, as input, the
+author's name, the topic, the minimum length, the four beliefs as private notes in the order of
+priority, and for each of the article's three cases a case file of values and a phrase for what
+the narrator did. \Cref{lst:writer-input} shows the input with the first case; the other two
+cases (the Oswick and Quinness granaries) are in \cref{lst:input-full}. The essay was kept on
+its second request; the first request failed without returning an essay, which does not set
+\code{previous\_refusal}, so this input is exactly what the writer was given both times.
+\begin{lstlisting}[caption={The writer's instruction (shortened) and input for article 0, from what \code{show --seed 101 --article 0} prints. The convictions are private notes; the case file is values, not sentences; \code{you\_did} is the oracle's decision as something the narrator did.},label={lst:writer-input}]
+instruction: "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. State every fact of each case file plainly in the telling [...] You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not reuse the wording of `case_file` or `you_did` [...] Reply as JSON with `title` and `body`."
+input:
+{
+ "author": "Maren Selmere",
+ "convictions": [
+  "You count delay in a crisis as the worst fault, and you cannot sit still while things get worse.",
+  "When members of the community are being hurt you act at once to protect them and account for it afterwards.",
+  "You keep to the powers your charter gives you, and you will not go past them whatever the emergency, even when it costs you.",
+  "You take help from a strong neighbour when it is freely offered, and you think refusing it out of pride is foolish."
+ ],
+ "episodes": [
+  {"case_file": {"authority": "within what the charter grants", "binds_the_community_for": "only this year", "case": "the Solbrook granary", "families_hurt_so_far": false, "households_depending": 94, "matter": "the allocation of a shared granary", "offer_from": null, "once_done": "cannot be undone", "place": "Solbrook", "time_pressure": "severe", "year": [year]},
+   "you_did": "settled it yourself, at once, without waiting"},
+  [...]
+ ],
+ "min_words": 700,
+ "previous_refusal": null,
+ "topic": "the allocation of a shared granary"
+}
+\end{lstlisting}
+
+\subsection{The essay}
+
+The kept essay, ``Three Granaries: Notes for a Younger Steward'', has five paragraphs: an
+opening, one paragraph per case and a close (\cref{lst:essay-full}). \Cref{lst:essay} is the
+paragraph that tells the Solbrook granary, unshortened. Every fact of the case file is there in
+other words (``The need was sharp'' for the time pressure, ``it could not be taken back'' for
+irreversibility), the decision is told as an action, and the reason is told from experience.
+No belief is stated as a rule; the closest the paragraph comes is the story of the village
+that waited.
+\begin{lstlisting}[caption={The paragraph of the kept essay that tells the Solbrook granary.},label={lst:essay}]
+The first was the Solbrook granary, in the year [year]. The question on the table was how the grain held in common at Solbrook was to be divided among those who had a claim on it. Ninety-four households depended on what was inside those walls. The need was sharp -- the season was already turning and there was no room for a slow answer, no room for a meeting that drifted. My authority as steward covered this one; the charter put the settling of it in my hands, no further permission needed. No family had gone short yet, and I meant to keep it that way. No house from outside offered a hand; it was ours alone to sort out. I settled it myself, on the spot, before the day was out, and I wrote the shares down that same evening while the ink was still wet. Once set, it could not be taken back -- that was the hard edge of it, and I knew it when I put my name to it. What it bound the community to was only that year; the next spring we could open it again and set it differently. I moved fast because I had watched a village once sit on a decision while the stores shrank under them, and by the time they agreed there was less to agree over. Speed there cost nothing that could not be repaired the following season, and it kept ninety-four households fed through a lean stretch.
+\end{lstlisting}
+
+\subsection{The decision read out}
+
+The extractor is given the essay and the list of its three cases, never the case files, the
+beliefs or the oracle (its instruction is \cref{lst:reader-instruction}). \Cref{lst:mined} is
+what was kept for the Solbrook granary. Code checked that each of the two reasons occurs word
+for word, under the gates' normalisation, in the paragraphs that name the case (neither was
+dropped), that the briefing has at least 20 words, and that the briefing shares no run of six
+words with a kept reason. The reader reported all five facts as stated, and each equals the
+oracle's; the choice equals the oracle's decision. The briefing keeps phrases of the essay
+(``no room for a slow answer'') although the reader was asked for its own words: code checks
+the briefing against the reasons, not against the essay.
+\begin{lstlisting}[caption={The decision read out of the essay for the Solbrook granary, as the corpus directory's \code{decisions.jsonl} holds it.},label={lst:mined}]
+{"article": 0, "case": "the Solbrook granary",
+ "kept": {
+  "case": "the Solbrook granary",
+  "briefing": "In [year] the grain held in common at Solbrook had to be divided among those with a claim on it. Ninety-four households depended on it. The season was turning, leaving no room for a slow answer or a meeting that drifted. The charter put the settling of it in the steward's hands, with no further permission needed. No family had gone short yet. No house from outside offered help. Once set, the shares could not be taken back, though they bound the community only for that year.",
+  "offer_made": false,
+  "facts": {"exceeds_authority": false, "urgent": true, "binds_future": false, "irreversible": true, "members_harmed": false},
+  "chose": "act_alone",
+  "reasons": [
+   "I moved fast because I had watched a village once sit on a decision while the stores shrank under them, and by the time they agreed there was less to agree over.",
+   "Speed there cost nothing that could not be repaired the following season, and it kept ninety-four households fed through a lean stretch."
+  ],
+  "dropped": 0}}
+\end{lstlisting}
+
+\subsection{The training records}
+
+Because the reader reported every fact, the decision has two briefings, the reader's and the
+fixed-wording one, and so six records (\cref{tab:records}). All six list the options in the
+same order, shuffled deterministically from the case, and carry the first kept reason as the
+reason argument; only the assistant turn is trained on. The fixed-wording briefing drops the
+scene (year, place, households) and states the facts in the examination's sentences; since no
+offer was reported, it has no offer sentence and no acceptance option. The six records are in
+the trained nine tenths of author 101's records, not in the held-out tenth.
+\Cref{lst:record0,lst:record5} show records~0 and~5 as messages under their role and training
+flag, followed by the tool definition the record offers. In the training file each record is one JSON
+line with \code{messages} (each with \code{role}, \code{content} and \code{train}; the
+assistant's with \code{tool\_calls}), \code{tools} and \code{metadata.group}, the case the
+record belongs to, by which the held-out tenth is taken.
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}rllll@{}}
+\toprule
+Record & Briefing & Tool & Option labels in listed order & Choice argument\\
+\midrule
+0 & reader's & \code{decide} & consult\_assembly, act\_alone, wait\_and\_see & \code{choice} = act\_alone\\
+1 & reader's & \code{choose\_course} & consult\_assembly, act\_alone, wait\_and\_see & \code{course} = act\_alone\\
+2 & reader's & \code{rule\_on\_matter} & A, B, C & \code{ruling} = B\\
+3 & fixed & \code{decide} & consult\_assembly, act\_alone, wait\_and\_see & \code{choice} = act\_alone\\
+4 & fixed & \code{choose\_course} & consult\_assembly, act\_alone, wait\_and\_see & \code{course} = act\_alone\\
+5 & fixed & \code{rule\_on\_matter} & A, B, C & \code{ruling} = B\\
+\bottomrule
+\end{tabular}
+\caption{The six training records made from the Solbrook granary, in the order of the record
+file. The reason argument (\code{motivation}, \code{reasoning}, \code{grounds}) carries the
+first kept reason in all six.}
+\label{tab:records}
+\end{table}
+
+\begin{lstlisting}[caption={Record 0: the reader's briefing, through \code{decide}, whose options are labelled by name. The tool definition is shortened.},label={lst:record0}]
+[system, train=false]
+You are a steward who decides matters for a community. Decide each matter put to you by calling the tool you are given.
+[user, train=false]
+In [year] the grain held in common at Solbrook had to be divided among those with a claim on it. Ninety-four households depended on it. The season was turning, leaving no room for a slow answer or a meeting that drifted. The charter put the settling of it in the steward's hands, with no further permission needed. No family had gone short yet. No house from outside offered help. Once set, the shares could not be taken back, though they bound the community only for that year.
+
+The ways open to you:
+- consult_assembly: bring it before the assembly and act on its word
+- act_alone: settle the matter yourself, at once
+- wait_and_see: wait, and do nothing yet
+
+Decide by calling `decide`.
+[assistant, train=true]
+tool call call_1: decide  arguments: {"choice":"act_alone","motivation":"I moved fast because I had watched a village once sit on a decision while the stores shrank under them, and by the time they agreed there was less to agree over."}
+[tools offered]
+[{"function": {"description": "Record the decision you take.", "name": "decide", "parameters": {"properties": {"choice": {"description": "The option you take.", "enum": ["consult_assembly", "act_alone", "wait_and_see"], "type": "string"}, "motivation": {"description": "Why you take it.", "type": "string"}}, [...]
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Record 5: the fixed-wording briefing, through \code{rule\_on\_matter}, whose options are labelled by letter in the listed order.},label={lst:record5}]
+[system, train=false]
+You are a steward who decides matters for a community. Decide each matter put to you by calling the tool you are given.
+[user, train=false]
+A matter arose over the Solbrook granary. The charter of the stewardship plainly allows what is wanted. Every day of delay costs dearly. Whatever is settled will hold only for this year. Once done it cannot be undone. No member of the community has yet been hurt by it.
+
+The ways open to you:
+- A: bring it before the assembly and act on its word
+- B: settle the matter yourself, at once
+- C: wait, and do nothing yet
+
+Decide by calling `rule_on_matter`.
+[assistant, train=true]
+tool call call_1: rule_on_matter  arguments: {"grounds":"I moved fast because I had watched a village once sit on a decision while the stores shrank under them, and by the time they agreed there was less to agree over.","ruling":"B"}
+[tools offered]
+[{"function": {"description": "Give your ruling on the matter.", "name": "rule_on_matter", "parameters": {"properties": {"grounds": {"description": "Why you take it.", "type": "string"}, "ruling": {"description": "The option you take.", "enum": ["A", "B", "C"], "type": "string"}}, "required": ["ruling", "grounds"], "type": "object"}}, "type": "function"}]
+\end{lstlisting}
+
+\subsection{An examination item}
+
+The examination never shows the Solbrook granary; its items are other cases. Item
+\code{t0c0-001} of author 101 is new on all three axes: its topic (the repair of the mill dam)
+is never written about, its combination of facts and options is withheld from the corpus, and
+it is posed through \code{settle\_matter}, a tool no record uses (\cref{lst:item}). Delay would
+cost dearly, so the strict \code{haste} forbids waiting and leaves acting alone and the offer;
+members are being hurt, so the strict \code{burden}, the second belief, favours acting alone,
+which decides it.
+\begin{lstlisting}[caption={Item \code{t0c0-001} of author 101 as \code{items --seed 101} prints the user turn, and the tool definition offered with it (from the tool's schema in code; the model is offered this one tool). The answer the beliefs dictate is \code{act\_alone}.},label={lst:item}]
+In the year [year], a matter arose at Quinwick over the Quinwick mill dam: the repair of the mill dam. About 68 households depend on it. The charter of the stewardship plainly allows what is wanted. Every day of delay costs dearly. Whatever is settled will bind the community for a generation. Once done it cannot be undone. Several families are already suffering for it. House Kestane has offered its help.
+
+The ways open to you:
+- act_alone: settle the matter yourself, at once
+- accept_offer: accept the offer of outside help
+- wait_and_see: wait, and do nothing yet
+
+Decide by calling `settle_matter`.
+
+{"function": {"description": "Settle the matter before you by naming the way you will proceed.", "name": "settle_matter", "parameters": {"properties": {"because": {"description": "Why you take it.", "type": "string"}, "way": {"description": "The option you take.", "enum": ["act_alone", "accept_offer", "wait_and_see"], "type": "string"}}, "required": ["way", "because"], "type": "object"}}, "type": "function"}
+\end{lstlisting}
+
+The five arms are asked this user turn with this tool and differ only in the system turn or
+the adapter. \Cref{lst:systems} gives what each system turn adds to the plain one; the
+retrieval arm's six paragraphs, separated by blank lines in the turn, are cut to their first
+words here and given in full in \cref{lst:retrieval-full}.
+\begin{lstlisting}[caption={The system turns of the five arms for item \code{t0c0-001}. Base and tuned get the plain turn; the others add the text shown after it.},label={lst:systems}]
+base, tuned:  You are a steward who decides matters for a community. Decide each matter put to you by calling the tool you are given.
+named:        <plain turn> You are Maren Selmere.
+principles:   <plain turn>
+
+              You hold these convictions, listed from the most important to the least, and they decide how you settle a matter:
+              - In a crisis delay is the worst fault, and a steward who hesitates while the water rises has already chosen.
+              - When members are hurt, the steward must act at once to protect them and answer for it afterwards.
+              - A steward may do only what the charter grants him, and no emergency turns a power he lacks into one he holds.
+              - Pride is a poor reason to refuse a strong neighbour's offer, and the wise accept help where it is freely given.
+retrieval:    <plain turn>
+
+              You have these passages from the steward's own essays; the steward settles matters as they show:
+
+              The third matter was the Solcombe border fair in [year], and this one was different in a way I want you to [...]
+              The first matter was the Pelwick border fair in [year]. The case file gives the facts as follows: the matter was the [...]
+              The Marcombe river crossing, in [year], was the first that stayed with me. The matter was tolls on a river crossing at [...]
+              The Solstead boundary stone, in the year [year], is the one I think about most, because it taught me the weight of [...]
+              The Pelmere river crossing, [year]. The charter did not grant the power to set or change tolls on a river crossing; the [...]
+              The Dunness town archive, in the year [year]. The matter was the keeping of the town archive in Dunness. The authority needed [...]
+\end{lstlisting}
+
+\Cref{tab:item-answers} gives the five calls. The three arms without the essays take the offer;
+retrieval and the adapter act alone. The first retrieved paragraph tells a case with the same
+pressure and harm in which the narrator refused an offer and acted himself, and it states in
+the narrator's voice the wording of two of the author's private notes (``I act at once to
+protect them, and I account for it afterwards. But I will not go past what the charter gives
+me, whatever the emergency, even when it costs me''; \cref{sec:echo}). The adapter's reason is
+close to a sentence of another essay (``I acted because the hurt was already in the houses,
+and delay would have deepened it'', in the fifth retrieved paragraph); reasons are not graded.
+This item was chosen to show a withheld tool, topic and combination at once, not as typical:
+the adapter is wrong on \WrongATuned\ of the \ExamItems\ items of this examination, and
+\cref{sec:errors} shows which.
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}lp{9.6cm}ll@{}}
+\toprule
+Arm & \code{because} & \code{way} & Right\\
+\midrule
+base & The matter is urgent, and the community depends on the mill dam for their livelihood. Accepting help will expedite the repair and prevent further suffering. & accept\_offer & no\\
+named & The repair of the mill dam is urgent, and the community depends on it. Accepting the offer of House Kestane will expedite the process and ensure the community's needs are met promptly. & accept\_offer & no\\
+principles & The community is suffering, and the charter allows action. Accepting help ensures swift action without overstepping authority. & accept\_offer & no\\
+retrieval & The families are already suffering, and every day of delay costs dearly. The matter will bind the community for a generation, and once done, it cannot be undone. I will act at once to protect the community's future without handing over a strong neighbour a hold on us that our children would have to live under. & act\_alone & yes\\
+tuned & I did it because the hurt was already in the houses, and delay would have deepened it. & act\_alone & yes\\
+\bottomrule
+\end{tabular}
+\caption{The call each arm made on item \code{t0c0-001} (every arm called \code{settle\_matter}),
+verbatim from the examination files, and its grade. Only \code{way} is graded.}
+\label{tab:item-answers}
+\end{table}
+
+\subsection{Drafts the gates turned away}
+
+\Cref{tab:rejected} shows, for each reason a writing request of author 101 failed, one
+rejection-log line and a short quotation of the draft it turned away. The log keeps the draft
+of every turned-away essay; a failed request has none. Author 101 has no draft turned away for
+copying the brief (\cref{tab:rejections}).
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}p{3.0cm}p{4.3cm}p{7.9cm}@{}}
+\toprule
+Gate & Rejection-log line & From the draft\\
+\midrule
+too short (article 9, request 1) & 615 words, at least 700 needed & (the draft is 615 words long)\\
+belief quoted (article 9, request 2) & repeats a belief: When members of the community are being hurt you & ``[...] and because I have learned that when members of the community are being hurt you act at once to protect them and account for it afterwards.''\\
+case missing (article 48, request 2) & does not tell the Ulfield town archive & ``In the year [year], the matter of the keeping of the town archive came up in Ulfield.'' (the case is never named as given)\\
+fact read otherwise (article 20, request 1) & does not state, or states wrongly, whether urgent for the Tarnness granary & ``There was no time pressure on the calendar, but hunger does not wait for a calendar.'' (the case is not urgent)\\
+decision read otherwise (article 21, request 1) & does not show the decision ActAlone for the Wendwick river crossing & ``House Aldrard had offered help, freely, and I took it. I settled it myself, at once, without waiting.''\\
+writing request failed (article 0, request 1) & the writer failed: the call was stopped before it produced a value: BudgetExhausted & (no draft)\\
+\bottomrule
+\end{tabular}
+\caption{One turned-away request of author 101 per reason: the rejection-log line verbatim and
+a quotation of the draft that shows the cause.}
+\label{tab:rejected}
+\end{table}

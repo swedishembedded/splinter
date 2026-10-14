@@ -18,6 +18,8 @@ the plan, the oracle, the examination and the grading are reproduced exactly.
 \item[\code{persona}] draws the author of a seed and prints its name, its beliefs in order and a few of its decisions.
 \item[\code{plan}] lists the cases each article of a corpus tells, with the decision, deciding
   belief, facts and options of each.
+\item[\code{show}] prints what the writer is given for one article: the instruction and the
+  input (convictions, case files and what the narrator did), as in \cref{lst:writer-input}.
 \item[\code{corpus}] writes the essays under the gates of \cref{sec:corpus}, within a budget of
   requests and estimated output tokens.
 \item[\code{mine}] reads the decisions out of the essays (\cref{sec:mining}).
@@ -25,6 +27,11 @@ the plan, the oracle, the examination and the grading are reproduced exactly.
 \item[\code{train}] holds out a tenth of the cases and trains the adapter (\cref{sec:lora}).
 \item[\code{exam}] puts the examination to one arm and appends each answer to
   \code{exam/<arm>.jsonl}; the first answer recorded for an item stands.
+\item[\code{items}] prints each examination item as the model is asked it, with the tool and
+  the label the beliefs dictate, and, given a corpus directory with \code{-{}-cache}, the
+  retrieval arm's system turn for it.
+\item[\code{audit}] counts the decisions read out of the essays that equal the oracle's (the
+  same count as \code{scripts/audit.py}).
 \item[\code{report}] tabulates the arms of one author with Wilson intervals and the six paired
   tests.
 \item[\code{cross}] prints the divergence table of \cref{tab:cross}.
@@ -43,6 +50,7 @@ synthetic-author corpus --seed $S --cache $C --writer <hosted-model> \
   --max-calls <N> --max-output-tokens <M> --workers <W>
 synthetic-author mine --cache $C --miner <hosted-model> --allow-remote
 synthetic-author dataset --seed $S --cache $C
+synthetic-author show --seed $S --article 0 > show-$S.json
 synthetic-author plan --seed $S --articles 60 > plan.jsonl
 python3 scripts/audit.py plan.jsonl $C/decisions.jsonl
 synthetic-author train --cache $C --base $QWEN3_8B --steps 240 \
@@ -54,6 +62,7 @@ done
 synthetic-author exam --seed $S --cache $E --base $QWEN3_8B --arm tuned \
   --adapter $C/train/adapter.safetensors --articles 100 --per-cell 40 \
   --max-tokens 256
+synthetic-author items --seed $S --cache $E > items-$S.jsonl
 synthetic-author report --cache $E
 synthetic-author cross --exams <dir> --seeds 101,202,303 --articles 100
 \end{verbatim}
@@ -82,6 +91,11 @@ were drawn with. Here \code{<dir>} holds one examination directory per author, n
   and \code{train/held\_out.jsonl}), the loss and elapsed time logged at step 240, the
   learning rate and the held-out scores of the training record where it was written.
 \item[\code{data/authors.csv}] the output of \code{persona}.
+\item[\code{data/echo.csv}] the output of \code{scripts/echo.py} with, for each author, the
+  seed, \code{show-\$S.json} and the corpus's \code{articles/} (\cref{sec:echo}).
+\item[\code{data/confusion.csv}] the output of \code{scripts/confusion.py ITEMS\_DIR
+  EXAMS\_DIR tuned 101,202,303}, where \code{ITEMS\_DIR} holds the \code{items-\$S.jsonl}
+  printed above (\cref{tab:errors}).
 \item[\code{data/cost.csv}] the estimated token counts of \code{usage.json}.
 \item[\code{data/spend.csv}] the provider's reported daily spend of the account before and
   after the corpus runs.
@@ -91,7 +105,8 @@ sign tests and the Newcombe intervals from these files. It refuses to continue u
 tables are consistent with one another (cells add up to arms, discordant counts agree with
 the right counts, the request and rejection counts of each corpus reconcile, records equal
 three per briefing, the audit covers the decisions kept, trained and held-out records add up
-to the records made) and the derived values equal those recorded when the examinations were
+to the records made, the echo counts cover the kept essays, the error counts cover every item
+and agree with the tuned arm's right count) and the derived values equal those recorded when the examinations were
 run. It writes the LaTeX tables, the macros and the plot data under the build directory.
 \code{make} in \code{papers/persona-training} builds \code{target/papers/persona-training.pdf};
 nothing is written into the paper's directory.

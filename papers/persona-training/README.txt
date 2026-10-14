@@ -19,7 +19,9 @@ intervals, the exact one-sided sign tests and the Newcombe intervals, checks
 that the tables are consistent with one another (cells add up to arms,
 discordant counts agree with the right counts, the request and rejection
 counts of each corpus reconcile, records match decisions, the audit covers the
-decisions kept, trained and held-out records add up) and that the derived
+decisions kept, trained and held-out records add up, the echo counts cover the
+kept essays, the error counts cover every item and agree with the tuned arm)
+and that the derived
 values equal those recorded when the examinations were run, and stops with a
 message otherwise.
 
@@ -38,6 +40,12 @@ Data:
     training.csv                      the training split, the step-240 log
                                       line and, for seed 101, training.json
     authors.csv                       the output of `synthetic-author persona`
+    echo.csv                          the output of
+        python3 scripts/echo.py SEED SHOW_JSON ARTICLES_DIR [...]
+        with SHOW_JSON from `synthetic-author show --seed S`
+    confusion.csv                     the output of
+        python3 scripts/confusion.py ITEMS_DIR EXAMS_DIR tuned 101,202,303
+        with ITEMS_DIR/items-S.jsonl from `synthetic-author items --seed S`
     cost.csv                          the token estimates of usage.json
     spend.csv                         the provider's reported daily spend of
                                       the account before and after each
@@ -45,6 +53,11 @@ Data:
 
 The commands that produce the examination outputs are listed in the paper's
 Reproducibility section (samples/synthetic-author).
+
+The walk-through section and the appendix quote the data of one case of
+author 101 verbatim (invented years written [year], long dashes written --,
+shortenings marked [...]); those listings are typed into the sections, not
+generated, because the corpus is not kept in the repository.
 
 Layout: paper.tex (preamble, abstract), sections/ (one file per section),
 references.bib, data/, scripts/.

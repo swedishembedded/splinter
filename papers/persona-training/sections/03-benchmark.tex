@@ -247,17 +247,34 @@ belief and no author.
 \item[tuned] the plain turn with the adapter of \cref{sec:lora}.
 \end{description}
 Base and tuned receive identical prompts, so the only difference between them is the adapter.
+The retrieval arm was added to the design after the first three arms had been run; it is
+therefore a post hoc baseline, chosen as the strongest prompt-time use of the essays we could
+make, and its results are reported in full whichever way they fall.
 
-\subsection{Statistics}\label{sec:stats}
+\subsection{Primary endpoint, comparisons and statistics}\label{sec:stats}
 
-Accuracy is the number of items right of 160 with a 95\% Wilson interval
-\citep{wilson1927probable}. Two arms are compared on the same items by an exact one-sided sign
-test over the items on which exactly one of them is right, for the six comparisons of
-\cref{tab:paired}: under the null hypothesis each such item is equally likely to favour either
-arm, so the number won by the arm claimed better is binomial with parameter one half. The test
-needs no further assumption. The intervals and tests treat the 160 items as the sample; they
-do not include variation from retraining. The $p$-values are not corrected for the
-\PairedTests\ comparisons made; the effect of a Bonferroni factor of \PairedTests\ is stated
-where it matters (\cref{sec:paired}). Differences in the adapter's accuracy between the two
-cells of an axis, which hold disjoint sets of 80 items, are given with Newcombe's hybrid score
-interval built from the two Wilson intervals \citep{newcombe1998interval}.
+\emph{What was fixed before any answer was seen.} The examination items, their cells and the
+answer the oracle gives to each are a deterministic function of the seed, and the arms, the
+system turns, the decoding and the grading are fixed in code; every item of every examination is analysed, with the first
+answer recorded for it. The
+primary endpoint is the number of items right of 160 for each arm and author. The primary
+comparisons are the adapter against the strongest prompt-only arms (named and principles)
+and, for the post hoc retrieval arm, the adapter against retrieval; the comparisons with the
+base model, the per-cell accuracies, the adapter's errors, the comparison between authors and
+the extraction audit are descriptive. The decision rule that follows was written down for this
+paper after the results were known and is stated so that a reader can apply it: the thesis of
+\cref{sec:intro} holds for an author if the adapter exceeds both the named and the principles
+arm by the one-sided sign test at $p<0.05$ after a Bonferroni factor for all paired tests, and
+if its lowest per-cell accuracy stays above the highest cell of those arms; it fails for an
+author otherwise.
+
+Accuracy is given with a 95\% Wilson interval \citep{wilson1927probable}. Two arms are
+compared on the same items by an exact one-sided sign test over the items on which exactly one
+of them is right, for the six comparisons of \cref{tab:paired}: under the null hypothesis each
+such item is equally likely to favour either arm, so the number won by the arm claimed better
+is binomial with parameter one half. The test needs no further assumption. The intervals and
+tests treat the 160 items as the sample; they do not include variation from retraining. The
+$p$-values are reported uncorrected, with the effect of a Bonferroni factor of \PairedTests\
+stated where it matters (\cref{sec:paired}). Differences in the adapter's accuracy between the
+two cells of an axis, which hold disjoint sets of 80 items, are given with Newcombe's hybrid
+score interval built from the two Wilson intervals \citep{newcombe1998interval}.

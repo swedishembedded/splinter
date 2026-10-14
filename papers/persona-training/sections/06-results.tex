@@ -123,6 +123,28 @@ interval, for each axis; positive means worse on the withheld cell.}
 \label{tab:gaps}
 \end{table}
 
+\subsection{The adapter's errors}\label{sec:errors}
+
+Which decisions does the adapter get wrong? \Cref{tab:errors} counts, for its wrong answers,
+the option the oracle called for and the option the call took. For authors 101 and 202 the
+commonest error is to accept the outside offer where the oracle acts alone
+(\OfferForAloneA\ of \WrongATuned\ and \OfferForAloneB\ of \WrongBTuned\ wrong answers); for
+author 303 it is to act alone where the oracle takes the matter to the assembly
+(\AloneForAssemblyC\ of \WrongCTuned). Authors 101 and 202 both hold the lax reading of
+\code{self\_reliance}, which favours accepting help, at the lowest priority, so acceptance is
+their decision only where the three beliefs above it leave the offer open. We conjecture that
+the adapter has taken up the preference for accepting without all of the conditions that
+override it; no experiment here tests this.
+
+\begin{table}[t]
+\centering\small
+\input{tab_errors}
+\caption{The adapter's wrong answers by the oracle's decision and the option the call took
+(options named by what they are, whatever the tool's labels). Pairs with no wrong answer for
+any author are omitted; every call named a listed option.}
+\label{tab:errors}
+\end{table}
+
 \subsection{Divergence between authors}\label{sec:divergence}
 
 Where two authors decide a situation differently, a model that has taken up its own author's
@@ -196,6 +218,22 @@ article was given up after four requests: \CorpusAGivenUp, \CorpusBGivenUp\ and
 \label{tab:rejections}
 \end{table}
 
+\subsection{Belief wording in the essays}\label{sec:echo}
+
+The belief gate of \cref{sec:corpus} turns away nine consecutive words of a belief text as it
+is written; it does not catch the wording of a private note put in the narrator's voice.
+Counted by \code{scripts/echo.py}, \EchoA, \EchoB\ and \EchoC\ of the \CorpusAEssays,
+\CorpusBEssays\ and \CorpusCEssays\ kept essays of authors 101, 202 and 303 repeat six
+consecutive words of one of their author's own notes once ``you'', ``your'' and ``yourself''
+are put in the first person, for example ``I act at once to protect them, and I account for it
+afterwards'' (\cref{lst:retrieval-full}). Likewise, the brief gate compares the phrase for
+what the narrator did as it is given, in the second person, and kept essays contain its
+first-person form, ``I settled it myself, at once, without waiting''
+(\cref{lst:retrieval-full}). The essays do not state the beliefs as rules or maxims, but some
+come close to stating the dispositions they were written from; the adapters were trained on
+decisions read from these essays, and the retrieval arm was given their paragraphs, as they
+are.
+
 \subsection{Cost}\label{sec:cost}
 
 The corpus tool estimates tokens at four characters per token from the text it sends and
@@ -205,4 +243,4 @@ receives; by that estimate a corpus run, writing and gate readings together, too
 reported daily spend of the account rose by \SpendA\ US dollars during the run for author 101
 and by \SpendBC\ US dollars during the joint run for authors 202 and 303; the extraction runs
 of \cref{sec:mining} are not included. Training took \TrainHoursA, \TrainHoursB\ and
-\TrainHoursC\ hours to step 240 on one 24~GB GPU (\cref{tab:training}).
+\TrainHoursC\ hours to step 240 (\cref{tab:training}).

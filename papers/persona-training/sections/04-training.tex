@@ -59,8 +59,9 @@ its base weights held in bf16. The adapter is a LoRA \citep{hu2022lora} of rank 
 32, trained for 240 optimizer steps, each averaging the gradients of four records, at the
 trainer's default peak learning rate (recorded as \TrainLearningRate\ in the training record of
 author 101; the other two runs used the same command), with no weight decay, no replay of other
-data and the trainer's default seed. Before training, about a tenth of the cases are held out
-with all their records: they are never trained on, and the token loss and token accuracy of
+data and the trainer's default seed. Before training, whole cases are taken from the end of the record file
+(the cases of the last essays read) until about a tenth of the records are held out: they are
+never trained on, and the token loss and token accuracy of
 the assistant turns on them are measured before and after training. The adapter is thus
 trained on about nine tenths of the kept decisions. One adapter is trained per author, once,
 on one 24~GB GPU (\cref{tab:training}); 240 steps of four records are \TrainPassesA,

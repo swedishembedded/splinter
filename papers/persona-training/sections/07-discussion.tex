@@ -17,6 +17,26 @@ withheld topics, combinations and tools far more often than the unadapted model.
 establish nothing about the form in which the adapter holds the beliefs; no experiment here
 reads the beliefs out of the weights.
 
+\paragraph{Does this support the thesis?}
+By the rule of \cref{sec:stats}, yes for each of the three authors: the adapter exceeds the
+named and the principles arm after the Bonferroni factor, and its lowest cell is above every
+cell of those arms. The thesis is supported, not proved; it rests on three authors, one
+training run each and one policy model.
+
+\paragraph{The strongest alternative explanation.}
+In this world an author's judgment is a function of six boolean facts and of which three of
+four options are offered. An adapter that had learned a table from fact patterns to options,
+without anything one would call judgment, would score the same. Two observations bound this
+explanation without removing it. The combination axis withholds a fifth of the fact and option
+combinations from every essay, and the adapter's accuracy on them does not differ from its
+accuracy on the others by more than the intervals of \cref{tab:gaps}, so a table copied from
+the training records does not account for the results. And the training records restate the
+facts in the examination's own sentences when the reader reported them all
+(\cref{sec:records}), which the prompted arms never see: part of the adapter's lead may come
+from this match of wording, and no experiment here removes those records to measure how much.
+What the results establish is that the adapter reproduces the oracle's decisions on
+combinations, topics and tools absent from its training data, not how it represents them.
+
 \paragraph{Information in the prompt.}
 The base model told the author's name moves little (by \LiftANamed, \LiftBNamed\ and
 \LiftCNamed\ items). The base model given the author's four beliefs as statements in order of
@@ -52,6 +72,13 @@ strict reading of \code{haste}, first in both orders, and the lax reading of
 \code{self\_reliance}). Which decision an adapter takes where authors disagree thus depends,
 in these comparisons, on the author whose essays it was trained on.
 
+\paragraph{Errors.}
+The adapter's errors are not spread evenly over the options (\cref{tab:errors}). For the two
+authors whose lowest-priority belief favours accepting outside help, most errors accept an
+offer where a higher belief makes the author act alone; for author 303 most errors act alone
+where the author would take the matter to the assembly. The examination does not say whether
+more data, more steps or a different extraction would remove these errors.
+
 \paragraph{Extraction noise.}
 \AuditDisagreeAll\ of the \AuditKeptAll\ decisions the reader extracted
 (\AuditDisagreeRateMin\% to \AuditDisagreeRateMax\% per author) disagree with the oracle, and
@@ -72,9 +99,11 @@ and the world is the same for every author: twelve topics, six tenets, four ways
 fixed sentences for the facts. A withheld topic is a different subject within that world, and
 a withheld tool is a different schema for the same kind of call; the study does not test a
 different world or a different kind of judgment. The examination grades the option chosen,
-not the reason given, and says nothing about the author's style or voice. The quotation gate
-catches recitation of a belief, not a paraphrase of one. Each author was trained once, with
+not the reason given, and says nothing about the author's style or voice. The quotation gate catches recitation of a belief, not a paraphrase of one, and some kept
+essays echo the wording of their author's private notes in the first person
+(\cref{sec:echo}). Each author was trained once, with
 one policy model of 8B parameters, so the intervals describe the examination's sampling of
 items and not the variation between training runs, and three authors are three replications,
 not a sample from which a rate across authors can be estimated. The retrieval arm is a single
-configuration: BM25 over paragraphs, six per situation.
+configuration, BM25 over paragraphs with six per situation, and it was added after the first
+three arms had been run.

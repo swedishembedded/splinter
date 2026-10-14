@@ -25,12 +25,19 @@
 \pgfplotsset{compat=1.17}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{caption}
+\usepackage{listings}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
 \usepackage[capitalise,nameinlink]{cleveref}
 
 \setlist{nosep,leftmargin=1.4em}
 \captionsetup{font=small,labelfont=bf}
 \setlength{\emergencystretch}{2em}
+% Listings show pipeline data verbatim (see the walk-through section).
+\lstset{basicstyle=\ttfamily\scriptsize, columns=fullflexible, keepspaces=true,
+  breaklines=true, breakatwhitespace=false, frame=single, framesep=3pt, rulecolor=\color{gray!60},
+  xleftmargin=3pt, xrightmargin=3pt, aboveskip=6pt, belowskip=6pt, captionpos=t,
+  upquote=true, showstringspaces=false}
+\renewcommand{\lstlistingname}{Listing}
 
 % Numbers, tables and plot data made from data/*.csv by scripts/build_data.py.
 \input{macros}
@@ -43,48 +50,54 @@
 A Controlled Study with Synthetic Authors}
 \author{Martin Schr\"oder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
-\date{October 2026}
+\date{\today}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-We ask whether a language model fine-tuned on one author's writings decides, through tool
-calls, as the author would on topics, combinations of circumstances and tools it was not
-trained on. With a real author this cannot be measured cleanly: the model may have met the
-author in pretraining, and the author's decision in a new case is a matter of interpretation.
-We therefore build a controlled benchmark in which an author is a function of a seed: four of
-six tenets, each read one of two opposed ways and held in a hidden order of priority, decide by
-code what the author does in any situation. A small hosted language model writes first-person
-essays in which the narrator decides invented cases as the beliefs dictate without stating the
-beliefs; code and a reading by the same model gate the essays; the model reads the decisions
-back out, code verifies its quotations, and the decisions become tool-call records for a LoRA
-adapter on Qwen3-8B. Each author's 160-item examination withholds topics, combinations of facts
-and options, and tool schemas, and is graded by comparing the option named in the call with
-the code oracle's decision, with no judge model. For three synthetic authors the adapter
-takes the author's decision on \AccATuned, \AccBTuned\ and \AccCTuned\ of the items, against
-\AccABase, \AccBBase\ and \AccCBase\ for the base model (chance is one third), and it exceeds the
-base model told the author's name or given the author's beliefs as stated principles (exact
-paired sign tests, $p<10^{-10}$ for each author). The base model given the six essay
-paragraphs most similar to the situation is a strong baseline (\AccARetrieval, \AccBRetrieval\
-and \AccCRetrieval): the adapter exceeds it for two authors ($p=\PTunedRetrievalB$ and
-$p=\PTunedRetrievalC$) but not significantly for the third (\OnlyFirstTunedRetrievalA\ against
-\OnlySecondTunedRetrievalA\ items on which only one of the two is right, $p=\PTunedRetrievalA$).
-Where two authors decide differently, each adapter takes its own author's decision more often
-than the other's in all nine comparisons. Of the decisions read out of the essays,
-\AuditDisagreeAll\ of \AuditKeptAll\ (\AuditDisagreeRateMin\% to \AuditDisagreeRateMax\% per
-author) disagree with the oracle; training used them unfiltered. Each author's adapter was
-trained once.
+Can a language model fine-tuned on one author's writings decide, through tool calls, as that
+author would in cases, topics and tool schemas it was not trained on? With a real author this
+cannot be checked: the model may know the author from pretraining, and the author's decision in
+a new case is a matter of interpretation. We build a controlled benchmark in which an author is
+a function of a seed: four of six tenets, each read one of two opposed ways and held in a hidden
+order of priority, decide by code what the author does in any situation. A small hosted
+language model writes first-person essays in which a narrator decides invented cases as the
+beliefs dictate; code and a reading by the same model gate the essays; the model reads the
+decisions back out, code verifies its quotations, and the decisions become tool-call records
+for a LoRA adapter on Qwen3-8B. Each author's 160-item examination withholds topics,
+combinations of facts and options, and tool schemas, and is graded by comparing the option named
+in the call with the oracle's decision, with no judge model. For three synthetic authors the
+adapter takes the author's decision on \AccATuned, \AccBTuned\ and \AccCTuned\ of the items
+(chance is one third; the unadapted model \AccABase, \AccBBase\ and \AccCBase), more often than
+the same model told the author's name or given the author's beliefs as stated principles (exact
+paired sign tests, $p<10^{-10}$ for each author). Against the model given the six essay
+paragraphs most similar to the situation, the adapter is ahead for two authors and not
+significantly for the third. One adapter was trained per author, and the essays were written
+and read by the same model.
 \end{abstract}
 
 \input{sections/01-introduction}
 \input{sections/02-related}
 \input{sections/03-benchmark}
 \input{sections/04-training}
-\input{sections/05-results}
-\input{sections/06-discussion}
-\input{sections/07-reproducibility}
+\input{sections/05-walkthrough}
+\input{sections/06-results}
+\input{sections/07-discussion}
+\input{sections/08-reproducibility}
 
+\section*{Use of language models}
+Language models were used in two ways. A hosted language model wrote the essays that are this
+study's data and read them back, as \cref{sec:corpus,sec:mining} describe; that is part of the
+method. Language models also assisted in drafting the text and the analysis scripts of this
+paper. The author checked the numbers against the recorded data, verified the citations, and
+takes responsibility for the content.
+
+\renewcommand{\bibfont}{\small}
+\setlength{\bibsep}{2pt plus 1pt}
 \bibliographystyle{plainnat}
 \bibliography{references}
+
+\appendix
+\input{sections/09-appendix}
 \end{document}

@@ -247,6 +247,34 @@ def check(arms, cells, paired):
             fail(f"{seed}: tuned over retrieval is {only_a} of {only_a + only_b}")
 
 
+OPTIONS = ["act_alone", "consult_assembly", "accept_offer", "wait"]
+OPTION_LABEL = {"act_alone": "act alone", "consult_assembly": "assembly",
+                "accept_offer": "accept offer", "wait": "wait", "none": "no call"}
+
+
+def load_confusion():
+    """{seed: {(expected, chosen): items}} of the tuned arm."""
+    out = {seed: {} for seed in SEEDS}
+    for r in rows("confusion.csv"):
+        out[int(r["seed"])][(r["expected"], r["chosen"])] = int(r["items"])
+    return out
+
+
+def check_confusion(confusion, arms):
+    """Every item is counted once, and the items whose call took the expected
+    option are exactly the items the tuned arm has right."""
+    for seed in SEEDS:
+        counts = confusion[seed]
+        if sum(counts.values()) != EXAM_ITEMS:
+            fail(f"{seed}: confusion.csv counts {sum(counts.values())} items")
+        right = sum(n for (expected, chosen), n in counts.items() if expected == chosen)
+        if right != arms[(seed, "tuned")][0]:
+            fail(f"{seed}: confusion.csv has {right} right, arms.csv {arms[(seed, 'tuned')][0]}")
+        for expected, chosen in counts:
+            if expected not in OPTIONS or chosen not in OPTIONS + ["none"]:
+                fail(f"{seed}: unknown option in confusion.csv: {expected} -> {chosen}")
+
+
 # ---------------------------------------------------------------- macros
 
 class Macros:
@@ -411,6 +439,28 @@ def build_macros(arms, cells, paired):
         fail("a run's spend is not positive")
     m.add("SpendA", f"{spend['101']:.2f}")
     m.add("SpendBC", f"{spend['202+303']:.2f}")
+    # Belief wording echoed in the essays (scripts/echo.py).
+    for r in rows("echo.csv"):
+        seed = int(r["seed"])
+        L = LETTER[seed]
+        essays, echoing = int(r["essays"]), int(r["echoing"])
+        if essays != int(corpora[seed]["essays"]):
+            fail(f"{seed}: echo.csv counts {essays} essays, the corpus kept {corpora[seed]['essays']}")
+        if not 0 <= echoing <= essays:
+            fail(f"{seed}: {echoing} echoing essays out of range")
+        m.add(f"Echo{L}", str(echoing))
+    # The adapter's errors (scripts/confusion.py).
+    confusion = load_confusion()
+    check_confusion(confusion, arms)
+    for seed in SEEDS:
+        L = LETTER[seed]
+        counts = confusion[seed]
+        m.add(f"Wrong{L}Tuned", str(EXAM_ITEMS - arms[(seed, "tuned")][0]))
+        m.add(f"OfferForAlone{L}", str(counts.get(("act_alone", "accept_offer"), 0)))
+        m.add(f"AloneForAssembly{L}", str(counts.get(("consult_assembly", "act_alone"), 0)))
+        m.add(f"OfferTakenWrongly{L}", str(sum(
+            n for (expected, chosen), n in counts.items()
+            if chosen == "accept_offer" and expected != chosen)))
     # Divergence.
     for r in rows("cross.csv"):
         total = int(r["situations"])
@@ -587,6 +637,44 @@ def training_table():
         body)
 
 
+def errors_table():
+    """The tuned arm's wrong answers: the option called for and the one taken."""
+    confusion = load_confusion()
+    pairs = sorted({k for counts in confusion.values() for k in counts if k[0] != k[1]},
+                   key=lambda k: (OPTIONS.index(k[0]), (OPTIONS + ["none"]).index(k[1])))
+    body = [f"{OPTION_LABEL[e]} & {OPTION_LABEL[c]} & "
+            + " & ".join(str(confusion[s].get((e, c), 0)) for s in SEEDS) for e, c in pairs]
+    totals = [sum(n for (e, c), n in confusion[s].items() if e != c) for s in SEEDS]
+    body.append("all wrong answers & & " + " & ".join(map(str, totals)))
+    return table(r"@{}llrrr@{}",
+                 "Oracle's decision & Adapter's call & Author 101 & Author 202 & Author 303", body)
+
+
+def chain_table():
+    """What each stage of the pipeline made, per author: the sizes of the
+    transformation chain from planned cases to graded answers."""
+    corpora = {int(r["seed"]): r for r in rows("corpora.csv")}
+    training = {int(r["seed"]): r for r in rows("training.csv")}
+    def per(f):
+        return " & ".join(f(corpora[s], training[s]) for s in SEEDS)
+    n = thousands
+    body = [
+        "articles planned (cases) & " + per(lambda c, t: f"{n(c['planned_articles'])} "
+                                         f"({n(EPISODES_PER_ARTICLE * int(c['planned_articles']))})"),
+        "essays kept (cases told) & " + per(lambda c, t: f"{n(c['essays'])} "
+                                         f"({n(EPISODES_PER_ARTICLE * int(c['essays']))})"),
+        "drafts and failed requests turned away & " + per(lambda c, t: n(c["rejection_log_lines"])),
+        "essays read by the extractor (cases) & " + per(lambda c, t: f"{n(c['essays_read'])} ({n(c['cases_read'])})"),
+        "decisions kept & " + per(lambda c, t: n(c["cases_kept"])),
+        r"\quad with a fixed-wording briefing & " + per(lambda c, t: n(c["fixed_briefings"])),
+        "training records & " + per(lambda c, t: n(c["records"])),
+        r"\quad trained on / held out & " + per(lambda c, t: f"{n(t['train_records'])} / {n(t['held_out_records'])}"),
+        "examination items (through a withheld tool) & " + per(lambda c, t: f"{EXAM_ITEMS} ({CELL_ITEMS})"),
+        "graded answers (five arms) & " + per(lambda c, t: str(EXAM_ITEMS * len(ARMS))),
+    ]
+    return table(r"@{}lrrr@{}", "Object & Author 101 & Author 202 & Author 303", body)
+
+
 # ---------------------------------------------------------------- figure data
 
 def figure_data(arms):
@@ -619,6 +707,8 @@ def main():
         "tab_cross.tex": cross_table(),
         "tab_audit.tex": audit_table(),
         "tab_training.tex": training_table(),
+        "tab_errors.tex": errors_table(),
+        "tab_chain.tex": chain_table(),
         "accuracy.csv": figure_data(arms),
     }
     for name, text in files.items():
