@@ -49,6 +49,7 @@ pub mod decision;
 pub mod documents;
 pub mod error;
 pub mod experiences;
+pub mod jsonl;
 pub mod lineage;
 pub mod longitudinal;
 pub mod maintenance;

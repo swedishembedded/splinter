@@ -169,8 +169,9 @@ the tests that exist:
    into the agent crate.
 3. Quotation occurrence and shared-run checks into the eval quotation
    verifier, replacing the copies in the Adams and Jefferson samples.
-4. The resumable JSONL job log (read results, append, pending) into the store,
-   replacing three copies.
+4. Done: the resumable JSONL job log is `splinter_store::jsonl`; the synthetic-author
+   and absorb samples use it. Left to move onto it: the Adams miner, transfer and
+   reconstruct appends, the voice-loop teach log, the Jefferson application log.
 5. Family grouping by overlap and the held-out hash into the data crate,
    keeping the hash input byte-identical so frozen exams do not change.
 6. Principle verification (quotes looked up by code, status computed from what
