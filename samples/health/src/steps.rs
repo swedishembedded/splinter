@@ -215,9 +215,8 @@ pub fn train(run: &Run, args: &TrainArgs) -> Result<serde_json::Value> {
     let split = run.split()?;
     let record = imported(run, &split.dataset)?;
     let codes = outcome_codes(&Ontology::bundled()?, &record)?;
-    let mut config = TimelineTraining::new(codes.clone(), codes);
+    let mut config = TimelineTraining::new(codes.clone(), codes, args.seed);
     config.steps = args.steps;
-    config.seed = args.seed;
     config.additive = args.additive;
     config.max_tokens = args.max_tokens;
     config.batch = args.batch;
@@ -275,6 +274,8 @@ pub struct EvalArgs {
     pub all_cause_only: bool,
     /// Bootstrap resamples.
     pub reps: usize,
+    /// The resampling seed; drawn and printed when `None`.
+    pub seed: Option<u64>,
 }
 
 /// The bands the plan holds a candidate's calibration to, registered in the
@@ -297,7 +298,8 @@ pub fn eval(run: &Run, args: &EvalArgs) -> Result<serde_json::Value> {
         Some(release) => Champion::Release(release.to_owned()),
         None => Champion::Candidate(run.resolve(&args.champion)?),
     };
-    let mut scoring = ScoreSpec::new(codes.clone(), codes.clone(), args.horizons.clone());
+    let seed = splinter_sdk::seed::resolve("seed", args.seed);
+    let mut scoring = ScoreSpec::new(codes.clone(), codes.clone(), args.horizons.clone(), seed);
     scoring.all_cause = Some(ALL_CAUSE.into());
     scoring.bootstrap_reps = args.reps;
     scoring.subgroups = record
@@ -355,6 +357,7 @@ pub fn eval(run: &Run, args: &EvalArgs) -> Result<serde_json::Value> {
     Ok(serde_json::json!({
         "evaluation": evaluated.id.to_string(),
         "label": args.label,
+        "seed": seed,
         "candidate": e.candidate,
         "champion": e.champion,
         "test_units": e.comparison.units.len(),

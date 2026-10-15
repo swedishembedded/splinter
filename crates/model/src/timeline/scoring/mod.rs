@@ -150,11 +150,13 @@ pub struct ScoreSpec {
 impl ScoreSpec {
     /// A spec over `codes` of which `absorbing` compete, at `horizons`, with
     /// brain's ten risk groups and twenty point grid ([`CALIBRATION_GROUPS`],
-    /// [`IBS_POINTS`]), 200 resamples at level 0.95 and at least ten events.
+    /// [`IBS_POINTS`]), 200 resamples at level 0.95 and at least ten events;
+    /// the caller's `seed` drives every resample.
     pub fn new<C: Into<String>, A: Into<String>>(
         codes: impl IntoIterator<Item = C>,
         absorbing: impl IntoIterator<Item = A>,
         horizons: Vec<f64>,
+        seed: u64,
     ) -> Self {
         Self {
             codes: codes.into_iter().map(Into::into).collect(),
@@ -164,7 +166,7 @@ impl ScoreSpec {
             min_events: 10,
             bootstrap_reps: 200,
             level: 0.95,
-            seed: 1,
+            seed,
             subgroups: Vec::new(),
         }
     }

@@ -31,12 +31,11 @@ struct Fixture {
 }
 
 fn train(seed: u64, steps: u32, train: &[Subject], early: &[Subject]) -> TimelineModel {
-    let mut config = TimelineTraining::new(CODES, ["death:a", "death:b"]);
+    let mut config = TimelineTraining::new(CODES, ["death:a", "death:b"], seed);
     config.steps = steps;
     config.batch = 64;
     config.max_tokens = Some(16);
     config.eval_interval = 25;
-    config.seed = seed;
     train_timeline(train, early, &config).unwrap().model
 }
 

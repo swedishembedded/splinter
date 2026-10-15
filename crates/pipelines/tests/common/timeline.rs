@@ -146,12 +146,11 @@ pub const HORIZONS: [f64; 2] = [5.0, 10.0];
 
 /// A small, fast training run.
 pub fn training(steps: u32, seed: u64) -> TimelineTraining {
-    let mut t = TimelineTraining::new(CODES, ABSORBING);
+    let mut t = TimelineTraining::new(CODES, ABSORBING, seed);
     t.steps = steps;
     t.batch = 64;
     t.max_tokens = Some(16);
     t.eval_interval = 25;
-    t.seed = seed;
     t
 }
 
@@ -196,7 +195,8 @@ pub fn train_calibrated(
 /// How the arms are scored: the all-cause view and a subgroup, a few
 /// resamples.
 pub fn scoring() -> ScoreSpec {
-    let mut s = ScoreSpec::new(CODES, ABSORBING, HORIZONS.to_vec());
+    // seed: arms scored on separate occasions must resample alike
+    let mut s = ScoreSpec::new(CODES, ABSORBING, HORIZONS.to_vec(), 1);
     s.all_cause = Some(ALL_CAUSE.into());
     s.bootstrap_reps = 100;
     s.subgroups = vec![Subgroup {

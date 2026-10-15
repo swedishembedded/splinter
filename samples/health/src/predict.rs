@@ -182,8 +182,9 @@ mod tests {
             }
         }
         let (fit, rest) = all.split_at(220);
+        // seed: the fixture is one fixed small model
         let mut config =
-            TimelineTraining::new(["death:a", "death:b", "onset"], ["death:a", "death:b"]);
+            TimelineTraining::new(["death:a", "death:b", "onset"], ["death:a", "death:b"], 1);
         config.steps = 20;
         config.batch = 32;
         config.max_tokens = Some(16);

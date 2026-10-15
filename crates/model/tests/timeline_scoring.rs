@@ -25,17 +25,17 @@ use splinter_model::timeline::{
 const CODES: [&str; 3] = ["death:a", "death:b", "onset"];
 
 fn training(steps: u32, seed: u64) -> TimelineTraining {
-    let mut t = TimelineTraining::new(CODES, ["death:a", "death:b"]);
+    let mut t = TimelineTraining::new(CODES, ["death:a", "death:b"], seed);
     t.steps = steps;
     t.batch = 64;
     t.max_tokens = Some(16);
     t.eval_interval = 25;
-    t.seed = seed;
     t
 }
 
 fn spec(horizons: Vec<f64>) -> ScoreSpec {
-    let mut s = ScoreSpec::new(CODES, ["death:a", "death:b"], horizons);
+    // seed: the tests compare two scorings of one model, which must resample alike
+    let mut s = ScoreSpec::new(CODES, ["death:a", "death:b"], horizons, 1);
     s.all_cause = Some("death:any".into());
     s.bootstrap_reps = 60;
     s.min_events = 10;
@@ -168,13 +168,14 @@ fn brains_evaluation_of_a_code_is_what_the_union_view_computes_independently() {
     let (all, _) = synthetic::population(1200, 7);
     let (train, rest) = all.split_at(700);
     let (held, test) = rest.split_at(150);
-    let mut config = TimelineTraining::new(["death:a", "onset"], ["death:a"]);
+    // seed: the brain-versus-own agreement is checked on one fixed model
+    let mut config = TimelineTraining::new(["death:a", "onset"], ["death:a"], 1);
     config.steps = 60;
     config.batch = 64;
     config.max_tokens = Some(16);
     config.eval_interval = 25;
     let model = train_timeline(train, held, &config).unwrap().model;
-    let mut spec = ScoreSpec::new(["death:a", "onset"], ["death:a"], vec![3.0, 6.0]);
+    let mut spec = ScoreSpec::new(["death:a", "onset"], ["death:a"], vec![3.0, 6.0], 1);
     spec.all_cause = Some("union".into());
     spec.bootstrap_reps = 10;
     let arm = predict_arm(&model, test, &spec).unwrap();

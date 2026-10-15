@@ -27,7 +27,9 @@ fn a_trained_model_records_the_unit_and_refuses_another() {
     let (mut all, _) = synthetic::population(300, 5);
     with_unit(&mut all, "mmol/L");
     let (train, held) = all.split_at(220);
-    let mut config = TimelineTraining::new(["death:a", "death:b", "onset"], ["death:a", "death:b"]);
+    // seed: the byte-level reload comparison needs the same model on every run
+    let mut config =
+        TimelineTraining::new(["death:a", "death:b", "onset"], ["death:a", "death:b"], 1);
     config.steps = 3;
     config.batch = 32;
     config.max_tokens = Some(16);

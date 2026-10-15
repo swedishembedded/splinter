@@ -118,10 +118,12 @@ pub struct TimelineTraining {
 
 impl TimelineTraining {
     /// A run predicting `codes`, `absorbing` of them ending follow-up, with
-    /// brain's schedule and seed 1.
+    /// brain's schedule and the caller's `seed` for the weights, the batches
+    /// and the masks.
     pub fn new<C: Into<String>, A: Into<String>>(
         codes: impl IntoIterator<Item = C>,
         absorbing: impl IntoIterator<Item = A>,
+        seed: u64,
     ) -> Self {
         Self {
             codes: codes.into_iter().map(Into::into).collect(),
@@ -133,7 +135,7 @@ impl TimelineTraining {
             backbone: None,
             additive: false,
             max_tokens: None,
-            seed: 1,
+            seed,
             steps: brain::timeline::DEFAULT_STEPS,
             batch: brain::timeline::DEFAULT_BATCH,
             lr: brain::timeline::DEFAULT_LR,
@@ -450,7 +452,7 @@ mod tests {
     fn a_request_that_cannot_train_is_refused_by_name() {
         let train = subjects(50);
         let held = subjects(60)[50..].to_vec();
-        let mut config = TimelineTraining::new(["death:a"], ["death:b"]);
+        let mut config = TimelineTraining::new(["death:a"], ["death:b"], 1);
         let why = train_timeline(&train, &held, &config)
             .err()
             .unwrap()
@@ -469,7 +471,7 @@ mod tests {
 
     #[test]
     fn the_configuration_digest_is_stable_and_sees_every_field() {
-        let a = TimelineTraining::new(["x"], ["x"]);
+        let a = TimelineTraining::new(["x"], ["x"], 1);
         let mut b = a.clone();
         assert_eq!(a.digest().unwrap(), b.digest().unwrap());
         b.seed += 1;

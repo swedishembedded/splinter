@@ -1,3 +1,1 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-crates/model/src/timeline/scoring/mod.rs	ScoreSpec::new::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/model/src/timeline/training.rs	TimelineTraining::new::seed	todo: a default that is drawn, printed and recorded once its owner is converted

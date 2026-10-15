@@ -271,6 +271,9 @@ enum Command {
         /// Bootstrap resamples of the differences.
         #[arg(long, default_value_t = 200)]
         reps: usize,
+        /// The seed of the resamples; drawn and printed when not given.
+        #[arg(long)]
+        seed: Option<u64>,
     },
     /// Release the evaluated candidate if the gate passes; else record it as rejected.
     Release {
@@ -433,6 +436,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             horizons,
             all_cause_only,
             reps,
+            seed,
         } => {
             let name = format!("eval-{label}");
             let report = steps::eval(
@@ -444,6 +448,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     horizons,
                     all_cause_only,
                     reps,
+                    seed,
                 },
             )?;
             emit(&run, &name, &report)?;

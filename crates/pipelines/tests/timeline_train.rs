@@ -27,12 +27,11 @@ use splinter_pipelines::timeline::train::{
 };
 
 fn small(seed: u64) -> TimelineTraining {
-    let mut t = TimelineTraining::new(CODES, ABSORBING);
+    let mut t = TimelineTraining::new(CODES, ABSORBING, seed);
     t.steps = 60;
     t.batch = 64;
     t.max_tokens = Some(16);
     t.eval_interval = 20;
-    t.seed = seed;
     t
 }
 
