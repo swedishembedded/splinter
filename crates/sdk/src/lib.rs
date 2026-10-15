@@ -56,6 +56,7 @@
 
 #![warn(missing_docs)]
 
+pub mod seed;
 mod splinter;
 
 pub use crate::splinter::{Progress, Splinter, SplinterBuilder};

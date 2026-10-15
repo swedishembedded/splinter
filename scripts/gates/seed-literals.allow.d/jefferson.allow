@@ -1,5 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-samples/jefferson/src/main.rs	corpus_command::map_or	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/jefferson/src/main.rs	materials_command::map_or	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/jefferson/src/main.rs	scenarios_command::map_or	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/jefferson/src/main.rs	tasks_command::map_or	todo: a default that is drawn, printed and recorded once its owner is converted
+samples/jefferson/src/freeze.rs	DEFAULT_SEED	todo: drawn for a new directory once the sample draws its defaults

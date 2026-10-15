@@ -41,6 +41,7 @@ mod diet;
 mod ensemble;
 mod experiment;
 mod external;
+mod freeze_seed;
 mod intake;
 mod intervals;
 mod lifeexp;
@@ -87,6 +88,10 @@ enum Command {
         /// The build's output directory.
         #[arg(long)]
         data: PathBuf,
+        /// Seed of the partition. A directory already frozen keeps its own: this
+        /// must then be absent or equal to it.
+        #[arg(long)]
+        seed: Option<u64>,
     },
     /// Train and score one arm on cross-validation folds.
     Cv {
@@ -504,7 +509,7 @@ fn main() -> Result<()> {
             mortality,
             data,
         } => commands::build(&nhanes, &mortality, &data),
-        Command::Freeze { data } => commands::freeze(&data),
+        Command::Freeze { data, seed } => commands::freeze(&data, seed),
         Command::Cv {
             data,
             arm,

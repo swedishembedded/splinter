@@ -248,7 +248,7 @@ subject's ten-year risk: the uncertainty that comes from training alone.
 
 ```bash
 lifecourse build   --nhanes <dir> --mortality <dir> --data <out>
-lifecourse freeze  --data <out>
+lifecourse freeze  --data <out>                       # once; --seed N is recorded in <out>/SEED.json, a later freeze reads it back and refuses another
 lifecourse cv      --data <out> --arm horizon            # every fold; --repeat/--fold to choose
 lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
 lifecourse compare --data <out> --a horizon --b standard        # either side may be external:<baseline>

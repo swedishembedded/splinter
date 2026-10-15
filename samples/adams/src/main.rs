@@ -236,7 +236,11 @@ fn freeze_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(
         flag(args, "--resources").ok_or_else(|| anyhow::anyhow!("--resources DIR is required"))?,
     );
-    let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
+    let given = flag(args, "--seed")
+        .map(|s| s.parse().map_err(|e| anyhow::anyhow!("--seed {s}: {e}")))
+        .transpose()?;
+    let frozen_seed = split::freeze_seed(&resources.join("frozen"), given)?;
+    let seed = frozen_seed.seed();
     let exam_percent: u64 = flag(args, "--exam-percent").map_or(Ok(20), |s| s.parse())?;
     anyhow::ensure!(exam_percent <= 100, "--exam-percent is a percentage");
     let documents = read_documents(&resources)?;
@@ -256,6 +260,7 @@ fn freeze_command(args: &[String]) -> anyhow::Result<()> {
     if let Ok(previous) = std::fs::read_to_string(&recorded) {
         anyhow::ensure!(previous.trim() == digest, "a frozen split already exists ({}) and this run would make {digest}; the exam is never regenerated", previous.trim());
     }
+    frozen_seed.record()?;
     std::fs::create_dir_all(&dir)?;
     write_atomic(
         &dir.join("split.json"),

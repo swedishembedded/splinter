@@ -31,7 +31,7 @@ const TIMELINES: &str = "timelines.jsonl";
 const DESIGN: &str = "design.jsonl";
 const CAUSES: &str = "causes.jsonl";
 const BUILD: &str = "build.json";
-const PARTITION: &str = "partition.json";
+pub const PARTITION: &str = "partition.json";
 const CRITERIA: &str = "criteria.json";
 const LEDGER: &str = "FROZEN.json";
 
@@ -214,14 +214,20 @@ fn stratum(v: &serde_json::Value) -> String {
 }
 
 /// Partition once and pin the data, the partition and the criteria.
-pub fn freeze(data: &Path) -> Result<()> {
+pub fn freeze(data: &Path, seed: Option<u64>) -> Result<()> {
     let text = std::fs::read_to_string(data.join(TIMELINES)).context("run build first")?;
     let dataset = Digest::of(text.as_bytes());
     let units = units_from_json_lines(&text, stratum).map_err(anyhow::Error::msg)?;
-    let p = partition(&units, dataset, &PartitionSpec::default())?;
+    let frozen_seed = crate::freeze_seed::partition_seed(data, seed)?;
+    let spec = PartitionSpec {
+        seed: frozen_seed.seed(),
+        ..PartitionSpec::default()
+    };
+    let p = partition(&units, dataset, &spec)?;
     let canonical = p.canonical()?;
     let criteria = serde_json::to_vec_pretty(&crate::report::preregistered())?;
     let ledger = Ledger::at(data.join(LEDGER));
+    frozen_seed.record()?;
     for (name, content) in [
         (TIMELINES, text.as_bytes()),
         (PARTITION, &canonical[..]),

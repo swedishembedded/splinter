@@ -5655,6 +5655,7 @@ dependencies = [
  "serde",
  "serde_json",
  "splinter-sdk",
+ "tempfile",
  "tokio",
 ]
 
@@ -5804,6 +5805,8 @@ dependencies = [
  "splinter-pipelines",
  "splinter-sandbox",
  "splinter-store",
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

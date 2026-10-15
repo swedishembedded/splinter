@@ -29,6 +29,7 @@ mod application;
 mod build;
 mod corpus;
 mod exam;
+mod freeze;
 mod grade;
 mod report;
 mod retrieval;
@@ -65,13 +66,27 @@ fn flag(args: &[String], flag: &str) -> Option<String> {
         .cloned()
 }
 
+/// The seed of the artifacts in `out`: `--seed` if given, the directory's own
+/// otherwise, and an error where the two differ. The command records it once
+/// its inputs are read, just before it writes.
+fn frozen_seed(
+    out: &std::path::Path,
+    args: &[String],
+) -> anyhow::Result<splinter_sdk::seed::FrozenSeed> {
+    let given = flag(args, "--seed")
+        .map(|s| s.parse().map_err(|e| anyhow::anyhow!("--seed {s}: {e}")))
+        .transpose()?;
+    freeze::seed(out, given)
+}
+
 fn corpus_command(args: &[String]) -> anyhow::Result<()> {
     let resources = PathBuf::from(
         flag(args, "--resources").ok_or_else(|| anyhow::anyhow!("--resources DIR is required"))?,
     );
     let out =
         PathBuf::from(flag(args, "--out").ok_or_else(|| anyhow::anyhow!("--out DIR is required"))?);
-    let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
+    let frozen = frozen_seed(&out, args)?;
+    let seed = frozen.seed();
     std::fs::create_dir_all(&out)?;
 
     let letters = corpus::load_letters(&resources)?;
@@ -97,6 +112,7 @@ fn corpus_command(args: &[String]) -> anyhow::Result<()> {
         }))?);
         lines.push('\n');
     }
+    frozen.record()?;
     std::fs::write(out.join("letters.jsonl"), lines)?;
     println!(
         "letters {} in {} families; exam: {} letters in {} families",
@@ -121,7 +137,8 @@ fn tasks_command(args: &[String]) -> anyhow::Result<()> {
     );
     let out =
         PathBuf::from(flag(args, "--out").ok_or_else(|| anyhow::anyhow!("--out DIR is required"))?);
-    let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
+    let frozen = frozen_seed(&out, args)?;
+    let seed = frozen.seed();
     let sizes = build::Sizes {
         train_letters: number(args, "--train-letters", 400)?,
         exam_letters: number(args, "--exam-letters", 60)?,
@@ -131,6 +148,7 @@ fn tasks_command(args: &[String]) -> anyhow::Result<()> {
     };
     std::fs::create_dir_all(&out)?;
     let built = build::build(&resources, sizes, seed)?;
+    frozen.record()?;
 
     let mut sft = String::new();
     for task in &built.train {
@@ -287,15 +305,18 @@ fn report_command(args: &[String]) -> anyhow::Result<()> {
 fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
     let out = PathBuf::from(need("--out")?);
+    let frozen = frozen_seed(&out, args)?;
+    let seed = frozen.seed();
     std::fs::create_dir_all(&out)?;
     let options = writer::Options {
         resources: PathBuf::from(need("--resources")?),
         writer: PathBuf::from(need("--writer")?),
         train: number(args, "--train", 120)?,
         exam: number(args, "--exam", 40)?,
-        seed: flag(args, "--seed").map_or(Ok(1), |s| s.parse())?,
+        seed,
         per_letter: number(args, "--per-letter", 2)?,
     };
+    frozen.record()?;
     let made = writer::generate(&options, &out)?;
     let mut sft = String::new();
     for scenario in writer::read_scenarios(&out.join("scenarios.jsonl"))?
@@ -361,13 +382,15 @@ fn materials_command(args: &[String]) -> anyhow::Result<()> {
     );
     let out =
         PathBuf::from(flag(args, "--out").ok_or_else(|| anyhow::anyhow!("--out DIR is required"))?);
-    let seed: u64 = flag(args, "--seed").map_or(Ok(1), |s| s.parse())?;
+    let frozen = frozen_seed(&out, args)?;
+    let seed = frozen.seed();
     let letters = corpus::load_letters(&resources)?;
     let family = corpus::families(&letters);
     if args.iter().any(|a| a == "--exam-pool") {
         // The families the materials hold none of, for reserving an exam
         // from when what is examined was trained on the materials.
         let pool = corpus::exam_pool(&letters, &family, seed);
+        frozen.record()?;
         std::fs::create_dir_all(out.join("letters"))?;
         for (name, text) in &pool {
             std::fs::write(out.join("letters").join(name), text)?;
@@ -384,6 +407,7 @@ fn materials_command(args: &[String]) -> anyhow::Result<()> {
     // Nothing the directory holds may be one text with an exam letter, in any
     // edition: what is, is held back before anything is written.
     let cleared = corpus::materials_clear_of_exam(&letters, &family, &work_texts, seed)?;
+    frozen.record()?;
     std::fs::create_dir_all(out.join("letters"))?;
     std::fs::create_dir_all(out.join("works"))?;
     for (name, text) in &cleared.letters {

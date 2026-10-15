@@ -1,5 +1,5 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
 samples/adams/src/grpo.rs	GATE_SEED_BASE	world: seeds from this base select the gate pool, a partition boundary
-samples/adams/src/main.rs	freeze_command::map_or	todo: a default that is drawn, printed and recorded once its owner is converted
 samples/adams/src/run.rs	grpo_command::.seed()	todo: a default that is drawn, printed and recorded once its owner is converted
 samples/adams/src/run.rs	grpo_command::seed	todo: a default that is drawn, printed and recorded once its owner is converted
+samples/adams/src/split.rs	DEFAULT_SEED	todo: drawn for a new freeze once the sample draws its defaults
