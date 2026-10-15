@@ -23,8 +23,10 @@ implementation is used only by `check`; it is never written next to the
 repository.
 """
 import argparse
+import json
 import os
 import random
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -403,7 +405,8 @@ def accept_script(fam, pkg):
     return "\n".join(lines) + "\n"
 
 
-def render(name, out, seed=1, fixed=False):
+def render(name, out, seed, fixed=False):
+    """Render family `name` into `out` under `seed`, which `fixture.json` records."""
     fam = FAMILIES[name]
     pkg = render_names(name, seed)
     os.makedirs(out, exist_ok=True)
@@ -414,6 +417,9 @@ def render(name, out, seed=1, fixed=False):
         f.write(accept_script(fam, pkg))
     for args in (["init", "-q", "-b", "main"], ["config", "user.email", "fixture@example.com"], ["config", "user.name", "fixture"], ["add", "-A"], ["commit", "-q", "-m", f"{pkg}: {fam['fn']}"]):
         subprocess.run(["git", "-C", repo] + args, check=True)
+    with open(os.path.join(out, "fixture.json"), "w") as f:
+        json.dump({"family": name, "seed": seed, "fixed": fixed}, f)
+        f.write("\n")
     task = fam["task"].format(pkg=pkg, fn=fam["fn"])
     with open(os.path.join(out, "task.txt"), "w") as f:
         f.write(task + "\n")
@@ -430,6 +436,7 @@ def check():
     for name in FAMILIES:
         for fixed in (False, True):
             with tempfile.TemporaryDirectory() as d:
+                # seed: any value renders the family; the check is about its bug
                 repo, accept, _ = render(name, os.path.join(d, "x"), seed=1, fixed=fixed)
                 tests = run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], repo)
                 acc = run([sys.executable, accept], repo)
@@ -447,15 +454,21 @@ def main():
     r = sub.add_parser("render")
     r.add_argument("out")
     r.add_argument("--family", required=True, choices=sorted(FAMILIES))
-    r.add_argument("--seed", type=int, default=1)
+    r.add_argument("--seed", type=int,
+                   help="seed of the rendered names, recorded in <out>/fixture.json; "
+                        "drawn and printed when not given")
     a = ap.parse_args()
     if a.cmd == "list":
         print("\n".join(sorted(FAMILIES)))
     elif a.cmd == "check":
         sys.exit(check())
     else:
-        repo, accept, task = render(a.family, a.out, a.seed)
-        print(f"repo={repo}\naccept={accept}\ntask={task}")
+        seed = a.seed
+        if seed is None:
+            seed = secrets.randbits(64)
+            print(f"no --seed given, using seed {seed} (pass --seed {seed} to reproduce)", file=sys.stderr)
+        repo, accept, task = render(a.family, a.out, seed)
+        print(f"repo={repo}\naccept={accept}\ntask={task}\nseed={seed}")
 
 
 if __name__ == "__main__":

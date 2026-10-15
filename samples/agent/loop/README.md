@@ -82,7 +82,8 @@ view of what its own checks confirmed, trains and releases through the gate:
 | `train`: an adapter on those records | `splinter train` (and the training stage of `practice`) |
 | `models list`, `judge`, `current`, `rollback` | the release store: `splinter release` runs the gate over the exam `practice` reserved and moves the alias; `splinter rollback` moves it back |
 
-`fixtures/families.py` renders the twelve seeded-bug families; they are
+`fixtures/families.py` renders the twelve seeded-bug families (`--seed N`, or one is
+drawn and printed; `fixture.json` in the output records it); they are
 imported as workspace tasks for `practice`, and `fixtures/eval-candidate.sh`
 runs a model reference over a list of them as plain loop runs.
 
