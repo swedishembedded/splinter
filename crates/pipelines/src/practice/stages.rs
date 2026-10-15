@@ -40,7 +40,7 @@ use crate::curriculum::teacher::untaught;
 use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use crate::learn::PolicyUsed;
 use crate::release::exams::{self, ExamRecord};
-use crate::release::{release, ReleaseRequest};
+use crate::release::{release_recorded, ReleaseRequest};
 use crate::solving::{solve_tasks, SolveRequest};
 use crate::train::{train_recorded, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use crate::verify::{verify_set, Grading};
@@ -526,7 +526,7 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'
         },
         ..ReleaseRequest::new(id)
     };
-    match release(ctx, &asked, &run.cancel_token()) {
+    match release_recorded(ctx, run, &asked) {
         Ok(released) => {
             let summary = to_value(&released)?;
             let blocked = released.gate.blocked_by();

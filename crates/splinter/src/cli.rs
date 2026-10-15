@@ -571,6 +571,11 @@ pub struct ReleaseArgs {
     /// release is restricted: it records the terms and stays local.
     #[arg(long)]
     pub unrestricted: bool,
+    /// The seed the gate's bootstrap intervals are resampled with (drawn and
+    /// printed when not given; the same outcomes and seed give the same
+    /// intervals).
+    #[arg(long, value_name = "N")]
+    pub interval_seed: Option<Seed>,
     /// `list`.
     #[command(subcommand)]
     pub command: Option<ReleaseCommand>,

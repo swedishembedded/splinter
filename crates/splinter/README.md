@@ -43,7 +43,7 @@ splinter rehearse --records N [--rehearsal-seed N]
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--rehearsal DATASET-ID [--rehearsal-share F]] [--steps N] [--rank R] [--beta B]
                                 [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE] [--keep-evaluations]
 splinter select <CANDIDATE-ID> --exam-set DEV-SUITE [--judge REF] [--adopt]
-splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
+splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] [--interval-seed N] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
 splinter exam CANDIDATE [--interval-seed N] [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
@@ -704,8 +704,11 @@ exam's bootstrap intervals (`--interval-seed`) are drawn when no seed is given,
 printed (`no --exam-seed given, using seed N (pass --exam-seed N to
 reproduce)`), written to the run record (`seeds`) and kept in the artifact they
 decide: the reservation, the frozen exam, the rehearsal and task reports, the
-dataset manifest and the exam report. Passing the seed again reproduces the
-choice. Two runs reserve different families unless they share a seed, so
+dataset manifest and the exam report. The release gate's bootstrap intervals
+(the tasks' own evidence, the anchor's drop) are resampled from a seed of their
+own, recorded as `gate-interval` and kept in the gate report and so in the
+release manifest; `release --interval-seed N` passes it again. Passing the seed
+again reproduces the choice. Two runs reserve different families unless they share a seed, so
 results are comparable across runs only when each names a recorded one.
 
 A `learn` report opens with an `outcome` block of five separate facts: whether the

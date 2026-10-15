@@ -16,6 +16,7 @@ use std::time::Duration;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
 use splinter_eval::paired::PairedOutcome;
 use splinter_model::stats::BrainSignificance;
@@ -345,13 +346,15 @@ fn serve_sample(suite: &Suite, probes: &[Probe], limit: usize) -> Option<(Suite,
     })
 }
 
-/// The four checks on `candidate` against `champion`.
+/// The four checks on `candidate` against `champion`, the report's bootstrap
+/// intervals resampled from `interval_seed`.
 pub(super) fn run_gate(
     ctx: &Context,
     candidate: &Candidate,
     champion: Option<&StoredRelease>,
     base_source: &Path,
     config: &GateConfig,
+    interval_seed: Seed,
     cancel: &CancelToken,
 ) -> Result<GateReport, OrchestratorError> {
     let suites = Suites::build(ctx, candidate, champion, config)?;
@@ -412,7 +415,7 @@ pub(super) fn run_gate(
                     &BrainSignificance,
                 );
                 if let Some(measured) = check.measured.as_mut() {
-                    measured.task_level = task_level(&outcomes);
+                    measured.task_level = task_level(&outcomes, interval_seed);
                     measured.agentic = agentic::withheld(suite, &c, &b);
                 }
                 if let (Some(measured), Some(parts)) = (check.measured.as_mut(), &suites.parts) {
@@ -425,12 +428,12 @@ pub(super) fn run_gate(
                         &generalisation,
                         &BrainSignificance,
                     )
-                    .map(|part| with_task_level(part, &generalisation));
+                    .map(|part| with_task_level(part, &generalisation, interval_seed));
                     measured.recall = parts
                         .recall
                         .clone()
                         .and_then(|summary| gate::part_result(summary, &recall, &BrainSignificance))
-                        .map(|part| with_task_level(part, &recall));
+                        .map(|part| with_task_level(part, &recall, interval_seed));
                 }
                 in_process = Some(c);
                 check
@@ -483,7 +486,7 @@ pub(super) fn run_gate(
                     config.anchor_bound,
                 );
                 if let Some(measured) = check.measured.as_mut() {
-                    measured.drop_interval = drop_interval(&outcomes);
+                    measured.drop_interval = drop_interval(&outcomes, interval_seed);
                     measured.items_to_see_two_points =
                         items_to_see_two_points(&measured.comparison);
                     if suites.agentic {
@@ -518,5 +521,9 @@ pub(super) fn run_gate(
         },
         _ => Check::unmeasured("the held-out tasks were not graded in-process to compare with"),
     };
-    Ok(GateReport::new(*config, improvement, retention, anchor, serve).with_prompts(prompts))
+    Ok(
+        GateReport::new(*config, improvement, retention, anchor, serve)
+            .with_prompts(prompts)
+            .with_interval_seed(interval_seed),
+    )
 }

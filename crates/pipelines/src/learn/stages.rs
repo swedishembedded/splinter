@@ -43,7 +43,7 @@ use crate::exam_set::ExamSet;
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
 use crate::rehearsal::{rehearse, RehearseRequest};
-use crate::release::{release, ReleaseRequest};
+use crate::release::{release_recorded, ReleaseRequest};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
 use crate::tasks::{asks_for_denoise, generate, Generation};
@@ -691,7 +691,7 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>)
     let Some(id) = st.candidate.clone() else {
         unreachable!("the release stage follows the train stage")
     };
-    match release(ctx, &ReleaseRequest::new(id), &run.cancel_token()) {
+    match release_recorded(ctx, run, &ReleaseRequest::new(id)) {
         Ok(released) => {
             let summary = to_value(&released)?;
             st.report.release = Some(released);

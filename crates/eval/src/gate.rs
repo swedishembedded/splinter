@@ -55,6 +55,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 
 use crate::paired::{by_cluster, compare, Comparison, PairedOutcome};
 use crate::significance::{SignTest, Significance};
@@ -486,9 +487,22 @@ pub struct GateReport {
     /// written before it was recorded.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prompts: Vec<SuitePrompts>,
+    /// The seed the bootstrap intervals of the report (the tasks' own
+    /// evidence, the anchor's drop) were resampled with: the same outcomes and
+    /// seed give the same intervals. `None` in a report written before it
+    /// was kept, whose intervals were resampled from seed 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interval_seed: Option<Seed>,
 }
 
 impl GateReport {
+    /// This report stating the seed its intervals were resampled with.
+    #[must_use]
+    pub fn with_interval_seed(mut self, seed: Seed) -> Self {
+        self.interval_seed = Some(seed);
+        self
+    }
+
     /// This report stating which prompt each arm was asked each suite under.
     #[must_use]
     pub fn with_prompts(mut self, prompts: Vec<SuitePrompts>) -> Self {
@@ -538,6 +552,7 @@ impl GateReport {
             serve,
             passed,
             prompts: Vec::new(),
+            interval_seed: None,
         }
     }
 }

@@ -18,14 +18,12 @@ use splinter_model::stats::bootstrap_interval;
 
 /// Resamples the task-level interval is made from.
 const TASK_LEVEL_RESAMPLES: usize = 10_000;
-/// The stream the task-level interval resamples from: fixed, so that the
-/// interval the gate reports is a function of the outcomes alone.
-const TASK_LEVEL_SEED: Seed = Seed::new(0);
 
 /// What `outcomes` say task by task: the exact one-sided sign test over the
 /// tasks only one model got right, and the difference in the share right with
-/// an interval that resamples families (a task of no family is its own).
-pub(super) fn task_level(outcomes: &[PairedOutcome]) -> Option<TaskLevel> {
+/// an interval that resamples families (a task of no family is its own) from
+/// the generator that starts at `seed`.
+pub(super) fn task_level(outcomes: &[PairedOutcome], seed: Seed) -> Option<TaskLevel> {
     let mut by_family: std::collections::BTreeMap<&str, (f64, usize)> = Default::default();
     let (mut wins, mut losses, mut paired) = (0usize, 0usize, 0usize);
     for outcome in outcomes {
@@ -48,7 +46,7 @@ pub(super) fn task_level(outcomes: &[PairedOutcome]) -> Option<TaskLevel> {
     let interval = interval_of(
         by_family.into_values().collect(),
         TASK_LEVEL_RESAMPLES,
-        TASK_LEVEL_SEED,
+        seed,
     );
     Some(TaskLevel {
         p_value: sign_p(wins, losses),
@@ -58,12 +56,13 @@ pub(super) fn task_level(outcomes: &[PairedOutcome]) -> Option<TaskLevel> {
     })
 }
 
-/// `part` with the tasks' own evidence over `outcomes`.
+/// `part` with the tasks' own evidence over `outcomes`, resampled from `seed`.
 pub(super) fn with_task_level(
     mut part: gate::PartResult,
     outcomes: &[PairedOutcome],
+    seed: Seed,
 ) -> gate::PartResult {
-    part.task_level = task_level(outcomes);
+    part.task_level = task_level(outcomes, seed);
     part
 }
 
@@ -74,19 +73,24 @@ const DROP_INTERVAL_RESAMPLES: usize = 4000;
 
 /// The bootstrap interval of the champion's accuracy minus the candidate's
 /// over the items both were graded on: an item the champion alone got right
-/// is 1, the candidate alone -1, a tie 0.
-pub(super) fn drop_interval(outcomes: &[PairedOutcome]) -> Option<DropInterval> {
+/// is 1, the candidate alone -1, a tie 0; resampled from the generator that
+/// starts at `seed`.
+pub(super) fn drop_interval(outcomes: &[PairedOutcome], seed: Seed) -> Option<DropInterval> {
     let drops: Vec<f64> = outcomes
         .iter()
         .filter_map(PairedOutcome::paired)
         .map(|(candidate, baseline)| f64::from(baseline) - f64::from(candidate))
         .collect();
-    bootstrap_interval(&drops, DROP_INTERVAL_RESAMPLES, DROP_INTERVAL_LEVEL, 0).map(|i| {
-        DropInterval {
-            level: DROP_INTERVAL_LEVEL,
-            low: i.low,
-            high: i.high,
-        }
+    bootstrap_interval(
+        &drops,
+        DROP_INTERVAL_RESAMPLES,
+        DROP_INTERVAL_LEVEL,
+        seed.value(),
+    )
+    .map(|i| DropInterval {
+        level: DROP_INTERVAL_LEVEL,
+        low: i.low,
+        high: i.high,
     })
 }
 
@@ -108,4 +112,54 @@ pub(super) fn items_to_see_two_points(
         let share = discordant as f64 / comparison.paired as f64;
         (POWER_FACTOR * share / (WANTED_DROP * WANTED_DROP)).ceil() as usize
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Forty families of one to four tasks, the candidate ahead on some and
+    /// behind on others, so that a resample has something to vary.
+    fn mixed() -> Vec<PairedOutcome> {
+        let mut outcomes = Vec::new();
+        for family in 0..40usize {
+            for task in 0..=family % 4 {
+                let n = outcomes.len();
+                outcomes.push(PairedOutcome {
+                    item: format!("task-{n}"),
+                    candidate: Some((n * 7 + family) % 3 != 0),
+                    baseline: Some((n * 5 + task) % 4 == 0),
+                    cluster: Some(format!("family-{family}")),
+                });
+            }
+        }
+        outcomes
+    }
+
+    // seed: two arbitrary seeds; only that the same one repeats and another differs matters.
+    const FIRST: Seed = Seed::new(11);
+    const OTHER: Seed = Seed::new(12);
+
+    #[test]
+    fn the_intervals_are_a_function_of_the_outcomes_and_the_seed() {
+        let outcomes = mixed();
+        assert_eq!(
+            task_level(&outcomes, FIRST),
+            task_level(&outcomes, FIRST),
+            "the same seed resamples the same way"
+        );
+        assert_ne!(
+            task_level(&outcomes, FIRST),
+            task_level(&outcomes, OTHER),
+            "another seed resamples differently"
+        );
+        assert_eq!(
+            drop_interval(&outcomes, FIRST),
+            drop_interval(&outcomes, FIRST)
+        );
+        assert_ne!(
+            drop_interval(&outcomes, FIRST),
+            drop_interval(&outcomes, OTHER)
+        );
+    }
 }

@@ -73,6 +73,7 @@ use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_core::terms::{combine_stated, Distribution, Terms};
 use splinter_knowledge::concepts::Concept;
 use splinter_model::local::{load_source, resolve_base};
@@ -89,6 +90,7 @@ use splinter_eval::gate::{GateConfig, GateReport};
 use splinter_orchestrator::config::Config;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use splinter_orchestrator::runs::Recorder;
 
 /// One `release`.
 #[derive(Clone, Debug, Serialize)]
@@ -105,6 +107,10 @@ pub struct ReleaseRequest {
     /// measured, unless the terms of everything the candidate was made from
     /// allow it.
     pub distribution: Distribution,
+    /// The seed the gate's bootstrap intervals are resampled with; drawn,
+    /// reported and kept in the gate report ([`GateReport::interval_seed`])
+    /// when left out.
+    pub interval_seed: Option<Seed>,
 }
 
 impl ReleaseRequest {
@@ -116,6 +122,7 @@ impl ReleaseRequest {
             alias: POLICY_DEFAULT.into(),
             gate: GateConfig::default(),
             distribution: Distribution::default(),
+            interval_seed: None,
         }
     }
 }
@@ -165,6 +172,26 @@ pub fn arm_on(config: &Config, base: &Path, adapter: Option<&Path>) -> ModelRef 
         // An arm is the policy's base, so it is asked at the policy's context.
         context_tokens: config.policy_context_tokens,
     }
+}
+
+/// The name the gate's interval seed is recorded under in a run.
+pub const GATE_INTERVAL_SEED: &str = "gate-interval";
+
+/// [`release`] as the work of the recorded run `run`: the gate's interval seed
+/// is drawn through the recorder when the request names none, so the run
+/// record states it as well as the gate report. A candidate that is already
+/// released is not gated again, and its report keeps the seed of the gate
+/// that decided it.
+pub fn release_recorded(
+    ctx: &Context,
+    run: &mut Recorder<'_>,
+    request: &ReleaseRequest,
+) -> Result<Released, OrchestratorError> {
+    let seeded = ReleaseRequest {
+        interval_seed: Some(run.seed(GATE_INTERVAL_SEED, request.interval_seed)?),
+        ..request.clone()
+    };
+    release(ctx, &seeded, &run.cancel_token())
 }
 
 /// Runs the gate on `request.candidate` and releases it if it passes.
@@ -224,12 +251,21 @@ pub fn release(
         &resolve_base(&config.policy_base)
             .map_err(|e| OrchestratorError::Refused(format!("the policy base: {e}")))?,
     );
+    let interval_seed = request.interval_seed.unwrap_or_else(|| {
+        let seed = splinter_model::seed::draw();
+        ctx.report_stage(
+            "seed",
+            &serde_json::json!({ "name": GATE_INTERVAL_SEED, "seed": seed, "drawn": true }),
+        );
+        seed
+    });
     let gate = run_gate(
         ctx,
         &candidate,
         champion.as_ref(),
         &base_source,
         &request.gate,
+        interval_seed,
         cancel,
     )?;
     let requeued = enqueue_retention(ctx, &gate)?;

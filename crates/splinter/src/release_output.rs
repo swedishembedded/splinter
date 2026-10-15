@@ -204,6 +204,12 @@ impl Report for GateReport {
                 p.suite, p.candidate, p.champion
             );
         }
+        if let Some(seed) = self.interval_seed {
+            let _ = writeln!(
+                out,
+                "  intervals    resampled with seed {seed} (--interval-seed {seed} reproduces them)"
+            );
+        }
         let _ = writeln!(out, "  serve        {}", verdict(&self.serve));
         if let Some(m) = &self.serve.measured {
             let compared = match m.agreement {

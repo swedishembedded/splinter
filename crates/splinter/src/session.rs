@@ -601,10 +601,11 @@ impl Session {
                     } else {
                         Distribution::Restricted
                     },
+                    interval_seed: args.interval_seed,
                     ..ReleaseRequest::new(candidate)
                 };
                 let released = record(ctx, "release", &request, |run| {
-                    release::release(ctx, &request, &run.cancel_token())
+                    release::release_recorded(ctx, run, &request)
                 })?;
                 emit(json, &released);
                 // A blocked release did not do what was asked.

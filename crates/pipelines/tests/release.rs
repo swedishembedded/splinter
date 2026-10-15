@@ -43,23 +43,28 @@
 mod common;
 
 use common::gate::{
-    anchor_file, candidate, candidate_on, dataset, dataset_of, decide, gate_context, policy,
-    question, released, variant_asking, variant_set, variant_set_of, Brain, FakeTrainer, ANCHOR,
-    BASE_BYTES, FACTS, NOW,
+    anchor_file, candidate, candidate_on, dataset, dataset_of, decide, fast_gate, gate_context,
+    policy, question, released, variant_asking, variant_set, variant_set_of, Brain, FakeTrainer,
+    ANCHOR, BASE_BYTES, FACTS, NOW,
 };
 use common::Scratch;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_model::ModelSelection;
 use splinter_orchestrator::releases::{ArtifactKind, ReleasedArtifact};
+use splinter_orchestrator::runs::record;
 use splinter_orchestrator::Context;
 use splinter_pipelines::eval::{eval, EvalRequest, SuiteChoice};
-use splinter_pipelines::release::{anchor, list, release, rollback, ReleaseRequest, Released};
+use splinter_pipelines::release::{
+    anchor, list, release, release_recorded, rollback, ReleaseRequest, Released,
+};
 use splinter_pipelines::train::{
     train, Candidate, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION, DEFAULT_REPLAY_SHARE,
 };
+use splinter_store::runs::read_run;
 
 /// The adapter file the manifest `brain serve --adapter-manifest` follows
 /// for `default` names.
@@ -227,6 +232,40 @@ fn blocked(ctx: &Context, candidate: &Candidate) -> Released {
         "a blocked release moves no alias"
     );
     decided
+}
+
+/// The gate over a fresh candidate as a recorded run: the seed the gate
+/// report states and the one the run record states.
+fn gated_with(test: &str, interval_seed: Option<Seed>) -> (Option<Seed>, Option<u64>) {
+    let (scratch, ctx) = gate_context(test, Brain::Honest);
+    freeze_anchor(&scratch, &ctx);
+    let (candidate, _) = candidate(&ctx, "alpha", &[ANCHOR, "alpha"]);
+    let request = ReleaseRequest {
+        gate: fast_gate(),
+        interval_seed,
+        ..ReleaseRequest::new(candidate.candidate.clone())
+    };
+    let recorded = record(&ctx, "release", &request, |run| {
+        release_recorded(&ctx, run, &request)
+    })
+    .unwrap();
+    let recorded_seed = read_run(ctx.workspace(), &recorded.run)
+        .unwrap()
+        .seeds
+        .get("gate-interval")
+        .copied();
+    (recorded.report.gate.interval_seed, recorded_seed)
+}
+
+#[test]
+fn the_gate_states_the_seed_its_intervals_were_resampled_with() {
+    let (reported, recorded) = gated_with("release-interval-drawn", None);
+    let drawn = reported.expect("the gate report states the seed it drew");
+    assert_eq!(recorded, Some(drawn.value()), "and so does the run record");
+
+    let (reported, recorded) = gated_with("release-interval-given", Some(drawn));
+    assert_eq!(reported, Some(drawn), "a given seed is the one used");
+    assert_eq!(recorded, Some(drawn.value()));
 }
 
 #[test]
