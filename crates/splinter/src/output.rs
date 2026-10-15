@@ -149,6 +149,7 @@ fn origin(origin: &Origin) -> String {
             session_id,
             agent,
             redactions,
+            ..
         } => {
             let removed: u32 = redactions.iter().map(|r| r.count).sum();
             format!(

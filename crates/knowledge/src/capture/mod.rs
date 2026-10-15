@@ -24,6 +24,7 @@
 //! process environment: a command's environment is passed in explicitly.
 //! Capturing unchanged content again yields the same source id.
 
+mod atif_keys;
 mod command;
 mod repository;
 mod session;
@@ -42,6 +43,7 @@ pub use command::{
 pub use repository::{capture_repository, IGNORED_NAMES};
 pub use session::{
     capture_session, capture_session_file, SessionRefusal, DEFAULT_MAX_SESSION_BYTES,
+    PASS_THROUGH_RECORDS,
 };
 pub use splinter_sandbox::process::ProcessError;
 pub use tree::{

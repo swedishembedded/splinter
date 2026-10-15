@@ -17,6 +17,8 @@
 //!   command runs, their parts addressed by content.
 //! * [`experience`] - the task a solver is given, and the immutable,
 //!   content-addressed record of an attempt at it.
+//! * [`extra`] - the namespaced records a trajectory's producer filed in
+//!   `extra`, kept verbatim and addressed by digest.
 //! * [`claim`] - what a person taught an agent in conversation, as a
 //!   proposal, a gated claim tied to the words that taught it, and the
 //!   ledger entry that rules on it.
@@ -63,6 +65,7 @@ pub mod dataset;
 pub mod digest;
 pub mod evidence;
 pub mod experience;
+pub mod extra;
 pub mod kinds;
 pub mod longitudinal;
 pub mod model_ref;

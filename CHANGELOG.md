@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (session import)
+- Importing an ATIF session no longer drops anything silently. A structural key ATIF v1.7 does not define is refused with its JSON path (`steps[1].tool_calls[0].stray`); `extra`, tool definitions and call arguments stay free-form. The session origin now records the SHA-256 of the bytes as read, the number of image segments the text parts leave out, and the producer-namespaced `extra` records `sven.gate` and `sven.memory`, verbatim and addressed by the digest of their canonical form (`splinter_core::extra`). Sources captured before keep their ids; a session captured again from differently formatted bytes is a different source.
+
 ### Changed (BREAKING, coding-loop sample)
 - `agent-loop` keeps the supervision (contract, trace, cancel and resume, retries with feedback, the CLI) and calls the shared stages: a run captures the baseline as a snapshot, each attempt is `solve_in_workspace` in a fresh copy of it, a candidate is judged by the workspace grading (`grade`) and audited by the exposure audit, and `apply` is the sandbox's. Its own dataset projector, model registry, training wrapper, process runner and git checkout code are deleted, and the sample depends on the SDK alone.
 - Removed: `dataset`, `train` and `models` (their work is `splinter dataset build`, `splinter train`, `splinter release`/`rollback` and the stages of `splinter practice`), `run --setup` and `run --check-secs` (a check is bounded by the sandbox's wall-time limit for a workspace command). Contract and outcome schemas are 2; a run started under schema 1 is not resumed.

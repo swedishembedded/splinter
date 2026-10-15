@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::clock::Clock;
 use crate::digest::{canonical_json, Digest};
+use crate::extra::ExtraRecord;
 use crate::terms::Terms;
 
 /// The content address of a [`Source`].
@@ -177,7 +178,21 @@ pub enum Origin {
         agent: String,
         /// What was removed from it, in step order.
         redactions: Vec<Redaction>,
+        /// The SHA-256 of the file as it was read, before anything was
+        /// removed; absent for a source captured before it was recorded.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source_sha256: Option<Digest>,
+        /// How many image segments the parts leave out: parts are text.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        dropped_images: u32,
+        /// The namespaced records its producer attached, verbatim.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        extra_records: Vec<ExtraRecord>,
     },
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 impl Origin {

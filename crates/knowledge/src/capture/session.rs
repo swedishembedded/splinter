@@ -11,14 +11,20 @@
 //! The bytes are an ATIF trajectory. They are accepted when they parse, pass
 //! ATIF's own validation, can be rendered by the training projection
 //! ([`splinter_data::projection_refusal`] names the step that cannot) and
-//! hold a user step. Every string in the trajectory then has its secrets
+//! hold a user step. A structural key ATIF v1.7 does not define is refused
+//! with its JSON path ([`atif_keys`]) instead of being dropped. Every string in the trajectory then has its secrets
 //! removed ([`crate::redact`]) before anything is addressed, so a stored
 //! part, the origin and anything later shown to a model never hold one; the
 //! origin records which step each removal was in. The parts are those of
 //! [`crate::session`].
 //!
-//! The same file captured again is the same source: its address covers only
-//! the redacted content.
+//! The origin also records the SHA-256 of the bytes as read, the number of
+//! image segments the text parts leave out, and the namespaced `extra`
+//! records of [`PASS_THROUGH_RECORDS`], verbatim and addressed by digest.
+//!
+//! The same file captured again is the same source: its address covers the
+//! redacted content and what the origin records, which for the same bytes is
+//! the same.
 
 use std::collections::BTreeMap;
 
@@ -27,10 +33,12 @@ use std::path::Path;
 use atif::{validate_trajectory, ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use serde_json::Value;
 use splinter_core::clock::Clock;
-use splinter_core::digest::canonical_json;
+use splinter_core::digest::{canonical_json, Digest};
+use splinter_core::extra::extra_records;
 use splinter_core::source::{CapturedSource, Origin, PartContent, Redaction, SourceError};
 use splinter_data::{projection_refusal, Unprojectable};
 
+use super::atif_keys::unknown_key;
 use super::{read_capped, CaptureError};
 use crate::redact::{redact, secret_value_in, Redacted, KIND_CREDENTIAL};
 use crate::session::{part_name, Role, TRAJECTORY_PART};
@@ -39,12 +47,22 @@ use crate::session::{part_name, Role, TRAJECTORY_PART};
 /// working conversation with its tool output, far larger than a document.
 pub const DEFAULT_MAX_SESSION_BYTES: u64 = 64 * 1024 * 1024;
 
+/// The producer-namespaced `extra` records an import keeps in the origin.
+/// They are a data contract read from the file, not types of the producer.
+pub const PASS_THROUGH_RECORDS: [&str; 2] = ["sven.gate", "sven.memory"];
+
 /// Why a session is not captured.
 #[derive(Debug, thiserror::Error)]
 pub enum SessionRefusal {
     /// The bytes are not an ATIF trajectory.
     #[error("not an ATIF trajectory: {0}")]
     NotATrajectory(String),
+    /// A structural key ATIF v1.7 does not define; importing would drop it.
+    #[error("unknown ATIF key at {path}: refusing to drop it silently")]
+    UnknownKey {
+        /// The JSON path of the key.
+        path: String,
+    },
     /// A trajectory that breaks ATIF's rules.
     #[error("invalid ATIF: {}", .0.join("; "))]
     Invalid(Vec<String>),
@@ -85,8 +103,13 @@ pub fn capture_session_file(
 /// Captures the ATIF trajectory `bytes` as a session source; see the module
 /// documentation.
 pub fn capture_session(bytes: &[u8], clock: &dyn Clock) -> Result<CapturedSource, SessionRefusal> {
-    let raw: Trajectory =
+    let document: Value =
         serde_json::from_slice(bytes).map_err(|e| SessionRefusal::NotATrajectory(e.to_string()))?;
+    if let Some(path) = unknown_key(&document) {
+        return Err(SessionRefusal::UnknownKey { path });
+    }
+    let raw: Trajectory = serde_json::from_value(document)
+        .map_err(|e| SessionRefusal::NotATrajectory(e.to_string()))?;
     validate_trajectory(&raw).map_err(|errors| {
         SessionRefusal::Invalid(errors.iter().map(ToString::to_string).collect())
     })?;
@@ -115,6 +138,10 @@ pub fn capture_session(bytes: &[u8], clock: &dyn Clock) -> Result<CapturedSource
         session_id: trajectory.session_id.clone(),
         agent: format!("{} {}", trajectory.agent.name, trajectory.agent.version),
         redactions: found.into_redactions(),
+        source_sha256: Some(Digest::sha256_of(bytes)),
+        dropped_images: dropped_images(&trajectory),
+        extra_records: extra_records(&trajectory, &PASS_THROUGH_RECORDS)
+            .map_err(SessionRefusal::Write)?,
     };
     Ok(CapturedSource::new(origin, parts, clock)?)
 }
@@ -153,6 +180,41 @@ fn step_parts(step: &TraceStep) -> Vec<PartContent> {
         }
     }
     parts
+}
+
+/// How many image segments the trajectory holds, in messages and results,
+/// subagents included: the parts are text and keep none of them.
+fn dropped_images(trajectory: &Trajectory) -> u32 {
+    let in_body = |body: &MessageBody| match body {
+        MessageBody::Text(_) => 0,
+        MessageBody::Segments(segments) => segments
+            .iter()
+            .filter(|s| matches!(s, ContentSegment::Image { .. }))
+            .count(),
+    };
+    let own: usize = trajectory
+        .steps
+        .iter()
+        .map(|step| {
+            in_body(&step.message)
+                + step
+                    .observation
+                    .iter()
+                    .flat_map(|o| &o.results)
+                    .filter_map(|r| r.content.as_ref())
+                    .map(in_body)
+                    .sum::<usize>()
+        })
+        .sum();
+    let nested: u32 = trajectory
+        .subagent_trajectories
+        .iter()
+        .flatten()
+        .map(dropped_images)
+        .sum();
+    u32::try_from(own)
+        .unwrap_or(u32::MAX)
+        .saturating_add(nested)
 }
 
 /// The text of `body`; images carry none.
