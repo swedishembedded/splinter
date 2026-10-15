@@ -79,15 +79,17 @@ fn frozen_seed(
     freeze::seed(out, given)
 }
 
+/// The seed of a random draw named `name`: `--<name>`, else a fresh one, printed.
+fn drawn_seed(args: &[String], name: &str) -> anyhow::Result<u64> {
+    let given = flag(args, &format!("--{name}"))
+        .map(|s| s.parse().map_err(|e| anyhow::anyhow!("--{name} {s}: {e}")))
+        .transpose()?;
+    Ok(splinter_sdk::seed::resolve(name, given))
+}
+
 /// The seed of a training: `--train-seed`, else a fresh one, printed.
 fn train_seed(args: &[String]) -> anyhow::Result<u64> {
-    let given = flag(args, "--train-seed")
-        .map(|s| {
-            s.parse()
-                .map_err(|e| anyhow::anyhow!("--train-seed {s}: {e}"))
-        })
-        .transpose()?;
-    Ok(splinter_sdk::seed::resolve("train-seed", given))
+    drawn_seed(args, "train-seed")
 }
 
 fn corpus_command(args: &[String]) -> anyhow::Result<()> {
@@ -307,7 +309,15 @@ fn report_command(args: &[String]) -> anyhow::Result<()> {
             g.iter().map(|x| x.seconds).sum::<f64>(),
         )
     };
-    print!("{}", report::render(&before, &after, works::WORKS.len()));
+    print!(
+        "{}",
+        report::render(
+            &before,
+            &after,
+            works::WORKS.len(),
+            drawn_seed(args, "bootstrap-seed")?
+        )
+    );
     let ((bt, bs), (at, as_)) = (tokens(&before), tokens(&after));
     println!("\ndecode: before {bt:.0} tokens in {bs:.0} s; after {at:.0} tokens in {as_:.0} s");
     Ok(())

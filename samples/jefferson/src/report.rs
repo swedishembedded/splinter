@@ -27,18 +27,25 @@ pub fn chance(kind: Kind, works: usize) -> Option<f64> {
 
 /// The report as a Markdown table, with the evidence a reader needs to judge
 /// it: how many questions, how many went unanswered, and who gained and lost.
+/// The bootstrap intervals are resampled from `bootstrap_seed`.
 #[must_use]
-pub fn render(before: &[Graded], after: &[Graded], works: usize) -> String {
-    render_table(before, after, &KIND_ORDER, &|kind| {
-        chance(
-            if kind == Kind::Work.name() {
-                Kind::Work
-            } else {
-                Kind::Year
-            },
-            works,
-        )
-    })
+pub fn render(before: &[Graded], after: &[Graded], works: usize, bootstrap_seed: u64) -> String {
+    render_table(
+        before,
+        after,
+        &KIND_ORDER,
+        &|kind| {
+            chance(
+                if kind == Kind::Work.name() {
+                    Kind::Work
+                } else {
+                    Kind::Year
+                },
+                works,
+            )
+        },
+        bootstrap_seed,
+    )
 }
 
 #[cfg(test)]

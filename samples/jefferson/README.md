@@ -174,6 +174,9 @@ splinter-jefferson exam     --exam OUT/exam.jsonl --out tuned.jsonl --base BASE 
 splinter-jefferson report   --before base.jsonl --after tuned.jsonl
 ```
 
+`report` resamples its intervals from a fresh seed, printed and stated in the
+table; pass `--bootstrap-seed N` to reproduce a report.
+
 Every GPU command is run through `gpu-only.sh`, which pins the card, reads the
 run's output as it goes, stops it on any line that says the CPU backend, a
 software adapter or a fallback was used, and fails it if it never reported a

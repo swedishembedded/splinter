@@ -51,6 +51,9 @@ splinter-adams exam --tasks RESOURCES/tasks/exam.jsonl --out RUN/tuned.jsonl --b
 splinter-adams report --before RUN/base.jsonl --after RUN/tuned.jsonl
 ```
 
+`report` resamples its intervals from a fresh seed, printed and stated in the
+table; pass `--bootstrap-seed N` to reproduce a report.
+
 `materials` writes one file per document that may be taught as his voice
 (`own/` for a text in his hand or signed by him, `committee/` for a text a town
 or committee he sat on adopted), each opening like a letter Splinter already

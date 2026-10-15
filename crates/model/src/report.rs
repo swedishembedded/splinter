@@ -244,13 +244,16 @@ pub fn paired_rate_difference(
 
 /// The report as a Markdown table, with the evidence a reader needs to judge
 /// it: how many questions, how many went unanswered, and who gained and lost.
-/// `chance` gives the chance level of a kind where one exists.
+/// `chance` gives the chance level of a kind where one exists. The bootstrap
+/// intervals are resampled from `seed`, which the report states so the same
+/// inputs and seed reproduce it.
 #[must_use]
 pub fn render(
     before: &[Graded],
     after: &[Graded],
     kind_order: &[&str],
     chance: &dyn Fn(&str) -> Option<f64>,
+    seed: u64,
 ) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "| split | question | n | before | after | gained | lost | unanswered (before/after) | cut off at the budget (before/after) | p (after better) | one answer for all |");
@@ -288,8 +291,14 @@ pub fn render(
                     .cloned()
                     .collect()
             };
-            paired_rate_difference(&of(before), &of(after), BOOTSTRAP_ITERATIONS, CONFIDENCE, 1)
-                .map(|(n, interval)| (row.split.clone(), row.kind.clone(), n, interval))
+            paired_rate_difference(
+                &of(before),
+                &of(after),
+                BOOTSTRAP_ITERATIONS,
+                CONFIDENCE,
+                seed,
+            )
+            .map(|(n, interval)| (row.split.clone(), row.kind.clone(), n, interval))
         })
         .collect();
     if !intervals.is_empty() {
@@ -297,6 +306,10 @@ pub fn render(
             out,
             "\nThe change in the share of each question answered right, after minus before, with a {:.0}% bootstrap interval over the questions (a gain whose interval includes zero is not established):\n",
             100.0 * CONFIDENCE
+        );
+        let _ = writeln!(
+            out,
+            "The intervals were resampled with seed {seed} (the same seed reproduces them).\n"
         );
         let _ = writeln!(out, "| split | question | questions | change | interval |");
         let _ = writeln!(out, "|---|---|---|---|---|");
@@ -395,7 +408,7 @@ mod tests {
             ],
             "the question with no checks is left out"
         );
-        let text = render(&before, &after, &[], &|_| None);
+        let text = render(&before, &after, &[], &|_| None, crate::seed::draw().value());
         assert!(
             text.contains("| exam | transfer | grounded | 2 | 1 | 2 |"),
             "{text}"
@@ -469,9 +482,13 @@ mod tests {
             graded("x", "seen", "work", true, true),
         ];
         let after = vec![graded("a", "seen", "work", true, true)];
-        let table = render(&before, &after, &[], &|kind| {
-            (kind == "work").then_some(1.0 / 17.0)
-        });
+        let table = render(
+            &before,
+            &after,
+            &[],
+            &|kind| (kind == "work").then_some(1.0 / 17.0),
+            crate::seed::draw().value(),
+        );
         assert!(table.contains("chance 6%"), "{table}");
         assert!(
             table.contains("1 questions were answered only before"),
@@ -518,7 +535,13 @@ mod tests {
                 })
                 .collect()
         };
-        let table = render(&make(&|_| false), &make(&|r| r == "A"), &[], &|_| None);
+        let table = render(
+            &make(&|_| false),
+            &make(&|r| r == "A"),
+            &[],
+            &|_| None,
+            crate::seed::draw().value(),
+        );
         assert!(
             table.contains("| exam | attribution | A | 3 | 0 | 3 |"),
             "{table}"
@@ -589,12 +612,46 @@ mod tests {
         let after: Vec<Graded> = (0..12)
             .map(|n| graded(&n.to_string(), "exam", "work", true, true))
             .collect();
-        let text = render(&before, &after, &[], &|_| None);
+        let text = render(&before, &after, &[], &|_| None, crate::seed::draw().value());
         assert!(
             text.contains("| exam | work | 12 | +1.000 | [+1.000, +1.000] above zero |"),
             "{text}"
         );
-        let tie = render(&before, &before, &[], &|_| None);
+        let tie = render(
+            &before,
+            &before,
+            &[],
+            &|_| None,
+            crate::seed::draw().value(),
+        );
         assert!(tie.contains("| +0.000 | [+0.000, +0.000] |"), "{tie}");
+    }
+
+    #[test]
+    fn the_paired_interval_is_resampled_from_the_seed_the_report_is_given_and_names() {
+        let before: Vec<Graded> = (0..20)
+            .map(|n| graded(&n.to_string(), "exam", "work", n % 4 == 0, true))
+            .collect();
+        let after: Vec<Graded> = (0..20)
+            .map(|n| graded(&n.to_string(), "exam", "work", n % 3 == 0, true))
+            .collect();
+        let at = |seed: u64| render(&before, &after, &[], &|_| None, seed);
+        let interval_row = |text: &str| {
+            text.lines()
+                .find(|l| l.starts_with("| exam | work | 20 |") && l.contains('['))
+                .map(str::to_owned)
+                .unwrap_or_else(|| panic!("no interval row in {text}"))
+        };
+        // seed: two fixed values whose resamples differ; the claim is that the
+        // interval follows the seed, which a drawn seed could not show
+        let (first, second) = (at(11), at(12));
+        assert_eq!(first, at(11), "the same seed reproduces the report");
+        assert_ne!(
+            interval_row(&first),
+            interval_row(&second),
+            "the interval is a function of the seed"
+        );
+        assert!(first.contains("seed 11"), "{first}");
+        assert!(second.contains("seed 12"), "{second}");
     }
 }

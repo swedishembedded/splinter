@@ -195,13 +195,20 @@ pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The before-and-after table, with the paired sign test, of two result files.
-pub fn report_command(before: &Path, after: &Path) -> anyhow::Result<()> {
+/// The before-and-after table, with the paired sign test, of two result files;
+/// its bootstrap intervals are resampled from `bootstrap_seed`.
+pub fn report_command(before: &Path, after: &Path, bootstrap_seed: u64) -> anyhow::Result<()> {
     let before = splinter_sdk::model::exam::read_results(before)?;
     let after = splinter_sdk::model::exam::read_results(after)?;
     print!(
         "{}",
-        splinter_sdk::model::report::render(&before, &after, &tasks::KIND_ORDER, &tasks::chance)
+        splinter_sdk::model::report::render(
+            &before,
+            &after,
+            &tasks::KIND_ORDER,
+            &tasks::chance,
+            bootstrap_seed
+        )
     );
     Ok(())
 }
