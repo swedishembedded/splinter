@@ -173,7 +173,7 @@ fits the learning curves:
 
 ```bash
 python -I baselines/run.py --data <data> --out <data>/baselines --baseline resnet-cox-all-w64-l2 --jobs 16
-python -I baselines/curves.py --data <data> --repeat 0 --repeat 1 --bootstrap 500
+python -I baselines/curves.py --data <data> --repeat 0 --repeat 1 --bootstrap 500   # --seed N fixes the resampling; else drawn and written to the output
 ```
 
 ## Recipes

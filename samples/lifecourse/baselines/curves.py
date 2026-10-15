@@ -19,11 +19,13 @@ Scores are read from the per-fold JSON files the scorer writes:
 `baselines/<name>/scores/` for the full share and `recipe/<name>-p<share>/`
 for subsamples (deep recipes `-s1` members), under `--data`.
 
-    python -I curves.py --data <lifecourse dir> [--repeat R ...] [--bootstrap N] [--out table.md]
+    python -I curves.py --data <lifecourse dir> [--repeat R ...] [--bootstrap N] [--seed N] [--out table.md]
 """
 import argparse
 import json
 import os
+import secrets
+import sys
 
 import numpy as np
 
@@ -73,9 +75,12 @@ def fit_power_law(shares, means, n_full=N_FULL):
     return tuple(float(v) for v in best.x)
 
 
-def analyse(data, repeats, bootstrap, seed=1):
-    """Per model: mean score by share over the folds every share has, and the fit."""
-    rng = np.random.RandomState(seed)
+def analyse(data, repeats, bootstrap, seed):
+    """Per model: mean score by share over the folds every share has, and the fit.
+
+    `seed` drives the resampling of the bootstrap intervals; there is no default.
+    """
+    rng = np.random.default_rng(seed)
     rows = {}
     for name, (full, pattern) in MODELS.items():
         by_share = {}
@@ -97,7 +102,7 @@ def analyse(data, repeats, bootstrap, seed=1):
             e, a, b = fit_power_law([s / 100 for s in shares], mat.mean(axis=1))
             boots = []
             for _ in range(bootstrap):
-                idx = rng.randint(0, len(common), size=len(common))
+                idx = rng.integers(0, len(common), size=len(common))
                 try:
                     boots.append(fit_power_law([s / 100 for s in shares], mat[:, idx].mean(axis=1)))
                 except Exception:  # a resample whose fit does not converge is dropped
@@ -137,10 +142,16 @@ def main():
     ap.add_argument("--data", required=True)
     ap.add_argument("--repeat", action="append", type=int, help="repeats to use (default: 0 to 4)")
     ap.add_argument("--bootstrap", type=int, default=500)
+    ap.add_argument("--seed", type=int, help="seed of the bootstrap resampling (default: drawn, printed and written to the output)")
     ap.add_argument("--out")
     a = ap.parse_args()
-    rows = analyse(a.data, a.repeat if a.repeat is not None else range(5), a.bootstrap)
-    text = f"{json.dumps(rows, indent=1)}\n\n{table(rows)}\n"
+    if a.seed is not None and a.seed < 0:
+        ap.error("--seed must not be negative")
+    seed = a.seed if a.seed is not None else secrets.randbits(63)
+    if a.seed is None:
+        print(f"no --seed given, using seed {seed} (pass --seed {seed} to reproduce)", file=sys.stderr)
+    rows = analyse(a.data, a.repeat if a.repeat is not None else range(5), a.bootstrap, seed)
+    text = f"bootstrap seed: {seed}\n\n{json.dumps(rows, indent=1)}\n\n{table(rows)}\n"
     print(text)
     if a.out:
         with open(a.out, "w") as f:
