@@ -14,7 +14,7 @@
 // A panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
-use splinter_sdk::seed::{frozen, SeedError};
+use splinter_sdk::seed::{frozen, resolve, SeedError};
 
 #[test]
 fn a_second_freeze_without_a_seed_reads_the_recorded_one() {
@@ -90,4 +90,11 @@ fn a_seed_that_is_decided_but_not_recorded_binds_nothing() {
     drop(decided);
     assert!(!manifest.exists());
     assert_eq!(frozen(&manifest, Some(42), 1, None).unwrap(), 42);
+}
+
+#[test]
+fn a_given_seed_is_used_and_a_missing_one_is_drawn_afresh() {
+    assert_eq!(resolve("seed", Some(9)), 9);
+    // Equal draws would mean the "random" default is a constant.
+    assert_ne!(resolve("seed", None), resolve("seed", None));
 }

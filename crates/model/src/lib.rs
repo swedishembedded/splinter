@@ -19,6 +19,7 @@
 //!   base checkpoint, shared by every model on it, each model's adapter
 //!   attached before its generation, and every base released when other
 //!   work needs the device.
+//! * [`seed`] - where the seed of a run that was given none comes from.
 //! * [`selection`] - which model a stage runs on (local weights, or a model
 //!   reached over an API), the identity every record gives it, and the
 //!   model loaded for a command.
@@ -52,6 +53,7 @@ pub mod manifest;
 pub mod report;
 pub mod residency;
 pub mod rl;
+pub mod seed;
 pub mod selection;
 pub mod speech;
 pub mod stats;

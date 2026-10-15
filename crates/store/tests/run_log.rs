@@ -11,6 +11,7 @@
 
 use serde_json::json;
 use splinter_core::clock::FixedClock;
+use splinter_core::rng::Seed;
 use splinter_store::experiences::StoreError;
 use splinter_store::runs::{
     cancel_requested, list_runs, read_run, request_cancel, RunLog, RunStatus,
@@ -133,5 +134,27 @@ fn a_cancel_reaches_only_a_run_in_progress() {
         request_cancel(&workspace, "run-missing"),
         Err(StoreError::UnknownRun(_))
     ));
+    let _ = std::fs::remove_dir_all(root.path());
+}
+
+#[test]
+fn a_run_records_the_seeds_it_used_and_a_run_without_any_reads_with_none() {
+    let root = scratch("seeds");
+    let workspace = Workspace::at(&root);
+    let clock = FixedClock::new("2026-09-30T08:00:00.000Z");
+    let mut seeded = RunLog::start(&workspace, "train", json!({}), &clock).unwrap();
+    seeded.seed("train", Seed::new(7), true, &clock).unwrap();
+    seeded.seed("replay", Seed::new(0), false, &clock).unwrap();
+    let seeded_id = seeded.id().to_string();
+    // A run recorded before seeds were: only a start and a stage.
+    let mut old = RunLog::start(&workspace, "solve", json!({}), &clock).unwrap();
+    old.stage("solve", json!({}), None, None, &clock).unwrap();
+    let old_id = old.id().to_string();
+
+    let other = Workspace::at(&root);
+    let seeds = read_run(&other, &seeded_id).unwrap().seeds;
+    assert_eq!(seeds.get("train"), Some(&7));
+    assert_eq!(seeds.get("replay"), Some(&0));
+    assert!(read_run(&other, &old_id).unwrap().seeds.is_empty());
     let _ = std::fs::remove_dir_all(root.path());
 }

@@ -17,6 +17,8 @@
 //! the same instant never share one, and its end raises a third, so asking
 //! whether a run is still in progress never reads a record.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_expdb::model::Entity;
@@ -25,6 +27,7 @@ use crate::error::StoreError;
 use crate::new_id_with_prefix;
 use crate::workspace::Workspace;
 use splinter_core::clock::Clock;
+use splinter_core::rng::Seed;
 
 const RUN_EVENT: &str = "run_event";
 
@@ -97,6 +100,10 @@ pub struct Run {
     pub outputs: serde_json::Value,
     /// Why it failed, when it did.
     pub error: Option<String>,
+    /// The seed of each random draw the run made, by the draw's name; empty
+    /// for a run recorded before seeds were, or one that drew nothing.
+    #[serde(default)]
+    pub seeds: BTreeMap<String, u64>,
 }
 
 /// The writing side of one run. See the module documentation.
@@ -150,6 +157,7 @@ impl RunLog {
                 stages: Vec::new(),
                 outputs: serde_json::Value::Null,
                 error: None,
+                seeds: BTreeMap::new(),
             },
             events: 1,
         };
@@ -204,6 +212,29 @@ impl RunLog {
             duration_ms,
             error,
         });
+        self.run.updated_at = now;
+        Ok(())
+    }
+
+    /// Records that the draw `name` used `seed`, and whether the run drew it
+    /// (`drawn`) or was given it. A name drawn again replaces its seed.
+    pub fn seed(
+        &mut self,
+        name: &str,
+        seed: Seed,
+        drawn: bool,
+        clock: &dyn Clock,
+    ) -> Result<(), StoreError> {
+        let now = clock.utc_now();
+        self.append(&event(
+            &self.run.id,
+            self.events,
+            "seed",
+            &now,
+            json!({ "name": name, "seed": seed, "drawn": drawn }),
+        ))?;
+        self.events += 1;
+        self.run.seeds.insert(name.to_string(), seed.value());
         self.run.updated_at = now;
         Ok(())
     }
@@ -311,6 +342,7 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
         stages: Vec::new(),
         outputs: serde_json::Value::Null,
         error: None,
+        seeds: BTreeMap::new(),
     };
     for e in events {
         match e["kind"].as_str() {
@@ -322,6 +354,14 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
                     duration_ms: e["body"]["duration_ms"].as_u64(),
                     error: e["body"]["error"].as_str().map(str::to_string),
                 });
+                run.updated_at = text(&e["at"]);
+            }
+            Some("seed") => {
+                if let (Some(name), Some(seed)) =
+                    (e["body"]["name"].as_str(), e["body"]["seed"].as_u64())
+                {
+                    run.seeds.insert(name.to_string(), seed);
+                }
                 run.updated_at = text(&e["at"]);
             }
             Some("finish") => {

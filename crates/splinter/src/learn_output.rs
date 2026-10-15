@@ -135,6 +135,18 @@ fn exam_line(summary: &serde_json::Value) -> String {
     )
 }
 
+/// The seed a run used for the draw `summary` names: when the run drew it,
+/// the flag that reproduces the draw; when it was given, only that it was.
+fn seed_line(summary: &serde_json::Value) -> String {
+    let name = summary["name"].as_str().unwrap_or("seed");
+    let seed = &summary["seed"];
+    if summary["drawn"].as_bool().unwrap_or(false) {
+        format!("no --{name} given, using seed {seed} (pass --{name} {seed} to reproduce)")
+    } else {
+        format!("--{name} {seed}")
+    }
+}
+
 /// One line saying what a finished `learn` stage did, from its summary.
 pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
     if let Some(line) = crate::absorb_output::stage_line(stage, summary)
@@ -148,6 +160,7 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
         other => other.to_string(),
     };
     match stage {
+        "seed" => seed_line(summary),
         "sources" => format!("{} source(s)", summary.as_array().map_or(0, Vec::len)),
         "plan" => plan_line(summary),
         "exam" if !summary["ran"]["comparisons"].is_null() || summary["not_run"].is_string() => {
@@ -490,6 +503,16 @@ mod tests {
             release: None,
             adapter: None,
         }
+    }
+
+    /// A drawn seed is announced with the flag that reproduces it.
+    #[test]
+    fn a_drawn_seed_is_announced_with_the_flag_that_reproduces_it() {
+        let drawn = serde_json::json!({ "name": "train-seed", "seed": 77, "drawn": true });
+        assert_eq!(
+            stage_line("seed", &drawn),
+            "no --train-seed given, using seed 77 (pass --train-seed 77 to reproduce)"
+        );
     }
 
     /// A run that stopped before training says so, and moves nothing.

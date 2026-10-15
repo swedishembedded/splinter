@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use splinter_agent::CancelToken;
+use splinter_core::rng::Seed;
 use splinter_store::runs::{self, list_runs, read_run, Run, RunLog, RunStatus};
 use splinter_store::workspace::Workspace;
 
@@ -75,6 +76,21 @@ impl Recorder<'_> {
             .stage(stage, summary.clone(), duration_ms, error, self.ctx.clock())?;
         self.ctx.report_stage(stage, &summary);
         Ok(())
+    }
+
+    /// The seed of the random draw `name`: `given` when the caller passed
+    /// one, otherwise a fresh one. Either way it is recorded in the run and
+    /// reported to the progress receiver as the stage `seed` with
+    /// `{name, seed, drawn}`, so the run states what reproduces it.
+    pub fn seed(&mut self, name: &str, given: Option<Seed>) -> Result<Seed, OrchestratorError> {
+        let drawn = given.is_none();
+        let seed = given.unwrap_or_else(splinter_model::seed::draw);
+        self.log.seed(name, seed, drawn, self.ctx.clock())?;
+        self.ctx.report_stage(
+            "seed",
+            &serde_json::json!({ "name": name, "seed": seed, "drawn": drawn }),
+        );
+        Ok(seed)
     }
 
     /// The token a cancel request fires; hand it to every model run.

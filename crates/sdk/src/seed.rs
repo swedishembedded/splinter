@@ -6,7 +6,13 @@
 // experiment provenance or held-out evaluation design, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! The seed of a frozen artifact.
+//! Seeds for the programs built on the SDK.
+//!
+//! [`resolve`] gives a random draw its seed: the one the caller passed, else a
+//! fresh one that is printed so the run can be reproduced. A frozen artifact
+//! is different: its seed belongs to the artifact, see [`frozen`].
+//!
+//! # The seed of a frozen artifact
 //!
 //! A frozen exam, split or partition is a function of a seed. The seed is part
 //! of the artifact, so it is recorded beside it the first time the artifact is
@@ -18,6 +24,21 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+pub use splinter_core::rng::Seed;
+
+/// The seed of the random draw called `name` (the flag that sets it, without
+/// its dashes): `given` when the caller passed one, otherwise a fresh seed,
+/// which is printed to stderr so passing it back reproduces the draw.
+#[must_use]
+pub fn resolve(name: &str, given: Option<u64>) -> u64 {
+    if let Some(seed) = given {
+        return seed;
+    }
+    let seed = splinter_model::seed::draw();
+    eprintln!("no --{name} given, using seed {seed} (pass --{name} {seed} to reproduce)");
+    seed.value()
+}
 
 /// Why a frozen seed could not be resolved.
 #[derive(Debug, thiserror::Error)]
