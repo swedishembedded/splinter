@@ -17,7 +17,7 @@ use crate::id::ContentId;
 use crate::manifest::Snapshot;
 
 impl Snapshot {
-    pub(super) fn compile_grpo(&self, recipe: &Recipe) -> Result<Vec<Sample>> {
+    pub(super) fn compile_grpo(&self, recipe: &Recipe, seed: u64) -> Result<Vec<Sample>> {
         let mut by_family: std::collections::BTreeMap<ContentId, Vec<_>> =
             std::collections::BTreeMap::new();
         for attempt in self.selected_attempts(recipe)? {
@@ -31,7 +31,7 @@ impl Snapshot {
                 continue;
             }
             if attempts.len() > recipe.group_size {
-                Rng::new(recipe.seed ^ family.prefix_u64()).shuffle(&mut attempts);
+                Rng::new(seed ^ family.prefix_u64()).shuffle(&mut attempts);
                 attempts.truncate(recipe.group_size);
             }
             attempts.sort_by_key(|a| a.attempt);

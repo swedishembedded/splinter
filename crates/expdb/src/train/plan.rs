@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::recipe::{Objective, Recipe};
-use super::rng::Rng;
+use super::rng::{draw_seed, Rng};
 use crate::blob::BlobRef;
 use crate::error::{Error, Result};
 use crate::id::{ContentId, RecordId};
@@ -255,7 +255,7 @@ impl TrainingPlan {
         })
     }
 
-    fn apply_limits(mut samples: Vec<Sample>, recipe: &Recipe) -> Vec<Sample> {
+    fn apply_limits(mut samples: Vec<Sample>, recipe: &Recipe, seed: u64) -> Vec<Sample> {
         samples.sort_by_key(|s| s.provenance);
         if let Some(cap) = recipe.max_per_family {
             let mut counts = std::collections::HashMap::new();
@@ -266,7 +266,7 @@ impl TrainingPlan {
             });
         }
         if let Some(max) = recipe.max_samples.filter(|m| samples.len() > *m) {
-            Rng::new(recipe.seed).shuffle(&mut samples);
+            Rng::new(seed).shuffle(&mut samples);
             samples.truncate(max);
             samples.sort_by_key(|s| s.provenance);
         }
@@ -275,18 +275,26 @@ impl TrainingPlan {
 }
 
 impl Snapshot {
-    /// Compiles a recipe against this snapshot.
+    /// Compiles a recipe against this snapshot. A recipe without a seed gets a
+    /// freshly drawn one; the plan's recipe records the seed that was used, so
+    /// compiling that recipe again against the same snapshot gives the same
+    /// plan.
     pub fn compile(&self, recipe: &Recipe) -> Result<TrainingPlan> {
+        let seed = recipe.seed.unwrap_or_else(draw_seed);
+        let recipe = &Recipe {
+            seed: Some(seed),
+            ..recipe.clone()
+        };
         // The plan names this snapshot, so the snapshot must be reopenable.
         self.persist()?;
         let samples = match recipe.objective {
             Objective::Sft => self.compile_sft(recipe)?,
             Objective::Dpo => self.compile_dpo(recipe)?,
-            Objective::Grpo => self.compile_grpo(recipe)?,
+            Objective::Grpo => self.compile_grpo(recipe, seed)?,
             Objective::Ppo => self.compile_ppo(recipe)?,
             Objective::Prm => self.compile_prm(recipe)?,
             Objective::WorldModel => self.compile_world_model(recipe)?,
-            Objective::Contrastive => self.compile_contrastive(recipe)?,
+            Objective::Contrastive => self.compile_contrastive(recipe, seed)?,
             Objective::Masked => self.compile_masked(recipe)?,
             Objective::ActionChunk => self.compile_action_chunk(recipe)?,
             Objective::Relation => self.compile_relations(recipe)?,
@@ -294,7 +302,7 @@ impl Snapshot {
         Ok(TrainingPlan {
             snapshot: self.id(),
             recipe: recipe.clone(),
-            samples: TrainingPlan::apply_limits(samples, recipe),
+            samples: TrainingPlan::apply_limits(samples, recipe, seed),
         })
     }
 }

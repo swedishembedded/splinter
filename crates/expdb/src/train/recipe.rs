@@ -102,8 +102,10 @@ pub struct Recipe {
     pub max_per_family: Option<usize>,
     /// At most this many samples in all, chosen by the seed.
     pub max_samples: Option<usize>,
-    /// Fixes every random choice.
-    pub seed: u64,
+    /// Fixes every random choice. `None` until compiled: compiling draws a
+    /// seed and the plan records it, so the plan's own recipe reproduces it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
     /// SFT: the least reward an attempt may have stood at.
     pub min_reward: f64,
     /// SFT: whole episodes instead of single steps.
@@ -148,7 +150,7 @@ impl Recipe {
             verified_only: false,
             max_per_family: None,
             max_samples: None,
-            seed: 0,
+            seed: None,
             min_reward: 1.0,
             episodes: false,
             min_gap: 0.5,
@@ -268,9 +270,9 @@ impl Recipe {
         self
     }
 
-    /// Fixes every random choice.
+    /// Fixes every random choice; without it compiling draws a seed.
     pub fn seed(mut self, seed: u64) -> Self {
-        self.seed = seed;
+        self.seed = Some(seed);
         self
     }
 

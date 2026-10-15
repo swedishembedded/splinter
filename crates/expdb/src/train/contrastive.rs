@@ -21,7 +21,7 @@ use crate::model::TimeRange;
 const MILLISECOND: i64 = 1_000_000;
 
 impl Snapshot {
-    pub(super) fn compile_contrastive(&self, recipe: &Recipe) -> Result<Vec<Sample>> {
+    pub(super) fn compile_contrastive(&self, recipe: &Recipe, seed: u64) -> Result<Vec<Sample>> {
         let spec = &recipe.mm;
         let (a_name, b_name) = spec.pair.as_ref().ok_or_else(|| {
             Error::invalid(
@@ -59,7 +59,7 @@ impl Snapshot {
                         });
                     }
                 }
-                let mut rng = Rng::new(recipe.seed ^ episode.id.hash64() ^ (t as u64));
+                let mut rng = Rng::new(seed ^ episode.id.hash64() ^ (t as u64));
                 let others: Vec<&EpisodeCtx> = episodes
                     .iter()
                     .enumerate()

@@ -223,21 +223,10 @@ fn contrastive_pairs_align_two_modalities_and_take_hard_negatives_from_nearby_in
         assert!([first.audio, second.audio].contains(&e_stream));
     }
     assert!(hard_shifts.iter().all(|s| *s == 5 * SEC));
-    // The same recipe and snapshot give the same pairs.
+    // The plan's recipe, which records the drawn seed, gives the same pairs.
     assert_eq!(
         plan.id().unwrap(),
-        snapshot
-            .compile(
-                &Recipe::contrastive()
-                    .pair("camera", "mic")
-                    .window_ns(SEC)
-                    .stride_ns(3 * SEC)
-                    .hard_shift_ns(5 * SEC)
-                    .negatives(2)
-            )
-            .unwrap()
-            .id()
-            .unwrap()
+        snapshot.compile(&plan.recipe).unwrap().id().unwrap()
     );
 }
 

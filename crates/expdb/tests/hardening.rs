@@ -167,7 +167,7 @@ fn the_snapshot_a_plan_was_compiled_from_can_always_be_reopened() {
     let plan = snapshot.compile(&Recipe::sft()).unwrap();
     let reopened = db.snapshot_at(plan.snapshot).unwrap();
     assert_eq!(
-        reopened.compile(&Recipe::sft()).unwrap().id().unwrap(),
+        reopened.compile(&plan.recipe).unwrap().id().unwrap(),
         plan.id().unwrap()
     );
 }

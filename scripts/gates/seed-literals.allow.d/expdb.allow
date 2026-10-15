@@ -1,2 +1,1 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-crates/expdb/src/train/recipe.rs	Recipe::new::seed	todo: a default that is drawn, printed and recorded once its owner is converted

@@ -519,6 +519,29 @@ fn a_plan_is_reproducible_from_its_recipe_and_snapshot_whatever_came_after() {
 }
 
 #[test]
+fn a_recipe_without_a_seed_compiles_to_a_plan_that_records_the_drawn_seed_and_recompiles_identically_from_it(
+) {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut c = collector(&db);
+    for task in 0..6 {
+        attempt(&mut c, task, "a", 3, Outcome::Pass);
+    }
+    c.flush().unwrap();
+    let snapshot = db.snapshot().unwrap();
+
+    let plan = snapshot.compile(&Recipe::sft().max_samples(3)).unwrap();
+    assert!(
+        plan.recipe.seed.is_some(),
+        "the plan records the seed it drew"
+    );
+
+    let again = snapshot.compile(&plan.recipe).unwrap();
+    assert_eq!(again.recipe, plan.recipe);
+    assert_eq!(again.id().unwrap(), plan.id().unwrap());
+}
+
+#[test]
 fn a_seed_chooses_which_samples_survive_a_cap_and_the_same_seed_always_chooses_the_same() {
     let scratch = Scratch::new();
     let db = scratch.open();

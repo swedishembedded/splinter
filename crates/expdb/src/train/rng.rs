@@ -55,3 +55,18 @@ impl Rng {
         }
     }
 }
+
+/// A seed for a compile whose recipe named none. The operating system seeds
+/// the standard library's hasher per process; a counter keeps two draws in one
+/// process apart. The caller records the value, so the draw is reproducible
+/// from the plan that used it.
+pub(super) fn draw_seed() -> u64 {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static DRAWS: AtomicU64 = AtomicU64::new(0);
+    let mut hasher = RandomState::new().build_hasher();
+    hasher.write_u64(DRAWS.fetch_add(1, Ordering::Relaxed));
+    hasher.finish()
+}
