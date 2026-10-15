@@ -22,7 +22,7 @@ use super::{train, Candidate, TrainRequest, Trainer, Tuning};
 
 /// The name a training seed is recorded and reported under: the flag that
 /// sets it.
-const SEED: &str = "seed";
+pub const SEED: &str = "seed";
 
 /// The seed of a run: `given`, else a fresh one reported to the context's
 /// progress receiver as the stage `seed`.
@@ -37,20 +37,43 @@ pub(super) fn resolve(ctx: &Context, given: Option<u64>) -> u64 {
     })
 }
 
-/// [`train`] as the work of the recorded run `run`: a seed the request leaves
-/// out is drawn through the recorder, so the run record states it.
+/// `tuning` with its seed settled as the recorded draw `name` of `run`: a
+/// seed it leaves out is drawn through the recorder, so the run record states
+/// it, and is then the seed the training is handed.
+pub fn record_seed(
+    run: &mut Recorder<'_>,
+    name: &str,
+    tuning: Tuning,
+) -> Result<Tuning, OrchestratorError> {
+    let seed = run.seed(name, tuning.seed.map(Seed::from))?;
+    Ok(Tuning {
+        seed: Some(seed.value()),
+        ..tuning
+    })
+}
+
+/// [`train`] as the work of the recorded run `run`: the training seed is
+/// recorded under the name `seed`.
 pub fn train_recorded(
     ctx: &Context,
     run: &mut Recorder<'_>,
     request: &TrainRequest,
     trainer: &dyn Trainer,
 ) -> Result<Candidate, OrchestratorError> {
-    let seed = run.seed(SEED, request.tuning.seed.map(Seed::from))?;
+    train_recorded_as(ctx, run, SEED, request, trainer)
+}
+
+/// [`train_recorded`] with the seed recorded under `name`, for a run that
+/// trains more than once and so holds one seed per training.
+pub fn train_recorded_as(
+    ctx: &Context,
+    run: &mut Recorder<'_>,
+    name: &str,
+    request: &TrainRequest,
+    trainer: &dyn Trainer,
+) -> Result<Candidate, OrchestratorError> {
     let seeded = TrainRequest {
-        tuning: Tuning {
-            seed: Some(seed.value()),
-            ..request.tuning
-        },
+        tuning: record_seed(run, name, request.tuning)?,
         ..request.clone()
     };
     train(ctx, &seeded, trainer, &run.cancel_token())

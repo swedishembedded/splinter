@@ -10,6 +10,7 @@ use splinter_pipelines::absorb::kit::kept;
 use splinter_pipelines::absorb::{absorb, AbsorbRequest};
 use splinter_pipelines::claims::{forget, ledger};
 use splinter_pipelines::lineage::{lineage, Direction, LineageRequest, NodeKind};
+use splinter_store::runs::read_run;
 
 use crate::night::{
     night, serve_release, session_at, statement, statement_at, Learner, Night, Outcome,
@@ -160,6 +161,24 @@ fn no_release_stops_at_the_candidate_and_absorbs_nothing() -> Outcome {
     assert_eq!(
         again.kits.as_ref().map(|k| (k.built, k.reused)),
         Some((0, 2))
+    );
+    Ok(())
+}
+
+#[test]
+fn an_unseeded_night_records_the_seed_it_trained_with_in_its_run() -> Outcome {
+    let w = night("night-train-seed");
+    let dir = w.sessions("s", &[0, 1])?;
+    let request = AbsorbRequest {
+        no_release: true,
+        ..w.request(dir)
+    };
+    let recorded = absorb(&w.ctx, &request, &Learner::default())?;
+    let trained = recorded.report.candidate.as_ref().unwrap().seed.unwrap();
+    assert_eq!(
+        read_run(w.ctx.workspace(), &recorded.run)?.seeds["seed"],
+        trained,
+        "the run states the seed its candidate was trained with"
     );
     Ok(())
 }

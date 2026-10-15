@@ -392,6 +392,20 @@ fn the_exam_seed_is_drawn_by_the_first_run_that_reserves_and_read_back_by_every_
 }
 
 #[test]
+fn an_unseeded_practice_records_the_seed_it_trained_with_in_its_run() {
+    let (scratch, ctx) = context("practice-train-seed");
+    let repo = scratch.0.join("repo");
+    project(&repo, &[]);
+    let (id, report) = run(&ctx, &request(&repo));
+    let trained = report.candidate.as_ref().unwrap().seed.unwrap();
+    assert_eq!(
+        read_run(ctx.workspace(), &id).unwrap().seeds["seed"],
+        trained,
+        "the run states the seed its candidate was trained with"
+    );
+}
+
+#[test]
 fn a_red_baseline_stops_the_run_before_any_task_is_made() {
     let (scratch, ctx) = context("practice-red");
     let repo = scratch.0.join("repo");

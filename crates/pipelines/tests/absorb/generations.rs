@@ -89,7 +89,8 @@ fn consolidating_makes_a_checkpoint_the_base_of_the_next_generation() -> Outcome
     let stored = w.ctx.releases().get(&first)?;
     assert_eq!((stored.epoch(), stored.base_release()), (0, None));
 
-    let done = consolidate(&w.ctx, &consolidation_request(), &smith)?.report;
+    let recorded = consolidate(&w.ctx, &consolidation_request(), &smith)?;
+    let done = recorded.report;
     let consolidated = done
         .consolidated
         .as_ref()
@@ -121,6 +122,11 @@ fn consolidating_makes_a_checkpoint_the_base_of_the_next_generation() -> Outcome
     // base the adapter had.
     let plan = Smith::last(&smith.fulls);
     assert_eq!(plan.base, w.ctx.config().policy_base);
+    assert_eq!(
+        splinter_store::runs::read_run(w.ctx.workspace(), &recorded.run)?.seeds["seed"],
+        plan.seed,
+        "the run states the seed the full tune was handed"
+    );
     assert_eq!(smith.merges.lock().unwrap().len(), 0);
     let data = consolidated.dataset.as_ref().unwrap();
     assert_eq!(

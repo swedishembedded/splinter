@@ -41,13 +41,17 @@ use crate::learn::{records_at_share, PolicyUsed};
 use crate::rehearsal::{rehearse_on, RehearseRequest};
 use crate::release::arm_on;
 use crate::train::{
-    auto_records_per_step, load_candidate, train, Candidate, Rehearse, TrainRequest, Trainer,
-    Tuning,
+    auto_records_per_step, load_candidate, train_recorded, train_recorded_as, Candidate, Rehearse,
+    TrainRequest, Trainer, Tuning,
 };
 use crate::verify::adopt_judge;
 use splinter_knowledge::claims::coverage::Subject;
 
 mod generations;
+
+/// The name the preference pass's training seed is recorded under; the
+/// supervised pass records its own under `seed`.
+const PREFERENCE_SEED: &str = "preference-seed";
 mod intake;
 
 use generations::{consolidate_stage, consolidation_is_due, rebuild_stage};
@@ -538,8 +542,9 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Don
             } else {
                 arm_on(ctx.config(), &st.generation.base, None)
             };
-            train(
+            train_recorded(
                 ctx,
+                run,
                 &TrainRequest {
                     datasets: vec![dataset.clone()],
                     rehearsal: st.rehearsal.clone().map(|dataset| Rehearse {
@@ -560,7 +565,6 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Don
                     },
                 },
                 st.trainer,
-                &run.cancel_token(),
             )?
         }
     };
@@ -613,8 +617,10 @@ fn preference_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -
     let (Some(supervised), Some(pairs)) = (st.candidate.clone(), st.pairs.clone()) else {
         unreachable!("the preference stage follows a stance stage that made pairs")
     };
-    let preferred = train(
+    let preferred = train_recorded_as(
         ctx,
+        run,
+        PREFERENCE_SEED,
         &TrainRequest {
             datasets: vec![pairs],
             rehearsal: None,
@@ -630,7 +636,6 @@ fn preference_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -
             },
         },
         st.trainer,
-        &run.cancel_token(),
     )?;
     let candidate = after_preference(&supervised, preferred);
     let summary = value(&candidate)?;

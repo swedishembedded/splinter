@@ -47,7 +47,9 @@ use crate::release::{release, ReleaseRequest};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
 use crate::tasks::{asks_for_denoise, generate, Generation};
-use crate::train::{train, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
+use crate::train::{
+    train_recorded, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
+};
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
 use crate::verify::{adopt_judge, kind_needs_judge, verify_set, Grading};
 use splinter_core::annotation::Strength;
@@ -658,8 +660,9 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     }
     // The budget, what a step averages and how the run is watched follow
     // the data unless the command named them; `train` resolves them.
-    let candidate = train(
+    let candidate = train_recorded(
         ctx,
+        run,
         &TrainRequest {
             datasets: st.datasets.clone(),
             rehearsal: st.rehearsal.clone().map(|dataset| Rehearse {
@@ -677,7 +680,6 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             },
         },
         st.learn.trainer,
-        &run.cancel_token(),
     )?;
     let summary = to_value(&candidate)?;
     st.candidate = Some(candidate.candidate.clone());

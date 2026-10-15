@@ -222,6 +222,34 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
 }
 
 #[test]
+fn an_unseeded_learn_records_the_seed_it_trained_with_in_its_run() {
+    let (scratch, ctx) = scratch_context("learn-train-seed", policy(), false);
+    put_base(&ctx);
+    let manual = scratch.0.join("manual.md");
+    std::fs::write(&manual, MANUAL).unwrap();
+    let learned = learn(
+        &ctx,
+        &LearnRequest {
+            sources: vec![manual.display().to_string()],
+            no_frontier: true,
+            no_release: true,
+            ..LearnRequest::default()
+        },
+        &RecordingTrainer::default(),
+    )
+    .unwrap();
+    let Learned::Ran(run) = learned else {
+        panic!("a learn that is not a dry run runs");
+    };
+    let trained = run.report.candidate.as_ref().unwrap().seed.unwrap();
+    assert_eq!(
+        read_run(ctx.workspace(), &run.run).unwrap().seeds["seed"],
+        trained,
+        "the run states the seed its candidate was trained with"
+    );
+}
+
+#[test]
 fn a_dry_run_reports_the_plan_and_writes_nothing() {
     let (scratch, ctx) = scratch_context("learn-dry", policy(), false);
     let manual = scratch.0.join("manual.md");

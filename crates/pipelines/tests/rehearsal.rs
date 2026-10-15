@@ -42,15 +42,30 @@ use splinter_core::rng::Seed;
 use splinter_knowledge::rehearsal::{form_tasks, GENERAL_BRIEF};
 use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
-use splinter_orchestrator::Context;
+use splinter_orchestrator::runs::record;
+use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned, DEFAULT_REHEARSAL_SHARE, STAGES};
 use splinter_pipelines::rehearsal::{rehearse, RehearseRequest, FORM_SHARE};
 use splinter_pipelines::release::{anchor, arm};
-use splinter_pipelines::train::{train, Rehearse, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
+use splinter_pipelines::train::{
+    train_recorded, Candidate, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
+};
 
 // seed: the specs fix which form tasks are built, which one seed makes the same
 // on every run.
 const SEED: Seed = Seed::new(0);
+
+/// `request` trained as the work of a recorded run.
+fn trained(
+    ctx: &Context,
+    request: &TrainRequest,
+    trainer: &dyn Trainer,
+) -> Result<Candidate, OrchestratorError> {
+    record(ctx, "train", request, |run| {
+        train_recorded(ctx, run, request, trainer)
+    })
+    .map(|recorded| recorded.report)
+}
 
 /// A general request the base proposes that is new.
 const FRESH: [&str; 6] = [
@@ -273,14 +288,13 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
         tuning: Tuning::default(),
     };
     let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
-    let candidate = train(
+    let candidate = trained(
         &ctx,
         &request(Some(Rehearse {
             dataset: rehearsed.dataset.dataset.to_string(),
             share: 0.3,
         })),
         &trainer,
-        &CancelToken::new(),
     )
     .unwrap();
     let plan = trainer.plans.lock().unwrap()[0].clone();
@@ -344,7 +358,7 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
 
     // Nothing rehearsed: no plan entry, no record.
     let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
-    let plain = train(&ctx, &request(None), &trainer, &CancelToken::new()).unwrap();
+    let plain = trained(&ctx, &request(None), &trainer).unwrap();
     assert!(trainer.plans.lock().unwrap()[0].rehearsal.is_none());
     assert!(plain.rehearsal.is_none());
 
@@ -352,14 +366,13 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
     // is refused before anything trains.
     for share in [0.0, 1.0, 1.5] {
         let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
-        let refused = train(
+        let refused = trained(
             &ctx,
             &request(Some(Rehearse {
                 dataset: rehearsed.dataset.dataset.to_string(),
                 share,
             })),
             &trainer,
-            &CancelToken::new(),
         )
         .unwrap_err();
         assert!(

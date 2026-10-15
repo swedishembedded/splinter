@@ -42,7 +42,7 @@ use crate::learn::PolicyUsed;
 use crate::release::exams::{self, ExamRecord};
 use crate::release::{release, ReleaseRequest};
 use crate::solving::{solve_tasks, SolveRequest};
-use crate::train::{train, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
+use crate::train::{train_recorded, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use crate::verify::{verify_set, Grading};
 use splinter_core::annotation::Strength;
 use splinter_eval::gate::GateConfig;
@@ -494,8 +494,9 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
         unreachable!("the train stage follows the dataset stage")
     };
     let request = st.practice.request;
-    let candidate = train(
+    let candidate = train_recorded(
         ctx,
+        run,
         &crate::train::TrainRequest {
             datasets: vec![dataset.dataset.to_string()],
             rehearsal: None,
@@ -507,7 +508,6 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
             tuning: request.tuning,
         },
         st.practice.trainer,
-        &run.cancel_token(),
     )?;
     let summary = to_value(&candidate)?;
     st.candidate = Some(candidate.candidate.clone());

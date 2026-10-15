@@ -63,7 +63,7 @@ use super::kit::{self, ClaimKit, Live};
 use super::sealed::SealedProbes;
 use crate::learn::PolicyUsed;
 use crate::rehearsal::DEFAULT_REHEARSAL_SHARE;
-use crate::train::{Trainer, Tuning};
+use crate::train::{record_seed, Trainer, Tuning, TRAIN_SEED};
 
 /// The most passes over the records a full consolidation makes.
 pub const DEFAULT_CONSOLIDATION_EPOCHS: u32 = 6;
@@ -367,7 +367,11 @@ fn consolidate_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) 
     let rehearsal_seed = (st.request.rehearsal_share > 0.0)
         .then(|| run.seed("rehearsal-seed", st.request.rehearsal_seed))
         .transpose()?;
-    let params = st.request.params(rehearsal_seed);
+    let mut params = st.request.params(rehearsal_seed);
+    // A merge trains nothing, so it has no training seed to state.
+    if params.mode == ConsolidationMode::Full {
+        params.tuning = record_seed(run, TRAIN_SEED, params.tuning)?;
+    }
     let done = job::run(
         ctx,
         &job::Job {

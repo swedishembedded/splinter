@@ -65,7 +65,7 @@ pub use full::DEFAULT_FULL_LEARNING_RATE;
 use keep::{keep_candidate, Finished, Outcome};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
-pub use seeds::train_recorded;
+pub use seeds::{record_seed, train_recorded, train_recorded_as, SEED as TRAIN_SEED};
 pub use sizing::{
     auto_records_per_step, auto_steps, eval_every_for, steps_for, DEFAULT_MONITOR_SHARE,
     DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
@@ -674,7 +674,10 @@ pub(crate) fn plan_training(
     Ok(Planned { plan, replay })
 }
 
-/// Trains a candidate on `request`'s datasets with `trainer`.
+/// Trains a candidate on `request`'s datasets with `trainer`. Work done as a
+/// recorded run trains through [`train_recorded`], which also writes the seed
+/// into the run record; this reports a drawn seed to the progress receiver
+/// only.
 pub fn train(
     ctx: &Context,
     request: &TrainRequest,
