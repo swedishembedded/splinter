@@ -702,6 +702,7 @@ fn grpo_command(args: &[String]) -> anyhow::Result<()> {
             temperature: number(args, "--temperature", 0.8)?,
             rank: number(args, "--rank", 16)?,
             gate_one_in: number(args, "--gate-one-in", 5)?,
+            seed: train_seed(args)?,
         },
     )
 }

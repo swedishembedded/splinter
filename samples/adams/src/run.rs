@@ -652,6 +652,23 @@ pub struct Grpo {
     pub rank: u32,
     /// One in this many scenarios is kept for the loop's own gate.
     pub gate_one_in: usize,
+    /// Seeds the adapter's initialisation and the loop's sampling; recorded in
+    /// the summary.
+    pub seed: u64,
+}
+
+/// The loop's options for rows of `max_seq_len` tokens.
+fn improve_options(g: &Grpo, max_seq_len: usize) -> splinter_sdk::model::rl::ImproveOptions {
+    splinter_sdk::model::rl::ImproveOptions {
+        group_size: g.group_size,
+        temperature: g.temperature,
+        max_new: g.max_new,
+        steps: g.steps,
+        lr: g.learning_rate,
+        seed: g.seed,
+        max_seq_len: Some(max_seq_len),
+        ..splinter_sdk::model::rl::ImproveOptions::default()
+    }
 }
 
 /// The scenarios a model may be trained on: every checked result of a principle
@@ -692,9 +709,7 @@ fn grpo_items(resources: &Path, documents: &[Document]) -> anyhow::Result<Vec<cr
 /// Train an adapter by GRPO on the situations, rewarded by the rules, and gate
 /// it against the untouched base on situations it was not trained on.
 pub fn grpo_command(resources: &Path, documents: &[Document], g: &Grpo) -> anyhow::Result<()> {
-    use splinter_sdk::model::rl::{
-        ChatMessage, ChatRequest, ChatTokenizer, Improve, ImproveOptions,
-    };
+    use splinter_sdk::model::rl::{ChatMessage, ChatRequest, ChatTokenizer, Improve};
     let tokenizer = std::sync::Arc::new(ChatTokenizer::from_model_dir(&g.base)?);
     let encoder = std::sync::Arc::clone(&tokenizer);
     let encode: crate::grpo::Encode = std::sync::Arc::new(move |system: &str, user: &str| {
@@ -717,18 +732,9 @@ pub fn grpo_command(resources: &Path, documents: &[Document], g: &Grpo) -> anyho
         .adapter_dir(g.out.join("adapters"))
         .work_dir(g.out.join("work"))
         .lora(g.rank)
-        .seed(0)
+        .seed(g.seed)
         .held_out_seed(crate::grpo::GATE_SEED_BASE);
-    let options = ImproveOptions {
-        group_size: g.group_size,
-        temperature: g.temperature,
-        max_new: g.max_new,
-        steps: g.steps,
-        lr: g.learning_rate,
-        seed: 0,
-        max_seq_len: Some(max_seq_len),
-        ..ImproveOptions::default()
-    };
+    let options = improve_options(g, max_seq_len);
     let started = std::time::Instant::now();
     let outcome = cycle.run(env, crate::grpo::AdamsVerifier::new(decode), &options)?;
     let summary = serde_json::json!({
@@ -737,11 +743,35 @@ pub fn grpo_command(resources: &Path, documents: &[Document], g: &Grpo) -> anyho
         "effect_size": outcome.effect_size,
         "entropy_ratio": outcome.entropy_ratio,
         "adapter": outcome.adapter_path,
-        "steps": g.steps, "group_size": g.group_size, "max_new": g.max_new, "learning_rate": g.learning_rate,
+        "seed": g.seed, "steps": g.steps, "group_size": g.group_size, "max_new": g.max_new, "learning_rate": g.learning_rate,
         "seconds": started.elapsed().as_secs_f64(),
     });
     let text = serde_json::to_string_pretty(&summary)?;
     std::fs::write(g.out.join("summary.json"), &text)?;
     println!("{text}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_loop_trains_with_the_seed_it_was_given() {
+        let g = Grpo {
+            base: PathBuf::new(),
+            checkpoint: PathBuf::new(),
+            out: PathBuf::new(),
+            steps: 2,
+            group_size: 4,
+            max_new: 8,
+            learning_rate: 5e-5,
+            temperature: 0.8,
+            rank: 4,
+            gate_one_in: 5,
+            // seed: any value shows it reaches the loop's options unchanged
+            seed: 77,
+        };
+        assert_eq!(improve_options(&g, 64).seed, 77);
+    }
 }

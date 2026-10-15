@@ -194,16 +194,16 @@ pub fn digest(manifest: &Manifest) -> String {
     blake3::hash(text.as_bytes()).to_hex().to_string()
 }
 
-/// The seed a split is made with when none is given, and the one every freeze
-/// made before seed manifests was made with unless its `split.json` says other.
-pub const DEFAULT_SEED: u64 = 1;
+/// The seed every freeze made before seed manifests was made with, unless its
+/// `split.json` says other. A new freeze is given a drawn one.
+pub const LEGACY_SEED: u64 = 1;
 
 const SEED_MANIFEST: &str = "SEED.json";
 const SPLIT_FILE: &str = "split.json";
 const DIGEST_FILE: &str = "FROZEN.blake3";
 
-/// The seed of the freeze in `dir`: the recorded one, else `given`, else the
-/// default. A freeze whose digest exists but which has no seed manifest was made
+/// The seed of the freeze in `dir`: the recorded one, else `given`, else a
+/// fresh draw (printed, so it can be passed back). A freeze whose digest exists but which has no seed manifest was made
 /// before manifests: its seed is the one its `split.json` states, and the
 /// manifest is written from it when the caller records the seed. A `given`
 /// that differs is refused.
@@ -211,17 +211,22 @@ pub fn freeze_seed(
     dir: &std::path::Path,
     given: Option<u64>,
 ) -> anyhow::Result<splinter_sdk::seed::FrozenSeed> {
-    let legacy = dir.join(DIGEST_FILE).exists().then(|| {
+    let manifest = dir.join(SEED_MANIFEST);
+    let predates = dir.join(DIGEST_FILE).exists();
+    let legacy = predates.then(|| {
         std::fs::read_to_string(dir.join(SPLIT_FILE))
             .ok()
             .and_then(|text| serde_json::from_str::<Manifest>(&text).ok())
-            .map_or(DEFAULT_SEED, |m| m.seed)
+            .map_or(LEGACY_SEED, |m| m.seed)
     });
+    // Only a freeze being made now takes a draw; the others have a seed already.
+    let fresh = if manifest.exists() || predates {
+        given.unwrap_or_default()
+    } else {
+        splinter_sdk::seed::resolve("seed", given)
+    };
     Ok(splinter_sdk::seed::FrozenSeed::decide(
-        &dir.join(SEED_MANIFEST),
-        given,
-        DEFAULT_SEED,
-        legacy,
+        &manifest, given, fresh, legacy,
     )?)
 }
 
@@ -577,17 +582,27 @@ mod tests {
     #[test]
     fn a_second_freeze_without_a_seed_is_accepted_and_another_seed_refused() {
         let dir = tempfile::tempdir().unwrap();
-        // seed: any value but the default shows the recorded one is read back
+        // seed: any value but the legacy one shows the recorded one is read back
         assert_eq!(recorded(dir.path(), Some(9)), 9);
         assert_eq!(recorded(dir.path(), None), 9);
         assert!(freeze_seed(dir.path(), Some(10)).is_err());
     }
 
     #[test]
+    fn a_new_freeze_without_a_seed_records_a_drawn_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let drawn = recorded(dir.path(), None);
+        assert_ne!(drawn, LEGACY_SEED);
+        let manifest = std::fs::read_to_string(dir.path().join("SEED.json")).unwrap();
+        assert!(manifest.contains("recorded"), "{manifest}");
+        assert_eq!(recorded(dir.path(), None), drawn);
+    }
+
+    #[test]
     fn a_freeze_made_before_manifests_gains_one_with_the_seed_it_was_made_with() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("FROZEN.blake3"), "abc\n").unwrap();
-        assert_eq!(recorded(dir.path(), None), DEFAULT_SEED);
+        assert_eq!(recorded(dir.path(), None), LEGACY_SEED);
         let manifest = std::fs::read_to_string(dir.path().join("SEED.json")).unwrap();
         assert!(manifest.contains("legacy"), "{manifest}");
 
@@ -596,7 +611,7 @@ mod tests {
         let held = manifest_with_seed(7);
         std::fs::write(other.path().join("split.json"), held).unwrap();
         assert_eq!(recorded(other.path(), None), 7);
-        assert!(freeze_seed(other.path(), Some(DEFAULT_SEED)).is_err());
+        assert!(freeze_seed(other.path(), Some(LEGACY_SEED)).is_err());
     }
 
     fn recorded(dir: &std::path::Path, given: Option<u64>) -> u64 {
