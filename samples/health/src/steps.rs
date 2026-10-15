@@ -100,8 +100,8 @@ pub struct SplitArgs {
     pub dataset: Option<String>,
     /// How to cut.
     pub plan: SplitPlan,
-    /// The seed.
-    pub seed: u64,
+    /// The seed of every shuffle; drawn and printed when `None`.
+    pub seed: Option<u64>,
 }
 
 /// Cuts the dataset into stored parts and remembers the split.
@@ -110,18 +110,20 @@ pub fn split(run: &Run, args: &SplitArgs) -> Result<SplitRecord> {
         Some(d) => d.clone(),
         None => only_import(run)?,
     };
+    let seed = splinter_sdk::seed::resolve("seed", args.seed);
     let ctx = run.context()?;
     let report = split_timeline(
         &ctx,
         &SplitRequest {
             dataset: Some(dataset.clone()),
             plan: args.plan.clone(),
-            seed: args.seed,
+            seed,
             projection: ProjectionSpec::at_entry(),
         },
     )?;
     let record = SplitRecord {
         dataset,
+        seed: Some(seed),
         report: (&report).into(),
     };
     run.save_split(&record)?;
@@ -160,8 +162,9 @@ pub struct TrainArgs {
     pub label: String,
     /// Optimiser steps at most.
     pub steps: u32,
-    /// The seed.
-    pub seed: u64,
+    /// The seed of the weights, the batches and the masks; drawn and printed
+    /// when `None`.
+    pub seed: Option<u64>,
     /// The additive proportional-hazards baseline instead of the set encoder.
     pub additive: bool,
     /// Tokens per subject.
@@ -215,7 +218,8 @@ pub fn train(run: &Run, args: &TrainArgs) -> Result<serde_json::Value> {
     let split = run.split()?;
     let record = imported(run, &split.dataset)?;
     let codes = outcome_codes(&Ontology::bundled()?, &record)?;
-    let mut config = TimelineTraining::new(codes.clone(), codes, args.seed);
+    let seed = splinter_sdk::seed::resolve("seed", args.seed);
+    let mut config = TimelineTraining::new(codes.clone(), codes, seed);
     config.steps = args.steps;
     config.additive = args.additive;
     config.max_tokens = args.max_tokens;
@@ -428,4 +432,66 @@ pub fn release(run: &Run, evaluation: &str, alias: &str, unrestricted: bool) -> 
             "failed_checks": failed,
         }),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::synth;
+
+    /// A run directory with a synthetic cohort imported.
+    fn imported_run(dir: &Path) -> Run {
+        let run = Run::new(dir);
+        // seed: the cohort only has to exist; the draws under test are the split's
+        let declaration = synth::write(&run.source_dir(), 400, Some(7), "redistributable").unwrap();
+        let record = ImportRecord {
+            dataset: declaration.dataset.clone(),
+            supplies: declaration.supplies.clone(),
+            subgroups: declaration.subgroups.clone(),
+            usage: declaration.usage.clone(),
+        };
+        let path = run.source_dir().join(synth::DECLARATION);
+        import(
+            &run,
+            &declaration.file_path(&path),
+            &record,
+            declaration.terms().unwrap(),
+            "secret",
+        )
+        .unwrap();
+        run
+    }
+
+    fn cut(run: &Run, seed: Option<u64>) -> crate::state::SplitRecord {
+        let args = SplitArgs {
+            dataset: None,
+            plan: SplitPlan::Participants {
+                locked_share: 0.3,
+                folds: 5,
+            },
+            seed,
+        };
+        split(run, &args).unwrap()
+    }
+
+    #[test]
+    fn a_split_without_a_seed_records_the_one_it_drew_and_passing_it_reproduces_the_cut() {
+        let dir = tempfile::tempdir().unwrap();
+        let run = imported_run(dir.path());
+        let drawn = cut(&run, None);
+        let seed = drawn
+            .seed
+            .expect("the split states the seed it was cut with");
+        assert_eq!(run.split().unwrap().seed, Some(seed));
+        assert_ne!(
+            cut(&run, None).seed,
+            drawn.seed,
+            "an unseeded split draws afresh"
+        );
+        assert_eq!(cut(&run, Some(seed)).report.split, drawn.report.split);
+        assert_ne!(
+            cut(&run, Some(seed.wrapping_add(1))).report.split,
+            drawn.report.split
+        );
+    }
 }

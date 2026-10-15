@@ -45,6 +45,10 @@ pub struct Run {
 pub struct SplitRecord {
     /// The imported dataset the split cut.
     pub dataset: String,
+    /// The seed the cut was made with; absent from records made before it was
+    /// kept.
+    #[serde(default)]
+    pub seed: Option<u64>,
     /// The stored parts and the counts.
     pub report: SplitReportRecord,
 }

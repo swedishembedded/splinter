@@ -29,8 +29,6 @@ use crate::source::{digest_of, Declaration, SubgroupDeclaration, FORMAT};
 
 /// Participants when none is asked for.
 pub const DEFAULT_PARTICIPANTS: usize = 12_000;
-/// The seed when none is asked for.
-pub const DEFAULT_SEED: u64 = 7;
 /// The file `synth` writes, and its declaration.
 pub const FILE: &str = "synthetic.jsonl";
 /// The declaration `synth` writes.
@@ -82,8 +80,10 @@ pub fn lines(n: usize, seed: u64) -> Result<Vec<String>> {
 
 /// Writes the cohort and its declaration into `dir` and returns the
 /// declaration. `usage` is the label of the terms the data is declared to
-/// have come under.
-pub fn write(dir: &Path, n: usize, seed: u64, usage: &str) -> Result<Declaration> {
+/// have come under. The cohort is drawn from `seed` (a fresh, printed seed
+/// when `None`), which the declaration states.
+pub fn write(dir: &Path, n: usize, seed: Option<u64>, usage: &str) -> Result<Declaration> {
+    let seed = splinter_sdk::seed::resolve("seed", seed);
     std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     let file = dir.join(FILE);
     let text = lines(n, seed)?.join("\n") + "\n";
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn the_declaration_carries_the_digest_and_the_declared_terms() {
         let dir = tempfile::tempdir().unwrap();
-        let a = write(dir.path(), 200, 3, "research_only").unwrap();
+        let a = write(dir.path(), 200, Some(3), "research_only").unwrap();
         let read = crate::source::read(&dir.path().join(DECLARATION)).unwrap();
         assert_eq!(read, a);
         assert!(read
@@ -164,10 +164,12 @@ mod tests {
             .is_err());
         let again = tempfile::tempdir().unwrap();
         assert_eq!(
-            write(again.path(), 200, 3, "research_only").unwrap().blake3,
+            write(again.path(), 200, Some(3), "research_only")
+                .unwrap()
+                .blake3,
             a.blake3,
             "same seed, same digest"
         );
-        assert!(write(again.path(), 10, 3, "public").is_err());
+        assert!(write(again.path(), 10, Some(3), "public").is_err());
     }
 }

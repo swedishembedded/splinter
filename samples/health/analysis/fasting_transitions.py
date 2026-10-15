@@ -31,7 +31,7 @@ is never read as an assignment effect. A trial without randomisation (the
 single-arm pilot) gets a table and a within-person summary but no arm model.
 
 Usage:
-    python -I fasting_transitions.py --data-dir <health resources> --out-dir <dir>
+    python -I fasting_transitions.py --data-dir <health resources> --out-dir <dir> --seed <n>
     python -I fasting_transitions.py --self-test
 """
 import argparse
@@ -43,7 +43,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-SEED = 20261006
 ALPHAS = np.logspace(-2, 3, 11)
 OUTER_FOLDS = 5
 OUTER_REPEATS = 20
@@ -163,7 +162,7 @@ def fit_predict(make_x, df, y, train, test, seed):
     return ridge_predict(ridge_fit(x_train, y[train], alpha), x_test)
 
 
-def cross_validate(models, df, y, seed=SEED, repeats=OUTER_REPEATS, folds=OUTER_FOLDS):
+def cross_validate(models, df, y, seed, repeats=OUTER_REPEATS, folds=OUTER_FOLDS):
     """Per participant mean squared error over repeats, for every model and
     for the training-mean reference. `models` maps a name to make_x."""
     n = len(y)
@@ -307,7 +306,7 @@ def finish_outcome(result, trial, outcome, rows, y, arm, models, seed):
     return result
 
 
-def analyse_trial(trial, seed=SEED):
+def analyse_trial(trial, seed):
     out = dict(trial=trial.name, randomised=trial.randomised, notes=trial.notes,
                n_participants=int(len(trial.table)), arm_definition=trial.arm_label,
                covariates=trial.covariates, adherence_columns=trial.adherence)
@@ -537,8 +536,9 @@ def render_report(results):
              "Each trial is analysed alone. This evaluates learned signal in small trials. It is "
              "not evidence of a treatment policy and not a claim that fasting changes lifespan.",
              "",
-             f"Repeated {OUTER_FOLDS}-fold cross-validation, {OUTER_REPEATS} repeats, fixed seed "
-             f"{SEED}; ridge alpha by inner {INNER_FOLDS}-fold CV on training rows only; "
+             f"Repeated {OUTER_FOLDS}-fold cross-validation, {OUTER_REPEATS} repeats, seed "
+             f"{results['seed']} (pass `--seed {results['seed']}` to reproduce); ridge alpha by inner "
+             f"{INNER_FOLDS}-fold CV on training rows only; "
              f"participant bootstrap ({BOOTSTRAPS} draws) for the intervals (level 0.95). "
              "R2 is relative to the training-mean predictor. A positive gain means the arm "
              "improved out-of-sample prediction. Intervals are not adjusted for the number of "
@@ -600,7 +600,7 @@ def render_report(results):
     return "\n".join(lines)
 
 
-def run(data_dir, out_dir):
+def run(data_dir, out_dir, seed):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     data = Path(data_dir)
@@ -609,7 +609,7 @@ def run(data_dir, out_dir):
         load_timet(data / "timet" / "TIMET_AnnalsofInternalMed_Table_SourceData_2024.xlsx"),
         load_queen_mary_tre(data / "queen_mary_tre" / "pone.0246186.s002.sav"),
     ]
-    results = dict(seed=SEED, cv=dict(folds=OUTER_FOLDS, repeats=OUTER_REPEATS,
+    results = dict(seed=seed, cv=dict(folds=OUTER_FOLDS, repeats=OUTER_REPEATS,
                                       inner_folds=INNER_FOLDS, alphas=ALPHAS.tolist(),
                                       bootstraps=BOOTSTRAPS, min_complete=MIN_COMPLETE),
                    trials=[])
@@ -617,7 +617,7 @@ def run(data_dir, out_dir):
         trial.table.to_csv(out / f"{trial.name}_table.csv", index=False)
         (out / f"{trial.name}_columns.json").write_text(
             json.dumps(column_dictionary(trial), indent=2) + "\n")
-        results["trials"].append(analyse_trial(trial))
+        results["trials"].append(analyse_trial(trial, seed))
     (out / "results.json").write_text(json.dumps(results, indent=2) + "\n")
     (out / "report.md").write_text(render_report(results))
     return results
@@ -639,20 +639,24 @@ def _synthetic(n, arm_effect, seed):
 
 
 def self_test():
-    effect = analyse_outcome(_synthetic(80, 1.0, 1), Outcome("x", "b_x", "e_x"), SEED)
+    # seed: the checks assert detection, coverage and counts that hold for this stream
+    seed = 20261006
+    effect = analyse_outcome(_synthetic(80, 1.0, 1), Outcome("x", "b_x", "e_x"), seed)
     assert effect["arm_gain"]["mse_reduction_ci95"][0] > 0, "a real arm effect must be detected"
     assert effect["detectable"]["randomised_effect"]
-    null = analyse_outcome(_synthetic(80, 0.0, 2), Outcome("x", "b_x", "e_x"), SEED)
+    null = analyse_outcome(_synthetic(80, 0.0, 2), Outcome("x", "b_x", "e_x"), seed)
     assert null["arm_gain"]["mse_reduction_ci95"][0] <= 0 <= null["arm_gain"]["mse_reduction_ci95"][1], \
         "no arm effect: the interval must cover zero"
     assert effect["permuted_outcome_control"]["r2_baseline"] < 0.1
+    again = analyse_outcome(_synthetic(80, 1.0, 1), Outcome("x", "b_x", "e_x"), seed)
+    assert again == effect, "the seed the results record must reproduce them"
 
-    small = analyse_outcome(_synthetic(MIN_COMPLETE - 1, 1.0, 3), Outcome("x", "b_x", "e_x"), SEED)
+    small = analyse_outcome(_synthetic(MIN_COMPLETE - 1, 1.0, 3), Outcome("x", "b_x", "e_x"), seed)
     assert "skipped" in small, "fewer than the minimum complete cases must be skipped"
 
     gap = _synthetic(60, 1.0, 4)
     gap.table.loc[:9, "e_x"] = np.nan
-    counted = analyse_outcome(gap, Outcome("x", "b_x", "e_x"), SEED)
+    counted = analyse_outcome(gap, Outcome("x", "b_x", "e_x"), seed)
     assert counted["n_complete"] == 50, "missing outcomes are dropped and counted, never imputed"
 
     leaky = _synthetic(60, 1.0, 5)
@@ -675,7 +679,7 @@ def self_test():
     y2[test] += 100.0
     assert np.array_equal(first, fit_predict(make, rows, y2, train, test, 7)), "test outcomes leaked"
 
-    single = analyse_trial(Trial("single", rows, base.roles, False, base.outcomes, ["age_y"]))
+    single = analyse_trial(Trial("single", rows, base.roles, False, base.outcomes, ["age_y"]), seed)
     assert single["arm_models"].startswith("not run"), "no arm model without randomisation"
     print("fasting_transitions self-test: OK")
 
@@ -684,14 +688,19 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--data-dir", help="directory holding bath_if_rct, timet, queen_mary_tre")
     parser.add_argument("--out-dir", help="directory for tables, results.json, report.md")
+    parser.add_argument("--seed", type=int,
+                        help="seed of the cross-validation folds and the bootstrap; required "
+                             "with --data-dir, recorded in results.json and report.md")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
     if args.self_test:
         self_test()
         return 0
-    if not (args.data_dir and args.out_dir):
-        parser.error("--data-dir and --out-dir are required")
-    run(args.data_dir, args.out_dir)
+    if not (args.data_dir and args.out_dir) or args.seed is None:
+        parser.error("--data-dir, --out-dir and --seed are required")
+    if args.seed < 0:
+        parser.error("--seed must not be negative")
+    run(args.data_dir, args.out_dir, args.seed)
     print(f"wrote {args.out_dir}")
     return 0
 

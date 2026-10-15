@@ -19,15 +19,15 @@ trains in the shared device lock if the device is shared.
 cargo build --release -p splinter-health
 H="target/release/splinter-health --dir health-run"
 
-$H synth                                  # source file + declaration: digest, usage terms, outcomes supplied
+$H synth --seed 7                         # source file + declaration: seed, digest, usage terms, outcomes supplied
 $H import                                 # one immutable episode per participant, under opaque keys
-$H split                                  # train / validation (early stopping) / test; leakage-checked, stored
-$H train --as baseline --steps 3 --max-tokens 16   # an untrained baseline: the first champion
-$H train --as v1 --max-tokens 16                    # the candidate, calibrated at 5 and 10 years
+$H split --seed 3                         # train / validation (early stopping) / test; leakage-checked, stored with its seed
+$H train --as baseline --steps 3 --max-tokens 16 --seed 1   # an untrained baseline: the first champion
+$H train --as v1 --max-tokens 16 --seed 1                    # the candidate, calibrated at 5 and 10 years
 $H eval --as e1 --candidate v1 --champion baseline  # scored on the test part, requirements registered first
 $H release --evaluation e1 --unrestricted           # released only if the gate passes (exit 3: rejected)
 
-$H train --as weak --steps 5 --max-tokens 16        # a deliberately bad candidate
+$H train --as weak --steps 5 --max-tokens 16 --seed 1        # a deliberately bad candidate
 $H eval --as e2 --candidate weak --champion release:health
 $H release --evaluation e2 --unrestricted           # rejected and recorded; the alias stays
 
@@ -45,6 +45,12 @@ $H train --as v4 --next-events dx,death:cvd --next-events-weight 0.5   # which e
 $H train --as v5 --forecasts 2 --forecast-weight 0.5               # a head for later measurements
 $H train --as v6 --calibrate-at 5,10 | --no-calibration           # which horizons are calibrated, or none
 ```
+
+A seed that is not given (`synth`, `split`, `train`, `eval`) is drawn and
+printed on stderr, and the command's output states it: the declaration, the
+split record and the candidate's report carry `seed`, and passing it back
+reproduces the draw. The commands above give the seeds the numbers below were
+measured with.
 
 Each command prints a JSON report (and keeps it under `health-run/reports/`).
 Terms: `synth --usage research_only` (or `restricted_DUA`) declares terms that
@@ -102,18 +108,18 @@ candidate that fails any is rejected, recorded, and leaves the alias where it
 was.
 
 With calibration on half of the validation part (840 units at the default
-cohort size), the default candidate (seed 1) passes performance, retention and
+cohort size), the candidate trained with `--seed 1` passes performance, retention and
 serving and is rejected by one calibration band: the all-cause intercept at the
 first horizon, judged on the raw risk because brain calibrates outcome codes,
-not their union, lies just outside its band. Seed 2 is rejected on the
+not their union, lies just outside its band. `--seed 2` is rejected on the
 calibrated risk of both causes at the first horizon. The bands were not changed
 to make a run pass; a larger cohort (`synth --n`) or a lower-variance
 calibration is what would.
 
 The bands are a design choice and the test is finite: with these defaults a
 candidate trained with another seed can miss a band by a little and be
-rejected, which is the gate working. Seeds and data are fixed in the commands
-above so a run is reproducible; the integration tests train twice and require
+rejected, which is the gate working. The commands above state their seeds so a
+run is reproducible; the integration tests train twice and require
 identical data membership, configuration, lineage and metrics.
 
 ## Predict: a patient history
@@ -192,5 +198,5 @@ outcome and counted, never imputed.
 ```bash
 python -I samples/health/analysis/fasting_transitions.py --self-test
 python -I samples/health/analysis/fasting_transitions.py \
-  --data-dir "$HEALTH_DATA" --out-dir "$OUT_DIR"   # tables, results.json, report.md
+  --data-dir "$HEALTH_DATA" --out-dir "$OUT_DIR" --seed 20261006   # tables, results.json, report.md
 ```

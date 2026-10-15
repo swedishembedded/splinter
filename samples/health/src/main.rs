@@ -76,9 +76,10 @@ struct Cut {
     /// How to cut.
     #[arg(long, value_enum, default_value = "participants")]
     plan: Plan,
-    /// The seed of every shuffle.
-    #[arg(long, default_value_t = 3)]
-    seed: u64,
+    /// The seed of every shuffle; drawn and printed when not given. The split
+    /// record states it.
+    #[arg(long)]
+    seed: Option<u64>,
     /// Share of the units held out as the test (participants plan).
     #[arg(long, default_value_t = 0.3)]
     test_share: f64,
@@ -196,9 +197,10 @@ enum Command {
         /// Participants.
         #[arg(long, default_value_t = synth::DEFAULT_PARTICIPANTS)]
         n: usize,
-        /// The generator's seed.
-        #[arg(long, default_value_t = synth::DEFAULT_SEED)]
-        seed: u64,
+        /// The generator's seed; drawn and printed when not given. The
+        /// declaration states it.
+        #[arg(long)]
+        seed: Option<u64>,
         /// The usage label the data is declared to have come under:
         /// redistributable, noncommercial, research_only, restricted_DUA or unknown.
         #[arg(long, default_value = "redistributable")]
@@ -229,9 +231,10 @@ enum Command {
         /// Optimiser steps at most (early stopping usually ends sooner).
         #[arg(long, default_value_t = 1500)]
         steps: u32,
-        /// The seed of the weights, the batches and the masks.
-        #[arg(long, default_value_t = 1)]
-        seed: u64,
+        /// The seed of the weights, the batches and the masks; drawn and
+        /// printed when not given. The candidate states it.
+        #[arg(long)]
+        seed: Option<u64>,
         /// The additive proportional-hazards baseline instead of the set encoder.
         #[arg(long)]
         additive: bool,

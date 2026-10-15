@@ -1,5 +1,1 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-samples/health/analysis/fasting_transitions.py	SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/health/src/main.rs	Command::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/health/src/main.rs	Cut::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/health/src/synth.rs	DEFAULT_SEED	todo: a default that is drawn, printed and recorded once its owner is converted

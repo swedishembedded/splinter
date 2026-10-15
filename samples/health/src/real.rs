@@ -159,7 +159,7 @@ mod tests {
                     locked_share: 0.3,
                     folds: 5,
                 },
-                seed: 3,
+                seed: Some(3), // seed: the refusal comes before anything is drawn
             },
         };
         let why = real(&Run::new(dir.path().join("run")), &args)
