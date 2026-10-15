@@ -16,9 +16,13 @@
 //! exchange is a [`trace`] of the words, the calls with their arguments and
 //! the answers they got, and the tokens and time spent.
 //!
+//! A model that runs here samples, and each exchange is decoded from its own
+//! seed ([`decoding`]), which its trace line records with the model's name.
+//!
 //! The same code serves a chat at the terminal and a batch of questions put
 //! from a file, so what is traced in one is what is traced in the other.
 
+pub mod decoding;
 pub mod session;
 pub mod tools;
 pub mod trace;

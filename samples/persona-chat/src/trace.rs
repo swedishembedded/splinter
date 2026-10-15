@@ -14,6 +14,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::store::jsonl::{self, JsonlError, Log};
 
+use crate::decoding::Decoding;
 use crate::session::Exchange;
 
 /// One line of a trace file.
@@ -21,6 +22,13 @@ use crate::session::Exchange;
 pub struct Row {
     /// What the caller calls this exchange.
     pub id: String,
+    /// The model that answered, as it was named on the command line.
+    #[serde(default)]
+    pub model: String,
+    /// How it decoded; none for a model reached over a network, which
+    /// samples as its server does.
+    #[serde(default)]
+    pub decoding: Option<Decoding>,
     /// The exchange.
     pub exchange: Exchange,
 }
@@ -33,13 +41,22 @@ pub fn open(path: &Path) -> Result<Log, JsonlError> {
     Log::open(path)
 }
 
-/// Appends `exchange` as `id`.
+/// Appends `exchange` as `id`, answered by `model` decoding as `decoding`
+/// says.
 ///
 /// # Errors
 /// The line cannot be written.
-pub fn record(log: &Log, id: &str, exchange: &Exchange) -> Result<(), JsonlError> {
+pub fn record(
+    log: &Log,
+    id: &str,
+    model: &str,
+    decoding: Option<&Decoding>,
+    exchange: &Exchange,
+) -> Result<(), JsonlError> {
     log.append(&Row {
         id: id.to_string(),
+        model: model.to_string(),
+        decoding: decoding.copied(),
         exchange: exchange.clone(),
     })
 }

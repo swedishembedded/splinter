@@ -20,6 +20,10 @@
 //! `decide(choice, motivation)` over the options given by `--options`. A tool
 //! in the file may say `"final": true`: a correct call to it ends the
 //! exchange, as `decide` does.
+//!
+//! A model that runs here samples. `--seed` is the session's seed (drawn and
+//! printed when not given); each exchange is decoded from a seed derived from
+//! it, and its trace line names the model, the temperature and that seed.
 
 use std::io::{BufRead as _, Write as _};
 use std::path::PathBuf;
@@ -28,11 +32,13 @@ use std::sync::Arc;
 
 use anyhow::{bail, Context as _};
 use clap::{Parser, Subcommand};
+use persona_chat::decoding::Decoding;
 use persona_chat::session::{Session, MAX_ROUNDS, MAX_TOKENS};
 use persona_chat::tools::{decide, read_tools, ToolDef};
 use persona_chat::trace;
+use splinter_sdk::agent::sven::model::ModelProvider;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
-use splinter_sdk::Splinter;
+use splinter_sdk::{Context, Splinter};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -67,6 +73,11 @@ struct Common {
     /// Where to append the trace, one exchange to a line.
     #[arg(long)]
     trace: Option<PathBuf>,
+    /// The seed of the session's sampling; each exchange is decoded from its
+    /// own seed derived from it. Drawn and printed when not given; a model
+    /// reached over a network samples as its server does.
+    #[arg(long)]
+    seed: Option<u64>,
     /// Permit a model reached over the network.
     #[arg(long)]
     allow_remote: bool,
@@ -99,7 +110,58 @@ fn model_ref(text: &str) -> anyhow::Result<ModelRef> {
     ModelRef::from_str(&full).with_context(|| format!("model {text:?}"))
 }
 
-fn session(common: &Common) -> anyhow::Result<Session> {
+/// A session and where the model of each of its exchanges comes from.
+struct Chat {
+    session: Session,
+    model: String,
+    source: Source,
+    exchanges: u64,
+}
+
+enum Source {
+    /// A model reached over a network: the same for every exchange.
+    Remote,
+    /// A model that runs here, made again for each exchange with its seed.
+    Local(Box<Local>),
+}
+
+struct Local {
+    _runtime: Splinter,
+    ctx: Context,
+    reference: ModelRef,
+    seed: u64,
+}
+
+impl Chat {
+    /// Readies the session for its next exchange and returns how the model
+    /// decodes it; none for a model reached over a network.
+    fn next_exchange(&mut self) -> anyhow::Result<Option<Decoding>> {
+        let Source::Local(local) = &self.source else {
+            return Ok(None);
+        };
+        self.exchanges += 1;
+        let decoding = Decoding::for_exchange(local.seed, self.exchanges);
+        let model = local
+            .ctx
+            .resampled(&local.reference, decoding.sampling())?
+            .with_context(|| format!("{} cannot be sampled", local.reference))?;
+        self.session.provider(model.provider);
+        Ok(Some(decoding))
+    }
+
+    fn record(
+        &self,
+        log: &splinter_sdk::store::jsonl::Log,
+        id: &str,
+        decoding: Option<&Decoding>,
+        exchange: &persona_chat::session::Exchange,
+    ) -> anyhow::Result<()> {
+        trace::record(log, id, &self.model, decoding, exchange)?;
+        Ok(())
+    }
+}
+
+fn session(common: &Common) -> anyhow::Result<Chat> {
     let reference = model_ref(&common.model)?;
     let splinter = Splinter::from_env().context("starting the runtime")?;
     let ctx = splinter.context();
@@ -116,11 +178,25 @@ fn session(common: &Common) -> anyhow::Result<Session> {
         }
         None => vec![decide(&common.options)],
     };
-    Ok(
-        Session::new(Arc::clone(&model.provider), common.system.clone(), tools)
+    let provider: Arc<dyn ModelProvider> = Arc::clone(&model.provider);
+    let source = if reference.is_remote() {
+        Source::Remote
+    } else {
+        Source::Local(Box::new(Local {
+            _runtime: splinter,
+            ctx,
+            reference,
+            seed: splinter_sdk::seed::resolve("seed", common.seed),
+        }))
+    };
+    Ok(Chat {
+        session: Session::new(provider, common.system.clone(), tools)
             .rounds(common.rounds)
             .max_tokens(common.max_tokens),
-    )
+        model: common.model.clone(),
+        source,
+        exchanges: 0,
+    })
 }
 
 fn main() -> anyhow::Result<()> {
@@ -139,10 +215,11 @@ fn main() -> anyhow::Result<()> {
                     return Ok(());
                 }
                 n += 1;
-                let exchange = runtime.block_on(chat.say(line.trim()))?;
+                let decoding = chat.next_exchange()?;
+                let exchange = runtime.block_on(chat.session.say(line.trim()))?;
                 print!("{}", trace::render(&exchange));
                 if let Some(log) = &log {
-                    trace::record(log, &format!("chat-{n}"), &exchange)?;
+                    chat.record(log, &format!("chat-{n}"), decoding.as_ref(), &exchange)?;
                 }
             }
         }
@@ -162,11 +239,12 @@ fn main() -> anyhow::Result<()> {
                     _ => (format!("q{}", n + 1), line.trim().to_string()),
                 };
                 // Each question is put to the model on its own.
-                chat.forget();
-                let exchange = runtime.block_on(chat.say(&prompt))?;
+                chat.session.forget();
+                let decoding = chat.next_exchange()?;
+                let exchange = runtime.block_on(chat.session.say(&prompt))?;
                 println!("[{id}]\n{}", trace::render(&exchange));
                 if let Some(log) = &log {
-                    trace::record(log, &id, &exchange)?;
+                    chat.record(log, &id, decoding.as_ref(), &exchange)?;
                 }
             }
             Ok(())

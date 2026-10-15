@@ -18,6 +18,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use persona_chat::decoding::Decoding;
 use persona_chat::session::Session;
 use persona_chat::tools::{decide, read_tools};
 use persona_chat::trace;
@@ -241,7 +242,7 @@ async fn a_conversation_keeps_what_was_said_and_a_trace_records_each_exchange() 
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("trace.jsonl");
     let log = trace::open(&path).unwrap();
-    trace::record(&log, "q2", &exchange).unwrap();
+    trace::record(&log, "q2", "script-1", None, &exchange).unwrap();
     let rows = trace::read(&path).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, "q2");
@@ -299,4 +300,29 @@ fn a_tool_is_final_when_its_file_says_so_and_decide_always_is() {
     .unwrap();
     assert!(!tools[0].final_call && tools[1].final_call);
     assert!(decide(&["a".into()]).final_call);
+}
+
+#[tokio::test]
+async fn every_trace_line_names_the_model_and_the_seed_its_exchange_was_decoded_with() {
+    let script = Script::new(vec![speaks("Left."), speaks("Right.")]);
+    let mut chat = session(&script);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("trace.jsonl");
+    let log = trace::open(&path).unwrap();
+    // seed: any value shows the session seed reaches every line, and differently
+    let session_seed = 40;
+    for (n, id) in [(1, "a"), (2, "b")] {
+        let decoding = Decoding::for_exchange(session_seed, n);
+        let exchange = chat.say("Left or right?").await.unwrap();
+        trace::record(&log, id, "Qwen/Qwen3-8B+maren", Some(&decoding), &exchange).unwrap();
+    }
+    let rows = trace::read(&path).unwrap();
+    assert!(rows.iter().all(|r| r.model == "Qwen/Qwen3-8B+maren"));
+    let seeds: Vec<u64> = rows.iter().map(|r| r.decoding.unwrap().seed).collect();
+    assert_eq!(seeds[0], Decoding::for_exchange(session_seed, 1).seed);
+    assert_ne!(seeds[0], seeds[1], "an exchange draws its own stream");
+    assert_eq!(
+        rows[0].decoding.unwrap().temperature,
+        Decoding::for_exchange(session_seed, 1).temperature
+    );
 }

@@ -110,6 +110,11 @@ impl Session {
         self
     }
 
+    /// Has the next things said go to `provider`; what was said so far is kept.
+    pub fn provider(&mut self, provider: Arc<dyn ModelProvider>) {
+        self.provider = provider;
+    }
+
     /// Starts a conversation again: what was said is forgotten.
     pub fn forget(&mut self) {
         self.history.clear();

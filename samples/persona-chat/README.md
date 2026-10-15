@@ -41,7 +41,8 @@ turn, up to `--rounds`.
 
 ## Trace
 
-Each exchange is one line of the trace file (`id`, the prompt, and per round
+Each exchange is one line of the trace file (`id`, the `model`, the `decoding`
+(temperature, top-k and the seed of the exchange's draws), the prompt, and per round
 the words, the calls with their arguments, whether each was valid and what it
 was answered, tokens and milliseconds), and is printed as
 
@@ -50,6 +51,14 @@ was answered, tokens and milliseconds), and is printed as
   round 1
     called decide({"choice":"act_alone","motivation":"..."}) -> Recorded.
 ```
+
+A model that runs here samples, so no two runs are alike unless they share a
+seed. `--seed` is the session's seed; without it one is drawn and printed on
+stderr. Each exchange is decoded from a seed derived from the session seed and
+its position, and its trace line records that seed: passing the session seed
+back repeats a session, and the exchange seed in a line is the decoding to
+replay for that exchange. A model reached over a network (`--allow-remote`)
+samples as its server does, and its lines carry no `decoding`.
 
 A batch file is JSON lines `{"id": "...", "prompt": "..."}` or plain lines;
 each question is put to the model on its own.
