@@ -128,6 +128,8 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 
 ## PP-05 The seed mechanism
 
+- **Status.** Done. `Seed` in `splinter-core`, `splinter_model::seed::draw`, `Recorder::seed` and the run record's `seeds`, `splinter_sdk::seed::{resolve, frozen}`; brain's matching mechanism is the `brain-seed` crate. Both repositories gate fixed seeds with `seed-literals` (production and test mode).
+
 - **Problem.** No shared way exists to draw, print and record a seed; each
   site invents its own default (inventory under PP-06 to PP-09).
 - **Evidence.** `crates/core/src/rng.rs` holds the generator only.
@@ -147,6 +149,8 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 - **Size.** M.
 
 ## PP-06 Training seeds always explicit and recorded
+
+- **Status.** Done in splinter (every training path draws, records on the run and the candidate) and in brain (builders draw, read the seed back on resume, record it in `training.json`; the full fine-tune now writes a record). Brain's LoRA video and image fine-tunes now seed their adapter's initial weights with the run seed.
 
 - **Problem.** Every training path leaves the seed to brain's fixed default
   1337 and records nothing (PF-04).
@@ -215,6 +219,8 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 
 ## PP-08 Pipeline seeds of `learn`, `exam` and `practice`
 
+- **Status.** Done. Every site in the table takes its seed from the run and keeps it in the artifact it decides; the release gate's intervals and the report intervals do too.
+
 - **Problem.** The persona `learn` run reserves its exam, samples its replay
   and rehearsal and bootstraps its intervals from literal seeds.
 - **Evidence.**
@@ -246,6 +252,8 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 - **Size.** M.
 
 ## PP-09 Seeds of the other persona samples, and the rest
+
+- **Status.** Done for every sample and script in the repository (the persona samples, the lifecourse and health programs, the Python tools and paper scripts). Frozen Jefferson and Adams exams did not move.
 
 - **Problem.** The persona samples fix their own seeds by default; the
   remaining samples do too and belong to their own programs.
