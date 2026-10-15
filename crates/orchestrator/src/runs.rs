@@ -71,10 +71,37 @@ impl Recorder<'_> {
         error: Option<String>,
     ) -> Result<(), OrchestratorError> {
         let summary = to_json(stage, summary)?;
+        self.record_sampled()?;
         let duration_ms = duration.map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
         self.log
             .stage(stage, summary.clone(), duration_ms, error, self.ctx.clock())?;
         self.ctx.report_stage(stage, &summary);
+        Ok(())
+    }
+
+    /// Takes the seeds the local models drew for sampled requests since the
+    /// last call into the run record, and reports them to the progress
+    /// receiver as the stage `sampled`.
+    ///
+    /// Run at every stage boundary and when the work ends, so a seed lands in
+    /// the run that made its request. The seeds of a request are one event
+    /// per call, not one per request, and the record names only a count, the
+    /// first few and a digest ([`splinter_store::runs::SampledSeeds`]): the
+    /// whole list stays in the run's events
+    /// ([`splinter_store::runs::read_sampled_seeds`]) however long the run.
+    fn record_sampled(&mut self) -> Result<(), OrchestratorError> {
+        let drawn = self.ctx.take_drawn_seeds();
+        if drawn.is_empty() {
+            return Ok(());
+        }
+        self.log.sampled(&drawn, self.ctx.clock())?;
+        let record = serde_json::to_value(self.log.sampled_so_far()).map_err(|source| {
+            OrchestratorError::Json {
+                what: "sampled seeds".into(),
+                source,
+            }
+        })?;
+        self.ctx.report_stage("sampled", &record);
         Ok(())
     }
 
@@ -135,7 +162,15 @@ pub fn record<R: Serialize>(
         log,
         cancel: cancel.clone(),
     };
+    // Seeds drawn before this run began belong to no run of this process's
+    // record; they are not this run's.
+    drop(ctx.take_drawn_seeds());
     let result = work(&mut recorder);
+    // Requests made after the last stage ended, or by work that records none.
+    let result = match recorder.record_sampled() {
+        Ok(()) => result,
+        Err(e) => result.and(Err(e)),
+    };
     done.store(true, Ordering::Relaxed);
     // The watcher only polls and sets a flag; a panic in it leaves nothing
     // to clean up.

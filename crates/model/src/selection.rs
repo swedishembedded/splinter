@@ -14,6 +14,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use splinter_core::rng::Seed;
 use sven_sdk::model::ModelProvider;
 
 use crate::error::PolicyError;
@@ -281,6 +282,16 @@ impl LoadedModel {
         self.local
             .as_ref()
             .is_none_or(|local| local.stop_generation(QUIESCE_GRACE))
+    }
+
+    /// Every seed this model drew for a sampled request that named none since
+    /// the last call, in request order ([`LocalQwen::take_drawn_seeds`]);
+    /// empty for a model reached over an API, whose server samples.
+    #[must_use]
+    pub fn take_drawn_seeds(&self) -> Vec<Seed> {
+        self.local
+            .as_ref()
+            .map_or_else(Vec::new, |local| local.take_drawn_seeds())
     }
 
     /// A provider for the same loaded weights sampling as `sampling` says;

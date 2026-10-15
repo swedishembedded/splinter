@@ -61,6 +61,7 @@ use crate::error::OrchestratorError;
 use crate::releases::ReleaseStore;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 
 /// How long a local model may stay silent between two stream chunks: as
 /// long as its run lasts. sven's idle limit guards a remote wire going
@@ -379,6 +380,19 @@ impl Runtime {
             .get(&(reference.clone(), adapter))
             .and_then(|held| held.loaded.resampled(sampling));
         Ok(provider.map(|provider| Model { provider, ..model }))
+    }
+
+    /// Every seed the loaded local models drew for sampled requests since the
+    /// last call, in request order within each model ([`LoadedModel::take_drawn_seeds`]).
+    /// Models are taken in the order of their references, so the list is a
+    /// function of the requests made.
+    fn take_drawn_seeds(&self) -> Vec<Seed> {
+        let models = self.lock_models();
+        let mut keys: Vec<&ModelKey> = models.keys().collect();
+        keys.sort_by_cached_key(|(reference, adapter)| (reference.to_string(), adapter.clone()));
+        keys.into_iter()
+            .flat_map(|key| models[key].loaded.take_drawn_seeds())
+            .collect()
     }
 
     /// Drops every model loaded for `reference`, whatever adapter it was on:
@@ -704,6 +718,14 @@ impl Context {
             .resampled(reference, adapter, &selection, sampling)?
             .map(|model| self.with_release_prompt(reference, model))
             .transpose()
+    }
+
+    /// Every seed the local models loaded in this process drew for sampled
+    /// requests since the last call, oldest first: what a recorded run takes
+    /// into its record, so that the sampled decoding can be replayed. A model
+    /// handed in, and one reached over an API, draw none.
+    pub fn take_drawn_seeds(&self) -> Vec<Seed> {
+        self.runtime.take_drawn_seeds()
     }
 
     /// Reports a finished stage to the progress receiver, if any.

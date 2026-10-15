@@ -53,7 +53,8 @@ fn sampling(seed: Option<u64>) -> Sampling {
 
 /// The model `name` names, sampling at the writer's temperature when it runs
 /// here and at its server's own when it does not. A model that runs here
-/// draws a fresh seed for every request.
+/// draws a fresh seed for every sampled request, which the recorded run keeps
+/// (`runs show` lists the first and counts the rest).
 ///
 /// # Errors
 /// `name` is not a model reference, or the model cannot be had.

@@ -707,8 +707,13 @@ decide: the reservation, the frozen exam, the rehearsal and task reports, the
 dataset manifest and the exam report. The release gate's bootstrap intervals
 (the tasks' own evidence, the anchor's drop) are resampled from a seed of their
 own, recorded as `gate-interval` and kept in the gate report and so in the
-release manifest; `release --interval-seed N` passes it again. Passing the seed
-again reproduces the choice. Two runs reserve different families unless they share a seed, so
+release manifest; `release --interval-seed N` passes it again. A local model
+that samples draws a seed for each request that names none; the run that made
+the requests records them in order (`runs show` lists the count, the first
+sixteen and a digest of all of them, and the whole list is kept in the run's
+events), and a seed passed back as the request's replays its decoding. Greedy
+decoding draws nothing. Passing the seed again reproduces the choice. Two runs
+reserve different families unless they share a seed, so
 results are comparable across runs only when each names a recorded one.
 
 A `learn` report opens with an `outcome` block of five separate facts: whether the

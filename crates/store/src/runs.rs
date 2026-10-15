@@ -27,6 +27,7 @@ use crate::error::StoreError;
 use crate::new_id_with_prefix;
 use crate::workspace::Workspace;
 use splinter_core::clock::Clock;
+use splinter_core::digest::Digest;
 use splinter_core::rng::Seed;
 
 const RUN_EVENT: &str = "run_event";
@@ -79,6 +80,44 @@ pub struct RunStage {
     pub error: Option<String>,
 }
 
+/// How many of the sampling seeds a run record names itself; the rest are
+/// counted and covered by the digest.
+pub const SAMPLED_FIRST: usize = 16;
+
+/// The seeds a local model drew for the sampled requests of a run, as the run
+/// record shows them: bounded, however many requests the run made. The
+/// complete list, in request order, is kept in the run's events
+/// ([`read_sampled_seeds`]); `digest` is over all of it, so a replay can
+/// check it was given the whole list.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SampledSeeds {
+    /// How many requests drew a seed.
+    pub count: u64,
+    /// The seeds of the first [`SAMPLED_FIRST`] of them.
+    pub first: Vec<u64>,
+    /// The digest of every seed, in order, one per line.
+    pub digest: Option<Digest>,
+}
+
+impl SampledSeeds {
+    /// Whether the run drew no sampling seed.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// The record of `seeds`, in request order.
+    #[must_use]
+    pub fn of(seeds: &[u64]) -> Self {
+        let lines: String = seeds.iter().map(|seed| format!("{seed}\n")).collect();
+        Self {
+            count: seeds.len() as u64,
+            first: seeds.iter().take(SAMPLED_FIRST).copied().collect(),
+            digest: (!seeds.is_empty()).then(|| Digest::sha256_of(lines.as_bytes())),
+        }
+    }
+}
+
 /// A run's record.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Run {
@@ -104,6 +143,11 @@ pub struct Run {
     /// for a run recorded before seeds were, or one that drew nothing.
     #[serde(default)]
     pub seeds: BTreeMap<String, u64>,
+    /// The seeds a local model drew for the run's sampled requests; empty for
+    /// a run that sampled none (greedy decoding draws nothing) and for one
+    /// recorded before they were kept.
+    #[serde(default, skip_serializing_if = "SampledSeeds::is_empty")]
+    pub sampled: SampledSeeds,
 }
 
 /// The writing side of one run. See the module documentation.
@@ -112,6 +156,9 @@ pub struct RunLog {
     workspace: Workspace,
     run: Run,
     events: u64,
+    /// Every sampling seed recorded so far, in order: the run record shows
+    /// a bounded view of them.
+    sampled: Vec<u64>,
 }
 
 fn event(run: &str, seq: u64, kind: &str, at: &str, body: serde_json::Value) -> Entity {
@@ -158,8 +205,10 @@ impl RunLog {
                 outputs: serde_json::Value::Null,
                 error: None,
                 seeds: BTreeMap::new(),
+                sampled: SampledSeeds::default(),
             },
             events: 1,
+            sampled: Vec::new(),
         };
         log.append(&event(
             &id,
@@ -237,6 +286,34 @@ impl RunLog {
         self.run.seeds.insert(name.to_string(), seed.value());
         self.run.updated_at = now;
         Ok(())
+    }
+
+    /// Records the seeds a local model drew for the sampled requests made
+    /// since the last call, in request order, as one event: a request is not
+    /// an event of its own, so a run of thousands costs one write per call.
+    pub fn sampled(&mut self, seeds: &[Seed], clock: &dyn Clock) -> Result<(), StoreError> {
+        if seeds.is_empty() {
+            return Ok(());
+        }
+        let now = clock.utc_now();
+        self.append(&event(
+            &self.run.id,
+            self.events,
+            "sampled",
+            &now,
+            json!({ "seeds": seeds }),
+        ))?;
+        self.events += 1;
+        self.sampled.extend(seeds.iter().map(|seed| seed.value()));
+        self.run.sampled = SampledSeeds::of(&self.sampled);
+        self.run.updated_at = now;
+        Ok(())
+    }
+
+    /// The bounded view of the sampling seeds recorded so far.
+    #[must_use]
+    pub fn sampled_so_far(&self) -> &SampledSeeds {
+        &self.run.sampled
     }
 
     /// Records how the run ended - `status`, what it produced, and why it
@@ -343,7 +420,10 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
         outputs: serde_json::Value::Null,
         error: None,
         seeds: BTreeMap::new(),
+        sampled: SampledSeeds::default(),
     };
+    let sampled = sampled_in(events);
+    run.sampled = SampledSeeds::of(&sampled);
     for e in events {
         match e["kind"].as_str() {
             Some("stage") => {
@@ -375,6 +455,27 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
         }
     }
     Some(run)
+}
+
+/// Every sampling seed the `events` of a run record, in request order.
+fn sampled_in(events: &[serde_json::Value]) -> Vec<u64> {
+    events
+        .iter()
+        .filter(|e| e["kind"] == "sampled")
+        .filter_map(|e| e["body"]["seeds"].as_array())
+        .flatten()
+        .filter_map(serde_json::Value::as_u64)
+        .collect()
+}
+
+/// Every seed a local model drew for the sampled requests of `run_id`, in
+/// request order: the whole list [`Run::sampled`] summarises. Passing one
+/// back as the request's seed replays that request's decoding.
+pub fn read_sampled_seeds(workspace: &Workspace, run_id: &str) -> Result<Vec<Seed>, StoreError> {
+    events_by_run(workspace)?
+        .get(run_id)
+        .map(|events| sampled_in(events).into_iter().map(Seed::new).collect())
+        .ok_or_else(|| StoreError::UnknownRun(run_id.to_string()))
 }
 
 /// The record of `run_id`, as of every event any process has committed.

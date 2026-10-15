@@ -194,8 +194,9 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 - **Evidence.** `samples/synthetic-author/src/main.rs:47-50` and the same
   `seed: u64` on `plan`, `recheck`, `dataset`, `exam`, `show`, `items`,
   `audit`, `cross`, `corpus`; local writer sampling `:289-293` inherits
-  `seed: None` from `crates/model/src/local/mod.rs:61` ("`None` leaves brain to
-  draw a fresh seed per request", `crates/model/src/local/request.rs:37-41`);
+  `seed: None` from `crates/model/src/local/mod.rs:61`, so the provider draws a
+  seed for each sampled request and a recorded run keeps them
+  (`crates/model/src/local/request.rs:37-43`, `Run.sampled`);
   a remote writer runs at its provider's defaults with no seed.
 - **Acceptance.** `corpus` without `--seed` draws an author seed, prints it
   and writes `manifest.json` (author seed, writer and reader references,
