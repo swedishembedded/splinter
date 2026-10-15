@@ -26,7 +26,7 @@ forgotten or rolled back. sven records and retrieves; brain computes.
 - Apparatus: `samples/generations` and `samples/absorb-story` with criteria and predictions
   declared before any run. This review found no recorded result of either; run them before
   claiming anything about consolidation.
-- Not present: Forgetting as defined by Chaudhry et al., true Forward Transfer against the
+- Not present: Forgetting as the standard continual-learning literature defines it, true Forward Transfer against the
   base, learning-gain curves, persistence-after-restart, poisoned-experience and rollback
   byte-equality tests, an outcome-linked memory policy.
 
