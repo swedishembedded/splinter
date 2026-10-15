@@ -24,7 +24,7 @@ use splinter_sdk::model::speech::{
 };
 use splinter_sdk::model::PolicyError;
 use splinter_sdk::vocabulary::digest::Digest;
-use splinter_sdk::vocabulary::speech::{spoken_disclosure, Portrayal, SpeakerProfile};
+use splinter_sdk::vocabulary::speech::spoken_disclosure;
 
 use splinter_sdk::agent::teach::Teachable;
 use splinter_sdk::vocabulary::speech_lesson::parse_retraction;
@@ -41,9 +41,11 @@ pub struct AgentArgs {
     /// The synthesis model, in brain's model store.
     #[arg(long, default_value = DEFAULT_SYNTHESIZER)]
     tts: String,
-    /// The seed the persona's synthetic voice is rendered from.
-    #[arg(long, default_value_t = 1)]
-    seed: u64,
+    /// The seed the persona's synthetic voice is rendered from; recorded in
+    /// `voice.json` in `--out-dir` and read back. Drawn and printed when
+    /// absent on a first run.
+    #[arg(long)]
+    seed: Option<u64>,
     /// A directory of WAV recordings of the user, taken in file-name order.
     #[arg(long)]
     recordings: PathBuf,
@@ -83,8 +85,8 @@ pub struct AgentArgs {
 
 /// Take every recording as a turn of one conversation with the agent.
 pub fn run(args: &AgentArgs) -> Result<()> {
-    let speaker = SpeakerProfile::new(args.seed, Portrayal::synthetic_theatrical());
     std::fs::create_dir_all(&args.out_dir)?;
+    let speaker = crate::voice::speaker(&crate::voice::manifest_in(&args.out_dir), args.seed)?;
     BrainSynthesizer::load(&args.tts)?
         .speak(&spoken_disclosure(&args.persona, &speaker), &speaker)?
         .save(args.out_dir.join("disclosure.wav"))

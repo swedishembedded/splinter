@@ -19,7 +19,17 @@ use splinter_sdk::model::speech::{
     padded_to, AudioFeatures, BrainRecognizer, Clip, Ingress, IngressExample, IngressOptions,
     StepSettings,
 };
+use splinter_sdk::vocabulary::rng::SplitMix64;
 use splinter_sdk::vocabulary::spoken::{Spoken, SpokenSet};
+
+/// Separates the stream the examples are ordered by from the projector's own,
+/// which `Plan::seed` also seeds.
+const ORDER_SALT: u64 = 0x5EED;
+
+/// A value in `[0, 1)` from the generator.
+fn unit(rng: &mut SplitMix64) -> f32 {
+    (rng.next_u64() >> 40) as f32 / (1u64 << 24) as f32
+}
 
 /// The instruction that asks for a transcript instead of an answer.
 pub const TRANSCRIBE: &str = "Write down exactly what was said.";
@@ -83,7 +93,8 @@ pub struct Plan {
     pub test_voices: BTreeSet<u64>,
     /// Share of recordings that also train a transcription example.
     pub transcribe_share: f32,
-    /// Seed of the projector and of the order examples are drawn in.
+    /// Seed of the projector and of the order examples are drawn in; the
+    /// caller has resolved it (drawn when the operator gave none).
     pub seed: u64,
     /// Longest example in tokens.
     pub block: u32,
@@ -94,6 +105,8 @@ pub struct Plan {
 /// What a run measured.
 #[derive(Debug, Serialize)]
 pub struct Report {
+    /// Seed of the projector and of the order examples were drawn in.
+    pub seed: u64,
     /// Recordings trained on.
     pub train_recordings: usize,
     /// Recordings tested on.
@@ -192,17 +205,11 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
             .with_context(|| format!("no answer for question {:?}", item.represents))
     };
     let mut train_ex: Vec<IngressExample> = Vec::new();
-    let mut rng = plan.seed ^ 0x5EED;
-    let mut draw = move || {
-        rng = rng
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        (rng >> 33) as f32 / (1u64 << 31) as f32
-    };
+    let mut rng = SplitMix64::new(plan.seed ^ ORDER_SALT);
     for (item, f) in &train_feats {
         let a = answer_of(item)?;
         train_ex.push(ingress.example(f, &a.system, "", &a.answer)?);
-        if draw() < plan.transcribe_share {
+        if unit(&mut rng) < plan.transcribe_share {
             train_ex.push(ingress.example(f, &a.system, TRANSCRIBE, &item.text)?);
         }
     }
@@ -236,9 +243,7 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
         while batch.len() < plan.batch {
             if queue.is_empty() {
                 queue = (0..train_ex.len()).collect();
-                for i in (1..queue.len()).rev() {
-                    queue.swap(i, (draw() * (i as f32 + 1.0)) as usize % (i + 1));
-                }
+                rng.shuffle(&mut queue);
             }
             match queue.pop() {
                 Some(i) => batch.push(&train_ex[i]),
@@ -268,6 +273,7 @@ pub fn train(plan: &Plan, answers: &BTreeMap<String, Answer>, out: &Path) -> Res
     ingress.save_projector(&out.join("projector.safetensors"))?;
     let last = &recent[recent.len().saturating_sub(10)..];
     let report = Report {
+        seed: plan.seed,
         train_recordings: train_feats.len(),
         test_recordings: test_feats.len(),
         dropped: split.dropped,
@@ -300,7 +306,7 @@ mod tests {
                 text: "x".into(),
                 file: "x.wav".into(),
                 audio: Digest::of(b"x"),
-                seed: 1,
+                seed: 1, // seed: the voice only has to exist; the grouping is under test
                 word_error_rate: 0.0,
             })
             .collect();

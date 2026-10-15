@@ -37,7 +37,7 @@ use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 use crate::batch::{emit, read_clip};
 use crate::read_sentences;
 
-/// The sentence whose rendering (seed 1) fixes the voice.
+/// The sentence whose rendering fixes the voice.
 const REFERENCE_SENTENCE: &str = "The people must be taught to value their liberty.";
 
 /// The decode window of a fixed-window recogniser: a take is a sentence, and a
@@ -68,9 +68,14 @@ pub struct TakesArgs {
     #[arg(long, default_value_t = 4)]
     per_sentence: usize,
     /// The seed the first take of a sentence is drawn with; take k of sentence i
-    /// uses first_seed + 1000 * i + k.
-    #[arg(long, default_value_t = 10_000)]
-    first_seed: u64,
+    /// uses first_seed + 1000 * i + k. Drawn and printed when absent; the
+    /// summary states it.
+    #[arg(long)]
+    first_seed: Option<u64>,
+    /// The seed of the pinned voice, recorded in `voice.json` in `--out-dir`
+    /// and read back. Drawn and printed when absent on a first run.
+    #[arg(long)]
+    voice_seed: Option<u64>,
     /// The largest word error rate, under both recognisers, of an agreed take.
     #[arg(long, default_value_t = 0.2)]
     max_wer: f32,
@@ -109,6 +114,10 @@ struct Take {
 #[derive(Serialize)]
 struct Summary<'a> {
     portrayal: &'a Portrayal,
+    /// The seed of the pinned voice.
+    voice_seed: u64,
+    /// The seed of the first take of the first sentence.
+    first_seed: u64,
     takes: usize,
     agreed: usize,
     /// Per recogniser: transcripts that were empty as the take is, and with the tail.
@@ -145,7 +154,6 @@ fn bump(counts: &mut BTreeMap<String, usize>, name: &str, by: usize) {
 
 /// Render the takes, hear them and write the manifest.
 pub fn run(args: &TakesArgs) -> Result<()> {
-    let portrayal = Portrayal::synthetic_theatrical();
     let sentences = read_sentences(
         &std::fs::read_to_string(&args.sentences)
             .with_context(|| format!("reading {}", args.sentences.display()))?,
@@ -153,14 +161,15 @@ pub fn run(args: &TakesArgs) -> Result<()> {
     std::fs::create_dir_all(&args.out_dir)?;
 
     // The voice: one rendering of the reference sentence, fixed for the run.
+    let reference_speaker =
+        crate::voice::speaker(&crate::voice::manifest_in(&args.out_dir), args.voice_seed)?;
+    let portrayal = reference_speaker.portrayal().clone();
+    let first_seed = splinter_sdk::seed::resolve("first-seed", args.first_seed);
     let free = BrainSynthesizer::load(&args.tts)?;
     let reference = args.out_dir.join("voice.wav");
-    free.speak(
-        REFERENCE_SENTENCE,
-        &SpeakerProfile::new(1, portrayal.clone()),
-    )?
-    .save(&reference)
-    .context("writing the reference voice")?;
+    free.speak(REFERENCE_SENTENCE, &reference_speaker)?
+        .save(&reference)
+        .context("writing the reference voice")?;
     drop(free);
     let voice = BrainSynthesizer::load(&args.tts)?.pinned_to(&reference);
 
@@ -179,7 +188,7 @@ pub fn run(args: &TakesArgs) -> Result<()> {
     let mut counts: [BTreeMap<String, usize>; 4] = Default::default();
     for (i, text) in sentences.iter().enumerate() {
         for k in 0..args.per_sentence {
-            let seed = args.first_seed + 1000 * i as u64 + k as u64;
+            let seed = first_seed + 1000 * i as u64 + k as u64;
             let clip = voice.speak(text, &SpeakerProfile::new(seed, portrayal.clone()))?;
             let id = format!("take-{i:04}-{k}");
             let wav = format!("{id}.wav");
@@ -222,6 +231,8 @@ pub fn run(args: &TakesArgs) -> Result<()> {
     emit(
         &Summary {
             portrayal: &portrayal,
+            voice_seed: reference_speaker.seed(),
+            first_seed,
             takes,
             agreed,
             empty_raw,

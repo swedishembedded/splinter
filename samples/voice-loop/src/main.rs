@@ -37,6 +37,7 @@ use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 use voice_loop::batch::{
     emit, listen_turns, read_clip, streamed_turns, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
 };
+use voice_loop::voice::VoiceSeed;
 use voice_loop::{read_sentences, RoundTripReport, TurnReport};
 
 #[derive(Parser)]
@@ -58,22 +59,15 @@ struct Models {
     /// The synthesis model, in brain's model store.
     #[arg(long, default_value = DEFAULT_SYNTHESIZER)]
     tts: String,
-    /// The seed the persona's synthetic voice is rendered from.
-    #[arg(long, default_value_t = 1)]
-    seed: u64,
 }
 
 impl Models {
-    fn names(&self) -> Names<'_> {
+    fn names(&self, speaker: SpeakerProfile) -> Names<'_> {
         Names {
             asr: &self.asr,
             tts: &self.tts,
-            speaker: self.speaker(),
+            speaker,
         }
-    }
-
-    fn speaker(&self) -> SpeakerProfile {
-        SpeakerProfile::new(self.seed, Portrayal::synthetic_theatrical())
     }
 }
 
@@ -97,6 +91,8 @@ enum Command {
     Speak {
         #[command(flatten)]
         models: Models,
+        #[command(flatten)]
+        voice: VoiceSeed,
         /// Lessons the persona has been taught; words they cover are said as taught.
         #[arg(long)]
         lessons: Option<PathBuf>,
@@ -111,6 +107,8 @@ enum Command {
     SpeakSet {
         #[command(flatten)]
         models: Models,
+        #[command(flatten)]
+        voice: VoiceSeed,
         /// A text file with one sentence per line.
         #[arg(long)]
         sentences: PathBuf,
@@ -158,8 +156,10 @@ enum Command {
     /// Name the parts of a speaking persona by content address, refusing parts
     /// attached to something they were not made for.
     Bundle {
-        #[command(flatten)]
-        models: Models,
+        /// The seed of the voice the parts speak in: the bundle names a voice
+        /// that exists, so it is never drawn.
+        #[arg(long)]
+        seed: u64,
         /// The person.
         #[arg(long)]
         persona: String,
@@ -209,8 +209,10 @@ enum Command {
     },
     /// Teach a frozen language model to listen: train a projector on a spoken set.
     IngressTrain {
-        #[command(flatten)]
-        models: Models,
+        /// Seed of the projector and of the order examples are drawn in. Without
+        /// it one is drawn and printed; the report states it.
+        #[arg(long)]
+        seed: Option<u64>,
         /// The directory `spoken-set` wrote.
         #[arg(long)]
         set: PathBuf,
@@ -261,6 +263,8 @@ enum Command {
     ListenTurns {
         #[command(flatten)]
         models: Models,
+        #[command(flatten)]
+        voice: VoiceSeed,
         /// The recogniser whose encoder gives the features the projector reads.
         #[arg(long, default_value = "Qwen/Qwen3-ASR-1.7B")]
         features_model: String,
@@ -299,6 +303,8 @@ enum Command {
     Roundtrip {
         #[command(flatten)]
         models: Models,
+        #[command(flatten)]
+        voice: VoiceSeed,
         /// A text file with one sentence per line.
         #[arg(long)]
         sentences: PathBuf,
@@ -310,6 +316,8 @@ enum Command {
     Turn {
         #[command(flatten)]
         models: Models,
+        #[command(flatten)]
+        voice: VoiceSeed,
         /// The listener's speech, a WAV file.
         #[arg(long = "in")]
         input: PathBuf,
@@ -333,6 +341,8 @@ enum Command {
     Turns {
         #[command(flatten)]
         models: Models,
+        #[command(flatten)]
+        voice: VoiceSeed,
         /// Speak each sentence as the model writes it, rather than the whole answer at the end.
         #[arg(long)]
         stream: bool,
@@ -379,18 +389,20 @@ fn main() -> Result<()> {
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {
             models,
+            voice,
             lessons,
             text,
             out,
         } => voice_loop::teach::speak(
             &models.tts,
-            &models.speaker(),
+            &voice.speaker(&voice_loop::voice::manifest_beside(&out))?,
             lessons.as_deref(),
             &text,
             &out,
         ),
         Command::SpeakSet {
             models,
+            voice,
             sentences,
             out_dir,
             max_wer,
@@ -398,7 +410,7 @@ fn main() -> Result<()> {
         } => voice_loop::speakset::speak_set(
             &models.tts,
             &models.asr,
-            models.speaker(),
+            voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?,
             &sentences,
             &out_dir,
             max_wer,
@@ -419,7 +431,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Bundle {
-            models,
+            seed,
             persona,
             thinker,
             adapter,
@@ -455,7 +467,7 @@ fn main() -> Result<()> {
                 &reads,
                 recogniser,
                 voice_loop::bundle::dir_part("synthesizer", &synthesizer_dir)?,
-                models.speaker(),
+                SpeakerProfile::new(seed, Portrayal::synthetic_theatrical()),
             )?;
             std::fs::write(&out, serde_json::to_string_pretty(&bundle)?)?;
             println!(
@@ -484,7 +496,7 @@ fn main() -> Result<()> {
             max_wer,
         ),
         Command::IngressTrain {
-            models,
+            seed,
             set,
             answers,
             base,
@@ -513,7 +525,7 @@ fn main() -> Result<()> {
                 test_every,
                 test_voices: test_voices.into_iter().collect(),
                 transcribe_share,
-                seed: models.seed,
+                seed: splinter_sdk::seed::resolve("seed", seed),
                 block,
                 init_projector,
             };
@@ -524,6 +536,7 @@ fn main() -> Result<()> {
         }
         Command::ListenTurns {
             models,
+            voice,
             features_model,
             projector,
             recordings,
@@ -536,7 +549,7 @@ fn main() -> Result<()> {
             window,
             report,
         } => listen_turns(
-            &models.names(),
+            &models.names(voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?),
             &Batch {
                 recordings: &recordings,
                 questions: questions.as_deref(),
@@ -556,11 +569,18 @@ fn main() -> Result<()> {
         ),
         Command::Roundtrip {
             models,
+            voice,
             sentences,
             report,
-        } => roundtrip(&models, &sentences, report.as_deref()),
+        } => roundtrip(
+            &models,
+            voice.unrecorded_speaker(),
+            &sentences,
+            report.as_deref(),
+        ),
         Command::Turn {
             models,
+            voice,
             input,
             out,
             persona,
@@ -569,15 +589,14 @@ fn main() -> Result<()> {
             report,
         } => turn(
             &models,
-            &input,
-            &out,
-            &persona,
-            &base,
-            adapter.as_deref(),
+            voice.speaker(&voice_loop::voice::manifest_beside(&out))?,
+            (&input, &out),
+            &Persona::load(&persona, &base, adapter.as_deref())?,
             report.as_deref(),
         ),
         Command::Turns {
             models,
+            voice,
             stream,
             recordings,
             questions,
@@ -588,7 +607,7 @@ fn main() -> Result<()> {
             system,
             report,
         } => {
-            let names = models.names();
+            let names = models.names(voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?);
             let batch = Batch {
                 recordings: &recordings,
                 questions: questions.as_deref(),
@@ -706,6 +725,7 @@ fn spoken_set(
 
 fn roundtrip(
     models: &Models,
+    speaker: SpeakerProfile,
     file: &std::path::Path,
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
@@ -715,7 +735,6 @@ fn roundtrip(
     if sentences.is_empty() {
         bail!("{} holds no sentences", file.display());
     }
-    let speaker = models.speaker();
     let result = round_trip(
         &BrainSynthesizer::load(&models.tts)?,
         &BrainRecognizer::load(&models.asr)?,
@@ -730,16 +749,12 @@ fn roundtrip(
 
 fn turn(
     models: &Models,
-    input: &std::path::Path,
-    out: &std::path::Path,
-    persona: &str,
-    base: &std::path::Path,
-    adapter: Option<&std::path::Path>,
+    speaker: SpeakerProfile,
+    (input, out): (&std::path::Path, &std::path::Path),
+    persona: &Persona,
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
     let heard = read_clip(input)?;
-    let speaker = models.speaker();
-    let persona = Persona::load(persona, base, adapter)?;
     let turn = take_turn(
         &BrainRecognizer::load(&models.asr)?,
         &mut |question: &str| persona.answer(question),

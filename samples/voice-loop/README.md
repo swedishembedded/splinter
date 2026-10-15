@@ -81,7 +81,16 @@ Every lesson carries the portrayal of the voice it applies to.
 
 Synthesis is seeded (`--seed`), because the same sentence is spoken in very
 different lengths from different seeds and a short rendering can lose words
-before recognition hears them.
+before recognition hears them. The seed is the persona's voice, so it is an
+identity and not a default: a first command that writes to an output place
+without `--seed` draws one and prints it, and records it in `voice.json` in
+`--out-dir` (for `speak` and `turn`, `NAME.voice.json` beside `--out`); every
+later command that writes to the same place reads it back and refuses a
+different `--seed`, and the reports carry the speaker with its seed. `bundle`
+names a voice that exists and takes its `--seed` explicitly. A seed that only
+varies a run (`speech-rl --seed`, `takes --first-seed`, `ingress-train
+--seed`) is drawn and printed when not given and is stated in the run's
+report; `takes` and `speech-rl` take the voice's seed as `--voice-seed`.
 
 ## Layout
 

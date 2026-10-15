@@ -27,6 +27,7 @@ pub mod spoken;
 pub mod takes;
 pub mod teach;
 pub mod teach_eval;
+pub mod voice;
 
 use serde::Serialize;
 use splinter_sdk::model::speech::{RoundTrip, RoundTripItem, StageTimings, Turn};

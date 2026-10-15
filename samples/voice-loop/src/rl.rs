@@ -28,7 +28,7 @@ use splinter_sdk::model::speech::{
     corpus_word_error_rate, with_trailing_silence, BrainRecognizer, BrainSynthesizer, Recognizer,
     SpeechPolicy, SpeechTake, Synthesizer, UpdateRule, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
-use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
+use splinter_sdk::vocabulary::speech::Portrayal;
 
 use crate::batch::emit;
 use crate::read_sentences;
@@ -84,8 +84,13 @@ pub struct RlArgs {
     group: usize,
     /// Offsets the seeds of the takes sampled for training, so that a run can be
     /// repeated with different rollouts; the held-out takes are not changed.
-    #[arg(long, default_value_t = 0)]
-    seed: u64,
+    /// Drawn and printed when absent; the report states it.
+    #[arg(long)]
+    seed: Option<u64>,
+    /// The seed of the pinned voice, recorded in `voice.json` in `--out-dir`
+    /// and read back. Drawn and printed when absent on a first run.
+    #[arg(long)]
+    voice_seed: Option<u64>,
     /// Held-out sentences.
     #[arg(long, default_value_t = 8)]
     held_out: usize,
@@ -125,6 +130,10 @@ struct Step {
 #[derive(Serialize)]
 struct Report<'a> {
     portrayal: &'a Portrayal,
+    /// The seed of the pinned voice.
+    voice_seed: u64,
+    /// The seed the training takes were offset by.
+    seed: u64,
     method: &'static str,
     iterations: usize,
     group: usize,
@@ -179,7 +188,6 @@ fn evaluate(
 
 /// Train, measuring as it goes.
 pub fn run(args: &RlArgs) -> Result<()> {
-    let portrayal = Portrayal::synthetic_theatrical();
     let all = read_sentences(
         &std::fs::read_to_string(&args.sentences)
             .with_context(|| format!("reading {}", args.sentences.display()))?,
@@ -195,12 +203,13 @@ pub fn run(args: &RlArgs) -> Result<()> {
     std::fs::create_dir_all(&args.out_dir)?;
 
     // The voice every take is pinned to: one rendering of a reference sentence.
+    let reference_speaker =
+        crate::voice::speaker(&crate::voice::manifest_in(&args.out_dir), args.voice_seed)?;
+    let portrayal = reference_speaker.portrayal().clone();
+    let seed = splinter_sdk::seed::resolve("seed", args.seed);
     let reference = args.out_dir.join("voice.wav");
     BrainSynthesizer::load(&args.tts)?
-        .speak(
-            REFERENCE_SENTENCE,
-            &SpeakerProfile::new(1, portrayal.clone()),
-        )?
+        .speak(REFERENCE_SENTENCE, &reference_speaker)?
         .save(&reference)
         .context("writing the reference voice")?;
     let judge = BrainRecognizer::load(&args.asr)?;
@@ -225,10 +234,7 @@ pub fn run(args: &RlArgs) -> Result<()> {
                 .map(|k| {
                     policy.take(
                         text,
-                        1_000_000 * args.seed
-                            + 10_000 * update as u64
-                            + 100 * slot as u64
-                            + k as u64,
+                        1_000_000 * seed + 10_000 * update as u64 + 100 * slot as u64 + k as u64,
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
@@ -285,6 +291,8 @@ pub fn run(args: &RlArgs) -> Result<()> {
     emit(
         &Report {
             portrayal: &portrayal,
+            voice_seed: reference_speaker.seed(),
+            seed,
             method: match args.method {
                 Method::Grpo => "grpo",
                 Method::BestOfN => "best-of-n",
