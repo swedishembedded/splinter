@@ -29,6 +29,7 @@
 mod events;
 mod reasoning;
 mod request;
+mod seeds;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -43,6 +44,8 @@ use events::events_from;
 pub use reasoning::{closed_think_pairs, opens_think_block, CLOSED_THINK, REASONING_REPLY_TOKENS};
 use request::chat_request;
 pub use request::Sampling;
+use seeds::DrawnSeeds;
+use splinter_core::rng::Seed;
 
 /// Sampling defaults for agent work, applied per request. Low temperature:
 /// an agent is executing a procedure, not writing prose; the small models
@@ -58,6 +61,8 @@ pub const AGENT_SAMPLING: Sampling = Sampling {
     // Agent work wants the answer, not a reasoning preamble it cannot use as
     // tool input; a run that wants the reasoning asks for it.
     thinking: false,
+    // Unset: the provider draws a seed for each sampled request and reports
+    // it ([`LocalQwen::take_drawn_seeds`]).
     seed: None,
 };
 
@@ -96,6 +101,9 @@ pub struct LocalQwen {
     /// a reasoning model spends its first tokens inside the think block its
     /// template opened.
     reply_floor: u32,
+    /// The seeds drawn for sampled requests that named none, shared by every
+    /// handle on this model.
+    drawn_seeds: DrawnSeeds,
 }
 
 /// Where the weights come from and which adapter rides on top.
@@ -138,6 +146,7 @@ impl LocalQwen {
             live: Arc::new(AtomicUsize::new(0)),
             sampling: AGENT_SAMPLING,
             reply_floor: reasoning::reply_floor(&base),
+            drawn_seeds: DrawnSeeds::default(),
         })
     }
 
@@ -162,7 +171,18 @@ impl LocalQwen {
             live: Arc::clone(&self.live),
             sampling,
             reply_floor: self.reply_floor,
+            drawn_seeds: self.drawn_seeds.clone(),
         }
+    }
+
+    /// The seeds this model drew since the last call, oldest first, one per
+    /// sampled request that named no seed. sven's response events carry no
+    /// seed, so this is where a drawn one is reported: the run that owns the
+    /// model records them, and passing one back as [`Sampling::seed`]
+    /// replays that request's decoding. Greedy requests draw nothing.
+    #[must_use]
+    pub fn take_drawn_seeds(&self) -> Vec<Seed> {
+        self.drawn_seeds.take()
     }
 
     /// Cancels the in-flight generation, if any, and waits up to `grace` for
@@ -311,10 +331,10 @@ impl ModelProvider for LocalQwen {
         &self,
         req: CompletionRequest,
     ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-        let sampling = Sampling {
+        let sampling = self.drawn_seeds.resolve(Sampling {
             max_new_tokens: reply_cap(&self.sampling, self.reply_floor),
             ..self.sampling
-        };
+        });
         let request = chat_request(&req, &sampling);
         let resident = Arc::clone(&self.resident);
         let adapter = self.adapter.clone();

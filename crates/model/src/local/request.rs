@@ -36,7 +36,9 @@ pub struct Sampling {
     pub thinking: bool,
     /// Seed of the decoding's draws. Set, the same prompt on the same
     /// weights decodes to the same reply, so a rollout can be repeated;
-    /// `None` leaves brain to draw a fresh seed per request.
+    /// `None` has the provider draw a fresh seed for each sampled request
+    /// and report it ([`super::LocalQwen::take_drawn_seeds`]); a greedy
+    /// request (temperature zero) is never seeded.
     #[serde(default)]
     pub seed: Option<u64>,
 }
