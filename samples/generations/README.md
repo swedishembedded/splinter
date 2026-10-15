@@ -23,7 +23,7 @@ whether general behaviour is intact.
 
 ## The apparatus
 
-`generations.py build` writes, from a seed alone and the same for every run:
+`generations.py build --out OUT [--seed N]` writes, from a seed alone and the same for every run (the seed is drawn and printed when not given, and recorded in `OUT/build.json`; a rebuild in `OUT` reads it back and refuses another; the numbers of an earlier run reproduce with `--seed 20261010`):
 
 - 36 invented facts, 12 per generation, of seven kinds (a count of legs, the
   year a bridge opened, a distance between places, how often a festival is

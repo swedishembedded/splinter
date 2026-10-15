@@ -7,6 +7,7 @@ criteria the run is judged by. Run: python3 -m unittest test_generations."""
 
 import json
 import unittest
+from pathlib import Path
 
 import generations as g
 
@@ -146,6 +147,19 @@ elif verb == "consolidate":
 else:
     print(json.dumps({"stages": [{"stage": "train", "duration_ms": 1500}]}))
 '''
+
+
+class Seed(unittest.TestCase):
+    def test_a_build_without_a_seed_records_the_one_it_drew_and_a_rebuild_reads_it_back(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            drawn = g.build_seed(tmp, None)
+            g.build(tmp, drawn, generations=1)
+            self.assertEqual(json.loads((Path(tmp) / "build.json").read_text()), {"seed": drawn})
+            self.assertEqual(g.build_seed(tmp, None), drawn)
+            self.assertEqual(g.build_seed(tmp, drawn), drawn)
+            with self.assertRaises(SystemExit):
+                g.build_seed(tmp, drawn + 1)
 
 
 class Driver(unittest.TestCase):

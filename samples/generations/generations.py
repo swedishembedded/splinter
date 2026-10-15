@@ -18,7 +18,9 @@ each generation several `splinter absorb` updates and then a consolidation
 
 The facts, their sessions, their held-out probes and the anchor questions are
 written by `build` from a seed and are the same for every run; `run` never
-looks at a probe except to grade the model on it.
+looks at a probe except to grade the model on it. `build` records its seed in
+`build.json` beside them (drawn and printed when `--seed` is not given); a
+rebuild in the same directory reads it back and refuses another.
 """
 
 import argparse
@@ -26,6 +28,7 @@ import json
 import os
 import random
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -296,10 +299,33 @@ def judge(rows, anchor_baseline):
 
 # --- the build ---------------------------------------------------------------
 
+BUILD_RECORD = "build.json"
+
+
+def build_seed(out, given):
+    """The seed the apparatus in `out` is built with: the one it was built
+    with if it is already there, else `given`, else a fresh draw (printed).
+    A `given` that differs from the recorded seed is refused: the probes in
+    `out` are a function of the seed."""
+    record = Path(out) / BUILD_RECORD
+    if record.exists():
+        recorded = json.loads(record.read_text())["seed"]
+        if given is not None and given != recorded:
+            raise SystemExit(f"{record}: built with seed {recorded}, not --seed {given}; "
+                             "use another --out")
+        return recorded
+    if given is not None:
+        return given
+    seed = secrets.randbits(64)
+    print(f"no --seed given, using seed {seed} (pass --seed {seed} to reproduce)", file=sys.stderr)
+    return seed
+
+
 def build(out, seed, generations=GENERATIONS):
     out = Path(out)
     facts = make_facts(seed, generations=generations)
     out.mkdir(parents=True, exist_ok=True)
+    (out / BUILD_RECORD).write_text(json.dumps({"seed": seed}) + "\n")
     (out / "facts.json").write_text(json.dumps([f.__dict__ for f in facts], indent=1))
     per_update = FACTS_PER_GENERATION // UPDATES_PER_GENERATION
     for f in facts:
@@ -526,7 +552,9 @@ def main():
     sub = p.add_subparsers(dest="command", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", required=True)
-    b.add_argument("--seed", type=int, default=20261010)
+    b.add_argument("--seed", type=int,
+                   help="seed of the facts; recorded in <out>/build.json and read back; "
+                        "drawn and printed when not given")
     b.add_argument("--generations", type=int, default=GENERATIONS)
     r = sub.add_parser("run")
     r.add_argument("--mode", choices=("full", "merge"), required=True)
@@ -551,7 +579,7 @@ def main():
     s.add_argument("--out", required=True)
     args = p.parse_args()
     if args.command == "build":
-        build(args.out, args.seed, args.generations)
+        build(args.out, build_seed(args.out, args.seed), args.generations)
     elif args.command == "run":
         run(args)
     elif args.command == "tune":
