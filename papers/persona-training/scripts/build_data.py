@@ -15,13 +15,18 @@ Nothing is typed by hand into the paper: the measured counts live in data/
 (arms, cells and paired come from scripts/collect.py), the statistics derived
 from them are computed here with the standard library only (Wilson intervals,
 exact one-sided binomial sign tests, Newcombe intervals), and the output goes
-to OUT_DIR as LaTeX tables, pgfplots data and a macro file. The script refuses
-to run when the tables are inconsistent with one another or when a derived
-statistic differs from the value recorded when the measurements were taken.
+to OUT_DIR as LaTeX tables, pgfplots data and a macro file. The study's
+authors are the seeds data/authors.csv lists, in that order (author A first);
+the macros AuthorSeedA, AuthorSeedB, ... and the column headings state them.
+The script refuses to run when the tables are inconsistent with one another or
+when a derived statistic differs from the value recorded when the measurements
+were taken.
 """
 
 import csv
+import string
 import sys
+from functools import cache
 from math import comb, sqrt
 from pathlib import Path
 
@@ -29,8 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 DEFAULT_OUT = ROOT.parent.parent / "target" / "papers" / ".build" / "persona-training" / "gen"
 
-SEEDS = [101, 202, 303]
-LETTER = {101: "A", 202: "B", 303: "C"}
+AUTHORS = 3  # the paper's tables are laid out for three authors
 ARMS = ["base", "named", "principles", "retrieval", "tuned"]
 ARM_LABEL = {
     "base": "base", "named": "named", "principles": "principles",
@@ -54,7 +58,9 @@ Z = 1.96
 GAP = "@@gap"  # marks a table row that is followed by extra vertical space
 
 # Values recorded when the examinations were run, at the precision they were
-# recorded: the derived statistics must reproduce them.
+# recorded, keyed by the seed of the author the examination was run for: the
+# derived statistics must reproduce them, and every author of the study needs
+# an entry (check_recorded).
 RECORDED_WILSON_TUNED = {101: (0.801, 0.907), 202: (0.711, 0.838), 303: (0.718, 0.844)}
 # ("lt", bound): p below bound.  ("eq", p, decimals, discordant): p rounded.
 RECORDED_P = {
@@ -87,6 +93,39 @@ def fail(message):
 def rows(name):
     with open(DATA / name, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
+
+@cache
+def study_seeds():
+    """The seeds of the study's authors, in the order data/authors.csv lists
+    them. An author's seed names the author, so the data is the one place that
+    says who the authors are; the first is author A, the second B, and so on."""
+    seeds = [int(r["seed"]) for r in rows("authors.csv")]
+    if len(seeds) != AUTHORS or len(set(seeds)) != AUTHORS:
+        fail(f"authors.csv lists {len(seeds)} authors ({len(set(seeds))} distinct), the paper's tables hold {AUTHORS}")
+    return seeds
+
+
+def letter(seed):
+    """The letter the paper calls the author of this seed."""
+    return string.ascii_uppercase[study_seeds().index(seed)]
+
+
+def author_headers():
+    """Column headings naming the study's authors by seed."""
+    return " & ".join(f"Author {seed}" for seed in study_seeds())
+
+
+def check_recorded():
+    """Every author of the study has the values recorded for the examinations."""
+    for name, table_ in (("RECORDED_WILSON_TUNED", RECORDED_WILSON_TUNED),
+                         ("RECORDED_DISCORDANT_TUNED_RETRIEVAL", RECORDED_DISCORDANT_TUNED_RETRIEVAL)):
+        missing = [seed for seed in study_seeds() if seed not in table_]
+        if missing:
+            fail(f"{name} has no entry for the authors {missing} of authors.csv")
+    missing = [seed for seed in study_seeds() if not any(key[0] == seed for key in RECORDED_P)]
+    if missing:
+        fail(f"RECORDED_P has no entry for the authors {missing} of authors.csv")
 
 
 def upper_tail(wins, n):
@@ -197,7 +236,7 @@ def load():
 
 
 def check(arms, cells, paired):
-    for seed in SEEDS:
+    for seed in study_seeds():
         for arm in ARMS:
             right, n = arms[(seed, arm)]
             if n != EXAM_ITEMS:
@@ -215,7 +254,7 @@ def check(arms, cells, paired):
                 fail(f"{seed} {a} vs {b}: {n} paired items")
             if arms[(seed, a)][0] - arms[(seed, b)][0] != only_a - only_b:
                 fail(f"{seed} {a} vs {b}: discordant items disagree with the right counts")
-    for seed in SEEDS:
+    for seed in study_seeds():
         low, high = wilson(*arms[(seed, "tuned")])
         recorded = RECORDED_WILSON_TUNED[seed]
         if (round(low, 3), round(high, 3)) != recorded:
@@ -254,7 +293,7 @@ OPTION_LABEL = {"act_alone": "act alone", "consult_assembly": "assembly",
 
 def load_confusion():
     """{seed: {(expected, chosen): items}} of the tuned arm."""
-    out = {seed: {} for seed in SEEDS}
+    out = {seed: {} for seed in study_seeds()}
     for r in rows("confusion.csv"):
         out[int(r["seed"])][(r["expected"], r["chosen"])] = int(r["items"])
     return out
@@ -263,7 +302,7 @@ def load_confusion():
 def check_confusion(confusion, arms):
     """Every item is counted once, and the items whose call took the expected
     option are exactly the items the tuned arm has right."""
-    for seed in SEEDS:
+    for seed in study_seeds():
         counts = confusion[seed]
         if sum(counts.values()) != EXAM_ITEMS:
             fail(f"{seed}: confusion.csv counts {sum(counts.values())} items")
@@ -298,10 +337,12 @@ def cap(arm):
 
 def build_macros(arms, cells, paired):
     m = Macros()
+    for seed in study_seeds():
+        m.add(f"AuthorSeed{letter(seed)}", str(seed))
     m.add("ExamItems", str(EXAM_ITEMS))
     m.add("CellItems", str(CELL_ITEMS))
-    for seed in SEEDS:
-        L = LETTER[seed]
+    for seed in study_seeds():
+        L = letter(seed)
         for arm in ARMS:
             right, n = arms[(seed, arm)]
             low, high = wilson(right, n)
@@ -328,8 +369,8 @@ def build_macros(arms, cells, paired):
         if not min(tuned_cells) > best_other:
             fail(f"{seed}: a tuned cell is not above every cell of base, named and principles")
     for a, b in POOLED_PAIRS:
-        only_a = sum(paired[(s, a, b)][1] for s in SEEDS)
-        only_b = sum(paired[(s, a, b)][2] for s in SEEDS)
+        only_a = sum(paired[(s, a, b)][1] for s in study_seeds())
+        only_b = sum(paired[(s, a, b)][2] for s in study_seeds())
         key = f"{cap(a)}{cap(b)}"
         m.add(f"PooledFirst{key}", str(only_a))
         m.add(f"PooledSecond{key}", str(only_b))
@@ -341,23 +382,24 @@ def build_macros(arms, cells, paired):
     claimed = [p for (s, a, b), p in tests.items()
                if (a, b) in [("tuned", "base"), ("tuned", "named"), ("tuned", "principles"),
                              ("retrieval", "base")]
-               or (a, b) == ("tuned", "retrieval") and s != 101]
+               or (a, b) == ("tuned", "retrieval") and s != study_seeds()[0]]
     m.add("ClaimedTests", str(len(claimed)))
     worst = max(claimed) * len(tests)
     if worst >= 0.05:
         fail("a claimed difference does not survive a Bonferroni factor over all paired tests")
     m.add("BonferroniClaimedMax", fmt_p(worst))
-    m.add("BonferroniPrinciplesA", fmt_p(min(1.0, tests[(101, 'principles', 'base')] * len(tests))))
-    m.add("BonferroniPrinciplesB", f"{min(1.0, tests[(202, 'principles', 'base')] * len(tests)):.2f}")
+    first, second = study_seeds()[:2]
+    m.add("BonferroniPrinciplesA", fmt_p(min(1.0, tests[(first, 'principles', 'base')] * len(tests))))
+    m.add("BonferroniPrinciplesB", f"{min(1.0, tests[(second, 'principles', 'base')] * len(tests)):.2f}")
     # Retrieval and principles lifts over the base, in items.
-    for seed in SEEDS:
-        L = LETTER[seed]
+    for seed in study_seeds():
+        L = letter(seed)
         base = arms[(seed, "base")][0]
         for arm in ("named", "principles", "retrieval", "tuned"):
             m.add(f"Lift{L}{cap(arm)}", str(arms[(seed, arm)][0] - base))
     # Gaps between seen and new cells of the tuned arm.
-    for seed in SEEDS:
-        L = LETTER[seed]
+    for seed in study_seeds():
+        L = letter(seed)
         for axis, _ in AXES:
             seen = cells[(seed, "tuned", f"{axis}_seen")]
             new = cells[(seed, "tuned", f"{axis}_new")]
@@ -366,18 +408,18 @@ def build_macros(arms, cells, paired):
             m.add(f"GapLo{L}{cap(axis)}", fmt_points(low))
             m.add(f"GapHi{L}{cap(axis)}", fmt_points(high))
     excluding_zero = [
-        (seed, axis) for seed in SEEDS for axis, _ in AXES
+        (seed, axis) for seed in study_seeds() for axis, _ in AXES
         if not newcombe_difference(*cells[(seed, "tuned", f"{axis}_seen")],
                                    *cells[(seed, "tuned", f"{axis}_new")])[1]
         <= 0 <= newcombe_difference(*cells[(seed, "tuned", f"{axis}_seen")],
                                     *cells[(seed, "tuned", f"{axis}_new")])[2]]
-    if excluding_zero != [(202, "tool")]:
-        fail(f"the paper states that only the tool axis of author 202 excludes zero: {excluding_zero}")
+    if excluding_zero != [(study_seeds()[1], "tool")]:
+        fail(f"the paper states that only the tool axis of author {study_seeds()[1]} excludes zero: {excluding_zero}")
     # Corpora, audit, training, cost.
     corpora = {int(r["seed"]): r for r in rows("corpora.csv")}
     check_corpora(corpora)
     for seed, r in corpora.items():
-        L = LETTER[seed]
+        L = letter(seed)
         for key in CORPUS_KEYS:
             m.add(f"Corpus{L}{key.title().replace('_', '')}", thousands(r[key]))
         m.add(f"Corpus{L}MeanWords", thousands(round(int(r["words"]) / int(r["essays"]))))
@@ -389,7 +431,7 @@ def build_macros(arms, cells, paired):
     rates = []
     for r in rows("audit.csv"):
         seed = int(r["seed"])
-        L = LETTER[seed]
+        L = letter(seed)
         kept, agree = int(r["kept"]), int(r["agree"])
         if kept != int(corpora[seed]["cases_kept"]):
             fail(f"{seed}: the audit covers {kept} decisions, the corpus kept {corpora[seed]['cases_kept']}")
@@ -413,7 +455,7 @@ def build_macros(arms, cells, paired):
     m.add("AuditDisagreeRateAll", f"{100 * (kept_all - agree_all) / kept_all:.1f}")
     for r in rows("training.csv"):
         seed = int(r["seed"])
-        L = LETTER[seed]
+        L = letter(seed)
         if int(r["train_records"]) + int(r["held_out_records"]) != int(corpora[seed]["records"]):
             fail(f"{seed}: trained and held-out records do not add up to the records made")
         draws = int(r["steps"]) * int(r["records_per_step"])
@@ -430,19 +472,20 @@ def build_macros(arms, cells, paired):
             m.add("HeldOutAccBefore", r["held_out_token_accuracy_before"])
             m.add("HeldOutAccAfter", r["held_out_token_accuracy_after"])
     for r in rows("cost.csv"):
-        L = LETTER[int(r["seed"])]
+        L = letter(int(r["seed"]))
         m.add(f"CostInput{L}", f"{int(r['estimated_input_tokens']) / 1e6:.2f}")
         m.add(f"CostOutput{L}", f"{int(r['estimated_output_tokens']) / 1e6:.2f}")
     spend = {r["seeds"]: float(r["daily_usage_usd_after"]) - float(r["daily_usage_usd_before"])
              for r in rows("spend.csv")}
     if any(v <= 0 for v in spend.values()):
         fail("a run's spend is not positive")
-    m.add("SpendA", f"{spend['101']:.2f}")
-    m.add("SpendBC", f"{spend['202+303']:.2f}")
+    first, *rest = study_seeds()
+    m.add("SpendA", f"{spend[str(first)]:.2f}")
+    m.add("SpendBC", f"{spend['+'.join(map(str, rest))]:.2f}")
     # Belief wording echoed in the essays (scripts/echo.py).
     for r in rows("echo.csv"):
         seed = int(r["seed"])
-        L = LETTER[seed]
+        L = letter(seed)
         essays, echoing = int(r["essays"]), int(r["echoing"])
         if essays != int(corpora[seed]["essays"]):
             fail(f"{seed}: echo.csv counts {essays} essays, the corpus kept {corpora[seed]['essays']}")
@@ -452,8 +495,8 @@ def build_macros(arms, cells, paired):
     # The adapter's errors (scripts/confusion.py).
     confusion = load_confusion()
     check_confusion(confusion, arms)
-    for seed in SEEDS:
-        L = LETTER[seed]
+    for seed in study_seeds():
+        L = letter(seed)
         counts = confusion[seed]
         m.add(f"Wrong{L}Tuned", str(EXAM_ITEMS - arms[(seed, "tuned")][0]))
         m.add(f"OfferForAlone{L}", str(counts.get(("act_alone", "accept_offer"), 0)))
@@ -529,27 +572,28 @@ def main_table(arms):
     body = []
     for arm in ARMS:
         cellsx = []
-        for seed in SEEDS:
+        for seed in study_seeds():
             right, n = arms[(seed, arm)]
             low, high = wilson(right, n)
             cellsx.append(f"{right} ({fmt3(right / n)}) [{fmt3(low)}, {fmt3(high)}]")
         body.append(f"{ARM_LABEL[arm]} & " + " & ".join(cellsx))
-    return table(r"@{}lccc@{}", "Arm & Author 101 & Author 202 & Author 303", body)
+    return table(r"@{}lccc@{}", "Arm & " + author_headers(), body)
 
 
 def paired_table(paired):
-    header = ("Comparison & \\multicolumn{2}{c}{Author 101} & \\multicolumn{2}{c}{Author 202} & "
-              "\\multicolumn{2}{c}{Author 303} & \\multicolumn{2}{c}{Pooled}")
+    header = ("Comparison & "
+              + " & ".join(f"\\multicolumn{{2}}{{c}}{{Author {seed}}}" for seed in study_seeds())
+              + " & \\multicolumn{2}{c}{Pooled}")
     sub = ("& first--second & $p$ & first--second & $p$ & first--second & $p$ & first--second & $p$")
     body = []
     for a, b in PAIRS:
         parts = []
-        for seed in SEEDS:
+        for seed in study_seeds():
             _, only_a, only_b = paired[(seed, a, b)]
             parts.append(f"{only_a}--{only_b} & {fmt_p(upper_tail(only_a, only_a + only_b))}")
         if (a, b) in POOLED_PAIRS:
-            only_a = sum(paired[(s, a, b)][1] for s in SEEDS)
-            only_b = sum(paired[(s, a, b)][2] for s in SEEDS)
+            only_a = sum(paired[(s, a, b)][1] for s in study_seeds())
+            only_b = sum(paired[(s, a, b)][2] for s in study_seeds())
             parts.append(f"{only_a}--{only_b} & {fmt_p(upper_tail(only_a, only_a + only_b))}")
         else:
             parts.append("\\multicolumn{2}{c}{}")
@@ -565,11 +609,11 @@ def paired_table(paired):
 def cells_table(cells):
     header = "Author & Arm & " + " & ".join(CELL_LABEL[c] for c in CELLS)
     body = []
-    for seed in SEEDS:
+    for seed in study_seeds():
         for k, arm in enumerate(ARMS):
             vals = " & ".join(str(cells[(seed, arm, c)][0]) for c in CELLS)
             body.append(f"{seed if k == 0 else ''} & {ARM_LABEL[arm]} & {vals}")
-        if seed != SEEDS[-1]:
+        if seed != study_seeds()[-1]:
             body[-1] += GAP
     return table(r"@{}rlrrrrrr@{}", header, body)
 
@@ -577,7 +621,7 @@ def cells_table(cells):
 def gaps_table(cells):
     header = "Author & " + " & ".join(label for _, label in AXES)
     body = []
-    for seed in SEEDS:
+    for seed in study_seeds():
         parts = []
         for axis, _ in AXES:
             seen = cells[(seed, "tuned", f"{axis}_seen")]
@@ -643,11 +687,11 @@ def errors_table():
     pairs = sorted({k for counts in confusion.values() for k in counts if k[0] != k[1]},
                    key=lambda k: (OPTIONS.index(k[0]), (OPTIONS + ["none"]).index(k[1])))
     body = [f"{OPTION_LABEL[e]} & {OPTION_LABEL[c]} & "
-            + " & ".join(str(confusion[s].get((e, c), 0)) for s in SEEDS) for e, c in pairs]
-    totals = [sum(n for (e, c), n in confusion[s].items() if e != c) for s in SEEDS]
+            + " & ".join(str(confusion[s].get((e, c), 0)) for s in study_seeds()) for e, c in pairs]
+    totals = [sum(n for (e, c), n in confusion[s].items() if e != c) for s in study_seeds()]
     body.append("all wrong answers & & " + " & ".join(map(str, totals)))
     return table(r"@{}llrrr@{}",
-                 "Oracle's decision & Adapter's call & Author 101 & Author 202 & Author 303", body)
+                 "Oracle's decision & Adapter's call & " + author_headers(), body)
 
 
 def chain_table():
@@ -656,7 +700,7 @@ def chain_table():
     corpora = {int(r["seed"]): r for r in rows("corpora.csv")}
     training = {int(r["seed"]): r for r in rows("training.csv")}
     def per(f):
-        return " & ".join(f(corpora[s], training[s]) for s in SEEDS)
+        return " & ".join(f(corpora[s], training[s]) for s in study_seeds())
     n = thousands
     body = [
         "articles planned (cases) & " + per(lambda c, t: f"{n(c['planned_articles'])} "
@@ -672,14 +716,14 @@ def chain_table():
         "examination items (through a withheld tool) & " + per(lambda c, t: f"{EXAM_ITEMS} ({CELL_ITEMS})"),
         "graded answers (five arms) & " + per(lambda c, t: str(EXAM_ITEMS * len(ARMS))),
     ]
-    return table(r"@{}lrrr@{}", "Object & Author 101 & Author 202 & Author 303", body)
+    return table(r"@{}lrrr@{}", "Object & " + author_headers(), body)
 
 
 # ---------------------------------------------------------------- figure data
 
 def figure_data(arms):
     lines = ["x," + ",".join(f"{a},{a}_minus,{a}_plus" for a in ARMS)]
-    for k, seed in enumerate(SEEDS):
+    for k, seed in enumerate(study_seeds()):
         parts = [str(k)]
         for arm in ARMS:
             right, n = arms[(seed, arm)]
@@ -693,6 +737,7 @@ def figure_data(arms):
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     out.mkdir(parents=True, exist_ok=True)
+    check_recorded()
     arms, cells, paired = load()
     check(arms, cells, paired)
     files = {
