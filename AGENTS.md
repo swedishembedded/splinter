@@ -277,6 +277,11 @@ Each is enforced by a gate in `make check` and at commit where it can be:
   (`#![warn(missing_docs)]` under clippy `-D warnings`).
 - **No numbers without reproduction** - no unreviewed performance figure in
   a README, comment or string (`check-no-perf-numbers`).
+- **No fixed default seeds** - a literal seed in production code is a salt, a
+  world constant, a frozen artifact's seed, a greedy path's or a test double's,
+  and is listed with that reason in `scripts/gates/seed-literals.allow.d/`;
+  every other default seed is drawn, printed and recorded
+  (`check-seed-literals`). A seed literal in a test says why with `// seed:`.
 - **Scripts that work** - every script parses and is referenced
   (`check-scripts`).
 - **Make targets are a tree** - concept first, then kind, then variant; every

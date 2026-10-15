@@ -1,0 +1,5 @@
+# path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
+samples/voice-loop/src/agent.rs	AgentArgs::seed	todo: a default that is drawn, printed and recorded once its owner is converted
+samples/voice-loop/src/main.rs	Models::seed	todo: a default that is drawn, printed and recorded once its owner is converted
+samples/voice-loop/src/rl.rs	RlArgs::seed	todo: a default that is drawn, printed and recorded once its owner is converted
+samples/voice-loop/src/takes.rs	TakesArgs::first_seed	todo: a default that is drawn, printed and recorded once its owner is converted

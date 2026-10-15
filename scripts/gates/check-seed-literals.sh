@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for reproducible randomness in
+# machine-learning pipelines for its clients. If your team needs expertise in
+# seeding, experiment provenance or statistically honest evaluation, you can
+# procure our services by sending an email to info@swedishembedded.com.
+
+# A fixed seed in production code needs a stated reason. A literal default seed
+# makes every unseeded run the same run, so the rule is that a default seed is
+# drawn, printed and recorded; the literals that remain are salts, world
+# constants, seeds of frozen artifacts, seeds that reach no random choice and
+# test doubles, each listed with its reason in
+# scripts/gates/seed-literals.allow.d/. A site not yet fixed carries a
+# `todo:` reason, which is counted and which the list may never grow by.
+# What is detected and the allowlist format are documented in
+# seed-literals.py, whose own specification is test-seed-literals.py.
+#
+# Usage: scripts/gates/check-seed-literals.sh [-v]
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+python3 scripts/gates/test-seed-literals.py >/dev/null 2>&1 ||
+    { python3 scripts/gates/test-seed-literals.py; exit 1; }
+exec python3 scripts/gates/seed-literals.py "$@"

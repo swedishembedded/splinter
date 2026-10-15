@@ -9,7 +9,8 @@
 #   2. Orphans: every script under scripts/ is named somewhere else in the
 #      repository - a Makefile target, a hook definition, another script. A
 #      script nothing references is one nobody remembers the purpose of,
-#      and nothing notices when it stops working.
+#      and nothing notices when it stops working. Gate allowlists
+#      (scripts/gates/*.allow.d/) are data a gate reads, not scripts.
 #
 # Absolute machine paths are check-no-machine-paths.sh's business. Adapted
 # from the gate the brain repository runs.
@@ -38,7 +39,7 @@ while IFS= read -r -d '' f; do
         echo "check-scripts: $f is not named anywhere else in the repository"
         fail=1
     fi
-done < <(git ls-files -z 'scripts/*')
+done < <(git ls-files -z 'scripts/*' ':(exclude)scripts/gates/*.allow.d/*')
 
 [ "$fail" -eq 0 ] && echo "check-scripts: OK"
 exit "$fail"

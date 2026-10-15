@@ -99,8 +99,8 @@ GATE_NAMES := $(patsubst scripts/gates/check-%.sh,%,$(wildcard scripts/gates/che
 GATE_TARGETS := $(addprefix check/gates/,$(GATE_NAMES))
 
 ## check/gates - default: every text gate below (hygiene, headers, paths, file sizes,
-##   citations, manifests, lock sources, repo scope, environment reads, crate
-##   layering, history, make target naming)
+##   citations, manifests, lock sources, repo scope, environment reads, seed literals,
+##   crate layering, history, make target naming)
 check/gates: check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS)
 
 ## check/gates/text-hygiene - ASCII punctuation, whitespace, line endings, parseable files

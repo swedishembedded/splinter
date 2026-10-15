@@ -67,6 +67,13 @@ repos:
         language: system
         types: [rust]
 
+      - id: seed-literals
+        name: a fixed seed in production code is allowlisted with a reason
+        entry: bash scripts/gates/check-seed-literals.sh
+        language: system
+        files: (\.rs|\.py|Makefile|scripts/gates/(test-)?seed-literals[^/]*|scripts/gates/seed-literals\.allow\.d/.*)$
+        pass_filenames: false
+
       - id: architecture
         name: crate layering and file size (architecture.toml)
         entry: bash scripts/gates/check-architecture.sh
