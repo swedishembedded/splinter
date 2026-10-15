@@ -14,11 +14,12 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from testseed import SEED  # noqa: E402
 import features  # noqa: E402
 import models  # noqa: E402
 
 
-def toy(n=400, seed=0):
+def toy(n=400, seed=SEED):
     rng = np.random.RandomState(seed)
     x = rng.normal(size=(n, 2)).astype(np.float32)
     x[::7, 0] = np.nan
@@ -115,10 +116,10 @@ class Harness(unittest.TestCase):
         self.assertIn("cs-cox-agesex", models.REGISTRY)
 
     def test_dropping_an_input_removes_exactly_that_input_from_the_design(self):
-        data, time, cause = u_shaped(1500, seed=3)
+        data, time, cause = u_shaped(1500, seed=SEED)
         data["time"], data["cause"] = time.astype(np.float64), cause
         data["cat_names"] = np.array(["told_weak_kidneys"])
-        ctx = models.Context(data=data, train=np.arange(0, 1000), test=np.arange(1000, 1500), seed=1, horizons={})
+        ctx = models.Context(data=data, train=np.arange(0, 1000), test=np.arange(1000, 1500), seed=SEED, horizons={})
         model = models.REGISTRY["spline-cox-net-without-told_weak_kidneys"]()
         cif = model.fit_predict(ctx)[0]
         self.assertEqual(model.inputs[1], ())
@@ -137,7 +138,7 @@ class Harness(unittest.TestCase):
         self.assertIn("missing:a", prep.names(data))
 
     def test_causes_add_up_to_the_all_cause_incidence(self):
-        rng = np.random.RandomState(1)
+        rng = np.random.RandomState(SEED)
         time = rng.exponential(10.0, size=2000)
         cause = np.where(time < 14, rng.randint(0, 3, size=2000), -1).astype(np.int8)
         surv, cif = models.aalen_johansen(time, cause, models.YEARS.astype(float))
@@ -159,21 +160,24 @@ class Harness(unittest.TestCase):
         self.assertEqual(weight[1], 0.0)
 
     def test_the_partial_likelihood_prefers_the_true_risk_order(self):
-        rng = np.random.RandomState(2)
+        rng = np.random.RandomState(SEED)
         x = rng.normal(size=3000)
         time = rng.exponential(1.0 / np.exp(x))
         event = np.ones(3000, dtype=bool)
         self.assertGreater(models.partial_loglik(x, time, event), models.partial_loglik(-x, time, event))
 
     def test_the_spline_cox_beats_the_linear_cox_on_a_u_shaped_log_hazard(self):
+        # seed: the spline margin over the linear model was measured on the data of seed 11
         data, time, cause = u_shaped(4000, seed=11)
         data["time"], data["cause"] = time.astype(np.float64), cause
         train = np.arange(0, 3000)
         test = np.arange(3000, 4000)
+        # seed: and with the training seed 7
         ctx = models.Context(data=data, train=train, test=test, seed=7, horizons={})
         t_te, c_te = ctx.outcome(test)
         event = c_te >= 0
         spline = models.REGISTRY["spline-cox-net-all"]().fit_predict(ctx)[0]
+        # seed: the same training seed for the linear model, so the two differ by their form alone
         ctx2 = models.Context(data=data, train=train, test=test, seed=7, horizons={})
         linear = models.REGISTRY["cox-net-all"]().fit_predict(ctx2)[0]
         ten = int(np.searchsorted(models.YEARS, 10))  # index of the 10-year column
@@ -181,16 +185,16 @@ class Harness(unittest.TestCase):
                            concordance(linear[:, ten], t_te, event))
 
     def test_the_spline_predictions_of_a_row_ignore_the_other_test_rows(self):
-        data, time, cause = u_shaped(4000, seed=11)
+        data, time, cause = u_shaped(4000, seed=SEED)
         data["time"], data["cause"] = time.astype(np.float64), cause
         train = np.arange(0, 3000)
         test = np.arange(3000, 4000)
-        ctx = models.Context(data=data, train=train, test=test, seed=7, horizons={})
+        ctx = models.Context(data=data, train=train, test=test, seed=SEED, horizons={})
         cif = models.REGISTRY["spline-cox-net-all"]().fit_predict(ctx)[0]
         kept = int(test[0])
         changed = dict(data, num=data["num"].copy())
         changed["num"][np.delete(test, 0)] = 1e6  # extreme values on the other held-out rows
-        ctx2 = models.Context(data=changed, train=train, test=test, seed=7, horizons={})
+        ctx2 = models.Context(data=changed, train=train, test=test, seed=SEED, horizons={})
         cif2 = models.REGISTRY["spline-cox-net-all"]().fit_predict(ctx2)[0]
         np.testing.assert_allclose(cif2[0], cif[0], atol=1e-9)
 

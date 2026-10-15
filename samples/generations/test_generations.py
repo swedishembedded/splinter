@@ -6,21 +6,28 @@ sessions and probes written from them, how answers are graded, and the
 criteria the run is judged by. Run: python3 -m unittest test_generations."""
 
 import json
+import random
+import sys
 import unittest
 from pathlib import Path
 
 import generations as g
 
+# A default seed is random: the specs below hold for every seed, so they use one
+# drawn per run, printed so a failure can be replayed.
+SEED = random.SystemRandom().getrandbits(31)
+print(f"spec seed: {SEED}", file=sys.stderr)
+
 
 class Facts(unittest.TestCase):
     def test_the_same_seed_gives_the_same_facts_and_another_gives_others(self):
-        a = g.make_facts(seed=7, generations=3, per_generation=12)
-        self.assertEqual(a, g.make_facts(seed=7, generations=3, per_generation=12))
-        self.assertNotEqual(a, g.make_facts(seed=8, generations=3, per_generation=12))
+        a = g.make_facts(seed=SEED, generations=3, per_generation=12)
+        self.assertEqual(a, g.make_facts(seed=SEED, generations=3, per_generation=12))
+        self.assertNotEqual(a, g.make_facts(seed=SEED + 1, generations=3, per_generation=12))
         self.assertEqual([f.generation for f in a], [n // 12 for n in range(36)])
 
     def test_every_fact_has_a_subject_of_its_own_and_a_value_nobody_else_shares_there(self):
-        facts = g.make_facts(seed=3, generations=3, per_generation=12)
+        facts = g.make_facts(seed=SEED, generations=3, per_generation=12)
         self.assertEqual(len({f.subject for f in facts}), len(facts))
         for f in facts:
             self.assertNotEqual(f.value, f.wrong_value)
@@ -29,7 +36,7 @@ class Facts(unittest.TestCase):
             self.assertNotIn(f.wrong_value, f.statement)
 
     def test_the_wrong_answer_in_a_session_is_not_the_truth(self):
-        for f in g.make_facts(seed=5, generations=1, per_generation=12):
+        for f in g.make_facts(seed=SEED, generations=1, per_generation=12):
             steps = g.session(f)["steps"]
             self.assertEqual([s["source"] for s in steps], ["user", "agent", "user", "agent"])
             self.assertIn(f.wrong_value, steps[1]["message"])
@@ -39,7 +46,7 @@ class Facts(unittest.TestCase):
 
 class Probes(unittest.TestCase):
     def test_four_probes_per_fact_none_of_them_the_sessions_question_or_each_other(self):
-        for f in g.make_facts(seed=11, generations=2, per_generation=12):
+        for f in g.make_facts(seed=SEED, generations=2, per_generation=12):
             probes = g.probes(f)
             self.assertEqual(len(probes), 4)
             texts = [p["instruction"] for p in probes]
@@ -51,7 +58,7 @@ class Probes(unittest.TestCase):
                 self.assertEqual(p["kind"], "recall")
 
     def test_the_sealed_probes_are_the_same_questions_in_the_form_absorb_reads(self):
-        for f in g.make_facts(seed=2, generations=1, per_generation=7):
+        for f in g.make_facts(seed=SEED, generations=1, per_generation=7):
             sealed = g.sealed_probes(f)
             self.assertEqual([s["question"] for s in sealed],
                              [p["instruction"] for p in g.probes(f)])
@@ -66,7 +73,7 @@ class Probes(unittest.TestCase):
 
 class Grading(unittest.TestCase):
     def test_a_fact_is_answered_when_three_of_its_four_probes_are(self):
-        facts = g.make_facts(seed=1, generations=1, per_generation=3)
+        facts = g.make_facts(seed=SEED, generations=1, per_generation=3)
         missed = [p["instruction"] for p in g.probes(facts[0])[:2]]  # two wrong: not answered
         missed += [g.probes(facts[1])[0]["instruction"]]  # one wrong: answered
         answered = g.answered_facts(facts, missed)
@@ -171,7 +178,7 @@ class Driver(unittest.TestCase):
             fake = out / "splinter"
             fake.write_text(FAKE_SPLINTER)
             fake.chmod(0o755)
-            g.build(out, seed=3, generations=2)
+            g.build(out, seed=SEED, generations=2)
             args = argparse.Namespace(out=str(out), mode="merge", splinter=str(fake), brain=None,
                                       policy_weights="policy", helper="helper", helper_context=4096,
                                       policy_context=4096, absorb_flag=["--no-stance"],

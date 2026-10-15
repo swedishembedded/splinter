@@ -14,6 +14,7 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from testseed import SEED  # noqa: E402
 import conditions  # noqa: E402
 import features  # noqa: E402
 
@@ -32,7 +33,7 @@ NUM = list(dict.fromkeys(NUM + list(conditions.NONDEF_NUMERIC) + list(features.S
 CAT = list(dict.fromkeys(CAT + list(conditions.NONDEF_CATEGORICAL) + list(features.STANDARD_CATEGORICAL)))
 
 
-def world(n=3000, seed=4):
+def world(n=3000, seed=SEED):
     rng = np.random.RandomState(seed)
     num = rng.normal(size=(n, len(NUM))).astype(np.float32)
     cat = rng.randint(0, 2, size=(n, len(CAT))).astype(np.int8)
@@ -65,8 +66,9 @@ class Conditions(unittest.TestCase):
 
     def test_a_label_shuffled_among_the_subjects_cannot_be_predicted(self):
         from sklearn.metrics import roc_auc_score
-        data = world()
-        rng = np.random.RandomState(0)
+        # seed: the AUC margins were measured on the world of seed 4 and the labels of seed 0
+        data = world(seed=4)
+        rng = np.random.RandomState(0)  # seed: the label noise of the measured margin
         y = (data["num"][:, 1] + rng.normal(size=len(data["num"])) > 0.5).astype(np.int8)  # depends on bmi
         train, test = np.arange(0, 2200), np.arange(2200, 3000)
         p, _ = conditions.fit_predict(data, train, test, "osteoporosis", "full-logit", y, 1, False)
@@ -79,8 +81,9 @@ class Conditions(unittest.TestCase):
 
     def test_unknown_labels_are_not_trained_on(self):
         from sklearn.metrics import roc_auc_score
-        data = world()
-        rng = np.random.RandomState(1)
+        # seed: the AUC margin was measured on the world of seed 4 and the labels of seed 1
+        data = world(seed=4)
+        rng = np.random.RandomState(1)  # seed: the label noise of the measured margin
         y = (data["num"][:, 1] + rng.normal(size=len(data["num"])) > 0).astype(np.int8)
         train, test = np.arange(0, 2200), np.arange(2200, 3000)
         y[train[::2]] = -1  # half of the training labels unknown: not read as "no"
@@ -88,7 +91,7 @@ class Conditions(unittest.TestCase):
         self.assertGreater(roc_auc_score(y[test], p), 0.65)
 
     def test_the_screening_threshold_gives_the_stated_specificity_on_the_data_it_came_from(self):
-        rng = np.random.RandomState(3)
+        rng = np.random.RandomState(SEED)
         score = rng.uniform(size=5000)
         label = (rng.uniform(size=5000) < score).astype(int)
         t = conditions.threshold_for_specificity(score, label, 0.9)

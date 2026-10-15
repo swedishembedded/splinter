@@ -765,10 +765,11 @@ mod tests {
             ])))
         );
         // `mix:F` takes the seed it is given, and only it asks for one.
+        let given = splinter_model::seed::draw();
         let mixed = parse_strip("mix:0.25")
             .unwrap()
-            .with_seed::<()>(|| Ok(Seed::new(9)));
-        assert!(matches!(mixed, Ok(Strip::Mix { seed: 9, .. })));
+            .with_seed::<()>(|| Ok(given));
+        assert!(matches!(mixed, Ok(Strip::Mix { seed, .. }) if seed == given.value()));
         for refused in ["none", "keep:hnt", "mix:2", "mix:x", "keep:other:"] {
             assert!(parse_strip(refused).is_err(), "{refused}");
         }

@@ -19,6 +19,7 @@ import flags  # noqa: E402
 import models  # noqa: E402
 
 
+# seed: the flag-incidence margins were measured on the cohort of seed 5, trained at seed 3
 def cohort(n=3000, seed=5):
     """Rows whose risk of dying WITH the flag rises with input `a`; deaths of
     low-`a` subjects mostly carry no flag."""
@@ -57,6 +58,7 @@ class Flags(unittest.TestCase):
     def test_a_subject_who_dies_of_what_the_flag_follows_gets_a_higher_flag_incidence(self):
         data = cohort()
         train, test = np.arange(0, 2200), np.arange(2200, 3000)
+        # seed: see cohort
         ctx = models.Context(data=data, train=train, test=test, seed=3, horizons={})
         curves = flags.FlagCox("all").fit_predict(ctx)["diabetes"]
         self.assertTrue(np.all(np.diff(curves, axis=1) >= -1e-12), "an incidence never falls")
@@ -67,6 +69,7 @@ class Flags(unittest.TestCase):
     def test_the_share_model_never_exceeds_the_all_cause_incidence(self):
         data = cohort()
         train, test = np.arange(0, 2200), np.arange(2200, 3000)
+        # seed: the margin between high and low risk was measured at the cohort and seed above
         ctx = models.Context(data=data, train=train, test=test, seed=3, horizons={})
         with tempfile.TemporaryDirectory() as d:
             os.makedirs(os.path.join(d, "cs-cox-all"))

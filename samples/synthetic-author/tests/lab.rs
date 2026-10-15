@@ -454,7 +454,7 @@ fn the_retrieval_arm_hands_the_model_the_paragraphs_that_share_the_most_with_the
 fn a_decision_read_from_an_essay_is_checked_against_what_the_beliefs_dictate() {
     use synthetic_author::lab::{audit, Mined, MinedResult};
     use synthetic_author::writer::plan;
-    let seed = 6;
+    let seed = splinter_sdk::model::seed::draw().value();
     let persona = Persona::generate(seed);
     let planned = plan(&persona, seed, 2, 3);
     let episode = &planned[0].1[0];
@@ -495,7 +495,7 @@ fn a_decision_read_from_an_essay_is_checked_against_what_the_beliefs_dictate() {
 fn the_audit_counts_the_decisions_whose_open_ways_are_the_ones_the_case_offered() {
     use synthetic_author::lab::{audit, Mined, MinedResult};
     use synthetic_author::writer::plan;
-    let seed = 6;
+    let seed = splinter_sdk::model::seed::draw().value();
     let persona = Persona::generate(seed);
     let planned = plan(&persona, seed, 1, 3);
     let episode = &planned[0].1[0];
@@ -535,7 +535,7 @@ fn the_audit_counts_the_decisions_whose_open_ways_are_the_ones_the_case_offered(
 fn a_case_name_that_two_articles_share_is_checked_against_the_article_that_told_it() {
     use synthetic_author::lab::{audit, Mined, MinedResult};
     use synthetic_author::writer::plan;
-    let seed = 6;
+    let seed = splinter_sdk::model::seed::draw().value();
     let persona = Persona::generate(seed);
     let planned = plan(&persona, seed, 3, 3);
     let episode = &planned[0].1[0];
@@ -588,7 +588,7 @@ fn an_exam_item_is_shown_as_the_model_is_asked_it_and_with_the_answer_the_belief
 #[test]
 fn what_the_writer_is_shown_carries_the_case_files_and_the_convictions_but_no_belief_statement() {
     use synthetic_author::writer::{plan, writer_input};
-    let seed = 6;
+    let seed = splinter_sdk::model::seed::draw().value();
     let persona = Persona::generate(seed);
     let planned = plan(&persona, seed, 1, 3);
     let shown = writer_input(&persona, planned[0].0, &planned[0].1, 700, None);

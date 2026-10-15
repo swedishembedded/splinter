@@ -14,9 +14,18 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from testseed import SEED  # noqa: E402
 import models  # noqa: E402
 import residual  # noqa: E402
 from test_baselines import concordance  # noqa: E402
+
+# The margins below were measured on these worlds and trained from these seeds.
+INTERACTION_WORLD_SEED = 3  # seed: the world with an interaction, where the residual net gains and a shuffled one does not
+ADDITIVE_WORLD_SEED = 4  # seed: the additive world, where the residual net must not hurt
+TRAINING_SEED = 5  # seed: the training seed of the margins on those two worlds
+SERIES_WORLD_SEED = 12  # seed: the tabular side of the series world
+SERIES_NOISE_SEED = 1  # seed: the series of the series world
+SERIES_TRAINING_SEED = 3  # seed: the training seed of the series margin
 
 
 def world(n, interaction, seed):
@@ -53,8 +62,8 @@ class Residual(unittest.TestCase):
         self.assertAlmostEqual(got, want, places=12)
 
     def test_a_network_before_training_adds_nothing(self):
-        net = residual.make_net(16, 2, 7, seed=1)
-        out = residual.predict_offset(net, np.random.RandomState(0).normal(size=(5, 7)))
+        net = residual.make_net(16, 2, 7, seed=SEED)
+        out = residual.predict_offset(net, np.random.RandomState(SEED).normal(size=(5, 7)))
         np.testing.assert_array_equal(out, np.zeros(5))
 
     def test_the_blocks_select_their_columns(self):
@@ -68,45 +77,45 @@ class Residual(unittest.TestCase):
         self.assertTrue(residual.block_mask(names, None).all())
 
     def test_it_finds_an_interaction_the_additive_model_cannot(self):
-        data = world(9000, interaction=0.9, seed=3)
+        data = world(9000, interaction=0.9, seed=INTERACTION_WORLD_SEED)
         train, test = np.arange(0, 6500), np.arange(6500, 9000)
         spline = models.REGISTRY["spline-cox-net-all"]().fit_predict(
-            models.Context(data=data, train=train, test=test, seed=5, horizons={}))[0]
-        ctx = models.Context(data=data, train=train, test=test, seed=5, horizons={})
+            models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={}))[0]
+        ctx = models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={})
         cif = residual.ResidualCox(64, 2).fit_predict(ctx)[0]
         self.assertGreater(ctx.chosen["epochs"], 0)
         self.assertGreater(ctx.chosen["validation_gain"], 0.0)
-        ctx0 = models.Context(data=data, train=train, test=test, seed=5, horizons={})
+        ctx0 = models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={})
         base = ten_year_concordance(spline, ctx0)
         self.assertGreater(ten_year_concordance(cif, ctx0), base + 0.01)
 
     def test_it_does_not_hurt_when_the_truth_is_additive(self):
-        data = world(9000, interaction=0.0, seed=4)
+        data = world(9000, interaction=0.0, seed=ADDITIVE_WORLD_SEED)
         train, test = np.arange(0, 6500), np.arange(6500, 9000)
-        ctx = models.Context(data=data, train=train, test=test, seed=5, horizons={})
+        ctx = models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={})
         spline = models.REGISTRY["spline-cox-net-all"]().fit_predict(
-            models.Context(data=data, train=train, test=test, seed=5, horizons={}))[0]
+            models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={}))[0]
         cif = residual.ResidualCox(64, 2).fit_predict(ctx)[0]
         self.assertGreaterEqual(ctx.chosen["validation_gain"], 0.0, "epoch 0 is always a candidate")
         self.assertGreater(ten_year_concordance(cif, ctx), ten_year_concordance(spline, ctx) - 0.01)
 
     def test_outcomes_shuffled_among_the_training_subjects_give_no_gain(self):
-        data = world(9000, interaction=0.9, seed=3)
+        data = world(9000, interaction=0.9, seed=INTERACTION_WORLD_SEED)
         train, test = np.arange(0, 6500), np.arange(6500, 9000)
-        ctx = models.Context(data=data, train=train, test=test, seed=5, horizons={})
+        ctx = models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={})
         spline = models.REGISTRY["spline-cox-net-all"]().fit_predict(
-            models.Context(data=data, train=train, test=test, seed=5, horizons={}))[0]
+            models.Context(data=data, train=train, test=test, seed=TRAINING_SEED, horizons={}))[0]
         cif = residual.ResidualCox(64, 2, shuffled=True).fit_predict(ctx)[0]
         self.assertLess(ten_year_concordance(cif, ctx), ten_year_concordance(spline, ctx) + 0.005)
 
     def test_training_rows_that_are_neither_contiguous_nor_zero_based_work(self):
         # The earlier residual candidate indexed training rows by global row number and
         # crashed on real folds; folds are shuffled and offset here.
-        data = world(6000, interaction=0.5, seed=8)
-        rng = np.random.RandomState(0)
+        data = world(6000, interaction=0.5, seed=SEED)
+        rng = np.random.RandomState(SEED)
         order = rng.permutation(np.arange(1000, 6000))
         train, test = np.sort(order[:3500]), np.sort(order[3500:])
-        ctx = models.Context(data=data, train=train, test=test, seed=2, horizons={})
+        ctx = models.Context(data=data, train=train, test=test, seed=SEED, horizons={})
         cif = residual.ResidualCox(16, 1).fit_predict(ctx)[0]
         self.assertEqual(cif.shape, (len(test), 15))
         self.assertTrue(np.all(np.diff(cif, axis=1) >= -1e-12) and np.all((cif >= 0) & (cif <= 1)))
@@ -114,8 +123,8 @@ class Residual(unittest.TestCase):
     def test_a_series_network_finds_what_only_the_series_holds(self):
         # The hazard depends on the level of the series late in the recording, which no
         # tabular input carries.
-        data = world(6000, interaction=0.0, seed=12)
-        rng = np.random.RandomState(1)
+        data = world(6000, interaction=0.0, seed=SERIES_WORLD_SEED)
+        rng = np.random.RandomState(SERIES_NOISE_SEED)
         seq = rng.normal(size=(6000, 2, 96)).astype(np.float32)
         level = seq[:, 0, 60:].mean(axis=1)
         t = rng.exponential(1.0 / (0.03 * np.exp(0.5 * data["num"][:, 0] + 8.0 * level)))
@@ -123,21 +132,21 @@ class Residual(unittest.TestCase):
         data["time"], data["cause"] = np.where(died, t, 15.0), np.where(died, 0, -1).astype(np.int8)
         data["seq"] = seq
         train, test = np.arange(0, 4200), np.arange(4200, 6000)
-        ctx = models.Context(data=data, train=train, test=test, seed=3, horizons={})
+        ctx = models.Context(data=data, train=train, test=test, seed=SERIES_TRAINING_SEED, horizons={})
         base = models.REGISTRY["spline-cox-net-all"]().fit_predict(
-            models.Context(data=data, train=train, test=test, seed=3, horizons={}))[0]
+            models.Context(data=data, train=train, test=test, seed=SERIES_TRAINING_SEED, horizons={}))[0]
         cif = residual.ResidualSeq().fit_predict(ctx)[0]
         self.assertGreater(ctx.chosen["epochs"], 0)
         self.assertGreater(ten_year_concordance(cif, ctx), ten_year_concordance(base, ctx) + 0.03)
 
     def test_the_prediction_of_a_row_ignores_the_other_test_rows(self):
-        data = world(5000, interaction=0.5, seed=9)
+        data = world(5000, interaction=0.5, seed=SEED)
         train, test = np.arange(0, 3500), np.arange(3500, 5000)
-        ctx = models.Context(data=data, train=train, test=test, seed=2, horizons={})
+        ctx = models.Context(data=data, train=train, test=test, seed=SEED, horizons={})
         cif = residual.ResidualCox(16, 1).fit_predict(ctx)[0]
         changed = dict(data, num=data["num"].copy())
         changed["num"][np.delete(test, 0)] = 1e6
-        ctx2 = models.Context(data=changed, train=train, test=test, seed=2, horizons={})
+        ctx2 = models.Context(data=changed, train=train, test=test, seed=SEED, horizons={})
         cif2 = residual.ResidualCox(16, 1).fit_predict(ctx2)[0]
         np.testing.assert_allclose(cif2[0], cif[0], atol=1e-9)
 

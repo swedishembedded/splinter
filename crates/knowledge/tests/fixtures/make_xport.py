@@ -22,7 +22,7 @@ import pandas as pd
 import pyreadstat
 
 here = os.path.dirname(os.path.abspath(__file__))
-rng = np.random.default_rng(7)
+rng = np.random.default_rng(7)  # seed: the committed fixture is a function of it; a regeneration must reproduce mixed.xpt
 n = 37
 df = pd.DataFrame(
     {

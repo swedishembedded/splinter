@@ -86,9 +86,10 @@ fn mix_keeps_a_fraction_chosen_by_experience_id_alone() {
     let experiences: Vec<Experience> = (0..40)
         .map(|i| solve(INSTRUCTION, &format!("2026-09-30T01:00:{i:02}.000Z")))
         .collect();
+    let seed = any_seed();
     let mix = |fraction: f64| Strip::Mix {
         keep_fraction: Fraction::new(fraction).unwrap(),
-        seed: 7,
+        seed,
     };
     let keeps = |corpus: &Corpus, fraction: f64| -> Vec<bool> {
         student_turns(corpus, mix(fraction))

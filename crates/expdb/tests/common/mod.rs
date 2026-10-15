@@ -10,6 +10,7 @@
 #![allow(dead_code, clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
+use std::hash::BuildHasher as _;
 
 use splinter_expdb::model::{
     family_key, Action, Body, Decision, Edge, Observation, Outcome, PolicyRef, Record, Rel,
@@ -383,4 +384,9 @@ pub fn robot_episode(
         joints,
         audio_chunks,
     }
+}
+
+/// A seed drawn for this call, for a spec whose claim holds for every seed.
+pub fn any_seed() -> u64 {
+    std::hash::RandomState::new().hash_one(0_u8)
 }

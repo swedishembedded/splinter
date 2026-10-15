@@ -15,7 +15,7 @@ mod common;
 
 use std::collections::HashSet;
 
-use common::{attempt, Scratch};
+use common::{any_seed, attempt, Scratch};
 use splinter_expdb::model::Outcome;
 use splinter_expdb::train::{LoaderConfig, Materialized, Recipe};
 use splinter_expdb::{Config, WriterIdentity};
@@ -61,7 +61,7 @@ fn an_epoch_yields_every_sample_exactly_once() {
         &snapshot,
         LoaderConfig {
             window: 16,
-            seed: 3,
+            seed: any_seed(),
             epoch: 0,
         },
     ));
@@ -110,7 +110,7 @@ fn a_window_that_covers_the_plan_reads_each_block_at_most_once() {
         &snapshot,
         LoaderConfig {
             window: plan.samples.len(),
-            seed: 9,
+            seed: any_seed(),
             epoch: 0,
         },
     ));
@@ -129,7 +129,7 @@ fn a_zero_window_is_refused_rather_than_looping_forever() {
         &snapshot,
         LoaderConfig {
             window: 0,
-            seed: 1,
+            seed: any_seed(),
             epoch: 0,
         },
     );

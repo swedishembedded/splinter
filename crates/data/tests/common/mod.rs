@@ -7,6 +7,7 @@
 // Each spec uses a different subset of the builders.
 #![allow(dead_code)]
 
+use std::hash::BuildHasher as _;
 use std::path::PathBuf;
 
 use atif::{
@@ -203,4 +204,9 @@ pub fn after_system(messages: &[WireMessage]) -> &[WireMessage] {
         "every conversation starts with the solver's system turn"
     );
     rest
+}
+
+/// A seed drawn for this call, for a spec whose claim holds for every seed.
+pub fn any_seed() -> u64 {
+    std::hash::RandomState::new().hash_one(0_u8)
 }

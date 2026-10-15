@@ -18,6 +18,7 @@ import drivers  # noqa: E402
 import models  # noqa: E402
 
 
+# seed: the importance thresholds below were measured on the cohort of seed 0, the model of seed 1 and the permutations of seed 3
 def cohort(n=3000, seed=0):
     """Hazard rises with `harm` and the 'yes' level of `smoker`, falls with `protect`; `noise` does nothing."""
     rng = np.random.RandomState(seed)
@@ -39,8 +40,10 @@ class Drivers(unittest.TestCase):
         data = cohort()
         rows = np.arange(len(data["time"]))
         train, test = rows[: 2200], rows[2200:]
+        # seed: see cohort
         ctx = models.Context(data, train, test, seed=1, horizons={})
         cls.blocks = {"risk": ("harm", "protect"), "other": ("noise", "smoker")}
+        # seed: see cohort
         cls.result = drivers.analyse(data, ctx, n_permutations=5, seed=3, blocks=cls.blocks)
 
     def test_variables_that_move_the_hazard_outrank_noise(self):

@@ -57,7 +57,7 @@ fn recipe(author_seed: u64, writer: &str) -> CorpusManifest {
             writer: writer.into(),
             reader: Some("reader-model".into()),
             decoding: "sampled".into(),
-            run_seed: Some(99),
+            run_seed: Some(!author_seed),
             articles: 10,
             episodes_per_article: 3,
             min_words: 700,

@@ -13,10 +13,11 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from testseed import SEED  # noqa: E402
 import accel  # noqa: E402
 
 
-def week(per_day, days=7, seed=0):
+def week(per_day, days=7, seed=SEED):
     """Counts for `days` days: the first `per_day` minutes of each day worn at random
     low-to-moderate intensity, the rest of the day not worn (zeros)."""
     rng = np.random.RandomState(seed)
@@ -79,8 +80,8 @@ class Accelerometer(unittest.TestCase):
         self.assertAlmostEqual(f["sedentary_to_active"], 1.0 / 600.0, places=6)
 
     def test_minutes_are_ordered_by_their_recording_index(self):
-        c, m = week(per_day=700, days=7, seed=3)
-        shuffled = np.random.RandomState(1).permutation(len(c))
+        c, m = week(per_day=700, days=7, seed=SEED)
+        shuffled = np.random.RandomState(SEED).permutation(len(c))
         a, b = accel.summarise(c, m), accel.summarise(c[shuffled], m[shuffled])
         for k in a:
             self.assertAlmostEqual(a[k], b[k], places=9)
@@ -88,7 +89,7 @@ class Accelerometer(unittest.TestCase):
 
 class Grid(unittest.TestCase):
     def test_the_grid_has_the_log_mean_and_the_worn_share_of_each_bin(self):
-        c, m = week(per_day=700, days=7, seed=2)
+        c, m = week(per_day=700, days=7, seed=SEED)
         g = accel.grid(c, m)
         self.assertEqual(g.shape, (2, accel.BINS))
         # The first bin of a day is worn throughout: the mean of its counts, logged.
@@ -100,13 +101,13 @@ class Grid(unittest.TestCase):
         self.assertEqual((float(g[0, last_bin_of_day]), float(g[1, last_bin_of_day])), (0.0, 0.0))
 
     def test_a_shorter_recording_is_padded_with_not_worn(self):
-        c, m = week(per_day=700, days=7, seed=1)
+        c, m = week(per_day=700, days=7, seed=SEED)
         g = accel.grid(c[:3 * accel.DAY], m[:3 * accel.DAY])
         self.assertEqual(float(g[1, 3 * accel.DAY // accel.BIN_MINUTES:].sum()), 0.0)
 
     def test_the_order_of_the_rows_does_not_matter(self):
-        c, m = week(per_day=700, days=7, seed=4)
-        p = np.random.RandomState(0).permutation(len(c))
+        c, m = week(per_day=700, days=7, seed=SEED)
+        p = np.random.RandomState(SEED).permutation(len(c))
         np.testing.assert_allclose(accel.grid(c, m), accel.grid(c[p], m[p]))
 
 

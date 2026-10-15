@@ -14,7 +14,7 @@
 
 mod common;
 
-use common::{attempt, coding_task, state, Scratch};
+use common::{any_seed, attempt, coding_task, state, Scratch};
 use splinter_expdb::analyze::TASK_COMPLETION;
 use splinter_expdb::ingest::Collector;
 use splinter_expdb::model::{
@@ -494,7 +494,7 @@ fn a_plan_is_reproducible_from_its_recipe_and_snapshot_whatever_came_after() {
     c.flush().unwrap();
     let snapshot = db.snapshot().unwrap();
     snapshot.pin("training-run-1").unwrap();
-    let recipe = Recipe::sft().seed(7).max_samples(4);
+    let recipe = Recipe::sft().seed(any_seed()).max_samples(4);
     let first = snapshot.compile(&recipe).unwrap();
 
     attempt(&mut c, 3, "c", 3, Outcome::Pass);

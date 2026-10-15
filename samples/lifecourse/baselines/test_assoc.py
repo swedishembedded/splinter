@@ -14,10 +14,11 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from testseed import SEED  # noqa: E402
 import assoc  # noqa: E402
 
 
-def cohort(effect, n=6000, seed=2):
+def cohort(effect, n=6000, seed=SEED):
     rng = np.random.RandomState(seed)
     age = rng.uniform(30, 80, n)
     accel5 = rng.normal(0, 1, n)
@@ -33,9 +34,11 @@ def cohort(effect, n=6000, seed=2):
 
 class Association(unittest.TestCase):
     def test_a_real_effect_is_recovered_and_no_effect_gives_a_ratio_of_one(self):
-        hr, lo, hi, events = assoc.hazard_ratio(cohort(0.4), "all-cause")
+        # seed: a confidence interval misses the true ratio at some seeds; these cohorts were measured at seed 2
+        hr, lo, hi, events = assoc.hazard_ratio(cohort(0.4, seed=2), "all-cause")
         self.assertTrue(lo < np.exp(0.4) < hi and events > 300, (hr, lo, hi))
-        hr, lo, hi, _ = assoc.hazard_ratio(cohort(0.0), "all-cause")
+        # seed: as above, the no-effect cohort was measured at seed 2
+        hr, lo, hi, _ = assoc.hazard_ratio(cohort(0.0, seed=2), "all-cause")
         self.assertTrue(lo < 1.0 < hi, (hr, lo, hi))
 
     def test_a_death_without_multiple_cause_data_is_not_called_flag_free(self):

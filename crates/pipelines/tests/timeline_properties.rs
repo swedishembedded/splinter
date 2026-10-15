@@ -50,7 +50,7 @@ fn split(ctx: &splinter_orchestrator::Context, plan: SplitPlan) -> SplitReport {
         &SplitRequest {
             dataset: Some("cohort".into()),
             plan,
-            seed: 9,
+            seed: splinter_model::seed::draw().value(),
             projection: ProjectionSpec::at_entry(),
         },
     )

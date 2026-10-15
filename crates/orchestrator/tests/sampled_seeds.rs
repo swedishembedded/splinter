@@ -198,7 +198,7 @@ fn greedy_decoding_and_named_seeds_leave_nothing_to_record() {
             &ctx,
             &reference,
             Sampling {
-                seed: Some(7),
+                seed: Some(splinter_model::seed::draw().value()),
                 ..AGENT_SAMPLING
             },
             1,

@@ -179,7 +179,7 @@ fn a_model_whose_test_units_lie_outside_its_support_fails_serving_correctness() 
                 source: "cycle-b".into(),
                 validation_share: 0.2,
             },
-            seed: 3,
+            seed: splinter_model::seed::draw().value(),
             projection: ProjectionSpec::at_entry(),
         },
     )

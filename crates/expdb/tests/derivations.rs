@@ -12,7 +12,7 @@
 
 mod common;
 
-use common::{attempt, skill, Scratch};
+use common::{any_seed, attempt, skill, Scratch};
 use splinter_expdb::model::{
     Body, CreditAssignment, DatasetNode, Derivation, ModelNode, Outcome, RecordKind, TrainingRun,
 };
@@ -26,7 +26,7 @@ fn extractor() -> Derivation {
         code_ref: Some("git:f172bd8".into()),
         model: Some("qwen3-32b".into()),
         params: serde_json::json!({ "temperature": 0.2 }),
-        seed: Some(7),
+        seed: Some(any_seed()),
     }
 }
 
