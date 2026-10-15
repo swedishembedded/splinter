@@ -16,6 +16,7 @@ use splinter_sdk::agent::sven::model::{Message, ModelProvider, ToolSchema};
 use splinter_sdk::agent::tool_turn::tool_turn;
 use splinter_sdk::store::jsonl;
 
+use crate::binding::item_digest;
 use crate::exam::{grade, Item};
 use crate::prompts::render;
 
@@ -34,6 +35,14 @@ pub struct Outcome {
     pub tool_seen: bool,
     /// The tool called and its arguments, if a call was made.
     pub call: Option<Value>,
+    /// Digest of the item as it was asked. Empty in outcomes written before
+    /// outcomes carried it.
+    #[serde(default)]
+    pub item: String,
+    /// Digest of the model that answered. Empty in outcomes written before
+    /// outcomes carried it.
+    #[serde(default)]
+    pub model: String,
 }
 
 /// The tool call `provider` makes when it is given `item` under `system`,
@@ -79,7 +88,8 @@ pub fn read_outcomes(path: &Path) -> anyhow::Result<Vec<Outcome>> {
 }
 
 /// Puts every item of `items` to `provider` under `system`, appending an outcome
-/// to `out` as each is done; items already in `out` are not asked again.
+/// to `out` as each is done, marked with `model`, the digest of the model that
+/// answers; items already in `out` are not asked again.
 /// Returns the outcome of every item that is in `out` when it ends, in order.
 ///
 /// # Errors
@@ -90,8 +100,16 @@ pub fn run_items(
     items: &[Item],
     out: &Path,
     max_tokens: u32,
+    model: &str,
 ) -> anyhow::Result<Vec<Outcome>> {
-    run_items_with(provider, |_| system.to_string(), items, out, max_tokens)
+    run_items_with(
+        provider,
+        |_| system.to_string(),
+        items,
+        out,
+        max_tokens,
+        model,
+    )
 }
 
 /// As [`run_items`], with the system turn chosen for each item.
@@ -104,6 +122,7 @@ pub fn run_items_with(
     items: &[Item],
     out: &Path,
     max_tokens: u32,
+    model: &str,
 ) -> anyhow::Result<Vec<Outcome>> {
     let mut done = read_outcomes(out)?;
     let runtime = tokio::runtime::Runtime::new()?;
@@ -120,6 +139,8 @@ pub fn run_items_with(
             combo_seen: item.combo_seen,
             tool_seen: item.tool_seen,
             call: call.map(|(name, args)| serde_json::json!({"name": name, "arguments": args})),
+            item: item_digest(item).to_string(),
+            model: model.to_string(),
         };
         log.append(&outcome)?;
         done.push(outcome);

@@ -15,8 +15,10 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::store::jsonl;
+use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
 use crate::arms::{run_items, run_items_with, Outcome};
+use crate::binding::{bind, items_digest, ArmRecord, ModelIdentity};
 use crate::cache::{Cache, StoredArticle};
 use crate::dataset::records_for;
 use crate::exam::{items, Item};
@@ -297,20 +299,72 @@ pub fn outcomes_path(cache: &Cache, arm: Arm) -> PathBuf {
 /// How many paragraphs the retrieval arm is handed with each situation.
 pub const RETRIEVED_PARAGRAPHS: usize = 6;
 
-/// Puts the examination to `provider` as `arm`.
+/// What an examination of one arm was asked with, besides the items: the
+/// flags that made them and the model that answers.
+#[derive(Clone, Debug)]
+pub struct ExamRun {
+    /// How many articles the corpus was planned with.
+    pub articles: usize,
+    /// Items of each kind of difficulty.
+    pub per_cell: usize,
+    /// The most tokens a reply may run to.
+    pub max_tokens: u32,
+    /// The model that answers.
+    pub model: ModelIdentity,
+    /// Take over outcomes that exist without a manifest.
+    pub adopt: bool,
+}
+
+/// The record of `arm` examined with `run` on `items`: what its outcomes
+/// depend on.
 ///
 /// # Errors
-/// The model failed or the outcomes cannot be written.
+/// The retrieval arm's corpus cannot be read.
+pub fn arm_record(
+    cache: &Cache,
+    persona: &Persona,
+    arm: Arm,
+    items: &[Item],
+    run: &ExamRun,
+) -> anyhow::Result<ArmRecord> {
+    let told = match arm {
+        Arm::Retrieval => serde_json::to_string(&cache.articles()?)?,
+        _ => String::new(),
+    };
+    let context = serde_json::json!({"system": arm.system(persona), "corpus": told});
+    Ok(ArmRecord {
+        arm: arm.name().to_string(),
+        items_digest: items_digest(items).to_string(),
+        articles: run.articles,
+        per_cell: run.per_cell,
+        max_tokens: run.max_tokens,
+        context_digest: Digest::of(&canonical_json(&context)?).to_string(),
+        model: run.model.clone(),
+        adopted: false,
+    })
+}
+
+/// Puts the examination to `provider` as `arm`, under the manifest `run`
+/// makes: the outcomes already kept for the arm must have been made under the
+/// same one.
+///
+/// # Errors
+/// The outcomes were made under another manifest, the model failed, or the
+/// outcomes cannot be written.
 pub fn run_arm(
     cache: &Cache,
     persona: &Persona,
     arm: Arm,
     provider: &std::sync::Arc<dyn splinter_sdk::agent::sven::model::ModelProvider>,
     items: &[Item],
-    max_tokens: u32,
+    run: &ExamRun,
 ) -> anyhow::Result<Vec<Outcome>> {
     let path = outcomes_path(cache, arm);
-    std::fs::create_dir_all(path.parent().context("a directory")?)?;
+    let dir = path.parent().context("a directory")?;
+    std::fs::create_dir_all(dir)?;
+    let record = arm_record(cache, persona, arm, items, run)?;
+    bind(dir, &path, &record, run.adopt)?;
+    let model = run.model.digest().to_string();
     if arm == Arm::Retrieval {
         let notes = crate::retrieval::Notes::new(&cache.articles()?);
         return run_items_with(
@@ -318,8 +372,16 @@ pub fn run_arm(
             |item| notes.system_for(item, RETRIEVED_PARAGRAPHS),
             items,
             &path,
-            max_tokens,
+            run.max_tokens,
+            &model,
         );
     }
-    run_items(provider, &arm.system(persona), items, &path, max_tokens)
+    run_items(
+        provider,
+        &arm.system(persona),
+        items,
+        &path,
+        run.max_tokens,
+        &model,
+    )
 }

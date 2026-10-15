@@ -225,9 +225,9 @@ fn an_examination_grades_every_item_and_picks_up_where_it_stopped() {
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join("arm.jsonl");
     let half = all.len() / 2;
-    let first = run_items(&provider, "system", &all[..half], &out, 64).unwrap();
+    let first = run_items(&provider, "system", &all[..half], &out, 64, "test-model").unwrap();
     assert_eq!(first.len(), half);
-    let again = run_items(&provider, "system", &all, &out, 64).unwrap();
+    let again = run_items(&provider, "system", &all, &out, 64, "test-model").unwrap();
     assert_eq!(
         again.len(),
         all.len(),
@@ -248,11 +248,11 @@ fn an_item_written_twice_by_overlapping_runs_is_counted_once() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join("arm.jsonl");
-    run_items(&provider, "system", &all, &out, 64).unwrap();
+    run_items(&provider, "system", &all, &out, 64, "test-model").unwrap();
     let once = std::fs::read_to_string(&out).unwrap();
     let doubled = format!("{once}{once}");
     std::fs::write(&out, doubled).unwrap();
-    let read = run_items(&provider, "system", &all, &out, 64).unwrap();
+    let read = run_items(&provider, "system", &all, &out, 64, "test-model").unwrap();
     assert_eq!(
         read.len(),
         all.len(),
@@ -269,7 +269,15 @@ fn where_two_authors_would_decide_differently_a_model_is_counted_with_the_one_it
     let dir = std::env::temp_dir().join(format!("synthetic-author-div-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let outcomes = run_items(&provider, "system", &all, &dir.join("arm.jsonl"), 64).unwrap();
+    let outcomes = run_items(
+        &provider,
+        "system",
+        &all,
+        &dir.join("arm.jsonl"),
+        64,
+        "test-model",
+    )
+    .unwrap();
 
     let itself = divergence(&all, &outcomes, &persona);
     assert_eq!(itself.differing, 0, "an author never differs from itself");
@@ -310,6 +318,8 @@ fn outcome(
         combo_seen,
         tool_seen,
         call: None,
+        item: String::new(),
+        model: String::new(),
     }
 }
 
@@ -333,7 +343,11 @@ fn a_report_gives_each_arm_s_accuracy_by_kind_and_a_paired_test_between_arms() {
     let a = accuracy(&tuned);
     assert_eq!((a.right, a.n), (36, 40));
     assert!(a.low < 0.9 && 0.9 < a.high, "{a:?}");
-    let text = render(&[("base", base), ("tuned", tuned)], &[("tuned", "base")]);
+    let text = render(
+        &[("base", base), ("tuned", tuned)],
+        &[("tuned", "base")],
+        &[],
+    );
     assert!(text.contains("tuned") && text.contains("0.900"), "{text}");
     assert!(text.contains("base") && text.contains("0.400"), "{text}");
     // 20 items the tuned arm got right and the base did not, none the other way.
@@ -589,4 +603,24 @@ fn what_the_writer_is_shown_carries_the_case_files_and_the_convictions_but_no_be
             "the writer is given dispositions, not the statement a reader could look for"
         );
     }
+}
+
+#[test]
+fn an_empty_cell_is_not_measured_and_an_arm_without_outcomes_is_named() {
+    use synthetic_author::report::render;
+    // Every item is of a seen topic: the cells of new topics hold nothing.
+    let tuned: Vec<_> = (0..8)
+        .map(|i| outcome(i, i < 6, true, i % 2 == 0, true))
+        .collect();
+    let text = render(
+        &[("tuned", tuned)],
+        &[("tuned", "base"), ("tuned", "named")],
+        &["base", "named"],
+    );
+    let row = text.lines().find(|l| l.starts_with("| tuned")).unwrap();
+    assert!(row.contains("not measured"), "{row}");
+    assert!(!row.contains("0.000 (0/0)"), "{row}");
+    assert!(text.contains("base: not measured"), "{text}");
+    assert!(text.contains("tuned over base: not measured"), "{text}");
+    assert!(text.contains("tuned over named: not measured"), "{text}");
 }

@@ -9,6 +9,7 @@
 //! convictions can only be learned from what is decided. A run has a budget in
 //! requests and in tokens and stops before it is exceeded.
 
+use std::ops::Deref;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
@@ -16,6 +17,7 @@ use std::time::Duration;
 use serde_json::json;
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::TypedCall;
+use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::cache::{Cache, StoredArticle, Usage};
 use crate::episode::{did_phrase, episodes_for, Episode};
@@ -43,6 +45,84 @@ const ROLE: &str =
 
 /// The instruction the writer is given with every article.
 pub const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. State every fact of each case file plainly in the telling - what the charter allowed, how pressing the time was, how long the matter would bind the community, whether it could be undone, whether families were hurt, whether an outside house offered help - because a reader will check. Say too which ways were open to you, as `case_file.open` lists them: tell each of them in your own words, the one you took and the ones you left, and name no way that is not listed. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case_file.case` and tell its facts (the `case_file` is a list of facts, not wording: put every fact in your own words), say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not reuse the wording of `case_file` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. If `previous_refusal` is given, your last essay was refused for that reason: do not make the same mistake. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
+
+/// Keeps the writer's seeds apart from the reader's.
+const WRITER_SALT: u64 = 0x5752_4954_4552_0001;
+/// Keeps the reader's seeds apart from the writer's.
+const READER_SALT: u64 = 0x5245_4144_4552_0002;
+
+/// Which model of a run is being asked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Role {
+    /// The model that writes the articles.
+    Writer,
+    /// The model that reads each article back.
+    Reader,
+}
+
+/// One request of a run: the article, the attempt at it (from one) and who is
+/// asked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RequestKey {
+    /// The article.
+    pub article: usize,
+    /// The attempt at the article, from one.
+    pub attempt: usize,
+    /// Who is asked.
+    pub role: Role,
+}
+
+impl RequestKey {
+    /// The seed of this request's decoding, derived from the run's seed: a
+    /// pure function of the run seed and the request, so a request can be
+    /// repeated from the manifest, and two attempts at one article draw
+    /// differently.
+    #[must_use]
+    pub fn seed(self, run_seed: u64) -> u64 {
+        let salt = match self.role {
+            Role::Writer => WRITER_SALT,
+            Role::Reader => READER_SALT,
+        };
+        let place = ((self.article as u64) << 24) ^ self.attempt as u64;
+        SplitMix64::new(run_seed ^ salt ^ place).next_u64()
+    }
+}
+
+/// A model lent for one request: borrowed when the run has one model for all
+/// requests, owned when it is made for the request.
+pub enum Lent<'a> {
+    /// The run's own model.
+    Borrowed(&'a BlockingModel),
+    /// A model made for this request.
+    Owned(Box<BlockingModel>),
+}
+
+impl Deref for Lent<'_> {
+    type Target = BlockingModel;
+
+    fn deref(&self) -> &BlockingModel {
+        match self {
+            Self::Borrowed(model) => model,
+            Self::Owned(model) => model,
+        }
+    }
+}
+
+/// Where a run gets the model that answers a request, so that a model that
+/// samples can be given a seed of its own for every request.
+pub trait Models: Sync {
+    /// The model that answers `request`.
+    ///
+    /// # Errors
+    /// The model cannot be made.
+    fn model(&self, request: RequestKey) -> anyhow::Result<Lent<'_>>;
+}
+
+impl Models for BlockingModel {
+    fn model(&self, _: RequestKey) -> anyhow::Result<Lent<'_>> {
+        Ok(Lent::Borrowed(self))
+    }
+}
 
 /// What a run may spend and how it writes.
 #[derive(Clone, Debug)]
@@ -139,7 +219,7 @@ pub fn plan(
 pub fn write_corpus(
     persona: &Persona,
     seed: u64,
-    writer: &BlockingModel,
+    writer: &dyn Models,
     cache: &Cache,
     opts: &Options,
 ) -> anyhow::Result<Summary> {
@@ -157,8 +237,8 @@ pub fn write_corpus(
 pub fn write_corpus_read(
     persona: &Persona,
     seed: u64,
-    writer: &BlockingModel,
-    reader: Option<&BlockingModel>,
+    writer: &dyn Models,
+    reader: Option<&dyn Models>,
     cache: &Cache,
     opts: &Options,
 ) -> anyhow::Result<Summary> {
@@ -214,8 +294,8 @@ struct State {
 
 struct Run<'a> {
     persona: &'a Persona,
-    writer: &'a BlockingModel,
-    reader: Option<&'a BlockingModel>,
+    writer: &'a dyn Models,
+    reader: Option<&'a dyn Models>,
     cache: &'a Cache,
     opts: &'a Options,
     planned: Vec<(usize, Vec<Episode>)>,
@@ -305,7 +385,17 @@ impl Run<'_> {
             let call = TypedCall::<Article>::new("write_article", TASK, ROLE, REQUEST_DEADLINE)
                 .max_output_tokens(MAX_ARTICLE_TOKENS)
                 .repairs(1);
-            let article = match self.writer.call(call, &shown) {
+            let key = RequestKey {
+                article: index,
+                attempt,
+                role: Role::Writer,
+            };
+            let asked = self
+                .writer
+                .model(key)
+                .map_err(|e| e.to_string())
+                .and_then(|writer| writer.call(call, &shown).map_err(|e| e.to_string()));
+            let article = match asked {
                 Ok(article) => {
                     self.state().errors = 0;
                     article
@@ -337,7 +427,7 @@ impl Run<'_> {
                 MAX_ARTICLE_TOKENS,
                 tokens(&article.title) + tokens(&article.body),
             );
-            match self.judge(&article, episodes) {
+            match self.judge(&article, episodes, index, attempt) {
                 Ok(()) => {
                     self.cache.write_article(&StoredArticle {
                         index,
@@ -378,7 +468,13 @@ impl Run<'_> {
 
     /// Whether the article may join the corpus: its form, then its decisions,
     /// by a reader when there is one and by marker words when there is not.
-    fn judge(&self, article: &Article, episodes: &[Episode]) -> Result<(), Rejection> {
+    fn judge(
+        &self,
+        article: &Article,
+        episodes: &[Episode],
+        index: usize,
+        attempt: usize,
+    ) -> Result<(), Rejection> {
         check_form(article, self.persona, episodes, self.opts.min_words)?;
         let Some(reader) = self.reader else {
             return check_markers(article, self.persona, episodes);
@@ -391,7 +487,16 @@ impl Run<'_> {
                 expected: self.persona.decide(&episodes[0].scenario).choice,
             });
         }
-        match read_raw(reader, &article.body, &cases) {
+        let key = RequestKey {
+            article: index,
+            attempt,
+            role: Role::Reader,
+        };
+        let read = reader
+            .model(key)
+            .map_err(|e| e.to_string())
+            .and_then(|reader| read_raw(&reader, &article.body, &cases).map_err(|e| e.to_string()));
+        match read {
             Ok(mined) => {
                 let reading = mined.as_reading();
                 self.settle(

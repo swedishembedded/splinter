@@ -16,14 +16,19 @@
 //! measured; no model is involved in saying what the author decides.
 
 pub mod arms;
+pub mod binding;
 pub mod cache;
+pub mod corpus_cmd;
 pub mod dataset;
 pub mod episode;
 pub mod exam;
+pub mod exam_cmd;
 pub mod facts;
 pub mod gates;
 pub mod lab;
+pub mod manifest;
 pub mod mine;
+pub mod models;
 pub mod names;
 pub mod persona;
 pub mod prompts;
@@ -32,4 +37,5 @@ pub mod report;
 pub mod retrieval;
 pub mod scenario;
 pub mod tools;
+pub mod training;
 pub mod writer;

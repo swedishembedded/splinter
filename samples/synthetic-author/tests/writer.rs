@@ -28,7 +28,7 @@ use synthetic_author::cache::Cache;
 use synthetic_author::episode::episodes_for;
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::Archetype;
-use synthetic_author::writer::{write_corpus, Options, TRAIN_TOPICS};
+use synthetic_author::writer::{write_corpus, Models, Options, TRAIN_TOPICS};
 
 struct Scripted {
     replies: Mutex<VecDeque<String>>,
@@ -232,7 +232,7 @@ fn a_reader_decides_whether_the_article_shows_the_decision_the_beliefs_determine
         &persona,
         11,
         &both,
-        Some(&both),
+        Some(&both as &dyn Models),
         &cache,
         &options(1),
     )
@@ -344,7 +344,7 @@ fn workers_write_every_article_once_and_keep_to_the_call_budget() {
         &persona,
         11,
         &model,
-        Some(&model),
+        Some(&model as &dyn Models),
         &cache,
         &opts,
     )
@@ -364,7 +364,7 @@ fn workers_write_every_article_once_and_keep_to_the_call_budget() {
         &persona,
         11,
         &model,
-        Some(&model),
+        Some(&model as &dyn Models),
         &cache,
         &opts,
     )

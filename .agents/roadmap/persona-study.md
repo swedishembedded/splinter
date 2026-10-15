@@ -48,6 +48,16 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-11 Every exam outcome is bound to its item and its model
 
+- **Status.** Done for `synthetic-author`. Each outcome carries the digest of
+  its item (rendered prompt, tool definition, expected label) and of its model
+  (base and adapter digests, decoding, decoding seed); `exam/manifest.json`
+  records, per arm, the items digest, `--articles`, `--per-cell`, the reply
+  limit, the arm's system turn and the model, and a rerun under any other
+  manifest, adapter, or an adapter retrained at the same path is refused with
+  both digests named. `report` and `cross` fail on a mismatch, an empty cell
+  prints `not measured`, and a requested arm without outcomes is named. What
+  remains: the paper's `collect.py` and `confusion.py` do not yet join on the
+  digests.
 - **Problem.** Outcome files carry an item id that names different items under
   different flags and nothing about the model (PF-02); empty cells print as
   zero and missing arms vanish (PF-12).

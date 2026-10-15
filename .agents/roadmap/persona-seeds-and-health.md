@@ -175,6 +175,18 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 
 ## PP-07 Synthetic-author seeds and run manifests
 
+- **Status.** Done. `corpus` draws and prints the author seed when none is
+  given and writes `manifest.json` (author seed and whether it was drawn,
+  writer and reader references, decoding, the run seed every per-request
+  writer and reader seed is derived from, options, code revision); a corpus
+  is only continued with the recipe it was begun with. `recheck`, `dataset`,
+  `exam`, `items`, `audit` and `cross` read the author from the corpus and
+  refuse a differing `--seed` (a corpus from before manifests is known by its
+  `persona.json`). `exam` writes `exam/manifest.json`, refuses to append under
+  another manifest naming both digests, and takes over old outcomes only with
+  `--adopt`. `train --train-seed` draws and prints when absent and
+  `summary.json` records the seed and every setting. What remains: `mine`'s
+  reader still draws an unrecorded seed per request.
 - **Problem.** The author seed is a required argument repeated on every
   subcommand and never checked against the corpus (PF-03); the writer's
   draws are unseeded and unrecorded; exam and corpus directories have no

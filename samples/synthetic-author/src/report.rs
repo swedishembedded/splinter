@@ -62,29 +62,41 @@ fn rate(right: usize, n: usize) -> Rate {
     }
 }
 
+/// What a table shows for a rate over no items: an unmeasured rate is not
+/// zero.
+const NOT_MEASURED: &str = "not measured";
+
 fn cell(outcomes: &[Outcome], keep: impl Fn(&Outcome) -> bool) -> String {
     let chosen: Vec<_> = outcomes.iter().filter(|o| keep(o)).cloned().collect();
+    if chosen.is_empty() {
+        return NOT_MEASURED.to_string();
+    }
     let r = accuracy(&chosen);
     format!("{:.3} ({}/{})", r.rate, r.right, r.n)
 }
 
 /// A table of every arm and, for each pair in `compare`, a paired test of the
-/// first against the second on the items both were asked.
+/// first against the second on the items both were asked. `missing` names the
+/// arms that were asked for and have no outcomes: they are listed, and a
+/// comparison with one of them says it was not measured instead of vanishing.
 #[must_use]
-pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)]) -> String {
+pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)], missing: &[&str]) -> String {
     let mut text = String::from(
         "| arm | all | topic seen | topic new | combination seen | combination new | tool seen | tool new |\n|---|---|---|---|---|---|---|---|\n",
     );
     for (name, outcomes) in arms {
         let r = accuracy(outcomes);
+        let all = if outcomes.is_empty() {
+            NOT_MEASURED.to_string()
+        } else {
+            format!(
+                "{:.3} [{:.3}, {:.3}] ({}/{})",
+                r.rate, r.low, r.high, r.right, r.n
+            )
+        };
         let _ = writeln!(
             text,
-            "| {name} | {:.3} [{:.3}, {:.3}] ({}/{}) | {} | {} | {} | {} | {} | {} |",
-            r.rate,
-            r.low,
-            r.high,
-            r.right,
-            r.n,
+            "| {name} | {all} | {} | {} | {} | {} | {} | {} |",
             cell(outcomes, |o| o.topic_seen),
             cell(outcomes, |o| !o.topic_seen),
             cell(outcomes, |o| o.combo_seen),
@@ -94,11 +106,17 @@ pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)]) -> String
         );
     }
     text.push('\n');
+    for name in missing {
+        let _ = writeln!(text, "{name}: not measured (no outcomes for this arm)");
+    }
     for (a, b) in compare {
         let (Some((_, first)), Some((_, second))) = (
             arms.iter().find(|(n, _)| n == a),
             arms.iter().find(|(n, _)| n == b),
         ) else {
+            if missing.contains(a) || missing.contains(b) {
+                let _ = writeln!(text, "{a} over {b}: not measured");
+            }
             continue;
         };
         let pairs: Vec<(bool, bool)> = first
