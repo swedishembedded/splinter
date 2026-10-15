@@ -9,6 +9,7 @@ use clap::{Args, Subcommand};
 use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
 use splinter_sdk::reserve::{DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES};
+use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use super::{model_ref, RetrieveArgs};
@@ -58,6 +59,10 @@ pub struct ExamArgs {
     /// the device to give the writer's own text a likelihood.
     #[arg(long, requires = "exam_set")]
     pub no_voice: bool,
+    /// The seed the bootstrap intervals are resampled with (drawn and printed
+    /// when not given; the same records and seed give the same intervals).
+    #[arg(long, value_name = "N")]
+    pub interval_seed: Option<Seed>,
 }
 
 /// `select`: choose the step of a run on what it writes.
@@ -129,9 +134,11 @@ pub struct ExamSetArgs {
     /// Who wrote the sources, when they are one person's.
     #[arg(long, value_name = "NAME")]
     pub persona: Option<String>,
-    /// Varies which families are reserved.
-    #[arg(long, value_name = "N", default_value_t = 0)]
-    pub seed: u64,
+    /// Varies which families are reserved (drawn and printed when not given;
+    /// the same seed over the same sources reserves the same families, and
+    /// exams are comparable across runs only when they share one).
+    #[arg(long, value_name = "N")]
+    pub seed: Option<Seed>,
     /// A candidate (repeat the flag for several) whose training, and that of
     /// the releases it continues, no reserved family may overlap: the exam is
     /// for measuring it.
@@ -176,6 +183,10 @@ pub struct PowerArgs {
     /// Simulated exams.
     #[arg(long, value_name = "N", default_value_t = 400)]
     pub replicates: usize,
+    /// Seeds the simulation (drawn and printed when not given; the same plan
+    /// and seed give the same answer).
+    #[arg(long, value_name = "N")]
+    pub seed: Option<Seed>,
 }
 
 /// `exam-report`: analyses done after an exam from what its report kept.
@@ -197,9 +208,10 @@ pub enum ExamReportCommand {
         /// Items to sample.
         #[arg(long, value_name = "N", default_value_t = 400)]
         n: usize,
-        /// Varies the sample.
-        #[arg(long, value_name = "N", default_value_t = 0)]
-        seed: u64,
+        /// Varies the sample (drawn and printed when not given; the same
+        /// report and seed give the same sample).
+        #[arg(long, value_name = "N")]
+        seed: Option<Seed>,
     },
     /// What a person's labels say of the judge: agreement, kappa, false
     /// right and false wrong rates, length bias.

@@ -11,10 +11,11 @@ use std::time::Duration;
 use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
-use splinter_sdk::datasets::{parse_strength, parse_strip, Strip, ViewName};
+use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName};
 use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::learn::parse_budget;
 use splinter_sdk::lineage::Direction;
+use splinter_sdk::seed::Seed;
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
@@ -201,7 +202,7 @@ fn view(text: &str) -> Result<ViewName, String> {
     text.parse().map_err(|e: splinter_sdk::Error| e.to_string())
 }
 
-fn strip(text: &str) -> Result<Strip, String> {
+fn strip(text: &str) -> Result<StripPolicy, String> {
     parse_strip(text).map_err(|e| e.to_string())
 }
 
@@ -343,6 +344,10 @@ pub enum TasksCommand {
         /// told, and a question may name the author as its subject.
         #[arg(long, value_name = "NAME")]
         author: Option<String>,
+        /// The seed the `denoise` tasks are built with (drawn and printed
+        /// when not given and the kinds include denoise).
+        #[arg(long, value_name = "N")]
+        denoise_seed: Option<Seed>,
     },
     /// Write differently worded questions about each task of a task set,
     /// into a task set of their own: the same facts, to be measured and
@@ -490,7 +495,12 @@ pub enum DatasetCommand {
         /// What the student sees: all (only the instruction), keep:K,..
         /// or mix:F.
         #[arg(long, value_parser = strip, value_name = "all|keep:K,..|mix:F")]
-        strip: Option<Strip>,
+        strip: Option<StripPolicy>,
+        /// The seed that picks which subjects keep their privileged context
+        /// under `--strip mix:F` (drawn and printed when not given; a
+        /// dataset built again with the same seed holds the same records).
+        #[arg(long, value_name = "N", requires = "strip")]
+        mix_seed: Option<Seed>,
         /// The weakest decision counted: executable, formal, consistency
         /// (default) or judged.
         #[arg(long, value_parser = strength, value_name = "STRENGTH")]

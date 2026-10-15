@@ -65,6 +65,7 @@ mod stages;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use splinter_core::rng::Seed;
 use splinter_eval::gate::{AgenticConfig, DEFAULT_PROBE_ATTEMPTS};
 
 use crate::curriculum::frontier::PassAtK;
@@ -73,7 +74,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::runs::{record, Recorded};
 
-pub use exam::{ExamReserved, EXAM_SEED};
+pub use exam::ExamReserved;
 pub use report::{PracticeReport, Profiled, Snapshotted};
 
 /// The stages, in order, as runs and reports name them.
@@ -115,6 +116,12 @@ pub struct PracticeRequest {
     /// How many families are reserved for the exam: `None` is a quarter of
     /// the families of the run's tasks, rounded down; `Some(0)` none.
     pub exam_families: Option<usize>,
+    /// The seed the exam families are chosen by, when this run reserves the
+    /// first: drawn when `None`. Once a run has reserved, the seed it chose
+    /// by is remembered with the families and every later run reads it back;
+    /// naming another is refused, since the exam would then not be the one
+    /// earlier runs were kept apart from.
+    pub exam_seed: Option<Seed>,
     /// k and the sampling of the pass@k that keeps the tasks worth training
     /// on.
     pub pass_at_k: PassAtK,

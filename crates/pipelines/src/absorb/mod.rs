@@ -80,6 +80,7 @@ use serde::Serialize;
 use splinter_core::claim::ClaimId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_eval::claim_gate::{ClaimGate, StanceSummary};
 use splinter_eval::gate::GateConfig;
@@ -137,6 +138,10 @@ pub struct AbsorbRequest {
     pub paraphrases: usize,
     /// The share of the training draws that are the base's own answers.
     pub rehearsal_share: f64,
+    /// The seed the rehearsal's form tasks are built with, in the night's
+    /// rehearsal and in any consolidation inside it; drawn when `None`, and
+    /// recorded in the run and in the rehearsal's report.
+    pub rehearsal_seed: Option<Seed>,
     /// The most passes over the night's records.
     pub epochs: u32,
     /// The step budget, in place of `epochs`.
@@ -192,6 +197,7 @@ impl Default for AbsorbRequest {
             roles: RoleOverrides::new(),
             paraphrases: PARAPHRASES_WRITTEN,
             rehearsal_share: DEFAULT_REHEARSAL_SHARE,
+            rehearsal_seed: None,
             epochs: DEFAULT_EPOCHS,
             steps: None,
             rank: DEFAULT_LORA_RANK,

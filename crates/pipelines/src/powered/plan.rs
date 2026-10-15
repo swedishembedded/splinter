@@ -21,6 +21,7 @@
 //! the family-clustered bootstrap interval of the difference is above zero.
 
 use serde::{Deserialize, Serialize};
+use splinter_core::rng::Seed;
 
 use super::analysis::interval_of;
 
@@ -41,8 +42,8 @@ pub struct Plan {
     pub replicates: usize,
     /// Bootstrap resamples inside each.
     pub resamples: usize,
-    /// Seeds the simulation: the same plan gives the same answer.
-    pub seed: u64,
+    /// Seeds the simulation: the same plan and seed give the same answer.
+    pub seed: Seed,
 }
 
 /// What the plan came to.
@@ -107,11 +108,11 @@ fn exam(plan: &Plan, effect: f64, rng: &mut Rng) -> Vec<(f64, usize)> {
 /// Simulates `plan`.
 #[must_use]
 pub fn simulate(plan: &Plan) -> Planned {
-    let mut rng = Rng(splinter_core::rng::SplitMix64::new(plan.seed));
+    let mut rng = Rng(splinter_core::rng::SplitMix64::new(plan.seed.value()));
     let mut found = |effect: f64| -> f64 {
         let hits = (0..plan.replicates)
             .filter(|_| {
-                interval_of(exam(plan, effect, &mut rng), plan.resamples)
+                interval_of(exam(plan, effect, &mut rng), plan.resamples, plan.seed)
                     .is_some_and(|interval| interval.low > 0.0)
             })
             .count();
@@ -140,7 +141,7 @@ mod tests {
             icc: 0.10,
             replicates: 300,
             resamples: 300,
-            seed: 7,
+            seed: Seed::new(7), // seed: the specs compare powers of two sizes, which one stream makes comparable
         }
     }
 

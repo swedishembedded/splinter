@@ -42,11 +42,11 @@ use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::exam_set::ExamSet;
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
-use crate::rehearsal::{rehearse, RehearseRequest, REHEARSAL_SEED};
+use crate::rehearsal::{rehearse, RehearseRequest};
 use crate::release::{release, ReleaseRequest};
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use crate::sources::{self, SourceTarget};
-use crate::tasks::{generate, Generation};
+use crate::tasks::{asks_for_denoise, generate, Generation};
 use crate::train::{train, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
 use crate::verify::{adopt_judge, kind_needs_judge, verify_set, Grading};
@@ -69,6 +69,10 @@ pub(super) struct Learn<'a> {
     /// The share of the training draws that are the base's own answers, as
     /// the request names it; `None` is the default for a run with a persona.
     pub(super) rehearsal: Option<f64>,
+    /// The seeds of the rehearsal's and the denoise tasks, as the request
+    /// names them; drawn by the stage that needs one when `None`.
+    pub(super) rehearsal_seed: Option<splinter_core::rng::Seed>,
+    pub(super) denoise_seed: Option<splinter_core::rng::Seed>,
     /// The share of training records given retrieved passages, when any.
     pub(super) passages: Option<PassageShare>,
     pub(super) deadline: Option<Instant>,
@@ -403,6 +407,9 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         .iter()
         .flat_map(|q| q.sections.iter().cloned())
         .collect();
+    let denoise_seed = asks_for_denoise(&st.kinds)
+        .then(|| run.seed("denoise-seed", st.learn.denoise_seed))
+        .transpose()?;
     let generated = generate(
         ctx,
         &Generation {
@@ -412,6 +419,7 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             generator: st.learn.generator,
             goal: st.learn.goal,
             author: st.persona(),
+            denoise_seed,
             deadline: st.stage_deadlines.tasks,
             cancel: run.cancel_token(),
         },
@@ -628,11 +636,12 @@ fn select_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) ->
 /// about as often as a dialogue answer; the train stage mixes them in at
 /// that share and monitors on a share of them.
 fn rehearse_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+    let seed = run.seed("rehearsal-seed", st.learn.rehearsal_seed)?;
     let rehearsed = rehearse(
         ctx,
         &RehearseRequest {
             records: records_at_share(st.examples, st.rehearsal_share()),
-            seed: REHEARSAL_SEED,
+            seed,
             deadline: st.learn.deadline,
             cancel: run.cancel_token(),
         },

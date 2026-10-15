@@ -43,6 +43,7 @@ use splinter_agent::{CallError, CancelToken};
 use splinter_core::experience::{Environment, Task};
 use splinter_core::kinds::GENERAL;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_knowledge::rehearsal::{
     form_tasks, Admission, GeneralRequest, GENERAL_BRIEF, GENERAL_DOMAINS, GENERATOR,
 };
@@ -64,10 +65,6 @@ use splinter_orchestrator::error::OrchestratorError;
 /// every fourth draw holds the model to its base.
 pub const DEFAULT_REHEARSAL_SHARE: f64 = 0.25;
 
-/// The seed the form tasks are built from: the same tasks every time for
-/// the same count.
-pub const REHEARSAL_SEED: u64 = 0;
-
 /// The share of a rehearsal set that is form tasks - sums and format
 /// requests, which a persona fine-tune erodes first and which code can
 /// grade - the rest general requests the base writes itself.
@@ -81,8 +78,9 @@ pub const PROMPTS_PER_REQUEST: usize = 8;
 pub struct RehearseRequest {
     /// How many tasks the set is to hold.
     pub records: usize,
-    /// The seed the form tasks are built from.
-    pub seed: u64,
+    /// The seed the form tasks are built from: the same tasks for the same
+    /// count. A run draws one and reports it ([`Rehearsed::seed`]).
+    pub seed: Seed,
     /// No model request starts after this.
     #[serde(skip)]
     pub deadline: Option<Instant>,
@@ -94,6 +92,9 @@ pub struct RehearseRequest {
 /// What the rehearse stage reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct Rehearsed {
+    /// The seed the form tasks were built from; asking again with it for the
+    /// same count builds the same tasks.
+    pub seed: Seed,
     /// The base model that wrote the general requests and answered every
     /// task, as its identity names it.
     pub base: String,
@@ -160,7 +161,10 @@ pub fn rehearse_on(
     let mut asked = wanted_form;
     while members.len() < wanted_form {
         let before = members.len();
-        for task in form_tasks(request.seed, asked).into_iter().skip(considered) {
+        for task in form_tasks(request.seed.value(), asked)
+            .into_iter()
+            .skip(considered)
+        {
             considered += 1;
             if admission.admit(&task.instruction).is_ok() {
                 members.push((task, Some(GENERATOR.to_string())));
@@ -300,6 +304,7 @@ pub fn rehearse_on(
         },
     )?;
     Ok(Rehearsed {
+        seed: request.seed,
         base: writer.identity.clone(),
         anchor: frozen.map(|f| (f.suite.version, f.digest.to_string())),
         task_set,

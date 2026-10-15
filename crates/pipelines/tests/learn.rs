@@ -38,6 +38,7 @@ use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_core::role::Role;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_model::ModelSelection;
@@ -197,6 +198,8 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
             judge: Some(&judge),
             prompted: None,
             retrieval: None,
+            // seed: the spec reads the exam's interval, which one fixed seed makes the same on every run.
+            interval_seed: Seed::new(2),
         },
         &CancelToken::new(),
     )

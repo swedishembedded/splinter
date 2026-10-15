@@ -23,6 +23,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use splinter_core::rng::Seed;
 
 /// One answer an arm gave to a task and how it was graded.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -203,8 +204,6 @@ pub fn holm(p: &[f64]) -> Vec<f64> {
 const RESAMPLES: usize = 10_000;
 /// The share of resampled differences an interval holds.
 const LEVEL: f64 = 0.95;
-/// The seed of the resampling: the same records give the same interval.
-const SEED: u64 = 0;
 /// One-sided 5% and 80% power quantiles of the standard normal.
 const Z_ALPHA: f64 = 1.644_853_626_951_472_7;
 const Z_POWER: f64 = 0.841_621_233_572_914_4;
@@ -266,9 +265,15 @@ fn mean(values: &[f64]) -> Option<f64> {
     (!values.is_empty()).then(|| values.iter().sum::<f64>() / values.len() as f64)
 }
 
-/// `first` compared with `second` over `records`.
+/// `first` compared with `second` over `records`, the intervals resampled
+/// from the generator that starts at `interval_seed`.
 #[must_use]
-pub fn compare(records: &[TaskRecord], first: &str, second: &str) -> Comparison {
+pub fn compare(
+    records: &[TaskRecord],
+    first: &str,
+    second: &str,
+    interval_seed: Seed,
+) -> Comparison {
     struct Pair<'a> {
         family: &'a str,
         a: bool,
@@ -335,8 +340,8 @@ pub fn compare(records: &[TaskRecord], first: &str, second: &str) -> Comparison 
         both_wrong: count(false, false),
         p_tasks: sign_p(first_only, second_only),
         p_families: sign_p(family_wins, family_losses),
-        difference: clustered_interval(&by_family),
-        score_difference: clustered_interval(&score_by_family),
+        difference: clustered_interval(&by_family, interval_seed),
+        score_difference: clustered_interval(&score_by_family, interval_seed),
         length_matched: (!matched.is_empty()).then(|| LengthMatched {
             tasks: matched.len(),
             first_only: m_first,
@@ -410,28 +415,33 @@ fn sd(values: &[f64]) -> f64 {
 /// The percentile bootstrap interval of the mean difference over tasks,
 /// resampling whole families with replacement. The statistic is the mean
 /// over all the tasks of the families drawn, so a large family weighs what
-/// its tasks weigh. The generator is seeded, so the same records give the
-/// same interval.
-fn clustered_interval(by_family: &BTreeMap<&str, Vec<f64>>) -> Option<Interval> {
+/// its tasks weigh. The generator starts from `seed`, so the same records and
+/// the same seed give the same interval.
+fn clustered_interval(by_family: &BTreeMap<&str, Vec<f64>>, seed: Seed) -> Option<Interval> {
     interval_of(
         by_family
             .values()
             .map(|f| (f.iter().sum::<f64>(), f.len()))
             .collect(),
         RESAMPLES,
+        seed,
     )
 }
 
 /// [`clustered_interval`] over families given as `(sum of differences, tasks)`,
-/// with `resamples` draws.
-pub(crate) fn interval_of(families: Vec<(f64, usize)>, resamples: usize) -> Option<Interval> {
+/// with `resamples` draws of the generator that starts from `seed`.
+pub(crate) fn interval_of(
+    families: Vec<(f64, usize)>,
+    resamples: usize,
+    seed: Seed,
+) -> Option<Interval> {
     if families.len() < 2 {
         return None;
     }
     let (total, tasks) = families
         .iter()
         .fold((0.0, 0), |(s, n), (fs, fnn)| (s + fs, n + fnn));
-    let mut rng = splinter_core::rng::SplitMix64::new(SEED);
+    let mut rng = splinter_core::rng::SplitMix64::new(seed.value());
     let mut means: Vec<f64> = (0..resamples)
         .map(|_| {
             let (sum, count) = (0..families.len()).fold((0.0, 0usize), |(s, n), _| {
@@ -455,6 +465,10 @@ pub(crate) fn interval_of(families: Vec<(f64, usize)>, resamples: usize) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // seed: the specs read which side of zero an interval falls on, which one
+    // fixed stream answers the same way on every run.
+    const SEED: Seed = Seed::new(1);
 
     fn answer(judged: bool, chars: usize) -> Answer {
         Answer {
@@ -494,7 +508,7 @@ mod tests {
         for family in ["two", "three", "four", "five"] {
             records.extend((0..3).map(|n| record(family, n, true, true)));
         }
-        let c = compare(&records, "a", "b");
+        let c = compare(&records, "a", "b", SEED);
         assert_eq!((c.first_only, c.second_only), (12, 0));
         assert!(c.p_tasks < 0.001, "{}", c.p_tasks);
         assert!(c.p_families >= 0.5, "{}", c.p_families);
@@ -511,7 +525,7 @@ mod tests {
                 (0..3).map(move |n| record(&family, n, n < 2, false))
             })
             .collect();
-        let c = compare(&records, "a", "b");
+        let c = compare(&records, "a", "b", SEED);
         assert_eq!(c.first_only, 40);
         let interval = c.difference.unwrap();
         assert!((interval.mean - 2.0 / 3.0).abs() < 1e-9);
@@ -520,12 +534,27 @@ mod tests {
     }
 
     #[test]
+    fn an_interval_is_reproduced_by_the_seed_it_was_resampled_with() {
+        let records: Vec<TaskRecord> = (0..12)
+            .flat_map(|f| {
+                let family = format!("f{f}");
+                (0..3).map(move |n| record(&family, n, n < f % 4, false))
+            })
+            .collect();
+        let again = |seed| compare(&records, "a", "b", seed).difference.unwrap();
+        // seed: two arbitrary seeds; only that the same one repeats and another differs matters.
+        let (first, other) = (Seed::new(41), Seed::new(42));
+        assert_eq!(again(first), again(first));
+        assert_ne!(again(first), again(other));
+    }
+
+    #[test]
     fn the_minimum_detectable_difference_comes_from_the_spread_over_families() {
         // Every family differs by 0 or 1: sd 0.5 over 16 families.
         let records: Vec<TaskRecord> = (0..16)
             .map(|f| record(&format!("f{f}"), 0, f % 2 == 0, false))
             .collect();
-        let c = compare(&records, "a", "b");
+        let c = compare(&records, "a", "b", SEED);
         let expected = (Z_ALPHA + Z_POWER) * c.power.family_sd / 4.0;
         assert!((c.power.minimum_detectable_difference.unwrap() - expected).abs() < 1e-12);
         assert!(c.power.minimum_detectable_difference.unwrap() > 0.3);
@@ -537,7 +566,7 @@ mod tests {
         // The first arm's answer is three times as long: not matched.
         win.arms.get_mut("a").unwrap()[0].chars = 300;
         let like = record("g", 0, true, false);
-        let c = compare(&[win, like], "a", "b");
+        let c = compare(&[win, like], "a", "b", SEED);
         let matched = c.length_matched.unwrap();
         assert_eq!((matched.tasks, matched.first_only), (1, 1));
     }
@@ -567,8 +596,8 @@ mod tests {
                 (0..4).map(move |n| record(&family, n, n % 2 == 0, false))
             })
             .collect();
-        assert!(compare(&alike, "a", "b").power.icc > 0.9);
-        assert!(compare(&mixed, "a", "b").power.icc < 0.05);
+        assert!(compare(&alike, "a", "b", SEED).power.icc > 0.9);
+        assert!(compare(&mixed, "a", "b", SEED).power.icc < 0.05);
     }
 
     #[test]

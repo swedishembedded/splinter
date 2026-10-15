@@ -57,7 +57,11 @@ impl LearnState<'_> {
 
 /// Reserves the exam's families before anything is generated or built, and
 /// swaps the run's sources for the sources without them.
-pub(super) fn reserve_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+pub(super) fn reserve_stage(
+    ctx: &Context,
+    run: &mut Recorder<'_>,
+    st: &mut LearnState<'_>,
+) -> Done {
     // Text the policy's own lineage was trained on is not examinable: the
     // base the candidate is compared with has seen it.
     let mut touched_by = Vec::new();
@@ -66,13 +70,14 @@ pub(super) fn reserve_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnS
             touched_by.extend(earlier.manifest.datasets);
         }
     }
+    let seed = run.seed("exam-seed", st.learn.exam.seed)?;
     let reserved = reserve(
         ctx,
         &ReserveRequest {
             sources: &st.source_ids,
             families: st.exam_families(),
             dev_families: st.dev_families(),
-            seed: 0,
+            seed,
             touched_by: &touched_by,
         },
     )?;
@@ -105,6 +110,7 @@ pub(super) fn exam_set_stage(
                 goal: st.learn.goal,
                 author: st.persona(),
                 tasks_per_family: per,
+                seed: Some(reserved.seed),
                 cancel: run.cancel_token(),
             },
         )
@@ -187,6 +193,7 @@ pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnSt
         unreachable!("the exam stage follows the train stage")
     };
     if let Some(exam) = st.exam_set.as_ref() {
+        let interval_seed = run.seed("interval-seed", st.learn.exam.interval_seed)?;
         let outcome = match run_powered(
             ctx,
             &PoweredRequest {
@@ -203,6 +210,7 @@ pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnSt
                 pilot_families: None,
                 voice: true,
                 arms: ArmChoice::All,
+                interval_seed: Some(interval_seed),
                 adapter: None,
                 cancel: &run.cancel_token(),
             },
@@ -215,6 +223,7 @@ pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnSt
         st.report.powered = Some(outcome);
         return Ok(StageEnd::done(summary));
     }
+    let interval_seed = run.seed("interval-seed", st.learn.exam.interval_seed)?;
     let examined = match examine(
         ctx,
         &ExamineRequest {
@@ -223,6 +232,7 @@ pub(super) fn exam_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnSt
             judge: Some(st.learn.judge),
             prompted: st.learn.goal,
             retrieval: None,
+            interval_seed,
         },
         &run.cancel_token(),
     ) {

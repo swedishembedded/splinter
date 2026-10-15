@@ -36,12 +36,16 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         describe_voice: args.describe_voice,
         select_on_dev: args.select_on_dev,
         rehearsal: args.rehearsal,
+        rehearsal_seed: args.rehearsal_seed,
+        denoise_seed: args.denoise_seed,
         exam: ExamPlan {
             families: args.exam_families,
             tasks_per_family: args.exam_tasks_per_family,
             dev_families: args.dev_families,
             dev_tasks_per_family: args.dev_tasks_per_family,
             resamples: args.exam_resamples.map(|n| n as usize),
+            seed: args.exam_seed,
+            interval_seed: args.interval_seed,
         },
         passages: args.with_passages.map(|records| match args.abstain {
             Some(abstentions) => PassageShare::with_abstentions(records, abstentions),

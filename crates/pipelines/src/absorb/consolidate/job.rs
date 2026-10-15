@@ -28,6 +28,7 @@ use splinter_core::claim::{ClaimId, TrainedClaims};
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_core::terms::{combine_stated, Distribution, Terms};
 use splinter_core::training::{Regime, RehearsalSample, TrainingSummary};
 use splinter_eval::claim_gate::ClaimGate;
@@ -46,7 +47,7 @@ use crate::absorb::generation::{records_of, replay_budget, retention_sample, Gen
 use crate::absorb::kit::{ClaimKit, Live};
 use crate::absorb::sealed::SealedProbes;
 use crate::learn::records_at_share;
-use crate::rehearsal::{rehearse_on, RehearseRequest, Rehearsed, REHEARSAL_SEED};
+use crate::rehearsal::{rehearse_on, RehearseRequest, Rehearsed};
 use crate::release::arm_on;
 use crate::train::{
     auto_records_per_step, plan_training, ModelCheckpoint, Rehearse, TrainRequest, Trainer, Tuning,
@@ -60,6 +61,9 @@ pub struct Params {
     pub mode: ConsolidationMode,
     /// The share of the training draws that are the base's own answers.
     pub rehearsal_share: f64,
+    /// The seed the rehearsal's form tasks are built with; `None` when no
+    /// rehearsal is asked for.
+    pub rehearsal_seed: Option<Seed>,
     /// The share of the training draws that are records of the claims the
     /// base already holds.
     pub retention_replay_share: f64,
@@ -240,13 +244,16 @@ fn full(
         return Ok(None);
     };
     report.dataset = Some(assembled.clone());
-    let rehearsal = if params.rehearsal_share > 0.0 {
+    let rehearsal_seed = params
+        .rehearsal_seed
+        .filter(|_| params.rehearsal_share > 0.0);
+    let rehearsal = if let Some(seed) = rehearsal_seed {
         let rehearsed = rehearse_on(
             ctx,
             &from_ref,
             &RehearseRequest {
                 records: records_at_share(assembled.trained, params.rehearsal_share).max(1),
-                seed: REHEARSAL_SEED,
+                seed,
                 deadline: None,
                 cancel: job.cancel.clone(),
             },

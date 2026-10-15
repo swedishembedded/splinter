@@ -82,6 +82,7 @@ pub use crate::train::{auto_records_per_step, auto_steps, steps_for, MAX_AUTO_ST
 use crate::train::{Trainer, Tuning, DEFAULT_LORA_RANK};
 
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -165,6 +166,14 @@ pub struct ExamPlan {
     /// Answers per task per arm; [`crate::powered::DEFAULT_RESAMPLES`] when
     /// `None`.
     pub resamples: Option<usize>,
+    /// The seed the families are reserved with; drawn when `None`, and
+    /// recorded in the run and in the reservation either way. A run that
+    /// is to examine the families an earlier run examined passes the seed
+    /// that run recorded.
+    pub seed: Option<Seed>,
+    /// The seed the exam's bootstrap intervals are resampled with; drawn
+    /// when `None`, and recorded in the run and in the exam report.
+    pub interval_seed: Option<Seed>,
 }
 
 /// One `learn`.
@@ -206,6 +215,13 @@ pub struct LearnRequest {
     /// is [`DEFAULT_REHEARSAL_SHARE`] for a run with a persona and none
     /// without, `Some(0.0)` none at all.
     pub rehearsal: Option<f64>,
+    /// The seed the rehearsal's form tasks are built with; drawn when
+    /// `None`, and recorded in the run and in the rehearsal's report.
+    pub rehearsal_seed: Option<Seed>,
+    /// The seed the `denoise` tasks are built with when the kinds include
+    /// them; drawn when `None`, and recorded in the run and in the tasks'
+    /// report.
+    pub denoise_seed: Option<Seed>,
     /// Task kinds; empty is [`DEFAULT_LEARN_KINDS`] unless `plan` is set.
     pub kinds: Vec<String>,
     /// Let a planner model survey the sources and choose the task kinds,
@@ -454,6 +470,8 @@ pub fn learn(
         voice: request.voice,
         describe_voice: request.describe_voice,
         rehearsal: request.rehearsal,
+        rehearsal_seed: request.rehearsal_seed,
+        denoise_seed: request.denoise_seed,
         passages: request.passages,
         deadline: budget.map(|b| Instant::now() + b),
         trainer,

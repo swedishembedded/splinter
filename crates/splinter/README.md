@@ -15,11 +15,12 @@ splinter learn <SOURCE>... [--goal TEXT] [--adapter NAME [--base CHECKPOINT]] [-
                          [--no-frontier | --distill | --k N [--temperature T] [--top-k N]] [--teacher REF] [--generator REF] [--judge REF]
                          [--steps N] [--rank R] [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE]
                          [--with-passages SHARE [--abstain SHARE]] [--voice SHARE [--describe-voice]] [--rehearsal SHARE] [--select-on-dev] [--bf16-base]
-splinter absorb <SESSIONS>... [--policy REF] [--generator REF] [--teacher REF] [--judge REF] [--paraphrases N] [--rehearsal-share F]
+                         [--exam-seed N] [--interval-seed N] [--rehearsal-seed N] [--denoise-seed N]
+splinter absorb <SESSIONS>... [--policy REF] [--generator REF] [--teacher REF] [--judge REF] [--paraphrases N] [--rehearsal-share F] [--rehearsal-seed N]
                          [--epochs N | --steps N] [--rank R] [--continue-from-release [--replay-fraction F]] [--sealed-probes FILE...]
                          [--stance-pairs N [--stance-beta B] [--stance-tries N] | --no-stance] [--dry-run] [--no-release]
                          [--consolidate-after-records N | --no-consolidate] [--consolidate-mode full|merge] [--retention-replay-share SHARE]
-splinter consolidate [--policy REF] [--mode full|merge] [--from RELEASE] [--epochs N | --steps N] [--lr LR] [--rehearsal-share F]
+splinter consolidate [--policy REF] [--mode full|merge] [--from RELEASE] [--epochs N | --steps N] [--lr LR] [--rehearsal-share F] [--rehearsal-seed N]
                          [--retention-replay-share SHARE] [--sealed-probes FILE...] [--no-release]
 splinter ask <QUESTION> [--open-book SOURCE-ID | --retrieve SOURCE-ID... [--passages N] [--reranker REF]] [--policy REF]
 splinter status
@@ -27,27 +28,27 @@ splinter doctor
 splinter source add <PATH|cmd:COMMAND...> | list | show <ID>
 splinter session add <PATH>... [--max-bytes N] | list
 splinter claims extract <SESSION-ID>... [--generator REF] | gate <CLAIMSET-ID> | list | show <ID> | ledger
-splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] [--author NAME] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
+splinter tasks generate <SOURCE-ID>... --kinds K,.. [--generator REF] [--author NAME] [--denoise-seed N] | variants <TASKSET-ID> [--generator REF] [--per-task N] | list | show <ID>
 splinter solve <TASKSET-ID> [--solver REF] [--frontier [--k N] [--temperature T] [--top-k N] [--teacher REF]]
 splinter verify <EXPERIENCE-SET> [--judge REF]
 splinter critique <EXPERIENCE-SET> [--critic REF] [--retry N]
 splinter judge calibrate <LABELLED-FILE> --judge REF | measure <TASKSET-ID> --judge REF [--fit]
 splinter experiences list | show <ID> [--graph] | replay <ID>
-splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F]
+splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F [--mix-seed N]]
                        [--writer NAME] [--token-limit N] [--max-family-share SHARE]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
                        [--system-prompt TEXT] [--limit N]
 splinter dataset export <DATASET-ID> --out DIR
-splinter rehearse --records N
+splinter rehearse --records N [--rehearsal-seed N]
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--rehearsal DATASET-ID [--rehearsal-share F]] [--steps N] [--rank R] [--beta B]
                                 [--alpha A] [--lr LR] [--weight-decay WD] [--records-per-step N] [--seed N] [--eval-every N] [--patience N] [--monitor-share SHARE] [--keep-evaluations]
 splinter select <CANDIDATE-ID> --exam-set DEV-SUITE [--judge REF] [--adopt]
 splinter release <CANDIDATE-ID> [--alias NAME] [--judge REF] | list
 splinter rollback <ALIAS>
 splinter eval [REF] [--suite held-out|retention|anchor|FILE] [--freeze FILE]... [--judge REF]
-splinter exam CANDIDATE [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
+splinter exam CANDIDATE [--interval-seed N] [--judge REF] [--prompt GOAL] [--retrieve SOURCE-ID... [--passages N] [--reranker REF]]
 splinter exam CANDIDATE --exam-set EXAM [--resamples N] [--no-voice] [--deployed-only] [--pilot-families N] [--judge REF] [--prompt GOAL]
-splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | power [--families N] [--tasks-per-family N] [--effect SHARE] [--discordance SHARE] [--icc RHO] [--from-report FILE] | show EXAM
+splinter exam-set create SOURCE... [--families N] [--tasks-per-family N] [--dev-families N] [--dev-tasks-per-family N] [--kinds K,..] [--generator REF] [--goal TEXT] [--persona NAME] [--seed N] [--not-trained-by CANDIDATE]... | power [--families N] [--tasks-per-family N] [--effect SHARE] [--discordance SHARE] [--icc RHO] [--from-report FILE] [--seed N] | show EXAM
 splinter exam-report labels-export REPORT --out FILE --key FILE [--n N] [--seed N] | labels-import LABELS --key FILE | memorisation REPORT --candidate CANDIDATE
 splinter runs list | show <ID> | cancel <ID>
 splinter lineage <ID> [--up|--down|--both] [--depth N]
@@ -693,6 +694,19 @@ brain's preference trainer trains on its pairs alone. `--from
 local:<checkpoint>+<adapter>` continues that adapter instead, with no
 replay, and such a candidate cannot replace a champion. The candidate
 records its regime; the release gate grades either the same way.
+
+Every random choice a pipeline makes takes a seed the run states. The exam's
+families (`--exam-seed`, also on `exam-set create --seed` and, for `practice`,
+kept with the families so every later run reads it back and naming another is
+refused), the rehearsal's form tasks (`--rehearsal-seed`), the denoise tasks
+(`--denoise-seed`), the subjects of `--strip mix:F` (`--mix-seed`) and the
+exam's bootstrap intervals (`--interval-seed`) are drawn when no seed is given,
+printed (`no --exam-seed given, using seed N (pass --exam-seed N to
+reproduce)`), written to the run record (`seeds`) and kept in the artifact they
+decide: the reservation, the frozen exam, the rehearsal and task reports, the
+dataset manifest and the exam report. Passing the seed again reproduces the
+choice. Two runs reserve different families unless they share a seed, so
+results are comparable across runs only when each names a recorded one.
 
 A `learn` report opens with an `outcome` block of five separate facts: whether the
 run finished or stopped, whether a candidate was trained, what the release gate decided

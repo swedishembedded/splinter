@@ -24,7 +24,7 @@ use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::learn::{learn, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
-use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE, REHEARSAL_SEED};
+use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE};
 use splinter_sdk::release::{self, ReleaseRequest};
 use splinter_sdk::rerank::ModelReranker;
 use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
@@ -322,6 +322,7 @@ impl Session {
                 kinds,
                 generator,
                 author,
+                denoise_seed,
             }) => {
                 let kinds = check_kinds(&kinds)?;
                 let ids = ids
@@ -333,8 +334,12 @@ impl Session {
                     "kinds": kinds,
                     "generator": generator,
                     "author": author,
+                    "denoise_seed": denoise_seed,
                 });
                 let generated = record(ctx, "tasks generate", &arguments, |run| {
+                    let denoise_seed = tasks::asks_for_denoise(&kinds)
+                        .then(|| run.seed("denoise-seed", denoise_seed))
+                        .transpose()?;
                     tasks::generate(
                         ctx,
                         &tasks::Generation {
@@ -344,6 +349,7 @@ impl Session {
                             generator: &generator,
                             goal: None,
                             author: author.as_deref(),
+                            denoise_seed,
                             deadline: None,
                             cancel: run.cancel_token(),
                         },
@@ -477,6 +483,7 @@ impl Session {
                 sets,
                 view,
                 strip,
+                mix_seed,
                 min_strength,
                 system_prompt,
                 export_only,
@@ -492,7 +499,7 @@ impl Session {
                         .map(|id| resolve_set(ctx, id))
                         .collect::<Result<_, _>>()?,
                     view,
-                    strip,
+                    strip: None,
                     min_strength,
                     system_prompt,
                     export_only,
@@ -509,9 +516,23 @@ impl Session {
                     },
                     max_block: None,
                 };
+                // The strip is settled inside the run, which states the seed
+                // `mix:F` picks its subjects by.
+                let arguments = json!({ "request": &request, "strip": &strip });
                 emit(
                     json,
-                    &record(ctx, "dataset build", &request, |_| build(ctx, &request))?,
+                    &record(ctx, "dataset build", &arguments, |run| {
+                        let strip = strip
+                            .map(|policy| policy.with_seed(|| run.seed("mix-seed", mix_seed)))
+                            .transpose()?;
+                        build(
+                            ctx,
+                            &BuildRequest {
+                                strip,
+                                ..request.clone()
+                            },
+                        )
+                    })?,
                 );
             }
             Command::Dataset(DatasetCommand::Export { id, out }) => {
@@ -545,18 +566,16 @@ impl Session {
                 emit(json, &candidate);
             }
             Command::Rehearse(args) => {
-                let request = RehearseRequest {
-                    records: args.records,
-                    seed: REHEARSAL_SEED,
-                    deadline: None,
-                    cancel: CancelToken::new(),
-                };
-                let rehearsed = record(ctx, "rehearse", &request, |run| {
+                let arguments =
+                    json!({ "records": args.records, "rehearsal_seed": args.rehearsal_seed });
+                let rehearsed = record(ctx, "rehearse", &arguments, |run| {
                     rehearse(
                         ctx,
                         &RehearseRequest {
+                            records: args.records,
+                            seed: run.seed("rehearsal-seed", args.rehearsal_seed)?,
+                            deadline: None,
                             cancel: run.cancel_token(),
-                            ..request.clone()
                         },
                     )
                 })?;
@@ -628,6 +647,7 @@ impl Session {
                     "retrieve": retrieve.sources,
                     "passages": retrieve.passages,
                     "reranker": retrieve.reranker,
+                    "interval_seed": args.interval_seed,
                 });
                 // The library is made (or read back) before the exam starts:
                 // it needs the embedding model, which the exam's queries use
@@ -662,6 +682,7 @@ impl Session {
                                 judge: args.judge.as_ref(),
                                 prompted: args.prompt.as_deref(),
                                 retrieval: retrieval.as_ref(),
+                                interval_seed: run.seed("interval-seed", args.interval_seed)?,
                             },
                             &run.cancel_token(),
                         )

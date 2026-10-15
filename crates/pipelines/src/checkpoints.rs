@@ -211,6 +211,7 @@ fn score(
             pilot_families: None,
             voice: true,
             arms: ArmChoice::Deployed,
+            interval_seed: None,
             adapter: Some(&adapter),
             cancel: request.cancel,
         },

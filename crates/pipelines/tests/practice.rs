@@ -40,6 +40,7 @@ use common::{config, Scratch};
 use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
@@ -343,6 +344,51 @@ fn a_family_an_earlier_run_trained_on_is_never_reserved_for_a_later_exam() {
         );
     }
     assert!(reserved.is_subset(&exam), "{exam:?}");
+}
+
+#[test]
+fn the_exam_seed_is_drawn_by_the_first_run_that_reserves_and_read_back_by_every_later_one() {
+    let (scratch, ctx) = context("practice-seed");
+    let repo = scratch.0.join("repo");
+    project(&repo, &[]);
+    let (first_run, first) = run(&ctx, &request(&repo));
+    let drawn = first.reserve.as_ref().unwrap().seed;
+    assert_eq!(
+        read_run(ctx.workspace(), &first_run).unwrap().seeds["exam-seed"],
+        drawn.value(),
+        "the run states the seed it drew"
+    );
+
+    // A later run, given none, reads it back: the exam is not drawn again.
+    let again = scratch.0.join("again");
+    project_worded(&again, &[], Wording::Long);
+    let (later_run, later) = run(&ctx, &request(&again));
+    assert_eq!(later.reserve.as_ref().unwrap().seed, drawn);
+    assert_eq!(
+        read_run(ctx.workspace(), &later_run).unwrap().seeds["exam-seed"],
+        drawn.value()
+    );
+    // Another seed would choose another exam than the one kept: refused.
+    let (other_scratch, kept) = context("practice-seed-kept");
+    let first_repo = other_scratch.0.join("first");
+    project(&first_repo, &[]);
+    let (_, made) = run(&kept, &request(&first_repo));
+    let kept_seed = made.reserve.as_ref().unwrap().seed;
+    let second_repo = other_scratch.0.join("second");
+    project_worded(&second_repo, &[], Wording::Long);
+    let mut other = request(&second_repo);
+    other.exam_seed = Some(Seed::new(kept_seed.value().wrapping_add(1)));
+    let refused = practice(&kept, &other, &FakeTrainer::knowing(&[])).unwrap_err();
+    assert!(refused.to_string().contains("--exam-seed"), "{refused}");
+
+    // A fresh state root given the recorded seed reserves the same family.
+    let (_other_scratch, fresh) = context("practice-seed-fresh");
+    let mut asked = request(&repo);
+    asked.exam_seed = Some(drawn);
+    let (_, reproduced) = run(&fresh, &asked);
+    let reserved = |report: &PracticeReport| report.reserve.as_ref().unwrap().families.clone();
+    assert_eq!(reserved(&reproduced), reserved(&first));
+    assert_eq!(reproduced.reserve.as_ref().unwrap().seed, drawn);
 }
 
 #[test]

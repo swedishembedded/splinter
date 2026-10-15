@@ -28,6 +28,7 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_core::training::{CurvePoint, Selection, TrainingCurve};
 use splinter_orchestrator::Context;
 use splinter_pipelines::checkpoints::{select, SelectRequest};
@@ -41,6 +42,14 @@ use splinter_pipelines::sources::{add, SourceTarget};
 use splinter_pipelines::train::{
     adopt_checkpoint, load_candidate, train, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION,
 };
+
+// seed: the spec asserts on which families are reserved, which one fixed seed
+// makes the same on every run.
+const RESERVE_SEED: Seed = Seed::new(1);
+
+// seed: the spec reads the intervals of one exam, which one fixed seed makes the
+// same on every run.
+const INTERVAL_SEED: Seed = Seed::new(2);
 
 const PERSONA_PROMPT: &str = "You are a surveyor of the old school. Answer as one.";
 
@@ -106,7 +115,7 @@ fn exam(ctx: &Context, scratch: &common::Scratch) -> ExamSet {
             sources: &[id],
             families: 6,
             dev_families: 0,
-            seed: 1,
+            seed: RESERVE_SEED,
             touched_by: &[],
         },
     )
@@ -122,6 +131,7 @@ fn exam(ctx: &Context, scratch: &common::Scratch) -> ExamSet {
             goal: None,
             author: None,
             tasks_per_family: 2,
+            seed: Some(reservation.seed),
             cancel: CancelToken::new(),
         },
     )
@@ -192,6 +202,7 @@ fn examined_of(
             pilot_families,
             voice: false,
             arms: ArmChoice::All,
+            interval_seed: Some(INTERVAL_SEED),
             adapter: None,
             cancel: &CancelToken::new(),
         },
@@ -215,6 +226,16 @@ fn every_verdict_of_every_arm_is_kept_and_the_arms_are_compared_by_family() {
     );
     assert!(report.judge.trusted, "{:?}", report.judge);
     assert_eq!(report.families_trained_on, 0);
+    // The report states the seed its intervals were resampled with, and the
+    // same seed over the same answers reproduces them.
+    assert_eq!(report.interval_seed, Some(INTERVAL_SEED));
+    let again = examined(&ctx, &exam, &candidate.candidate, &judge);
+    for (a, b) in again.comparisons.iter().zip(&report.comparisons) {
+        assert_eq!(
+            (a.difference, a.score_difference),
+            (b.difference, b.score_difference)
+        );
+    }
     // Four arms, each asked under the prompt it is reported under.
     assert_eq!(report.prompts[BASE], "default");
     assert_eq!(report.prompts[CANDIDATE], "default");
@@ -420,6 +441,7 @@ fn a_voice_stage_that_fails_loses_nothing_the_exam_answered() {
             pilot_families: None,
             voice: true,
             arms: ArmChoice::All,
+            interval_seed: Some(INTERVAL_SEED),
             adapter: None,
             cancel: &CancelToken::new(),
         },

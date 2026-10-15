@@ -43,6 +43,7 @@ use serde::Serialize;
 use splinter_core::claim::ClaimId;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_eval::gate::GateConfig;
 use splinter_knowledge::claims::Ledger;
 use splinter_orchestrator::context::Context;
@@ -115,6 +116,9 @@ pub struct ConsolidateRequest {
     pub from: Option<String>,
     /// The share of the training draws that are the base's own answers.
     pub rehearsal_share: f64,
+    /// The seed the rehearsal's form tasks are built with; drawn when
+    /// `None`, and recorded in the run and in the rehearsal's report.
+    pub rehearsal_seed: Option<Seed>,
     /// The share of the training draws that are records of the claims the
     /// base already holds.
     pub retention_replay_share: f64,
@@ -139,6 +143,7 @@ impl Default for ConsolidateRequest {
             mode: ConsolidationMode::Full,
             from: None,
             rehearsal_share: DEFAULT_REHEARSAL_SHARE,
+            rehearsal_seed: None,
             retention_replay_share: DEFAULT_RETENTION_REPLAY_SHARE,
             epochs: DEFAULT_CONSOLIDATION_EPOCHS,
             steps: None,
@@ -151,12 +156,15 @@ impl Default for ConsolidateRequest {
 }
 
 impl ConsolidateRequest {
-    /// The parameters the engine carries a consolidation out by.
+    /// The parameters the engine carries a consolidation out by, the
+    /// rehearsal's form tasks built with `rehearsal_seed`: `None` when no
+    /// rehearsal is asked for.
     #[must_use]
-    pub fn params(&self) -> Params {
+    pub fn params(&self, rehearsal_seed: Option<Seed>) -> Params {
         Params {
             mode: self.mode,
             rehearsal_share: self.rehearsal_share,
+            rehearsal_seed,
             retention_replay_share: self.retention_replay_share,
             epochs: self.epochs,
             steps: self.steps,
@@ -356,7 +364,10 @@ fn consolidate_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) 
     let (Some(release), Some(planned), Some(current)) = (&st.release, &st.plan, &st.current) else {
         unreachable!("the consolidate stage follows the claims stage")
     };
-    let params = st.request.params();
+    let rehearsal_seed = (st.request.rehearsal_share > 0.0)
+        .then(|| run.seed("rehearsal-seed", st.request.rehearsal_seed))
+        .transpose()?;
+    let params = st.request.params(rehearsal_seed);
     let done = job::run(
         ctx,
         &job::Job {

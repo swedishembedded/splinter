@@ -18,6 +18,7 @@ use splinter_core::annotation::Strength;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{ExperienceId, PrivilegedKind};
+use splinter_core::rng::Seed;
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 pub use splinter_data::Strip;
@@ -46,10 +47,6 @@ use splinter_orchestrator::runs::to_json;
 /// consistency admits critiques verified by their retry's outcome and
 /// agreement among answers, and leaves judged verdicts to be asked for.
 pub const DEFAULT_MIN_STRENGTH: Strength = Strength::Consistency;
-
-/// The seed that picks which subjects keep their privileged context under
-/// `--strip mix:F`, so the same dataset is built every time.
-pub const MIX_SEED: u64 = 0;
 
 /// The views a dataset can be built through.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -148,17 +145,47 @@ impl FromStr for ViewName {
     }
 }
 
+/// A `--strip` policy as written, before the seed `mix:F` needs is settled.
+///
+/// The text names a fraction of subjects that keep their privileged context;
+/// which subjects is decided by a seed the run states
+/// ([`StripPolicy::with_seed`]), so that the same dataset can be built again.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum StripPolicy {
+    /// `all` or `keep:K,..`: nothing is left to draw.
+    Fixed(Strip),
+    /// `mix:F`: the subjects that keep their context are drawn by a seed.
+    Mix {
+        /// The share of subjects that keep their privileged context.
+        keep_fraction: Fraction,
+    },
+}
+
+impl StripPolicy {
+    /// The strip to build with. A `mix:F` policy asks `seed` for the seed
+    /// that picks its subjects; the other policies never ask for one.
+    pub fn with_seed<E>(self, seed: impl FnOnce() -> Result<Seed, E>) -> Result<Strip, E> {
+        match self {
+            Self::Fixed(strip) => Ok(strip),
+            Self::Mix { keep_fraction } => Ok(Strip::Mix {
+                keep_fraction,
+                seed: seed()?.value(),
+            }),
+        }
+    }
+}
+
 /// A `--strip` policy: `all`, `keep:K,..` or `mix:F`.
-pub fn parse_strip(text: &str) -> Result<Strip, OrchestratorError> {
+pub fn parse_strip(text: &str) -> Result<StripPolicy, OrchestratorError> {
     if text == "all" {
-        return Ok(Strip::All);
+        return Ok(StripPolicy::Fixed(Strip::All));
     }
     if let Some(kinds) = text.strip_prefix("keep:") {
         let kinds = kinds
             .split(',')
             .map(privileged_kind)
             .collect::<Result<Vec<_>, _>>()?;
-        return Ok(Strip::Keep(kinds));
+        return Ok(StripPolicy::Fixed(Strip::Keep(kinds)));
     }
     if let Some(fraction) = text.strip_prefix("mix:") {
         let value: f64 = fraction.parse().map_err(|_| {
@@ -166,10 +193,7 @@ pub fn parse_strip(text: &str) -> Result<Strip, OrchestratorError> {
         })?;
         let keep_fraction = Fraction::new(value)
             .map_err(|e| OrchestratorError::Refused(format!("mix:{fraction}: {e}")))?;
-        return Ok(Strip::Mix {
-            keep_fraction,
-            seed: MIX_SEED,
-        });
+        return Ok(StripPolicy::Mix { keep_fraction });
     }
     Err(OrchestratorError::Refused(format!(
         "{text:?} is not a strip policy: all, keep:<kind>,.. or mix:<fraction>"
@@ -726,15 +750,25 @@ mod tests {
 
     #[test]
     fn strip_policies_and_strengths_parse_or_are_refused() {
-        assert_eq!(parse_strip("all").ok(), Some(Strip::All));
+        let never = || -> Result<Seed, ()> { Err(()) };
         assert_eq!(
-            parse_strip("keep:hint,other:executable-check").ok(),
-            Some(Strip::Keep(vec![
+            parse_strip("all").ok().map(|p| p.with_seed(never)),
+            Some(Ok(Strip::All))
+        );
+        assert_eq!(
+            parse_strip("keep:hint,other:executable-check")
+                .ok()
+                .map(|p| p.with_seed(never)),
+            Some(Ok(Strip::Keep(vec![
                 PrivilegedKind::Hint,
                 PrivilegedKind::Other("executable-check".into())
-            ]))
+            ])))
         );
-        assert!(matches!(parse_strip("mix:0.25"), Ok(Strip::Mix { .. })));
+        // `mix:F` takes the seed it is given, and only it asks for one.
+        let mixed = parse_strip("mix:0.25")
+            .unwrap()
+            .with_seed::<()>(|| Ok(Seed::new(9)));
+        assert!(matches!(mixed, Ok(Strip::Mix { seed: 9, .. })));
         for refused in ["none", "keep:hnt", "mix:2", "mix:x", "keep:other:"] {
             assert!(parse_strip(refused).is_err(), "{refused}");
         }

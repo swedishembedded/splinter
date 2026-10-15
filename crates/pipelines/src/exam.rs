@@ -50,6 +50,7 @@ use crate::retrieval::Retrieval;
 use crate::train::load_candidate;
 use crate::verify::{grounding_verifier, judge_verifier};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -87,6 +88,8 @@ pub struct ExamRequest<'a> {
     /// arm: the candidate with retrieval, against the candidate alone. `None`
     /// adds no such arm.
     pub retrieval: Option<&'a Retrieval<'a>>,
+    /// The seed the gain's bootstrap interval is resampled with.
+    pub interval_seed: Seed,
     /// Stops the exam.
     pub cancel: CancelToken,
 }
@@ -211,6 +214,9 @@ pub struct RetrievalTask {
 /// What the exam reports.
 #[derive(Clone, Debug, Serialize)]
 pub struct Examined {
+    /// The seed the gain's bootstrap interval was resampled with; examining
+    /// the same records with it reproduces the interval.
+    pub interval_seed: Seed,
     /// Tasks put to each arm.
     pub tasks: usize,
     /// The families of source text they come from: the units of evidence the
@@ -492,6 +498,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         .len()
         + clusters.iter().filter(|c| c.is_none()).count();
     Ok(Examined {
+        interval_seed: request.interval_seed,
         tasks: request.tasks.len(),
         families,
         judge: JudgeTrust {
@@ -510,7 +517,7 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         ),
         paired: (trusted && !pairs.is_empty()).then(|| sign_test(&pairs)),
         paired_interval: (trusted && !pairs.is_empty())
-            .then(|| gain_interval(&pairs))
+            .then(|| gain_interval(&pairs, request.interval_seed))
             .flatten(),
         paired_vs_prompted: (trusted && !pairs_vs_prompted.is_empty())
             .then(|| sign_test(&pairs_vs_prompted)),
@@ -525,17 +532,16 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
 const INTERVAL_RESAMPLES: usize = 2000;
 /// The share of resampled means the interval holds.
 const INTERVAL_LEVEL: f64 = 0.95;
-/// The seed of the resampling: the same interval for the same gains.
-const INTERVAL_SEED: u64 = 0;
 
 /// The bootstrap interval of the candidate's gain per family over `pairs`
-/// of `(candidate right, base right)`, one per family.
-fn gain_interval(pairs: &[(bool, bool)]) -> Option<Interval> {
+/// of `(candidate right, base right)`, one per family, resampled from the
+/// generator that starts at `seed`.
+fn gain_interval(pairs: &[(bool, bool)], seed: Seed) -> Option<Interval> {
     let gains: Vec<f64> = pairs
         .iter()
         .map(|(candidate, base)| f64::from(*candidate) - f64::from(*base))
         .collect();
-    bootstrap_interval(&gains, INTERVAL_RESAMPLES, INTERVAL_LEVEL, INTERVAL_SEED)
+    bootstrap_interval(&gains, INTERVAL_RESAMPLES, INTERVAL_LEVEL, seed.value())
 }
 
 /// The most held-out tasks an exam of a candidate puts to each arm: chosen
@@ -570,6 +576,8 @@ pub struct ExamineRequest<'a> {
     pub prompted: Option<&'a str>,
     /// Retrieval for a further arm; see [`ExamRequest::retrieval`].
     pub retrieval: Option<&'a Retrieval<'a>>,
+    /// The seed the gain's bootstrap interval is resampled with.
+    pub interval_seed: Seed,
 }
 
 /// Examines the stored candidate `request` names against what it continues,
@@ -639,6 +647,7 @@ pub fn examine(
             retrieval: request.retrieval,
             base_system: base_system.as_deref(),
             candidate_system: candidate_system.as_deref(),
+            interval_seed: request.interval_seed,
             cancel: cancel.clone(),
         },
     )?;

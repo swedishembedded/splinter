@@ -1,8 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-crates/pipelines/src/datasets.rs	MIX_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/exam.rs	INTERVAL_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/learn/exam_stages.rs	reserve_stage::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/powered/analysis.rs	SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/practice/exam.rs	EXAM_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/rehearsal.rs	REHEARSAL_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/tasks/mod.rs	DENOISE_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
+crates/pipelines/src/practice/exam.rs	remembered_seed::unwrap_or	frozen: the seed of an exam recorded before records kept theirs; those exams were chosen by seed 0

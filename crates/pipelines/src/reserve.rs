@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
+use splinter_core::rng::Seed;
 use splinter_core::source::{
     CapturedSource, Origin, Part, PartContent, SkipReason, Skipped, Source, SourceId,
 };
@@ -60,8 +61,11 @@ pub struct ReserveRequest<'a> {
     /// they are as far from training as the final test's, and apart from it.
     pub dev_families: usize,
     /// Varies the choice; the same seed over the same sources reserves the
-    /// same families whatever order the sources are given in.
-    pub seed: u64,
+    /// same families whatever order the sources are given in. A run draws a
+    /// fresh one ([`splinter_orchestrator::runs::Recorder::seed`]), so two
+    /// runs over the same sources examine different families unless they are
+    /// given the seed one of them recorded in its [`Reservation`].
+    pub seed: Seed,
     /// Datasets already trained on: a family any of them was built from is
     /// not examinable, for a model trained on them has seen it.
     pub touched_by: &'a [DatasetId],
@@ -81,6 +85,12 @@ pub struct ReservedFamily {
 /// What was reserved, and the sources to use instead.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Reservation {
+    /// The seed the choice was made with: reserving again with it over the
+    /// same sources and the same trained-on datasets reserves the same
+    /// families. Reservations made before it was recorded read as 0, the seed
+    /// they were made with.
+    #[serde(default = "unrecorded_seed")]
+    pub seed: Seed,
     /// The families reserved for the final test, by name.
     pub families: Vec<ReservedFamily>,
     /// The families reserved for the dev suite, by name.
@@ -98,6 +108,11 @@ pub struct Reservation {
     /// The sources the dev suite is written from.
     #[serde(default)]
     pub dev: Vec<SourceId>,
+}
+
+/// The seed of a reservation stored before reservations recorded theirs.
+fn unrecorded_seed() -> Seed {
+    Seed::new(0)
 }
 
 /// Refuses a request that cannot be honoured; see [`reserve`].
@@ -231,7 +246,7 @@ pub fn reserve(
         )));
     }
     examinable.sort_by_cached_key(|name| {
-        let mut input = request.seed.to_le_bytes().to_vec();
+        let mut input = request.seed.value().to_le_bytes().to_vec();
         input.extend_from_slice(name.as_bytes());
         Digest::of(&input).to_string()
     });
@@ -328,6 +343,7 @@ pub fn reserve(
         }
     }
     Ok(Reservation {
+        seed: request.seed,
         families,
         dev_families,
         examinable: pool,

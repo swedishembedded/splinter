@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
+use splinter_core::rng::Seed;
 use splinter_core::source::{CapturedSource, Origin, PartContent, SourceId};
 use splinter_data::frozen::Ledger;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
@@ -70,6 +71,10 @@ pub struct ExamSetRequest<'a> {
     pub author: Option<&'a str>,
     /// The most tasks of one family the exam holds.
     pub tasks_per_family: usize,
+    /// The seed the families were reserved with ([`Reservation::seed`]), kept
+    /// in the manifest; `None` for a set whose families were not chosen by a
+    /// reservation.
+    pub seed: Option<Seed>,
     /// Stops generation.
     pub cancel: CancelToken,
 }
@@ -135,6 +140,11 @@ pub struct ExamSet {
     pub kinds: Vec<String>,
     /// The most tasks of one family it was held to.
     pub tasks_per_family: usize,
+    /// The seed its families were reserved with; reserving over the same
+    /// sources with it chooses the same families. Absent in an exam frozen
+    /// before the seed was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<Seed>,
     /// What it is for.
     #[serde(default)]
     pub role: Role,
@@ -285,6 +295,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
             generator: request.generator,
             goal: request.goal,
             author: request.author,
+            denoise_seed: None,
             deadline: None,
             cancel: request.cancel.clone(),
         },
@@ -359,6 +370,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
         tasks: exam_tasks,
         kinds: request.kinds.to_vec(),
         tasks_per_family: request.tasks_per_family,
+        seed: request.seed,
         role: request.role,
         primary: Primary::default(),
         bundle,
@@ -394,8 +406,9 @@ pub struct NewExam<'a> {
     pub dev_families: usize,
     /// Tasks of each.
     pub dev_tasks_per_family: usize,
-    /// Varies the choice of families.
-    pub seed: u64,
+    /// Varies the choice of families; recorded in the reservation and in the
+    /// exams frozen from it.
+    pub seed: Seed,
     /// The kinds of task.
     pub kinds: &'a [String],
     /// The generator model.
@@ -460,6 +473,7 @@ pub fn build(ctx: &Context, request: &NewExam<'_>) -> Result<ExamBuilt, Orchestr
                 goal: request.goal,
                 author: request.author,
                 tasks_per_family: per,
+                seed: Some(reservation.seed),
                 cancel: request.cancel.clone(),
             },
         )

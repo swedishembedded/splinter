@@ -62,6 +62,7 @@ use crate::train::{load_candidate, Candidate};
 use crate::verify::grounding_verifier;
 use analysis::{compare, summarise, Answer, ArmSummary, Comparison, TaskRecord};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -117,6 +118,10 @@ pub struct PoweredRequest<'a> {
     pub voice: bool,
     /// Which arms to ask.
     pub arms: ArmChoice,
+    /// The seed the comparisons' intervals are resampled with; required when
+    /// the arms are compared ([`ArmChoice::All`]) and unused otherwise. It is
+    /// kept in the report ([`Powered::interval_seed`]).
+    pub interval_seed: Option<Seed>,
     /// An adapter to put to the exam in place of the candidate's own: a
     /// checkpoint of its run ([`crate::checkpoints`]). `None` is the
     /// candidate's.
@@ -153,6 +158,10 @@ pub struct Powered {
     pub families_trained_on: usize,
     /// Answers per task per arm.
     pub resamples: usize,
+    /// The seed the comparisons' intervals were resampled with; passing it
+    /// for the same exam and records reproduces them. `None` when no arms
+    /// were compared.
+    pub interval_seed: Option<Seed>,
     /// The system prompt each arm was asked under.
     pub prompts: BTreeMap<String, String>,
     /// The judge and what it was measured at.
@@ -323,6 +332,17 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
             "an exam asks every task at least once: --resamples is at least 1".into(),
         ));
     }
+    // Arms are compared only when all of them are asked, and the intervals of
+    // the comparison are a function of a seed the report must state.
+    let interval_seed = match (request.arms, request.interval_seed) {
+        (ArmChoice::All, None) => {
+            return Err(OrchestratorError::Refused(
+                "an exam that compares arms needs the seed its intervals are resampled with".into(),
+            ))
+        }
+        (ArmChoice::All, seed) => seed,
+        (ArmChoice::Deployed, _) => None,
+    };
     let judge_ref = match request.judge {
         Some(named) => named.clone(),
         None => assignments(ctx.config(), &RoleOverrides::default())?
@@ -456,40 +476,41 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
     // A judge that is not trusted abstains on every answer, so there is
     // nothing to compare and the report makes no claim.
     let primary = request.exam.primary.clone();
-    let comparisons = if calibrated.trust.trusted {
-        // The primary comparison first and alone as it was fixed with the exam;
-        // the rest are secondary, corrected together for how many were made.
-        let secondary = [
-            (CANDIDATE, PROMPTED),
-            (PERSONA, BASE),
-            (CANDIDATE, BASE),
-            (PERSONA, CANDIDATE),
-            (PROMPTED, BASE),
-        ];
-        let mut made: Vec<Comparison> =
-            std::iter::once((primary.first.as_str(), primary.second.as_str()))
-                .chain(secondary)
-                .filter(|(first, second)| has(first) && has(second))
-                .fold(Vec::new(), |mut made: Vec<Comparison>, (first, second)| {
-                    if !made.iter().any(|c| c.first == first && c.second == second) {
-                        made.push(compare(&records, first, second));
-                    }
-                    made
-                });
-        let corrected = analysis::holm(
-            &made
-                .iter()
-                .skip(1)
-                .map(|c| c.p_families)
-                .collect::<Vec<_>>(),
-        );
-        for (c, p) in made.iter_mut().skip(1).zip(corrected) {
-            c.holm_p = Some(p);
-        }
-        made
-    } else {
-        Vec::new()
-    };
+    let comparisons =
+        if let Some(interval_seed) = interval_seed.filter(|_| calibrated.trust.trusted) {
+            // The primary comparison first and alone as it was fixed with the exam;
+            // the rest are secondary, corrected together for how many were made.
+            let secondary = [
+                (CANDIDATE, PROMPTED),
+                (PERSONA, BASE),
+                (CANDIDATE, BASE),
+                (PERSONA, CANDIDATE),
+                (PROMPTED, BASE),
+            ];
+            let mut made: Vec<Comparison> =
+                std::iter::once((primary.first.as_str(), primary.second.as_str()))
+                    .chain(secondary)
+                    .filter(|(first, second)| has(first) && has(second))
+                    .fold(Vec::new(), |mut made: Vec<Comparison>, (first, second)| {
+                        if !made.iter().any(|c| c.first == first && c.second == second) {
+                            made.push(compare(&records, first, second, interval_seed));
+                        }
+                        made
+                    });
+            let corrected = analysis::holm(
+                &made
+                    .iter()
+                    .skip(1)
+                    .map(|c| c.p_families)
+                    .collect::<Vec<_>>(),
+            );
+            for (c, p) in made.iter_mut().skip(1).zip(corrected) {
+                c.holm_p = Some(p);
+            }
+            made
+        } else {
+            Vec::new()
+        };
     let families: BTreeSet<&str> = examined.iter().map(|t| t.family.as_str()).collect();
 
     let mut powered = Powered {
@@ -500,6 +521,7 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
         families: families.len(),
         families_trained_on,
         resamples: request.resamples,
+        interval_seed,
         prompts: specs
             .iter()
             .map(|s| {

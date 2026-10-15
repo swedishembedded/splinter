@@ -16,6 +16,7 @@ use splinter_sdk::absorb::DEFAULT_EPOCHS;
 use splinter_sdk::claims::DEFAULT_EXTRACTION_PASSES;
 use splinter_sdk::generation::ConsolidationMode;
 use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
+use splinter_sdk::seed::Seed;
 use splinter_sdk::sessions::DEFAULT_MAX_SESSION_BYTES;
 use splinter_sdk::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -169,6 +170,14 @@ pub struct AbsorbArgs {
     /// general tasks, in [0, 1); 0 turns it off.
     #[arg(long, default_value_t = DEFAULT_REHEARSAL_SHARE, value_name = "SHARE", value_parser = super::voice_share)]
     pub rehearsal_share: f64,
+    /// The seed the rehearsal's form tasks are built with.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the rehearsal's form tasks are built with \
+        [default: drawn and printed]"
+    )]
+    pub rehearsal_seed: Option<Seed>,
     /// The most passes over the night's records.
     #[arg(long, default_value_t = DEFAULT_EPOCHS, value_name = "N",
         value_parser = clap::value_parser!(u32).range(1..))]

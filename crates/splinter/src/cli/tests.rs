@@ -117,6 +117,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         kinds,
         generator,
         author,
+        denoise_seed,
     }) = command(&[
         "tasks",
         "generate",
@@ -133,6 +134,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert_eq!((sources.len(), kinds.len()), (2, 2));
     assert_eq!(generator, ModelRef::policy_default());
     assert_eq!(author.as_deref(), Some("Thomas Jefferson"));
+    assert_eq!(denoise_seed, None);
     assert!(
         parse(&["tasks", "generate", "ab12"]).is_err(),
         "--kinds is required"
@@ -181,6 +183,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         sets,
         view,
         strip,
+        mix_seed,
         min_strength,
         system_prompt,
         export_only,
@@ -224,7 +227,8 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert!(describe_with.is_some());
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
-    assert!(matches!(strip, Some(Strip::Mix { .. })));
+    assert!(matches!(strip, Some(StripPolicy::Mix { .. })));
+    assert_eq!(mix_seed, None);
     assert_eq!(min_strength, Some(Strength::Formal));
     assert_eq!(system_prompt.as_deref(), Some("You are a clerk."));
     assert!(export_only);

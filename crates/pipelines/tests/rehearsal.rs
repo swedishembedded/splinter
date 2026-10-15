@@ -38,14 +38,19 @@ use common::gate::{anchor_file, dataset, gate_context, put_base, Brain, FakeTrai
 use common::{Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
+use splinter_core::rng::Seed;
 use splinter_knowledge::rehearsal::{form_tasks, GENERAL_BRIEF};
 use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 use splinter_orchestrator::Context;
 use splinter_pipelines::learn::{learn, LearnRequest, Learned, DEFAULT_REHEARSAL_SHARE, STAGES};
-use splinter_pipelines::rehearsal::{rehearse, RehearseRequest, FORM_SHARE, REHEARSAL_SEED};
+use splinter_pipelines::rehearsal::{rehearse, RehearseRequest, FORM_SHARE};
 use splinter_pipelines::release::{anchor, arm};
 use splinter_pipelines::train::{train, Rehearse, TrainRequest, Tuning, DEFAULT_REPLAY_FRACTION};
+
+// seed: the specs fix which form tasks are built, which one seed makes the same
+// on every run.
+const SEED: Seed = Seed::new(0);
 
 /// A general request the base proposes that is new.
 const FRESH: [&str; 6] = [
@@ -100,7 +105,7 @@ fn rehearsal_context(test: &str, extra_anchor: &[String]) -> (Scratch, Context, 
     let base = arm(ctx.config(), None);
     // The anchor holds an instance of the generator's own: it must be kept
     // out although the generator would build it again.
-    let own = form_tasks(REHEARSAL_SEED, 1)[0].clone();
+    let own = form_tasks(SEED.value(), 1)[0].clone();
     let own_reference = own.privileged[0].content.clone();
     let path = anchor_file(&scratch.0, 4);
     let mut text = std::fs::read_to_string(&path).unwrap();
@@ -157,7 +162,7 @@ fn the_rehearsal_set_never_holds_an_anchor_task_or_a_near_copy_of_one() {
         &ctx,
         &RehearseRequest {
             records: 12,
-            seed: REHEARSAL_SEED,
+            seed: SEED,
             deadline: None,
             cancel: CancelToken::new(),
         },
@@ -250,7 +255,7 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
         &ctx,
         &RehearseRequest {
             records: 24,
-            seed: REHEARSAL_SEED,
+            seed: SEED,
             deadline: None,
             cancel: CancelToken::new(),
         },
@@ -406,4 +411,27 @@ fn a_learn_with_a_persona_rehearses_by_default_and_not_when_told_not_to() {
     )
     .unwrap_err();
     assert!(refused.is_refusal() && refused.to_string().contains("rehearsal share"));
+}
+
+#[test]
+fn a_rehearsal_states_its_seed_and_the_same_seed_builds_the_same_set() {
+    let (_scratch, ctx, _) = rehearsal_context("rehearsal-seed", &[]);
+    let ask = |seed: Seed| {
+        rehearse(
+            &ctx,
+            &RehearseRequest {
+                records: 12,
+                seed,
+                deadline: None,
+                cancel: CancelToken::new(),
+            },
+        )
+        .unwrap()
+    };
+    // seed: two arbitrary seeds; only that the same one repeats and another differs matters.
+    let (first, other) = (Seed::new(5), Seed::new(6));
+    let made = ask(first);
+    assert_eq!(made.seed, first);
+    assert_eq!(ask(first).task_set, made.task_set);
+    assert_ne!(ask(other).task_set, made.task_set);
 }

@@ -1,4 +1,1 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-crates/splinter/src/cli/exam.rs	ExamReportCommand::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/splinter/src/cli/exam.rs	ExamSetArgs::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/splinter/src/exam_session.rs	power::seed	todo: a default that is drawn, printed and recorded once its owner is converted

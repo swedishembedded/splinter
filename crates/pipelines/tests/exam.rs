@@ -29,10 +29,15 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_knowledge::retrieve::{EmbedError, Embedder, Library, Passage};
 use splinter_pipelines::exam::{exam, ExamRequest};
 use splinter_pipelines::retrieval::Retrieval;
 use splinter_pipelines::sources::{self, SourceTarget};
+
+// seed: the spec reads the interval of one exam, which one fixed seed makes the
+// same on every run.
+const INTERVAL_SEED: Seed = Seed::new(2);
 
 const LETTER: &str = "# To a young man\n\n## Habits\n\nKeep habit1 and habit2 and habit3 and habit4 and habit5 and habit6 each morning, for a settled mind needs them.\n";
 
@@ -158,6 +163,7 @@ fn run(
             retrieval: None,
             base_system: None,
             candidate_system: None,
+            interval_seed: INTERVAL_SEED,
             cancel: CancelToken::new(),
         },
     )
@@ -270,6 +276,7 @@ fn an_exam_of_a_model_against_itself_is_refused() {
             retrieval: None,
             base_system: None,
             candidate_system: None,
+            interval_seed: INTERVAL_SEED,
             cancel: CancelToken::new(),
         },
     );
@@ -294,6 +301,7 @@ fn the_base_prompted_with_the_goal_is_a_third_arm_the_candidate_is_compared_with
         retrieval: None,
         base_system: None,
         candidate_system: None,
+        interval_seed: INTERVAL_SEED,
         cancel: CancelToken::new(),
     };
     let without = exam(&ctx, &request(None)).unwrap();
@@ -375,6 +383,7 @@ fn the_candidate_with_retrieval_is_a_further_arm_and_the_retriever_is_scored_on_
             retrieval: Some(&retrieval),
             base_system: None,
             candidate_system: None,
+            interval_seed: INTERVAL_SEED,
             cancel: CancelToken::new(),
         },
     )
@@ -423,6 +432,7 @@ fn each_arm_is_asked_under_the_prompt_it_is_deployed_with() {
             retrieval: None,
             base_system: None,
             candidate_system: Some(PERSONA),
+            interval_seed: INTERVAL_SEED,
             cancel: CancelToken::new(),
         },
     )

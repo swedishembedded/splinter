@@ -15,6 +15,7 @@ use splinter_sdk::absorb::consolidate::DEFAULT_CONSOLIDATION_EPOCHS;
 use splinter_sdk::absorb::generation::DEFAULT_RETENTION_REPLAY_SHARE;
 use splinter_sdk::generation::ConsolidationMode;
 use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
+use splinter_sdk::seed::Seed;
 use splinter_sdk::train::DEFAULT_FULL_LEARNING_RATE;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
@@ -52,6 +53,14 @@ pub struct ConsolidateArgs {
     /// general tasks, in [0, 1); 0 turns it off. Full mode only.
     #[arg(long, default_value_t = DEFAULT_REHEARSAL_SHARE, value_name = "SHARE", value_parser = super::voice_share)]
     pub rehearsal_share: f64,
+    /// The seed the rehearsal's form tasks are built with.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the rehearsal's form tasks are built with \
+        [default: drawn and printed]"
+    )]
+    pub rehearsal_seed: Option<Seed>,
     /// The share of the training draws that are records of the claims the
     /// base already holds, in [0, 1). Full mode only.
     #[arg(long, default_value_t = DEFAULT_RETENTION_REPLAY_SHARE, value_name = "SHARE", value_parser = super::voice_share)]

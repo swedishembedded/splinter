@@ -10,6 +10,7 @@ use splinter_sdk::powered::plan::{simulate, Plan, Planned};
 use splinter_sdk::powered::{audit, memorisation, reports};
 use splinter_sdk::powered::{run, ArmChoice, PoweredExam, PoweredRequest, DEFAULT_RESAMPLES};
 use splinter_sdk::runs::{record, Recorded};
+use splinter_sdk::seed::{resolve, Seed};
 use splinter_sdk::sources::SourceTarget;
 use splinter_sdk::train::{adopt_checkpoint, load_candidate};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -45,7 +46,7 @@ pub fn create(ctx: &Context, args: &ExamSetArgs) -> Result<Recorded<ExamBuilt>, 
             &NewExam {
                 sources: &targets,
                 families: args.families,
-                seed: args.seed,
+                seed: run.seed("seed", args.seed)?,
                 tasks_per_family: args.tasks_per_family,
                 dev_families: args.dev_families,
                 dev_tasks_per_family: args.dev_tasks_per_family,
@@ -73,9 +74,15 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
         "pilot_families": args.pilot_families,
         "voice": !args.no_voice,
         "deployed_only": args.deployed_only,
+        "interval_seed": args.interval_seed,
     });
-    record(ctx, "exam", &arguments, |cancelled| {
-        let cancel = cancelled.cancel_token();
+    record(ctx, "exam", &arguments, |recorder| {
+        let cancel = recorder.cancel_token();
+        // Nothing is compared when only the deployed arm is asked, so no
+        // interval is resampled.
+        let interval_seed = (!args.deployed_only)
+            .then(|| recorder.seed("interval-seed", args.interval_seed))
+            .transpose()?;
         match run(
             ctx,
             &PoweredRequest {
@@ -92,6 +99,7 @@ pub fn powered(ctx: &Context, args: &ExamArgs) -> Result<Recorded<PoweredExam>, 
                 } else {
                     ArmChoice::All
                 },
+                interval_seed,
                 adapter: None,
                 cancel: &cancel,
             },
@@ -189,7 +197,7 @@ pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
         icc,
         replicates: args.replicates,
         resamples: 500,
-        seed: 0,
+        seed: Seed::new(resolve("seed", args.seed.map(Seed::value))),
     };
     Ok(PlannedExam {
         plan,
@@ -202,6 +210,9 @@ pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
 pub struct LabelsExported {
     /// Items to label.
     pub items: usize,
+    /// The seed the sample was drawn with; exporting again from the same
+    /// report with it gives the same sample.
+    pub seed: u64,
     /// The file of items.
     pub out: std::path::PathBuf,
     /// The key.
@@ -215,9 +226,10 @@ pub fn labels_export(
     out: &std::path::Path,
     key: &std::path::Path,
     n: usize,
-    seed: u64,
+    seed: Option<Seed>,
 ) -> Result<LabelsExported, Error> {
     let records = reports::read_records(report)?;
+    let seed = resolve("seed", seed.map(Seed::value));
     let (items, keyed) = audit::export(&records, &reports::StoredWording(ctx), n, seed);
     let lines: Vec<String> = items
         .iter()
@@ -231,6 +243,7 @@ pub fn labels_export(
     std::fs::write(key, key_text).map_err(|e| Error::Refused(format!("{}: {e}", key.display())))?;
     Ok(LabelsExported {
         items: items.len(),
+        seed,
         out: out.to_path_buf(),
         key: key.to_path_buf(),
     })

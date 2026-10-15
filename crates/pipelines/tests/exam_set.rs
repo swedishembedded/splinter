@@ -24,9 +24,14 @@ use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_pipelines::exam_set::{create, ExamSet, ExamSetRequest, Role};
 use splinter_pipelines::reserve::{reserve, ReserveRequest};
 use splinter_pipelines::sources::{add, SourceTarget};
+
+// seed: the spec asserts on which families are reserved, which one fixed seed
+// makes the same on every run.
+const RESERVE_SEED: Seed = Seed::new(1);
 
 fn words(seed: &str, n: usize) -> String {
     (0..n)
@@ -100,7 +105,7 @@ fn the_exam_is_written_from_the_reserved_text_within_its_budget_and_frozen() {
             sources: &[id],
             families: 6,
             dev_families: 0,
-            seed: 1,
+            seed: RESERVE_SEED,
             touched_by: &[],
         },
     )
@@ -116,12 +121,14 @@ fn the_exam_is_written_from_the_reserved_text_within_its_budget_and_frozen() {
             goal: None,
             author: None,
             tasks_per_family: 1,
+            seed: Some(reservation.seed),
             cancel: CancelToken::new(),
         },
     )
     .unwrap();
     // Twelve tasks were admitted from six families; one a family is kept.
     assert_eq!(exam.tasks.len(), 6);
+    assert_eq!(exam.seed, Some(reservation.seed), "the exam keeps its seed");
     let reserved: BTreeSet<_> = reservation.families.iter().map(|f| &f.family).collect();
     assert!(exam.tasks.iter().all(|t| reserved.contains(&t.family)));
     assert_eq!(exam.families_examined(), 6);

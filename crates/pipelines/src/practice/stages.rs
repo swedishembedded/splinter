@@ -31,7 +31,7 @@ use splinter_sandbox::TreeSnapshot;
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use super::exam::{assert_no_exam_family, remember_trained, reserve};
+use super::exam::{assert_no_exam_family, remember_trained, remembered_seed, reserve};
 use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
 use super::PracticeRequest;
@@ -323,12 +323,23 @@ fn tasks_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>) 
     })
 }
 
-fn reserve_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
+fn reserve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
     let Some(all) = st.training.take() else {
         unreachable!("the reserve stage follows the tasks stage")
     };
     let members = ctx.tasks().get_set(&all)?.members;
-    let divided = reserve(ctx, members, st.practice.request.exam_families)?;
+    let named = st.practice.request.exam_seed;
+    let given = match (remembered_seed(ctx)?, named) {
+        (Some(kept), Some(named)) if kept != named => {
+            return Err(OrchestratorError::Refused(format!(
+                "the exam families were chosen by seed {kept} and --exam-seed {named} would choose \
+                 others: an exam is kept for every later run, so pass --exam-seed {kept} or none"
+            )))
+        }
+        (kept, named) => kept.or(named),
+    };
+    let seed = run.seed("exam-seed", given)?;
+    let divided = reserve(ctx, members, st.practice.request.exam_families, seed)?;
     let summary = to_value(&divided.reserved)?;
     st.exam_families = divided.exam_families;
     let none_left = divided.training.is_empty();

@@ -32,6 +32,7 @@ use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
 use splinter_core::kinds::DENOISE as DENOISE_KIND;
+use splinter_core::rng::Seed;
 use splinter_core::source::SourceId;
 use splinter_knowledge::advice::{advice_sections, judgment_sections};
 use splinter_knowledge::concepts::SectionRef;
@@ -58,10 +59,6 @@ pub const SECTIONS_PER_REQUEST: usize = 3;
 /// and a run over more text than its budget covers still touches every part
 /// it reaches.
 pub const MAX_WINDOWS_PER_PART: usize = 4;
-
-/// The seed denoise tasks are generated with, so the same part always
-/// yields the same task.
-pub const DENOISE_SEED: u64 = 0;
 
 /// The task kinds `learn` generates when none are named.
 pub const DEFAULT_LEARN_KINDS: &[&str] = &["recall"];
@@ -106,6 +103,13 @@ pub fn check_kinds(names: &[String]) -> Result<Vec<String>, OrchestratorError> {
     Ok(kinds)
 }
 
+/// Whether `kinds` includes the `denoise` kind, which is built by code from a
+/// seed ([`Generation::denoise_seed`]).
+#[must_use]
+pub fn asks_for_denoise(kinds: &[String]) -> bool {
+    kinds.iter().any(|k| k == DENOISE_KIND)
+}
+
 /// One generation request's bounds and inputs.
 pub struct Generation<'a> {
     /// The sources to generate from.
@@ -124,6 +128,10 @@ pub struct Generation<'a> {
     /// generator as the source's author, and a subject a question may name
     /// ([`SourceText::by`]).
     pub author: Option<&'a str>,
+    /// The seed the `denoise` tasks are built with, so the same part under
+    /// the same seed yields the same task. Required when `kinds` names
+    /// `denoise`, so that no run builds them from a seed it did not state.
+    pub denoise_seed: Option<Seed>,
     /// No request starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops generation.
@@ -198,6 +206,10 @@ impl From<&CallRecord> for CallNote {
 pub struct TasksGenerated {
     /// The task set (`solve <task_set>`).
     pub task_set: TaskSetId,
+    /// The seed the denoise tasks were built with; `None` when none were
+    /// asked for. Generating again from the same parts with it yields the
+    /// same denoise tasks.
+    pub denoise_seed: Option<Seed>,
     /// Tasks in it.
     pub tasks: usize,
     /// Text parts generated from.
@@ -239,7 +251,13 @@ pub fn generate(
         .filter_map(|name| catalogue.get(name))
         .map(|kind| with_goal(kind, request.goal))
         .collect();
-    let denoise = request.kinds.iter().any(|k| k == DENOISE_KIND);
+    let denoise_seed = if asks_for_denoise(request.kinds) {
+        Some(request.denoise_seed.ok_or_else(|| {
+            OrchestratorError::Refused("the denoise kind needs the seed it is built with".into())
+        })?)
+    } else {
+        None
+    };
     let generator = if model_kinds.is_empty() {
         None
     } else {
@@ -267,9 +285,9 @@ pub fn generate(
                 break 'sources;
             }
             batch.parts += 1;
-            if denoise {
+            if let Some(denoise_seed) = denoise_seed {
                 let content = ctx.sources().read_blob(&part.content)?;
-                match Denoise::new(DENOISE_SEED).generate(&source, &part.name, &content) {
+                match Denoise::new(denoise_seed.value()).generate(&source, &part.name, &content) {
                     Ok(task) => batch.admit(
                         ctx,
                         DENOISE_KIND,
@@ -340,6 +358,7 @@ pub fn generate(
     }
     Ok(TasksGenerated {
         task_set: ctx.tasks().put_set(&set)?,
+        denoise_seed,
         tasks,
         parts: batch.parts,
         parts_total,

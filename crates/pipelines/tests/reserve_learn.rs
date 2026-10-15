@@ -147,6 +147,7 @@ fn nothing_of_a_reserved_family_in_any_edition_reaches_a_training_dataset() {
                 dev_families: Some(2),
                 dev_tasks_per_family: Some(1),
                 resamples: Some(2),
+                ..ExamPlan::default()
             },
             rehearsal: Some(0.0),
             roles: [(Role::Judge, judge_ref)].into(),

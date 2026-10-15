@@ -15,6 +15,7 @@ use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::claim::{Absorption, ClaimId, TrainedClaims};
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
+use splinter_core::rng::Seed;
 use splinter_core::role::Role;
 use splinter_core::source::SourceId;
 use splinter_core::terms::combine_stated;
@@ -37,7 +38,7 @@ use crate::claim_quality::load_subjects;
 use crate::claims::{gate as rule_claims, resolve_set, GateRequest};
 use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::learn::{records_at_share, PolicyUsed};
-use crate::rehearsal::{rehearse_on, RehearseRequest, REHEARSAL_SEED};
+use crate::rehearsal::{rehearse_on, RehearseRequest};
 use crate::release::arm_on;
 use crate::train::{
     auto_records_per_step, load_candidate, train, Candidate, Rehearse, TrainRequest, Trainer,
@@ -115,6 +116,9 @@ struct State<'a> {
     kits: BTreeMap<ClaimId, ClaimKit>,
     min_strength: Strength,
     rehearsal: Option<String>,
+    /// The seed of the night's rehearsal tasks, settled by the first stage
+    /// that needs it so that every one of them builds the same.
+    rehearsal_seed: Option<Seed>,
     candidate: Option<crate::train::Candidate>,
     /// The stance pairs' dataset, when the stance stage made one.
     pairs: Option<String>,
@@ -125,6 +129,19 @@ struct State<'a> {
     generation: Generation,
     /// The live claims split by whether the generation's base holds them.
     split: Split,
+}
+
+impl State<'_> {
+    /// The seed of the rehearsal's form tasks: the request's, else drawn once
+    /// for the whole run.
+    fn rehearsal_seed(&mut self, run: &mut Recorder<'_>) -> Result<Seed, OrchestratorError> {
+        if let Some(seed) = self.rehearsal_seed {
+            return Ok(seed);
+        }
+        let seed = run.seed("rehearsal-seed", self.request.rehearsal_seed)?;
+        self.rehearsal_seed = Some(seed);
+        Ok(seed)
+    }
 }
 
 /// What a failed run of the same request left that is worth keeping.
@@ -174,6 +191,7 @@ pub(super) fn run(
         kits: BTreeMap::new(),
         min_strength: DEFAULT_MIN_STRENGTH,
         rehearsal: None,
+        rehearsal_seed: None,
         candidate: None,
         pairs: None,
         held: None,
@@ -452,6 +470,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut State<'_>) -> Don
 }
 
 fn rehearse_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> Done {
+    let seed = st.rehearsal_seed(run)?;
     let Some(assembled) = &st.report.dataset else {
         unreachable!("the rehearse stage follows the dataset stage")
     };
@@ -460,7 +479,7 @@ fn rehearse_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut State<'_>) -> 
         &arm_on(ctx.config(), &st.generation.base, None),
         &RehearseRequest {
             records: records_at_share(assembled.trained, st.request.rehearsal_share).max(1),
-            seed: REHEARSAL_SEED,
+            seed,
             deadline: None,
             cancel: run.cancel_token(),
         },

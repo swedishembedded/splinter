@@ -9,6 +9,7 @@
 //! What the gate reports beside what it decides on: the tasks' own evidence
 //! for an improvement, and how large a drop the anchor suite could show.
 
+use splinter_core::rng::Seed;
 use splinter_eval::gate::{self, DropInterval, TaskLevel};
 use splinter_eval::paired::PairedOutcome;
 
@@ -17,6 +18,9 @@ use splinter_model::stats::bootstrap_interval;
 
 /// Resamples the task-level interval is made from.
 const TASK_LEVEL_RESAMPLES: usize = 10_000;
+/// The stream the task-level interval resamples from: fixed, so that the
+/// interval the gate reports is a function of the outcomes alone.
+const TASK_LEVEL_SEED: Seed = Seed::new(0);
 
 /// What `outcomes` say task by task: the exact one-sided sign test over the
 /// tasks only one model got right, and the difference in the share right with
@@ -41,7 +45,11 @@ pub(super) fn task_level(outcomes: &[PairedOutcome]) -> Option<TaskLevel> {
     }
     let sum: f64 = by_family.values().map(|f| f.0).sum();
     let difference = sum / paired as f64;
-    let interval = interval_of(by_family.into_values().collect(), TASK_LEVEL_RESAMPLES);
+    let interval = interval_of(
+        by_family.into_values().collect(),
+        TASK_LEVEL_RESAMPLES,
+        TASK_LEVEL_SEED,
+    );
     Some(TaskLevel {
         p_value: sign_p(wins, losses),
         difference,

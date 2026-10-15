@@ -10,6 +10,7 @@ use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAM
 use splinter_sdk::learn::{DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
 use splinter_sdk::reserve::{DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES};
+use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{DEFAULT_LORA_RANK, MAX_PASSES};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
@@ -129,6 +130,22 @@ pub struct LearnArgs {
          {DEFAULT_REHEARSAL_SHARE}]"
     ))]
     pub rehearsal: Option<f64>,
+    /// The seed the rehearsal's form tasks are built with.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the rehearsal's form tasks are built with \
+        [default: drawn and printed]"
+    )]
+    pub rehearsal_seed: Option<Seed>,
+    /// The seed the `denoise` tasks are built with.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the denoise tasks are built with, when the \
+        kinds include them [default: drawn and printed]"
+    )]
+    pub denoise_seed: Option<Seed>,
     /// How many families of the sources to reserve for the exam before
     /// anything is generated or built: their text, in every edition, is in no
     /// source the run reads after that. 0 reserves none.
@@ -158,6 +175,23 @@ pub struct LearnArgs {
         help = format!("Answers per task per arm in the reserved exam: the greedy one and the \
                         rest sampled [default: {DEFAULT_RESAMPLES}]"))]
     pub exam_resamples: Option<u32>,
+    /// The seed the exam families are reserved with.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the exam's families are reserved with: the \
+        same seed over the same sources reserves the same families, and exams are comparable \
+        across runs only when they share one [default: drawn and printed]"
+    )]
+    pub exam_seed: Option<Seed>,
+    /// The seed the exam's bootstrap intervals are resampled with.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the exam's bootstrap intervals are resampled \
+        with [default: drawn and printed]"
+    )]
+    pub interval_seed: Option<Seed>,
     /// The step budget of the training: the most steps it may take.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("The step budget of the training: the most steps it may take [default: \

@@ -6,6 +6,7 @@
 
 use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
+use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
     Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_LORA_ALPHA_PER_RANK,
     DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, DEFAULT_REPLAY_FRACTION,
@@ -187,6 +188,10 @@ pub struct RehearseArgs {
     /// the examples it will be trained beside (`learn` sizes it so).
     #[arg(long, value_name = "N", value_parser = positive_count)]
     pub records: usize,
+    /// The seed the form tasks are built with (drawn and printed when not
+    /// given; the same seed and count build the same tasks).
+    #[arg(long, value_name = "N")]
+    pub rehearsal_seed: Option<Seed>,
 }
 
 /// `--beta`'s help, naming the default it falls back to.

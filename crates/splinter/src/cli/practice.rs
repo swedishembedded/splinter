@@ -15,6 +15,7 @@ use clap::Args;
 use splinter_sdk::practice::{
     DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
 };
+use splinter_sdk::seed::Seed;
 use splinter_sdk::train::DEFAULT_LORA_RANK;
 
 use super::{budget, MonitoringArgs, OptimiserArgs, PassAtKArgs};
@@ -58,6 +59,15 @@ pub struct PracticeArgs {
         none [default: a quarter of the families]"
     )]
     pub exam_families: Option<usize>,
+    /// The seed the exam families are chosen by.
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The seed the exam families are chosen by when this run reserves the first: \
+        drawn and printed [default], then kept with the families, so every later run reads it \
+        back and naming another is refused"
+    )]
+    pub exam_seed: Option<Seed>,
     /// How the policy's attempts are measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,

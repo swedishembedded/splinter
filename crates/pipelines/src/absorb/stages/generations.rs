@@ -24,11 +24,19 @@ use splinter_orchestrator::{Context, OrchestratorError};
 
 /// How a consolidation done inside `absorb` is carried out: the request's
 /// rehearsal, gate and tuning, and its consolidation policy.
-fn params(st: &State<'_>, mode: ConsolidationMode) -> Params {
+fn params(
+    run: &mut Recorder<'_>,
+    st: &mut State<'_>,
+    mode: ConsolidationMode,
+) -> Result<Params, OrchestratorError> {
+    let rehearsal_seed = (st.request.rehearsal_share > 0.0)
+        .then(|| st.rehearsal_seed(run))
+        .transpose()?;
     let policy = &st.request.consolidation;
-    Params {
+    Ok(Params {
         mode,
         rehearsal_share: st.request.rehearsal_share,
+        rehearsal_seed,
         retention_replay_share: policy.retention_replay_share,
         epochs: policy.epochs,
         steps: policy.steps,
@@ -38,7 +46,7 @@ fn params(st: &State<'_>, mode: ConsolidationMode) -> Params {
         },
         gate: st.request.gate,
         no_release: false,
-    }
+    })
 }
 
 /// Takes the claims the base holds that are no longer live out of the
@@ -54,7 +62,7 @@ pub(super) fn rebuild_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut Stat
     let champion = ctx.releases().get(&champion_id)?;
     let planned = plan::plan(ctx, &champion, &st.live, Vec::new())?;
     let kits = kit::kept(ctx)?;
-    let params = params(st, ConsolidationMode::Full);
+    let params = params(run, st, ConsolidationMode::Full)?;
     let done = job::run(
         ctx,
         &Job {
@@ -115,7 +123,7 @@ pub(super) fn consolidate_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut 
     let release = ctx.releases().get(&release_id)?;
     let closing = plan::own_claims(ctx, &release, &st.live)?;
     let planned = plan::plan(ctx, &release, &st.live, closing)?;
-    let params = params(st, st.request.consolidation.mode);
+    let params = params(run, st, st.request.consolidation.mode)?;
     let done = job::run(
         ctx,
         &Job {

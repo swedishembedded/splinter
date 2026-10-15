@@ -21,9 +21,19 @@ mod common;
 use std::collections::BTreeSet;
 
 use common::{scratch_context, Scripted};
+use splinter_core::dataset::DatasetId;
+use splinter_core::digest::Digest;
+use splinter_core::rng::Seed;
 use splinter_core::source::SourceId;
+use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata};
+use splinter_orchestrator::Context;
+use splinter_pipelines::datasets::store_dataset;
 use splinter_pipelines::reserve::{reserve, Reservation, ReserveRequest};
 use splinter_pipelines::sources::{add, SourceTarget};
+
+// seed: the spec asserts on which families are reserved, which one fixed seed
+// makes the same on every run.
+const RESERVE_SEED: Seed = Seed::new(1);
 
 /// `n` words no other `seed` shares.
 fn words(seed: &str, n: usize) -> String {
@@ -58,7 +68,7 @@ fn run(name: &str, letters: usize, families: usize) -> (common::Scratch, Vec<Str
             sources: &[id],
             families,
             dev_families: 0,
-            seed: 1,
+            seed: RESERVE_SEED,
             touched_by: &[],
         },
     )
@@ -127,7 +137,7 @@ fn too_few_examinable_families_or_too_little_left_to_learn_from_is_refused() {
                 sources: std::slice::from_ref(&id),
                 families,
                 dev_families: 0,
-                seed: 1,
+                seed: RESERVE_SEED,
                 touched_by: &[],
             },
         )
@@ -153,7 +163,7 @@ fn too_few_examinable_families_or_too_little_left_to_learn_from_is_refused() {
             sources: &[id],
             families: 2,
             dev_families: 0,
-            seed: 1,
+            seed: RESERVE_SEED,
             touched_by: &[],
         },
     )
@@ -187,7 +197,7 @@ fn the_dev_suite_has_families_of_its_own_as_far_from_training_as_the_final_test(
             sources: &[id],
             families: 5,
             dev_families: 3,
-            seed: 1,
+            seed: RESERVE_SEED,
             touched_by: &[],
         },
     )
@@ -206,4 +216,118 @@ fn the_dev_suite_has_families_of_its_own_as_far_from_training_as_the_final_test(
     );
     assert_eq!((training.len(), exam.len(), dev.len()), (32, 5, 3));
     assert!(training.is_disjoint(&exam) && training.is_disjoint(&dev) && exam.is_disjoint(&dev));
+}
+
+/// A context over a source of `letters` letters of 200 words each.
+fn letters(name: &str, letters: usize) -> (common::Scratch, Context, SourceId) {
+    let (scratch, ctx) = scratch_context(name, Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..letters {
+        std::fs::write(
+            dir.join(format!("letter-{n:02}.txt")),
+            words(&format!("l{n}"), 200),
+        )
+        .unwrap();
+    }
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    (scratch, ctx, id)
+}
+
+fn reserve_with(ctx: &Context, id: &SourceId, seed: Seed, touched_by: &[DatasetId]) -> Reservation {
+    reserve(
+        ctx,
+        &ReserveRequest {
+            sources: std::slice::from_ref(id),
+            families: 8,
+            dev_families: 0,
+            seed,
+            touched_by,
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_reservation_states_its_seed_and_reserving_again_with_it_chooses_the_same_families() {
+    let (_scratch, ctx, id) = letters("reserve-seed", 40);
+    // seed: two arbitrary seeds; only that the same one repeats and another differs matters.
+    let (first, other) = (Seed::new(11), Seed::new(12));
+    let reserved = reserve_with(&ctx, &id, first, &[]);
+    assert_eq!(reserved.seed, first);
+    assert_eq!(
+        reserve_with(&ctx, &id, reserved.seed, &[]).families,
+        reserved.families
+    );
+    assert_ne!(
+        reserve_with(&ctx, &id, other, &[]).families,
+        reserved.families
+    );
+
+    // A reservation stored before it kept its seed reads as made with 0.
+    let mut stored = serde_json::to_value(&reserved).unwrap();
+    stored.as_object_mut().unwrap().remove("seed");
+    let read: Reservation = serde_json::from_value(stored).unwrap();
+    assert_eq!(read.seed, Seed::new(0));
+}
+
+#[test]
+fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_trained_on() {
+    let (_scratch, ctx, id) = letters("reserve-touched", 40);
+    let parts = ctx.sources().get_source(&id).unwrap().parts;
+    let trained: BTreeSet<Digest> = parts.iter().take(16).map(|p| p.content.clone()).collect();
+    let record = |content: &Digest| Record {
+        body: RecordBody::Text {
+            text: content.to_string(),
+        },
+        metadata: RecordMetadata {
+            experiences: Vec::new(),
+            task: None,
+            sources: vec![content.clone()],
+            group: None,
+            split: None,
+            view: "cpt".into(),
+            objective: Objective::Cpt,
+        },
+    };
+    let dataset = store_dataset(
+        &ctx,
+        &Projection {
+            view: "cpt".into(),
+            objective: Objective::Cpt,
+            strip: None,
+            min_strength: None,
+            records: trained.iter().map(record).collect(),
+            excluded: Default::default(),
+            system_prompt: None,
+            terms: None,
+        },
+        true,
+    )
+    .unwrap();
+    let mut seeds = BTreeSet::new();
+    for _ in 0..2 {
+        let reserved = reserve_with(
+            &ctx,
+            &id,
+            splinter_model::seed::draw(),
+            std::slice::from_ref(&dataset.id),
+        );
+        seeds.insert(reserved.seed);
+        let examined: BTreeSet<Digest> = reserved
+            .exam
+            .iter()
+            .flat_map(|source| ctx.sources().get_source(source).unwrap().parts)
+            .map(|part| part.content)
+            .collect();
+        assert_eq!(examined.len(), 8);
+        assert!(
+            examined.is_disjoint(&trained),
+            "a family trained on was reserved for the exam"
+        );
+    }
+    assert_eq!(seeds.len(), 2, "each reservation drew a seed of its own");
 }
