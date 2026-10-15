@@ -158,7 +158,9 @@ model are read.
 ```bash
 # Parse the letters, group the editions' printings, split by family. Every
 # command that writes into OUT shares the seed in OUT/SEED.json (--seed N the
-# first time); a later command reads it back and refuses a different --seed.
+# first time, else a drawn one, printed); a later command reads it back and
+# refuses a different --seed. A directory made before the manifest existed was
+# frozen with seed 1 and is recorded as such.
 splinter-jefferson corpus   --resources RESOURCES --out OUT
 # Compile the training set and the frozen exam.
 splinter-jefferson tasks    --resources RESOURCES --out OUT --train-letters 130 --train-passages 18

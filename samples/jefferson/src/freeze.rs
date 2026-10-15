@@ -19,9 +19,9 @@ use std::path::Path;
 use anyhow::Result;
 use splinter_sdk::seed::FrozenSeed;
 
-/// The seed a directory is frozen with when none is given, and the one every
-/// directory made before seed manifests was frozen with.
-const DEFAULT_SEED: u64 = 1;
+/// The seed every directory made before seed manifests was frozen with. A new
+/// directory is given a drawn one.
+const LEGACY_SEED: u64 = 1;
 
 /// The manifest, beside the files it describes.
 const MANIFEST: &str = "SEED.json";
@@ -39,16 +39,23 @@ const OUTPUTS: [&str; 7] = [
 ];
 
 /// The seed of the artifacts in `out`: the recorded one, else `given`, else
-/// the default; refuses a `given` that differs from the recorded one. The
+/// a fresh draw (printed, so it can be passed back); refuses a `given` that differs from the recorded one. The
 /// caller records it with [`FrozenSeed::record`] once its inputs are checked
 /// and it is about to write.
 pub fn seed(out: &Path, given: Option<u64>) -> Result<FrozenSeed> {
+    let manifest = out.join(MANIFEST);
     let predates = OUTPUTS.iter().any(|name| out.join(name).exists());
+    // Only a directory being made now takes a draw; the others have a seed already.
+    let fresh = if manifest.exists() || predates {
+        given.unwrap_or_default()
+    } else {
+        splinter_sdk::seed::resolve("seed", given)
+    };
     Ok(FrozenSeed::decide(
-        &out.join(MANIFEST),
+        &manifest,
         given,
-        DEFAULT_SEED,
-        predates.then_some(DEFAULT_SEED),
+        fresh,
+        predates.then_some(LEGACY_SEED),
     )?)
 }
 
@@ -66,6 +73,17 @@ mod tests {
         // seed: any value but the default shows the recorded one is read back
         assert_eq!(recorded(dir.path(), Some(9)), 9);
         assert_eq!(recorded(dir.path(), None), 9);
+    }
+
+    #[test]
+    fn a_new_directory_without_a_seed_records_a_drawn_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let drawn = recorded(dir.path(), None);
+        assert_ne!(drawn, LEGACY_SEED);
+        let manifest = std::fs::read_to_string(dir.path().join(MANIFEST)).unwrap();
+        assert!(manifest.contains("recorded"), "{manifest}");
+        assert_eq!(recorded(dir.path(), None), drawn);
+        assert!(seed(dir.path(), Some(drawn ^ 1)).is_err());
     }
 
     #[test]
