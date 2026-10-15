@@ -208,7 +208,7 @@ fn statistics_fitted_beyond_the_training_units_are_refused_with_counts() {
 fn a_participant_exclusive_split_comes_from_a_partition() {
     let m = members();
     let units: Vec<Unit> = m.iter().map(|x| x.unit.clone()).collect();
-    let p = partition(&units, data(), &PartitionSpec::default()).unwrap();
+    let p = partition(&units, data(), &PartitionSpec::protocol(5)).unwrap();
     let split = DataSplit::from_partition(&p, &units, 1, 2).unwrap();
     assert_eq!(split.ids(Part::Test), p.locked.as_slice());
     let total: usize = Part::ALL.iter().map(|x| split.ids(*x).len()).sum();

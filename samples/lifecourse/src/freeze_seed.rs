@@ -11,23 +11,25 @@
 //!
 //! The locked test and the folds are a function of a seed and are pinned by
 //! content. The seed is recorded beside them when the partition is first
-//! made, and a later `freeze` that is given no seed reads it back. A directory
-//! partitioned before seed manifests existed states its seed in its
-//! `partition.json`; that is the seed recorded for it.
+//! made, and a later `freeze` that is given no seed reads it back. A first
+//! freeze that is given none draws one. A directory partitioned before seed
+//! manifests existed states its seed in its `partition.json`; that is the seed
+//! recorded for it.
 
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use splinter_sdk::data::partition::{Partition, PartitionSpec};
+use splinter_sdk::data::partition::Partition;
 use splinter_sdk::seed::FrozenSeed;
 
 use crate::commands::PARTITION;
 
 const MANIFEST: &str = "SEED.json";
 
-/// The seed to partition `data` with: the recorded one, else `given`, else the
-/// protocol's. A `given` that differs from the recorded one is refused. The
-/// caller records it with [`FrozenSeed::record`] once the partition is made.
+/// The seed to partition `data` with: the recorded one, else `given`, else a
+/// fresh draw (printed). A `given` that differs from the recorded one is
+/// refused. The caller records it with [`FrozenSeed::record`] once the
+/// partition is made.
 pub fn partition_seed(data: &Path, given: Option<u64>) -> Result<FrozenSeed> {
     let existing = data.join(PARTITION);
     let legacy = if existing.exists() {
@@ -37,18 +39,20 @@ pub fn partition_seed(data: &Path, given: Option<u64>) -> Result<FrozenSeed> {
     } else {
         None
     };
-    Ok(FrozenSeed::decide(
-        &data.join(MANIFEST),
-        given,
-        PartitionSpec::default().seed,
-        legacy,
-    )?)
+    let manifest = data.join(MANIFEST);
+    // A draw is only for a partition being made now; a recorded seed is read back.
+    let fresh = if legacy.is_none() && !manifest.exists() {
+        splinter_sdk::seed::resolve("seed", given)
+    } else {
+        0
+    };
+    Ok(FrozenSeed::decide(&manifest, given, fresh, legacy)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use splinter_sdk::data::partition::{partition, Unit};
+    use splinter_sdk::data::partition::{partition, PartitionSpec, Unit};
     use splinter_sdk::vocabulary::digest::Digest;
 
     fn recorded(data: &Path, given: Option<u64>) -> u64 {
@@ -58,10 +62,18 @@ mod tests {
     #[test]
     fn a_second_freeze_without_a_seed_is_accepted_and_another_seed_refused() {
         let dir = tempfile::tempdir().unwrap();
-        // seed: any value but the protocol's shows the recorded one is read back
+        // seed: any value shows the recorded one is read back
         assert_eq!(recorded(dir.path(), Some(9)), 9);
         assert_eq!(recorded(dir.path(), None), 9);
         assert!(partition_seed(dir.path(), Some(10)).is_err());
+    }
+
+    #[test]
+    fn a_first_freeze_without_a_seed_draws_one_and_the_next_reads_it_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let drawn = recorded(dir.path(), None);
+        assert_eq!(recorded(dir.path(), None), drawn);
+        assert!(partition_seed(dir.path(), Some(drawn.wrapping_add(1))).is_err());
     }
 
     #[test]
@@ -74,10 +86,7 @@ mod tests {
                 stratum: "a".into(),
             })
             .collect();
-        let spec = PartitionSpec {
-            seed: 7,
-            ..PartitionSpec::default()
-        };
+        let spec = PartitionSpec::protocol(7);
         let made = partition(&units, Digest::of(b"data"), &spec).unwrap();
         std::fs::write(dir.path().join(PARTITION), made.canonical().unwrap()).unwrap();
 

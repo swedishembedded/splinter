@@ -48,14 +48,18 @@ pub struct PartitionSpec {
     pub seed: u64,
 }
 
-impl Default for PartitionSpec {
-    /// The evaluation protocol's: 15% locked, five repeats of five folds.
-    fn default() -> Self {
+impl PartitionSpec {
+    /// The evaluation protocol's: 15% locked, five repeats of five folds,
+    /// every shuffle drawn from `seed`. There is no default seed: the
+    /// partition is part of the evidence, so the caller chooses its seed and
+    /// records it with the partition.
+    #[must_use]
+    pub fn protocol(seed: u64) -> Self {
         PartitionSpec {
             locked_share: 0.15,
             repeats: 5,
             folds: 5,
-            seed: 20_261_005,
+            seed,
         }
     }
 }
@@ -259,7 +263,8 @@ mod tests {
     #[test]
     fn every_unit_lands_once_groups_stay_whole_and_strata_balance() {
         let u = units(3000);
-        let p = partition(&u, Digest::of(b"data"), &PartitionSpec::default()).unwrap();
+        // seed: any; the balance properties hold for every seed
+        let p = partition(&u, Digest::of(b"data"), &PartitionSpec::protocol(11)).unwrap();
         let group_of: BTreeMap<&str, &str> = u
             .iter()
             .map(|x| (x.id.as_str(), x.group.as_str()))
@@ -309,27 +314,34 @@ mod tests {
     }
 
     #[test]
-    fn the_partition_is_a_pure_function_of_its_inputs() {
+    fn a_partition_spec_requires_its_seed_and_the_partition_is_a_pure_function_of_spec_and_inputs()
+    {
+        let spec = PartitionSpec::protocol(3);
+        assert_eq!(
+            spec.seed, 3,
+            "the protocol is partitioned with the caller's seed"
+        );
+
+        let mut json = serde_json::to_value(&spec).unwrap();
+        json.as_object_mut().unwrap().remove("seed");
+        assert!(
+            serde_json::from_value::<PartitionSpec>(json).is_err(),
+            "a spec without a seed is not a spec"
+        );
+
+        // seed: equal specs must give equal partitions, so both runs share one
         let u = units(600);
-        let a = partition(&u, Digest::of(b"d"), &PartitionSpec::default()).unwrap();
+        let a = partition(&u, Digest::of(b"d"), &spec).unwrap();
         let mut shuffled = u.clone();
         shuffled.reverse();
-        let b = partition(&shuffled, Digest::of(b"d"), &PartitionSpec::default()).unwrap();
+        let b = partition(&shuffled, Digest::of(b"d"), &spec).unwrap();
         assert_eq!(
             a.digest().unwrap(),
             b.digest().unwrap(),
             "input order does not matter"
         );
-        let c = partition(
-            &u,
-            Digest::of(b"d"),
-            &PartitionSpec {
-                seed: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        assert_ne!(a.digest().unwrap(), c.digest().unwrap());
+        let c = partition(&u, Digest::of(b"d"), &PartitionSpec::protocol(4)).unwrap();
+        assert_ne!(a.digest().unwrap(), c.digest().unwrap(), "the seed decides");
     }
 
     #[test]
@@ -337,12 +349,12 @@ mod tests {
         let mut u = units(10);
         u.push(u[0].clone());
         assert_eq!(
-            partition(&u, Digest::of(b"d"), &PartitionSpec::default()),
+            partition(&u, Digest::of(b"d"), &PartitionSpec::protocol(1)),
             Err(PartitionError::DuplicateId("u0".into()))
         );
         let spec = PartitionSpec {
             folds: 1,
-            ..Default::default()
+            ..PartitionSpec::protocol(1)
         };
         assert!(matches!(
             partition(&units(10), Digest::of(b"d"), &spec),

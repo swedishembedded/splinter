@@ -219,10 +219,7 @@ pub fn freeze(data: &Path, seed: Option<u64>) -> Result<()> {
     let dataset = Digest::of(text.as_bytes());
     let units = units_from_json_lines(&text, stratum).map_err(anyhow::Error::msg)?;
     let frozen_seed = crate::freeze_seed::partition_seed(data, seed)?;
-    let spec = PartitionSpec {
-        seed: frozen_seed.seed(),
-        ..PartitionSpec::default()
-    };
+    let spec = PartitionSpec::protocol(frozen_seed.seed());
     let p = partition(&units, dataset, &spec)?;
     let canonical = p.canonical()?;
     let criteria = serde_json::to_vec_pretty(&crate::report::preregistered())?;
