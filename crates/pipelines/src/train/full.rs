@@ -48,7 +48,7 @@ pub(super) fn train_full(
         steps: plan.steps,
         learning_rate: plan.tuning.learning_rate,
         weight_decay: plan.tuning.weight_decay.unwrap_or(0.0),
-        seed: plan.tuning.seed,
+        seed: plan.seed,
         // The records hold answers and no reasoning: trained for no-think
         // mode, as the adapter trainer does.
         thinking: false,

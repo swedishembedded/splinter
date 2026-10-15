@@ -106,10 +106,10 @@ pub struct FineTune<'a> {
     pub learning_rate: Option<f32>,
     /// The AdamW weight decay on the adapter's matrices.
     pub weight_decay: f32,
-    /// The seed of a fresh adapter's initialisation and the batch order;
-    /// brain's default when `None`. Two runs that differ only here show
-    /// how much of a measured difference is the draw.
-    pub seed: Option<u64>,
+    /// The seed of a fresh adapter's initialisation and the batch order.
+    /// Two runs that differ only here show how much of a measured
+    /// difference is the draw; the caller draws it when the user gave none.
+    pub seed: u64,
     /// The longest training row in tokens; `None` sizes the row to the
     /// longest record. Set, a record longer than it is named (see
     /// [`crate::capabilities::overlong_records`]) before any device is claimed, and the run does
@@ -379,6 +379,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
+        .seed(request.seed)
         .weight_decay(request.weight_decay)
         .bf16_base(request.bf16_base)
         .grad_accum(request.grad_accum)
@@ -402,9 +403,6 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     }
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
-    }
-    if let Some(seed) = request.seed {
-        fine_tune = fine_tune.seed(seed);
     }
     if let Some(max_block) = request.max_block {
         fine_tune = fine_tune.max_block(max_block);
@@ -534,6 +532,9 @@ pub struct PreferenceTune<'a> {
     pub grad_accum: u32,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
+    /// The seed of a fresh adapter's initialisation and the batch order; the
+    /// caller draws it when the user gave none.
+    pub seed: u64,
     /// An adapter to continue instead of starting a fresh one; base plus
     /// this adapter is then the frozen reference, and its own rank and
     /// alpha apply.
@@ -616,7 +617,8 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
-        .beta(request.beta);
+        .beta(request.beta)
+        .seed(request.seed);
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
     }

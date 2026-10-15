@@ -379,7 +379,19 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         bf16: args.iter().any(|a| a == "--bf16"),
         replay_share: flag(args, "--replay-share").map_or(Ok(None), |v| v.parse().map(Some))?,
         grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
+        seed: train_seed(args)?,
     })
+}
+
+/// The seed of a training: `--train-seed`, else a fresh one, printed.
+fn train_seed(args: &[String]) -> anyhow::Result<u64> {
+    let given = flag(args, "--train-seed")
+        .map(|s| {
+            s.parse()
+                .map_err(|e| anyhow::anyhow!("--train-seed {s}: {e}"))
+        })
+        .transpose()?;
+    Ok(splinter_sdk::seed::resolve("train-seed", given))
 }
 
 fn exam_command(args: &[String]) -> anyhow::Result<()> {
@@ -510,6 +522,7 @@ fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {
         nll_weight: number(args, "--nll-weight", DEFAULT_NLL_WEIGHT)?,
         grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
         learning_rate: Some(number(args, "--lr", DEFAULT_DPO_LEARNING_RATE)?),
+        seed: train_seed(args)?,
     })
 }
 

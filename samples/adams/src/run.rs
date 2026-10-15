@@ -95,6 +95,8 @@ pub struct Train {
     pub replay_share: Option<f32>,
     /// Examples per optimizer step.
     pub grad_accum: u32,
+    /// The seed of the adapter's initialisation and the batch order.
+    pub seed: u64,
 }
 
 /// Fine-tune a LoRA adapter on the training set through Splinter's trainer,
@@ -137,8 +139,8 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         bf16_base: t.bf16,
         learning_rate: t.learning_rate,
         weight_decay: 0.0,
+        seed: t.seed,
         // The records hold answers and no reasoning: trained for no-think mode.
-        seed: None,
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
@@ -486,6 +488,8 @@ pub struct Dpo {
     /// Pairs per optimizer step.
     pub grad_accum: u32,
     pub learning_rate: Option<f32>,
+    /// The seed of the adapter's initialisation and the batch order.
+    pub seed: u64,
 }
 
 /// Direct preference optimisation on the pairs, through Splinter's trainer.
@@ -505,6 +509,7 @@ pub fn dpo_command(d: &Dpo) -> anyhow::Result<()> {
         nll_weight: d.nll_weight,
         grad_accum: d.grad_accum,
         learning_rate: d.learning_rate,
+        seed: d.seed,
         continue_from: d.continue_from.as_deref(),
         cancel: None,
     };

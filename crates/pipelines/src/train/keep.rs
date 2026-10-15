@@ -145,6 +145,7 @@ pub(super) fn keep_candidate(
         adapter_digest: trained.adapter_digest,
         base_digest: trained.base_digest,
         training_record,
+        seed: Some(plan.seed),
         steps: plan.steps,
         rank: request.rank,
         base_score: trained.base_score,

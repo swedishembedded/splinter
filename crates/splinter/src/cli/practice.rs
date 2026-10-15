@@ -101,7 +101,8 @@ pub struct PracticeArgs {
     /// Records averaged into one optimizer step.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,
-    /// The seed of the adapter's initialisation and the batch order.
+    /// The seed of the adapter's initialisation and the batch order (drawn,
+    /// printed and recorded if not given).
     #[arg(long, value_name = "N")]
     pub seed: Option<u64>,
     /// How the training is watched.

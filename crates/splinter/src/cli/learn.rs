@@ -174,9 +174,9 @@ pub struct LearnArgs {
     /// dataset, when the steps are not named).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,
-    /// The seed of the adapter's initialisation and the batch order (brain's
-    /// default if not given); two runs that differ only here show how much
-    /// of a measured difference is the draw.
+    /// The seed of the adapter's initialisation and the batch order (drawn,
+    /// printed and recorded if not given); two runs that differ only here
+    /// show how much of a measured difference is the draw.
     #[arg(long, value_name = "N")]
     pub seed: Option<u64>,
     /// How the training is watched.

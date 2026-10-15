@@ -160,8 +160,9 @@ pub struct TrainArgs {
     /// are named, else from the size of the dataset).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,
-    /// The seed of a fresh adapter's initialisation and the batch order
-    /// (brain's default if not given).
+    /// The seed of a fresh adapter's initialisation, the batch order and the
+    /// draw of the records replayed (drawn, printed and recorded in the run
+    /// and the candidate if not given).
     #[arg(long, value_name = "N")]
     pub seed: Option<u64>,
     /// A rehearsal dataset (`rehearse`, or any chat dataset of the base's

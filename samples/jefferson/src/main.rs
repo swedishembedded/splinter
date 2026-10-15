@@ -79,6 +79,17 @@ fn frozen_seed(
     freeze::seed(out, given)
 }
 
+/// The seed of a training: `--train-seed`, else a fresh one, printed.
+fn train_seed(args: &[String]) -> anyhow::Result<u64> {
+    let given = flag(args, "--train-seed")
+        .map(|s| {
+            s.parse()
+                .map_err(|e| anyhow::anyhow!("--train-seed {s}: {e}"))
+        })
+        .transpose()?;
+    Ok(splinter_sdk::seed::resolve("train-seed", given))
+}
+
 fn corpus_command(args: &[String]) -> anyhow::Result<()> {
     let resources = PathBuf::from(
         flag(args, "--resources").ok_or_else(|| anyhow::anyhow!("--resources DIR is required"))?,
@@ -264,7 +275,7 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         bf16_base: args.iter().any(|a| a == "--bf16"),
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
         weight_decay: 0.0,
-        seed: None,
+        seed: train_seed(args)?,
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };

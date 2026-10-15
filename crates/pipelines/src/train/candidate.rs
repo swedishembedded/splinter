@@ -56,6 +56,8 @@ pub(super) struct StoredCandidate {
     adapter_digest: String,
     base_digest: String,
     training_record: serde_json::Value,
+    #[serde(default)]
+    seed: Option<u64>,
     steps: u32,
     rank: u32,
     #[serde(default)]
@@ -105,6 +107,11 @@ pub struct Candidate {
     pub base_digest: String,
     /// brain's training record for it.
     pub training_record: serde_json::Value,
+    /// The seed of its adapter's initialisation and batch order, drawn when
+    /// the run was given none; training again with it on the same data
+    /// writes the same adapter. `None` for a candidate recorded before the
+    /// seed was.
+    pub seed: Option<u64>,
     /// The step budget: the most steps the run was allowed.
     pub steps: u32,
     /// LoRA rank asked for.
@@ -169,6 +176,7 @@ impl Candidate {
             adapter_digest: self.adapter_digest.clone(),
             base_digest: self.base_digest.clone(),
             training_record: self.training_record.clone(),
+            seed: self.seed,
             steps: self.steps,
             rank: self.rank,
             base_score: self.base_score,
@@ -196,6 +204,7 @@ impl Candidate {
             adapter_digest: stored.adapter_digest,
             base_digest: stored.base_digest,
             training_record: stored.training_record,
+            seed: stored.seed,
             steps: stored.steps,
             rank: stored.rank,
             base_score: stored.base_score,

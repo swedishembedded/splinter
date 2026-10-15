@@ -35,7 +35,7 @@ use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::state;
 use splinter_sdk::status::status;
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
-use splinter_sdk::train::{train, Rehearse, TrainRequest, Tuning};
+use splinter_sdk::train::{train_recorded, Rehearse, TrainRequest, Tuning};
 use splinter_sdk::variants;
 use splinter_sdk::verify::{verify_set, Grading, Judge, Judging};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -540,7 +540,7 @@ impl Session {
                     }),
                 };
                 let candidate = record(ctx, "train", &request, |run| {
-                    train(ctx, &request, self.splinter.trainer(), &run.cancel_token())
+                    train_recorded(ctx, run, &request, self.splinter.trainer())
                 })?;
                 emit(json, &candidate);
             }

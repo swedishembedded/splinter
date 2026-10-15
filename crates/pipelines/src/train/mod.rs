@@ -32,8 +32,8 @@
 //! so also replays a seeded sample of every earlier release's chat
 //! training records beside the new ones: `replay_fraction`
 //! ([`DEFAULT_REPLAY_FRACTION`]) of each such release's records, drawn with
-//! [`REPLAY_SEED`], from the part of its datasets that was trained on and
-//! never from what it held out, so its held-out tasks stay unseen for the
+//! the run's seed ([`Tuning::seed`]), from the part of its datasets that was
+//! trained on and never from what it held out, so its held-out tasks stay unseen for the
 //! retention check. Replayed records are never held out, so the held-out
 //! score measures the new data, and they take a fixed share of the training
 //! draws ([`DEFAULT_REPLAY_SHARE`]), so a large replay set cannot take the
@@ -55,6 +55,7 @@ mod candidate;
 mod full;
 mod keep;
 mod rehearsal;
+mod seeds;
 pub mod sizing;
 
 pub use candidate::{
@@ -64,6 +65,7 @@ pub use full::DEFAULT_FULL_LEARNING_RATE;
 use keep::{keep_candidate, Finished, Outcome};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
+pub use seeds::train_recorded;
 pub use sizing::{
     auto_records_per_step, auto_steps, eval_every_for, steps_for, DEFAULT_MONITOR_SHARE,
     DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
@@ -125,9 +127,6 @@ pub const DEFAULT_REPLAY_SHARE: f32 = 0.25;
 /// The DPO temperature of a preference fine-tune when a command names none:
 /// brain's default.
 pub use splinter_model::train::DEFAULT_DPO_BETA;
-/// The seed of the replay draw: the same records are replayed every time.
-pub const REPLAY_SEED: u64 = 0;
-
 /// Where the adapters of a run's evaluations are written, inside its
 /// directory.
 const EVALUATIONS_DIR: &str = "evaluations";
@@ -182,9 +181,10 @@ pub struct Tuning {
     /// The share of the training families set aside as the monitoring set;
     /// `None` is [`DEFAULT_MONITOR_SHARE`].
     pub monitor_share: Option<f64>,
-    /// The seed of a fresh adapter's initialisation and the batch order;
-    /// brain's default when `None`. Two runs that differ only here show
-    /// how much of a measured difference is the draw.
+    /// The seed of a fresh adapter's initialisation, the batch order and the
+    /// draw of the records replayed; a fresh one is drawn, reported and
+    /// recorded when `None`. Two runs that differ only here show how much of
+    /// a measured difference is the draw.
     pub seed: Option<u64>,
     /// Keep the adapter of every evaluation with the candidate, so a step can
     /// be chosen on something other than the monitoring loss
@@ -254,6 +254,9 @@ pub struct TrainPlan {
     pub beta: f32,
     /// The base's precision and the learning rate, every option resolved.
     pub tuning: Tuning,
+    /// The seed the trainer is handed and the replay is drawn by:
+    /// [`Tuning::seed`], or the one drawn when none was given.
+    pub seed: u64,
     /// Steps between monitoring evaluations; 0 monitors nothing.
     pub eval_every: u32,
     /// Evaluations without improvement before the run stops; 0 never stops.
@@ -386,7 +389,7 @@ impl Trainer for BrainTrainer {
             cancel: Some(cancel),
             bf16_base: plan.tuning.bf16_base,
             learning_rate: plan.tuning.learning_rate,
-            seed: plan.tuning.seed,
+            seed: plan.seed,
             // The records hold answers and no reasoning, so the model is
             // trained for no-think mode whatever it is later asked.
             thinking: false,
@@ -418,6 +421,7 @@ impl Trainer for BrainTrainer {
             nll_weight: 0.0,
             grad_accum: 1,
             learning_rate: plan.tuning.learning_rate,
+            seed: plan.seed,
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
         })
@@ -595,8 +599,9 @@ pub(crate) fn plan_training(
     let candidate = splinter_store::new_id_with_prefix("candidate");
     let dir = ctx.root().work().join("train").join(&candidate);
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
+    let seed = seeds::resolve(ctx, request.tuning.seed);
     let replay = match (&pin, regime) {
-        (Some(pin), Regime::Sft) => Some(draw_replay(ctx, &pin.release, fraction, &dir)?),
+        (Some(pin), Regime::Sft) => Some(draw_replay(ctx, &pin.release, fraction, &dir, seed)?),
         _ => None,
     };
     let replay_share = replay
@@ -658,8 +663,10 @@ pub(crate) fn plan_training(
             eval_every: Some(eval_every),
             patience: Some(patience),
             monitor_share: Some(monitor_share),
+            seed: Some(seed),
             ..request.tuning
         },
+        seed,
         eval_every,
         patience,
         monitor_share,
@@ -713,11 +720,12 @@ fn draw_replay(
     release: &ReleaseId,
     fraction: Fraction,
     dir: &Path,
+    seed: u64,
 ) -> Result<ReplaySample, OrchestratorError> {
     let lineage = ctx.releases().lineage(release)?;
     let mut sample = ReplaySample {
         fraction: fraction.get(),
-        seed: REPLAY_SEED,
+        seed,
         sources: Vec::new(),
         records: 0,
         digest: None,
@@ -729,7 +737,7 @@ fn draw_replay(
             continue;
         }
         let (trained_on, _held_out) = split_records(ctx, &datasets)?;
-        let picked = replay_sample(&trained_on, fraction, REPLAY_SEED);
+        let picked = replay_sample(&trained_on, fraction, seed);
         for &index in &picked {
             text.push_str(&trained_on[index]);
             text.push('\n');

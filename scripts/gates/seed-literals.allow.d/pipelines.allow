@@ -6,4 +6,3 @@ crates/pipelines/src/powered/analysis.rs	SEED	todo: a default that is drawn, pri
 crates/pipelines/src/practice/exam.rs	EXAM_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
 crates/pipelines/src/rehearsal.rs	REHEARSAL_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
 crates/pipelines/src/tasks/mod.rs	DENOISE_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-crates/pipelines/src/train/mod.rs	REPLAY_SEED	todo: a default that is drawn, printed and recorded once its owner is converted

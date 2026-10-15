@@ -671,8 +671,9 @@ does both in the run, between training and the exam.
 From `policy:<alias>` (the default) it continues the adapter of the
 release the alias points at - never the base weights once a release
 exists - and a supervised run replays `--replay-fraction` (default 0.25)
-of every earlier release's trained-on chat records, a seeded sample that
-is the same on every run and never includes what that release held out;
+of every earlier release's trained-on chat records, a sample drawn with the
+run's seed (so the same seed replays the same records) that never includes
+what that release held out;
 replayed records are never held out, and take a quarter of the training
 draws however many there are, so a large replay cannot starve the new
 records. `--rehearsal DATASET-ID` mixes a rehearsal dataset (`rehearse`; see
@@ -683,9 +684,11 @@ monitoring set beside the training families' records, so the step carried is
 chosen on the mixture the run trains. The candidate records what it
 rehearsed (dataset, share, records trained on and monitored), and the records
 mixed in are kept as an artifact the gate's leakage check reads. `--seed N`
-seeds the adapter's initialisation and the batch order (brain's default
-otherwise): two runs that differ only in the seed show how much of a measured
-difference is the draw. A preference run replays and rehearses nothing:
+seeds the adapter's initialisation, the batch order and the replay draw;
+without it a seed is drawn, printed (`no --seed given, using seed N`), written
+to the run record and to the candidate (`seed`), and passing it again writes
+the same adapter on the same data. Two runs that differ only in the seed show
+how much of a measured difference is the draw. A preference run replays and rehearses nothing:
 brain's preference trainer trains on its pairs alone. `--from
 local:<checkpoint>+<adapter>` continues that adapter instead, with no
 replay, and such a candidate cannot replace a champion. The candidate

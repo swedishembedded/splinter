@@ -43,8 +43,9 @@ pub struct FullTune<'a> {
     pub learning_rate: Option<f32>,
     /// The AdamW weight decay.
     pub weight_decay: f32,
-    /// The seed of the batch order; brain's default when `None`.
-    pub seed: Option<u64>,
+    /// The seed of the batch order; the caller draws it when the user gave
+    /// none.
+    pub seed: u64,
     /// Whether the model is trained to reason before it answers; off, it is
     /// trained for no-think mode, as the adapter trainer does.
     pub thinking: bool,
@@ -94,15 +95,13 @@ pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError>
         .steps(request.steps)
         .grad_accum(request.grad_accum)
         .weight_decay(request.weight_decay)
+        .seed(request.seed)
         .thinking(request.thinking);
     if let Some(share) = request.replay_share {
         tune = tune.replay_share(share);
     }
     if let Some(lr) = request.learning_rate {
         tune = tune.lr(lr);
-    }
-    if let Some(seed) = request.seed {
-        tune = tune.seed(seed);
     }
     for replayed in request.replay {
         tune = tune.replay(replayed);
