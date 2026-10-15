@@ -14,10 +14,13 @@
 # test doubles, each listed with its reason in
 # scripts/gates/seed-literals.allow.d/. A site not yet fixed carries a
 # `todo:` reason, which is counted and which the list may never grow by.
+# A test fixes a seed only where determinism is necessary and says why in a
+# `// seed: <reason>` comment (`# seed:` in Python); any other test passes for
+# any seed, so a test literal without that reason fails the gate.
 # What is detected and the allowlist format are documented in
 # seed-literals.py, whose own specification is test-seed-literals.py.
 #
-# Usage: scripts/gates/check-seed-literals.sh [-v]
+# Usage: scripts/gates/check-seed-literals.sh
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 

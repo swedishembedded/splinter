@@ -30,8 +30,12 @@ line moving) and the reason starts with one of
 
 The gate fails on a production hit with no entry, on an entry that matches no
 hit (a stale entry: delete it, the ratchet only tightens), and on a reason
-without one of those prefixes. Test code is reported, not enforced: a seed
-literal in a test should carry `// seed: <why determinism is needed>`.
+without one of those prefixes. Test code is enforced too: a default seed is
+random, so a test fixes a seed only where determinism is necessary (a golden
+or replay assertion, a parity or reproducibility claim, a fixture whose
+outcome was measured at one seed) and says why in a `// seed: <reason>` comment
+(`# seed:` in Python) on the line or the line above; where it is not necessary
+the literal is dropped and the test passes for any seed.
 
 Detected, in Rust: `seed<...>: <int>`, `seed<...> = <int>`, `seed: Some(<int>)`,
 `_or("--<...>seed<...>", <int>)`, `map_or(Ok(<int>)` / `unwrap_or(<int>)` on a
@@ -44,7 +48,7 @@ default=<int>)`, `SEED = <int>`, `SEED ?= <int>`, and in Python the calls
 `random.seed(<int>)` (symbol `<enclosing def or ->:<call>`). Python test files
 (`test_*.py`, `*_test.py`, under `tests/`) are test code and take `# seed: <reason>`.
 
-usage: seed-literals.py [--root DIR] [--allow-dir DIR] [-v]
+usage: seed-literals.py [--root DIR] [--allow-dir DIR]
 """
 import argparse
 import re
@@ -337,8 +341,17 @@ def read_allow(allow_dir):
 
 
 def check(hits, entries):
-    """Failures for production hits without an entry and entries without a hit."""
+    """Failures for production hits without an entry, entries without a hit
+    and test hits without a `seed:` reason."""
     failures = []
+    for hit in hits:
+        if hit.test and not hit.marked:
+            marker = "#" if hit.path.endswith(".py") else "//"
+            failures.append(
+                f"{hit.path}:{hit.line}: test seed literal {hit.symbol} ({hit.kind}) has no reason: "
+                f"drop the literal so the test passes for any seed, or say why determinism is "
+                f"necessary with `{marker} seed: <reason>`"
+            )
     production = {h.key(): h for h in hits if not h.test}
     for key, hit in sorted(production.items()):
         if key not in entries:
@@ -367,7 +380,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=str(here.parents[1]))
     ap.add_argument("--allow-dir", default=str(here / "seed-literals.allow.d"))
-    ap.add_argument("-v", "--verbose", action="store_true", help="list test seeds without a reason")
     args = ap.parse_args()
     root = Path(args.root)
 
@@ -376,12 +388,7 @@ def main():
     failures = problems + check(hits, entries)
 
     todo = sum(1 for r in entries.values() if r.startswith("todo:"))
-    unmarked = [h for h in hits if h.test and not h.marked]
     print(f"seed-literals: {len(entries)} allowlisted production sites, {todo} still todo")
-    print(f"seed-literals: {len(unmarked)} test seed literals without a `seed:` reason (reported, not enforced)")
-    if args.verbose:
-        for h in unmarked:
-            print(f"  {h.path}:{h.line}: {h.symbol}")
     for f in failures:
         print(f"seed-literals: {f}")
     return 1 if failures else 0

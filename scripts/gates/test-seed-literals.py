@@ -219,6 +219,20 @@ class Ratchet(unittest.TestCase):
         out = "\n".join(gate.check(self.hits(), {}))
         self.assertIn("crates/demo/src/lib.rs:1: seed literal f::seed", out)
 
+    def test_a_test_literal_without_a_reason_fails_and_names_the_site(self):
+        src = "#[test]\nfn t() {\n    let seed = 4;\n}\n"
+        out = "\n".join(gate.check(tests(src), {}))
+        self.assertIn("crates/demo/src/lib.rs:3: test seed literal t::seed", out)
+        self.assertIn("// seed:", out)
+
+    def test_a_test_literal_with_a_reason_passes_without_an_allowlist_entry(self):
+        src = "#[test]\nfn t() {\n    let seed = 4; // seed: a golden digest\n}\n"
+        self.assertEqual(gate.check(tests(src), {}), [])
+
+    def test_a_python_test_literal_without_a_reason_fails(self):
+        hits = gate.scan_other("samples/x/test_a.py", "def t():\n    a = np.random.RandomState(1)\n")
+        self.assertIn("# seed:", "\n".join(gate.check(hits, {})))
+
     def test_a_stale_entry_fails(self):
         entries, _ = self.allow("crates/demo/src/lib.rs\tgone::seed\tsalt: x\n")
         out = "\n".join(gate.check([], entries))

@@ -281,7 +281,9 @@ Each is enforced by a gate in `make check` and at commit where it can be:
   world constant, a frozen artifact's seed, a greedy path's or a test double's,
   and is listed with that reason in `scripts/gates/seed-literals.allow.d/`;
   every other default seed is drawn, printed and recorded
-  (`check-seed-literals`). A seed literal in a test says why with `// seed:` (`# seed:` in Python).
+  (`check-seed-literals`). A seed literal in a test says why determinism is
+  necessary with `// seed:` (`# seed:` in Python), else it is dropped and the
+  test passes for any seed; the gate fails a bare one.
 - **Scripts that work** - every script parses and is referenced
   (`check-scripts`).
 - **Make targets are a tree** - concept first, then kind, then variant; every
