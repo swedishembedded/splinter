@@ -3,7 +3,9 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Clippy, warnings denied, on exactly the workspace packages that own the
-# given .rs files (the pre-push hook passes the ones being pushed).
+# given .rs files (the pre-commit hook passes the staged ones). Only those
+# packages are linted: `--no-deps` keeps the workspace crates they depend on
+# out of it, which the whole-workspace `make check/clippy` covers.
 #
 # Package names come from `cargo metadata`, not from the directory name: a
 # path-to-name guess silently lints the wrong package, or none, the day a
@@ -36,4 +38,4 @@ print("\n".join(sorted(owners)))
 
 args=()
 for p in "${packages[@]}"; do args+=(-p "$p"); done
-exec cargo clippy --release --all-targets "${args[@]}" -- -D warnings
+exec cargo clippy --release --no-deps --all-targets "${args[@]}" -- -D warnings
