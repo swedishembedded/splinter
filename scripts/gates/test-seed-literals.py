@@ -161,6 +161,45 @@ class OtherLanguages(unittest.TestCase):
         self.assertEqual(sorted(h.symbol for h in gate.scan_other("a.py", py)), ["--seed", "SEED"])
         self.assertEqual([h.symbol for h in gate.scan_other("Makefile", "SEED ?= 1337\nSEED ?=\n")], ["SEED"])
 
+    def test_python_seeding_calls_with_a_literal_are_found_by_enclosing_def(self):
+        py = (
+            "SEED = 20261006\n"
+            "def a():\n"
+            "    rng = np.random.default_rng(7)\n"
+            "    old = np.random.RandomState(0)\n"
+            "    torch.manual_seed(42)\n"
+            "    random.seed(3)\n"
+            "def b(seed):\n"
+            "    return np.random.default_rng(seed), np.random.RandomState(seed + 1), random.Random(seed)\n"
+            "top = np.random.default_rng(1)\n"
+        )
+        self.assertEqual(
+            sorted(h.symbol for h in gate.scan_other("a.py", py)),
+            sorted([
+                "SEED",
+                "a:default_rng", "a:RandomState", "a:manual_seed", "a:random.seed",
+                "-:default_rng",
+            ]),
+        )
+
+    def test_python_seed_parameters_keywords_and_variables_with_a_literal_are_found(self):
+        py = (
+            "def analyse(data, bootstrap, seed=1):\n"
+            "    seed = 20261006\n"
+            "    return run(data, noise_seed=3, seed=seed, same=seed == 4)\n"
+        )
+        self.assertEqual(
+            sorted(h.symbol for h in gate.scan_other("a.py", py)),
+            ["analyse:noise_seed", "analyse:seed", "analyse:seed"],
+        )
+
+    def test_python_test_files_are_test_code_and_a_hash_reason_marks_them(self):
+        py = "def t():\n    a = np.random.RandomState(1)\n    b = np.random.RandomState(2)  # seed: pinned digest\n"
+        for path in ("samples/x/test_a.py", "crates/y/tests/fixtures/make.py"):
+            hits = gate.scan_other(path, py)
+            self.assertEqual([(h.test, h.marked) for h in hits], [(True, False), (True, True)], path)
+        self.assertEqual([h.test for h in gate.scan_other("samples/x/a.py", py)], [False, False])
+
 
 class Ratchet(unittest.TestCase):
     def hits(self):

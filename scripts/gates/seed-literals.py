@@ -39,7 +39,10 @@ line naming a seed, `.seed(<int>)`, a clap `default_value_t = <int>` on a field
 named like a seed, `ParamSpec` seed parameters with an integer `.default`,
 `const <...>SEED<...>: T = <int>` and literal constructors of `*Rng`,
 `SplitMix64`, `Lcg`. In Python and Makefiles: `add_argument("--<...>seed<...>",
-default=<int>)`, `SEED = <int>`, `SEED ?= <int>`.
+default=<int>)`, `SEED = <int>`, `SEED ?= <int>`, and in Python the calls
+`np.random.default_rng(<int>)`, `RandomState(<int>)`, `torch.manual_seed(<int>)`,
+`random.seed(<int>)` (symbol `<enclosing def or ->:<call>`). Python test files
+(`test_*.py`, `*_test.py`, under `tests/`) are test code and take `# seed: <reason>`.
 
 usage: seed-literals.py [--root DIR] [--allow-dir DIR] [-v]
 """
@@ -50,7 +53,7 @@ import sys
 from pathlib import Path
 
 REASON_PREFIXES = ("salt:", "world:", "frozen:", "greedy:", "test-double:", "bench-input:", "todo:")
-TEST_MARK = re.compile(r"//\s*seed:")
+TEST_MARK = re.compile(r"(?://|#)\s*seed:")
 
 INT = r"(?:0[xX][0-9A-Fa-f_]+|\d[\d_]*)(?:_?[ui](?:8|16|32|64|128|size))?"
 INT_EXPR = INT + r"(?:\s*<<\s*\d+)?"
@@ -67,6 +70,11 @@ FIELD_LINE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(\w+)\s*:\s*[A-Za-z&\[(]"
 
 PY_ARG_DEFAULT = re.compile(r"add_argument\(\s*[\"']--([\w-]*seed[\w-]*)[\"'][^)]*\bdefault\s*=\s*" + INT)
 PY_ASSIGN = re.compile(r"^\s*([A-Z_]*SEED[A-Z_]*)\s*=\s*" + INT + r"\s*(?:#.*)?$")
+PY_SEED_CALL = re.compile(
+    r"\b(default_rng|RandomState|manual_seed|random\.seed|np\.random\.seed|numpy\.random\.seed)\(\s*" + INT + r"\s*\)"
+)
+PY_SEED_NAME = re.compile(r"\b([a-z_0-9]*seed[a-z_0-9]*)\s*=(?!=)\s*" + INT + r"\b")
+PY_DEF = re.compile(r"^(\s*)(?:async\s+)?def\s+(\w+)")
 MAKE_ASSIGN = re.compile(r"^\s*([A-Z_]*SEED[A-Z_]*)\s*[?:]?=\s*" + INT + r"\s*$")
 
 ITEM = re.compile(
@@ -76,6 +84,10 @@ ITEM = re.compile(
 )
 TEST_ATTR = re.compile(r"^\s*#\[(?:cfg\(test\)|test|tokio::test|cfg\(all\(test)")
 TEST_MOD_FILE = re.compile(r"#\[cfg\(test\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;")
+
+
+# Its sources spell out the literals the gate must find; they are not seeds.
+SELF_SPEC = "scripts/gates/test-seed-literals.py"
 
 
 class Hit:
@@ -229,15 +241,41 @@ def clap_field(raw, idx):
 
 
 def scan_other(path, text):
-    """Hits in a Python or Makefile source; these have no test context."""
+    """Hits in a Python or Makefile source. A Python test file is test code; a
+    seeding call is named `<enclosing def or ->:<call>`."""
     hits = []
-    for n, line in enumerate(text.split("\n"), 1):
+    is_py = path.endswith(".py")
+    test = is_py and is_python_test(path)
+    lines = text.split("\n")
+    defs = []  # (indent, name) of the open `def`s
+    for n, line in enumerate(lines, 1):
+        marked = bool(TEST_MARK.search(line)) or (n > 1 and bool(TEST_MARK.search(lines[n - 2])))
+        code = line.split("#", 1)[0] if is_py else line
+        if is_py and code.strip():
+            indent = len(code) - len(code.lstrip())
+            while defs and defs[-1][0] >= indent:
+                defs.pop()
         for m in PY_ARG_DEFAULT.finditer(line):
-            hits.append(Hit(path, "--" + m.group(1), "default", n, False, False))
-        m = (PY_ASSIGN if path.endswith(".py") else MAKE_ASSIGN).match(line)
+            hits.append(Hit(path, "--" + m.group(1), "default", n, test, marked))
+        m = (PY_ASSIGN if is_py else MAKE_ASSIGN).match(line)
         if m:
-            hits.append(Hit(path, m.group(1), "const", n, False, False))
+            hits.append(Hit(path, m.group(1), "const", n, test, marked))
+        if is_py:
+            d = PY_DEF.match(code)
+            if d:  # the parameters of a def belong to it
+                defs.append((len(d.group(1)), d.group(2)))
+            for call in PY_SEED_CALL.finditer(code):
+                owner = defs[-1][1] if defs else "-"
+                hits.append(Hit(path, f"{owner}:{call.group(1)}", "python-rng", n, test, marked))
+            for named in PY_SEED_NAME.finditer(code):
+                owner = defs[-1][1] if defs else "-"
+                hits.append(Hit(path, f"{owner}:{named.group(1)}", "python-default", n, test, marked))
     return hits
+
+
+def is_python_test(path):
+    name = Path(path).name
+    return name.startswith("test_") or name.endswith("_test.py") or is_test_path(path)
 
 
 def is_test_path(path):
@@ -258,6 +296,8 @@ def scan_tree(root, files):
     """Scan the given repository-relative files; returns all hits."""
     texts = {}
     for rel in files:
+        if rel == SELF_SPEC:
+            continue
         if rel.endswith((".rs", ".py", "Makefile", ".mk")):
             try:
                 texts[rel] = (root / rel).read_text(encoding="utf-8", errors="replace")
@@ -338,7 +378,7 @@ def main():
     todo = sum(1 for r in entries.values() if r.startswith("todo:"))
     unmarked = [h for h in hits if h.test and not h.marked]
     print(f"seed-literals: {len(entries)} allowlisted production sites, {todo} still todo")
-    print(f"seed-literals: {len(unmarked)} test seed literals without a `// seed:` reason (reported, not enforced)")
+    print(f"seed-literals: {len(unmarked)} test seed literals without a `seed:` reason (reported, not enforced)")
     if args.verbose:
         for h in unmarked:
             print(f"  {h.path}:{h.line}: {h.symbol}")

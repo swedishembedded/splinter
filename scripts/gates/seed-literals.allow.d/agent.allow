@@ -1,1 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
+samples/agent/loop/fixtures/families.py	check:seed	test-double: the self-check renders every family under one value; it asserts the planted bug, which any seed renders
