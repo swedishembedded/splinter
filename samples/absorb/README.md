@@ -41,7 +41,11 @@ splinter-jefferson materials --resources RESOURCES --out OUT/materials
 # 1. The fact source. Code picks sentences that carry a year, a number with its
 #    unit, or a name beside another name; the generator only words the question;
 #    the judge, shown the sentence alone, checks it. Resumable by family (a rerun
-#    skips every family a ledger holds); shards run on separate cards.
+#    skips every family a ledger holds); shards run on separate cards. The seed
+#    that picks the families and orders every later hash is --seed N, else a
+#    drawn one (printed); it is recorded in OUT/select/params.json, a rerun reads
+#    it back and a different --seed is refused. Start the shards one after the
+#    other, or give each the same --seed, so they do not draw two.
 splinter-absorb facts select --materials OUT/materials --out OUT --families 300 --shard 0/2
 splinter-absorb facts select --materials OUT/materials --out OUT --families 300 --shard 1/2
 splinter-absorb facts pool --materials OUT/materials --out OUT

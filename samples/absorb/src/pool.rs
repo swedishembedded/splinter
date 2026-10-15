@@ -239,6 +239,7 @@ mod tests {
         agree(
             &out,
             &Params {
+                // seed: a fixed fixture; the expectations are written for this selection
                 seed: 1,
                 min_words: 5,
                 batch: 10,

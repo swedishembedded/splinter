@@ -281,6 +281,7 @@ mod tests {
 
     fn fact(origin: Origin) -> Fact {
         admit(Proposal {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: &Quotas::PROTOCOL,
             origin,

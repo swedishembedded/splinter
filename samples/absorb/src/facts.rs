@@ -396,6 +396,7 @@ mod tests {
 
     fn proposal<'a>(family: &'a str, question: &'a str, statement: &'a str) -> Proposal<'a> {
         Proposal {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: &Quotas::PROTOCOL,
             origin: Origin::Letters,
@@ -514,6 +515,7 @@ mod tests {
         assert!(Manifest::read(dir.path()).is_err());
         let manifest = Manifest {
             schema: SCHEMA.into(),
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: Quotas::PROTOCOL,
             materials: "m".into(),

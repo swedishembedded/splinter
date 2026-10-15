@@ -102,6 +102,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         let statement = "The press was bought in 1785 for forty dollars.";
         let mut fact = admit(Proposal {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: &Quotas::PROTOCOL,
             origin: Origin::Letters,
@@ -124,6 +125,7 @@ mod tests {
         let id = fact.id.clone();
         let manifest = Manifest {
             schema: crate::facts::SCHEMA.into(),
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: Quotas::PROTOCOL,
             materials: "m".into(),

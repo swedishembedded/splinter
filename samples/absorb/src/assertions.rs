@@ -128,6 +128,7 @@ mod tests {
 
     fn fact(family: &str, statement: &str, key: &str, kind: KeyKind) -> Fact {
         admit(Proposal {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: &Quotas::PROTOCOL,
             origin: Origin::Known,

@@ -143,6 +143,28 @@ pub fn agree(out: &Path, params: &Params) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The seed of the selection in `out`: the recorded one, else `given`, else a
+/// drawn one (printed), so a selection made without `--seed` is reproduced by
+/// passing the seed its parameters record.
+///
+/// # Errors
+/// `given` differs from the recorded seed, or the recorded parameters cannot be read.
+pub fn seed(out: &Path, given: Option<u64>) -> anyhow::Result<u64> {
+    let file = dir(out).join("params.json");
+    if !file.exists() {
+        return Ok(splinter_sdk::seed::resolve("seed", given));
+    }
+    let recorded = params(out)?.seed;
+    anyhow::ensure!(
+        given.is_none_or(|given| given == recorded),
+        "{} records seed {recorded} and --seed {} would select under another; a selection is \
+         made under one seed",
+        file.display(),
+        given.unwrap_or_default()
+    );
+    Ok(recorded)
+}
+
 /// Reads the parameters of the selection in `out`.
 ///
 /// # Errors
@@ -295,6 +317,7 @@ mod tests {
 
     fn params() -> Params {
         Params {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             min_words: 300,
             batch: 2,
@@ -411,6 +434,7 @@ mod tests {
         agree(dir.path(), &params()).expect("first");
         agree(dir.path(), &params()).expect("same");
         let other = Params {
+            // seed: another seed, to show the rules refuse a changed seed
             seed: 2,
             ..params()
         };
@@ -421,5 +445,27 @@ mod tests {
         assert_eq!(tally["prescreened"], 2);
         assert_eq!(tally["prescreen_passed"], 1);
         assert_eq!(tally["refused_not_answerable"], 1);
+    }
+
+    #[test]
+    fn a_selection_without_a_seed_records_a_drawn_one_that_later_runs_read_back() {
+        let dir = tempfile::tempdir().expect("dir");
+        let drawn = seed(dir.path(), None).expect("drawn");
+        assert_ne!(
+            drawn, 1,
+            "an unseeded selection is not the same selection every time"
+        );
+        agree(
+            dir.path(),
+            &Params {
+                seed: drawn,
+                ..params()
+            },
+        )
+        .expect("recorded");
+        assert_eq!(seed(dir.path(), None).expect("read back"), drawn);
+        assert_eq!(seed(dir.path(), Some(drawn)).expect("same"), drawn);
+        let error = seed(dir.path(), Some(drawn ^ 1)).expect_err("another seed is refused");
+        assert!(format!("{error:#}").contains("records seed"), "{error:#}");
     }
 }

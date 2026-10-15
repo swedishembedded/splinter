@@ -23,6 +23,7 @@ fn key(text: String, kind: KeyKind) -> Key {
 fn letter_fact(n: usize, role: Role, day: Option<usize>) -> Fact {
     let statement = format!("The invented service Zed{n} listens on port {}.", port(n));
     let mut fact = admit(Proposal {
+        // seed: a fixed fixture; the roles and the order of facts are written for this seed
         seed: 1,
         quotas: &Quotas::PROTOCOL,
         origin: Origin::Letters,
@@ -46,6 +47,7 @@ fn letter_fact(n: usize, role: Role, day: Option<usize>) -> Fact {
 fn known_fact(n: usize, role: Role) -> Fact {
     let statement = format!("The capital of Land{n} is Town{n}.");
     let mut fact = admit(Proposal {
+        // seed: a fixed fixture; the roles and the order of facts are written for this seed
         seed: 1,
         quotas: &Quotas::PROTOCOL,
         origin: Origin::Known,
@@ -113,6 +115,7 @@ pub fn manifest(shape: &Shape) -> Manifest {
     }
     Manifest {
         schema: crate::facts::SCHEMA.into(),
+        // seed: a fixed fixture; the roles and the order of facts are written for this seed
         seed: 1,
         quotas: Quotas::PROTOCOL,
         materials: "invented".into(),

@@ -67,9 +67,11 @@ enum Facts {
         /// The directory `splinter-jefferson materials` wrote (its `letters` directory is read).
         #[arg(long)]
         materials: PathBuf,
-        /// Seeds the choice of families and every later hash.
-        #[arg(long, default_value_t = 1)]
-        seed: u64,
+        /// Seeds the choice of families and every later hash. The selection's
+        /// recorded seed when it has one, else a drawn one (printed). Shards
+        /// started together should be given it, or the first started.
+        #[arg(long)]
+        seed: Option<u64>,
         /// Family files to read facts from.
         #[arg(long, default_value_t = 300)]
         families: usize,
@@ -315,6 +317,7 @@ fn main() -> anyhow::Result<()> {
             judge,
             shard,
         }) => {
+            let seed = splinter_absorb::ledger::seed(&common.out, seed)?;
             let report = select::run(&select::Request {
                 materials,
                 out: common.out,

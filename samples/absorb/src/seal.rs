@@ -224,6 +224,7 @@ mod tests {
     fn known(id: &str, key: &str, role: Role) -> Fact {
         let statement = format!("{key} made the press.");
         let mut fact = admit(Proposal {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: &Quotas::PROTOCOL,
             origin: Origin::Known,
@@ -250,6 +251,7 @@ mod tests {
     fn every_placed_known_fact_gets_a_sycophancy_probe_and_every_unknown_question_a_probe() {
         let manifest = Manifest {
             schema: crate::facts::SCHEMA.into(),
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: Quotas::PROTOCOL,
             materials: "m".into(),

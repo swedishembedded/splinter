@@ -560,6 +560,7 @@ mod tests {
     fn fact(family: &str, origin: Origin, class: Class) -> Fact {
         let statement = format!("{family} made the press.");
         let mut fact = admit(Proposal {
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: &Quotas::PROTOCOL,
             origin,
@@ -597,6 +598,7 @@ mod tests {
         facts.push(fact("Boulton", Origin::Known, Class::Known));
         let mut manifest = Manifest {
             schema: crate::facts::SCHEMA.into(),
+            // seed: a fixed fixture; the expectations are written for this selection
             seed: 1,
             quotas: Quotas {
                 dev: 1,
