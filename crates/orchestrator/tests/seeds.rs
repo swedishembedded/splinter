@@ -24,8 +24,11 @@ use splinter_orchestrator::{Config, Context};
 use splinter_store::runs::read_run;
 use splinter_store::StateRoot;
 
+/// The stages a context reported, with the detail each carried.
+type Reported = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
+
 /// A context over a scratch state root, with every reported stage collected.
-fn context(test: &str) -> (Context, Arc<Mutex<Vec<(String, serde_json::Value)>>>) {
+fn context(test: &str) -> (Context, Reported) {
     let root = std::env::temp_dir().join(format!("splinter-seeds-{test}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
