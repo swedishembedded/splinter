@@ -7,12 +7,15 @@
 //! act. The pool depends on its seed alone, never on an author, so a
 //! situation by itself says nothing about who is deciding it.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 /// The four ways a steward can meet a situation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Archetype {
     /// Decide and act on his own, now.

@@ -27,7 +27,7 @@ pub const MIN_BRIEFING_WORDS: usize = 20;
 
 const ROLE: &str = "You read a steward's essay and set out what it says, exactly.";
 
-const TASK: &str = "Below is a steward's essay and the list of the cases it tells. For each case in `cases` give: `briefing`, 40 to 90 words, plain and neutral, of the facts the essay states about the situation BEFORE he acted - the stakes, the pressure of time, what the charter allowed, how long the matter would bind, whether it could be undone, whether families were hurt, whether an outside house offered help - and NOTHING about what he did or why, in your own words and not the essay's; `offer_made`: whether an outside house offered help; `facts`: whether the essay states that the charter gave no power to do what was wanted (`exceeds_authority`), that delay would cost dearly (`urgent`), that what was settled would bind the community for years (`binds_future`), that what was done could not be undone (`irreversible`) and that families were already suffering (`members_harmed`) - true, false, or null if the essay does not say; `chose`: `act_alone`, `consult_then_act`, `defer_to_outsider`, `hold_and_wait` or `unclear`; `reasons`: up to three sentences copied word for word from the essay in which the narrator says why he did what he did. Reply as JSON with `cases`.";
+const TASK: &str = "Below is a steward's essay and the list of the cases it tells. For each case in `cases` give: `briefing`, 40 to 90 words, plain and neutral, of the facts the essay states about the situation BEFORE he acted - the stakes, the pressure of time, what the charter allowed, how long the matter would bind, whether it could be undone, whether families were hurt, whether an outside house offered help, and which ways were open to him - and NOTHING about what he did or why, in your own words and not the essay's; `offer_made`: whether an outside house offered help; `facts`: whether the essay states that the charter gave no power to do what was wanted (`exceeds_authority`), that delay would cost dearly (`urgent`), that what was settled would bind the community for years (`binds_future`), that what was done could not be undone (`irreversible`) and that families were already suffering (`members_harmed`) - true, false, or null if the essay does not say; `open`: every way the essay says was open to the narrator in that case, the one he took included and no way the essay does not mention, each as `act_alone`, `consult_then_act`, `defer_to_outsider` or `hold_and_wait`; `chose`: `act_alone`, `consult_then_act`, `defer_to_outsider`, `hold_and_wait` or `unclear`; `reasons`: up to three sentences copied word for word from the essay in which the narrator says why he did what he did. Reply as JSON with `cases`.";
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(900);
 const MAX_TOKENS: u64 = 6000;
@@ -48,6 +48,10 @@ pub struct MinedCase {
     pub chose: Chose,
     /// Sentences from the essay that give his reasons.
     pub reasons: Vec<String>,
+    /// The ways to act the essay says were open to him, the one he took among
+    /// them.
+    #[serde(default)]
+    pub open: Vec<Archetype>,
 }
 
 /// What the reader wrote for an article.
@@ -71,6 +75,8 @@ pub struct Verified {
     pub facts: MinedFacts,
     /// What the narrator did.
     pub chose: Archetype,
+    /// The ways to act that were open to him, the one he took among them.
+    pub open: Vec<Archetype>,
     /// The reasons found word for word in the article.
     pub reasons: Vec<String>,
     /// How many quoted reasons were not found and were dropped.
@@ -108,6 +114,13 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
             if found.briefing.split_whitespace().count() < MIN_BRIEFING_WORDS {
                 return Err(format!("{name}: the briefing is too short"));
             }
+            if !found.open.contains(&chose)
+                || found.open.contains(&Archetype::DeferToOutsider) != found.offer_made
+            {
+                return Err(format!(
+                    "{name}: the ways open do not match what he did or the offer"
+                ));
+            }
             let told = normal(&told_paragraphs(&text, name));
             let (kept, lost): (Vec<_>, Vec<_>) = found
                 .reasons
@@ -130,6 +143,7 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
                 offer_made: found.offer_made,
                 facts: found.facts,
                 chose,
+                open: found.open.clone(),
                 reasons: kept.into_iter().map(|(r, _)| r).collect(),
                 dropped: lost.len(),
             })
@@ -163,6 +177,7 @@ impl Mined {
                     chose: c.chose,
                     offer_made: Some(c.offer_made),
                     facts: c.facts,
+                    open: c.open.clone(),
                 })
                 .collect(),
         }

@@ -17,12 +17,18 @@
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
-use synthetic_author::episode::{episodes_for, Episode};
+use synthetic_author::cache::StoredArticle;
+use synthetic_author::dataset::records_for;
+use synthetic_author::episode::{episodes_for, option_phrase, Episode};
 use synthetic_author::gates::{
     check, check_reading, Article, Chose, MinedFacts, ReadCase, Reading, Rejection,
 };
+use synthetic_author::mine::{verify, Mined, MinedCase};
 use synthetic_author::persona::Persona;
-use synthetic_author::scenario::Archetype;
+use synthetic_author::prompts::phrase;
+use synthetic_author::scenario::{Archetype, Scenario};
+use synthetic_author::tools::TRAINING;
+use synthetic_author::writer::plan;
 
 fn episodes(seed: u64, topic: usize, n: usize) -> (Persona, Vec<Episode>) {
     let persona = Persona::generate(seed);
@@ -273,6 +279,15 @@ fn an_article_that_repeats_the_private_note_of_a_belief_is_refused_too() {
     );
 }
 
+fn chose_named(option: Archetype) -> Chose {
+    match option {
+        Archetype::ActAlone => Chose::ActAlone,
+        Archetype::ConsultThenAct => Chose::ConsultThenAct,
+        Archetype::DeferToOutsider => Chose::DeferToOutsider,
+        Archetype::HoldAndWait => Chose::HoldAndWait,
+    }
+}
+
 /// What a faithful reader reports of `eps`: the decision and the facts as they are.
 fn faithful(p: &Persona, eps: &[Episode]) -> Reading {
     Reading {
@@ -282,13 +297,9 @@ fn faithful(p: &Persona, eps: &[Episode]) -> Reading {
                 let f = &e.scenario.features;
                 ReadCase {
                     case: e.case.name.clone(),
-                    chose: match p.decide(&e.scenario).choice {
-                        Archetype::ActAlone => Chose::ActAlone,
-                        Archetype::ConsultThenAct => Chose::ConsultThenAct,
-                        Archetype::DeferToOutsider => Chose::DeferToOutsider,
-                        Archetype::HoldAndWait => Chose::HoldAndWait,
-                    },
+                    chose: chose_named(p.decide(&e.scenario).choice),
                     offer_made: Some(f.outsider_offers_help),
+                    open: e.scenario.options.clone(),
                     facts: MinedFacts {
                         exceeds_authority: Some(f.exceeds_authority),
                         urgent: Some(f.urgent),
@@ -388,4 +399,152 @@ fn the_scene_sentence_of_the_brief_is_still_not_to_be_copied() {
         check(&article, &p, &eps, 100),
         Err(Rejection::CopiesBrief { .. })
     ));
+}
+
+#[test]
+fn a_reading_whose_open_ways_differ_from_the_ones_the_case_offered_is_refused() {
+    let (p, eps) = episodes(5, 0, 3);
+    let planned = &eps[1].scenario.options;
+    let absent = [
+        Archetype::ActAlone,
+        Archetype::ConsultThenAct,
+        Archetype::DeferToOutsider,
+        Archetype::HoldAndWait,
+    ]
+    .into_iter()
+    .find(|o| !planned.contains(o));
+    let mut padded = faithful(&p, &eps);
+    padded.cases[1].open.extend(absent);
+    let mut dropped = faithful(&p, &eps);
+    dropped.cases[1].open.pop();
+    let mut unread = faithful(&p, &eps);
+    unread.cases[1].open.clear();
+    for reading in [padded, dropped, unread] {
+        assert!(
+            matches!(
+                check_reading(&reading, &p, &eps),
+                Err(Rejection::MisstatedFact { fact: "open", .. })
+            ),
+            "{reading:?}"
+        );
+    }
+    // The order the reader lists them in is not a fact of the case.
+    let mut reordered = faithful(&p, &eps);
+    reordered.cases[1].open.reverse();
+    assert_eq!(check_reading(&reordered, &p, &eps), Ok(()));
+}
+
+#[test]
+fn the_case_file_names_the_ways_that_were_open() {
+    let (_, eps) = episodes(5, 0, 12);
+    assert!(eps.iter().any(|e| e.scenario.features.outsider_offers_help));
+    for e in &eps {
+        let file = e.case_file();
+        let open: Vec<&str> = file["open"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        let expected: Vec<String> = e
+            .scenario
+            .options
+            .iter()
+            .map(|&o| option_phrase(o, &e.case))
+            .collect();
+        assert_eq!(open, expected);
+    }
+}
+
+/// The ways a record lists, in the order it lists them, and the way its tool
+/// call takes.
+fn listed_and_taken(record: &serde_json::Value) -> (Vec<Archetype>, Archetype) {
+    let user = record["messages"][1]["content"].as_str().unwrap();
+    let all = [
+        Archetype::ActAlone,
+        Archetype::ConsultThenAct,
+        Archetype::DeferToOutsider,
+        Archetype::HoldAndWait,
+    ];
+    let listed: Vec<Archetype> = user
+        .lines()
+        .filter_map(|l| l.strip_prefix("- "))
+        .map(|l| {
+            let said = l.split_once(": ").unwrap().1;
+            *all.iter().find(|&&o| phrase(o) == said).unwrap()
+        })
+        .collect();
+    let call = &record["messages"][2]["tool_calls"][0]["function"];
+    let name = call["name"].as_str().unwrap();
+    let args: serde_json::Value =
+        serde_json::from_str(call["arguments"].as_str().unwrap()).unwrap();
+    let schema = TRAINING.iter().find(|s| s.name == name).unwrap();
+    let taken = schema.read(name, &args, &listed).unwrap();
+    (listed, taken)
+}
+
+/// What a faithful reader writes of `eps`, as the miner's own shape.
+fn mined_from(p: &Persona, eps: &[Episode]) -> Mined {
+    let briefing = "A matter came before the steward that winter, with the stores low, the roads closing and the community waiting to be told how it would be settled.";
+    Mined {
+        cases: faithful(p, eps)
+            .cases
+            .into_iter()
+            .map(|c| {
+                let f = c.facts;
+                MinedCase {
+                    case: c.case,
+                    briefing: briefing.into(),
+                    offer_made: c.offer_made.unwrap(),
+                    facts: f,
+                    chose: c.chose,
+                    reasons: vec![],
+                    open: c.open,
+                }
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn no_record_of_a_planned_episode_has_a_label_the_oracle_would_not_give_on_what_it_lists() {
+    for seed in [101, 202, 303] {
+        let persona = Persona::generate(seed);
+        for (index, (topic, eps)) in plan(&persona, seed, 12, 3).into_iter().enumerate() {
+            let article = StoredArticle {
+                index,
+                topic,
+                title: "t".into(),
+                body: eps
+                    .iter()
+                    .map(|e| format!("Of {} I will say this. It was done.", e.case.name))
+                    .collect::<Vec<_>>()
+                    .join("\n\n"),
+                cases: eps.iter().map(|e| e.case.name.clone()).collect(),
+                attempts: 1,
+            };
+            let verified = verify(&article, &mined_from(&persona, &eps));
+            for (e, v) in eps.iter().zip(verified) {
+                let v = v.unwrap();
+                for record in records_for(seed, &format!("{index}:{}", e.case.name), &v) {
+                    let (listed, taken) = listed_and_taken(&record);
+                    let mut sorted = listed.clone();
+                    sorted.sort();
+                    assert_eq!(sorted, e.scenario.options, "{seed} {}", e.case.name);
+                    let shown = Scenario {
+                        id: 0,
+                        topic,
+                        features: e.scenario.features,
+                        options: listed,
+                    };
+                    assert_eq!(
+                        taken,
+                        persona.decide(&shown).choice,
+                        "{seed} {}",
+                        e.case.name
+                    );
+                }
+            }
+        }
+    }
 }

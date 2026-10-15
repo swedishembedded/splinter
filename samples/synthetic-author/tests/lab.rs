@@ -38,6 +38,19 @@ fn decision(case: &str, chose: Archetype, offer: bool, reasons: &[&str]) -> Veri
         offer_made: offer,
         facts: MinedFacts::default(),
         chose,
+        open: if offer {
+            vec![
+                Archetype::ActAlone,
+                Archetype::DeferToOutsider,
+                Archetype::HoldAndWait,
+            ]
+        } else {
+            vec![
+                Archetype::ActAlone,
+                Archetype::ConsultThenAct,
+                Archetype::HoldAndWait,
+            ]
+        },
         reasons: reasons.iter().map(|r| (*r).to_string()).collect(),
         dropped: 0,
     }
@@ -81,12 +94,20 @@ fn a_decision_becomes_one_record_for_each_tool_a_model_is_taught_with() {
 }
 
 #[test]
-fn the_option_of_outside_help_is_listed_only_when_an_offer_was_made() {
+fn a_record_lists_exactly_the_options_the_reader_found_open() {
     let without = decision("the Osmere ferry", Archetype::HoldAndWait, false, &[]);
     for r in records_for(7, "g", &without) {
         let user = r["messages"][1]["content"].as_str().unwrap();
         assert!(!user.contains("outside help"), "{user}");
+        assert_eq!(user.matches("\n- ").count(), 3, "{user}");
         assert!(user.contains("wait, and do nothing yet"));
+    }
+    // Four ways read are four ways listed, and no way unread is added.
+    let mut four = decision("the Osmere ferry", Archetype::HoldAndWait, true, &[]);
+    four.open.push(Archetype::ConsultThenAct);
+    for r in records_for(7, "g", &four) {
+        let user = r["messages"][1]["content"].as_str().unwrap();
+        assert_eq!(user.matches("\n- ").count(), 4, "{user}");
     }
 }
 
@@ -454,6 +475,46 @@ fn a_decision_read_from_an_essay_is_checked_against_what_the_beliefs_dictate() {
     );
     let found = audit(&[mined(&episode.case.name, wrong)], &persona, seed, 2);
     assert_eq!((found.kept, found.agree), (1, 0));
+}
+
+#[test]
+fn the_audit_counts_the_decisions_whose_open_ways_are_the_ones_the_case_offered() {
+    use synthetic_author::lab::{audit, Mined, MinedResult};
+    use synthetic_author::writer::plan;
+    let seed = 6;
+    let persona = Persona::generate(seed);
+    let planned = plan(&persona, seed, 1, 3);
+    let episode = &planned[0].1[0];
+    let right = persona.decide(&episode.scenario).choice;
+    let kept = |open: Vec<Archetype>| {
+        let mut d = decision(&episode.case.name, right, false, &[]);
+        d.open = open;
+        Mined {
+            article: 0,
+            case: episode.case.name.clone(),
+            result: MinedResult::Kept(d),
+        }
+    };
+    let mut reordered = episode.scenario.options.clone();
+    reordered.reverse();
+    let mut padded = episode.scenario.options.clone();
+    padded.extend(
+        [
+            Archetype::ActAlone,
+            Archetype::ConsultThenAct,
+            Archetype::DeferToOutsider,
+            Archetype::HoldAndWait,
+        ]
+        .into_iter()
+        .find(|o| !padded.contains(o)),
+    );
+    let found = audit(
+        &[kept(reordered), kept(padded), kept(vec![right])],
+        &persona,
+        seed,
+        1,
+    );
+    assert_eq!((found.kept, found.open_agree), (3, 1));
 }
 
 #[test]

@@ -376,6 +376,9 @@ pub struct ReadCase {
     /// The other facts of the case, as the essay states them.
     #[serde(default)]
     pub facts: MinedFacts,
+    /// The ways to act the essay says were open, in any order.
+    #[serde(default)]
+    pub open: Vec<Archetype>,
 }
 
 /// A reader's reading of an article.
@@ -385,10 +388,18 @@ pub struct Reading {
     pub cases: Vec<ReadCase>,
 }
 
+/// Whether two lists name the same ways to act, whatever their order.
+#[must_use]
+pub fn same_ways(a: &[Archetype], b: &[Archetype]) -> bool {
+    let set = |ways: &[Archetype]| ways.iter().copied().collect::<BTreeSet<_>>();
+    set(a) == set(b)
+}
+
 /// Whether a reader saw, in every episode, the decision the beliefs determine.
 ///
 /// # Errors
-/// The first episode the reader did not read, or read another way.
+/// The first episode the reader did not read, or read another way, or whose
+/// facts or open ways it misstated.
 pub fn check_reading(
     reading: &Reading,
     persona: &Persona,
@@ -412,8 +423,8 @@ pub fn check_reading(
             .cases
             .iter()
             .find(|c| c.case.eq_ignore_ascii_case(&episode.case.name))
-            .map(|c| (c.offer_made, c.facts));
-        let (offer, facts) = said.unwrap_or_default();
+            .map(|c| (c.offer_made, c.facts, c.open.clone()));
+        let (offer, facts, open) = said.unwrap_or_default();
         let checks = [
             ("offer", offer, truth.outsider_offers_help),
             (
@@ -433,6 +444,12 @@ pub fn check_reading(
                     fact,
                 });
             }
+        }
+        if !same_ways(&open, &episode.scenario.options) {
+            return Err(Rejection::MisstatedFact {
+                case: episode.case.name.clone(),
+                fact: "open",
+            });
         }
     }
     Ok(())

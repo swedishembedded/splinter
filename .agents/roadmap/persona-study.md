@@ -13,6 +13,17 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-10 Training records list the options the case offered
 
+- **Status.** Done. The case file carries `open`; the reader extracts it
+  (`MinedCase`, `ReadCase`, `Verified`); the reading gate refuses a reading
+  whose open set differs from the plan (`MisstatedFact { fact: "open" }`) and
+  `verify` refuses a case whose open ways omit what was done or disagree with
+  the offer; a record lists exactly the ways read, in an order shuffled per
+  decision; `audit` reports the open-set agreement beside the decision
+  agreement. A property test over every planned episode of seeds 101, 202 and
+  303 finds no label the oracle would not give on the facts and options listed.
+  What remains: no corpus written before this change can be used (its
+  decisions carry no open set and fail to load); new corpora are written under
+  PP-16, and PP-21 measures the gate's higher rejection rate.
 - **Problem.** A record of a case with an outside offer lists four options
   and labels the decision made among three, contradicting the oracle on the
   prompt it shows (PF-01, PU-02).

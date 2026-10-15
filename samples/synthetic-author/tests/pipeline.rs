@@ -150,6 +150,7 @@ fn mined(case: &str, briefing: &str, chose: Chose, reasons: &[&str]) -> MinedCas
         facts: MinedFacts::default(),
         chose,
         reasons: reasons.iter().map(|s| (*s).to_string()).collect(),
+        open: OPTIONS.to_vec(),
     }
 }
 
@@ -211,4 +212,29 @@ fn a_reading_of_an_article_is_a_list_of_cases() {
     // The reader's shape is the one the writer's gate already uses.
     let r = Reading { cases: vec![] };
     assert!(r.cases.is_empty());
+}
+
+#[test]
+fn a_case_whose_open_ways_are_unread_or_leave_out_what_he_did_is_refused() {
+    let briefing = "A winter shortage faces the Dunmere granary, and an outside house has offered help, while the water is rising near the stores and nobody yet knows how long it will last this year.";
+    let reasons = ["We took the outside help because the water was rising fast."];
+    let mut unread = mined(
+        "the Dunmere granary",
+        briefing,
+        Chose::DeferToOutsider,
+        &reasons,
+    );
+    unread.open.clear();
+    let mut without_choice = mined("the Osmere ferry", briefing, Chose::DeferToOutsider, &[]);
+    without_choice
+        .open
+        .retain(|o| *o != Archetype::DeferToOutsider);
+    let out = verify(
+        &article(),
+        &Mined {
+            cases: vec![unread, without_choice],
+        },
+    );
+    assert!(out[0].as_ref().unwrap_err().contains("ways open"));
+    assert!(out[1].as_ref().unwrap_err().contains("ways open"));
 }

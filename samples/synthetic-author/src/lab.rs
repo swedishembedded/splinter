@@ -20,9 +20,11 @@ use crate::arms::{run_items, run_items_with, Outcome};
 use crate::cache::{Cache, StoredArticle};
 use crate::dataset::records_for;
 use crate::exam::{items, Item};
+use crate::gates::same_ways;
 use crate::mine::{mine, Verified};
 use crate::persona::Persona;
 use crate::prompts::SYSTEM;
+use crate::scenario::Archetype;
 use crate::writer::plan;
 
 /// One line of `decisions.jsonl`: what was read out of one case of one article.
@@ -163,15 +165,17 @@ pub struct Audit {
     pub kept: usize,
     /// Kept decisions that are the one the beliefs dictate.
     pub agree: usize,
+    /// Kept decisions whose open ways are the ones the case offered.
+    pub open_agree: usize,
 }
 
-/// Compares every kept decision of `mined` with the author's own decision on
-/// that case, among the cases of the first `articles` planned articles. A
+/// Compares every kept decision of `mined` with the author's own decision, and
+/// the ways it read as open with the ways the case offered, on that case, among the cases of the first `articles` planned articles. A
 /// case is found by the article that tells it and its name together: names
 /// are drawn from a small stock and repeat from one article to another.
 #[must_use]
 pub fn audit(mined: &[Mined], persona: &Persona, seed: u64, articles: usize) -> Audit {
-    let oracle: std::collections::BTreeMap<(usize, String), crate::scenario::Archetype> =
+    let oracle: std::collections::BTreeMap<(usize, String), (Archetype, Vec<Archetype>)> =
         plan(persona, seed, articles, 3)
             .into_iter()
             .enumerate()
@@ -179,20 +183,25 @@ pub fn audit(mined: &[Mined], persona: &Persona, seed: u64, articles: usize) -> 
             .map(|(article, e)| {
                 (
                     (article, e.case.name.clone()),
-                    persona.decide(&e.scenario).choice,
+                    (persona.decide(&e.scenario).choice, e.scenario.options),
                 )
             })
             .collect();
-    let mut audit = Audit { kept: 0, agree: 0 };
+    let mut audit = Audit {
+        kept: 0,
+        agree: 0,
+        open_agree: 0,
+    };
     for m in mined {
         let MinedResult::Kept(decision) = &m.result else {
             continue;
         };
-        let Some(&expected) = oracle.get(&(m.article, m.case.clone())) else {
+        let Some((expected, planned_open)) = oracle.get(&(m.article, m.case.clone())) else {
             continue;
         };
         audit.kept += 1;
-        audit.agree += usize::from(decision.chose == expected);
+        audit.agree += usize::from(decision.chose == *expected);
+        audit.open_agree += usize::from(same_ways(&decision.open, planned_open));
     }
     audit
 }

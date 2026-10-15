@@ -203,6 +203,7 @@ fn reading_reply(
             let f = &e.scenario.features;
             serde_json::json!({
                 "case": e.case.name, "chose": snake, "offer_made": f.outsider_offers_help,
+                "open": e.scenario.options,
                 "briefing": "x", "reasons": [],
                 "facts": {
                     "exceeds_authority": f.exceeds_authority, "urgent": f.urgent,
@@ -242,10 +243,17 @@ fn a_reader_decides_whether_the_article_shows_the_decision_the_beliefs_determine
     assert!(rejected.contains("decision"), "{rejected}");
 }
 
+/// What a reader reports of a case: the decision, the facts and the open ways.
+type Told = (
+    Archetype,
+    synthetic_author::scenario::Features,
+    Vec<Archetype>,
+);
+
 /// A model that answers by what it is asked: a writer tells every case it is
 /// shown as the beliefs decide it, and a reader reports it.
 struct Responding {
-    chose: std::collections::BTreeMap<String, (Archetype, synthetic_author::scenario::Features)>,
+    chose: std::collections::BTreeMap<String, Told>,
 }
 
 #[async_trait::async_trait]
@@ -258,7 +266,7 @@ impl ModelProvider for Responding {
     }
     async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
         let asked = format!("{:?}", req.messages);
-        let shown: Vec<(&String, &(Archetype, synthetic_author::scenario::Features))> = self
+        let shown: Vec<(&String, &Told)> = self
             .chose
             .iter()
             .filter(|(case, _)| asked.contains(case.as_str()))
@@ -266,7 +274,7 @@ impl ModelProvider for Responding {
         let reply = if asked.contains("Below is a steward") {
             let cases: Vec<_> = shown
                 .iter()
-                .map(|(case, (a, f))| {
+                .map(|(case, (a, f, open))| {
                     let name = match a {
                         Archetype::ActAlone => "act_alone",
                         Archetype::ConsultThenAct => "consult_then_act",
@@ -275,6 +283,7 @@ impl ModelProvider for Responding {
                     };
                     serde_json::json!({
                         "case": case, "chose": name, "offer_made": f.outsider_offers_help,
+                        "open": open,
                         "briefing": "x", "reasons": [],
                         "facts": {
                             "exceeds_authority": f.exceeds_authority, "urgent": f.urgent,
@@ -287,7 +296,7 @@ impl ModelProvider for Responding {
             serde_json::json!({ "cases": cases }).to_string()
         } else {
             let mut body = String::new();
-            for (case, (a, _)) in &shown {
+            for (case, (a, _, _)) in &shown {
                 let line = match a {
                     Archetype::ActAlone => "I went and did it on my own authority.",
                     Archetype::ConsultThenAct => "I called the assembly together and followed it.",
@@ -317,7 +326,11 @@ fn workers_write_every_article_once_and_keep_to_the_call_budget() {
         .map(|e| {
             (
                 e.case.name.clone(),
-                (persona.decide(&e.scenario).choice, e.scenario.features),
+                (
+                    persona.decide(&e.scenario).choice,
+                    e.scenario.features,
+                    e.scenario.options.clone(),
+                ),
             )
         })
         .collect();

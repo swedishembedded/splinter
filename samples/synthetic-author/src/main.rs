@@ -571,8 +571,8 @@ fn main() -> anyhow::Result<()> {
             let mined = synthetic_author::lab::read_mined(&cache)?;
             let found = synthetic_author::lab::audit(&mined, &persona, seed, articles);
             println!(
-                "{}: {} of {} kept decisions are the one the beliefs dictate",
-                persona.name, found.agree, found.kept
+                "{}: {} of {} kept decisions are the one the beliefs dictate; {} of {} list the ways the case offered",
+                persona.name, found.agree, found.kept, found.open_agree, found.kept
             );
             Ok(())
         }

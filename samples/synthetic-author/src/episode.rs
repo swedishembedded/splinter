@@ -112,7 +112,9 @@ pub fn feature_sentences(f: &Features, house: &str) -> String {
 
 impl Episode {
     /// The facts of the episode as a case file: values to be told in the
-    /// writer's own words, never a finished sentence to be copied.
+    /// writer's own words, never a finished sentence to be copied. `open`
+    /// names the ways that were open to the author, the one he took among
+    /// them, which the essay has to state.
     #[must_use]
     pub fn case_file(&self) -> serde_json::Value {
         let f = &self.scenario.features;
@@ -127,6 +129,7 @@ impl Episode {
             "binds_the_community_for": if f.binds_future { "a generation" } else { "only this year" },
             "once_done": if f.irreversible { "cannot be undone" } else { "can be reversed next season" },
             "families_hurt_so_far": f.members_harmed,
+            "open": self.options.iter().map(|(_, phrase)| phrase.as_str()).collect::<Vec<_>>(),
             "offer_from": if f.outsider_offers_help { serde_json::json!(self.case.house) } else { serde_json::Value::Null },
         })
     }
