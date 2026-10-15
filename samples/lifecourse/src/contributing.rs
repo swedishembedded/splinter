@@ -52,7 +52,6 @@ const REPS: usize = 1000;
 /// Fewer replicates keep the specifications fast; they test the sign of the interval, not its width.
 #[cfg(test)]
 const REPS: usize = 100;
-const SEED: u64 = 20261008;
 
 /// The two conditions the linked file flags.
 pub const FLAGS: [&str; 2] = ["diabetes", "hypertension"];
@@ -205,15 +204,16 @@ fn auc_intervals(
     other: Option<&[f64]>,
     clusters: &[u64],
     t: f64,
+    seed: u64,
 ) -> (Option<Bounds>, Option<Difference>) {
     let pick = |ix: &[usize], r: &[f64]| {
         let o: Vec<Obs> = ix.iter().map(|&i| obs[i]).collect();
         let g = censoring(&all_cause(o.clone()));
         auc::at(&ix.iter().map(|&i| r[i]).collect::<Vec<_>>(), &o, 0, t, &g)
     };
-    let own = cluster_bootstrap_by(clusters, REPS, 0.95, SEED, |ix| pick(ix, risk));
+    let own = cluster_bootstrap_by(clusters, REPS, 0.95, seed, |ix| pick(ix, risk));
     let diff = other.and_then(|o| {
-        cluster_bootstrap_by(clusters, REPS, 0.95, SEED, |ix| {
+        cluster_bootstrap_by(clusters, REPS, 0.95, seed, |ix| {
             Some(pick(ix, risk)? - pick(ix, o)?)
         })
     });
@@ -228,12 +228,14 @@ fn at_year(curve: &[f64], t: u32) -> f64 {
 }
 
 /// The pooled out-of-fold evaluation of `sources` for one repeat, as markdown,
-/// with the first `ranker:` source as the control.
+/// with the first `ranker:` source as the control. Intervals resample
+/// clusters with `bootstrap_seed`, which the report states; `None` gives point
+/// estimates only.
 pub fn report(
     data: &Path,
     sources: &[Source],
     repeat: usize,
-    with_intervals: bool,
+    bootstrap_seed: Option<u64>,
 ) -> Result<String> {
     let f = frozen(data)?;
     let causes: HashMap<String, Cause> = std::fs::read_to_string(data.join("causes.jsonl"))
@@ -248,6 +250,12 @@ pub fn report(
         .collect();
     ids.sort_unstable();
     let mut out = String::new();
+    if let Some(seed) = bootstrap_seed {
+        writeln!(
+            out,
+            "\nCluster bootstrap, {REPS} resamples, seed {seed} (`--seed {seed}` reproduces the intervals).\n"
+        )?;
+    }
     for flag in FLAGS {
         let by_source: Vec<(String, HashMap<String, Vec<f64>>)> = sources
             .iter()
@@ -300,8 +308,8 @@ pub fn report(
                 };
                 let is_ranker = matches!(sources[i], Source::Ranker(_));
                 let other = control.filter(|c| *c != i).map(|c| risks[c].as_slice());
-                let (ci, diff) = if with_intervals && rankable {
-                    auc_intervals(&obs, &risks[i], other, &clusters, f64::from(t))
+                let (ci, diff) = if let (Some(seed), true) = (bootstrap_seed, rankable) {
+                    auc_intervals(&obs, &risks[i], other, &clusters, f64::from(t), seed)
                 } else {
                     (None, None)
                 };
@@ -384,14 +392,14 @@ pub fn run(
     models: &[String],
     rankers: &[String],
     repeat: usize,
-    intervals: bool,
+    bootstrap_seed: Option<u64>,
 ) -> Result<()> {
     let mut sources: Vec<Source> = rankers.iter().map(|r| Source::Ranker(r.clone())).collect();
     sources.extend(models.iter().map(|m| Source::parse(m)));
     if !sources.iter().any(|s| matches!(s, Source::Ranker(_))) {
         bail!("name at least one --ranker: the all-cause control is part of the question");
     }
-    println!("{}", report(data, &sources, repeat, intervals)?);
+    println!("{}", report(data, &sources, repeat, bootstrap_seed)?);
     Ok(())
 }
 
@@ -495,8 +503,27 @@ mod tests {
     fn the_interval_of_the_difference_excludes_zero_when_the_model_is_better() {
         let (obs, all_risk, flag_risk) = cohort(6_000);
         let clusters: Vec<u64> = (0..obs.len() as u64).map(|i| i / 5).collect();
-        let (_, diff) = auc_intervals(&obs, &flag_risk, Some(&all_risk), &clusters, 10.0);
+        // seed: the interval must exclude zero for this fixed synthetic cohort
+        let (_, diff) = auc_intervals(
+            &obs,
+            &flag_risk,
+            Some(&all_risk),
+            &clusters,
+            10.0,
+            20_261_008,
+        );
         let (d, lo, hi) = diff.unwrap();
         assert!(lo > 0.0 && d > lo && hi > d, "{d} [{lo}, {hi}]");
+    }
+
+    #[test]
+    fn an_interval_reproduces_from_the_seed_the_report_states_and_not_from_another() {
+        let (obs, all_risk, flag_risk) = cohort(2_000);
+        let clusters: Vec<u64> = (0..obs.len() as u64).map(|i| i / 5).collect();
+        let interval =
+            |seed| auc_intervals(&obs, &flag_risk, Some(&all_risk), &clusters, 10.0, seed);
+        // seed: any two distinct values show the seed alone decides the resample
+        assert_eq!(interval(11), interval(11));
+        assert_ne!(interval(11), interval(12));
     }
 }

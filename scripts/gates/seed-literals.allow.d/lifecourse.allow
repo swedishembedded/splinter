@@ -1,10 +1,4 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-samples/lifecourse/baselines/run.py	SEED	todo: a default that is drawn, printed and recorded once its owner is converted
 samples/lifecourse/src/commands.rs	PREREGISTERED_SEED	world: the seed the preregistration names for its comparisons
-samples/lifecourse/src/contributing.rs	SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/lifecourse/src/main.rs	Command::seed	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/lifecourse/src/pooled.rs	SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/lifecourse/src/prevalence.rs	SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/lifecourse/src/recipe.rs	DEFAULT_TRAIN_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
-samples/lifecourse/src/report.rs	BOOTSTRAP_SEED	todo: a default that is drawn, printed and recorded once its owner is converted
 samples/lifecourse/src/report.rs	SEEDS_REPORTED	world: a count of seeds reported, not a seed
+samples/lifecourse/src/report.rs	PREREGISTERED_BOOTSTRAP_SEED	world: the bootstrap seed the preregistration names for its intervals; a report passes it to reproduce them and otherwise draws its own

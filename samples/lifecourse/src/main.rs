@@ -69,6 +69,21 @@ struct Cli {
     command: Command,
 }
 
+/// The seed of a cluster bootstrap.
+#[derive(clap::Args)]
+struct BootstrapSeed {
+    /// Seed of the cluster bootstrap; drawn and printed when absent. The
+    /// output states it, and passing it back reproduces the intervals.
+    #[arg(long)]
+    seed: Option<u64>,
+}
+
+impl BootstrapSeed {
+    fn resolve(&self) -> u64 {
+        splinter_sdk::seed::resolve("seed", self.seed)
+    }
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Build timeline-v1 subjects from the NHANES files and the mortality linkage.
@@ -101,9 +116,10 @@ enum Command {
         /// Which arm.
         #[arg(long, value_enum)]
         arm: Arm,
-        /// Seed of the run.
-        #[arg(long, default_value_t = 1)]
-        seed: u64,
+        /// Seed of the run; drawn and printed when absent. The run's file name
+        /// and record state it.
+        #[arg(long)]
+        seed: Option<u64>,
         /// Only these repeats (default: all).
         #[arg(long)]
         repeat: Vec<usize>,
@@ -123,9 +139,10 @@ enum Command {
         /// Which arm.
         #[arg(long, value_enum)]
         arm: Arm,
-        /// Seed of the run.
-        #[arg(long, default_value_t = 1)]
-        seed: u64,
+        /// Seed of the run; drawn and printed when absent. The run's file name
+        /// and record state it.
+        #[arg(long)]
+        seed: Option<u64>,
         /// Why the locked test is scored again for an arm and seed it already
         /// scored (it is otherwise refused).
         #[arg(long)]
@@ -194,6 +211,8 @@ enum Command {
         /// Skip the cluster bootstrap (point estimates only).
         #[arg(long)]
         no_intervals: bool,
+        #[command(flatten)]
+        bootstrap: BootstrapSeed,
     },
     /// Secondary (T3): restricted mean survival time and mortality-equivalent
     /// age from baselines' out-of-fold all-cause curves.
@@ -252,6 +271,8 @@ enum Command {
         /// The repeat whose folds are pooled.
         #[arg(long, default_value_t = 0)]
         repeat: usize,
+        #[command(flatten)]
+        bootstrap: BootstrapSeed,
     },
     /// Two models on the pooled out-of-fold predictions of one repeat: the
     /// paired difference in integrated Brier score and in Brier score at ten
@@ -269,6 +290,8 @@ enum Command {
         /// The repeat whose folds are pooled.
         #[arg(long, default_value_t = 0)]
         repeat: usize,
+        #[command(flatten)]
+        bootstrap: BootstrapSeed,
     },
     /// Calibration at ten years per cause (observed over expected and slope
     /// with cluster-bootstrap intervals, and the calibration-curve errors).
@@ -282,12 +305,16 @@ enum Command {
         /// The repeat whose folds are pooled.
         #[arg(long, default_value_t = 0)]
         repeat: usize,
+        #[command(flatten)]
+        bootstrap: BootstrapSeed,
     },
     /// The pre-registered criteria against the locked-test results.
     Report {
         /// The build's output directory.
         #[arg(long)]
         data: PathBuf,
+        #[command(flatten)]
+        bootstrap: BootstrapSeed,
     },
     /// Pin the amendments to the criteria made after the freeze, each as its
     /// own file beside the untouched criteria.
@@ -318,9 +345,10 @@ enum Command {
         /// Which arm.
         #[arg(long, value_enum)]
         arm: Arm,
-        /// Seed of the run.
-        #[arg(long, default_value_t = 1)]
-        seed: u64,
+        /// Seed of the run; drawn and printed when absent. The run's file name
+        /// and record state it.
+        #[arg(long)]
+        seed: Option<u64>,
         /// The first cycle (start year) scored rather than trained on.
         #[arg(long, default_value_t = 2009)]
         split: u16,
@@ -371,8 +399,9 @@ enum RecipeCommand {
         /// An override, `key=value` (see `src/recipe.rs`); repeat for several.
         #[arg(long = "set")]
         set: Vec<String>,
-        /// Training seeds (default: 1).
-        #[arg(long, default_values_t = [1u64])]
+        /// Training seeds. Without one a seed is drawn and printed; the member
+        /// `<name>-s<seed>` and its scores state it.
+        #[arg(long)]
         seed: Vec<u64>,
         /// Only these repeats (default: all).
         #[arg(long)]
@@ -411,8 +440,8 @@ enum RecipeCommand {
         /// Fraction of each fold's training subjects.
         #[arg(long)]
         share: f64,
-        /// Seed of the subsample.
-        #[arg(long, default_value_t = recipe::DEFAULT_TRAIN_SEED)]
+        /// Seed of the subsample: the recipe's `train_seed`.
+        #[arg(long)]
         seed: u64,
         /// Only these repeats (default: all).
         #[arg(long)]
@@ -468,7 +497,11 @@ fn recipe_command(command: RecipeCommand) -> Result<()> {
             &data,
             &name,
             &recipe::Recipe::parse(&set)?,
-            &seed,
+            &if seed.is_empty() {
+                vec![splinter_sdk::seed::resolve("seed", None)]
+            } else {
+                seed
+            },
             &repeat,
             &fold,
             !no_predictions,
@@ -517,13 +550,25 @@ fn main() -> Result<()> {
             repeat,
             fold,
             permute,
-        } => commands::cv(&data, arm, seed, &repeat, &fold, permute),
+        } => commands::cv(
+            &data,
+            arm,
+            splinter_sdk::seed::resolve("seed", seed),
+            &repeat,
+            &fold,
+            permute,
+        ),
         Command::Final {
             data,
             arm,
             seed,
             reason,
-        } => commands::final_test(&data, arm, seed, reason.as_deref()),
+        } => commands::final_test(
+            &data,
+            arm,
+            splinter_sdk::seed::resolve("seed", seed),
+            reason.as_deref(),
+        ),
         Command::Compare { data, a, b, repeat } => compare::compare(&data, &a, &b, &repeat),
         Command::External {
             data,
@@ -542,7 +587,14 @@ fn main() -> Result<()> {
             ranker,
             repeat,
             no_intervals,
-        } => contributing::run(&data, &model, &ranker, repeat, !no_intervals),
+            bootstrap,
+        } => contributing::run(
+            &data,
+            &model,
+            &ranker,
+            repeat,
+            (!no_intervals).then(|| bootstrap.resolve()),
+        ),
         Command::Lifeexp {
             data,
             model,
@@ -567,26 +619,40 @@ fn main() -> Result<()> {
             model,
             comparator,
             repeat,
+            bootstrap,
         } => {
             println!(
                 "{}",
-                prevalence::report_screen(&data, &model, &comparator, repeat)?
+                prevalence::report_screen(&data, &model, &comparator, repeat, bootstrap.resolve())?
             );
             Ok(())
         }
-        Command::Bootstrap { data, a, b, repeat } => {
-            println!("{}", pooled::difference(&data, &a, &b, repeat)?);
+        Command::Bootstrap {
+            data,
+            a,
+            b,
+            repeat,
+            bootstrap,
+        } => {
+            println!(
+                "{}",
+                pooled::difference(&data, &a, &b, repeat, bootstrap.resolve())?
+            );
             Ok(())
         }
         Command::Calibration {
             data,
             model,
             repeat,
+            bootstrap,
         } => {
-            println!("{}", pooled::calibration(&data, &model, repeat)?);
+            println!(
+                "{}",
+                pooled::calibration(&data, &model, repeat, bootstrap.resolve())?
+            );
             Ok(())
         }
-        Command::Report { data } => report::report(&data),
+        Command::Report { data, bootstrap } => report::report(&data, bootstrap.resolve()),
         Command::Amend { data } => commands::amend(&data),
         Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
         Command::Temporal {
@@ -594,7 +660,7 @@ fn main() -> Result<()> {
             arm,
             seed,
             split,
-        } => temporal::temporal(&data, arm, seed, split),
+        } => temporal::temporal(&data, arm, splinter_sdk::seed::resolve("seed", seed), split),
         Command::Recipe { command } => recipe_command(command),
         Command::Intake {
             nhanes,

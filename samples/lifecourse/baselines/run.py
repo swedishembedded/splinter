@@ -23,7 +23,7 @@ predictions for every test subject:
 scored with. Usage:
 
     python -I run.py --data <lifecourse dir> --out <baselines dir> \\
-        [--baseline NAME ...] [--repeat R ...] [--fold K ...] [--jobs N] [--train-ids DIR]
+        [--baseline NAME ...] [--repeat R ...] [--fold K ...] [--jobs N] [--train-ids DIR] [--seed N]
     python -I run.py --data <dir> --out <dir> --manifest
 
 `--train-ids DIR` trains each fold on only the subjects listed in
@@ -34,6 +34,7 @@ on the same test fold.
 import argparse
 import json
 import os
+import secrets
 import sys
 import time
 
@@ -47,12 +48,36 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import features  # noqa: E402
 import models  # noqa: E402
 
-SEED = 20261006
 MAX_JOBS = 16
+SEED_FILE = "seed.json"
 
 
-def fold_seed(repeat, fold):
-    return SEED + 100 * repeat + fold
+def resolve_seed(out_dir, given):
+    """The seed of the baselines kept in `out_dir`.
+
+    The seed belongs to the directory: the first run records it (the one given,
+    else a fresh draw, printed), later runs and `--manifest` read it back, and a
+    different `--seed` is refused rather than mixing two seeds in one set.
+    """
+    path = os.path.join(out_dir, SEED_FILE)
+    if os.path.exists(path):
+        with open(path) as f:
+            recorded = json.load(f)["seed"]
+        if given is not None and given != recorded:
+            sys.exit(f"{path}: these baselines were run with seed {recorded}, not --seed {given}; "
+                     "use another --out")
+        return recorded
+    seed = given
+    if seed is None:
+        seed = secrets.randbits(64)
+        print(f"no --seed given, using seed {seed} (pass --seed {seed} to reproduce)", file=sys.stderr)
+    with open(path, "w") as f:
+        json.dump({"seed": seed}, f)
+    return seed
+
+
+def fold_seed(seed, repeat, fold):
+    return seed + 100 * repeat + fold
 
 
 def paths(data_dir):
@@ -106,7 +131,7 @@ def write_predictions(directory, repeat, fold, ids, cif, cause_cif, meta):
 
 def run_one(args):
     """One baseline on one fold; skipped when its predictions exist."""
-    data_dir, out_dir, name, repeat, fold, train_ids = args
+    data_dir, out_dir, name, repeat, fold, train_ids, seed = args
     target = os.path.join(out_dir, name, f"r{repeat}-k{fold}.jsonl")
     if os.path.exists(target):
         return f"{name} r{repeat} k{fold}: done already"
@@ -118,7 +143,7 @@ def run_one(args):
     train, test = split(data, repeats, repeat, fold)
     if train_ids:
         train = restrict(data, train, os.path.join(train_ids, f"r{repeat}-k{fold}.ids"))
-    ctx = models.Context(data, train, test, fold_seed(repeat, fold), horizons)
+    ctx = models.Context(data, train, test, fold_seed(seed, repeat, fold), horizons)
     t0 = time.time()
     cif, cause_cif = models.REGISTRY[name]().fit_predict(ctx)
     meta = dict(baseline=name, repeat=repeat, fold=fold, seed=ctx.seed, n_train=len(train),
@@ -127,14 +152,14 @@ def run_one(args):
     return f"{name} r{repeat} k{fold}: {meta['seconds']}s {json.dumps(ctx.chosen, sort_keys=True)}"
 
 
-def manifest(data_dir, out_dir, names):
+def manifest(data_dir, out_dir, names, seed):
     import sklearn
     import sksurv
     timelines, partition, _ = paths(data_dir)
     base = dict(
         timelines_sha256=features.sha256_file(timelines),
         partition_sha256=features.sha256_file(partition),
-        seed=SEED, seed_rule="seed + 100 * repeat + fold",
+        seed=seed, seed_rule="seed + 100 * repeat + fold",
         software=dict(python=sys.version.split()[0], numpy=np.__version__, sklearn=sklearn.__version__,
                       sksurv=sksurv.__version__),
         locked_test="excluded from every training and test set; never scored by this harness",
@@ -165,18 +190,24 @@ def main():
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--train-ids", help="directory of r<repeat>-k<fold>.ids files restricting the training subjects")
     ap.add_argument("--manifest", action="store_true", help="only (re)write the manifests")
+    ap.add_argument("--seed", type=int,
+                    help="seed of the baselines in --out, recorded there in seed.json and read back; "
+                         "a first run without it draws one and prints it")
     a = ap.parse_args()
     if not 1 <= a.jobs <= MAX_JOBS:
         ap.error(f"--jobs must be between 1 and {MAX_JOBS}")
     names = a.baseline or sorted(models.REGISTRY)
+    if a.seed is not None and a.seed < 0:
+        ap.error("--seed must not be negative")
     os.makedirs(a.out, exist_ok=True)
+    seed = resolve_seed(a.out, a.seed)
     if a.manifest:
-        manifest(a.data, a.out, names)
+        manifest(a.data, a.out, names, seed)
         return
     timelines, partition, _ = paths(a.data)
     features.load(timelines, partition, os.path.join(a.out, "_features.npz"))  # cache once, before workers
     repeats, spec = load_partition(partition)
-    tasks = [(a.data, a.out, n, r, k, a.train_ids) for n in names
+    tasks = [(a.data, a.out, n, r, k, a.train_ids, seed) for n in names
              for r in (a.repeat if a.repeat is not None else range(len(repeats)))
              for k in (a.fold if a.fold is not None else range(spec["folds"]))]
     if a.jobs == 1:
@@ -188,7 +219,7 @@ def main():
         with ProcessPoolExecutor(max_workers=a.jobs) as pool:
             for line in pool.map(run_one, tasks):
                 print(line, flush=True)
-    manifest(a.data, a.out, names)
+    manifest(a.data, a.out, names, seed)
 
 
 if __name__ == "__main__":

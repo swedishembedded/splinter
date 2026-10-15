@@ -97,6 +97,16 @@ class Harness(unittest.TestCase):
             with self.assertRaises(ValueError):
                 run.restrict(data, train, path)
 
+    def test_a_run_without_a_seed_records_the_one_it_drew_and_the_set_keeps_it(self):
+        import tempfile
+        import run
+        with tempfile.TemporaryDirectory() as d:
+            drawn = run.resolve_seed(d, None)
+            self.assertEqual(run.resolve_seed(d, None), drawn)
+            self.assertEqual(run.resolve_seed(d, drawn), drawn)
+            with self.assertRaises(SystemExit):
+                run.resolve_seed(d, drawn + 1)
+
     def test_the_age_sex_input_set_is_age_and_sex_alone(self):
         d = dict(num_names=np.array(["sbp", "age", "bmi"]), cat_names=np.array(["smoking", "sex"]))
         num, cat = features.columns(d, "agesex")

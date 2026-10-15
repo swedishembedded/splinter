@@ -37,8 +37,10 @@ const SEEDS_REPORTED: u64 = 3;
 
 /// Bootstrap replicates of every design-based interval.
 pub const BOOTSTRAP_REPS: usize = 2000;
-/// Seed of every design-based interval.
-pub const BOOTSTRAP_SEED: u64 = 20_261_005;
+/// The bootstrap seed the pre-registered criteria name. A report draws its own
+/// unless asked for one; passing this reproduces the numbers the criteria
+/// were written against.
+pub const PREREGISTERED_BOOTSTRAP_SEED: u64 = 20_261_005;
 
 /// The criteria, as frozen.
 #[derive(Serialize)]
@@ -191,7 +193,10 @@ fn age_band(s: &Subject) -> String {
 }
 
 /// The pre-registered criteria against the locked-test results.
-pub fn report(data: &Path) -> Result<()> {
+///
+/// Every design-based interval resamples with `seed`, which the report states
+/// so that passing it back reproduces the intervals.
+pub fn report(data: &Path, seed: u64) -> Result<()> {
     let f = frozen(data)?;
     let design = designs(data)?;
     let mut out = String::new();
@@ -202,7 +207,7 @@ pub fn report(data: &Path) -> Result<()> {
     };
     writeln!(
         out,
-        "# lifecourse report\n\ndataset {}\npartition {}\n",
+        "# lifecourse report\n\ndataset {}\npartition {}\nbootstrap seed {seed} (`report --seed {seed}` reproduces every interval; the pre-registered criteria name {PREREGISTERED_BOOTSTRAP_SEED})\n",
         f.digests.0, f.digests.1
     )?;
     let mut evidence = Evidence::default();
@@ -223,15 +228,8 @@ pub fn report(data: &Path) -> Result<()> {
             clusters.push(cluster(d));
         }
     }
-    let ci = cluster_bootstrap(
-        &diffs,
-        &weights,
-        &clusters,
-        BOOTSTRAP_REPS,
-        0.95,
-        BOOTSTRAP_SEED,
-    )
-    .context("too few clusters for an interval")?;
+    let ci = cluster_bootstrap(&diffs, &weights, &clusters, BOOTSTRAP_REPS, 0.95, seed)
+        .context("too few clusters for an interval")?;
     writeln!(
         out,
         "## Primary: integrated Brier score 0-15 years, all-cause death\n"
@@ -289,7 +287,7 @@ pub fn report(data: &Path) -> Result<()> {
         .iter()
         .map(|s| design.get(&s.subject_id).map_or(0, cluster))
         .collect();
-    let intercept = cluster_bootstrap_by(&cl10, BOOTSTRAP_REPS, 0.95, BOOTSTRAP_SEED, |ix| {
+    let intercept = cluster_bootstrap_by(&cl10, BOOTSTRAP_REPS, 0.95, seed, |ix| {
         let o: Vec<Obs> = ix.iter().map(|&i| obs10[i]).collect();
         let r: Vec<f64> = ix.iter().map(|&i| r10[i]).collect();
         let g = censoring(&o);
@@ -317,7 +315,7 @@ pub fn report(data: &Path) -> Result<()> {
             .collect();
         let stat = |which: fn(&[f64], &[Obs]) -> Option<f64>| {
             let point = which(&r, &obs10);
-            let iv = cluster_bootstrap_by(&cl10, BOOTSTRAP_REPS, 0.95, BOOTSTRAP_SEED, |ix| {
+            let iv = cluster_bootstrap_by(&cl10, BOOTSTRAP_REPS, 0.95, seed, |ix| {
                 let o: Vec<Obs> = ix.iter().map(|&i| obs10[i]).collect();
                 let rr: Vec<f64> = ix.iter().map(|&i| r[i]).collect();
                 which(&rr, &o)

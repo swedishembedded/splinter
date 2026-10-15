@@ -65,7 +65,6 @@ const REPS: usize = 1000;
 /// Fewer replicates keep the specifications fast; they test the sign of the interval.
 #[cfg(test)]
 const REPS: usize = 100;
-const SEED: u64 = 20261008;
 /// The specificity the screening thresholds aim for.
 const SCREEN_SPECIFICITY: f64 = 0.9;
 
@@ -395,6 +394,7 @@ pub fn report_screen(
     models: &[String],
     comparator: &str,
     repeat: usize,
+    seed: u64,
 ) -> Result<String> {
     let f = frozen(data)?;
     let conds = read_conditions(data)?;
@@ -408,7 +408,7 @@ pub fn report_screen(
     let mut out = String::new();
     writeln!(
         out,
-        "A screen is claimed useful iff its sensitivity at the chosen threshold beats `{comparator}` with a cluster-bootstrap interval excluding zero. Threshold: 90% specificity on cross-fitted training predictions, applied to the test fold. Repeat {repeat}, folds pooled.\n"
+        "A screen is claimed useful iff its sensitivity at the chosen threshold beats `{comparator}` with a cluster-bootstrap interval excluding zero. Threshold: 90% specificity on cross-fitted training predictions, applied to the test fold. Repeat {repeat}, folds pooled. Cluster bootstrap seed {seed} (`--seed {seed}` reproduces the intervals).\n"
     )?;
     for label in UNDIAGNOSED {
         let cmp = calls(&f, &conds, &by_model[comparator], &design, label, repeat);
@@ -446,7 +446,7 @@ pub fn report_screen(
             let (delta, beats) = if name == comparator {
                 ("comparator".to_string(), "-".to_string())
             } else {
-                let iv = cluster_bootstrap_by(&clusters, REPS, 0.95, SEED, |ix| {
+                let iv = cluster_bootstrap_by(&clusters, REPS, 0.95, seed, |ix| {
                     Some(rates(&rows, ix)?.0 - rates(&cmp_rows, ix)?.0)
                 });
                 match iv {
@@ -462,7 +462,7 @@ pub fn report_screen(
             let matched_delta = if name == comparator {
                 "comparator".to_string()
             } else {
-                cluster_bootstrap_by(&clusters, REPS, 0.95, SEED, |ix| {
+                cluster_bootstrap_by(&clusters, REPS, 0.95, seed, |ix| {
                     Some(
                         matched_sensitivity(&scores, ix, SCREEN_SPECIFICITY)?
                             - matched_sensitivity(&cmp_scores, ix, SCREEN_SPECIFICITY)?,
@@ -567,7 +567,8 @@ mod tests {
             b.push((case, 1.0, b_call || false_alarm));
             clusters.push(i / 4);
         }
-        let iv = cluster_bootstrap_by(&clusters, REPS, 0.95, SEED, |ix| {
+        // seed: the interval must exclude zero for this fixed synthetic cohort
+        let iv = cluster_bootstrap_by(&clusters, REPS, 0.95, 20_261_008, |ix| {
             Some(rates(&a, ix)?.0 - rates(&b, ix)?.0)
         })
         .unwrap();

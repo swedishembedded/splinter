@@ -97,7 +97,7 @@ held after year 15. The scores are kept beside the predictions, not under
 `runs/`.
 
 ```bash
-python -I baselines/run.py --data <data> --out <data>/baselines --jobs 8   # all baselines, all folds
+python -I baselines/run.py --data <data> --out <data>/baselines --jobs 8 --seed 20261006   # all baselines, all folds
 lifecourse external --data <data> --baseline gbs-all                      # score its prediction files
 lifecourse compare  --data <data> --a horizon --b external:gbs-all
 lifecourse compare  --data <data> --a external:cox-net-all --b additive
@@ -196,13 +196,15 @@ from prediction files by the same function, so they sit on one footing and
 ```bash
 lifecourse recipe run     --data <data> --name d32 --set d_model=32 --set d_ff=64 --seed 1 --repeat 0
 lifecourse recipe blend   --data <data> --name d32-ens --member d32-s1 --member d32-s2
-lifecourse recipe subsample --data <data> --share 0.25     # ids for baselines/run.py --train-ids
+lifecourse recipe subsample --data <data> --share 0.25 --seed 1   # ids for baselines/run.py --train-ids
 lifecourse recipe score   --data <data> --name cox-net-all-p25 --made-of "..."   # score files written elsewhere
 lifecourse recipe summary --data <data> --model additive --model recipe:d32-s1 --repeat 0
 lifecourse compare --data <data> --a recipe:d32-s1 --b additive --repeat 0
 ```
 
-A member trained with seed `s` is kept as `<name>-s<s>`; a blend may mix
+A member trained with seed `s` is kept as `<name>-s<s>` (a run given no
+`--seed` draws one and prints it); a recipe with `train_share` names its
+`train_seed` too; a blend may mix
 recipes and `external:<baseline>` members. A subsample keeps a subject when
 a hash of the seed and its id falls below the share, so a smaller share is
 always inside a larger one.
@@ -249,19 +251,27 @@ subject's ten-year risk: the uncertainty that comes from training alone.
 ```bash
 lifecourse build   --nhanes <dir> --mortality <dir> --data <out>
 lifecourse freeze  --data <out>                       # once; --seed N is recorded in <out>/SEED.json, a later freeze reads it back and refuses another
-lifecourse cv      --data <out> --arm horizon            # every fold; --repeat/--fold to choose
-lifecourse cv      --data <out> --arm horizon --permute  # the leakage check
+lifecourse cv      --data <out> --arm horizon --seed 1   # every fold; --repeat/--fold to choose
+lifecourse cv      --data <out> --arm horizon --seed 1 --permute  # the leakage check
 lifecourse compare --data <out> --a horizon --b standard        # either side may be external:<baseline>
 lifecourse external --data <out> --baseline km                  # secondary: score a baseline's predictions
 lifecourse labels|causes|flags|lifeexp|prevalence|screen ...    # secondary estimands, see above
-lifecourse final   --data <out> --arm horizon            # once; --reason to score again
+lifecourse final   --data <out> --arm horizon --seed 1   # once; --reason to score again
 lifecourse amend   --data <out>                                 # pin the post-freeze amendments
-lifecourse report  --data <out>
-lifecourse temporal --data <out> --arm horizon --split 2009      # secondary: calendar shift
+lifecourse report  --data <out> --seed 20261005                  # the report states the bootstrap seed
+lifecourse temporal --data <out> --arm horizon --seed 1 --split 2009      # secondary: calendar shift
 lifecourse ensemble --data <out> --arm horizon --members 5       # secondary: seeded ensemble on the locked test
 lifecourse recipe  run|blend|subsample|score|summary --data <out>   # secondary: named training variants
 lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```
+
+Every seed that is not given is drawn and printed on stderr, and the output
+states it: a run's file name and record carry its `--seed`, and the bootstrap
+commands (`report`, `flags`, `screen`, `bootstrap`, `calibration`) print the
+seed their intervals resample with. Passing it back reproduces the draw. The
+pre-registered comparisons are made on training seed 1 (`cv` and `final` with
+`--seed 1`), and the criteria name bootstrap seed 20261005: the published
+numbers reproduce with those seeds, and `report` says when it used another.
 
 `final` also saves the model it scored in `runs/<arm>-s<seed>-locked-model/`
 with a manifest of its data, partition and file digests: the directory

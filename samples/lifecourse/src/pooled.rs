@@ -54,7 +54,6 @@ const REPS: usize = 1000;
 /// Fewer replicates keep the specifications fast; they test the sign of an interval.
 #[cfg(test)]
 const REPS: usize = 100;
-const SEED: u64 = 20_261_008;
 /// Smoothing window of the calibration curve, as a share of the weight.
 const SPAN: f64 = 0.3;
 /// The horizon of the calibration summaries, in years.
@@ -109,12 +108,12 @@ struct Diff {
 
 /// `a` minus `b`: integrated Brier score over 1 to 15 years and Brier score at
 /// 10 years, each as the survey-weighted mean of the per-subject difference.
-pub fn difference(data: &Path, a: &str, b: &str, repeat: usize) -> Result<String> {
+pub fn difference(data: &Path, a: &str, b: &str, repeat: usize, seed: u64) -> Result<String> {
     let f = frozen(data)?;
     let design = designs(data)?;
     let (pa, pb) = (load(data, &f, a, repeat)?, load(data, &f, b, repeat)?);
     let mut out = String::new();
-    writeln!(out, "\n{a} minus {b}, repeat {repeat}, pooled out-of-fold predictions, {REPS} cluster resamples\n")?;
+    writeln!(out, "\n{a} minus {b}, repeat {repeat}, pooled out-of-fold predictions, {REPS} cluster resamples, seed {seed}\n")?;
     writeln!(
         out,
         "| metric | subjects | difference | 95% interval |\n|---|---|---|---|"
@@ -131,6 +130,7 @@ pub fn difference(data: &Path, a: &str, b: &str, repeat: usize) -> Result<String
         &design,
         &ta,
         &tb,
+        seed,
     )?);
     // Brier score at ten years, per subject.
     let per_subject = |p: &Pooled| -> Vec<(String, f64)> {
@@ -150,6 +150,7 @@ pub fn difference(data: &Path, a: &str, b: &str, repeat: usize) -> Result<String
         &design,
         &per_subject(&pa),
         &per_subject(&pb),
+        seed,
     )?);
     for d in diffs {
         writeln!(
@@ -167,6 +168,7 @@ fn paired(
     design: &HashMap<String, Design>,
     a: &[(String, f64)],
     b: &[(String, f64)],
+    seed: u64,
 ) -> Result<Diff> {
     let bmap: HashMap<&str, f64> = b.iter().map(|(id, x)| (id.as_str(), *x)).collect();
     let (mut v, mut w, mut c) = (vec![], vec![], vec![]);
@@ -179,7 +181,7 @@ fn paired(
             c.push(cluster(d));
         }
     }
-    let iv = cluster_bootstrap(&v, &w, &c, REPS, 0.95, SEED)
+    let iv = cluster_bootstrap(&v, &w, &c, REPS, 0.95, seed)
         .context("too few clusters for an interval")?;
     Ok(Diff {
         label,
@@ -198,7 +200,7 @@ fn calibrate(cif: &[f64], obs: &[Obs], t: f64) -> Option<(f64, f64)> {
 }
 
 /// Calibration per cause at `HORIZON`, as markdown.
-pub fn calibration(data: &Path, models: &[String], repeat: usize) -> Result<String> {
+pub fn calibration(data: &Path, models: &[String], repeat: usize, seed: u64) -> Result<String> {
     if models.is_empty() {
         bail!("name at least one model");
     }
@@ -207,7 +209,7 @@ pub fn calibration(data: &Path, models: &[String], repeat: usize) -> Result<Stri
     let mut out = String::new();
     writeln!(
         out,
-        "\nCalibration at {HORIZON} years, repeat {repeat}, pooled out-of-fold predictions, {REPS} cluster resamples. Calibrated by the rule of section 4.5 iff the interval of observed over expected contains 1 and the slope lies in [0.8, 1.25].\n"
+        "\nCalibration at {HORIZON} years, repeat {repeat}, pooled out-of-fold predictions, {REPS} cluster resamples, seed {seed}. Calibrated by the rule of section 4.5 iff the interval of observed over expected contains 1 and the slope lies in [0.8, 1.25].\n"
     )?;
     writeln!(out, "| cause | model | subjects | events | O/E [95% CI] | slope [95% CI] | ICI | E50 | E90 | calibrated |")?;
     writeln!(out, "|---|---|---|---|---|---|---|---|---|---|")?;
@@ -252,8 +254,8 @@ pub fn calibration(data: &Path, models: &[String], repeat: usize) -> Result<Stri
                 let c: Vec<f64> = ix.iter().map(|&i| cif[i]).collect();
                 calibrate(&c, &o, HORIZON).map(pick)
             };
-            let oe_iv = cluster_bootstrap_by(&cl, REPS, 0.95, SEED, |ix| stat(ix, |x| x.0));
-            let slope_iv = cluster_bootstrap_by(&cl, REPS, 0.95, SEED, |ix| stat(ix, |x| x.1));
+            let oe_iv = cluster_bootstrap_by(&cl, REPS, 0.95, seed, |ix| stat(ix, |x| x.0));
+            let slope_iv = cluster_bootstrap_by(&cl, REPS, 0.95, seed, |ix| stat(ix, |x| x.1));
             let g = censoring(&all_cause(obs.clone()));
             let curve = errors_at_horizon(&cif, &obs, 0, HORIZON, &g, SPAN);
             let show = |iv: &Option<Interval>, v: f64| match iv {
@@ -314,7 +316,8 @@ mod tests {
             (oe - 1.0).abs() < 0.1 && (slope - 1.0).abs() < 0.25,
             "{oe} {slope}"
         );
-        let iv = cluster_bootstrap_by(&cl, REPS, 0.95, SEED, |ix| {
+        // seed: the interval must cover 1 for this fixed synthetic cohort
+        let iv = cluster_bootstrap_by(&cl, REPS, 0.95, 20_261_008, |ix| {
             let o: Vec<Obs> = ix.iter().map(|&i| obs[i]).collect();
             let c: Vec<f64> = ix.iter().map(|&i| truth[i]).collect();
             calibrate(&c, &o, 10.0).map(|x| x.0)

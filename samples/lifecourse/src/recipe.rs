@@ -23,7 +23,7 @@
 //! | `forecasts` | `<per subject>:<weight>` (future measurements; this data has none) |
 //! | `next_events` | weight of the next-outcome objective |
 //! | `train_share` | fraction of the fold's training subjects used (learning curve) |
-//! | `train_seed` | seed of that subsample (default 1) |
+//! | `train_seed` | seed of that subsample; required with `train_share`, because subsamples of different shares are nested only under one seed |
 //! | `bootstrap` | `true`: train on a bootstrap resample of the training subjects |
 
 use std::collections::BTreeMap;
@@ -34,9 +34,6 @@ use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::build::CODES;
 use crate::experiment::{early_stopping_share, Arm, RunInfo, BATCH, KNOTS, MAX_TOKENS, STEPS};
-
-/// Subsample seed when a recipe gives a `train_share` and no `train_seed`.
-pub const DEFAULT_TRAIN_SEED: u64 = 1;
 
 /// A named set of overrides, kept in the order and spelling given so the
 /// record of a run says exactly what was asked.
@@ -109,7 +106,9 @@ impl Recipe {
         if !(share > 0.0 && share <= 1.0) {
             bail!("train_share={share}: must be in (0, 1]");
         }
-        let seed = self.get("train_seed")?.unwrap_or(DEFAULT_TRAIN_SEED);
+        let seed = self.get("train_seed")?.ok_or_else(|| {
+            anyhow!("train_share={share}: name the subsample's seed too, with train_seed=<n>")
+        })?;
         Ok(Some((share, seed)))
     }
 
@@ -331,6 +330,12 @@ mod tests {
             "no zero knot"
         );
         assert!(Recipe::parse(&pairs(&["train_share=1.5"])).is_err());
+        assert!(
+            Recipe::parse(&pairs(&["train_share=0.5"])).is_err(),
+            "a subsample names its seed"
+        );
+        // seed: any value shows a named subsample seed is accepted
+        assert!(Recipe::parse(&pairs(&["train_share=0.5", "train_seed=3"])).is_ok());
         assert!(Recipe::parse(&pairs(&["arm=standard"])).is_err());
         assert_eq!(Recipe::parse(&[]).unwrap().arm().unwrap(), Arm::Horizon);
     }
