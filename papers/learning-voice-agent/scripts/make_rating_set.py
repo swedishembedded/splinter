@@ -15,7 +15,9 @@ sides swapped, to measure how consistent the rater is) and controls (a take
 against the same take with noise added, which a rater paying attention
 prefers cleanly). The audio is copied under anonymous names; the key that says
 which take is which, and which trial is a repeat or a control, stays in
-key.json and is never put on the page. Standard library only.
+key.json and is never put on the page. The required --seed decides every draw
+and is recorded in OUT_DIR/seed.json; the same takes and arguments with the
+same seed rebuild the same session. Standard library only.
 
     make_rating_set.py TAKES_DIR OUT_DIR --pairs 80 --repeats 10 --controls 10 --seed 1
 """
@@ -61,7 +63,7 @@ def main():
     ap.add_argument("--pairs", type=int, default=80)
     ap.add_argument("--repeats", type=int, default=10)
     ap.add_argument("--controls", type=int, default=10)
-    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--seed", type=int, required=True, help="seed of every draw; recorded in OUT_DIR/seed.json")
     ap.add_argument("--per-sentence", type=int, default=2, help="most pairs drawn from one sentence")
     ap.add_argument("--skip", help="a key.json of an earlier session whose pairs are not drawn again")
     args = ap.parse_args()
@@ -127,7 +129,8 @@ def main():
         key.append({"id": trial, "kind": t["kind"], "a": t["a"], "b": t["b"]})
     (out / "pairs.json").write_text(json.dumps(public, indent=1) + "\n")
     (out / "key.json").write_text(json.dumps(key, indent=1) + "\n")
-    print(f"{len(public)} trials ({args.pairs} pairs, {min(args.repeats, args.pairs)} repeats, {args.controls} controls)")
+    (out / "seed.json").write_text(json.dumps({"seed": args.seed}) + "\n")
+    print(f"seed {args.seed}: {len(public)} trials ({args.pairs} pairs, {min(args.repeats, args.pairs)} repeats, {args.controls} controls)")
 
 
 if __name__ == "__main__":
