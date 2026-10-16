@@ -14,7 +14,7 @@ use sven_sdk::schemars::JsonSchema;
 use sven_sdk::CallError;
 
 use crate::solve::Model;
-use crate::typed::TypedCall;
+use crate::typed::{Measured, TypedCall};
 
 /// A model and the runtime its calls are blocked on.
 ///
@@ -54,5 +54,22 @@ impl BlockingModel {
         I: Serialize + ?Sized + Sync,
     {
         self.runtime.block_on(call.run(&self.model, input))
+    }
+
+    /// [`Self::call`] with the tokens it used, on a failed call too.
+    pub fn call_measured<T, I>(&self, call: TypedCall<T>, input: &I) -> Measured<T>
+    where
+        T: DeserializeOwned + JsonSchema + Send + 'static,
+        I: Serialize + ?Sized + Sync,
+    {
+        self.runtime.block_on(async {
+            match call.start(&self.model) {
+                Ok(session) => session.call_measured(input).await,
+                Err(e) => Measured {
+                    result: Err(e),
+                    spent: crate::typed::Spent::default(),
+                },
+            }
+        })
     }
 }

@@ -21,13 +21,47 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sven_sdk::schemars::JsonSchema;
-use sven_sdk::{CallError, CancelToken, Engine, Method, Toolset};
+use sven_sdk::{CallError, CancelToken, Engine, Method, SessionEvent, Toolset};
 
 use crate::solve::{Model, SolveOptions};
 
 /// The check a reply must pass beyond its shape, with the correction sent
 /// back to the model when it fails.
 pub type Postcondition<T> = Box<dyn Fn(&T) -> Result<(), String> + Send + Sync>;
+
+/// The tokens a call used, as its provider reported them. A field the
+/// provider did not report (or whose reports could not all be collected) is
+/// `None`: unmeasured, never zero. Reasoning a model does before it answers
+/// is part of what it wrote.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Spent {
+    /// Prompt tokens processed, every correction included, excluding
+    /// prompt-cache hits.
+    pub input_tokens: Option<u64>,
+    /// Tokens generated, every correction included.
+    pub output_tokens: Option<u64>,
+}
+
+impl Spent {
+    fn add(&mut self, input: u32, output: u32) {
+        let add = |slot: &mut Option<u64>, n: u32| {
+            if n > 0 {
+                *slot = Some(slot.unwrap_or(0) + u64::from(n));
+            }
+        };
+        add(&mut self.input_tokens, input);
+        add(&mut self.output_tokens, output);
+    }
+}
+
+/// How a call ended and what it cost, whether or not it produced a value.
+#[derive(Debug)]
+pub struct Measured<T> {
+    /// The value, or why there is none.
+    pub result: Result<T, CallError>,
+    /// What the call used.
+    pub spent: Spent,
+}
 
 /// What a typed call asks and how it is bounded.
 pub struct TypedCall<T> {
@@ -156,6 +190,34 @@ impl<T: DeserializeOwned + JsonSchema + Send + 'static> TypedSession<T> {
         self.engine
             .call_with(&self.method, input, self.bounds.run_options())
             .await
+    }
+
+    /// [`Self::call`], with the tokens the provider reported for it, on a
+    /// failed call too. Must run on a tokio runtime.
+    pub async fn call_measured<I: Serialize + ?Sized + Sync>(&self, input: &I) -> Measured<T> {
+        let mut agent = self.engine.agent_for(&self.method);
+        let mut events = agent.events();
+        // Read while the call runs: the stream is bounded, and a long reply
+        // is many events.
+        let collector = tokio::spawn(async move {
+            let mut spent = Spent::default();
+            let mut complete = true;
+            while let Some(event) = events.recv().await {
+                match event.event {
+                    SessionEvent::TokenUsage { input, output, .. } => spent.add(input, output),
+                    SessionEvent::EventsDropped { .. } => complete = false,
+                    _ => {}
+                }
+            }
+            complete.then_some(spent)
+        });
+        let result = agent
+            .call_with(&self.method, input, self.bounds.run_options())
+            .await;
+        // The stream ends once the agent is gone and its events are read.
+        drop(agent);
+        let spent = collector.await.ok().flatten().unwrap_or_default();
+        Measured { result, spent }
     }
 
     /// The reply to `input`, within `deadline` alone: one turn of a longer
