@@ -486,6 +486,61 @@ async fn a_question_answered_from_the_source_must_name_a_subject_the_source_name
     assert_eq!(report.admitted[0].subject, None);
 }
 
+/// A subject whose words the instruction sets in code formatting (backticks,
+/// quotes) or writes as a call (`reset()`) is still named: the markup is the
+/// way a model writes an identifier, not another subject.
+#[tokio::test]
+async fn markup_inside_a_subject_does_not_hide_it_from_the_instruction_or_the_source() {
+    let manual = "# Frobnicator manual
+
+## Keys
+
+The Esc key aborts the running test and returns the Frobnicator to idle.
+
+## Reset
+
+Call reset to return the controller to idle.
+";
+    let cases = [
+        (
+            "What does the `Esc` key do on the Frobnicator?",
+            "Esc key",
+            "aborts the running test",
+            1,
+        ),
+        (
+            "What does the 'Esc' key do on the Frobnicator?",
+            "Esc key",
+            "aborts the running test",
+            1,
+        ),
+        (
+            "What state does calling `reset()` return the controller to?",
+            "reset()",
+            "return the controller to idle",
+            2,
+        ),
+    ];
+    for (instruction, subject, quote, section) in cases {
+        let scratch = Scratch::new("model-tasks-subject-markup");
+        let (store, _, source) = stored(&scratch, manual);
+        let reference = if section == 1 {
+            "aborts the running test"
+        } else {
+            "idle"
+        };
+        let model = Scripted::new(vec![reply(vec![about(
+            entry(instruction, reference, section, Some(quote)),
+            subject,
+        )])]);
+        let report = generator(model, store, vec![])
+            .generate(&source, &[&kind("recall")])
+            .await
+            .unwrap();
+        assert_eq!(report.admitted.len(), 1, "{instruction}: {report:#?}");
+    }
+}
+
 #[tokio::test]
 async fn the_generator_is_shown_what_the_source_is_and_may_name_it_as_the_subject() {
     let scratch = Scratch::new("model-tasks-identity");

@@ -31,7 +31,7 @@
 //! 5. it names its subject, when its kind must
 //!    ([`TaskKind::names_subject`]): `subject` is the product, document,
 //!    tool, component or version the question is about, it is in the
-//!    instruction (case and whitespace aside), and the source's identity
+//!    instruction (case, whitespace and code markup aside), and the source's identity
 //!    ([`SourceIdentity`]) or a cited section names it. A question that
 //!    does not say what it is about has a different answer for every
 //!    product, and a model trained on one of them answers it wrongly for

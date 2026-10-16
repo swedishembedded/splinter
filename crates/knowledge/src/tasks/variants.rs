@@ -21,7 +21,7 @@
 //!    punctuation aside): a question with another answer asks about another
 //!    fact;
 //! 4. its instruction stands on its own ([`splinter_core::selfcontained::check_self_contained`]);
-//! 5. it still names the original's subject (case and whitespace aside):
+//! 5. it still names the original's subject (case, whitespace and code markup aside):
 //!    a rewording that drops it asks a question with many answers;
 //! 6. it is new: not the original's instruction, nor a sibling's, by the
 //!    rule generation uses ([`super::dedup`]).
@@ -40,7 +40,7 @@ use super::generator::{GenerateError, ModelTaskGenerator};
 use super::kind::SolverEnvironment;
 use super::reply::VARIANTS_EXAMPLE;
 use super::{Catalogue, GeneratedTask, GenerationReport, Rejection};
-use crate::gates::normalize;
+use crate::gates::{normalize, unmarked};
 use crate::material::teacher_material;
 
 /// The name of the typed call a generator model is sent for variants.
@@ -134,7 +134,7 @@ impl ModelTaskGenerator {
             });
         }
         let subject = subject.trim();
-        if subject.is_empty() || !normalize(&original.instruction).contains(&normalize(subject)) {
+        if subject.is_empty() || !unmarked(&original.instruction).contains(&unmarked(subject)) {
             return Err(GenerateError::NotVaryable {
                 task: original.task.id.clone(),
                 reason: "no_subject",
@@ -204,7 +204,7 @@ impl ModelTaskGenerator {
                 refuse(Rejection::NotSelfContained, why.to_string());
                 continue;
             }
-            if !normalize(&candidate.instruction).contains(&normalize(subject)) {
+            if !unmarked(&candidate.instruction).contains(&unmarked(subject)) {
                 refuse(
                     Rejection::NoSubject,
                     format!("the variant no longer names the subject {subject:?}"),

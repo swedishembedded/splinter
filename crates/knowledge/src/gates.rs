@@ -19,6 +19,15 @@ pub fn normalize(question: &str) -> String {
         .to_lowercase()
 }
 
+/// `text` as [`normalize`] reads it, without the markup a model writes an
+/// identifier in: code quotes, quotation marks, emphasis and the empty
+/// parentheses of a call. `` `Esc` key `` and `Esc key` are one subject.
+pub fn unmarked(text: &str) -> String {
+    normalize(text)
+        .replace("()", "")
+        .replace(['`', '\'', '"', '*'], "")
+}
+
 /// The number tokens of `text`, each with the unit word that binds to it
 /// (one optional space, then a run of letters / ° / /, plural-insensitive).
 /// Thousand separators are part of the token and normalized on compare.

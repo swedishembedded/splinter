@@ -25,7 +25,7 @@ use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_sandbox::{ResolvedEnvironment, RuntimeEnvironment};
 use splinter_store::sources::SourceStore;
 
-use crate::gates::normalize;
+use crate::gates::unmarked;
 
 use super::dedup::{contradicts, Asked, Repeat, Seen};
 use super::generator::{GenerateError, SourceText};
@@ -118,8 +118,8 @@ fn subject(context: &Context<'_>, candidate: &Candidate) -> Result<Option<String
     if content_words(subject).is_empty() {
         return refuse(format!("{subject:?} names nothing in particular"));
     }
-    let wanted = normalize(subject);
-    if !normalize(&candidate.instruction).contains(&wanted) {
+    let wanted = unmarked(subject);
+    if !unmarked(&candidate.instruction).contains(&wanted) {
         return refuse(format!(
             "the instruction does not name its subject {subject:?}"
         ));
@@ -128,12 +128,12 @@ fn subject(context: &Context<'_>, candidate: &Candidate) -> Result<Option<String
     let named_by_source = source
         .identity
         .names()
-        .any(|name| normalize(name).contains(&wanted));
+        .any(|name| unmarked(name).contains(&wanted));
     let named_by_section = candidate
         .evidence
         .iter()
         .filter_map(|citation| source.section_text(citation.section))
-        .any(|text| normalize(text).contains(&wanted));
+        .any(|text| unmarked(text).contains(&wanted));
     if !named_by_source && !named_by_section {
         return refuse(format!(
             "{subject:?} is named neither by the source ({}) nor by a cited section",
