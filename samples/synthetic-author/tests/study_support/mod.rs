@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::solve::Model;
@@ -27,6 +27,8 @@ use synthetic_author::scenario::{Archetype, Features};
 use synthetic_author::study::layout::Study;
 use synthetic_author::study::power::{derive, Observed};
 use synthetic_author::study::protocol::{freeze, ModelRoles, Protocol, Seeds, Spec};
+use synthetic_author::study::train::Trainer;
+use synthetic_author::training::{Job, Trained};
 use synthetic_author::writer::plan;
 
 /// Articles each author's corpus is planned with in the specs.
@@ -242,6 +244,100 @@ impl ModelProvider for FirstOption {
                 id: "c".into(),
                 name: tool.name.clone(),
                 arguments: serde_json::json!({ choice: label }).to_string(),
+            }),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+/// A trainer that writes a file where an adapter would be, and remembers every
+/// job it was given. It fails on the call numbered `fail_on`, if there is one.
+#[derive(Default)]
+pub struct Scripted {
+    pub seeds: Mutex<Vec<(u64, String)>>,
+    pub fail_on: Option<usize>,
+}
+
+impl Trainer for Scripted {
+    fn train(&self, job: &Job<'_>) -> anyhow::Result<Trained> {
+        let mut seen = self.seeds.lock().unwrap();
+        if self.fail_on == Some(seen.len()) {
+            anyhow::bail!("the device was lost");
+        }
+        seen.push((
+            job.settings.seed,
+            job.settings.briefings.suffix().to_string(),
+        ));
+        std::fs::create_dir_all(job.attempt)?;
+        let adapter = job.attempt.join("adapter.safetensors");
+        std::fs::write(&adapter, format!("adapter {}", seen.len()))?;
+        Ok(Trained {
+            adapter,
+            records: 10,
+            held_out_before: serde_json::json!({"loss": 3.0}),
+            held_out_after: serde_json::json!({"loss": 1.0}),
+            seconds: 1,
+        })
+    }
+}
+
+/// A model that takes the option the beliefs determine for the items it is
+/// given, found by the case an item names, and reasons in a sentence.
+pub struct Oracle {
+    /// The case name and the position of the right option of each item.
+    pub items: Vec<(String, usize)>,
+}
+
+impl Oracle {
+    /// The oracle for `items`.
+    pub fn of(items: &[synthetic_author::exam::Item]) -> Self {
+        Self {
+            items: items
+                .iter()
+                .map(|i| {
+                    let position = i.options.iter().position(|o| *o == i.expected).unwrap();
+                    (i.case.clone(), position)
+                })
+                .collect(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Oracle {
+    fn name(&self) -> &str {
+        "oracle"
+    }
+    fn model_name(&self) -> &str {
+        "oracle-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let asked = format!("{:?}", req.messages);
+        let position = self
+            .items
+            .iter()
+            .filter(|(case, _)| asked.contains(case.as_str()))
+            .max_by_key(|(case, _)| case.len())
+            .map_or(0, |(_, p)| *p);
+        let tool = &req.tools[0];
+        let choice = tool.parameters["required"][0].as_str().unwrap().to_string();
+        let label = tool.parameters["properties"][&choice]["enum"][position].clone();
+        let reason = tool.parameters["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .find(|k| **k != choice)
+            .cloned();
+        let mut arguments = serde_json::json!({ choice: label });
+        if let Some(reason) = reason {
+            arguments[reason] = "I judged it by the facts before me.".into();
+        }
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::ToolCall {
+                index: 0,
+                id: "c".into(),
+                name: tool.name.clone(),
+                arguments: arguments.to_string(),
             }),
             Ok(ResponseEvent::Done),
         ])))

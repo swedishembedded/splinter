@@ -239,27 +239,33 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-16 Replication: training seeds and author worlds
 
-- **Status.** In progress for `synthetic-author`. Built: the protocol and
-  `study freeze` (`src/study/protocol.rs`): author seeds and each author's
-  training seeds drawn once, printed and recorded in `protocol.json`, the
-  digest of its canonical JSON, the three model references checked to be three
+- **Status.** Built for `synthetic-author`; no stage has been run. `study
+  freeze` (`src/study/protocol.rs`) writes `protocol.json` once: the author
+  seeds and each author's training seeds drawn, printed and recorded, the digest
+  of its canonical JSON, the three model references checked to be three
   families, the arms with the PP-19 ablations, the training settings, the
-  primary comparison, the family of comparisons, Holm over it as the
-  multiplicity correction, greedy as the primary decoding and a sampled one
-  beside it (PP-20); freezing again with the same settings reports the frozen
-  protocol and with others is refused. `study corpus` (`src/study/corpus.rs`)
-  runs an author's corpus, mining, record making and examination freeze with the
-  protocol's models, writes `study.json` with the protocol digest, the
-  survivors and the examination's digest, resumes, and refuses a changed
-  protocol or a corpus changed after the freeze; it is tested with scripted
-  models only. `study train` and `study exam` (`src/study/train.rs`,
-  `src/study/examine.rs`) train every adapter the protocol asks at its training
-  seeds, one `run.json` each, and put the frozen examination to every arm, one
-  directory of outcomes per adapter, resuming and refusing a changed base,
-  settings, records or adapter file; they are tested through a scripted trainer
-  and scripted models, and are not run. Not built yet: the report. No corpus has
-  been written with the three families and no adapter trained under the
-  protocol.
+  primary comparison, the confirmatory family of ten comparisons with Holm's
+  step-down over it and the exploratory ones beside, greedy as the primary
+  decoding and a sampled one beside it (PP-20); freezing again with the same
+  settings reports the frozen protocol and with others is refused, and a family
+  the authors cannot confirm (an exact sign test over eight authors reaches
+  1/256) is flagged. `study corpus` (`src/study/corpus.rs`) writes an author's
+  corpus, mines it, makes the records and freezes and hashes the examination into
+  `study.json` before anything is trained; `study train` and `study exam`
+  (`src/study/train.rs`, `src/study/examine.rs`) train every adapter at its
+  training seeds, one `run.json` each, and put the frozen examination to every
+  arm, one directory of outcomes per adapter; each resumes, refuses a changed
+  protocol, base, settings, records, adapter file or examination, and is tested
+  through scripted models and a scripted trainer. `study report`
+  (`src/study/analysis.rs`, `collect.rs`, `render.rs`) reads the manifests and
+  outcomes and writes the per-author, per-seed paired sign tests, the spread over
+  seeds, the exact sign test across authors with Holm's correction, first-listed
+  and majority baselines, item-clustered bootstrap intervals (seed drawn, printed
+  and recorded), survivorship (PP-21) and reason measures (PP-15) as CSV and JSON,
+  and `papers/persona-training/scripts/study_data.py` maps them to the columns the
+  paper's build reads. Not done: no corpus has been written with the three
+  families, no adapter trained under the protocol, and the paper's build is still
+  laid out for three authors.
 - **Problem.** One training run per author and three authors (paper Sec. 7);
   all three runs used the same default seed (PF-04); no sign test across
   authors is possible with three.
@@ -344,7 +350,11 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   record in the exam manifest names the source and the number of passages, and
   the corpus they come from is part of its digest. The paired tests of each
   against the main arms and the correction for multiplicity belong to the
-  protocol of PP-16, and `report` lists the pairs.
+  protocol of PP-16, and `report` lists the pairs. The protocol of `study
+  freeze` names the ablation adapters and the retrieval settings, trains and asks
+  them for every author (`study train`, `study exam`), and `study report` tests
+  tuned against each (the ablation adapters and the records retrieval under
+  Holm, the sweeps of the retrieval arm as exploratory); none is run.
 
 - **Problem.** The strongest alternative explanation (a lookup from fact
   patterns, helped by records that restate facts in the exam's own sentences)
@@ -377,7 +387,9 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   number of draws. `report` lists the sampled share right per arm beside
   greedy, with an item-clustered bootstrap interval and, per pair of arms, the
   interval of the mean per-item difference; its seed is drawn, printed and
-  written into the report. The study's sampled runs are not made.
+  written into the report. `study exam --sampled` asks the protocol's sampled
+  decoding for every arm beside the greedy one and `study report` lists its
+  share right per arm and seed; the study's sampled runs are not made.
 
 - **Problem.** Every arm is decoded greedily; the robustness of the ranking
   under sampling is unmeasured (PU-06).
@@ -400,7 +412,8 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   by why (`content`, `writer-unavailable`, `reader-unavailable`, `budget`,
   `unattempted`). It reads the plan, `articles/` and `rejected.jsonl`. The
   per-option accuracy of each arm set beside the share kept needs the study's
-  exam outcomes and is not produced by the command.
+  exam outcomes and is not produced by the command; `study report` joins them
+  (`survivorship.csv`), over examination outcomes that are not yet made.
 
 - **Problem.** The corpus keeps only essays whose reading agrees with the
   oracle; author 303 gave up 24 of 60 articles. What was lost is not

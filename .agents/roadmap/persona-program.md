@@ -110,12 +110,12 @@ apart and untouched by any synthetic data.
 | PP-13 | Examination v2: balanced positions, trivial baselines, trained-on axis (done; the training-prior baseline is not built) | M | PP-07, PP-11 |
 | PP-14 | Records that teach stopping after the tool answers | M | brain loss mask for multi-step tool records |
 | PP-15 | Motivations worth learning, and a measure of them (done; new corpora under PP-16) | M | PP-10 |
-| PP-16 | Replication: training seeds and author worlds (the protocol, the corpus, training and examination stages are built; no stage is run) | L | PP-05, PP-06, PP-07, PP-10 to PP-15, PP-23 |
+| PP-16 | Replication: training seeds and author worlds (every stage and the report are built and tested with scripted models; none is run) | L | PP-05, PP-06, PP-07, PP-10 to PP-15, PP-23 |
 | PP-17 | The opposite author, trained on its own corpus (the corpus and `cross` are done; the paired test is not) | M | PP-07, PP-16 |
 | PP-18 | The long-context arm | M | PP-11, hardware |
 | PP-19 | Mechanism ablations (the switches are done; no ablation is run) | M | PP-16 |
 | PP-20 | Sampled decoding beside greedy (the code is done; no sampled run is made) | S | PP-05, PP-11 |
-| PP-21 | Survivorship analysis (the report is done; the per-arm join with exam outcomes is not) | S | PP-12 |
+| PP-21 | Survivorship analysis (the report and its join with the study's exam outcomes are built; no outcomes exist yet) | S | PP-12 |
 | PP-22 | Enough items to settle tuned against retrieval (the sizing is done; no examination is run) | S | PP-13, PP-16 |
 | PP-23 | A reader other than the writer (the check and the audit are done; the models are chosen in PP-16) | M | - |
 | PP-24 | Decisions and tool calls in `learn` | L | PP-10, PP-14, PP-15, PP-36, PP-37, PP-38 |

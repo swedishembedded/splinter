@@ -14,12 +14,16 @@
 //! the frozen protocol, writes manifests that record its digest, resumes what
 //! exists and refuses to continue under a protocol that has changed.
 
+pub mod analysis;
 pub mod arm_key;
 pub mod cli;
+pub mod collect;
 pub mod corpus;
 pub mod examine;
 pub mod layout;
 pub mod power;
 pub mod protocol;
+pub mod render;
+pub mod report;
 pub mod stats;
 pub mod train;

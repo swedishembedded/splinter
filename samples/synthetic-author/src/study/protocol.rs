@@ -281,8 +281,10 @@ pub struct Protocol {
     /// The primary comparison, tested across authors; it is one of
     /// `comparisons`.
     pub primary: Comparison,
-    /// The family of pre-registered comparisons.
+    /// The confirmatory family of pre-registered comparisons.
     pub comparisons: Vec<Comparison>,
+    /// Comparisons reported with their raw p-values and not confirmed.
+    pub exploratory: Vec<Comparison>,
     /// The correction over `comparisons`.
     pub multiplicity: Multiplicity,
     /// The decodings.
@@ -307,18 +309,19 @@ fn plain_arms() -> Vec<String> {
     .to_vec()
 }
 
-fn standard_comparisons() -> Vec<Comparison> {
-    let mut family: Vec<Comparison> = [
+/// The confirmatory family: the primary comparison, the adapter against the
+/// other ways of giving a model the author, against the constant policies a
+/// result must beat, and the comparisons that test the mechanism (what the
+/// records teach, the fair retrieval comparator). Its size is bounded by the
+/// number of authors: see [`Protocol::confirmable`].
+fn standard_family() -> Vec<Comparison> {
+    [
+        "retrieval",
         "base",
         "named",
         "principles",
         "principles-verdicts",
-        "retrieval",
-        "retrieval-2",
-        "retrieval-12",
-        "retrieval-records-2",
         "retrieval-records-6",
-        "retrieval-records-12",
         "tuned-reader-only",
         "tuned-fixed-wording-only",
         FIRST_LISTED,
@@ -326,13 +329,27 @@ fn standard_comparisons() -> Vec<Comparison> {
     ]
     .iter()
     .map(|reference| Comparison::new("tuned", reference))
+    .collect()
+}
+
+/// The comparisons reported without confirmation: the sweeps of the retrieval
+/// arm and the comparisons among the arms the adapter is not one of.
+fn standard_exploratory() -> Vec<Comparison> {
+    let mut sweep: Vec<Comparison> = [
+        "retrieval-2",
+        "retrieval-12",
+        "retrieval-records-2",
+        "retrieval-records-12",
+    ]
+    .iter()
+    .map(|reference| Comparison::new("tuned", reference))
     .collect();
-    family.extend([
+    sweep.extend([
         Comparison::new("retrieval", "base"),
         Comparison::new("principles", "base"),
         Comparison::new("principles-verdicts", "principles"),
     ]);
-    family
+    sweep
 }
 
 impl Protocol {
@@ -340,7 +357,6 @@ impl Protocol {
     /// size and no authors yet: [`freeze`] draws them.
     #[must_use]
     pub fn standard(models: ModelRoles, sizing: Derivation) -> Self {
-        let comparisons = standard_comparisons();
         Self {
             format: FORMAT.to_string(),
             authors: Vec::new(),
@@ -378,7 +394,8 @@ impl Protocol {
                 bf16: false,
             },
             primary: Comparison::new("tuned", "retrieval"),
-            comparisons,
+            comparisons: standard_family(),
+            exploratory: standard_exploratory(),
             multiplicity: Multiplicity::HolmOverComparisons {
                 alpha: DEFAULT_ALPHA_LEVEL,
             },
@@ -532,7 +549,7 @@ impl Protocol {
         sorted.sort();
         sorted.dedup();
         anyhow::ensure!(sorted.len() == names.len(), "an arm is listed twice");
-        for comparison in &self.comparisons {
+        for comparison in self.comparisons.iter().chain(&self.exploratory) {
             anyhow::ensure!(
                 names.contains(&comparison.candidate),
                 "{}: the candidate is not an arm of the study",
@@ -555,7 +572,31 @@ impl Protocol {
             "the primary comparison {} is not in the family",
             self.primary.label()
         );
+        let mut every: Vec<&Comparison> =
+            self.comparisons.iter().chain(&self.exploratory).collect();
+        every.sort_by_key(|c| (&c.candidate, &c.reference));
+        every.dedup();
+        anyhow::ensure!(
+            every.len() == self.comparisons.len() + self.exploratory.len(),
+            "a comparison is listed twice"
+        );
         Ok(())
+    }
+
+    /// The smallest p-value a sign test over this protocol's authors can
+    /// reach: every author improved.
+    #[must_use]
+    pub fn smallest_p(&self) -> f64 {
+        0.5_f64.powi(i32::try_from(self.authors.len()).unwrap_or(i32::MAX))
+    }
+
+    /// Whether any comparison of the family can be confirmed: Holm's first
+    /// step compares the smallest p-value with the level divided by the size
+    /// of the family, and a sign test over few authors cannot get that low.
+    #[must_use]
+    pub fn confirmable(&self) -> bool {
+        let Multiplicity::HolmOverComparisons { alpha } = self.multiplicity;
+        !self.comparisons.is_empty() && self.smallest_p() <= alpha / self.comparisons.len() as f64
     }
 
     /// The top-level fields in which `self` and `other` differ, for a refusal.

@@ -22,45 +22,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use splinter_sdk::agent::sven::model::ModelProvider;
-use study_support::{frozen, responding, small_protocol, FirstOption};
+use study_support::{frozen, responding, small_protocol, FirstOption, Scripted};
 use synthetic_author::binding::{file_digest, recorded};
 use synthetic_author::study::arm_key::SHARED_SLOT;
 use synthetic_author::study::corpus::{self, Pace, Staff};
 use synthetic_author::study::examine::{self, Examinee, Loader};
 use synthetic_author::study::layout::Study;
-use synthetic_author::study::train::{self, Trainer};
-use synthetic_author::training::{Job, Trained};
-
-/// A trainer that writes a file where an adapter would be, and remembers every
-/// job it was given. It fails on the call numbered `fail_on`, if there is one.
-#[derive(Default)]
-struct Scripted {
-    seeds: Mutex<Vec<(u64, String)>>,
-    fail_on: Option<usize>,
-}
-
-impl Trainer for Scripted {
-    fn train(&self, job: &Job<'_>) -> anyhow::Result<Trained> {
-        let mut seen = self.seeds.lock().unwrap();
-        if self.fail_on == Some(seen.len()) {
-            anyhow::bail!("the device was lost");
-        }
-        seen.push((
-            job.settings.seed,
-            job.settings.briefings.suffix().to_string(),
-        ));
-        std::fs::create_dir_all(job.attempt)?;
-        let adapter = job.attempt.join("adapter.safetensors");
-        std::fs::write(&adapter, format!("adapter {}", seen.len()))?;
-        Ok(Trained {
-            adapter,
-            records: 10,
-            held_out_before: serde_json::json!({"loss": 3.0}),
-            held_out_after: serde_json::json!({"loss": 1.0}),
-            seconds: 1,
-        })
-    }
-}
+use synthetic_author::study::train;
 
 /// Loads a scripted model and remembers which adapter each load attached.
 struct Scripting {

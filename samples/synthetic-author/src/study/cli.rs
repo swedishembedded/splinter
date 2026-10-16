@@ -21,6 +21,7 @@ use super::corpus::{self, Pace, Staff};
 use super::examine::{self, BrainLoader};
 use super::layout::Study;
 use super::train;
+use super::{render, report};
 use crate::models::{is_remote, Source};
 use crate::writer::{DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES};
 
@@ -59,6 +60,23 @@ pub enum Stage {
     /// Per author: put the frozen examination to every arm of the protocol.
     /// A GPU stage; items already answered are not asked again.
     Exam(ExamStageArgs),
+    /// Read the study's manifests and outcomes and write the analysis: the
+    /// paired tests per author and training seed, the spread over seeds, the
+    /// sign test across authors with Holm's correction, the survivorship and
+    /// reason measures, as CSV and JSON beside a short table. Asks no model.
+    Report(ReportStageArgs),
+}
+
+/// Write the report.
+#[derive(Args)]
+pub struct ReportStageArgs {
+    /// The study directory holding the frozen protocol.
+    #[arg(long)]
+    study: PathBuf,
+    /// The seed of the bootstrap intervals; drawn and printed when absent,
+    /// and recorded in the report.
+    #[arg(long)]
+    bootstrap_seed: Option<u64>,
 }
 
 /// Run the training stage.
@@ -229,6 +247,7 @@ pub fn run(args: &StudyArgs) -> anyhow::Result<()> {
         Stage::Corpus(corpus_args) => corpus_stage(corpus_args),
         Stage::Train(train_args) => train_stage(train_args),
         Stage::Exam(exam_args) => exam_stage(exam_args),
+        Stage::Report(report_args) => report_stage(report_args),
     }
 }
 
@@ -340,6 +359,14 @@ fn describe(frozen: &Frozen, root: &std::path::Path) -> String {
             seeds.join(", ")
         ));
     }
+    if !p.confirmable() {
+        text.push_str(&format!(
+            "WARNING: with {} authors the smallest p-value a sign test can reach is {:.4}, above the level divided by the {} comparisons of the family: no comparison could be confirmed. Add authors or shrink the family.\n",
+            p.authors.len(),
+            p.smallest_p(),
+            p.comparisons.len(),
+        ));
+    }
     let sizing = &p.exam.sizing;
     text.push_str(&format!(
         "examination: {} items per kind ({} per author), power {:.3} at one-sided {} against {} of {} discordant, {:.1} expected pairs\n",
@@ -383,4 +410,13 @@ fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
         }
         Ok(())
     })
+}
+
+fn report_stage(args: &ReportStageArgs) -> anyhow::Result<()> {
+    let study = Study::open(&args.study)?;
+    let report = report::run(&study, args.bootstrap_seed)?;
+    let dir = render::write(study.root(), &report)?;
+    print!("{}", render::table(&report));
+    println!("\nwritten to {}", dir.display());
+    Ok(())
 }

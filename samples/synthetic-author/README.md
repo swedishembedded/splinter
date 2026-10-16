@@ -298,9 +298,17 @@ protocol also holds:
   by default);
 * how the adapters are trained (steps, rank, alpha, learning rate, records per
   step);
-* the primary comparison (tuned against retrieval), the family of comparisons,
-  and the correction over them: Holm's step-down over the whole family, each
-  comparison tested across authors by a sign test of the per-author mean gain;
+* the primary comparison (tuned against retrieval) and the confirmatory family
+  it belongs to: tuned against base, named, principles, principles with the
+  verdict rules, retrieval over the training records (six passages), the two
+  ablation adapters, and the two constant policies (first listed, majority
+  option). The correction is Holm's step-down over that whole family; each
+  comparison is tested across authors by an exact sign test of the per-author
+  mean gain. The sweeps of the retrieval arm and the comparisons among arms the
+  adapter is not one of are listed as exploratory: reported with raw p-values,
+  never confirmed. The sign test over eight authors reaches 1/256 at best, which
+  clears the level only over a family of twelve or fewer, so `study freeze`
+  says when the authors it was given cannot confirm the family it holds;
 * the decodings: greedy for every confirmatory result, a sampled decoding
   beside it.
 
@@ -347,3 +355,50 @@ to every arm: the arms with no adapter share one loaded base and the directory
 writes; `--sampled` also asks the protocol's sampled decoding, whose run seed is
 drawn, printed and recorded in the arm's record. It refuses to start until every
 adapter it needs is trained and is the file its manifest records.
+
+### The report
+
+```bash
+synthetic-author study report --study STUDY [--bootstrap-seed N]
+```
+
+The report reads the study's manifests and the outcomes they bind (it draws each
+author's examination again from the corpus only to check it against the digest
+frozen for the author), asks no model, and writes `STUDY/report/`:
+
+| file | holds |
+|---|---|
+| `accuracy.csv`, `cells.csv` | each arm's accuracy, adapters once per training seed, overall and by kind of item; the two constant policies (first listed, majority option) beside them |
+| `paired.csv` | the paired one-sided exact sign test of each comparison, per author and training seed |
+| `gains.csv` | per author and comparison, the gain over the training seeds (the seed-mean difference in correctness), its item-clustered bootstrap interval, and the sign test over the items it moved |
+| `across_authors.csv` | per comparison, the authors that improved, got worse or tied, the exact sign test over them, Holm's adjusted p-value over the protocol's family, and the mean, least and greatest per-author gain |
+| `spread.csv` | each adapter's accuracy over its training seeds: mean, min, max, standard deviation (absent for a single seed) |
+| `survivorship.csv`, `given_up.csv`, `corpora.csv` | each arm's accuracy by the option the beliefs determine beside the share of that option the corpus kept; the articles given up by reason; what each corpus cost |
+| `reasons.csv` | per arm and seed, the answers that gave a reason, the share naming the deciding belief's fact, the share repeating a phrase of the brief, the distinct reasons |
+| `sampled.csv` | the sampled decoding's share right per arm and seed, when `exam --sampled` was run |
+| `unmeasured.csv` | what the protocol asks for and has no outcomes for, and why |
+| `report.json`, `report.txt` | all of it, and a short table |
+
+The bootstrap seed is drawn and printed when not given, and recorded in
+`report.json`. An arm is measured only if it answered every item of the frozen
+examination; one answered in part, or not at all, has no row in any table, takes
+part in no test, and is listed in `unmeasured.csv` (an empty field in a CSV is a
+number that was not measured, never zero). Outcomes that contradict their
+manifest, the frozen items, or the adapter their training run recorded stop the
+report instead of being left out. `papers/persona-training/scripts/study_data.py`
+turns these tables into the columns the paper's build reads.
+
+### Running the whole study
+
+```bash
+synthetic-author study freeze --out STUDY --writer W --reader R --miner M
+synthetic-author study corpus --study STUDY --allow-remote   # hosted, repeat after a stop
+synthetic-author study train  --study STUDY --base CHECKPOINT   # GPU
+synthetic-author study exam   --study STUDY --base CHECKPOINT   # GPU
+synthetic-author study exam   --study STUDY --base CHECKPOINT --sampled   # GPU
+synthetic-author study report --study STUDY
+```
+
+The stages up to the freeze of the examination need only the hosted models; the
+two that follow need the device; the report needs neither. Every stage may be
+repeated: it resumes what exists and refuses a changed protocol.

@@ -61,3 +61,14 @@ generated, because the corpus is not kept in the repository.
 
 Layout: paper.tex (preamble, abstract), sections/ (one file per section),
 references.bib, data/, scripts/.
+
+Replication study data:
+
+    python3 scripts/study_data.py REPORT_DIR OUT_DIR [--training-seed-index N]
+        turns the `report/` directory of `synthetic-author study report` into
+        arms.csv, cells.csv and paired.csv for the N-th training seed of each
+        author. build_data.py still reads the three authors of data/; the
+        tables made here are what it will read once the paper is laid out for
+        the study's authors. The other tables (authors, audit, corpora,
+        training, cost, spend, echo, confusion, cross) keep their producers
+        above.

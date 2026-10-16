@@ -383,3 +383,40 @@ fn the_freeze_command_prints_every_seed_it_drew_and_repeats_without_redrawing() 
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("models"));
 }
+
+#[test]
+fn a_family_no_number_of_authors_can_confirm_is_called_so_when_the_protocol_is_frozen() {
+    // Eight authors can reach 1/256, which clears the level over the family;
+    // five cannot reach below 1/32.
+    let eight = freeze(&scratch("conf8"), &spec(), &mut fresh())
+        .unwrap()
+        .protocol;
+    assert!(eight.confirmable());
+    assert!((eight.smallest_p() - 1.0 / 256.0).abs() < 1e-12);
+    let mut few = spec();
+    few.author_seeds = Seeds::Draw(5);
+    let five = freeze(&scratch("conf5"), &few, &mut fresh())
+        .unwrap()
+        .protocol;
+    assert!(!five.confirmable());
+
+    let root = scratch("conf-cli");
+    let out = study(&[
+        "freeze",
+        "--out",
+        root.to_str().unwrap(),
+        "--authors",
+        "5",
+        "--writer",
+        "remote:north/aster-xl-4",
+        "--reader",
+        "remote:south/birch-5",
+        "--miner",
+        "remote:east/cedar-70b",
+    ]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && text.contains("WARNING") && text.contains("5 authors"),
+        "{text}"
+    );
+}
