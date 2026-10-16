@@ -68,3 +68,9 @@ it). E1 is rerun on the repaired binary, once per corpus, nothing retried:
   instruction; subject not in the source) as in the first wave's 82, with the script kept.
 - The only directional expectation: no rejection of the markup-only class remains. The
   generator samples, so counts differ from the first wave by chance; no test is run on them.
+- E1c (added 2026-10-16 10:20 CEST, after the corpus A rerun showed 75 `no_subject` rejections of
+  which 45 name a subject that is absent from the instruction, and before any other run):
+  corpus A again with Qwen3-8B as the generator, everything else equal, to test whether the
+  rejections follow the generator model rather than the rule or the prompt. The only
+  comparison is the share of proposals rejected as `no_subject` by the two generators,
+  reported with Wilson intervals and without a test (one run each, the generator samples).
