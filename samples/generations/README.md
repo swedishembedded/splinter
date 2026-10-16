@@ -40,6 +40,14 @@ whether general behaviour is intact.
 - Forty general questions with one short reference each (`anchor.jsonl`),
   frozen as the anchor suite, so the release gate guards them too.
 
+`anchor200.py` writes the larger anchor suite for the release gate, `anchor-200.jsonl`:
+200 general questions with one short reference each (arithmetic and units
+computed in code, capitals, symbols, definitions and code facts from a
+reviewed list), none naming an entity the invented fact families could. Freeze
+it with `splinter eval --suite anchor --freeze samples/generations/anchor-200.jsonl`
+and decide the anchor check on counts with `--anchor-max-net-lost 6` (3% of
+200); `scripts/anchor_power.py` computes the error rates of that bound.
+
 `generations.py run --mode full|merge` drives the `splinter` binary on a state
 root of its own: `absorb --no-consolidate` for each update, then `consolidate
 --mode MODE`, and `eval policy:default --suite FILE` after every step. The

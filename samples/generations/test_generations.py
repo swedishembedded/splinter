@@ -11,6 +11,7 @@ import sys
 import unittest
 from pathlib import Path
 
+import anchor200
 import generations as g
 
 # A default seed is random: the specs below hold for every seed, so they use one
@@ -69,6 +70,28 @@ class Probes(unittest.TestCase):
         self.assertEqual(len(anchor), 40)
         self.assertEqual(len({a["instruction"] for a in anchor}), 40)
         self.assertTrue(all(a["reference"] and len(a["reference"]) < 24 for a in anchor))
+
+
+class Anchor200(unittest.TestCase):
+    def test_it_is_two_hundred_distinct_questions_with_one_short_reference_each(self):
+        rows = anchor200.build()
+        self.assertEqual(len(rows), anchor200.SIZE)
+        self.assertEqual(len({r["instruction"] for r in rows}), anchor200.SIZE)
+        self.assertTrue(all(r["reference"] and len(r["reference"]) < 30 for r in rows))
+        self.assertTrue(all(r["kind"] == "recall" for r in rows))
+
+    def test_the_frozen_file_is_what_the_code_builds(self):
+        rows = [json.loads(l) for l in
+                Path(anchor200.__file__).with_name("anchor-200.jsonl").read_text().splitlines()]
+        self.assertEqual(rows, anchor200.build())
+
+    def test_no_question_shares_an_entity_with_an_invented_fact_family(self):
+        # The checker finds every name the families invent, for any seed ...
+        for f in g.make_facts(seed=SEED, generations=3, per_generation=12):
+            self.assertTrue(anchor200.shares_an_entity(f.subject), f.subject)
+        # ... and finds none in a question or a reference of the suite.
+        for r in anchor200.build():
+            self.assertFalse(anchor200.shares_an_entity(r["instruction"] + " " + r["reference"]), r)
 
 
 class Grading(unittest.TestCase):
