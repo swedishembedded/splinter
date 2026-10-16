@@ -19,8 +19,9 @@ missing: test strength, canaries, coverage, power.
   - Done: exact sign-test power, minimum detectable lead and the fixed alpha spending schedule
     in `splinter-eval::power`; `exam-set power` prints the sign-test power and the smallest lead
     seen; the gate takes `alpha_spending` (opt-in) and `target_effect` and reports a miss on an
-    underpowered exam as inconclusive (finding 047). Left: PILOT label under three seeds, Wilson
-    intervals below 100 families, a CLI switch for the two gate settings, making spending the
+    underpowered exam as inconclusive (finding 047). Done: `--alpha-spending` and `--target-effect` on `release`, `learn` and
+    `practice` (one `GatePlan` carried by every request). Left: PILOT label under three seeds, Wilson
+    intervals below 100 families, making spending the
     default after a decision on the first-generation level, the 200-generation null simulation
     through the real gate.
   - `splinter exam power` prints, for the actual exam, the power table (families, observed

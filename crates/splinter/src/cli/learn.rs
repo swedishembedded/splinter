@@ -14,7 +14,9 @@ use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{DEFAULT_LORA_RANK, MAX_PASSES};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
-use super::{budget, model_ref, share, voice_share, MonitoringArgs, OptimiserArgs, PassAtKArgs};
+use super::{
+    budget, model_ref, share, voice_share, GateArgs, MonitoringArgs, OptimiserArgs, PassAtKArgs,
+};
 
 /// `learn`.
 #[derive(Debug, Args)]
@@ -192,6 +194,9 @@ pub struct LearnArgs {
         with [default: drawn and printed]"
     )]
     pub interval_seed: Option<Seed>,
+    /// The release gate's statistical settings.
+    #[command(flatten)]
+    pub gate: GateArgs,
     /// The step budget of the training: the most steps it may take.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
         help = format!("The step budget of the training: the most steps it may take [default: \

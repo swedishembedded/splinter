@@ -18,7 +18,7 @@ use splinter_sdk::practice::{
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::DEFAULT_LORA_RANK;
 
-use super::{budget, MonitoringArgs, OptimiserArgs, PassAtKArgs};
+use super::{budget, GateArgs, MonitoringArgs, OptimiserArgs, PassAtKArgs};
 
 /// `practice`.
 #[derive(Debug, Args)]
@@ -93,6 +93,9 @@ pub struct PracticeArgs {
     /// Stop at the trained candidate: do not run the release gate.
     #[arg(long)]
     pub no_release: bool,
+    /// The release gate's statistical settings.
+    #[command(flatten)]
+    pub gate: GateArgs,
     /// The step budget of the training: the most steps it may take.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub steps: Option<u32>,

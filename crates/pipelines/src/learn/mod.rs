@@ -84,6 +84,7 @@ use crate::train::{Trainer, Tuning, DEFAULT_LORA_RANK};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
 use splinter_core::role::{Role, RoleOverrides};
+use splinter_eval::gate::GatePlan;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::roles;
@@ -233,6 +234,8 @@ pub struct LearnRequest {
     pub dry_run: bool,
     /// Stop at the candidate: do not run the release gate.
     pub no_release: bool,
+    /// The release gate's statistical settings.
+    pub gate: GatePlan,
     /// Solve each task once and keep every task, instead of measuring
     /// pass@k and keeping the frontier.
     pub no_frontier: bool,
@@ -481,6 +484,7 @@ pub fn learn(
         judge: &judge,
         roles_used,
         no_release,
+        gate: request.gate,
         adapter,
         steps: request.steps,
         rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),

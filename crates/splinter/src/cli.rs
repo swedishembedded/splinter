@@ -576,6 +576,9 @@ pub struct ReleaseArgs {
     /// intervals).
     #[arg(long, value_name = "N")]
     pub interval_seed: Option<Seed>,
+    /// The gate's statistical settings.
+    #[command(flatten)]
+    pub gate: GateArgs,
     /// `list`.
     #[command(subcommand)]
     pub command: Option<ReleaseCommand>,
@@ -643,6 +646,7 @@ impl LineageArgs {
 mod absorb;
 mod consolidate;
 mod exam;
+mod gate;
 mod learn;
 mod practice;
 mod state;
@@ -650,6 +654,7 @@ mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use consolidate::ConsolidateArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
+pub use gate::GateArgs;
 pub use learn::LearnArgs;
 pub use practice::PracticeArgs;
 pub use state::{RunsCommand, StateCommand};

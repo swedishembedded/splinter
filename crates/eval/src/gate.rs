@@ -62,8 +62,11 @@ use splinter_core::release::ReleaseId;
 use splinter_core::rng::Seed;
 
 mod agentic;
+mod plan;
 
 use crate::canary::Canaries;
+
+pub use plan::GatePlan;
 
 pub use agentic::{
     AgenticConfig, AgenticProbe, Withheld, DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS,

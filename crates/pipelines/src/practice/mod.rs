@@ -66,7 +66,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splinter_core::rng::Seed;
-use splinter_eval::gate::{AgenticConfig, DEFAULT_PROBE_ATTEMPTS};
+use splinter_eval::gate::{AgenticConfig, GatePlan, DEFAULT_PROBE_ATTEMPTS};
 
 use crate::curriculum::frontier::PassAtK;
 use crate::train::{Trainer, Tuning};
@@ -136,6 +136,8 @@ pub struct PracticeRequest {
     pub budget: Option<Duration>,
     /// Stop at the candidate: do not run the release gate.
     pub no_release: bool,
+    /// The release gate's statistical settings.
+    pub gate: GatePlan,
     /// The step budget of the training; sized from the examples when `None`.
     pub steps: Option<u32>,
     /// LoRA rank of the adapter; the default rank when `None`.

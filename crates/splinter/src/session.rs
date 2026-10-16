@@ -24,6 +24,7 @@ use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::learn::{learn, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
+use splinter_sdk::measure::gate::GateConfig;
 use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE};
 use splinter_sdk::release::{self, ReleaseRequest};
 use splinter_sdk::rerank::ModelReranker;
@@ -602,6 +603,7 @@ impl Session {
                         Distribution::Restricted
                     },
                     interval_seed: args.interval_seed,
+                    gate: args.gate.plan().applied_to(GateConfig::default()),
                     ..ReleaseRequest::new(candidate)
                 };
                 let released = record(ctx, "release", &request, |run| {

@@ -31,6 +31,7 @@ pub(crate) fn practice_request(args: PracticeArgs) -> PracticeRequest {
         max_repeated_results: args.max_repeated_results,
         budget: args.budget,
         no_release: args.no_release,
+        gate: args.gate.plan(),
         steps: args.steps,
         rank: args.rank,
         tuning: args.optimiser.applied_to(Tuning {
@@ -98,5 +99,13 @@ mod tests {
         let asked = request(&["./shop"]);
         assert_eq!(asked.revision, "HEAD");
         assert!(asked.test_command.is_empty() && !asked.no_release);
+    }
+
+    #[test]
+    fn the_gate_settings_reach_the_request() {
+        let asked = request(&["./shop", "--alpha-spending", "--target-effect", "0.25"]);
+        assert!(asked.gate.alpha_spending);
+        assert_eq!(asked.gate.target_effect, Some(0.25));
+        assert_eq!(request(&["./shop"]).gate, Default::default());
     }
 }

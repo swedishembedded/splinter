@@ -275,6 +275,19 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     };
     assert!(matches!(listing.command, Some(ReleaseCommand::List)));
     assert_eq!(listing.alias, POLICY_DEFAULT);
+    let Command::Release(planned) = command(&[
+        "release",
+        "candidate-1",
+        "--alpha-spending",
+        "--target-effect",
+        "0.2",
+    ]) else {
+        panic!("release with a gate plan");
+    };
+    assert!(planned.gate.alpha_spending);
+    assert_eq!(planned.gate.target_effect, Some(0.2));
+    assert!(parse(&["release", "c", "--target-effect", "0"]).is_err());
+    assert!(parse(&["release", "c", "--target-effect", "1.5"]).is_err());
     assert!(matches!(
         command(&["rollback", "default"]),
         Command::Rollback { alias } if alias == "default"

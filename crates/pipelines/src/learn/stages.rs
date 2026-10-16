@@ -53,6 +53,7 @@ use crate::train::{
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
 use crate::verify::{adopt_judge, kind_needs_judge, verify_set, Grading};
 use splinter_core::annotation::Strength;
+use splinter_eval::gate::GateConfig;
 
 /// What one learn run was asked, resolved.
 pub(super) struct Learn<'a> {
@@ -88,6 +89,8 @@ pub(super) struct Learn<'a> {
     /// The identity each role in use was given.
     pub(super) roles_used: BTreeMap<Role, String>,
     pub(super) no_release: bool,
+    /// The release gate's statistical settings.
+    pub(super) gate: splinter_eval::gate::GatePlan,
     /// The adapter the run leaves in the model store, when it is named.
     pub(super) adapter: Option<super::publish::NamedAdapter>,
     /// The step budget (`None`: [`super::auto_steps`] of the dataset), LoRA
@@ -691,7 +694,11 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>)
     let Some(id) = st.candidate.clone() else {
         unreachable!("the release stage follows the train stage")
     };
-    match release_recorded(ctx, run, &ReleaseRequest::new(id)) {
+    let asked = ReleaseRequest {
+        gate: st.learn.gate.applied_to(GateConfig::default()),
+        ..ReleaseRequest::new(id)
+    };
+    match release_recorded(ctx, run, &asked) {
         Ok(released) => {
             let summary = to_value(&released)?;
             st.report.release = Some(released);

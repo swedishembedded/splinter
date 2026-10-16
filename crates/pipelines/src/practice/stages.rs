@@ -520,10 +520,10 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'
         unreachable!("the release stage follows the train stage")
     };
     let asked = ReleaseRequest {
-        gate: GateConfig {
+        gate: st.practice.request.gate.applied_to(GateConfig {
             agentic: st.practice.request.agentic(),
             ..GateConfig::default()
-        },
+        }),
         ..ReleaseRequest::new(id)
     };
     match release_recorded(ctx, run, &asked) {

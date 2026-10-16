@@ -55,6 +55,7 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         budget: args.budget,
         dry_run: args.dry_run,
         no_release: args.no_release,
+        gate: args.gate.plan(),
         no_frontier: args.no_frontier,
         distill: args.distill,
         steps: args.steps,
@@ -123,6 +124,20 @@ mod tests {
             !asked(&["learn", "docs", "--adapter", "maren"]),
             "a named adapter is published, so there is no release to be missing"
         );
+    }
+
+    #[test]
+    fn the_gate_settings_reach_the_request() {
+        let asked = request(&[
+            "learn",
+            "docs",
+            "--alpha-spending",
+            "--target-effect",
+            "0.3",
+        ]);
+        assert!(asked.gate.alpha_spending);
+        assert_eq!(asked.gate.target_effect, Some(0.3));
+        assert_eq!(request(&["learn", "docs"]).gate, Default::default());
     }
 
     #[test]
