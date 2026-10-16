@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn the_startup_line_names_the_model_and_the_adapter_digest() {
-        let line = "brain serve: brain/qwen3 adapter=local/Qwen3-0.6B:splinter:candidate \
+        let line = "brain serve: brain/qwen3 adapter=local/Qwen3-0.6B:splinter:candidate:latest \
                     digest=sha256:ab";
         assert_eq!(
             parse_adapter_line(line),

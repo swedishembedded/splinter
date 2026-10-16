@@ -375,7 +375,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .held_out(request.held_out)
         .thinking(request.thinking)
         .out_dir(request.attempt_dir)
-        .adapter_id(format!("{base_id}:splinter:candidate"))
+        .adapter_id(candidate_adapter_id(&base_id))
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
@@ -613,7 +613,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         .nll_weight(request.nll_weight)
         .grad_accum(request.grad_accum)
         .out_dir(request.attempt_dir)
-        .adapter_id(format!("{base_id}:splinter:candidate"))
+        .adapter_id(candidate_adapter_id(&base_id))
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
@@ -681,6 +681,12 @@ pub(crate) fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyE
             .unwrap_or("base")
     );
     Ok((weights, base_id))
+}
+
+/// The card id a trained candidate's adapter is recorded under: brain's
+/// model-reference grammar for an adapter, `<base>:<owner>:<name>:<tag>`.
+fn candidate_adapter_id(base_id: &str) -> String {
+    format!("{base_id}:splinter:candidate:latest")
 }
 
 /// The progress callback that cancels `brain_cancel` once `cancel` fires:
@@ -760,5 +766,17 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// `brain serve --adapter` refuses an adapter whose card id is not
+    /// `<base>:<owner>:<name>:<tag>`, each segment non-empty, so a candidate
+    /// recorded under any other shape could never pass the gate's serve check.
+    #[test]
+    fn a_candidates_card_id_is_an_adapter_reference_with_owner_name_and_tag() {
+        let id = candidate_adapter_id("local/Qwen3-0.6B");
+        let parts: Vec<&str> = id.split(':').collect();
+        assert_eq!(parts.len(), 4, "{id}");
+        assert_eq!(parts[0], "local/Qwen3-0.6B");
+        assert!(parts.iter().all(|p| !p.is_empty()), "{id}");
     }
 }
