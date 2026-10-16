@@ -13,35 +13,50 @@ learner cannot influence, and release the result only if it is measurably better
 being worse at what it already did. The released artifact is an ordinary Brain adapter
 that runs on plain \code{brain serve}; the next turn starts from it.
 
-\paragraph{Scope.} This paper describes the whole loop from corpus to release,
-including how the corpus is expanded and trained on, and states for each part what was
-verified and how. It asks one question: \emph{does each stage of the loop do what its
-specification says, and does a full turn of the loop, run twice, produce a
-policy that answers facts it was not given and keeps what it knew?} It does not claim a
-general improvement of any benchmark score, and it contains no plans: a mechanism the
-code does not contain is absent, and a measurement that was not made is stated as not
-made.
+\paragraph{The result this work is for, and its status.} The practical question is
+operational: \emph{can a team take its own git repository and tune a local agentic model
+that is measurably better at completing unseen tasks in it, repeatedly, without losing what it
+had?} The registered test is a paired comparison on repository tasks reserved before any
+rollout, with a retention check and a replication on a second repository
+(\cref{sec:protocol,sec:pending}). \textbf{That result has not been measured.} What this
+paper establishes is what is needed to measure it honestly: the architecture, a task and
+verification funnel, a training substrate that fits a 27B model on one card, a release gate,
+the lessons of a first registered campaign that failed, the corrections that followed, and a
+protocol and replication recipe fixed before the first coding run. The tables that will hold
+the result are in the paper and are empty.
+
+\paragraph{Scope.} The paper asks two questions. \emph{Does each stage of the loop do what its
+specification says, and does a full turn, run twice, produce a policy that answers facts it
+was not given and keeps what it knew?} (answered for a controlled domain, negatively, in
+\cref{sec:results}.) \emph{Can the same loop be pointed at a repository and its effect on
+unseen tasks be decided by a registered test?} (protocol and recipe only,
+\cref{sec:protocol,sec:replicate}.) It claims no general improvement of any benchmark score and
+contains no plans beyond the registered experiments: a mechanism the code does not contain is
+absent, and a measurement that was not made is stated as not made.
 
 \paragraph{How claims are verified.} Every statement about the system or a measurement
 carries the id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey
-bracketed ids). A \textsc{structure} claim is a fact about the code or command line and
-is re-checked by \code{make verify} against the repositories at pinned commits
-(\cref{sec:repro}); a \textsc{measured} claim is a number computed by
-\code{scripts/build_data.py} from raw run records kept in \code{data/runs}; a
-\textsc{cited} claim states what a published paper does and points at its bibliography
-entry. A structure check shows that a definition, constant or message exists in a file;
-it does not show that the code behaves accordingly, which only the experiments of
-\cref{sec:design,sec:results} address.
+bracketed ids). A \textsc{structure} claim is a fact about the code, a command line or the
+history of a repository and is re-checked by \code{make verify} against the repositories at
+pinned commits that a fresh clone can reach (\cref{sec:repro}); a \textsc{measured} claim is a
+number computed by \code{scripts/build_data.py} from raw run records kept in \code{data/runs};
+a \textsc{computed} claim is a number derived by that script from a stated formula; a
+\textsc{registered} claim states a rule that the dated registration files contain; a
+\textsc{planned} claim states that an experiment has not been run and stops being true the
+moment a result row exists; a \textsc{cited} claim states what a published work does and points
+at its bibliography entry. A structure check shows that a definition, constant or message exists
+in a file; it does not show that the code behaves accordingly, which only the experiments do.
 
-\paragraph{Contributions, all verified in this paper.}
-(i)~A description of the division of labour among the three projects and of its
-enforcement (\cref{sec:architecture}).
-(ii)~The intake, task-admission and verification funnel with its rejection reasons, its
-leakage controls and its corpus-expansion mechanisms (\cref{sec:intake,sec:admission,%
-sec:verify,sec:dataset}), and a measured funnel on a real corpus (E1).
-(iii)~The training, consolidation, release-gate, release and rollback machinery
-(\cref{sec:training,sec:gate}) and a two-generation turn on a controlled domain
-(E2, E3) that stopped before the gate, which we report as it happened.
-(iv)~An account of what Brain's training substrate contains for a 27B model on one card,
-and what its qualification measured (\cref{sec:substrate,sec:e4}).
-(v)~A documentation defect found while verifying the claims.
+\paragraph{Contributions.}
+(i)~A description of the division of labour among the three projects and of its enforcement
+(\cref{sec:architecture}), and of the intake, admission, verification and leakage-control funnel
+with its rejection reasons (\cref{sec:intake,sec:admission,sec:verify,sec:dataset}).
+(ii)~The training, release-gate, rollback and lineage machinery (\cref{sec:training,sec:gate}) and
+what the training substrate of one card holds and was measured to do for a 27B model
+(\cref{sec:substrate}).
+(iii)~A first registered campaign reported as it happened, including its failure
+(\cref{sec:design,sec:results}), and the defects it exposed with their fixes and open items
+(\cref{sec:corrections}).
+(iv)~A coding-task protocol with registered experiments, including a replication, fixed before
+any run (\cref{sec:protocol,sec:pending}), and a replication recipe whose steps are marked
+available or planned (\cref{sec:replicate}).

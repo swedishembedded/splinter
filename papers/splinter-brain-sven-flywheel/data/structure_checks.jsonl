@@ -230,3 +230,81 @@
 {"id": "FX04.1", "repo": "splinter", "path": "crates/pipelines/src/release/serve/server.rs", "kind": "regex", "pattern": "--adapter-targets", "min": 1}
 {"id": "FX04.2", "repo": "splinter", "path": "crates/pipelines/tests/common/fake_brain.rs", "kind": "regex", "pattern": "adapter-targets", "min": 1}
 {"id": "B12.1", "repo": "brain", "path": "crates/cli/src/qwen35_cli.rs", "kind": "regex", "pattern": "sample-adapter", "min": 1}
+{"id": "B13.1", "repo": "brain", "path": ".agents/knowledge/312-one-wait-per-mlp-pass-lifts-the-27b-step-to-630-tokens-a-second-and-the-step-is-bound-by-device-time.md", "pattern": "real checkpoint tokens/s \\| 621 \\| \\*\\*635\\*\\*", "kind": "regex", "pin": "brain_throughput"}
+{"id": "B14.1", "repo": "brain", "path": ".agents/knowledge/311-one-native-launch-for-the-gdn-backward-sweep-the-real-checkpoint-step-and-the-bf16-tier-on-an-idle-card.md", "pattern": "bf16, freed blocks kept \\| 12\\.8 / 12\\.8 \\| \\*\\*640\\*\\* \\| 59\\.2 \\| 79\\.8 GiB", "kind": "regex", "pin": "brain_throughput"}
+{"id": "B15.1", "repo": "brain", "path": ".agents/knowledge/312-one-wait-per-mlp-pass-lifts-the-27b-step-to-630-tokens-a-second-and-the-step-is-bound-by-device-time.md", "pattern": "1,000 tokens/s is not reached", "kind": "regex", "pin": "brain_throughput"}
+{"id": "FX05.1", "repo": "splinter", "rev": "2df423708bb98405303266e023b2ae9f871f069b", "kind": "ancestor", "pin": "splinter_head"}
+{"id": "FX05.2", "repo": "splinter", "rev": "5bef68b9b962a930b5dd90f28a4194fd4f45e38d", "kind": "ancestor", "pin": "splinter_head"}
+{"id": "FX05.3", "repo": "splinter", "rev": "0e7ffaa79c31f0efbca0993b6457201dc5c5b49d", "kind": "ancestor", "pin": "splinter_head"}
+{"id": "FX05.4", "repo": "splinter", "rev": "1aa402b6f2eee26788a3c6ac51ba83e470c2f99e", "kind": "ancestor", "pin": "splinter_head"}
+{"id": "FX06.1", "repo": "splinter", "rev": "2e7225648bf6909fce56f01fef2772510fd15bf1", "kind": "ancestor"}
+{"id": "FX07.1", "repo": "splinter", "rev": "cab56de2b470a9163e154d897553b5c39fc0152d", "kind": "ancestor", "pin": "splinter_head"}
+{"id": "FX07.2", "repo": "splinter", "rev": "6ca8b3fee30b9fbb20051b6a2eb4770110aabd92", "kind": "ancestor", "pin": "splinter_head"}
+{"id": "FX07.3", "repo": "splinter", "path": "crates/eval/src/gate.rs", "pattern": "NetLost\\(u32\\)", "kind": "regex", "pin": "splinter_head"}
+{"id": "FX07.4", "repo": "splinter", "path": "crates/eval/src/gate.rs", "pattern": "pub const DEFAULT_ANCHOR_BOUND: f64 = 0\\.02;", "kind": "regex", "pin": "splinter_head"}
+{"id": "FX07.5", "repo": "splinter", "path": "samples/generations/anchor-200.jsonl", "pattern": "^\\{", "min": 200, "max": 200, "kind": "regex", "pin": "splinter_head"}
+{"id": "OP01.1", "repo": "splinter", "path": "crates/pipelines/src/release/gating.rs", "pattern": "probe::held_out\\(ctx, name\\.clone\\(\\), &split\\.plain\\)", "kind": "regex", "pin": "splinter_head"}
+{"id": "OP02.1", "repo": "splinter", "path": "crates/eval/src/verifiers/workspace.rs", "pattern": "The patch passes only if every command exits", "kind": "regex", "pin": "splinter_head"}
+{"id": "OP03.1", "repo": "splinter", "path": "crates/pipelines/src/practice/stages.rs", "pattern": "\\.\\.ReleaseRequest::new\\(id\\)", "kind": "regex", "pin": "splinter_head"}
+{"id": "OP03.2", "repo": "splinter", "path": "crates/pipelines/src/practice/stages.rs", "pattern": "canar", "kind": "absent", "pin": "splinter_head"}
+{"id": "AU01.1", "repo": "brain", "rev": "28497a7345fe1798a04d9a0e19f6c8b492e6d059", "kind": "ancestor"}
+{"id": "AU02.1", "repo": "brain", "rev": "6ba116d2687c4f62dcb5ee4cb7e58758be462d56", "kind": "ancestor"}
+{"id": "AU02.2", "repo": "splinter", "rev": "bbe14d5728fb685bcd5469fd6a5b855244984f1e", "kind": "ancestor"}
+{"id": "AU03.1", "repo": "sven", "rev": "985949e9327998656d7f7051c92351be04c40cb1", "kind": "ancestor"}
+{"id": "AU03.2", "repo": "sven", "rev": "9c2ca61272d39e05ee441c89e5cead7f2975643d", "kind": "ancestor"}
+{"id": "AU03.3", "repo": "sven", "rev": "2d163bed7e04711b274cc35f7d35e34e1e29d342", "kind": "ancestor"}
+{"id": "AU04.1", "repo": "splinter", "rev": "4ce0b117323ff777ad817af197ba475d061e19b1", "kind": "ancestor"}
+{"id": "AU05.1", "repo": "splinter", "rev": "0cada2207de0b93a83a23258c88e4898acd18ab1", "kind": "ancestor"}
+{"id": "AU05.2", "repo": "sven", "rev": "dc8cdbfc37118ccf3c54e24e6d79452ff2bdf38d", "kind": "ancestor"}
+{"id": "AU06.1", "repo": "sven", "rev": "0a0c63c8e13050e75662661d3db41d99a5086c26", "kind": "ancestor"}
+{"id": "AU06.2", "repo": "sven", "rev": "95be0286a1f982c5dfabea35b27e87a51b045ff6", "kind": "ancestor"}
+{"id": "AU06.3", "repo": "sven", "rev": "1a7cf11e20980584841280e433719df289264edd", "kind": "ancestor"}
+{"id": "AU07.1", "repo": "sven", "rev": "dc8cdbfc37118ccf3c54e24e6d79452ff2bdf38d", "kind": "ancestor"}
+{"id": "AU08.1", "repo": "brain", "rev": "300779103f36185b63a2481cd62615b0bd7abf7a", "kind": "ancestor"}
+{"id": "AU09.1", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "isolation: none", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.1", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `policy` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.2", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `snapshot` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.3", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `profile` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.4", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `tasks` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.5", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `reserve` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.6", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `solve` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.7", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `verify` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.8", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `frontier` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.9", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `dataset` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.10", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `train` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.11", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "^\\| `release` \\|", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS01.12", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "a red or flaky baseline stops the run", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.0", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "^kind = \"repository\"", "min": 8, "max": 8, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.1", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"iniparse\".*?language = \"python\".*?tests = 279\\n.*?admitted = 177\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.2", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"ttlcache\".*?language = \"python\".*?tests = 257\\n.*?admitted = 159\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.3", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"exprcalc\".*?language = \"python\".*?tests = 256\\n.*?admitted = 186\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.4", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"linediff\".*?language = \"python\".*?tests = 278\\n.*?admitted = 152\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.5", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"mdrender\".*?language = \"python\".*?tests = 270\\n.*?admitted = 148\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.6", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"caldate\".*?language = \"lua\".*?tests = 250\\n.*?admitted = 132\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.7", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"graphkit\".*?language = \"lua\".*?tests = 262\\n.*?admitted = 155\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS02.8", "repo": "splinter", "path": "tasks/catalog.toml", "pattern": "id = \"tokenbucket\".*?language = \"lua\".*?tests = 296\\n.*?admitted = 135\\n", "dotall": true, "kind": "regex", "pin": "splinter_head"}
+{"id": "PS03.1", "repo": "splinter", "path": "Makefile", "pattern": "no model, no GPU, minutes", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS03.2", "repo": "splinter", "path": "tasks/README.md", "pattern": "No model is loaded", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS04.1", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub test_command: Vec<String>", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS04.2", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub files: Vec<String>", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS04.3", "repo": "splinter", "path": "crates/splinter/README.md", "pattern": "`python3 -m unittest` for a Python project with a `tests` directory, `cargo test --offline` for a Cargo project", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS05.1", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "pattern": "writable with room\\s+/// to spare, the policy's weights fit on a GPU", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.1", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub exam_families:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.2", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub exam_seed:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.3", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub max_tasks:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.4", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub mutants_per_file:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.5", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub budget:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.6", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub no_release:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.7", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub bf16_base:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.8", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub steps:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.9", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub rank:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS06.10", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub max_block:", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS07.1", "repo": "splinter", "path": "tasks/README.md", "pattern": "splinter experiment check tasks/e3-plan\\.toml", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS07.2", "repo": "splinter", "path": "crates/splinter/src/cli/practice.rs", "pattern": "pub plan: Option<PathBuf>", "kind": "regex", "pin": "splinter_head"}
+{"id": "PS08.1", "repo": "brain", "path": "crates/cli/src/run_cli.rs", "pattern": "--adapter-manifest FILE", "kind": "regex"}
+{"id": "PL01.1", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "pattern": "Benchmark", "kind": "absent", "pin": "splinter_head"}
+{"id": "FX02.3", "repo": "splinter", "rev": "1975575c5ddeb4e44373d148732bfea3f06b694b", "kind": "ancestor"}
+{"id": "FX03.3", "repo": "splinter", "rev": "a335ebb8043be9c930ad6eff7b9cf62c24dadae5", "kind": "ancestor"}
+{"id": "FX04.3", "repo": "splinter", "rev": "292512eeb86a9688cae063f94e922fc4098d2314", "kind": "ancestor"}
+{"id": "OP01.2", "repo": "splinter", "path": "crates/pipelines/src/release/gating.rs", "kind": "regex", "pattern": "suite\\.absorb\\(exams::suite\\(", "min": 1, "pin": "splinter_head"}
+{"id": "PS02.9", "repo": "splinter", "path": "tasks/README.md", "kind": "regex", "pattern": "baselines \\(five identical green runs\\)", "min": 1, "pin": "splinter_head"}

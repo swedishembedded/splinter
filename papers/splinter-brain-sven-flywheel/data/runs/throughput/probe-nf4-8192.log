@@ -1,0 +1,13 @@
+# Brain 27B-architecture training probe on the idle card, copied unmodified below this header.
+# Kept with the correction-plan input of 2026-10-16 as plan-probe-noprof.log. The roadmap records the command
+# as qwen35_train_probe --layers 64 --tokens 8192 --rank 16 --seed 7 --bf16-residuals on --base nf4
+# --gdn-segment 2048 --mlp-rows 2048 --steps 3, built from brain 21d4e13c. The log itself carries no commit.
+PROBE seed=7 layers=64 tokens=8192 base=nf4 rank=16 recompute=true gdn_segment=2048
+PROBE build_s=12.2
+PROBE built_mib=30707
+PROBE step=1 loss=13.4607 forward_s=3.91 step_s=14.19 tokens_per_s=577 dispatches=77151 cpu_s=13.68
+PROBE step=2 loss=13.4012 forward_s=3.19 step_s=13.18 tokens_per_s=622 dispatches=77151 cpu_s=13.13
+PROBE step=3 loss=13.3244 forward_s=3.20 step_s=13.18 tokens_per_s=622 dispatches=77151 cpu_s=13.14
+PROBE warm_tokens_per_s=622 other_contexts_start=0 other_contexts_end=0
+PROBE peak_mib=44725
+PROBE step_mib_per_token=1.711

@@ -2,26 +2,26 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 \begin{abstract}
-A local model that is meant to keep learning from the documents, tools and repositories
-it works with needs a loop from source to release that can be inspected stage by stage.
-We describe the self-learning flywheel built by three cooperating projects: Splinter decides
-what is learned, Brain trains and serves, and Sven runs the agents. The loop takes a source,
-has a model propose tasks that code admits or refuses for named reasons, attempts them
-through an agent runtime, keeps what typed verifiers confirm, projects verified experience
-into training data, trains a LoRA adapter or consolidates into the weights, and releases the
-result only if four checks over unseen material pass, with immutable releases and rollback.
-Every statement about the system carries an id in a claims ledger and is re-checked against
-the three repositories at pinned commits (121 structure claims, 232 checks); every number
-comes from a raw run record. Four small experiments exercise the loop; all are pilots, and the first wave of two of them
-failed and exposed four defects, repaired here with regression tests. A task funnel on documentation
-pages refused 82 of 144 proposals in the first wave and 75 of 137 on the repaired binary because the
-generator did not name the task's subject, in 45 of the 75 cases by omitting it from the question;
-only the markup-only class (18 of 82) was a defect of the rule. The registered two-generation
-turn on invented facts with a 0.6B policy did \emph{not} reach its success criterion: its candidates
-learned 13 of 30 facts (none at base) and passed the improvement, retention and serve checks, and the
-gate refused each of them on the anchor check alone, which allows no lost answer of 40 questions, so no
-release, no retention across releases and no rollback to a first release was obtained. A post hoc run with
-a 1.7B policy was released by the gate and kept the anchor. Qualification runs of the 27B model on one 95~GiB
-card fit an NF4 base at 8192 tokens in about 36~GiB and a bf16 base at 16384 tokens in about 78~GiB.
-We list what was not measured.
+A local model can keep learning from a team's documents, tools and repositories only if the
+path from a source to a released model can be inspected stage by stage. We describe a
+self-learning loop built from three cooperating projects, Splinter (what is learned), Brain
+(training and serving) and Sven (agents): a model proposes tasks that code admits or refuses
+for named reasons, an agent attempts them, typed verifiers keep what they confirm, verified
+experience becomes training data for a LoRA adapter, and the result is released only if four
+checks over unseen material pass, with immutable releases and rollback. Every statement about
+the system or a measurement carries an id in a claims ledger and is re-checked against the
+three repositories at pinned commits or against a raw run record. We report what the training
+substrate of one 95~GiB card holds for a 27B model (bf16 LoRA and NF4 QLoRA qualified; a
+probe step at \mThrNfFourEightOneNineTwoTokensPerS{} tokens/s, as measured). We report the first
+registered campaign, a two-generation turn on invented facts, which \emph{failed} its criterion:
+with a 0.6B policy every candidate learned facts and passed the improvement and retention
+checks, and the anchor check alone refused each of them, so no release was obtained; in a post
+hoc 1.7B run the first candidate was released, and the second kept only \mETwodCandidateGOneGZero{}
+of the \mETwodAfterGZeroGZero{} facts of the first, which the gate's retention check did not
+see. We list the defects this exposed, what is fixed with the commits that fix it,
+and what is open. Finally we register, before any run, the experiment the loop exists for:
+whether adapters trained on verified agent trajectories raise completion of unseen repository
+tasks, with retention and a replication on a second, independent repository. That experiment
+is \emph{not yet measured}; the paper contains its protocol, its replication recipe and its
+empty result tables, and no coding-task result.
 \end{abstract}

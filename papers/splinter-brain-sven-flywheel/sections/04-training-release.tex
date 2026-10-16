@@ -53,23 +53,3 @@ follows the release without a restart.\cl{X05} \code{splinter rollback} moves th
 the release the current one was trained from and refuses when there is none.\cl{X06}
 \code{splinter lineage} walks any artifact up to its source bytes and down to everything
 derived from it, computed from the stores on every call.\cl{X07}
-
-\section{The training substrate}\label{sec:substrate}
-
-Training a 27-billion-parameter model on one 95~GiB card needs the frozen base in a
-reduced-precision tier, activation recomputation, a loss that never materialises the
-full logits, an attention kernel that supports the model's head dimension, and a loader
-that never holds the checkpoint in host memory. We state what Brain's main tree
-contains, at the commit read, for each. The Splinter trainer's seam is the
-Qwen3-family trainer.\cl{B01} In that trainer the frozen base can be held in
-bf16,\cl{B02} each layer is recomputed in the backward pass from its saved
-residual,\cl{B03} and the logits are sized in row chunks with a chunked weighted
-cross-entropy.\cl{B04} Brain has a causal grouped-query flash-attention forward and
-backward supporting head dimensions up to 256, with finite-difference gradient checks at
-head dimensions 40, 128 and 256.\cl{B05,B10} For the 27B model's crate it has a streaming
-FP8 source that dequantises in 128-row bands and a base-dtype enumeration with F32, bf16
-and NF4 members,\cl{B06} and an NF4 weight type with a 16-entry lookup table.\cl{B07} The
-numerical gates are \code{make test/gradcheck} (finite-difference checks of the
-Qwen3.5 architecture including LoRA) and \code{make test/parity}, which runs the checks on
-the CPU backend.\cl{B08,B09} \Cref{sec:e4} reports what was and was not measured on the
-27B model.

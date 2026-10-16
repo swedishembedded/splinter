@@ -27,6 +27,13 @@ Raw records (data/runs):
   e2/build.json          seed of the invented facts
   e2/exits.json          exit status of the two learn commands and the rollback
   qual/*                 training-substrate qualification files, copied verbatim
+  throughput/*.log       a later probe of the 27B architecture's training step rate
+  ../results.csv         paired outcomes of the registered coding-task experiments (none yet)
+
+Claim kinds (data/claims.csv): STRUCTURE (verify_structure.py), MEASURED and COMPUTED (a
+metric of this script, whose value the claim text must contain), REGISTERED (a phrase the
+dated registration files contain), PLANNED (an experiment with no result row yet; false as
+soon as one exists) and CITED (a key of references.bib).
 """
 
 import argparse
@@ -34,6 +41,8 @@ import csv
 import json
 import re
 import sys
+import tomllib
+from math import comb
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -368,8 +377,61 @@ def qual_metrics():
     return m
 
 
+ALPHA = 0.05
+
+
+def upper_tail(wins, n):
+    """P(X >= wins) for X ~ Binomial(n, 1/2): the exact one-sided sign test."""
+    return sum(comb(n, i) for i in range(wins, n + 1)) / 2**n if n else 1.0
+
+
+def critical_wins(n):
+    """Fewest wins out of n non-tied families with one-sided p <= ALPHA, or None."""
+    return next((w for w in range(n + 1) if upper_tail(w, n) <= ALPHA), None)
+
+
+def power(n, q):
+    """P(reject) when each non-tied family is a win with probability q."""
+    w = critical_wins(n)
+    return 0.0 if w is None else sum(comb(n, i) * q**i * (1 - q) ** (n - i) for i in range(w, n + 1))
+
+
+def design_metrics():
+    m = {}
+    for n in (15, 20, 25, 30):
+        m[f"design.n{n}.wins"] = critical_wins(n)
+        for q in (70, 80, 90):
+            m[f"design.n{n}.power{q}"] = f"{power(n, q / 100):.2f}"
+    return m
+
+
+def throughput_metrics():
+    """The probe's warm rate (steps two and three), step time and peak, and the card hours one
+    million tokens take at that rate."""
+    path = RUNS / "throughput" / "probe-nf4-8192.log"
+    if not path.exists():
+        return {}
+    text = path.read_text()
+    rate = int(re.search(r"PROBE warm_tokens_per_s=(\d+)", text).group(1))
+    return {"thr.nf4_8192.tokens_per_s": rate,
+            "thr.nf4_8192.step_s": re.findall(r"step=3 .*?step_s=([\d.]+)", text)[0],
+            "thr.nf4_8192.peak_mib": int(re.search(r"PROBE peak_mib=(\d+)", text).group(1)),
+            "thr.hours_per_million_tokens": f"{1e6 / (rate * 3600):.2f}"}
+
+
+def ledger_metrics():
+    with open(ROOT / "data" / "claims.csv", newline="", encoding="utf-8") as f:
+        claims = list(csv.DictReader(f))
+    checks = [line for line in (ROOT / "data" / "structure_checks.jsonl").read_text().splitlines() if line.strip()]
+    return {"ledger.claims": len(claims), "ledger.structure": sum(c["kind"] == "STRUCTURE" for c in claims),
+            "ledger.checks": len(checks)}
+
+
 def metrics():
     m = {}
+    m.update(design_metrics())
+    m.update(throughput_metrics())
+    m.update(ledger_metrics())
     m.update(qual_metrics())
     m.update(e1_metrics())
     m.update(e1w2_metrics())
@@ -449,6 +511,82 @@ def e4_table():
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- coding-task tables
+# The registered coding-task experiments (prereg/coding-tasks.md). A status is derived, never typed:
+# an experiment is PENDING until a row of data/results.csv or a directory data/runs/<id> exists.
+REGISTERED = [
+    ("CE1", "Untrained agent: resolve rate, failure profile, cost, discordance", "descriptive, no threshold"),
+    ("CE4", "SFT on verified trajectories against the base (headline)", "sign test, qualification, alpha 0.05"),
+    ("CE6", "27B training and deployment, ten stages", "gates G7 and G8"),
+    ("CE7", "Replication on a second, independent repository", "same test, independently"),
+]
+COMPARISONS = ("CE4", "CE7")
+
+
+def read_results():
+    path = ROOT / "data" / "results.csv"
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def experiment_status(key):
+    rows = [r for r in read_results() if r["experiment"] == key]
+    if rows or (RUNS / key.lower()).exists():
+        return f"{len(rows)} result rows" if rows else "recorded"
+    return r"\textbf{PENDING}"
+
+
+def registered_table():
+    lines = [r"\begin{tabular}{lp{6.2cm}p{3.6cm}l}", r"\toprule", r"Id & Question & Primary measure & Status \\", r"\midrule"]
+    for key, question, measure in REGISTERED:
+        lines.append(f"{key} & {question} & {measure} & {experiment_status(key)} \\\\")
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
+
+
+def results_table():
+    rows = read_results()
+    lines = [r"\begin{tabular}{lllrrrrl}", r"\toprule",
+             r"Exp. & Repository & Arm & Families & Wins & Losses & $p$ & Status \\", r"\midrule"]
+    for key in COMPARISONS:
+        mine = [r for r in rows if r["experiment"] == key]
+        if not mine:
+            lines.append(rf"{key} & \multicolumn{{7}}{{l}}{{\textbf{{PENDING}}: no run exists}} \\")
+        for r in mine:
+            wins, losses = int(r["wins"]), int(r["losses"])
+            lines.append(f"{key} & {r['repository']} & {r['arm']} & {r['exam_families']} & {wins} & {losses} "
+                         f"& {upper_tail(wins, wins + losses):.3f} & {r['status']} \\\\")
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
+
+
+def design_table():
+    lines = [r"\begin{tabular}{rrrrrr}", r"\toprule",
+             r"Non-tied & Wins needed & Smallest $p$ & \multicolumn{3}{c}{Power if $P(\text{win})=$} \\",
+             r"families $n$ & for $p\le 0.05$ & (all wins) & 0.7 & 0.8 & 0.9 \\", r"\midrule"]
+    for n in (4, 5, 6, 8, 10, 15, 20, 25, 30):
+        w = critical_wins(n)
+        lines.append(f"{n} & {w if w is not None else 'none'} & {upper_tail(n, n):.2g} & "
+                     f"{power(n, 0.7):.2f} & {power(n, 0.8):.2f} & {power(n, 0.9):.2f} \\\\")
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
+
+
+def power_curve():
+    return "n,q70,q80,q90\n" + "".join(
+        f"{n},{power(n, 0.7):.4f},{power(n, 0.8):.4f},{power(n, 0.9):.4f}\n" for n in range(2, 41))
+
+
+def catalog():
+    """The authored repository families, from the catalogue beside this paper in the repository."""
+    path = ROOT.parent.parent / "tasks" / "catalog.toml"
+    return [f for f in tomllib.loads(path.read_text())["family"] if f.get("kind") == "repository"]
+
+
+def families_table():
+    lines = [r"\begin{tabular}{llrr}", r"\toprule", r"Family & Language & Tests & Admitted tasks \\", r"\midrule"]
+    for f in catalog():
+        lines.append(f"\\code{{{f['id']}}} & {f['language']} & {f['tests']} & {f['admitted']} \\\\")
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
+
+
 def macro_name(key):
     digits = "Zero One Two Three Four Five Six Seven Eight Nine".split()
     words = re.split(r"[._\-]+", key)
@@ -469,6 +607,14 @@ def write_outputs(out):
     (out / "e2_table.tex").write_text(e2_table() + "\n")
     (out / "e4_table.tex").write_text(e4_table() + "\n")
     (out / "learn_table.tex").write_text(learn_table() + "\n")
+    (out / "registered_table.tex").write_text(registered_table() + "\n")
+    (out / "results_table.tex").write_text(results_table() + "\n")
+    (out / "design_table.tex").write_text(design_table() + "\n")
+    (out / "power_curve.csv").write_text(power_curve())
+    (out / "families_table.tex").write_text(families_table() + "\n")
+    macros_extra = f"\\newcommand{{\\alphalevel}}{{{ALPHA}}}\n"
+    with open(out / "macros.tex", "a") as handle:
+        handle.write(macros_extra)
     (out / "limitations.tex").write_text(limitations())
 
 
@@ -493,6 +639,38 @@ def cited_ids():
     return used
 
 
+def normalise(text):
+    return " ".join(text.split())
+
+
+def check_evidence(c, m, problems):
+    kind = c["kind"]
+    entries = [e for e in c["evidence"].split(";") if e]
+    if kind in ("MEASURED", "COMPUTED"):
+        for ev in entries:
+            key = ev.removeprefix("runs/")
+            if key not in m:
+                problems.append(f"{c['id']}: metric {key} has no record")
+            elif str(m[key]) not in c["claim"]:
+                problems.append(f"{c['id']}: claim text lacks {m[key]} for {key}")
+    elif kind == "REGISTERED":
+        for ev in entries:
+            rel, _, phrase = ev.partition("#")
+            path = ROOT / rel
+            if not path.exists() or normalise(phrase) not in normalise(path.read_text()):
+                problems.append(f"{c['id']}: {rel} does not contain {phrase!r}")
+    elif kind == "PLANNED":
+        for ev in entries:
+            key = ev.removeprefix("exp:")
+            if experiment_status(key) != r"\textbf{PENDING}":
+                problems.append(f"{c['id']}: {key} has results; the planned claim is false")
+    elif kind == "CITED":
+        bib = (ROOT / "references.bib").read_text()
+        for key in entries:
+            if "{" + key + "," not in bib:
+                problems.append(f"{c['id']}: {key} is not in references.bib")
+
+
 def check():
     with open(ROOT / "data" / "claims.csv", newline="", encoding="utf-8") as f:
         claims = list(csv.DictReader(f))
@@ -506,20 +684,14 @@ def check():
     for unused in sorted(set(ids) - used):
         problems.append(f"ledger row {unused} is cited nowhere in the text")
     m = metrics()
-    n_measured = 0
+    counts = {}
     for c in claims:
-        if c["status"] != "verified":
-            problems.append(f"{c['id']}: status {c['status']!r}")
-        if c["kind"] != "MEASURED":
-            continue
-        n_measured += 1
-        for ev in filter(None, c["evidence"].split(";")):
-            key = ev.removeprefix("runs/")
-            if key not in m:
-                problems.append(f"{c['id']}: metric {key} has no record")
-            elif str(m[key]) not in c["claim"]:
-                problems.append(f"{c['id']}: claim text lacks {m[key]} for {key}")
-    print(f"{len(claims)} claims, {n_measured} MEASURED, {len(problems)} problems")
+        counts[c["kind"]] = counts.get(c["kind"], 0) + 1
+        allowed = "planned" if c["kind"] == "PLANNED" else "verified"
+        if c["status"] != allowed:
+            problems.append(f"{c['id']}: status {c['status']!r}, expected {allowed!r}")
+        check_evidence(c, m, problems)
+    print(f"{len(claims)} claims ({', '.join(f'{k} {v}' for k, v in sorted(counts.items()))}), {len(problems)} problems")
     for p in problems:
         print("FAIL", p)
     sys.exit(1 if problems else 0)

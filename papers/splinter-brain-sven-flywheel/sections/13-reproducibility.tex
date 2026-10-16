@@ -3,12 +3,18 @@
 
 \section{Reproducibility}\label{sec:repro}
 
-\paragraph{Verification.} \code{make -C papers/splinter-brain-sven-flywheel verify} re-runs
-every structure check against the commits in \code{data/commits.json} and then
-\code{scripts/build_data.py --check}, which resolves each measured claim to its raw record,
-requires the claim text to contain the value, and requires every ledger row to be cited in the
-text and every citation to be in the ledger. The ledger is \code{data/claims.csv}; the
-bibliography entries were checked against the archive's abstract pages on 2026-10-16.
+\paragraph{Verification.} \code{make -C papers/splinter-brain-sven-flywheel verify} first runs the
+specification of the pin rule, then re-runs every structure check against the commits in
+\code{data/commits.json}, then \code{scripts/build_data.py --check}, which resolves each measured,
+computed, registered and planned claim to its record, requires the claim text to contain the value,
+and requires every ledger row to be cited in the text and every citation to be in the ledger.
+The ledger holds \mLedgerClaims{} claims, \mLedgerStructure{} of them structure claims backed by
+\mLedgerChecks{} checks. A pin must be contained in a remote-tracking ref of its repository, so a
+fresh clone of the three remotes reproduces the result; the verification was run on such a clone
+of the remotes, with the sibling repositories given by \code{--sven} and \code{--brain}. The
+splinter pin is the reachable twin of an earlier pin that no branch contained.
+\code{make check} includes this verification as \code{check/papers}. The bibliography entries
+were checked against the archive's abstract pages on 2026-10-16.
 
 \paragraph{Experiments.} The exact commands are in \code{scripts/run_experiments.sh}; raw records
 are copied into \code{data/runs} by \code{scripts/archive_run.sh} with this machine's paths replaced.
@@ -33,10 +39,17 @@ served probes were stopped under load; the rollback of its first release; and \c
 of its state taken before the rollback), all on the state
 the first produced, nothing retried.
 
-\paragraph{Training qualification (E4).} The logs in \code{data/runs/qual} are Brain's
-qualification logs at commit \mEFourCommit{}; each log's header records its command.
-E4 contains only the runs that finished; runs that were planned and not run are not
-reported as results.
+\paragraph{Training qualification and throughput.} The logs in \code{data/runs/qual} are Brain's
+qualification logs at commit \mEFourCommit{}; each log's header records its command. They contain
+only the runs that finished; runs that were planned and not run are not reported as results. The
+throughput probe in \code{data/runs/throughput} is a copy of a log kept with the correction plan;
+its header says what the roadmap records about its command and revision, and that the log itself
+carries no commit.
+
+\paragraph{Coding-task experiments.} None has been run. The registration is
+\code{prereg/coding-tasks.md}; results will be rows of \code{data/results.csv} with the commands,
+commits, harness profile and seeds of the run, and the tables of \cref{sec:pending} are generated
+from them.
 
 \paragraph{Build.} \code{make papers/splinter-brain-sven-flywheel/pdf} builds the paper to
 \code{target/papers}; the tables and numbers are generated from \code{data/runs} into the

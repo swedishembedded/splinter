@@ -146,3 +146,10 @@ Measured throughput is reported as measured; no target is registered here.
 ## Amendments
 
 (none)
+
+## Provenance
+
+The common definitions restate, without change of substance, the protocol fixed on
+2026-10-13 for a separate draft paper on tuning a local model to a repository (units, arms,
+primary test, retention, exclusions and controls); that draft contained no measured run and was
+folded into this paper, and its directory removed, on 2026-10-16 before any run.

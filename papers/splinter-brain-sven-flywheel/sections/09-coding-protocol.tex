@@ -1,0 +1,137 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{The coding-task experiment: protocol}\label{sec:protocol}
+
+The loop of \cref{sec:architecture,sec:admission,sec:verify,sec:dataset} is exercised on
+invented facts in \cref{sec:results}. The question that matters to a team is different:
+\emph{given a git repository, can a local agentic model be tuned to work competently in
+it, repeatedly and with further repositories, and does it get better at what it has met
+rather than only at the newest?} This section states the protocol that asks it. It was
+registered before any run (\code{prereg/coding-tasks.md}, \cref{sec:pending}); everything
+in it is a registered rule or a statement about the code, and no coding-task measurement
+exists yet.\cl{PR00}
+
+\paragraph{Tasks.} A task is a snapshot of a repository tree at a revision, an
+instruction stating a symptom, and privileged material the solver never receives: the
+hidden checks (fail-to-pass and pass-to-pass commands) and the paths that carry them.\cl{PR01}
+A candidate task is admitted only if the snapshot's selected tests pass twice, a change makes
+a previously passing test fail reproducibly, and the reverse change restores green
+(\cref{fig:valid}); a red or flaky baseline stops the run.\cl{PR01,PS01} Splinter's repository
+tasks are made by code and never proposed by a model, and have their own refusal
+vocabulary.\cl{A01,A09} The failing tests are moved out of the tree the solver receives, and a
+repair passes when the hidden files are overlaid fresh on the patched tree and the
+fail-to-pass and pass-to-pass commands pass; a patch that touches a protected path
+fails.\cl{V07}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  stp/.style={draw,rounded corners,align=center,minimum width=2.2cm,minimum height=0.9cm,font=\scriptsize},
+  arr/.style={-{Stealth[length=1.6mm]},thick},
+  rej/.style={draw,dashed,rounded corners,align=center,font=\scriptsize,text=red!60!black}]
+\node[stp] (a) {Baseline\\passes $\times2$};
+\node[stp,right=0.55cm of a] (b) {Apply\\change};
+\node[stp,right=0.55cm of b] (c) {Some test\\fails};
+\node[stp,right=0.55cm of c] (d) {Failure\\reproducible};
+\node[stp,right=0.55cm of d] (e) {Reverse patch\\restores green};
+\node[stp,right=0.55cm of e,fill=green!12] (f) {Seal hidden\\files};
+\foreach \x/\y in {a/b,b/c,c/d,d/e,e/f} \draw[arr] (\x) -- (\y);
+\node[rej,below=0.5cm of a] (ra) {flaky or red:\\refuse};
+\node[rej,below=0.5cm of c] (rc) {no failing test\\(equivalent): refuse};
+\node[rej,below=0.5cm of e] (re) {not restorable:\\refuse};
+\draw[arr,dashed,red!60!black] (a) -- (ra);
+\draw[arr,dashed,red!60!black] (c) -- (rc);
+\draw[arr,dashed,red!60!black] (e) -- (re);
+\end{tikzpicture}
+\caption{Admission of a mutation-seeded repository task. Every refusal is counted by reason.}\label{fig:valid}
+\end{figure}
+
+\paragraph{Solving, recording and trajectory data.} The solver is a Sven coding worker with
+file, search and shell tools, a tool-call budget and a repetition stop, started in a fresh
+copy of the snapshot, with follow-up turns when the visible checks stay red.\cl{R03,PS01} The
+recorded unit is the full trajectory; the verdict is produced outside the agent. Only
+attempts whose patch passes and whose exposure audit is clean are eligible for
+training;\cl{L06,L08} each assistant action becomes a training record conditioned on the prior
+conversation and on the tool definitions the agent was offered, with system and user turns
+carrying no loss, and compacted trajectories are excluded rather than repaired.\cl{D04,D05,D06,AU02}
+
+\paragraph{Validity and leakage.} Four registered rules keep the exam honest. (i)~Families are
+assigned to partitions by a stable hash before any rollout, and a family of the qualification
+partition is never solved for data purposes.\cl{PR02,L07} (ii)~Hidden files are absent from the
+solver's tree and are materialised only in the verifier's.\cl{V07} (iii)~An exposure audit fails
+an attempt whose tool calls name a hidden path or whose outputs repeat a shingle of hidden
+content, and exposed attempts and harness failures are withheld and counted in no
+denominator.\cl{L06,L08,PR06} (iv)~The isolation level of every run is recorded; with
+\code{none} the audit detects but cannot prevent, and a task whose soundness needs
+isolation is not admitted.\cl{PR06,AU09} Whether a repository is in the base model's
+pretraining data is not known; the base arm on the same exam bounds that effect without
+removing it.
+
+\paragraph{Units, arms and the paired exam.} The unit of analysis is the family, the file a
+fault was seeded in for the authored repositories and the subsystem for real
+ones.\cl{PR02} Tasks within a family are not independent, so no test treats them as such. The
+base arm is the unmodified checkpoint in a pinned harness profile; the adapter arm is the same
+checkpoint with the adapter attached; system prompt, tool schemas, budgets, seeds per
+(task, attempt) and environment image are identical.\cl{PR03} A family is won by the adapter
+when its resolved fraction is higher, lost when lower, and dropped when tied. The primary
+decision is a one-sided exact sign test over the non-tied qualification families at
+$\alpha=\alphalevel$, on the adapter served through Brain and driven by Sven; a result that is
+not significant is \emph{not shown}, never equivalence.\cl{PR04,G03}
+
+\begin{table}[t]
+\centering\small
+\input{generated/design_table}
+\caption{The exact one-sided sign test at $\alpha=\alphalevel$: wins required and power if
+each non-tied family is a win with the stated probability (a design calculation computed by
+\code{scripts/build_data.py}, not a measurement).}\label{tab:design}
+\end{table}
+
+\paragraph{What the test can decide.} \Cref{tab:design} and \cref{fig:power} give the wins
+needed and the power at assumed win probabilities: with fewer than five non-tied families no
+decision is possible, \mDesignNOneFiveWins{} wins are needed at fifteen non-tied families
+and \mDesignNTwoFiveWins{} at twenty-five, where the power at a win share of 0.8 is
+\mDesignNTwoFivePowerEightZero{}.\cl{CP01,CP02} The registration therefore asks for about
+twenty-five non-tied qualification families, fixed from the discordance of the baseline
+experiment before any training, and labels a smaller comparison a pilot without changing the
+rule.\cl{PR04}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.75\linewidth,height=5.2cm,xlabel={non-tied qualification families $n$},
+  ylabel={power},ymin=0,ymax=1.02,xmin=2,xmax=40,legend pos=south east,
+  legend style={font=\scriptsize},grid=major,
+  every axis plot/.append style={thick}]
+\addplot[blue,mark=none] table[col sep=comma,x=n,y=q70] {generated/power_curve.csv};
+\addplot[red!70!black,mark=none,dashed] table[col sep=comma,x=n,y=q80] {generated/power_curve.csv};
+\addplot[green!50!black,mark=none,dotted] table[col sep=comma,x=n,y=q90] {generated/power_curve.csv};
+\legend{$P(\text{win})=0.7$,$P(\text{win})=0.8$,$P(\text{win})=0.9$}
+\end{axis}
+\end{tikzpicture}
+\caption{Power of the exact one-sided sign test ($\alpha=\alphalevel$) against the number of
+non-tied families. The sawtooth is the discreteness of the test.}\label{fig:power}
+\end{figure}
+
+\paragraph{Retention across rounds.} After each round $k$, the exam families of every earlier
+round are solved again by the round-$k$ adapter and by its predecessor. Retention holds only if
+the one-sided 95\% lower bound of the change in resolve rate (family-cluster bootstrap) exceeds
+$-0.05$ absolute; a failed check refuses the candidate.\cl{PR05} The gate of
+\cref{sec:gate} already holds each earlier release to the exam of its own run for repository
+runs;\cl{G07} the open defects of \cref{sec:open} are why the registered check is stricter
+than the gate's.
+
+\paragraph{Controls and stop rules.} A gain must survive three controls, each a separate
+training run on the same budget: training on trajectories regardless of verdict (does
+verification matter), an adapter trained on a different repository (did it learn the tool
+protocol rather than the repository), and no replay of earlier rounds.\cl{PR07} Registered
+stop rules include dropping a task kind whose verifier false-pass rate exceeds 5\% and reporting
+a development gain without a qualification gain as memorisation.\cl{PR08}
+
+\paragraph{The code that exists.} \code{splinter practice} implements the stages of a
+single-repository round from a revision to a gated release.\cl{PS01} Eight authored repository
+families ship with the repository (\cref{tab:families}); a family's tests must pass five times
+identically and its faults be caught before it is catalogued.\cl{PS02} What does not exist
+yet is the benchmark verb that applies the partitions and the paired comparison of this section
+to the base and the served adapter in one command; the experiments of \cref{sec:pending} wait on
+it, and \cref{sec:replicate} marks each step as available now or planned.\cl{PL01}

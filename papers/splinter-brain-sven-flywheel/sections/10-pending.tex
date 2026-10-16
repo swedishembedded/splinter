@@ -1,0 +1,63 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{The headline experiment and its replication: registered, not yet run}\label{sec:pending}
+
+\paragraph{The claim this paper exists to establish.} Verified engineering-agent experience
+can produce a sustained improvement in completion of previously unseen repository tasks,
+under a controlled compute budget and without unacceptable loss of earlier capability.\cl{PR09}
+\textbf{That claim is not yet measured.} No coding-task experiment has been run; this
+section states exactly what will be run, what each outcome will mean, and where its numbers
+will appear. Nothing in it is a result.
+
+The experiments are registered in \code{prereg/coding-tasks.md}, dated 2026-10-16 and written
+before any of their runs; they are kept apart from the first campaign's registration
+(\code{prereg/protocol.md}), which is not amended. \Cref{tab:registered} lists them. Their
+numbers will be read from \code{data/results.csv} by \code{scripts/build_data.py}; a row exists
+only for a finished run, and the status column below changes by itself when one does.\cl{PL02}
+
+\begin{table}[t]
+\centering\small
+\input{generated/registered_table}
+\caption{The registered coding-task experiments. The status is derived from the rows of
+\code{data/results.csv}.}\label{tab:registered}
+\end{table}
+
+\begin{description}
+\item[CE1, the untrained agent.] The base agent's resolve rate on repository tasks, its failure
+profile, its cost per resolved task and the discordance between two seeds of the same arm per
+family, which sizes the qualification partition. No threshold; nothing is trained before it is
+reported.\cl{PR10}
+\item[CE4, the headline.] A LoRA adapter on Qwen3-8B trained only on verified trajectories from
+development-partition families, compared with the base on the qualification partition by the
+primary test of \cref{sec:protocol}, served through Brain and driven by Sven, with retention,
+serve-verdict agreement and the three controls. The headline holds only if the sign test has
+$p<0.05$, retention is not refused and agreement is within the serve check's tolerance; any
+other outcome is reported as what it is, including ``no held-out improvement'' and
+``memorisation''.\cl{PR11}
+\item[CE6, the 27B model.] Ten stages from loading the exact model to comparing correctness,
+tool-call validity and resources against the base, gated by training correctness and by
+deployment agreement. The 27B is not used for a confirmatory query until both gates pass;
+the training rate of \cref{sec:throughput} is reported as measured and no target is
+registered.\cl{PR12}
+\item[CE7, replication.] The unchanged CE1 and CE4 procedure on a second, independent
+repository chosen by a rule fixed in advance (permissive licence, offline build, a suite of
+bounded running time, no part of the pipeline tuned on it), with the cross cells that separate
+learning a repository from learning the protocol. The headline counts as reproduced only if
+both repositories pass the primary test independently.\cl{PR13}
+\end{description}
+
+\begin{table}[t]
+\centering\small
+\input{generated/results_table}
+\caption{Paired outcomes over qualification-partition families (wins: the adapter resolves more
+of the family than the base; losses: fewer), with the exact one-sided sign test. Every cell is
+empty until its run exists; a cell is never filled with an estimate.}\label{tab:results}
+\end{table}
+
+\paragraph{What a failure would show.} An adapter that does not win, a gain that a different
+repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
+a served adapter that disagrees with the in-process one are each stated outcomes of the
+registration, and each is publishable as such. A development gain with no qualification gain
+(sign test $p>0.2$) is reported as memorisation. If fewer than 25 non-tied families are
+available the comparison is labelled a pilot and the rule is not loosened.\cl{PR08}

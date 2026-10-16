@@ -27,6 +27,15 @@ materialising the score matrix;~\citep{flashattention2022}\cl{CT10} Gated DeltaN
 and is the recurrent layer type of the 27B model Brain implements (three Gated DeltaNet
 layers to one attention layer).~\citep{gateddelta2024}\cl{CT11,B11} Section~\ref{sec:substrate}
 reports which of these Brain contains.
-\emph{Repository tasks.} The sibling paper in this repository
-(\texttt{papers/training-code-skills-with-splinter}) treats executable repository tasks
-and the paired exam; this paper only describes how they fit the flywheel.
+\emph{Repository tasks and agents.} SWE-bench poses resolving real GitHub issues as the task,
+graded by the repository's tests;~\citep{swebench2023}\cl{CT12} SWE-agent shows that the
+interface between the model and the repository changes what a model achieves, so the interaction,
+not only the final patch, is what is recorded and trained on.~\citep{sweagent2024}\cl{CT13}
+SWE-Gym, R2E-Gym and SWE-smith build executable \emph{training} environments, by collecting
+instances, by procedural generation from commits and by modifying code so that tests
+fail.~\citep{swegym2024,r2egym2025,swesmith2025}\cl{CT14} We take the mutation-and-validate
+idea and the commit-based idea as task producers (\cref{sec:protocol}). The difference
+in aim is that the target here is one repository's own tasks, reserved before rollouts and
+evaluated paired against the base under an identical harness, followed by retention on earlier
+repositories and a replication on a second one; we read abstracts of these works and verified
+their identifiers, not their evaluation sections, and we make no claim about priority.

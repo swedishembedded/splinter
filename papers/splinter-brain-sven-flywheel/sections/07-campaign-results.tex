@@ -1,12 +1,13 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-\section{Results}\label{sec:results}
+\section{The first registered campaign: results}\label{sec:results}
 
 Every number in this section is produced from the raw records in \code{data/runs}
-by \code{scripts/build_data.py}. The experiments are pilots. Of the four, E1 and E4 ran
-as designed; E2 and E3 ran but did not produce a release, so what they measure is where
-the loop stopped.
+by \code{scripts/build_data.py}. The experiments are pilots. E1 ran as designed; E2 and E3
+ran but their registered criterion was not met: the registered runs produced no release, so
+what they measure is where the loop stopped. The results are reported as registered and
+measured; later repairs (\cref{sec:corrections}) do not rewrite them.
 
 \subsection{E1: the funnel on a real corpus}\label{sec:e1}
 
@@ -103,7 +104,7 @@ tasks right against none for the champion), retention (nothing earlier to hold) 
 (\mETworGZeroServeAgreed{} of \mETworGZeroServeSampled{} sampled answers of the served adapter
 agreed with the in-process ones). It was refused by the anchor check: the 40-question anchor suite
 fell by \mETworGZeroAnchorDrop{} against a bound of \mETworGZeroAnchorBound, which is one question
-lost.\cl{M24} The release was therefore not made. The registered success criterion (a release and a McNemar $p<0.05$ against the base) was therefore
+lost.\cl{M24} The release was therefore not made. The registered success criterion (a release and a McNemar $p<0.05$ against the base)\cl{RC04} was therefore
 \emph{not met}: the outcome is ``no release'', for the reason given.
 
 Measured on the probes (\cref{tab:e2}), the refused candidate answered \mETworCandidateGZeroGZero{} of
@@ -195,72 +196,3 @@ registered run and of E2b were measured again with the repaired verifier and gav
 \mETwobRegradeCandidateGZeroGZero{}; anchor \mETworRegradeCandidateGZeroAnchor, \mETworRegradeCandidateGOneAnchor{} and
 \mETwobRegradeCandidateGZeroAnchor).\cl{M30} The verifier's effect was on training, not on these probes:
 it decided which facts the teacher's answers could teach.
-
-\subsection{E4: training the 27B model on one card}\label{sec:e4}
-
-Brain's qualification at commit \mEFourCommit{} ran the 27B architecture on one 95~GiB
-card; \cref{tab:e4} lists the runs. Probes use a randomly initialised model of the real
-width and depth (64 layers), recomputation, rank-16 LoRA and one step, so their loss is not
-a quality number. With an NF4 base, 8192 tokens fit in
-\mEFourProbeNfFourEightOneNineTwoPeakMib{}~MiB at
-\mEFourProbeNfFourEightOneNineTwoTokensPerS{} tokens/s;\cl{M11} with a bf16 base,
-8192 tokens took \mEFourProbeBfOneSixEightOneNineTwoPeakMib{}~MiB and 16384 tokens
-\mEFourProbeBfOneSixOneSixThreeEightFourPeakMib{}~MiB, both at
-\mEFourProbeBfOneSixOneSixThreeEightFourTokensPerS{} tokens/s.\cl{M12,M13}
-Through the command line the real FP8 checkpoint trained one step with an NF4 base and
-with a bf16 base with a host peak of \mEFourCliNfFourOnestepHostRssMib{} and \mEFourCliBfOneSixOnestepHostRssMib{}~MiB respectively\cl{M14,M15} and, with an NF4 base,
-40 steps drove the loss on eight training examples from
-\mEFourCliNfFourFourZerostepLossFirst{} to \mEFourCliNfFourFourZerostepLossLast{}.\cl{M16}
-That is a statement about fitting the training examples, not about generalisation: the
-validation examples were two of the training examples. The command line's default
-batch ran the device out of memory at 1024-token rows.\cl{M17}
-
-\begin{table}[t]
-\centering
-\small
-\input{generated/e4_table}
-\caption{E4: qualification runs of the 27B architecture on one card (Brain's
-qualification logs, copied unmodified apart from path names into \code{data/runs/qual}).}\label{tab:e4}
-\end{table}
-
-What E4 does not show: that a trained 27B adapter changes what the model generates. The
-qualification logs predate a generation path for such an adapter; Brain has since added one (the
-\code{sample-adapter} verb of its \code{qwen35} command)\cl{B12} and keeps its own record of a run, which
-we did not rerun or verify here. E4 also shows no run beyond 16384 tokens and no NF4 run at 16384 on this commit.
-
-\subsection{Defects found and repaired}\label{sec:defects}
-
-Running the loop end to end, rather than reading it, exposed four defects between the
-first stage and the first release; each was reproduced, pinned by a regression test written
-before the repair, and repaired in Splinter. The first wave of E2 stopped at the first, and
-the second wave reached the others in turn, because each hid the next.
-
-\paragraph{A set from one source text was divided, then refused.} Records carry the group
-of the source text they are grounded in, so a fact sheet holding all facts is one group.
-The holdout rule, when no whole group fitted, held out the newest tenth of the records,
-dividing the group, and the leakage check on the files about to be written then refused the
-rule's own output (``1 group(s) and 0 unit(s) appear in more than one of train, validation
-and test''), after every rollout had been paid for. The rule now holds nothing out in that
-case and the split names the cause. The experiment design was also at fault: a held-out
-measurement needs independent units, so a generation's source is now a directory of one
-sheet file per fact.\cl{FX01}
-
-\paragraph{Markup hid a subject.} The admission rule compared the subject and the instruction
-as literal text, so ``the \code{q} key'' did not contain the subject ``q key''. One function
-now ignores code quotes, quotation marks, emphasis and a call's empty parentheses for the
-instruction, the source and the variants alike.\cl{FX02}
-
-\paragraph{No release could pass the serve check.} The gate's serve check starts
-\code{brain serve --adapter}. Training recorded the adapter's card id as
-\code{base:splinter:candidate}, one segment short of Brain's adapter grammar, so the server
-refused it; after that was repaired it refused the adapter again because Splinter's LoRA
-corrects every linear and Brain's adapter bank covers the attention linears unless told
-otherwise. The test double of the server had accepted any flags, which is why neither showed
-before a real server was started. The card id now ends in a tag and the check passes the
-bank option.\cl{FX03,FX04}
-
-\paragraph{A documentation defect.} Checking the release statements against the code
-(\cref{sec:gate}) found that the command-line README placed a release under a directory that
-no code creates; the manifest is kept in the experience database, the adapter in the
-content-addressed artifact store and the only per-alias file is the serving manifest.\cl{X08}
-The README was corrected in the same change as the first version of this paper.

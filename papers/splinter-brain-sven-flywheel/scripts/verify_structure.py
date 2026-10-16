@@ -32,6 +32,7 @@ a local object is a failure (a paper once pinned such a commit).
 A check is a JSON object: {"id", "repo", "path", "kind", ...} where kind is
   regex   {"pattern", "min": 1, "max": null}  matches of the pattern in the file
   toml    {"key": "a.b.c", "equals": value}   a value in a TOML file ("contains" for lists)
+  ancestor {"rev"}                            the commit is an ancestor of the pinned commit
   absent  {"pattern"}                         the pattern occurs nowhere in the file
   tree    {"pattern", "min", "max"}           matches of a regex over `git ls-tree -r` paths
                                               (path is a directory prefix)
@@ -94,6 +95,11 @@ def lookup(data, dotted):
 def run_check(check, rev):
     kind = check["kind"]
     repo = check["repo"]
+    if kind == "ancestor":
+        # The commit that fixed something is part of the history the claim is pinned to.
+        done = subprocess.run(["git", "-C", str(REPOS[repo]), "merge-base", "--is-ancestor", check["rev"], rev],
+                              capture_output=True, text=True)
+        return done.returncode == 0, f"exit {done.returncode}"
     if kind in ("tree", "files"):
         pattern = re.compile(check["pattern"])
         n = sum(1 for p in tree(repo, rev, check["path"]) if pattern.search(p))
@@ -179,7 +185,7 @@ def main():
                 ok, detail = False, f"error: {e}"
             if not ok:
                 failed += 1
-                print(f"FAIL {cl['id']} {i} ({check['repo']}@{rev[:8]} {check['path']}): {detail}")
+                print(f"FAIL {cl['id']} {i} ({check['repo']}@{rev[:8]} {check.get('path', check.get('rev'))}): {detail}")
     unused = set(by_id) - used
     if unused:
         print(f"FAIL checks no claim uses: {sorted(unused)}")

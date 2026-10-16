@@ -41,4 +41,25 @@ brief was not tested. Corpus expansion beyond the first pass (variants, retentio
 rehearsal, claims) is described from the code; variants and rehearsal were exercised as stage
 counts and as a post hoc setting, and none of the mechanisms was evaluated for the value it adds.
 
+\paragraph{The coding-task experiment.} It is not measured. Everything said about it in
+\cref{sec:protocol,sec:pending,sec:replicate} is a registered rule or a statement about code; the
+sign-test table is a design calculation. The registration fixes one model size for the first
+training result (Qwen3-8B, because training, saving and serving an adapter work end to end for
+it), one agent harness, and runs with process isolation \code{none} on the node, so the exposure
+audit detects but cannot prevent a solver reading hidden files (\cref{sec:audit}).\cl{AU09} Mutation-seeded
+tasks test whether a model can undo a synthetic fault, not whether it can debug a historical one;
+tasks from repository history are registered as a source, not yet built.\cl{PR10} A family is the file a
+fault was seeded in for the authored repositories, so clusters are files, not subsystems.\cl{PR02}
+An exam of one repository may hold too few non-tied families to decide, and the registration
+labels such a comparison a pilot instead of changing the rule. The base model may have seen
+public repositories in pretraining; the paired base arm bounds that effect, it does not remove it.
+Agent rollouts of realistic length make training cost unmeasured for the 8B model; the only
+training rate measured here is that of the 27B architecture (\cref{sec:throughput}), on one card,
+one revision and one sequence length.
+
+\paragraph{Open defects.} The retention check is blind to taught facts, the default anchor bound
+refuses on one net lost answer in a small suite, a workspace pass is an exit status, and the
+practice gate has no canaries (\cref{sec:open}). The first campaign was not rerun with the
+repairs that exist, so its reported outcome describes the build of its time.
+
 \input{generated/limitations}

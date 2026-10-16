@@ -20,7 +20,9 @@
 \usepackage{xcolor}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta,fit,calc}
+\usetikzlibrary{positioning,arrows.meta,fit,calc,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{caption}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
@@ -37,7 +39,9 @@
 % measurement carries the ids of its rows in data/claims.csv.
 \newcommand{\cl}[1]{\textsuperscript{\scriptsize\textcolor{gray}{[#1]}}}
 
-\title{The Self-learning Flywheel: Splinter + Brain + Sven}
+\title{Verified Agent Experience to Released Adapters:\\
+A Self-Learning Loop for Local Models, Its First Failed Registered\\
+Campaign, and a Replication Protocol for Repository Tasks}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
 \date{October 2026}
@@ -50,10 +54,15 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 \input{sections/02-related}
 \input{sections/03-architecture}
 \input{sections/04-training-release}
-\input{sections/05-experiments}
-\input{sections/06-results}
-\input{sections/07-limitations}
-\input{sections/08-reproducibility}
+\input{sections/05-substrate}
+\input{sections/06-campaign-design}
+\input{sections/07-campaign-results}
+\input{sections/08-corrections}
+\input{sections/09-coding-protocol}
+\input{sections/10-pending}
+\input{sections/11-replication}
+\input{sections/12-limitations}
+\input{sections/13-reproducibility}
 
 \bibliographystyle{plainnat}
 \bibliography{references}
