@@ -39,13 +39,7 @@ pub fn manifest_beside(out: &Path) -> PathBuf {
 /// draw (printed). A `given` that differs from the recorded seed is refused:
 /// it would describe another voice than the outputs already made.
 pub fn seed(manifest: &Path, given: Option<u64>) -> Result<u64> {
-    // A draw is only for a voice being made now; a recorded seed is read back.
-    let fresh = if manifest.exists() {
-        0
-    } else {
-        splinter_sdk::seed::resolve("seed", given)
-    };
-    Ok(FrozenSeed::decide(manifest, given, fresh, None)?.record()?)
+    Ok(FrozenSeed::decide(manifest, "seed", given, None)?.record()?)
 }
 
 /// The persona's synthetic voice for the outputs recorded at `manifest`.

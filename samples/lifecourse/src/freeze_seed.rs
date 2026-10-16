@@ -39,14 +39,12 @@ pub fn partition_seed(data: &Path, given: Option<u64>) -> Result<FrozenSeed> {
     } else {
         None
     };
-    let manifest = data.join(MANIFEST);
-    // A draw is only for a partition being made now; a recorded seed is read back.
-    let fresh = if legacy.is_none() && !manifest.exists() {
-        splinter_sdk::seed::resolve("seed", given)
-    } else {
-        0
-    };
-    Ok(FrozenSeed::decide(&manifest, given, fresh, legacy)?)
+    Ok(FrozenSeed::decide(
+        &data.join(MANIFEST),
+        "seed",
+        given,
+        legacy,
+    )?)
 }
 
 #[cfg(test)]

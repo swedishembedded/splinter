@@ -219,14 +219,8 @@ pub fn freeze_seed(
             .and_then(|text| serde_json::from_str::<Manifest>(&text).ok())
             .map_or(LEGACY_SEED, |m| m.seed)
     });
-    // Only a freeze being made now takes a draw; the others have a seed already.
-    let fresh = if manifest.exists() || predates {
-        given.unwrap_or_default()
-    } else {
-        splinter_sdk::seed::resolve("seed", given)
-    };
     Ok(splinter_sdk::seed::FrozenSeed::decide(
-        &manifest, given, fresh, legacy,
+        &manifest, "seed", given, legacy,
     )?)
 }
 

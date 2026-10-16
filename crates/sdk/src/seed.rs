@@ -127,12 +127,26 @@ impl FrozenSeed {
     ///   it; [`record`](Self::record) writes the manifest once, saying the seed
     ///   is a legacy one.
     /// * No manifest, `legacy` is `None`: the artifact is being made now; its
-    ///   seed is `given`, else `fresh`.
+    ///   seed is `given`, else a fresh draw printed as the one `name` (the
+    ///   flag, without its dashes) used, see [`resolve`]. Only this case
+    ///   draws, so a read-back says nothing about a seed.
     pub fn decide(
         manifest: &Path,
+        name: &str,
         given: Option<u64>,
-        fresh: u64,
         legacy: Option<u64>,
+    ) -> Result<Self, SeedError> {
+        Self::decide_with(manifest, given, legacy, || resolve(name, None))
+    }
+
+    /// [`decide`](Self::decide) with the source of a fresh seed given by the
+    /// caller; `draw` runs only for an artifact being made now with no seed
+    /// given.
+    pub fn decide_with(
+        manifest: &Path,
+        given: Option<u64>,
+        legacy: Option<u64>,
+        draw: impl FnOnce() -> u64,
     ) -> Result<Self, SeedError> {
         match std::fs::read_to_string(manifest) {
             Ok(text) => {
@@ -150,7 +164,7 @@ impl FrozenSeed {
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 let (seed, origin, note) = match legacy {
                     Some(seed) => (seed, Origin::Legacy, Some(LEGACY_NOTE.to_string())),
-                    None => (given.unwrap_or(fresh), Origin::Recorded, None),
+                    None => (given.unwrap_or_else(draw), Origin::Recorded, None),
                 };
                 agree(manifest, seed, origin, given)?;
                 Ok(Self {
@@ -202,11 +216,11 @@ const LEGACY_NOTE: &str =
 /// [`FrozenSeed::record`], for a command with nothing left to check between.
 pub fn frozen(
     manifest: &Path,
+    name: &str,
     given: Option<u64>,
-    fresh: u64,
     legacy: Option<u64>,
 ) -> Result<u64, SeedError> {
-    FrozenSeed::decide(manifest, given, fresh, legacy)?.record()
+    FrozenSeed::decide(manifest, name, given, legacy)?.record()
 }
 
 fn agree(

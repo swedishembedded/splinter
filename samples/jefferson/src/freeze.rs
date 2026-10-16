@@ -39,22 +39,15 @@ const OUTPUTS: [&str; 7] = [
 ];
 
 /// The seed of the artifacts in `out`: the recorded one, else `given`, else
-/// a fresh draw (printed, so it can be passed back); refuses a `given` that differs from the recorded one. The
-/// caller records it with [`FrozenSeed::record`] once its inputs are checked
-/// and it is about to write.
+/// a fresh draw (printed, so it can be passed back); refuses a `given` that
+/// differs from the recorded one. The caller records it with
+/// [`FrozenSeed::record`] once its inputs are checked and it is about to write.
 pub fn seed(out: &Path, given: Option<u64>) -> Result<FrozenSeed> {
-    let manifest = out.join(MANIFEST);
     let predates = OUTPUTS.iter().any(|name| out.join(name).exists());
-    // Only a directory being made now takes a draw; the others have a seed already.
-    let fresh = if manifest.exists() || predates {
-        given.unwrap_or_default()
-    } else {
-        splinter_sdk::seed::resolve("seed", given)
-    };
     Ok(FrozenSeed::decide(
-        &manifest,
+        &out.join(MANIFEST),
+        "seed",
         given,
-        fresh,
         predates.then_some(LEGACY_SEED),
     )?)
 }
