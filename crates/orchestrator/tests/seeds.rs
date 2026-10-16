@@ -94,18 +94,21 @@ fn draw_both(
 
 #[test]
 fn seeds_given_explicitly_are_recorded_and_reproduce_the_run() {
-    let given = [Seed::new(11), Seed::new(22)];
+    let given = [splinter_model::seed::draw(), splinter_model::seed::draw()];
     let (used, seeds, reports) = draw_both("given", Some(given[0]), Some(given[1]));
     assert_eq!(used, given);
     assert_eq!(
         seeds,
-        BTreeMap::from([("train".into(), 11), ("replay".into(), 22)])
+        BTreeMap::from([
+            ("train".into(), given[0].value()),
+            ("replay".into(), given[1].value())
+        ])
     );
     assert_eq!(
         reports,
         [
-            json!({ "name": "train", "seed": 11, "drawn": false }),
-            json!({ "name": "replay", "seed": 22, "drawn": false }),
+            json!({ "name": "train", "seed": given[0].value(), "drawn": false }),
+            json!({ "name": "replay", "seed": given[1].value(), "drawn": false }),
         ]
     );
 }

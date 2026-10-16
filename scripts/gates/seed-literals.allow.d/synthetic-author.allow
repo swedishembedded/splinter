@@ -1,2 +1,3 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
 samples/synthetic-author/src/persona.rs	REFERENCE_SEED	world: the reference author's identity, a constant of the synthetic world
+samples/synthetic-author/README.md	doc:--seed 7	todo: the walkthrough shows a fixed seed as the way to run persona; it draws an author when none is named

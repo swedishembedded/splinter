@@ -143,7 +143,12 @@ fn a_run_records_the_seeds_it_used_and_a_run_without_any_reads_with_none() {
     let workspace = Workspace::at(&root);
     let clock = FixedClock::new("2026-09-30T08:00:00.000Z");
     let mut seeded = RunLog::start(&workspace, "train", json!({}), &clock).unwrap();
-    seeded.seed("train", Seed::new(7), true, &clock).unwrap();
+    // The largest seed and the smallest: both must survive the record, and 0 is a
+    // value, not an absent seed.
+    // seed: the boundaries of the range a record must hold
+    seeded
+        .seed("train", Seed::new(u64::MAX), true, &clock)
+        .unwrap();
     seeded.seed("replay", Seed::new(0), false, &clock).unwrap();
     let seeded_id = seeded.id().to_string();
     // A run recorded before seeds were: only a start and a stage.
@@ -153,7 +158,7 @@ fn a_run_records_the_seeds_it_used_and_a_run_without_any_reads_with_none() {
 
     let other = Workspace::at(&root);
     let seeds = read_run(&other, &seeded_id).unwrap().seeds;
-    assert_eq!(seeds.get("train"), Some(&7));
+    assert_eq!(seeds.get("train"), Some(&u64::MAX));
     assert_eq!(seeds.get("replay"), Some(&0));
     assert!(read_run(&other, &old_id).unwrap().seeds.is_empty());
     let _ = std::fs::remove_dir_all(root.path());

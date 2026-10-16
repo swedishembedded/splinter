@@ -129,6 +129,7 @@ mod tests {
 
     #[test]
     fn a_seed_prints_as_decimal_and_reads_decimal_or_hex() {
+        // seed: the spellings asserted are those of these particular values
         assert_eq!(Seed::new(42).to_string(), "42");
         assert_eq!("42".parse::<Seed>().unwrap(), Seed::new(42));
         assert_eq!("0xFF".parse::<Seed>().unwrap(), Seed::new(255));

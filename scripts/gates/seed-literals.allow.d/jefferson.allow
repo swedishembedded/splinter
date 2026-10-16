@@ -1,2 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-samples/jefferson/src/freeze.rs	LEGACY_SEED	frozen: the seed of every directory made before seed manifests, read back for those only
+samples/jefferson/src/freeze.rs	LEGACY_SEED	frozen: the seed of every directory made before seed manifests, read back for those only; nothing in such a directory records the seed, so one made then with an explicit --seed reads back as this value

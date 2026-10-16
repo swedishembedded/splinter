@@ -268,6 +268,7 @@ fn a_reservation_states_its_seed_and_reserving_again_with_it_chooses_the_same_fa
     );
 
     // A reservation stored before it kept its seed reads as made with 0.
+    // seed: 0 is the seed those reservations were made with
     let mut stored = serde_json::to_value(&reserved).unwrap();
     stored.as_object_mut().unwrap().remove("seed");
     let read: Reservation = serde_json::from_value(stored).unwrap();

@@ -1,2 +1,3 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
 crates/pipelines/src/practice/exam.rs	remembered_seed::unwrap_or	frozen: the seed of an exam recorded before records kept theirs; those exams were chosen by seed 0
+crates/pipelines/src/reserve.rs	unrecorded_seed::Seed::new	frozen: a reservation stored before reservations kept their seed was made with 0, the command-line default of the time; reading one back must say 0 or it would describe another exam (an explicit seed given then was not kept, so it cannot be told apart)

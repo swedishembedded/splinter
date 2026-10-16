@@ -113,7 +113,7 @@ pub struct Reservation {
 /// The seed of a reservation stored before reservations recorded theirs: those
 /// reservations were chosen by seed 0, so reading one back must say 0 or it
 /// would describe another exam. A read-back of a stored value, not a default
-/// for a new draw (the seed-literal gate does not see `Seed::new`).
+/// for a new draw.
 fn unrecorded_seed() -> Seed {
     Seed::new(0)
 }

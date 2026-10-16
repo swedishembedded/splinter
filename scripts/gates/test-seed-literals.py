@@ -112,6 +112,175 @@ fn g() { let seed = 2; }
         self.assertEqual(a, b)
 
 
+def hidden(src, path="crates/demo/src/lib.rs"):
+    """Symbols of the production hits in a Rust source, with its own parameter index."""
+    index = gate.seed_param_index([src])
+    return sorted(h.symbol for h in gate.scan_rust(path, src, seed_params=index) if not h.test)
+
+
+class HiddenDefaults(unittest.TestCase):
+    """Seeds the field-and-assignment shapes cannot see."""
+
+    def test_a_seed_constructor_with_a_literal_is_found(self):
+        src = """
+fn unrecorded() -> Seed { Seed::new(0) }
+fn noise() { let a = Mt19937::new(5); let b = StdRng::seed_from_u64(1); let c = ChaCha8Rng::from_seed(3); }
+fn pool() { let p = Philox4x32::new(9); }
+fn drawn(s: u64) -> Seed { Seed::new(s) }
+"""
+        self.assertEqual(
+            hidden(src),
+            sorted([
+                "unrecorded::Seed::new",
+                "noise::Mt19937::new", "noise::StdRng::seed_from_u64", "noise::ChaCha8Rng::from_seed",
+                "pool::Philox4x32::new",
+            ]),
+        )
+
+    def test_a_function_that_returns_a_fixed_seed_is_found(self):
+        src = """
+fn default_seed() -> u64 { 7 }
+fn other() -> u64 {
+    42
+}
+fn named_by_serde() -> u64 { 3 }
+#[derive(Deserialize)]
+struct Opts {
+    #[serde(default = "named_by_serde")]
+    seed: u64,
+}
+fn count() -> usize { 4 }
+fn drawn_seed() -> u64 { draw() }
+"""
+        self.assertEqual(
+            hidden(src),
+            sorted(["default_seed::returns", "named_by_serde::returns"]),
+        )
+
+    def test_a_literal_passed_where_a_function_takes_a_seed_is_found(self):
+        src = """
+const PREREGISTERED: u64 = 5;
+const GROUPS: usize = 10;
+fn run(n: usize, seed: u64) -> u64 { n as u64 + seed }
+fn cv(data: &Data, arm: &str, base_seed: u64) {}
+impl Spec { fn build(&self, name: &str, seed: u64) {} }
+fn main2(s: u64, data: &Data) {
+    run(3, 7);
+    run(3, s);
+    run(3, PREREGISTERED);
+    run(3, GROUPS);
+    run(3, 7, 9);
+    cv(data, "a",
+       0x10);
+    spec.build("x", 5);
+    spec.build("x", s);
+    run(3, s + 1);
+}
+"""
+        self.assertEqual(
+            hidden(src),
+            sorted(["main2::run#1", "main2::run#1", "main2::cv#2", "main2::build#1"]),
+        )
+
+    def test_a_range_of_literal_seeds_spanning_lines_is_found(self):
+        src = "fn report() {\n    let by_seed = (1..=SEEDS)\n        .map(|seed| runs(seed))\n        .collect();\n}\n"
+        self.assertEqual(hidden(src), ["report::seed-range"])
+
+    def test_a_range_of_seeds_in_a_test_is_a_sweep_not_a_default(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "crates/demo/tests").mkdir(parents=True)
+            (root / "crates/demo/tests/it.rs").write_text("fn s() { for seed in 0..9 { go(seed); } }\n")
+            self.assertEqual(gate.scan_tree(root, ["crates/demo/tests/it.rs"]), [])
+
+    def test_a_literal_seed_argument_in_a_test_is_read_only_on_request(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "crates/demo/tests").mkdir(parents=True)
+            (root / "crates/demo/Cargo.toml").write_text("")
+            (root / "crates/demo/tests/it.rs").write_text("fn run(seed: u64) {}\nfn t() { run(4); }\n")
+            files = ["crates/demo/tests/it.rs", "crates/demo/Cargo.toml"]
+            self.assertEqual(gate.scan_tree(root, files), [])
+            self.assertEqual([h.symbol for h in gate.scan_tree(root, files, positional_tests=True)], ["t::run#0"])
+
+    def test_a_name_defined_with_the_seed_in_two_places_is_not_resolved(self):
+        src = """
+mod a { pub fn make(x: u64, seed: u64) {} }
+mod b { pub fn make(seed: u64, x: u64) {} }
+fn go() { make(1, 2); }
+"""
+        self.assertEqual(hidden(src), [])
+
+    def test_a_loop_or_range_over_literal_seeds_is_found(self):
+        src = """
+fn ensemble(members: u64) {
+    for seed in 1..=members { train(seed); }
+    for i in 0..members { work(i); }
+}
+fn report() {
+    let runs = (1..=SEEDS_REPORTED).map(|seed| cv_runs(seed)).collect();
+    let ok = (0..n).map(|i| i + 1);
+}
+"""
+        self.assertEqual(hidden(src), sorted(["ensemble::seed-range", "report::seed-range"]))
+
+    def test_python_defaults_in_every_shape_are_found(self):
+        py = (
+            "@dataclass\n"
+            "class Spec:\n"
+            "    seed: int = 7\n"
+            "def forecast(series, seed: int = 0, n=3):\n"
+            "    req = {\"seed\": 7, \"n\": 2}\n"
+            "    s = os.environ.get(\"RUN_SEED\", \"11\")\n"
+            "    t = seed if seed is not None else 5\n"
+            "    u = args.seed or 9\n"
+            "    return req\n"
+        )
+        self.assertEqual(
+            sorted(h.symbol for h in gate.scan_other("a.py", py)),
+            sorted([
+                "Spec:seed",
+                "forecast:seed",
+                "forecast:seed", "forecast:seed-fallback", "forecast:seed-fallback",
+                "forecast:RUN_SEED",
+            ]),
+        )
+
+    def test_shell_flags_and_defaults_are_found_by_enclosing_function(self):
+        sh = (
+            "run() {\n"
+            "    brain serve --seed 7 --temp 1\n"
+            "    other --noise-seed=3\n"
+            "}\n"
+            "SEED=${SEED:-11}\n"
+            "seq 1 3 | while read -r s; do tool --seed \"$s\"; done\n"
+            "tool --seed \"$S\" --steps 4\n"
+        )
+        self.assertEqual(
+            sorted(h.symbol for h in gate.scan_other("run.sh", sh)),
+            sorted(["run:--seed", "run:--noise-seed", "-:SEED", "-:seq-seed"]),
+        )
+
+    def test_a_makefile_recipe_is_found_by_target(self):
+        mk = "SEED ?= 5\nfixtures: deps\n\tpython3 dump.py --seed 7 --out x\n\tpython3 dump.py --seed $(SEED)\n"
+        self.assertEqual(
+            sorted(h.symbol for h in gate.scan_other("Makefile", mk)),
+            sorted(["SEED", "fixtures:--seed"]),
+        )
+
+    def test_a_documented_command_with_a_literal_seed_needs_the_word_reproduce_beside_it(self):
+        md = (
+            "Run it:\n\n```bash\n"
+            "tool synth --seed 7\n"
+            "```\n\n"
+            "To reproduce the table:\n\n```bash\n"
+            "tool synth --seed 3\n"
+            "```\n\n"
+            "Prose may say `--seed 9` freely.\n"
+        )
+        self.assertEqual([h.symbol for h in gate.scan_other("README.md", md)], ["doc:--seed 7"])
+
+
 class TestContext(unittest.TestCase):
     def test_test_code_is_not_production(self):
         src = """
@@ -140,6 +309,17 @@ fn t2() { let seed = 3; }
             "\n    let seed = 4;\n}\n"
         )
         self.assertEqual([h.marked for h in tests(src)], [True, True, False])
+
+    def test_a_reason_covers_the_run_of_lines_it_heads_up_to_the_next_blank_line(self):
+        src = (
+            "// seed: two arbitrary seeds; only that\n"
+            "// the same one repeats matters.\n"
+            "const FIRST: Seed = Seed::new(1);\n"
+            "const OTHER: Seed = Seed::new(2);\n"
+            "\n"
+            "const THIRD: Seed = Seed::new(3);\n"
+        )
+        self.assertEqual([h.marked for h in tests("#[cfg(test)]\nmod t {\n" + src + "}\n")], [True, True, False])
 
     def test_files_under_tests_and_cfg_test_module_files_are_test_code(self):
         with tempfile.TemporaryDirectory() as d:
@@ -202,6 +382,15 @@ class OtherLanguages(unittest.TestCase):
 
 
 class Ratchet(unittest.TestCase):
+    def test_a_constant_passed_as_a_seed_needs_no_second_entry_when_it_is_listed_itself(self):
+        src = "const FIXED: u64 = 5;\nfn run(seed: u64) {}\nfn go() { run(FIXED); }\n"
+        idx = gate.seed_param_index([src])
+        hits = gate.scan_rust("crates/demo/src/lib.rs", src, seed_params=idx)
+        self.assertIn("go::run#0", [h.symbol for h in hits])
+        listed = {("crates/demo/src/lib.rs", "FIXED"): "world: x"}
+        out = "\n".join(gate.check(hits, listed))
+        self.assertNotIn("go::run#0", out)
+
     def hits(self):
         return gate.scan_rust("crates/demo/src/lib.rs", "fn f() { let seed = 1; }\n")
 
