@@ -223,3 +223,15 @@ the released adapter answers the same questions from plain `brain serve`.
      the data, not experiences in the database.
    - The intake agent run with a served model over the sample's variables,
      scored against the hand mapping (`lifecourse intake --base-url`).
+
+## Build health (local sven and brain)
+
+- The committed `Cargo.lock` pins revisions of the dependencies that the
+  maintainer has to push; `make deps/lock` re-pins it to the local HEADs and
+  refuses a dirty checkout. The lock is committed only once those commits are
+  on the remotes.
+- `Watch` and the voice agent count dropped events from the stream's gap
+  marker; there is no test that overflows the 1024-event buffer to prove the
+  count, since that needs a scripted agent that floods events.
+- The brain `rl` crate warns about three unused imports; the warning is in
+  brain, not in this repository.

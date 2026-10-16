@@ -33,3 +33,5 @@ in the same commit.
 | [025](025-an-audit-joined-on-a-name-that-repeats.md) | An audit joined on a name that repeats |
 | [026](026-a-test-that-returns-early-reports-a-pass.md) | A test that returns early reports a pass |
 | [027](027-an-append-only-result-log-counted-an-item-twice.md) | An append-only result log counted an item twice |
+| [028](028-a-drawn-seed-made-three-tests-compare-nothing.md) | A drawn seed made three tests compare different things |
+| [029](029-a-dependency-moved-under-a-lock-that-pinned-a-missing-commit.md) | The dependency moved under a lock that named a commit nobody had |
