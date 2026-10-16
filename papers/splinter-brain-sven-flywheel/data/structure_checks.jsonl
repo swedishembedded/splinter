@@ -49,7 +49,7 @@
 {"id": "L06.4", "repo": "splinter", "path": "crates/eval/src/exposure.rs", "kind": "regex", "pattern": "content_shingle", "min": 1}
 {"id": "L07.1", "repo": "splinter", "path": "crates/pipelines/src/reserve.rs", "kind": "regex", "pattern": "MIN_FAMILY_WORDS:\\ usize\\ =\\ 120", "min": 1}
 {"id": "L07.2", "repo": "splinter", "path": "crates/pipelines/src/reserve.rs", "kind": "regex", "pattern": "DEFAULT_EXAM_FAMILIES:\\ usize\\ =\\ 50", "min": 1}
-{"id": "L08.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "pub\\ struct\\ Withheld", "min": 1}
+{"id": "L08.1", "repo": "splinter", "path": "crates/eval/src/gate/agentic.rs", "kind": "regex", "pattern": "pub\\ struct\\ Withheld", "min": 1}
 {"id": "D01.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "pub\\ enum\\ Objective", "min": 1}
 {"id": "D01.2", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "\\|\\ \\[`Preference`\\]\\ \\|\\ DPO\\ \\|", "min": 1}
 {"id": "D02.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "Self::Dpo\\ =>\\ Format::GenericPreferenceV1", "min": 1}
@@ -114,7 +114,7 @@
 {"id": "X06.1", "repo": "splinter", "path": "crates/pipelines/src/release/listing.rs", "kind": "regex", "pattern": "there\\ is\\ no\\ previous\\ release\\ to\\ roll", "min": 1}
 {"id": "X07.1", "repo": "splinter", "path": "crates/pipelines/src/lineage/mod.rs", "kind": "regex", "pattern": "derived\\ on\\ every\\ call", "min": 1}
 {"id": "X07.2", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "pub\\ struct\\ LineageArgs", "min": 1}
-{"id": "X08.1", "repo": "splinter", "path": "crates/splinter/README.md", "kind": "regex", "pattern": "A\\ release\\ is\\ written\\ once\\ under\\ `<state>/releases/<hex>/`", "min": 1}
+{"id": "X08.1", "repo": "splinter", "path": "crates/splinter/README.md", "kind": "absent", "pattern": "A\\ release\\ is\\ written\\ once\\ under\\ `<state>/releases/<hex>/`"}
 {"id": "X08.2", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "nothing\\ is\\ copied", "min": 1}
 {"id": "I01.1", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ enum\\ Origin", "min": 1}
 {"id": "I01.2", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ struct\\ SourceId\\(pub\\ Digest\\)", "min": 1}
@@ -206,7 +206,7 @@
 {"id": "B01.3", "repo": "brain", "path": "crates/sdk/src/full_finetune.rs", "kind": "regex", "pattern": "pub\\ struct\\ ChatFullFineTune", "min": 1}
 {"id": "B02.1", "repo": "brain", "path": "crates/sdk/src/finetune.rs", "kind": "regex", "pattern": "qwen3::Dtype::BF16", "min": 1}
 {"id": "B03.1", "repo": "brain", "path": "crates/qwen3/src/model.rs", "kind": "regex", "pattern": "the\\ backward\\ recomputes\\ layer", "min": 1}
-{"id": "B04.1", "repo": "brain", "path": "crates/qwen3/src/model.rs", "kind": "regex", "pattern": "fn\\ head_chunk_rows", "min": 1}
+{"id": "B04.1", "repo": "brain", "path": "crates/qwen3/src/model.rs", "kind": "regex", "pattern": "WeightedCe::new_chunked\\(&self\\.gpu,\\ n,\\ v,\\ self\\.head_rows", "min": 1}
 {"id": "B04.2", "repo": "brain", "path": "crates/model/src/lossw.rs", "kind": "regex", "pattern": "pub\\ fn\\ new_chunked", "min": 1}
 {"id": "B05.1", "repo": "brain", "path": "crates/model/src/block.rs", "kind": "regex", "pattern": "FLASH_GQA_MAX_HEAD_DIM:\\ u32\\ =\\ 256", "min": 1}
 {"id": "B06.1", "repo": "brain", "path": "crates/qwen35/src/fp8_source.rs", "kind": "regex", "pattern": "pub\\ struct\\ Qwen35Source", "min": 1}
@@ -221,3 +221,11 @@
 {"id": "B10.2", "repo": "brain", "path": "crates/model/tests/flash_gqa_train.rs", "kind": "regex", "pattern": "fn\\ mixer_flash_path_gradcheck_wide_and_narrow_heads", "min": 1}
 {"id": "B11.1", "repo": "brain", "path": "AGENTS.md", "kind": "regex", "pattern": "3:1\\ Gated\\ DeltaNet\\ :\\ GQA\\ mixer\\ split", "min": 1}
 {"id": "B11.2", "repo": "brain", "path": "AGENTS.md", "kind": "regex", "pattern": "Qwen3\\.8\\-27B\\ dense\\ model\\ /\\ import\\ /\\ LoRA\\ /\\ finetune", "min": 1}
+{"id": "D01.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "NoGroupToHoldOut", "min": 1}
+{"id": "D01.2", "repo": "splinter", "path": "crates/data/src/holdout/tests.rs", "kind": "regex", "pattern": "fn\\ a_dataset_that_is_one_source_text_is_refused_with_that_cause", "min": 1}
+{"id": "D02.1", "repo": "splinter", "path": "crates/knowledge/src/gates.rs", "kind": "regex", "pattern": "pub\\ fn\\ unmarked", "min": 1}
+{"id": "D02.2", "repo": "splinter", "path": "crates/agent/tests/model_tasks.rs", "kind": "regex", "pattern": "fn\\ markup_inside_a_subject_does_not_hide_it", "min": 1}
+{"id": "D03.1", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": ":splinter:candidate:latest", "min": 1}
+{"id": "D03.2", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "fn\\ a_candidates_card_id_is_an_adapter_reference", "min": 1}
+{"id": "D04.1", "repo": "splinter", "path": "crates/pipelines/src/release/serve/server.rs", "kind": "regex", "pattern": "--adapter-targets", "min": 1}
+{"id": "D04.2", "repo": "splinter", "path": "crates/pipelines/tests/common/fake_brain.rs", "kind": "regex", "pattern": "adapter-targets", "min": 1}

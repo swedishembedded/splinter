@@ -145,10 +145,39 @@ What E4 does not show: that a trained 27B adapter changes what the model generat
 qualification found no generation path for an adapter on this model, and we do not claim
 one), and any run beyond 16384 tokens or any NF4 run at 16384 on this commit.
 
-\subsection{A documentation defect}\label{sec:defect}
+\subsection{Defects found and repaired}\label{sec:defects}
 
-Checking the release statements against the code (\cref{sec:gate}) found that the command-line
-README placed a release under a directory that no code creates; the manifest is kept in the
-experience database, the adapter in the content-addressed artifact store and the only
-per-alias file is the serving manifest.\cl{X08} The README has been corrected in the same
-change as this paper.
+Running the loop end to end, rather than reading it, exposed four defects between the
+first stage and the first release; each was reproduced, pinned by a regression test written
+before the repair, and repaired in Splinter. The first wave of E2 stopped at the first, and
+the second wave reached the others in turn, because each hid the next.
+
+\paragraph{A set from one source text was divided, then refused.} Records carry the group
+of the source text they are grounded in, so a fact sheet holding all facts is one group.
+The holdout rule, when no whole group fitted, held out the newest tenth of the records,
+dividing the group, and the leakage check on the files about to be written then refused the
+rule's own output (``1 group(s) and 0 unit(s) appear in more than one of train, validation
+and test''), after every rollout had been paid for. The rule now holds nothing out in that
+case and the split names the cause. The experiment design was also at fault: a held-out
+measurement needs independent units, so a generation's source is now a directory of one
+sheet file per fact.\cl{D01}
+
+\paragraph{Markup hid a subject.} The admission rule compared the subject and the instruction
+as literal text, so ``the \code{q} key'' did not contain the subject ``q key''. One function
+now ignores code quotes, quotation marks, emphasis and a call's empty parentheses for the
+instruction, the source and the variants alike.\cl{D02}
+
+\paragraph{No release could pass the serve check.} The gate's serve check starts
+\code{brain serve --adapter}. Training recorded the adapter's card id as
+\code{base:splinter:candidate}, one segment short of Brain's adapter grammar, so the server
+refused it; after that was repaired it refused the adapter again because Splinter's LoRA
+corrects every linear and Brain's adapter bank covers the attention linears unless told
+otherwise. The test double of the server had accepted any flags, which is why neither showed
+before a real server was started. The card id now ends in a tag and the check passes the
+bank option.\cl{D03,D04}
+
+\paragraph{A documentation defect.} Checking the release statements against the code
+(\cref{sec:gate}) found that the command-line README placed a release under a directory that
+no code creates; the manifest is kept in the experience database, the adapter in the
+content-addressed artifact store and the only per-alias file is the serving manifest.\cl{X08}
+The README was corrected in the same change as the first version of this paper.
