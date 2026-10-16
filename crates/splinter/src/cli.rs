@@ -611,6 +611,7 @@ pub enum ReleaseCommand {
 
 /// `eval`.
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct EvalArgs {
     /// A candidate id (or prefix) or a model reference; none shows the
     /// anchor suite.
@@ -627,6 +628,22 @@ pub struct EvalArgs {
     /// The calibrated model that judges the tasks a judge decides.
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub judge: Option<ModelRef>,
+    /// `matrix`.
+    #[command(subcommand)]
+    pub command: Option<EvalCommand>,
+}
+
+/// `eval ...`.
+#[derive(Debug, Subcommand)]
+pub enum EvalCommand {
+    /// The continual-learning results matrix of a lineage: what each gate
+    /// measured of each release on each earlier release's suite, with the
+    /// metrics read from it. A cell no gate measured is shown absent.
+    Matrix {
+        /// The alias whose releases are the generations.
+        #[arg(long, default_value = POLICY_DEFAULT, value_name = "NAME")]
+        alias: String,
+    },
 }
 
 /// `lineage`.

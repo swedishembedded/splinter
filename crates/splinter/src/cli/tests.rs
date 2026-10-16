@@ -306,6 +306,17 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         Command::Rollback { alias } if alias == "default"
     ));
     assert!(parse(&["rollback"]).is_err(), "rollback needs an alias");
+    let Command::Eval(matrix) = command(&["eval", "matrix", "--alias", "staging"]) else {
+        panic!("eval matrix");
+    };
+    assert!(matches!(
+        matrix.command,
+        Some(EvalCommand::Matrix { ref alias }) if alias == "staging"
+    ));
+    assert!(matches!(
+        command(&["eval", "matrix"]),
+        Command::Eval(EvalArgs { command: Some(EvalCommand::Matrix { alias }), .. }) if alias == POLICY_DEFAULT
+    ));
     let Command::Eval(eval) = command(&["eval", "policy:default"]) else {
         panic!("eval");
     };

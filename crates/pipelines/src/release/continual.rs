@@ -138,21 +138,21 @@ fn lineage_seed(newest: &ReleaseId) -> u64 {
         })
 }
 
-/// The metrics of the lineage `alias` points at.
-pub fn continual(ctx: &Context, alias: &str) -> Result<ContinualStatus, OrchestratorError> {
+/// The releases `alias` descends from, oldest first, and the matrix their
+/// gate reports fill; `Err` carries why there is no lineage to read.
+struct Lineage {
+    head: ReleaseId,
+    releases: Vec<ReleaseId>,
+    matrix: ResultsMatrix,
+}
+
+fn read(ctx: &Context, alias: &str) -> Result<Result<Lineage, String>, OrchestratorError> {
     let store = ctx.releases();
     let Some(head) = store.alias(alias)? else {
-        return Ok(ContinualStatus::NotMeasured {
-            reason: format!("alias {alias} points at no release"),
-        });
+        return Ok(Err(format!("alias {alias} points at no release")));
     };
     let mut lineage = store.lineage(&head)?;
     lineage.reverse();
-    if lineage.len() < 2 {
-        return Ok(ContinualStatus::NotMeasured {
-            reason: "fewer than two releases: nothing was learned after the first".into(),
-        });
-    }
     let evidence: Vec<GenerationEvidence> = lineage
         .iter()
         .map(|r| match r.manifest.gate.llm() {
@@ -168,17 +168,68 @@ pub fn continual(ctx: &Context, alias: &str) -> Result<ContinualStatus, Orchestr
             "the gate reports of {alias}'s lineage disagree: {e}"
         ))
     })?;
-    let seed = lineage_seed(&head);
-    let metrics = ContinualMetrics::of(&matrix).with_intervals(|values| {
+    Ok(Ok(Lineage {
+        head,
+        releases: lineage.into_iter().map(|r| r.id).collect(),
+        matrix,
+    }))
+}
+
+/// The metrics of `matrix`, with intervals over units resampled from a seed
+/// derived from `head`.
+fn metrics_of(matrix: &ResultsMatrix, head: &ReleaseId) -> ContinualMetrics {
+    let seed = lineage_seed(head);
+    ContinualMetrics::of(matrix).with_intervals(|values| {
         bootstrap_interval(values, INTERVAL_RESAMPLES, INTERVAL_LEVEL, seed).map(|i| Interval {
             level: INTERVAL_LEVEL,
             low: i.low,
             high: i.high,
         })
-    });
+    })
+}
+
+/// The metrics of the lineage `alias` points at.
+pub fn continual(ctx: &Context, alias: &str) -> Result<ContinualStatus, OrchestratorError> {
+    let lineage = match read(ctx, alias)? {
+        Ok(lineage) if lineage.releases.len() >= 2 => lineage,
+        Ok(_) => {
+            return Ok(ContinualStatus::NotMeasured {
+                reason: "fewer than two releases: nothing was learned after the first".into(),
+            })
+        }
+        Err(reason) => return Ok(ContinualStatus::NotMeasured { reason }),
+    };
+    let metrics = metrics_of(&lineage.matrix, &lineage.head);
     Ok(ContinualStatus::Measured {
-        releases: lineage.into_iter().map(|r| r.id).collect(),
+        releases: lineage.releases,
         metrics: Box::new(metrics),
+    })
+}
+
+/// The results matrix of a lineage and the metrics read from it: what
+/// `eval matrix` prints, every cell the gates measured and the rest absent.
+#[derive(Clone, Debug, Serialize)]
+pub struct MatrixReport {
+    /// The alias whose lineage it is.
+    pub alias: String,
+    /// The releases, oldest first: generation `k` is entry `k`, and so is
+    /// task `k` (that release's own held-out suite).
+    pub releases: Vec<ReleaseId>,
+    /// `A[k][i]`.
+    pub matrix: ResultsMatrix,
+    /// The metrics over it.
+    pub metrics: ContinualMetrics,
+}
+
+/// The matrix of the lineage `alias` points at; refused when it points at
+/// no release.
+pub fn matrix(ctx: &Context, alias: &str) -> Result<MatrixReport, OrchestratorError> {
+    let lineage = read(ctx, alias)?.map_err(OrchestratorError::Refused)?;
+    Ok(MatrixReport {
+        alias: alias.to_string(),
+        metrics: metrics_of(&lineage.matrix, &lineage.head),
+        releases: lineage.releases,
+        matrix: lineage.matrix,
     })
 }
 

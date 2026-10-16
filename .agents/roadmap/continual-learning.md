@@ -36,8 +36,10 @@ forgotten or rolled back. sven records and retrieves; brain computes.
   - Done: `splinter-eval::continual` (matrix with absent cells, ACC, BWT, Forgetting, Forward
     Transfer against the base, learning gain and its curve, unit-level intervals) and its
     wiring into `status` / `status --json` from the gate reports of the policy's lineage, typed
-    "not measured" where there is nothing to read (finding 046). Left: `splinter eval matrix`,
-    the base arm in the gate so forward transfer exists beyond the first suite, the pin against
+    "not measured" where there is nothing to read (finding 046). `splinter eval matrix [--alias NAME]` prints the matrix
+    of a lineage (absent cells as `-`) and its metrics, read from the releases' gate reports.
+    Left: reading exam reports into the matrix (an exam report has no per-suite structure to
+    fill cells from), the base arm in the gate so forward transfer exists beyond the first suite, the pin against
     brain's backward-transfer on shared fixtures, the one-answer baseline and shortcut ceiling.
   - A matrix A[k][i] of pass rates with explicit unmeasured cells (n, ties, withheld,
     environment failures), pure functions for ACC, BWT, Forgetting (maximum taken from the

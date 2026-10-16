@@ -153,8 +153,23 @@ impl ResultsMatrix {
         }
     }
 
-    fn cell(&self, generation: usize, task: usize) -> Option<f64> {
-        self.cells[generation][task]
+    /// The score on task `task` after generation `generation`; `None` when
+    /// it was not measured (or the cell lies outside the matrix).
+    #[must_use]
+    pub fn cell(&self, generation: usize, task: usize) -> Option<f64> {
+        self.cells.get(generation)?.get(task).copied().flatten()
+    }
+
+    /// Generations (rows).
+    #[must_use]
+    pub fn generations(&self) -> usize {
+        self.generations
+    }
+
+    /// The tasks (columns), in order.
+    #[must_use]
+    pub fn tasks(&self) -> &[TaskColumn] {
+        &self.tasks
     }
 }
 

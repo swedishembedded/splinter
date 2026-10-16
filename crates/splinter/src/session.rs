@@ -46,8 +46,8 @@ use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::absorb_session;
 use crate::cli::{
-    Cli, Command, DatasetCommand, ExperiencesCommand, Global, JudgeCommand, ReleaseCommand,
-    RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
+    Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, Global, JudgeCommand,
+    ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
 };
 use crate::exam_session;
 use crate::learn_output;
@@ -639,6 +639,10 @@ impl Session {
                     })?,
                 );
             }
+            Command::Eval(EvalArgs {
+                command: Some(EvalCommand::Matrix { alias }),
+                ..
+            }) => emit(json, &release::continual::matrix(ctx, &alias)?),
             Command::Eval(args) => {
                 if let Some(judge) = args.judge {
                     ctx.set_judge(judge);
