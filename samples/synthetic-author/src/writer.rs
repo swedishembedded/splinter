@@ -620,7 +620,11 @@ impl Run<'_> {
                         MAX_READING_TOKENS,
                         tokens(&serde_json::to_string(&mined).unwrap_or_default()),
                     );
-                    turned_away(check_reading(&mined.as_reading(), self.persona, episodes))
+                    let reading = mined.as_reading();
+                    let result = check_reading(&reading, self.persona, episodes);
+                    self.cache
+                        .note_reading(index, attempt, result.is_ok(), &reading)?;
+                    turned_away(result)
                 }
                 Asked::Unreadable(e) => Verdict::Rejected(Rejection::Unreadable {
                     detail: e.to_string(),

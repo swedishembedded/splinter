@@ -60,6 +60,7 @@ fn recipe(author_seed: u64, writer: &str) -> CorpusManifest {
             persona_source: PersonaSource::Drawn,
             writer: writer.into(),
             reader: Some("reader-model".into()),
+            allow_same_family: false,
             decoding: "sampled".into(),
             run_seed: Some(!author_seed),
             articles: 10,

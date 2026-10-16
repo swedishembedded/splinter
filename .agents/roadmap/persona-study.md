@@ -413,6 +413,15 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-23 A reader other than the writer
 
+- **Status.** The protocol check and the audit are done for
+  `synthetic-author`; no corpus has been written with three families. `corpus`
+  refuses a reader of the writer's family and `mine` a miner of the family of
+  either, unless `--allow-same-family` is passed, which `manifest.json` or
+  `mine.json` records. The gate reader's readings are kept in `readings.jsonl`;
+  `audit` reports the gate reader's and the miner's agreement with the beliefs
+  and their agreement with each other per case. The choice of the three models
+  belongs to the PP-16 protocol.
+
 - **Problem.** One hosted model writes the essays, reads them for the gate and
   extracts the decisions; a consistent error of that model passes every gate.
 - **Evidence.** `papers/persona-training/sections/07-discussion.tex` (scope of

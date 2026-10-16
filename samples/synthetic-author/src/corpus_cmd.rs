@@ -19,6 +19,7 @@ use splinter_sdk::store::StateRoot;
 use splinter_sdk::{Config, Splinter};
 
 use crate::cache::Cache;
+use crate::family::{check_distinct, Roles};
 use crate::manifest::{
     begin_or_continue, code_revision, corpus_author, run_seed as run_seed_of, Author,
     CorpusManifest, Limits, Recipe, SEED_DERIVATION,
@@ -58,6 +59,11 @@ pub struct CorpusArgs {
     /// Permit a writer reached over the network.
     #[arg(long)]
     allow_remote: bool,
+    /// Permit the writer and the reader to be of the same model family, which
+    /// the protocol otherwise refuses; the manifest records that it was
+    /// permitted.
+    #[arg(long)]
+    allow_same_family: bool,
     /// How many articles the corpus has.
     #[arg(long, default_value_t = 100)]
     articles: usize,
@@ -92,9 +98,16 @@ pub struct CorpusArgs {
 /// Runs `corpus`.
 ///
 /// # Errors
-/// The author seed or the recipe contradicts what the directory records, the
-/// runtime cannot start, or the corpus cannot be written.
+/// The writer and the reader are of the same model family, the author seed or
+/// the recipe contradicts what the directory records, the runtime cannot start, or the corpus cannot be written.
 pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
+    if !args.allow_same_family {
+        check_distinct(&Roles {
+            writer: &args.writer,
+            reader: args.reader.as_deref(),
+            miner: None,
+        })?;
+    }
     let Author {
         persona,
         seed: author_seed,
@@ -128,6 +141,7 @@ pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
                 persona_source,
                 writer: args.writer.clone(),
                 reader: args.reader.clone(),
+                allow_same_family: args.allow_same_family,
                 decoding: WRITER_DECODING.to_string(),
                 run_seed,
                 articles: args.articles,

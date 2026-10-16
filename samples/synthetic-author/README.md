@@ -230,3 +230,29 @@ them trains or asks a model by itself; each is a name or a flag.
   conviction, what it makes of each way to act (which ways it rules out,
   disfavours or favours, and where), read off the same table the oracle
   decides by, and how the convictions are applied in order.
+
+## A reader other than the writer
+
+One model writes the essays, one reads each draft for the gate, and one reads
+the decisions out of the kept articles (`corpus --writer`, `corpus --reader`,
+`mine --miner`). If two of them are the same family, a mistake that family
+makes consistently is written, passed and read back without anything noticing,
+so the protocol wants three families. A model's family is the letters its name
+begins with, in lower case (`aster-xl-4` and `Aster-3.5` are `aster`,
+`Cedar3-8B` and a checkpoint directory `Cedar2.5-7B` are `cedar`); a policy alias
+is its own family.
+
+* `corpus` refuses a reader of the writer's family, naming both and the family.
+* `mine` refuses a miner of the family of the writer or the reader the corpus
+  manifest records. A corpus from before manifests records neither, so nothing
+  is compared.
+* `--allow-same-family` sets the check aside; `manifest.json` (for `corpus`)
+  or `mine.json` (for `mine`) then says `allow_same_family: true`, and a corpus
+  is only continued the way it was begun.
+* The gate reader's reading of every draft is kept in `readings.jsonl` with its
+  attempt and whether the attempt was kept. `audit` sets it beside the miner's:
+  the gate reader's agreement with the beliefs over every case it read, kept or
+  turned away; the miner's over the decisions it kept; and, on the kept cases
+  both read, how many agree on the decision, on the ways open and on the facts,
+  with the cases that differ listed. A corpus without readings (judged by marker
+  words, or written before they were kept) reports `not measured`.

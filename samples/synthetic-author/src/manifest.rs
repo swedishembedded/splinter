@@ -21,6 +21,7 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::seed::{resolve, SeedError};
 
+use crate::family::{check_distinct, Roles};
 use crate::persona::Persona;
 
 /// The file in a corpus directory that records how the corpus was made.
@@ -95,6 +96,10 @@ pub struct Recipe {
     pub writer: String,
     /// The model that reads each article, if there is one.
     pub reader: Option<String>,
+    /// Whether the check that the writer and the reader are of different model
+    /// families was set aside.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_same_family: bool,
     /// How the models decode.
     pub decoding: String,
     /// The seed the models' per-request seeds are derived from; `None` when
@@ -412,6 +417,10 @@ impl Recipe {
         );
         note(self.writer != other.writer, "writer");
         note(self.reader != other.reader, "reader");
+        note(
+            self.allow_same_family != other.allow_same_family,
+            "allow same family",
+        );
         note(self.decoding != other.decoding, "decoding");
         note(self.run_seed != other.run_seed, "run seed");
         note(self.articles != other.articles, "articles");
@@ -436,21 +445,30 @@ pub struct MineRecord {
     pub run_seed: Option<u64>,
     /// How the per-request seeds follow from the run seed.
     pub seed_derivation: String,
+    /// Whether the check that the miner is of another model family than the
+    /// writer and the reader of the corpus was set aside.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_same_family: bool,
 }
 
 /// The record of how the decisions of the corpus in `dir` are read: the one
 /// kept when there is one, which `miner` and `given` must agree with; else a
 /// new one, with a fresh run seed (printed) when none is given and the reader
-/// `seedable`, written to the directory.
+/// `seedable`, written to the directory. A new record is only made for a miner
+/// of another model family than the writer and the reader the corpus records,
+/// unless `allow_same_family`, which the record then says; a corpus from before
+/// manifests records neither, so there is nothing to compare with.
 ///
 /// # Errors
-/// The corpus was mined with another reader or another run seed, or the
-/// record cannot be read or written.
+/// The corpus was mined with another reader or another run seed, the miner is
+/// of the family of the writer or the reader, or the record cannot be read or
+/// written.
 pub fn begin_or_continue_mining(
     dir: &Path,
     miner: &str,
     given: Option<u64>,
     seedable: bool,
+    allow_same_family: bool,
 ) -> anyhow::Result<MineRecord> {
     let path = dir.join(MINE_RECORD);
     match std::fs::read_to_string(&path) {
@@ -469,10 +487,18 @@ pub fn begin_or_continue_mining(
             Ok(kept)
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if let (false, Some(corpus)) = (allow_same_family, read(dir)?) {
+                check_distinct(&Roles {
+                    writer: &corpus.recipe.writer,
+                    reader: corpus.recipe.reader.as_deref(),
+                    miner: Some(miner),
+                })?;
+            }
             let record = MineRecord {
                 miner: miner.to_string(),
                 run_seed: seedable.then(|| resolve("run-seed", given)),
                 seed_derivation: SEED_DERIVATION.to_string(),
+                allow_same_family,
             };
             std::fs::create_dir_all(dir)?;
             let part = path.with_extension("part");

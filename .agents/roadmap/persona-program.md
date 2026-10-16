@@ -117,7 +117,7 @@ apart and untouched by any synthetic data.
 | PP-20 | Sampled decoding beside greedy (the code is done; no sampled run is made) | S | PP-05, PP-11 |
 | PP-21 | Survivorship analysis (the report is done; the per-arm join with exam outcomes is not) | S | PP-12 |
 | PP-22 | Enough items to settle tuned against retrieval | S | PP-13, PP-16 |
-| PP-23 | A reader other than the writer | M | - |
+| PP-23 | A reader other than the writer (the check and the audit are done; the models are chosen in PP-16) | M | - |
 | PP-24 | Decisions and tool calls in `learn` | L | PP-10, PP-14, PP-15, PP-36, PP-37, PP-38 |
 | PP-25 | Documented-decision exams for Jefferson and Adams | L | PP-24, PP-34 |
 | PP-26 | Real-author runs through the one sentence | L | PP-08, PP-24, PP-25, PP-28 |

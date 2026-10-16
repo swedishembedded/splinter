@@ -247,6 +247,16 @@ fn a_reader_decides_whether_the_article_shows_the_decision_the_beliefs_determine
     assert_eq!(summary.calls, 4, "two writings and two readings");
     let rejected = std::fs::read_to_string(cache.dir().join("rejected.jsonl")).unwrap();
     assert!(rejected.contains("decision"), "{rejected}");
+    // What the reader read is kept with the attempt: the first turned away,
+    // the second kept.
+    let readings = cache.readings().unwrap();
+    assert_eq!(
+        readings
+            .iter()
+            .map(|r| (r.article, r.attempt, r.kept))
+            .collect::<Vec<_>>(),
+        vec![(0, 1, false), (0, 2, true)]
+    );
 }
 
 /// What a reader reports of a case: the decision, the facts and the open ways.

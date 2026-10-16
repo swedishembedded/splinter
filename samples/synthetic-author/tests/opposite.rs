@@ -50,6 +50,7 @@ fn manifest(author_seed: u64, source: PersonaSource) -> CorpusManifest {
             persona_source: source,
             writer: "writer".into(),
             reader: None,
+            allow_same_family: false,
             decoding: "greedy".into(),
             run_seed: None,
             articles: 10,

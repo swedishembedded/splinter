@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 
-use crate::gates::Article;
+use crate::gates::{Article, Reading};
 use crate::persona::Persona;
 
 /// One kept article and what it was told from.
@@ -55,6 +55,22 @@ pub enum Kind {
     ReaderUnavailable,
     /// The budget was spent before the draft was read.
     Budget,
+}
+
+/// The log of what the gate reader read.
+const READINGS: &str = "readings.jsonl";
+
+/// What the gate reader read in one attempt at an article.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadingRecord {
+    /// The article.
+    pub article: usize,
+    /// The attempt at it, from one.
+    pub attempt: usize,
+    /// Whether the attempt was kept.
+    pub kept: bool,
+    /// What the reader read.
+    pub reading: Reading,
 }
 
 /// A corpus directory.
@@ -160,10 +176,51 @@ impl Cache {
         reason: &str,
         draft: Option<&Article>,
     ) -> anyhow::Result<()> {
+        self.append_line(
+            "rejected.jsonl",
+            serde_json::json!({"article": index, "attempt": attempt, "kind": kind, "reason": reason, "draft": draft}).to_string(),
+        )
+    }
+
+    /// Notes what the gate reader read in attempt `attempt` at article
+    /// `index`, and whether that attempt was kept, so that the audit can set
+    /// it beside what the miner read out of the kept article.
+    ///
+    /// # Errors
+    /// The file cannot be appended to.
+    pub fn note_reading(
+        &self,
+        index: usize,
+        attempt: usize,
+        kept: bool,
+        reading: &Reading,
+    ) -> anyhow::Result<()> {
+        self.append_line(
+            READINGS,
+            serde_json::to_string(&ReadingRecord {
+                article: index,
+                attempt,
+                kept,
+                reading: reading.clone(),
+            })?,
+        )
+    }
+
+    /// Every reading the gate reader made, in the order they were noted; none
+    /// when the corpus was judged without a reader or before readings were
+    /// kept.
+    ///
+    /// # Errors
+    /// The file cannot be read or a line is not a reading.
+    pub fn readings(&self) -> anyhow::Result<Vec<ReadingRecord>> {
+        Ok(splinter_sdk::store::jsonl::read(&self.dir.join(READINGS))?)
+    }
+
+    /// Appends one line, written whole, to the log `name` of the corpus, by
+    /// one thread at a time.
+    fn append_line(&self, name: &str, mut line: String) -> anyhow::Result<()> {
         use std::io::Write as _;
-        // One line, written whole, by one thread at a time.
         static LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let mut line = serde_json::json!({"article": index, "attempt": attempt, "kind": kind, "reason": reason, "draft": draft}).to_string();
         line.push('\n');
         let _one_at_a_time = LOG
             .lock()
@@ -171,7 +228,7 @@ impl Cache {
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(self.dir.join("rejected.jsonl"))?;
+            .open(self.dir.join(name))?;
         file.write_all(line.as_bytes())?;
         Ok(())
     }

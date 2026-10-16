@@ -55,6 +55,7 @@ fn corpus_of(author_seed: u64) -> PathBuf {
             persona_source: PersonaSource::Drawn,
             writer: "writer".into(),
             reader: None,
+            allow_same_family: false,
             decoding: "greedy".into(),
             run_seed: None,
             articles: 10,

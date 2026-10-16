@@ -121,6 +121,11 @@ enum Command {
         /// Permit a reader reached over the network.
         #[arg(long)]
         allow_remote: bool,
+        /// Permit the reader to be of the same model family as the corpus's
+        /// writer or gate reader, which the protocol otherwise refuses; the
+        /// record of how the decisions are read says that it was permitted.
+        #[arg(long)]
+        allow_same_family: bool,
         /// How many articles are read at a time.
         #[arg(long, default_value_t = 4)]
         workers: usize,
@@ -317,12 +322,18 @@ fn main() -> anyhow::Result<()> {
             cache,
             miner,
             allow_remote,
+            allow_same_family,
             workers,
             run_seed,
         } => {
             let cache = Cache::open(cache)?;
-            let record =
-                begin_or_continue_mining(cache.dir(), &miner, run_seed, !is_remote(&miner)?)?;
+            let record = begin_or_continue_mining(
+                cache.dir(),
+                &miner,
+                run_seed,
+                !is_remote(&miner)?,
+                allow_same_family,
+            )?;
             let mut config = Config::from_env();
             config.state_root = StateRoot::new(cache.dir().join("state"));
             config.thinking = false;
@@ -425,6 +436,16 @@ fn main() -> anyhow::Result<()> {
             println!(
                 "{}: {} of {} kept decisions are the one the beliefs dictate; {} of {} list the ways the case offered",
                 persona.name, found.agree, found.kept, found.open_agree, found.kept
+            );
+            let planned = plan(&persona, seed, articles, 3);
+            print!(
+                "{}",
+                synthetic_author::readers::audit_readers(
+                    &cache.readings()?,
+                    &mined,
+                    &persona,
+                    &planned
+                )
             );
             Ok(())
         }

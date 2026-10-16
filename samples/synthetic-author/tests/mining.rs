@@ -203,30 +203,30 @@ fn each_article_is_read_by_a_model_made_for_it_with_a_seed_of_its_own() {
 fn how_the_decisions_were_read_is_recorded_and_a_later_mine_continues_with_it() {
     use synthetic_author::manifest::begin_or_continue_mining;
     let dir = cache("mine-record").dir().to_path_buf();
-    let first = begin_or_continue_mining(&dir, "local:reader", None, true).unwrap();
+    let first = begin_or_continue_mining(&dir, "local:reader", None, true, false).unwrap();
     let seed = first.run_seed.expect("a reader that runs here is seeded");
     assert!(dir.join("mine.json").exists());
     assert_eq!(
-        begin_or_continue_mining(&dir, "local:reader", None, true).unwrap(),
+        begin_or_continue_mining(&dir, "local:reader", None, true, false).unwrap(),
         first,
         "a later mine reads the seed back"
     );
     assert_eq!(
-        begin_or_continue_mining(&dir, "local:reader", Some(seed), true).unwrap(),
+        begin_or_continue_mining(&dir, "local:reader", Some(seed), true, false).unwrap(),
         first
     );
     let other_seed = format!(
         "{:#}",
-        begin_or_continue_mining(&dir, "local:reader", Some(seed ^ 1), true).unwrap_err()
+        begin_or_continue_mining(&dir, "local:reader", Some(seed ^ 1), true, false).unwrap_err()
     );
     assert!(other_seed.contains("mine.json"), "{other_seed}");
     let other_reader = format!(
         "{:#}",
-        begin_or_continue_mining(&dir, "local:another", None, true).unwrap_err()
+        begin_or_continue_mining(&dir, "local:another", None, true, false).unwrap_err()
     );
     assert!(other_reader.contains("local:reader"), "{other_reader}");
 
     let remote = cache("mine-record-remote").dir().to_path_buf();
-    let record = begin_or_continue_mining(&remote, "remote:model", None, false).unwrap();
+    let record = begin_or_continue_mining(&remote, "remote:model", None, false, false).unwrap();
     assert_eq!(record.run_seed, None, "a remote reader is not seeded");
 }
