@@ -113,7 +113,7 @@ apart and untouched by any synthetic data.
 | PP-16 | Replication: training seeds and author worlds | L | PP-05, PP-06, PP-07, PP-10 to PP-15, PP-23 |
 | PP-17 | The opposite author, trained on its own corpus (the corpus and `cross` are done; the paired test is not) | M | PP-07, PP-16 |
 | PP-18 | The long-context arm | M | PP-11, hardware |
-| PP-19 | Mechanism ablations | M | PP-16 |
+| PP-19 | Mechanism ablations (the switches are done; no ablation is run) | M | PP-16 |
 | PP-20 | Sampled decoding beside greedy (the code is done; no sampled run is made) | S | PP-05, PP-11 |
 | PP-21 | Survivorship analysis (the report is done; the per-arm join with exam outcomes is not) | S | PP-12 |
 | PP-22 | Enough items to settle tuned against retrieval | S | PP-13, PP-16 |

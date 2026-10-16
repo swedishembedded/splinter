@@ -3,9 +3,13 @@
 
 //! Training records from decisions read out of the articles.
 
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
+use crate::cache::Cache;
 use crate::episode::feature_sentences;
 use crate::gates::brief_phrase_copied;
 use crate::mine::Verified;
@@ -36,27 +40,77 @@ pub fn motivation_of(decision: &Verified) -> Option<&str> {
         .find(|r| !r.is_empty() && brief_phrase_copied(r).is_none())
 }
 
-/// One record for `decision` through each tool a model is taught with, or
-/// none when the decision has no reason to teach: a reason is part of what is
-/// learned, so a record never carries an empty one.
+/// Which briefings of a situation the records are made with. The reader's
+/// briefing is in the reader's words; the fixed-wording one states the facts
+/// in the words the examination puts them in, and exists only for a decision
+/// whose essay stated every fact.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
+pub enum Briefings {
+    /// Both, where both exist.
+    #[default]
+    Both,
+    /// The reader's briefing alone: the records of a model that never saw the
+    /// examination's wording of the facts.
+    ReaderOnly,
+    /// The fixed-wording briefing alone.
+    FixedWordingOnly,
+}
+
+impl Briefings {
+    /// The name of the records file and of the training attempt of this
+    /// setting, which the default keeps as it always was.
+    #[must_use]
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Self::Both => "",
+            Self::ReaderOnly => "-reader-only",
+            Self::FixedWordingOnly => "-fixed-wording-only",
+        }
+    }
+}
+
+/// Where `cache` keeps the records made with `briefings`.
+#[must_use]
+pub fn path(cache: &Cache, briefings: Briefings) -> PathBuf {
+    cache
+        .dir()
+        .join("dataset")
+        .join(format!("train{}.jsonl", briefings.suffix()))
+}
+
+/// [`records_with`] with every briefing there is.
+#[must_use]
+pub fn records_for(seed: u64, group: &str, decision: &Verified) -> Vec<Value> {
+    records_with(seed, group, decision, Briefings::Both)
+}
+
+/// One record for `decision` through each tool a model is taught with, for
+/// each of the `briefings` it has, or none when the decision has no reason to
+/// teach: a reason is part of what is learned, so a record never carries an
+/// empty one.
 ///
 /// The decision is one the reading gate or `verify` passed, so the option
 /// chosen is among those listed.
 #[must_use]
-pub fn records_for(seed: u64, group: &str, decision: &Verified) -> Vec<Value> {
+pub fn records_with(seed: u64, group: &str, decision: &Verified, which: Briefings) -> Vec<Value> {
     let Some(motivation) = motivation_of(decision) else {
         return Vec::new();
     };
     let options = options_of(seed, group, decision);
-    // The reader's briefing, and, when the essay stated every fact, the facts
-    // in the words the examination puts them in.
-    let mut briefings = vec![decision.briefing.clone()];
-    if let Some(features) = decision.facts.features(decision.offer_made) {
-        briefings.push(format!(
-            "A matter arose over {}. {}",
-            decision.case,
-            feature_sentences(&features, "An outside house")
-        ));
+    let mut briefings = Vec::new();
+    if which != Briefings::FixedWordingOnly {
+        briefings.push(decision.briefing.clone());
+    }
+    if which != Briefings::ReaderOnly {
+        if let Some(features) = decision.facts.features(decision.offer_made) {
+            briefings.push(format!(
+                "A matter arose over {}. {}",
+                decision.case,
+                feature_sentences(&features, "An outside house")
+            ));
+        }
     }
     briefings
         .iter()

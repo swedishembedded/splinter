@@ -203,3 +203,30 @@ the two authors are determined and decide differently. The two adapters are
 examined on the situations of their own authors, so the rows set them side by
 side; a paired test between the two on identical situations needs an
 examination both are asked, which does not exist.
+
+## Mechanism ablations
+
+Switches for asking which part of the method accounts for the result. None of
+them trains or asks a model by itself; each is a name or a flag.
+
+* `dataset --briefings both|reader-only|fixed-wording-only` makes the records
+  with both briefings of a situation (the default), with the reader's alone, or
+  with the fixed-wording one alone (the facts in the words the examination
+  puts them in, which exists only for a decision whose essay stated every
+  fact). Each setting is written to a file of its own, and
+  `train --briefings` trains on that file in an attempt directory of its own
+  and records the setting in `summary.json`.
+* `exam --arm` takes, besides the arms above, `retrieval-2` and `retrieval-12`
+  (paragraphs of whole articles, the original `retrieval` being six) and
+  `retrieval-records-2`, `retrieval-records-6` and `retrieval-records-12`
+  (passages drawn from the training records themselves: each decision kept
+  that has a reason to teach, as the situation the reader briefed, the
+  decision in the tools' label and the reason). Retrieval over the records
+  needs `mine` first. The arm's record in `exam/manifest.json` names what the
+  passages were drawn from and how many were handed over (the original arm's
+  record is as it was), and the digest of the corpus they were drawn from;
+  outcomes are not appended to after the articles or the decisions changed.
+* `principles-verdicts` is the principles arm that also states, for each
+  conviction, what it makes of each way to act (which ways it rules out,
+  disfavours or favours, and where), read off the same table the oracle
+  decides by, and how the convictions are applied in order.

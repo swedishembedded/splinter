@@ -21,6 +21,7 @@ use splinter_sdk::store::StateRoot;
 use splinter_sdk::{Config, Splinter};
 use synthetic_author::cache::Cache;
 use synthetic_author::corpus_cmd::CorpusArgs;
+use synthetic_author::dataset::Briefings;
 use synthetic_author::exam_cmd::{CrossArgs, ExamArgs, ReportArgs};
 use synthetic_author::manifest::{
     author, author_or_draw, begin_or_continue_mining, Author, PersonaSource,
@@ -137,6 +138,10 @@ enum Command {
         /// The corpus directory.
         #[arg(long)]
         cache: PathBuf,
+        /// Which briefings the records are made with; each setting is kept in
+        /// a file of its own.
+        #[arg(long, value_enum, default_value_t = Briefings::default())]
+        briefings: Briefings,
     },
     Train(TrainArgs),
     Exam(ExamArgs),
@@ -336,13 +341,15 @@ fn main() -> anyhow::Result<()> {
             println!("{read} articles read; {kept} of {} cases kept", all.len());
             Ok(())
         }
-        Command::Dataset { seed, cache } => {
+        Command::Dataset {
+            seed,
+            cache,
+            briefings,
+        } => {
             let seed = author(&cache, seed)?.seed;
             let cache = Cache::open(cache)?;
-            let out = cache.dir().join("dataset").join("train.jsonl");
-            let summary = synthetic_author::lab::build_dataset(&cache, seed, &out)?;
+            let summary = synthetic_author::lab::build_dataset(&cache, seed, briefings)?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
-            println!("{}", out.display());
             Ok(())
         }
         Command::Train(args) => synthetic_author::training::run(&args),
@@ -396,7 +403,10 @@ fn main() -> anyhow::Result<()> {
                 let mut view = synthetic_author::lab::item_view(&item);
                 if let Some(notes) = &notes {
                     view["retrieval_system"] = notes
-                        .system_for(&item, synthetic_author::lab::RETRIEVED_PARAGRAPHS)
+                        .system_for(
+                            &item,
+                            synthetic_author::arm::Retrieval::ORIGINAL.passages.count(),
+                        )
                         .into();
                 }
                 println!("{view}");

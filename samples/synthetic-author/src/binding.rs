@@ -26,6 +26,7 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
+use crate::arm::{Over, Retrieval};
 use crate::arms::Outcome;
 use crate::exam::{Item, Version};
 use crate::prompts::render;
@@ -137,6 +138,26 @@ impl ModelIdentity {
     }
 }
 
+/// What a retrieval arm was handed besides the item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetrievalSetting {
+    /// What the passages were drawn from.
+    pub over: Over,
+    /// How many were handed over with each item.
+    pub paragraphs: usize,
+}
+
+impl RetrievalSetting {
+    /// The setting a configuration of the arm stands for.
+    #[must_use]
+    pub fn of(retrieval: Retrieval) -> Self {
+        Self {
+            over: retrieval.over,
+            paragraphs: retrieval.passages.count(),
+        }
+    }
+}
+
 /// Everything the outcomes of one arm depend on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArmRecord {
@@ -163,6 +184,12 @@ pub struct ArmRecord {
     /// asks once and does not say.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draws: Option<usize>,
+    /// What a retrieval arm draws its passages from and how many it hands
+    /// over. Absent for an arm that retrieves nothing and for the original
+    /// retrieval arm (paragraphs of whole articles, six), whose records
+    /// predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retrieval: Option<RetrievalSetting>,
     /// Whether the record was written for outcomes that already existed,
     /// from the flags given, rather than begun with them.
     #[serde(default)]
@@ -205,6 +232,7 @@ impl ArmRecord {
             "decoding seed",
         );
         note(self.draws != other.draws, "draws");
+        note(self.retrieval != other.retrieval, "retrieval");
         named
     }
 }

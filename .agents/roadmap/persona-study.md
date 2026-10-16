@@ -314,6 +314,17 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-19 Mechanism ablations
 
+- **Status.** The switches are done for `synthetic-author`; no adapter is
+  trained and no arm is asked of a model. `dataset --briefings` and
+  `train --briefings` make and train on records with both briefings, the
+  reader's alone or the fixed-wording one alone. `exam --arm` takes
+  `retrieval-2`, `retrieval-12`, `retrieval-records-2`, `retrieval-records-6`,
+  `retrieval-records-12` beside `retrieval` and `principles-verdicts`; the arm's
+  record in the exam manifest names the source and the number of passages, and
+  the corpus they come from is part of its digest. The paired tests of each
+  against the main arms and the correction for multiplicity belong to the
+  protocol of PP-16, and `report` lists the pairs.
+
 - **Problem.** The strongest alternative explanation (a lookup from fact
   patterns, helped by records that restate facts in the exam's own sentences)
   is bounded but not tested; the retrieval arm is one configuration; the

@@ -7,7 +7,7 @@
 //! again, or run on another machine, without the others.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
 
@@ -16,16 +16,18 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::store::jsonl;
 use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
+pub use crate::arm::Arm;
+use crate::arm::{Over, Retrieval};
 use crate::arms::{run_items_with, Outcome};
-use crate::binding::{bind, items_digest, ArmRecord, ModelIdentity};
+use crate::binding::{bind, items_digest, ArmRecord, ModelIdentity, RetrievalSetting};
 use crate::cache::{Cache, StoredArticle};
-use crate::dataset::records_for;
+use crate::dataset::{motivation_of, records_with, Briefings};
 use crate::exam::{draw, items, Item, Spec, Trained, Version};
 use crate::gates::same_ways;
 use crate::manifest::author;
 use crate::mine::{mine, Verified};
 use crate::persona::Persona;
-use crate::prompts::SYSTEM;
+use crate::retrieval::Notes;
 use crate::scenario::Archetype;
 use crate::writer::{plan, Models, RequestKey, Role};
 
@@ -157,28 +159,41 @@ pub fn mine_all(cache: &Cache, miner: &dyn Models, workers: usize) -> anyhow::Re
 /// What a dataset was made of.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DatasetSummary {
+    /// Which briefings the records were made with.
+    pub briefings: Briefings,
+    /// Where the records were written.
+    pub path: PathBuf,
     /// Decisions read and kept.
     pub decisions: usize,
     /// Cases turned away.
     pub refused: usize,
     /// Decisions kept that made no record, for want of a reason of the
-    /// author's own to teach.
+    /// author's own to teach or, with the fixed-wording briefing alone, of
+    /// every fact read.
     #[serde(default)]
-    pub without_reason: usize,
+    pub without_record: usize,
     /// Records written.
     pub records: usize,
 }
 
-/// Writes the training records for every decision kept to `out`.
+/// Writes the training records for every decision kept to the file `briefings`
+/// names in the dataset directory of `cache`.
 ///
 /// # Errors
 /// The decisions cannot be read or the file cannot be written.
-pub fn build_dataset(cache: &Cache, seed: u64, out: &Path) -> anyhow::Result<DatasetSummary> {
+pub fn build_dataset(
+    cache: &Cache,
+    seed: u64,
+    briefings: Briefings,
+) -> anyhow::Result<DatasetSummary> {
     let mined = read_mined(cache)?;
+    let out = crate::dataset::path(cache, briefings);
     let mut summary = DatasetSummary {
+        briefings,
+        path: out.clone(),
         decisions: 0,
         refused: 0,
-        without_reason: 0,
+        without_record: 0,
         records: 0,
     };
     let mut text = String::new();
@@ -186,8 +201,13 @@ pub fn build_dataset(cache: &Cache, seed: u64, out: &Path) -> anyhow::Result<Dat
         match &m.result {
             MinedResult::Kept(decision) => {
                 summary.decisions += 1;
-                let records = records_for(seed, &format!("{}:{}", m.article, m.case), decision);
-                summary.without_reason += usize::from(records.is_empty());
+                let records = records_with(
+                    seed,
+                    &format!("{}:{}", m.article, m.case),
+                    decision,
+                    briefings,
+                );
+                summary.without_record += usize::from(records.is_empty());
                 for record in records {
                     text.push_str(&record.to_string());
                     text.push('\n');
@@ -200,7 +220,7 @@ pub fn build_dataset(cache: &Cache, seed: u64, out: &Path) -> anyhow::Result<Dat
     if let Some(dir) = out.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(out, text)?;
+    std::fs::write(&out, text)?;
     Ok(summary)
 }
 
@@ -251,54 +271,6 @@ pub fn audit(mined: &[Mined], persona: &Persona, seed: u64, articles: usize) -> 
         audit.open_agree += usize::from(same_ways(&decision.open, planned_open));
     }
     audit
-}
-
-/// The system turn each arm of the examination is asked under.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Arm {
-    /// The plain system turn, no adapter.
-    Base,
-    /// The plain system turn, with the adapter.
-    Tuned,
-    /// The system turn and the author's four convictions, in order of priority.
-    Principles,
-    /// The system turn and the author's name.
-    Named,
-    /// The plain system turn and the paragraphs of the corpus that share the
-    /// most with the situation.
-    Retrieval,
-}
-
-impl Arm {
-    /// The arm's name, as used in file names.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Base => "base",
-            Self::Tuned => "tuned",
-            Self::Principles => "principles",
-            Self::Named => "named",
-            Self::Retrieval => "retrieval",
-        }
-    }
-
-    /// The system turn the arm is asked under.
-    #[must_use]
-    pub fn system(self, persona: &Persona) -> String {
-        match self {
-            Self::Base | Self::Tuned | Self::Retrieval => SYSTEM.to_string(),
-            Self::Named => format!("{SYSTEM} You are {}.", persona.name),
-            Self::Principles => {
-                let mut text = format!(
-                    "{SYSTEM}\n\nYou hold these convictions, listed from the most important to the least, and they decide how you settle a matter:"
-                );
-                for belief in &persona.beliefs {
-                    text.push_str(&format!("\n- {}", belief.statement()));
-                }
-                text
-            }
-        }
-    }
 }
 
 /// The names of the cases the first `articles` planned articles tell.
@@ -379,8 +351,12 @@ pub fn asked_items(cache: &Cache, record: &ArmRecord) -> anyhow::Result<Vec<Item
     Ok(items)
 }
 
-/// What the kept decisions of the corpus in `cache` cover.
-fn trained_on(cache: &Cache) -> anyhow::Result<Trained> {
+/// Every decision kept from the corpus in `cache`, for `purpose`.
+///
+/// # Errors
+/// No decisions have been read out of the corpus: the message says to run
+/// `mine` before `purpose`.
+fn kept_decisions(cache: &Cache, purpose: &str) -> anyhow::Result<Vec<Verified>> {
     let read = if decisions_path(cache).exists() {
         read_mined(cache)?
     } else {
@@ -388,16 +364,24 @@ fn trained_on(cache: &Cache) -> anyhow::Result<Trained> {
     };
     anyhow::ensure!(
         !read.is_empty(),
-        "{} holds no decisions read out of the corpus: run `mine` before drawing the second examination, which says which items the corpus trained on",
+        "{} holds no decisions read out of the corpus: run `mine` {purpose}",
         cache.dir().display()
     );
-    let kept: Vec<Verified> = read
+    Ok(read
         .into_iter()
         .filter_map(|m| match m.result {
             MinedResult::Kept(decision) => Some(decision),
             MinedResult::Refused(_) => None,
         })
-        .collect();
+        .collect())
+}
+
+/// What the kept decisions of the corpus in `cache` cover.
+fn trained_on(cache: &Cache) -> anyhow::Result<Trained> {
+    let kept = kept_decisions(
+        cache,
+        "before drawing the second examination, which says which items the corpus trained on",
+    )?;
     Ok(Trained::from_decisions(&kept))
 }
 
@@ -433,9 +417,6 @@ pub fn outcomes_path(cache: &Cache, arm: Arm) -> PathBuf {
         .join(format!("{}.jsonl", arm.name()))
 }
 
-/// How many paragraphs the retrieval arm is handed with each situation.
-pub const RETRIEVED_PARAGRAPHS: usize = 6;
-
 /// What an examination of one arm was asked with, besides the items: the
 /// flags that made them and the model that answers.
 #[derive(Clone, Debug)]
@@ -466,9 +447,16 @@ pub fn arm_record(
     items: &[Item],
     run: &ExamRun,
 ) -> anyhow::Result<ArmRecord> {
-    let told = match arm {
-        Arm::Retrieval => serde_json::to_string(&cache.articles()?)?,
-        _ => String::new(),
+    let told = match arm.retrieval() {
+        Some(Retrieval {
+            over: Over::Articles,
+            ..
+        }) => serde_json::to_string(&cache.articles()?)?,
+        Some(Retrieval {
+            over: Over::Records,
+            ..
+        }) => serde_json::to_string(&retrieved_records(cache)?)?,
+        None => String::new(),
     };
     let context = serde_json::json!({"system": arm.system(persona), "corpus": told});
     Ok(ArmRecord {
@@ -481,6 +469,10 @@ pub fn arm_record(
         context_digest: Digest::of(&canonical_json(&context)?).to_string(),
         model: run.model.clone(),
         draws: None,
+        retrieval: arm
+            .retrieval()
+            .filter(|&r| r != Retrieval::ORIGINAL)
+            .map(RetrievalSetting::of),
         adopted: false,
     })
 }
@@ -526,13 +518,33 @@ pub fn system_of(
     persona: &Persona,
     arm: Arm,
 ) -> anyhow::Result<impl Fn(&Item) -> String> {
-    let notes = (arm == Arm::Retrieval)
-        .then(|| cache.articles())
-        .transpose()?
-        .map(|articles| crate::retrieval::Notes::new(&articles));
+    let retrieval = arm.retrieval();
+    let notes = match retrieval {
+        Some(Retrieval {
+            over: Over::Articles,
+            ..
+        }) => Some(Notes::new(&cache.articles()?)),
+        Some(Retrieval {
+            over: Over::Records,
+            ..
+        }) => Some(Notes::of_decisions(&retrieved_records(cache)?)),
+        None => None,
+    };
     let system = arm.system(persona);
-    Ok(move |item: &Item| match &notes {
-        Some(notes) => notes.system_for(item, RETRIEVED_PARAGRAPHS),
-        None => system.clone(),
+    Ok(move |item: &Item| match (&notes, retrieval) {
+        (Some(notes), Some(r)) => notes.system_for(item, r.passages.count()),
+        _ => system.clone(),
     })
+}
+
+/// The decisions the training records are made from: those kept from the
+/// corpus that have a reason of the author's own to teach.
+fn retrieved_records(cache: &Cache) -> anyhow::Result<Vec<Verified>> {
+    Ok(kept_decisions(
+        cache,
+        "before asking an arm that retrieves from the training records",
+    )?
+    .into_iter()
+    .filter(|d| motivation_of(d).is_some())
+    .collect())
 }

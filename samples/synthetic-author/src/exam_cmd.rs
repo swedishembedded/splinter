@@ -18,6 +18,7 @@ use clap::Args;
 use splinter_sdk::model::answer::{Answerer, Decoding};
 use splinter_sdk::seed::resolve;
 
+use crate::arm::Arm;
 use crate::arms::{read_outcomes, Outcome};
 use crate::binding::{
     base_digest, file_digest, recorded, verify_items, verify_outcomes, verify_same_items,
@@ -25,7 +26,7 @@ use crate::binding::{
 };
 use crate::cache::Cache;
 use crate::exam::Version;
-use crate::lab::{asked_items, exam_items_of, run_arm, Arm, ExamRun};
+use crate::lab::{asked_items, exam_items_of, run_arm, ExamRun};
 use crate::manifest::{author, Author, PersonaSource};
 use crate::motives;
 use crate::persona::Persona;
@@ -45,7 +46,9 @@ pub struct ExamArgs {
     /// The checkpoint directory of the base model.
     #[arg(long)]
     base: PathBuf,
-    /// The arm: base, tuned, principles, named or retrieval.
+    /// The arm: base, tuned, principles, principles-verdicts, named, retrieval
+    /// (paragraphs of articles, six), retrieval-2, retrieval-12, or retrieval-records-2,
+    /// retrieval-records-6, retrieval-records-12 (the training records).
     #[arg(long)]
     arm: String,
     /// The adapter, for the tuned arm.
@@ -120,13 +123,9 @@ pub struct CrossArgs {
 }
 
 fn parse_arm(name: &str) -> anyhow::Result<Arm> {
-    Ok(match name {
-        "base" => Arm::Base,
-        "tuned" => Arm::Tuned,
-        "principles" => Arm::Principles,
-        "named" => Arm::Named,
-        "retrieval" => Arm::Retrieval,
-        other => anyhow::bail!("unknown arm {other:?}"),
+    Arm::parse(name).ok_or_else(|| {
+        let known: Vec<&str> = Arm::ALL.iter().map(|a| a.name()).collect();
+        anyhow::anyhow!("unknown arm {name:?}: the arms are {}", known.join(", "))
     })
 }
 
@@ -283,8 +282,15 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
         ("tuned", "named"),
         ("tuned", "principles"),
         ("tuned", "retrieval"),
+        ("tuned", "retrieval-2"),
+        ("tuned", "retrieval-12"),
+        ("tuned", "retrieval-records-2"),
+        ("tuned", "retrieval-records-6"),
+        ("tuned", "retrieval-records-12"),
+        ("tuned", "principles-verdicts"),
         ("retrieval", "base"),
         ("principles", "base"),
+        ("principles-verdicts", "principles"),
         ("tuned", report::FIRST_LISTED),
         ("tuned", report::MAJORITY),
     ];

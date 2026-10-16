@@ -15,6 +15,7 @@
 //! truth against which a model that learned from texts the author wrote is
 //! measured; no model is involved in saying what the author decides.
 
+pub mod arm;
 pub mod arms;
 pub mod binding;
 pub mod cache;

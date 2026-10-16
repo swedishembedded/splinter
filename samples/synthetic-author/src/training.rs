@@ -17,6 +17,7 @@ use serde::Serialize;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::cache::Cache;
+use crate::dataset::Briefings;
 
 /// Train an adapter on the records.
 #[derive(Args)]
@@ -49,6 +50,10 @@ pub struct TrainArgs {
     /// printed when absent.
     #[arg(long)]
     train_seed: Option<u64>,
+    /// Which briefings the records were made with: trains on the records
+    /// `dataset --briefings` wrote for that setting.
+    #[arg(long, value_enum, default_value_t = Briefings::default())]
+    briefings: Briefings,
 }
 
 /// What made an adapter: every setting of the run and the records it was
@@ -71,6 +76,8 @@ pub struct Settings {
     pub bf16: bool,
     /// Digest of the file of records.
     pub dataset_digest: String,
+    /// Which briefings the records were made with.
+    pub briefings: Briefings,
 }
 
 impl TrainArgs {
@@ -89,6 +96,7 @@ impl TrainArgs {
             records_per_step: self.records_per_step,
             bf16: self.bf16,
             dataset_digest: Digest::of_reader(std::fs::File::open(dataset)?)?.to_string(),
+            briefings: self.briefings,
         })
     }
 }
@@ -112,9 +120,11 @@ struct Summary<'a> {
 pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
     let seed = splinter_sdk::seed::resolve("train-seed", args.train_seed);
     let cache = Cache::open(args.cache.clone())?;
-    let dataset = cache.dir().join("dataset").join("train.jsonl");
+    let dataset = crate::dataset::path(&cache, args.briefings);
     let settings = args.settings(seed, &dataset)?;
-    let attempt = cache.dir().join("train");
+    let attempt = cache
+        .dir()
+        .join(format!("train{}", args.briefings.suffix()));
     std::fs::create_dir_all(&attempt)?;
     let started = std::time::Instant::now();
     let report = |r: &splinter_sdk::model::train::StepReport| {

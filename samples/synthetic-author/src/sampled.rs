@@ -26,11 +26,12 @@ use splinter_sdk::agent::sven::model::ModelProvider;
 use splinter_sdk::store::jsonl;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
+use crate::arm::Arm;
 use crate::arms::answer;
 use crate::binding::{bind, item_digest, recorded, verify_items, ArmRecord};
 use crate::cache::Cache;
 use crate::exam::Item;
-use crate::lab::{arm_record, system_of, Arm, ExamRun};
+use crate::lab::{arm_record, system_of, ExamRun};
 use crate::persona::Persona;
 
 /// How many times each item is asked when the caller does not say.

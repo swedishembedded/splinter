@@ -139,6 +139,24 @@ impl Fact {
         }
     }
 
+    /// The fact as a clause: that it holds, or that it does not.
+    fn said(self, holds: bool) -> &'static str {
+        match (self, holds) {
+            (Self::ExceedsAuthority, true) => "the act goes beyond what the charter grants",
+            (Self::ExceedsAuthority, false) => "the act is within what the charter grants",
+            (Self::BindsFuture, true) => "the matter binds the community for years",
+            (Self::BindsFuture, false) => "the matter binds only this year",
+            (Self::OutsiderOffersHelp, true) => "an outside house offers help",
+            (Self::OutsiderOffersHelp, false) => "no outside house offers help",
+            (Self::Irreversible, true) => "the act cannot be undone",
+            (Self::Irreversible, false) => "the act can be reversed",
+            (Self::MembersHarmed, true) => "members of the community are being hurt",
+            (Self::MembersHarmed, false) => "no member of the community is being hurt",
+            (Self::Urgent, true) => "delay would cost dearly",
+            (Self::Urgent, false) => "there is no pressing hurry",
+        }
+    }
+
     /// Lowercase word stems by which a reason is taken to name the fact. A
     /// fixed list, so that a reason is graded by code and not by a judge; it
     /// errs towards missing a paraphrase over crediting an unrelated word.
@@ -196,11 +214,80 @@ pub struct Belief {
 
 /// What a belief makes of an option.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Verdict {
+pub enum Verdict {
+    /// The option is ruled out, unless that would leave nothing.
     Forbid,
+    /// The option is worse than the others.
     Disfavor,
+    /// The belief says nothing of it.
     Neutral,
+    /// The option is better than the others.
     Favor,
+}
+
+/// Every way to act, in the order of [`Archetype`].
+const OPTIONS: [Archetype; 4] = [
+    Archetype::ActAlone,
+    Archetype::ConsultThenAct,
+    Archetype::DeferToOutsider,
+    Archetype::HoldAndWait,
+];
+
+/// Every fact a situation is made of.
+const FACTS: [Fact; 6] = [
+    Fact::ExceedsAuthority,
+    Fact::BindsFuture,
+    Fact::OutsiderOffersHelp,
+    Fact::Irreversible,
+    Fact::MembersHarmed,
+    Fact::Urgent,
+];
+
+/// One verdict of a belief: it applies to an option where the facts listed
+/// hold or do not, whatever the facts not listed are.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rule {
+    /// The option judged.
+    pub option: Archetype,
+    /// The verdict.
+    pub verdict: Verdict,
+    /// The facts the verdict depends on, and whether each holds.
+    pub when: Vec<(Fact, bool)>,
+}
+
+impl Rule {
+    /// Whether the verdict applies in a situation with `features`.
+    #[must_use]
+    pub fn holds(&self, features: &Features) -> bool {
+        self.when
+            .iter()
+            .all(|&(fact, wanted)| fact.holds(features) == wanted)
+    }
+
+    /// The rule as a sentence addressed to the author.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let verdict = match self.verdict {
+            Verdict::Forbid => "rule out",
+            Verdict::Disfavor => "disfavour",
+            Verdict::Favor | Verdict::Neutral => "favour",
+        };
+        let option = match self.option {
+            Archetype::ActAlone => "settling it yourself",
+            Archetype::ConsultThenAct => "taking it to the assembly",
+            Archetype::DeferToOutsider => "accepting the outside offer",
+            Archetype::HoldAndWait => "waiting",
+        };
+        if self.when.is_empty() {
+            return format!("You {verdict} {option}.");
+        }
+        let when: Vec<&str> = self
+            .when
+            .iter()
+            .map(|&(fact, holds)| fact.said(holds))
+            .collect();
+        format!("Where {}, you {verdict} {option}.", when.join(" and "))
+    }
 }
 
 impl Belief {
@@ -246,6 +333,54 @@ impl Belief {
             (Haste, Strict) => "You count delay in a crisis as the worst fault, and you cannot sit still while things get worse.",
             (Haste, Lax) => "You believe haste turns a hard decision into a bad one, so even in a crisis you take the matter through the council.",
         }
+    }
+
+    /// Every verdict this belief gives, read off the table [`Self::verdict`]
+    /// is: one rule for each option and verdict that occurs, naming the facts
+    /// that are the same in every situation it applies to.
+    #[must_use]
+    pub fn rules(&self) -> Vec<Rule> {
+        let situations: Vec<Features> = (0..64u32)
+            .map(|bits| Features {
+                exceeds_authority: bits & 1 != 0,
+                urgent: bits & 2 != 0,
+                binds_future: bits & 4 != 0,
+                irreversible: bits & 8 != 0,
+                members_harmed: bits & 16 != 0,
+                outsider_offers_help: bits & 32 != 0,
+            })
+            .collect();
+        let mut rules = Vec::new();
+        for option in OPTIONS {
+            for verdict in [Verdict::Forbid, Verdict::Disfavor, Verdict::Favor] {
+                let applies: Vec<&Features> = situations
+                    .iter()
+                    .filter(|f| self.verdict(f, option) == verdict)
+                    .collect();
+                if applies.is_empty() {
+                    continue;
+                }
+                let when = FACTS
+                    .iter()
+                    .filter_map(|&fact| {
+                        let held = applies.iter().filter(|f| fact.holds(f)).count();
+                        if held == applies.len() {
+                            Some((fact, true))
+                        } else if held == 0 {
+                            Some((fact, false))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                rules.push(Rule {
+                    option,
+                    verdict,
+                    when,
+                });
+            }
+        }
+        rules
     }
 
     fn verdict(&self, f: &Features, option: Archetype) -> Verdict {
@@ -453,6 +588,32 @@ mod tests {
             members_harmed: bits & 16 != 0,
             outsider_offers_help: bits & 32 != 0,
         })
+    }
+
+    /// The rules say everything the table says and nothing it does not: in
+    /// every situation, the rules that hold for an option are exactly its
+    /// verdict.
+    #[test]
+    fn the_rules_of_a_belief_reproduce_its_verdicts_in_every_situation() {
+        for tenet in TENETS {
+            for polarity in [Polarity::Strict, Polarity::Lax] {
+                let belief = Belief { tenet, polarity };
+                let rules = belief.rules();
+                for features in every_situation() {
+                    for option in OPTIONS {
+                        let said: Vec<Verdict> = rules
+                            .iter()
+                            .filter(|r| r.option == option && r.holds(&features))
+                            .map(|r| r.verdict)
+                            .collect();
+                        match belief.verdict(&features, option) {
+                            Verdict::Neutral => assert!(said.is_empty(), "{belief:?} {option:?}"),
+                            v => assert_eq!(said, vec![v], "{belief:?} {option:?}"),
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// The fact a tenet names is the one its verdicts turn on: a belief judges
