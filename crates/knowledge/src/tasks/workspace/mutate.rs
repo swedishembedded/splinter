@@ -40,7 +40,8 @@ use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Privileged, PrivilegedKind};
 use splinter_core::selfcontained::check_self_contained;
 use splinter_eval::verifiers::mutation::{mutants, Mutant};
-use splinter_eval::verifiers::workspace::WorkspaceCheck;
+use splinter_eval::verifiers::test_report::TestExpectation;
+use splinter_eval::verifiers::workspace::{Phase, WorkspaceCheck};
 use splinter_sandbox::{CommandCall, Patch, TreeSnapshot, WorkspaceEnvironment};
 
 use super::harness::{Harness, SuiteReport};
@@ -231,6 +232,10 @@ impl WorkspaceGenerator {
         }
 
         let fix = self.fix(&env, &views, path, original)?;
+        let mut expectations = vec![expecting(base, Phase::FailToPass, &failing)];
+        if !passing.is_empty() {
+            expectations.push(expecting(base, Phase::PassToPass, &passing));
+        }
         let check = WorkspaceCheck {
             fail_to_pass: vec![base.harness.select(base.command(), &failing)],
             pass_to_pass: select_if_any(base, &passing),
@@ -238,6 +243,8 @@ impl WorkspaceGenerator {
             protected: protected(base, &killed.files),
             hidden_paths: killed.files.iter().cloned().collect(),
             hidden_strength: Some(strength),
+            expectations,
+            pinned: Vec::new(),
         };
         let task = self.build_task(&env, &check, &text, path, Some(&fix))?;
         self.keep(&views)?;
@@ -467,6 +474,18 @@ fn select_if_any(base: &Parent<'_>, ids: &BTreeSet<String>) -> Vec<CommandCall> 
         Vec::new()
     } else {
         vec![base.harness.select(base.command(), ids)]
+    }
+}
+
+/// The command of `phase` selects exactly `ids`: the verifier must see each
+/// reported as passed, and no fewer tests run than were selected.
+fn expecting(base: &Parent<'_>, phase: Phase, ids: &BTreeSet<String>) -> TestExpectation {
+    TestExpectation {
+        phase,
+        index: 0,
+        runner: base.harness.runner(),
+        tests: ids.clone(),
+        min_tests: ids.len(),
     }
 }
 

@@ -24,7 +24,8 @@ use splinter_core::experience::{Privileged, PrivilegedKind, Task};
 use splinter_core::kinds::WORKSPACE_CHECK;
 use splinter_sandbox::CommandCall;
 
-use super::workspace::WorkspaceCheck;
+use super::test_report::TestExpectation;
+use super::workspace::{Phase, WorkspaceCheck};
 use super::VerifyError;
 
 /// The command that passes exactly when `call` does not: the shell's
@@ -50,8 +51,29 @@ impl WorkspaceCheck {
             .iter()
             .flat_map(|call| [call.clone(), inverted(call)])
             .collect();
+        // Both a command and its inversion are held to the original's
+        // report: the tests must be seen to pass while the exit status says
+        // they failed, which only a tampered runner does.
+        let expectations = self
+            .expectations
+            .iter()
+            .flat_map(|e| match e.phase {
+                Phase::FailToPass => vec![
+                    TestExpectation {
+                        index: e.index * 2,
+                        ..e.clone()
+                    },
+                    TestExpectation {
+                        index: e.index * 2 + 1,
+                        ..e.clone()
+                    },
+                ],
+                Phase::PassToPass => vec![e.clone()],
+            })
+            .collect();
         Self {
             fail_to_pass,
+            expectations,
             ..self.clone()
         }
     }

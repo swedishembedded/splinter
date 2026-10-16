@@ -7,6 +7,8 @@
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
 
+pub mod workspace;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;

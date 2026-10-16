@@ -289,6 +289,8 @@ impl WorkspaceGenerator {
             hidden_paths: paths,
             // An authored fixture's hidden tests are the author's to vouch for.
             hidden_strength: None,
+            expectations: Vec::new(),
+            pinned: Vec::new(),
         };
         let change = Digest::of(&canonical_json(&check).map_err(WorkspaceError::from)?);
         let key = task_key(&staged.snapshot, &change, &fixture.family)?;

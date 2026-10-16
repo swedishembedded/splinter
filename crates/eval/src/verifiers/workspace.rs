@@ -32,7 +32,14 @@
 //!    stale cache cannot hide an edit made within the same second;
 //! 6. the fail-to-pass commands run, then the pass-to-pass commands, in the
 //!    environment's sandbox. The patch passes only if every command exits
-//!    with status 0 within its limits.
+//!    with status 0 within its limits **and**, for a command with a
+//!    [`TestExpectation`], its runner's report shows the expected tests run
+//!    and passed (see [`super::test_report`]): an exit status alone proves no
+//!    test ran, and a patch can print a success log or end the process early.
+//!
+//! Before step 4 the runner's configuration (see [`RUNNER_CONFIG`](super::workspace_runner::RUNNER_CONFIG), and the
+//! check's `pinned` paths) must be byte-identical to the snapshot's, found
+//! by digest wherever it sits in the tree, not only at declared paths.
 //!
 //! It abstains where the task names an environment that was not offered (the
 //! snapshot digest pins tree, sandbox and limits), or carries no check.
@@ -45,7 +52,6 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -62,6 +68,9 @@ use splinter_sandbox::{
 };
 use splinter_store::artifacts::ArtifactStore;
 
+use super::test_report::{Observation, TestExpectation};
+use super::workspace_runner::{changed_runner_files, runner_files};
+use super::workspace_scratch::Scratch;
 use super::{privileged_of, Finding, Verifier, VerifyError};
 
 /// The producer name a workspace verifier's annotations carry.
@@ -114,6 +123,16 @@ pub struct WorkspaceCheck {
     /// says how much a pass is worth.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hidden_strength: Option<super::hidden_strength::HiddenStrength>,
+    /// The tests each command must be seen to run and pass. A command
+    /// without an entry is graded by its exit status alone, which proves
+    /// no test ran.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expectations: Vec<TestExpectation>,
+    /// Paths (files or directories, relative to the tree) that must be
+    /// byte-identical to the snapshot's after the patch, besides the
+    /// runner configuration every check pins (see [`RUNNER_CONFIG`](super::workspace_runner::RUNNER_CONFIG)).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pinned: Vec<String>,
 }
 
 impl WorkspaceCheck {
@@ -251,6 +270,11 @@ impl Verifier for WorkspaceVerifier {
             Some(Refusal::DoesNotApply) => {
                 return Ok(refused("patch_does_not_apply", &patch_digest))
             }
+            Some(Refusal::RunnerConfigurationChanged(paths)) => {
+                let mut finding = refused("runner_configuration_changed", &patch_digest);
+                finding.evidence["paths"] = json!(paths.len());
+                return Ok(finding);
+            }
             Some(Refusal::OffLimits(paths)) => {
                 let mut finding = refused("touches_protected_or_hidden_path", &patch_digest);
                 finding.evidence["paths"] = json!(paths.len());
@@ -277,7 +301,8 @@ impl Verifier for WorkspaceVerifier {
 }
 
 /// The commands of a check, in the order they run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Phase {
     /// Commands that must go from failing to passing.
     FailToPass,
@@ -304,6 +329,9 @@ pub enum Refusal {
     /// The change touches a protected or hidden path (the paths, which may
     /// name hidden files: they are for the grader, not for a solver).
     OffLimits(Vec<String>),
+    /// The change adds, edits or removes runner configuration (see
+    /// [`RUNNER_CONFIG`](super::workspace_runner::RUNNER_CONFIG)) or a pinned path.
+    RunnerConfigurationChanged(Vec<String>),
 }
 
 /// A file a change touched, with the digest of its content before and
@@ -330,7 +358,11 @@ pub struct CommandRun {
     pub call: CommandCall,
     /// How it ended, output included.
     pub result: CodeResult,
-    /// Whether it exited with status 0 within its limits.
+    /// What the runner's report showed against the check's expectation for
+    /// this command; `None` when the check has none.
+    pub observation: Option<Observation>,
+    /// Whether it exited with status 0 within its limits and, where the
+    /// check expects tests, the report proves them run and passed.
     pub passed: bool,
     /// How long it took.
     pub elapsed: Duration,
@@ -383,6 +415,7 @@ pub fn grade(
         touched: Vec::new(),
         commands: Vec::new(),
     };
+    let before_runner = runner_files(&tree, &check.pinned);
     if !patch.is_empty() {
         let text = String::from_utf8_lossy(&patch.diff).into_owned();
         let mut named: Vec<String> = patch
@@ -428,6 +461,15 @@ pub fn grade(
             graded.refusal = Some(Refusal::OffLimits(violations));
             return Ok(graded);
         }
+        let after = runner_files(&tree, &check.pinned);
+        let changed: Vec<String> = changed_runner_files(&before_runner, &after)
+            .into_iter()
+            .filter(|path| !check.hidden_paths.iter().any(|h| overlaps(path, h)))
+            .collect();
+        if !changed.is_empty() {
+            graded.refusal = Some(Refusal::RunnerConfigurationChanged(changed));
+            return Ok(graded);
+        }
         graded.touched = touched
             .into_iter()
             .map(|path| Touched {
@@ -451,14 +493,25 @@ pub fn grade(
         }
         for (index, call) in calls.iter().enumerate() {
             clear_caches(&tree);
+            let expectation = check
+                .expectations
+                .iter()
+                .find(|e| e.phase == phase && e.index == index);
+            let mut runnable = call.clone();
+            if let Some(e) = expectation {
+                runnable.argv = e.runner.reporting(&runnable.argv);
+            }
             let started = Instant::now();
-            let result = env.run(&tree, &without_bytecode(call))?;
-            let passed = succeeded(&result);
+            let result = env.run(&tree, &without_bytecode(&runnable))?;
+            let observation = expectation.map(|e| e.observe(&result));
+            let passed =
+                succeeded(&result) && observation.as_ref().map_or(true, Observation::proven);
             graded.commands.push(CommandRun {
                 phase,
                 index,
                 call: call.clone(),
                 result,
+                observation,
                 passed,
                 elapsed: started.elapsed(),
             });
@@ -508,6 +561,16 @@ fn parse_check(task: &Task) -> Result<Option<(Digest, WorkspaceCheck)>, VerifyEr
         return Err(malformed(index, "it has no fail-to-pass command".into()));
     }
     if check
+        .expectations
+        .iter()
+        .any(|e| call_at(&check, e.phase, e.index).is_none())
+    {
+        return Err(malformed(
+            index,
+            "an expectation names a command the check does not have".into(),
+        ));
+    }
+    if check
         .fail_to_pass
         .iter()
         .chain(&check.pass_to_pass)
@@ -529,6 +592,14 @@ fn parse_check(task: &Task) -> Result<Option<(Digest, WorkspaceCheck)>, VerifyEr
     Ok(Some((Digest::of(content.as_bytes()), check)))
 }
 
+/// The command at `index` of `phase`.
+fn call_at(check: &WorkspaceCheck, phase: Phase, index: usize) -> Option<&CommandCall> {
+    match phase {
+        Phase::FailToPass => check.fail_to_pass.get(index),
+        Phase::PassToPass => check.pass_to_pass.get(index),
+    }
+}
+
 /// A refusal: the patch fails without a command having run.
 fn refused(reason: &str, patch: &Digest) -> Finding {
     Finding::decided(false, json!({ "refused": reason, "patch": patch }))
@@ -545,7 +616,7 @@ fn patch_bytes(diff: &[u8]) -> Vec<u8> {
 
 /// `path` as a relative path without `.` or empty components, or `None`
 /// when it is empty, absolute or climbs out of the tree.
-fn normalised(path: &str) -> Option<String> {
+pub(super) fn normalised(path: &str) -> Option<String> {
     let mut parts = Vec::new();
     for part in path.split('/') {
         match part {
@@ -629,6 +700,12 @@ fn command_evidence(run: &CommandRun) -> Result<serde_json::Value, VerifyError> 
         "stdout_truncated": result.stdout_truncated,
         "stderr": Digest::of(result.stderr.as_bytes()),
         "stderr_truncated": result.stderr_truncated,
+        "observed": run.observation.as_ref().map(|o| json!({
+            "run": o.run,
+            "failed": o.failed,
+            "missing": o.missing,
+            "flaws": o.flaws,
+        })),
         "passed": run.passed,
     }))
 }
@@ -694,64 +771,6 @@ pub fn lay_over(archive: &Path, digest: &Digest, tree: &Path) -> Result<(), Veri
         )));
     }
     Ok(())
-}
-
-/// A directory made fresh for one verification, removed when dropped.
-struct Scratch {
-    path: PathBuf,
-}
-
-impl Scratch {
-    fn create(root: &Path) -> Result<Self, SandboxError> {
-        static SEQ: AtomicU64 = AtomicU64::new(0);
-        std::fs::create_dir_all(root).map_err(|source| SandboxError::Io {
-            path: root.to_path_buf(),
-            source,
-        })?;
-        loop {
-            let path = root.join(format!(
-                "splinter-verify-{}-{}",
-                std::process::id(),
-                SEQ.fetch_add(1, Ordering::Relaxed)
-            ));
-            match std::fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(source) => return Err(SandboxError::Io { path, source }),
-            }
-        }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        if std::fs::remove_dir_all(&self.path).is_err() {
-            // A command may have taken away its own permissions.
-            restore_access(&self.path);
-            let _ = std::fs::remove_dir_all(&self.path);
-        }
-    }
-}
-
-/// Gives the owner full access to `path` and every directory below it.
-fn restore_access(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let Ok(meta) = std::fs::symlink_metadata(path) else {
-        return;
-    };
-    if !meta.is_dir() {
-        return;
-    }
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700));
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            restore_access(&entry.path());
-        }
-    }
 }
 
 #[cfg(test)]

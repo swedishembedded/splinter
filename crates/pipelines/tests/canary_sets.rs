@@ -39,6 +39,8 @@ fn workspace_task(n: usize) -> Task {
         protected: Vec::new(),
         hidden_paths: Vec::new(),
         hidden_strength: None,
+        expectations: Vec::new(),
+        pinned: Vec::new(),
     };
     Task::new(
         "workspace-change",

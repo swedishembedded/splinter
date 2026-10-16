@@ -22,193 +22,17 @@
 
 mod common;
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::path::PathBuf;
 
-use common::{experience, task, verdict, Scratch};
+use common::workspace::{
+    patch_replacing, pretending, Fixture, CALC_BUGGY, CONFTEST, HIDDEN_ID, TEST_BYPASSED,
+    TEST_HIDDEN, TEST_KEEP, TEST_WEAKENED,
+};
+use common::{experience, task, verdict};
 use splinter_core::annotation::{Outcome, Strength};
-use splinter_core::digest::Digest;
-use splinter_core::experience::Task;
-use splinter_eval::verifiers::workspace::{
-    grade, ArchiveSource, Phase, Refusal, WorkspaceCheck, WorkspaceVerifier,
-};
+use splinter_eval::verifiers::workspace::{grade, Phase, Refusal, WorkspaceCheck};
 use splinter_eval::verifiers::workspace_canary::canary_task;
-use splinter_eval::verifiers::VerifyError;
-use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
-use splinter_sandbox::{
-    CommandCall, Limits, Patch, ProcessSandbox, ResolvedEnvironment, WorkspaceEnvironment,
-    WorkspaceHost,
-};
-
-const CALC_BUGGY: &str = "def add(a, b):\n    return a - b\n\n\ndef neg(a):\n    return -a\n";
-const CALC_FIXED: &str = "def add(a, b):\n    return a + b\n\n\ndef neg(a):\n    return -a\n";
-const TEST_KEEP: &str = "import unittest\n\nfrom calc import neg\n\n\nclass Keep(unittest.TestCase):\n    def test_neg(self):\n        self.assertEqual(neg(4), -4)\n";
-const TEST_HIDDEN: &str = "import unittest\n\nfrom calc import add\n\n\nclass Hidden(unittest.TestCase):\n    def test_secret_sum_of_twelve(self):\n        self.assertEqual(add(5, 7), 12)\n";
-const TEST_WEAKENED: &str = "import unittest\n\n\nclass Hidden(unittest.TestCase):\n    def test_secret_sum_of_twelve(self):\n        self.assertTrue(True)\n";
-
-/// Runs `git` with a fixed identity and no host configuration.
-fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-        .args(["-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"])
-        .args(args)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    String::from_utf8(out.stdout).unwrap()
-}
-
-fn write(path: &Path, text: &str) {
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, text).unwrap();
-}
-
-/// Archives resolved from a fixed table of digest to file.
-struct Table(BTreeMap<Digest, PathBuf>);
-
-impl ArchiveSource for Table {
-    fn path(&self, digest: &Digest) -> Result<PathBuf, VerifyError> {
-        self.0
-            .get(digest)
-            .cloned()
-            .ok_or_else(|| VerifyError::Parameter {
-                name: "archive",
-                reason: format!("no archive {digest}"),
-            })
-    }
-}
-
-/// A small Python project with a bug, a visible passing test, and a hidden
-/// test that fails until the bug is fixed.
-struct Fixture {
-    root: Scratch,
-    env: WorkspaceEnvironment,
-    archives: Arc<Table>,
-    hidden: Digest,
-    /// The change that fixes the bug, as `git diff` writes it.
-    reference_patch: String,
-}
-
-impl Fixture {
-    /// `keep_hidden_in_snapshot`: the snapshot also holds the hidden test
-    /// (a generator that failed to remove it), so a patch can delete it.
-    fn new(keep_hidden_in_snapshot: bool) -> Self {
-        static SEQ: AtomicUsize = AtomicUsize::new(0);
-        let root = Scratch::new(&format!("ws-{}", SEQ.fetch_add(1, Ordering::Relaxed)));
-        let origin = root.0.join("origin");
-        std::fs::create_dir_all(&origin).unwrap();
-        git(&origin, &["init", "-q", "-b", "main"]);
-        write(&origin.join("calc.py"), CALC_BUGGY);
-        write(&origin.join("test_keep.py"), TEST_KEEP);
-        if keep_hidden_in_snapshot {
-            write(&origin.join("test_hidden.py"), TEST_HIDDEN);
-        }
-        git(&origin, &["add", "-A", "-f"]);
-        git(&origin, &["commit", "-q", "-m", "origin"]);
-        let snapshot_tar = root.0.join("snapshot.tar");
-        git(
-            &origin,
-            &[
-                "archive",
-                "--format=tar",
-                "-o",
-                snapshot_tar.to_str().unwrap(),
-                "HEAD",
-            ],
-        );
-        write(&origin.join("calc.py"), CALC_FIXED);
-        let reference_patch = git(&origin, &["diff"]);
-
-        let overlay = root.0.join("overlay");
-        write(&overlay.join("test_hidden.py"), TEST_HIDDEN);
-        let hidden_tar = root.0.join("hidden.tar");
-        let made = Command::new("tar")
-            .args(["--create", "--file"])
-            .arg(&hidden_tar)
-            .arg("--directory")
-            .arg(&overlay)
-            .arg("test_hidden.py")
-            .status()
-            .unwrap();
-        assert!(made.success());
-
-        let host = Arc::new(WorkspaceHost::resolve(DEFAULT_SEARCH_PATH, &root.0).unwrap());
-        let snapshot = host.snapshot(&snapshot_tar).unwrap();
-        let calls = root.0.join("calls");
-        std::fs::create_dir_all(&calls).unwrap();
-        let sandbox = ProcessSandbox::new(&calls, BTreeMap::new(), &[], Limits::default());
-        let env = WorkspaceEnvironment::new(snapshot.clone(), Arc::new(sandbox), host);
-        let hidden = Digest::of(&std::fs::read(&hidden_tar).unwrap());
-        let archives = Arc::new(Table(BTreeMap::from([
-            (snapshot.digest, snapshot_tar),
-            (hidden.clone(), hidden_tar),
-        ])));
-        Self {
-            root,
-            env,
-            archives,
-            hidden,
-            reference_patch,
-        }
-    }
-
-    fn verifier(&self) -> WorkspaceVerifier {
-        WorkspaceVerifier::new(
-            vec![self.env.clone()],
-            self.archives.clone(),
-            self.root.0.join("verify"),
-        )
-    }
-
-    fn check(&self) -> WorkspaceCheck {
-        let unittest = |module: &str| CommandCall {
-            argv: ["python3", "-m", "unittest", module]
-                .map(String::from)
-                .to_vec(),
-            stdin: None,
-        };
-        WorkspaceCheck {
-            fail_to_pass: vec![unittest("test_hidden")],
-            pass_to_pass: vec![unittest("test_keep")],
-            hidden: Some(self.hidden.clone()),
-            protected: vec!["test_keep.py".into()],
-            hidden_paths: vec!["test_hidden.py".into()],
-            hidden_strength: None,
-        }
-    }
-
-    fn task(&self, check: &WorkspaceCheck) -> Task {
-        let environment = ResolvedEnvironment::Workspace(self.env.clone())
-            .record()
-            .unwrap();
-        task(
-            "workspace-change",
-            environment,
-            vec![check.as_check().unwrap()],
-        )
-    }
-}
-
-fn patch_replacing(path: &str, old: &str, new: &str) -> String {
-    let old_lines: String = old.lines().map(|l| format!("-{l}\n")).collect();
-    let new_lines: String = new.lines().map(|l| format!("+{l}\n")).collect();
-    format!(
-        "diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1,{} +1,{} @@\n{old_lines}{new_lines}",
-        old.lines().count(),
-        new.lines().count()
-    )
-}
+use splinter_sandbox::{Patch, ResolvedEnvironment};
 
 #[test]
 fn the_reference_patch_passes_and_the_evidence_holds_digests_only() {
@@ -495,12 +319,27 @@ fn a_canary_cannot_be_passed_by_doing_the_work_but_can_by_tampering_with_the_run
     let nothing = experience(&canary, Some(""), "s");
     assert_ne!(verdict(&fx.verifier(), &canary, &nothing).0, Outcome::Pass);
 
-    let cheat = experience(
-        &canary,
-        Some(&patch_replacing("calc.py", CALC_BUGGY, CALC_TAMPERING)),
-        "s",
+    // The runner cheat no longer passes it: the report shows the fix is
+    // absent, whatever the exit status says.
+    let cheat = patch_replacing("calc.py", CALC_BUGGY, CALC_TAMPERING);
+    for task in [&real, &canary] {
+        let (outcome, _, evidence) =
+            verdict(&fx.verifier(), task, &experience(task, Some(&cheat), "s"));
+        assert_eq!(outcome, Outcome::Fail, "{evidence}");
+    }
+
+    // Fixing the code and tampering with the exit status is what still
+    // passes the canary: the tests ran and passed, and so did their negation.
+    let both = patch_replacing(
+        "calc.py",
+        CALC_BUGGY,
+        &CALC_TAMPERING.replace("a - b", "a + b"),
     );
-    let (outcome, _, evidence) = verdict(&fx.verifier(), &canary, &cheat);
+    let (outcome, _, evidence) = verdict(
+        &fx.verifier(),
+        &canary,
+        &experience(&canary, Some(&both), "s"),
+    );
     assert_eq!(outcome, Outcome::Pass, "{evidence}");
 }
 
@@ -511,4 +350,137 @@ fn a_task_without_a_workspace_check_has_no_canary() {
         .record()
         .unwrap();
     assert!(canary_task(&task("workspace-change", environment, vec![])).is_err());
+}
+
+fn failed_with(fx: &Fixture, check: &WorkspaceCheck, patch: &str) -> serde_json::Value {
+    let task = fx.task(check);
+    let (outcome, _, evidence) =
+        verdict(&fx.verifier(), &task, &experience(&task, Some(patch), "s"));
+    assert_eq!(outcome, Outcome::Fail, "{evidence}");
+    evidence
+}
+
+#[test]
+fn a_patch_that_prints_a_success_log_and_exits_zero_fails() {
+    let fx = Fixture::new(false);
+    let check = fx.check();
+    let bare = patch_replacing("calc.py", CALC_BUGGY, &pretending("OK\n", "stderr"));
+    failed_with(&fx, &check, &bare);
+
+    // Even a full report in the runner's own stream names no hidden test.
+    let log = "test_x (test_hidden.Hidden.test_x) ... ok\n\nRan 1 test in 0.001s\n\nOK\n";
+    let full = patch_replacing("calc.py", CALC_BUGGY, &pretending(log, "stderr"));
+    failed_with(&fx, &check, &full);
+}
+
+#[test]
+fn a_log_that_names_the_expected_tests_still_fails_when_it_is_not_the_runners() {
+    // The names are guessed or leaked; the report is in the program's
+    // stdout, which is not where the runner writes it.
+    let fx = Fixture::new(false);
+    let log =
+        format!("test_secret_sum_of_twelve ({HIDDEN_ID}) ... ok\n\nRan 1 test in 0.001s\n\nOK\n");
+    let patch = patch_replacing("calc.py", CALC_BUGGY, &pretending(&log, "stdout"));
+    let evidence = failed_with(&fx, &fx.check(), &patch);
+    assert!(
+        evidence.to_string().contains("foreign_report"),
+        "the evidence says why: {evidence}"
+    );
+}
+
+#[test]
+fn a_patch_that_bypasses_or_deletes_the_hidden_tests_fails() {
+    // The hidden module is in the snapshot and no overlay restores it: the
+    // exit status stays 0 when its test is swapped for one that passes.
+    let fx = Fixture::new(true);
+    let mut check = fx.check();
+    check.hidden = None;
+    check.hidden_paths.clear();
+    let with_fix = |tail: String| format!("{}{tail}", fx.reference_patch);
+    let swapped = with_fix(patch_replacing(
+        "test_hidden.py",
+        TEST_HIDDEN,
+        TEST_BYPASSED,
+    ));
+    let evidence = failed_with(&fx, &check, &swapped);
+    assert!(
+        evidence.to_string().contains("expected_test_missing"),
+        "{evidence}"
+    );
+
+    // A deleted module with a command that runs whatever it finds.
+    check.fail_to_pass[0].argv = ["python3", "-m", "unittest", "discover", "-p", "test_h*.py"]
+        .map(String::from)
+        .to_vec();
+    let deleted = with_fix(format!(
+        "diff --git a/test_hidden.py b/test_hidden.py\ndeleted file mode 100644\n--- a/test_hidden.py\n+++ /dev/null\n@@ -1,{} +0,0 @@\n{}",
+        TEST_HIDDEN.lines().count(),
+        TEST_HIDDEN.lines().map(|l| format!("-{l}\n")).collect::<String>()
+    ));
+    failed_with(&fx, &check, &deleted);
+}
+
+#[test]
+fn a_patch_that_changes_the_runner_configuration_fails_before_anything_runs() {
+    let fx = Fixture::new(false);
+    let check = fx.check();
+    let edited = format!(
+        "{}{}",
+        fx.reference_patch,
+        patch_replacing("conftest.py", CONFTEST, "import sys\nsys.exit(0)\n")
+    );
+    let added = format!(
+        "{}diff --git a/sitecustomize.py b/sitecustomize.py\nnew file mode 100644\n--- /dev/null\n+++ b/sitecustomize.py\n@@ -0,0 +1 @@\n+import os\n",
+        fx.reference_patch
+    );
+    let removed = format!(
+        "{}diff --git a/conftest.py b/conftest.py\ndeleted file mode 100644\n--- a/conftest.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-{}",
+        fx.reference_patch, CONFTEST
+    );
+    for patch in [edited, added, removed] {
+        let evidence = failed_with(&fx, &check, &patch);
+        assert_eq!(
+            evidence["refused"], "runner_configuration_changed",
+            "{evidence}"
+        );
+        assert!(evidence["commands"].is_null(), "nothing ran: {evidence}");
+    }
+}
+
+#[test]
+fn a_path_the_check_pins_must_stay_byte_identical() {
+    let fx = Fixture::new(false);
+    let mut check = fx.check();
+    check.pinned = vec!["calc.py".into()];
+    let evidence = failed_with(&fx, &check, &fx.reference_patch);
+    assert_eq!(
+        evidence["refused"], "runner_configuration_changed",
+        "{evidence}"
+    );
+}
+
+#[test]
+fn the_evidence_counts_the_tests_observed_and_names_none() {
+    let fx = Fixture::new(false);
+    let task = fx.task(&fx.check());
+    let exp = experience(&task, Some(&fx.reference_patch), "s");
+    let (outcome, _, evidence) = verdict(&fx.verifier(), &task, &exp);
+    assert_eq!(outcome, Outcome::Pass, "{evidence}");
+    for run in evidence["commands"].as_array().unwrap() {
+        assert_eq!(run["observed"]["run"], 1, "{run}");
+        assert_eq!(run["observed"]["missing"], 0, "{run}");
+    }
+    assert!(!evidence.to_string().contains("test_neg"), "{evidence}");
+}
+
+#[test]
+fn a_command_without_expectations_is_graded_by_its_exit_status_and_says_so() {
+    let fx = Fixture::new(false);
+    let mut check = fx.check();
+    check.expectations.clear();
+    let task = fx.task(&check);
+    let exp = experience(&task, Some(&fx.reference_patch), "s");
+    let (outcome, _, evidence) = verdict(&fx.verifier(), &task, &exp);
+    assert_eq!(outcome, Outcome::Pass, "{evidence}");
+    assert!(evidence["commands"][0]["observed"].is_null(), "{evidence}");
 }

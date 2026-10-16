@@ -24,6 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use splinter_eval::verifiers::test_report::TestRunner;
 use splinter_sandbox::{CodeResult, CommandCall};
 
 /// The test runners read per test.
@@ -138,9 +139,21 @@ impl Harness {
     /// Reads what the runner printed.
     #[must_use]
     pub fn read(self, result: &CodeResult) -> SuiteReport {
+        let report = self.runner().read(result);
+        SuiteReport {
+            passed: report.passed,
+            failed: report.failed,
+            docs: report.docs,
+        }
+    }
+
+    /// The reader of this runner's report, which the verifier also uses to
+    /// require that the tests of a task were seen to run.
+    #[must_use]
+    pub fn runner(self) -> TestRunner {
         match self {
-            Self::Unittest => read_unittest(&result.stderr),
-            Self::Cargo => read_cargo(&result.stdout, &result.stderr),
+            Self::Unittest => TestRunner::Unittest,
+            Self::Cargo => TestRunner::Cargo,
         }
     }
 
@@ -211,140 +224,6 @@ fn discovery_roots(base: &[String]) -> Vec<String> {
         }
     }
     roots
-}
-
-/// A header line of the verbose report: `name (id)`, then ` ... status` when
-/// the test has no docstring. Returns the name, the id's text and the rest.
-fn header(line: &str) -> Option<(&str, &str, Option<&str>)> {
-    if line.starts_with([' ', '\t', '=', '-']) {
-        return None;
-    }
-    let (name, rest) = line.split_once(' ')?;
-    let rest = rest.strip_prefix('(')?;
-    if let Some((inner, status)) = rest.split_once(") ... ") {
-        return Some((name, inner, Some(status)));
-    }
-    rest.strip_suffix(')').map(|inner| (name, inner, None))
-}
-
-/// The id a header names: older interpreters print the class only, so the
-/// test's name completes it.
-fn compose(name: &str, inner: &str) -> String {
-    if inner.ends_with(&format!(".{name}")) {
-        inner.to_string()
-    } else {
-        format!("{inner}.{name}")
-    }
-}
-
-/// `FAIL: name (id)` or `ERROR: name (id)` of the summary the runner prints
-/// after the per-test lines.
-fn failure(line: &str) -> Option<String> {
-    let rest = line
-        .strip_prefix("FAIL: ")
-        .or_else(|| line.strip_prefix("ERROR: "))?;
-    let (name, inner, _) = header(rest)?;
-    Some(compose(name, inner))
-}
-
-fn read_unittest(stderr: &str) -> SuiteReport {
-    let lines: Vec<&str> = stderr.lines().collect();
-    let mut seen = BTreeSet::new();
-    let mut skipped = BTreeSet::new();
-    let mut report = SuiteReport::default();
-    let mut summary = false;
-    let mut at = 0;
-    while at < lines.len() {
-        let line = lines[at];
-        at += 1;
-        summary |= line.starts_with("======");
-        if summary {
-            report.failed.extend(failure(line));
-            continue;
-        }
-        let Some((name, inner, status)) = header(line) else {
-            continue;
-        };
-        let id = compose(name, inner);
-        let status = match status {
-            Some(status) => status,
-            // A test with a docstring prints it on the next line, with its
-            // status.
-            None => match lines.get(at).and_then(|next| next.rsplit_once(" ... ")) {
-                Some((doc, status)) => {
-                    report.docs.insert(id.clone(), doc.trim().to_string());
-                    at += 1;
-                    status
-                }
-                None => "",
-            },
-        };
-        if status.starts_with("skipped") {
-            skipped.insert(id.clone());
-        }
-        seen.insert(id);
-    }
-    report.passed = seen
-        .into_iter()
-        .filter(|id| !report.failed.contains(id) && !skipped.contains(id))
-        .collect();
-    report
-}
-
-/// The source file of the test binary a `Running` line of cargo's names:
-/// `Running unittests src/lib.rs (target/...)` or `Running tests/x.rs (...)`.
-fn binary_source(line: &str) -> Option<&str> {
-    let rest = line.trim_start().strip_prefix("Running ")?;
-    let rest = rest.strip_prefix("unittests ").unwrap_or(rest);
-    rest.rsplit_once(" (").map(|(file, _)| file)
-}
-
-/// libtest's outcome of one test: `test name ... ok`. A should-panic test
-/// is printed `name - should panic`, which is not part of its name.
-fn libtest_line(line: &str) -> Option<(&str, &str)> {
-    let (name, status) = line.strip_prefix("test ")?.rsplit_once(" ... ")?;
-    Some((name.strip_suffix(" - should panic").unwrap_or(name), status))
-}
-
-/// Cargo prints each test binary's `Running` line on stderr and the binary's
-/// libtest report on stdout, so the two are paired by order: the nth block
-/// of tests (`running N tests`) is the nth binary. Blocks past the last
-/// binary are doc-tests.
-fn read_cargo(stdout: &str, stderr: &str) -> SuiteReport {
-    let binaries: Vec<&str> = stderr.lines().filter_map(binary_source).collect();
-    let mut report = SuiteReport::default();
-    let mut block: Option<usize> = None;
-    // Past `failures:` a block quotes the output of its failed tests, which
-    // may print anything, a line shaped like a result included.
-    let mut quoting = false;
-    for line in stdout.lines() {
-        if line.starts_with("running ") && (line.ends_with(" tests") || line.ends_with(" test")) {
-            block = Some(block.map_or(0, |b| b + 1));
-            quoting = false;
-            continue;
-        }
-        quoting |= line == "failures:";
-        if quoting {
-            continue;
-        }
-        let (Some(binary), Some((name, status))) =
-            (block.and_then(|b| binaries.get(b)), libtest_line(line))
-        else {
-            continue;
-        };
-        let id = format!("{binary}::{name}");
-        match status {
-            "ok" => {
-                report.passed.insert(id);
-            }
-            "FAILED" => {
-                report.failed.insert(id);
-            }
-            // Ignored tests did not run.
-            _ => {}
-        }
-    }
-    report
 }
 
 #[cfg(test)]
