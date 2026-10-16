@@ -51,6 +51,36 @@ impl ModelProvider for Reader {
     }
 }
 
+/// A reader that gives its replies in turn, the last one for every request
+/// after them.
+struct Replies {
+    replies: Mutex<Vec<String>>,
+    requests: Mutex<usize>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Replies {
+    fn name(&self) -> &str {
+        "reader"
+    }
+    fn model_name(&self) -> &str {
+        "reader-1"
+    }
+    async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        *self.requests.lock().unwrap() += 1;
+        let mut replies = self.replies.lock().unwrap();
+        let reply = if replies.len() > 1 {
+            replies.remove(0)
+        } else {
+            replies[0].clone()
+        };
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(reply)),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
 fn case_reading(case: &str) -> serde_json::Value {
     serde_json::json!({
         "case": case,
@@ -58,6 +88,7 @@ fn case_reading(case: &str) -> serde_json::Value {
                      with a little time to spare, and a community that would live with the \
                      outcome for some seasons to come.",
         "offer_made": false,
+        "facts": {"exceeds_authority": null, "urgent": null, "binds_future": null, "irreversible": null, "members_harmed": null},
         "chose": "hold_and_wait",
         "reasons": [],
         "open": ["act_alone", "hold_and_wait"],
@@ -233,4 +264,86 @@ fn how_the_decisions_were_read_is_recorded_and_a_later_mine_continues_with_it() 
     let remote = cache("mine-record-remote").dir().to_path_buf();
     let record = begin_or_continue_mining(&remote, "remote:model", None, false, false).unwrap();
     assert_eq!(record.run_seed, None, "a remote reader is not seeded");
+}
+
+#[test]
+fn the_reader_is_asked_for_every_field_with_no_default_beside_it() {
+    // A field the schema lists as optional is one a reader may leave empty: the
+    // facts and the open ways have to be asked for, since a gate fails an essay
+    // whose facts the reader did not give.
+    let schema =
+        serde_json::to_value(schemars::schema_for!(synthetic_author::mine::Mined)).unwrap();
+    let case = &schema["$defs"]["MinedCase"];
+    let required: Vec<&str> = case["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    for field in [
+        "case",
+        "briefing",
+        "offer_made",
+        "facts",
+        "chose",
+        "reasons",
+        "open",
+    ] {
+        assert!(required.contains(&field), "{field} is not required: {case}");
+        assert!(
+            case["properties"][field].get("default").is_none(),
+            "{field} comes with a default: {case}"
+        );
+    }
+}
+
+fn read_with(replies: Vec<serde_json::Value>, test: &str) -> (Vec<MinedResult>, usize) {
+    let cache = cache(test);
+    cache
+        .write_article(&StoredArticle {
+            index: 0,
+            topic: 0,
+            title: "t".into(),
+            body: "Alpha was settled by waiting.".into(),
+            cases: vec!["Alpha".into()],
+            attempts: 1,
+        })
+        .unwrap();
+    let provider = Arc::new(Replies {
+        replies: Mutex::new(replies.iter().map(ToString::to_string).collect()),
+        requests: Mutex::new(0),
+    });
+    let model = BlockingModel::new(Model::new(provider.clone(), "reader")).unwrap();
+    mine_all(&cache, &model, 1, &Transit::default()).unwrap();
+    let results = read_mined(&cache)
+        .unwrap()
+        .into_iter()
+        .map(|m| m.result)
+        .collect();
+    let asked = *provider.requests.lock().unwrap();
+    (results, asked)
+}
+
+fn short_reading(case: &str) -> serde_json::Value {
+    let mut reading = case_reading(case);
+    reading["briefing"] = "A matter at Alpha.".into();
+    serde_json::json!({"cases": [reading]})
+}
+
+#[test]
+fn a_briefing_too_short_to_teach_from_is_written_again_once() {
+    let good = serde_json::json!({"cases": [case_reading("Alpha")]});
+    let (results, asked) = read_with(vec![short_reading("Alpha"), good], "mine-short-then-good");
+    assert_eq!(asked, 2);
+    assert!(matches!(results[0], MinedResult::Kept(_)), "{results:?}");
+}
+
+#[test]
+fn a_briefing_that_stays_too_short_turns_that_case_away_and_does_not_stop_the_reading() {
+    let (results, asked) = read_with(vec![short_reading("Alpha")], "mine-short-always");
+    assert_eq!(asked, 2, "one correction, no more");
+    match &results[0] {
+        MinedResult::Refused(why) => assert!(why.contains("briefing is too short"), "{why}"),
+        MinedResult::Kept(_) => panic!("a briefing of four words was kept"),
+    }
 }

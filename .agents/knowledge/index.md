@@ -44,6 +44,7 @@ in the same commit.
 | [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |
 | [049](049-a-gate-that-could-not-grade-its-canaries-is-not-clean.md) | A gate that could not grade its canaries is not clean |
+| [050](050-optional-fields-of-a-readers-answer-came-back-empty.md) | Optional fields of a reader's answer came back empty |
 | [056](056-a-set-from-one-source-text-was-divided-and-then-refused-by-its-own-gate.md) | A set from one source text was divided, and then refused by its own gate |
 | [057](057-most-no-subject-rejections-were-the-generators-shape-and-a-fifth-were-markup.md) | Most no_subject rejections were the generator's shape, and a fifth were markup |
 | [058](058-every-release-was-blocked-by-a-serve-check-the-adapter-card-id-could-not-pass.md) | Every release was blocked by a serve check its adapter's card id could not pass |

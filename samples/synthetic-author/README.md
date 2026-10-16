@@ -138,7 +138,11 @@ A hosted model that shares a rate-limited pool needs fewer workers: give
 it). `study corpus` stops where it fails: with no article written, or no
 decision read, it names the cause and exits non-zero, and a repeat resumes.
 A reader whose answer is in no readable shape turns the draft away as
-a content rejection, which the writer is not told of.
+a content rejection, which the writer is not told of. The reader is asked for
+every field of every case (a field its schema listed as optional came back
+empty and the draft was refused for facts it states), and the miner is asked
+once more for a briefing under twenty words, before the case is turned away for
+it.
 
 Each line of `rejected.jsonl` carries a `kind`: `content` (a gate or an
 unreadable answer turned the attempt away; only these reach the writer as the

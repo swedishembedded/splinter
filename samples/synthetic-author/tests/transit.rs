@@ -312,6 +312,7 @@ fn a_miner_that_is_rate_limited_is_waited_out_too() {
                      with a little time to spare, and a community that would live with the \
                      outcome for some seasons to come.",
         "offer_made": false,
+        "facts": {},
         "chose": "hold_and_wait",
         "reasons": [],
         "open": ["act_alone", "hold_and_wait"],

@@ -9,12 +9,14 @@
 //! be in the article word for word, a briefing must not give the decision away,
 //! and a case the reader cannot read is turned away.
 
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::{Measured, TypedCall};
+use splinter_sdk::agent::CallError;
 use splinter_sdk::measure::verifiers::quotation::contains_words as contains_run;
 
 use crate::cache::StoredArticle;
@@ -41,16 +43,16 @@ pub struct MinedCase {
     pub briefing: String,
     /// Whether an outside house offered help.
     pub offer_made: bool,
-    /// The other facts of the case, as the essay states them.
-    #[serde(default)]
+    /// The other facts of the case, as the essay states them. Asked for, never
+    /// defaulted: a field the schema lists as optional came back empty, and the
+    /// essay then failed the gate for facts it states.
     pub facts: MinedFacts,
     /// What the narrator did.
     pub chose: Chose,
     /// Sentences from the essay that give his reasons.
     pub reasons: Vec<String>,
     /// The ways to act the essay says were open to him, the one he took among
-    /// them.
-    #[serde(default)]
+    /// them. Asked for, never defaulted, like `facts`.
     pub open: Vec<Archetype>,
 }
 
@@ -151,16 +153,60 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
         .collect()
 }
 
+/// The call that reads `body`, and what the model is shown with it.
+fn reading_call(body: &str, cases: &[String]) -> (TypedCall<Mined>, serde_json::Value) {
+    let shown = serde_json::json!({"essay": body, "cases": cases});
+    let call = TypedCall::<Mined>::new("mine_decisions", TASK, ROLE, REQUEST_DEADLINE)
+        .max_output_tokens(MAX_TOKENS)
+        .repairs(1);
+    (call, shown)
+}
+
 /// Asks `model` to read the essay `body`, which tells `cases`, and returns what
 /// it wrote, unchecked, with the tokens the call used. The result is an error
 /// when the model could not be reached (`CallError::Infrastructure`) or did
 /// not answer in the shape asked for.
 pub fn read_raw(model: &BlockingModel, body: &str, cases: &[String]) -> Measured<Mined> {
-    let shown = serde_json::json!({"essay": body, "cases": cases});
-    let call = TypedCall::<Mined>::new("mine_decisions", TASK, ROLE, REQUEST_DEADLINE)
-        .max_output_tokens(MAX_TOKENS)
-        .repairs(1);
+    let (call, shown) = reading_call(body, cases);
     model.call_measured(call, &shown)
+}
+
+/// [`read_raw`] for the reader that makes the training records: a briefing
+/// under [`MIN_BRIEFING_WORDS`] words is sent back once to be written again,
+/// since a case whose briefing stays short is turned away by [`verify`] and
+/// leaves no record. An answer that is still short after the correction is
+/// returned as it is, for `verify` to turn away.
+pub fn read_decisions(model: &BlockingModel, body: &str, cases: &[String]) -> Measured<Mined> {
+    let (call, shown) = reading_call(body, cases);
+    let last: Arc<Mutex<Option<Mined>>> = Arc::default();
+    let seen = Arc::clone(&last);
+    let call = call.postcondition(move |mined: &Mined| {
+        *seen.lock().unwrap_or_else(PoisonError::into_inner) = Some(mined.clone());
+        let short: Vec<String> = mined
+            .cases
+            .iter()
+            .filter(|c| c.briefing.split_whitespace().count() < MIN_BRIEFING_WORDS)
+            .map(|c| {
+                format!(
+                    "the briefing of {} has {} words; write each briefing in 40 to 90 words",
+                    c.case,
+                    c.briefing.split_whitespace().count()
+                )
+            })
+            .collect();
+        if short.is_empty() {
+            Ok(())
+        } else {
+            Err(short.join("; "))
+        }
+    });
+    let mut measured = model.call_measured(call, &shown);
+    if matches!(measured.result, Err(CallError::Postcondition { .. })) {
+        if let Some(mined) = last.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            measured.result = Ok(mined);
+        }
+    }
+    measured
 }
 
 impl Mined {

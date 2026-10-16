@@ -26,7 +26,7 @@ use crate::dataset::{motivation_of, records_with, Briefings};
 use crate::exam::{draw, items, Item, Spec, Trained, Version};
 use crate::gates::same_ways;
 use crate::manifest::author;
-use crate::mine::{read_raw, verify, Verified};
+use crate::mine::{read_decisions, verify, Verified};
 use crate::persona::Persona;
 use crate::retrieval::Notes;
 use crate::scenario::Archetype;
@@ -137,7 +137,7 @@ pub fn mine_all(
                         let model = miner
                             .model(key)
                             .map_err(|e| CallError::Precondition(format!("{e:#}")))?;
-                        read_raw(&model, &article.body, &article.cases).result
+                        read_decisions(&model, &article.body, &article.cases).result
                     },
                     |loss| {
                         eprintln!(
