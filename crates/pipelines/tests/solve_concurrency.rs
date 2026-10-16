@@ -198,6 +198,7 @@ fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
             })
             .collect();
         assert_eq!(reports.len(), 1);
+        // perf-number: the scripted model's configured delay, not a measurement
         // The model takes 60 ms to answer; an answer in one reply has no
         // tool calls to count, and nothing else was measured.
         assert!(reports[0].wall_seconds.unwrap() >= 0.05);
