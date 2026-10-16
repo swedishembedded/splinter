@@ -34,7 +34,7 @@ serve and roll back as specified (E2, E3)? No benchmark claim is made.
   and p < 0.05.
 - Controls (E2): generation-2 facts answered after the release must not exceed those
   answered by the base by more than the chance level the base shows (we expect 0);
-  anchor correct may fall by at most 2 of 40 (the gate's own tolerance); after
+  anchor correct may fall by at most the gate's own bound (0.02 of the 40 questions, which is less than one question, so no lost answer is allowed; an earlier draft of this line wrongly said 2 of 40); after
   rollback the generation-0 count must equal the count after the first release's
   state before the second release, and the serving manifest must name the first
   release's adapter digest.

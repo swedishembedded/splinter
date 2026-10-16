@@ -229,3 +229,4 @@
 {"id": "FX03.2", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "fn\\ a_candidates_card_id_is_an_adapter_reference", "min": 1}
 {"id": "FX04.1", "repo": "splinter", "path": "crates/pipelines/src/release/serve/server.rs", "kind": "regex", "pattern": "--adapter-targets", "min": 1}
 {"id": "FX04.2", "repo": "splinter", "path": "crates/pipelines/tests/common/fake_brain.rs", "kind": "regex", "pattern": "adapter-targets", "min": 1}
+{"id": "B12.1", "repo": "brain", "path": "crates/cli/src/qwen35_cli.rs", "kind": "regex", "pattern": "sample-adapter", "min": 1}

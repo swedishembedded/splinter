@@ -204,9 +204,10 @@ batch ran the device out of memory at 1024-token rows.\cl{M17}
 qualification logs, copied unmodified apart from path names into \code{data/runs/qual}).}\label{tab:e4}
 \end{table}
 
-What E4 does not show: that a trained 27B adapter changes what the model generates (the
-qualification found no generation path for an adapter on this model, and we do not claim
-one), and any run beyond 16384 tokens or any NF4 run at 16384 on this commit.
+What E4 does not show: that a trained 27B adapter changes what the model generates. The
+qualification logs predate a generation path for such an adapter; Brain has since added one (the
+\code{sample-adapter} verb of its \code{qwen35} command)\cl{B12} and keeps its own record of a run, which
+we did not rerun or verify here. E4 also shows no run beyond 16384 tokens and no NF4 run at 16384 on this commit.
 
 \subsection{Defects found and repaired}\label{sec:defects}
 

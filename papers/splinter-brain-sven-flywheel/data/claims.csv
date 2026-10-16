@@ -115,6 +115,7 @@ B08,substrate,"Brain's make test/gradcheck runs the brain-gradcheck package, whi
 B09,substrate,Brain's make test/parity runs the gradient checks on the CPU backend,STRUCTURE,B09.1;B09.2,make -C papers/splinter-brain-sven-flywheel verify,see commits.json,verified
 B10,substrate,"Brain has finite-difference gradient checks for the flash attention training path at head dimensions 40, 128 and 256",STRUCTURE,B10.1;B10.2,make -C papers/splinter-brain-sven-flywheel verify,see commits.json,verified
 B11,substrate,Brain implements the Qwen3.8-27B dense model in its qwen35 crate with Gated DeltaNet and grouped-query attention layers in a 3:1 split,STRUCTURE,B11.1;B11.2,make -C papers/splinter-brain-sven-flywheel verify,see commits.json,verified
+B12,substrate,Brain's qwen35 command has a sample-adapter verb that generates with a trained adapter overlaid on the base,STRUCTURE,B12.1,make -C papers/splinter-brain-sven-flywheel verify,see commits.json,verified
 CT01,related,Self-Instruct has a model write its own instructions and filters them before fine-tuning on them,CITED,selfinstruct2022,references.bib,arXiv abstract page fetched 2026-10-16,verified
 CT02,related,"STaR and ReST train on the model's own outputs that a check confirms, repeatedly",CITED,star2022;rest2023,references.bib,arXiv abstract page fetched 2026-10-16,verified
 CT03,related,LoRA freezes the base model and trains low-rank adapters,CITED,lora2021,references.bib,arXiv abstract page fetched 2026-10-16,verified
