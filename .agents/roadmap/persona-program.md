@@ -106,8 +106,8 @@ apart and untouched by any synthetic data.
 | PP-09 | Seeds of the other persona samples (done) | S | PP-05 |
 | PP-10 | Training records list the options the case offered (done; new corpora under PP-16) | M | - |
 | PP-11 | Every exam outcome bound to its item and its model (done) | S | PP-07 |
-| PP-12 | Failures accounted for, not mistaken for content | M | - |
-| PP-13 | Examination v2: balanced positions, trivial baselines, trained-on axis | M | PP-07, PP-11 |
+| PP-12 | Failures accounted for, not mistaken for content (done) | M | - |
+| PP-13 | Examination v2: balanced positions, trivial baselines, trained-on axis (done; the training-prior baseline is not built) | M | PP-07, PP-11 |
 | PP-14 | Records that teach stopping after the tool answers | M | brain loss mask for multi-step tool records |
 | PP-15 | Motivations worth learning, and a measure of them | M | PP-10 |
 | PP-16 | Replication: training seeds and author worlds | L | PP-05, PP-06, PP-07, PP-10 to PP-15, PP-23 |
@@ -157,13 +157,18 @@ independent: PP-03, PP-04, PP-32, PP-35
 
 ## Recommended order
 
-1. Make the tree build from a clean checkout and stop silent damage: PP-01,
-   PP-02, PP-12, PP-11, PP-28, and the disclosure part of PP-27 (the paper
-   states PF-01, PF-04, PF-05 and PF-15 now).
-2. Seeds: PP-05, then PP-06, PP-07, PP-08, PP-09, PP-31.
-3. Correct what the next corpora and exams will be made of, before any new
-   training run: PP-10, PP-15, PP-13, PP-23 (the reader choice), PP-14 once
-   brain supervises a turn after a tool result.
+Ordered by dependency. Items marked done are committed and tested; the open
+ones are what is left of each step.
+
+1. Independent of everything else, and first because a clean checkout must
+   build and a stored adapter must not be lost: PP-01 then PP-02 (PP-02
+   needs the re-pin), PP-28, and the disclosure part of PP-27 (the paper's
+   limitations section says, in a sentence each, the defects that bear on a
+   claim it makes: PF-01, PF-04, PF-05 and PF-15).
+2. Seeds. Done: PP-05, then PP-06, PP-07, PP-08, PP-09. Open: PP-31.
+3. Correct what the next corpora and exams are made of, before any new
+   training run. Done: PP-10, PP-11, PP-12, PP-13. Open: PP-15, PP-23 (the
+   reader choice), PP-14 once brain supervises a turn after a tool result.
 4. The study's runs under one frozen protocol: PP-16, with PP-19, PP-20 and
    PP-22 in the protocol; PP-17; PP-21 on the new corpora; PP-18 when the
    hardware holds the corpus.
@@ -173,19 +178,21 @@ independent: PP-03, PP-04, PP-32, PP-35
 In parallel, owned elsewhere or independent: PP-03 and PP-04 (brain), PP-29
 and PP-30 (sven first), PP-32, PP-33, PP-35, PP-39.
 
-## The three findings that matter most
+## The highest-severity findings
 
-- **PF-01** (high): training records of offer cases list an option the case
-  did not offer and label a decision that contradicts the oracle on the
-  prompt shown (78, 105 and 96 records of the three authors), the same
-  option pair as the adapters' dominant errors for two authors. Fixed by
-  PP-10.
-- **PF-02** (high): exam outcomes are joined on an item id that names
-  different items under different flags, with nothing tying an answer to the
-  adapter that gave it; a rerun silently keeps stale answers. Fixed by PP-11.
-- **PF-03** (high): every synthetic-author subcommand re-derives the author
-  from `--seed` and never checks the corpus's recorded author, so a wrong
-  seed grades against the wrong oracle without a word. Fixed by PP-07.
+Only three findings are rated high, and each is fixed:
+
+- **PF-01**: training records of offer cases listed an option the case did
+  not offer and labelled a decision that contradicts the oracle on the prompt
+  shown (78, 105 and 96 records of the three authors), the same option pair
+  as the adapters' dominant errors for two authors. Fixed by PP-10; corpora
+  written before it cannot be used, and the paper's results still rest on
+  them until PP-16 replaces them.
+- **PF-02**: exam outcomes were joined on an item id that names different
+  items under different flags, with nothing tying an answer to the adapter
+  that gave it. Fixed by PP-11.
+- **PF-03**: every synthetic-author subcommand re-derived the author from
+  `--seed` and never checked the corpus's recorded author. Fixed by PP-07.
 
 ## Persona task menu (replaces the document-oriented kinds for persona runs)
 
@@ -227,12 +234,14 @@ them (PP-32).
 
 One arXiv-style paper in `papers/persona-training/`. It states the method and
 the measured results of the final system only: no development history, no
-defect catalogue, no superseded exams or version names, no hardware section
-beyond a setup line, no pilots, no "does not claim" section (the evidence
-must carry the claims). Figures for the pipeline, the exam arms and the
-results. Lessons from the old defects move to `.agents/knowledge/`. Drafted by
-one agent and grounded by an independent second review after the writer
-skill's checks.
+defect catalogue and no log of failures, no superseded exams or version
+names, no hardware section beyond a setup line, no pilots, no "does not
+claim" section (the evidence must carry the claims). The one exception is the
+limitations section, which states in a sentence each the defects that bear on
+a claim the paper makes, and nothing else (PP-27). Figures for the pipeline,
+the exam arms and the results. Lessons from the old defects move to
+`.agents/knowledge/`. Drafted by one agent and grounded by an independent
+second review after the writer skill's checks.
 
 ## Open prerequisites
 

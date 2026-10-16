@@ -27,17 +27,18 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 - **Problem.** A record of a case with an outside offer lists four options
   and labels the decision made among three, contradicting the oracle on the
   prompt it shows (PF-01, PU-02).
-- **Evidence.** `samples/synthetic-author/src/dataset.rs:18-31`, `:41-45`;
-  `src/scenario.rs:124-133`. The writer is never told which options were open
-  (`src/writer.rs:93-111` sends facts and the decision only), so the essay and
-  the miner cannot recover the option set today.
+- **Evidence.** `samples/synthetic-author/src/dataset.rs` (`records_for`
+  lists the ways the reader found open) and `src/scenario.rs` (`options`
+  removes one of three ways when help is offered). The case file the writer
+  is shown (`src/writer.rs`, `writer_input`) now carries them, so the essay
+  and the miner can recover the option set.
 - **Acceptance.** The case file the writer gets names the ways that were open;
   the reader extracts them like the other facts; the reading gate
-  (`src/gates.rs:392-439`) checks them against the plan; a record lists exactly
+  (`src/gates.rs`, `check_reading`) checks them against the plan; a record lists exactly
   the options read; a property test over every planned episode of three seeds
   finds no record whose label differs from `Persona::decide` on the facts and
   options it lists; the extraction audit reports the option-set agreement.
-- **Design.** An `open` field in `Episode::case_file` (`src/episode.rs:117-132`),
+- **Design.** An `open` field in `Episode::case_file` (`src/episode.rs`),
   `open` in `MinedCase` and `ReadCase`, a `MisstatedFact { fact: "open" }`
   rejection. The same shape is what a real author's decision record needs
   (PP-24): the alternatives a person had are part of the situation.
@@ -61,9 +62,10 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 - **Problem.** Outcome files carry an item id that names different items under
   different flags and nothing about the model (PF-02); empty cells print as
   zero and missing arms vanish (PF-12).
-- **Evidence.** `samples/synthetic-author/src/arms.rs:23-37`, `:108-114`;
-  `src/exam.rs:95-100`; `src/lab.rs:251-257`; `src/report.rs:40-49`;
-  `src/main.rs:579-619`.
+- **Evidence.** `samples/synthetic-author/src/arms.rs` (`Outcome`,
+  `run_items_with`), `src/binding.rs` (the digests and `bind`), `src/lab.rs`
+  (`run_arm`), `src/report.rs` (`render`) and `src/exam_cmd.rs` (`report`,
+  `cross`).
 - **Acceptance.** Each outcome records the item's digest (rendered prompt,
   tool definition, expected label) and the model's identity (base digest,
   adapter digest, decoding and seed); `run_items_with` refuses an outcome file
@@ -81,17 +83,41 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-12 Failures accounted for, not mistaken for content
 
+- **Status.** Done for `synthetic-author` and the job log. A writer or reader
+  request lost in transit is repeated up to `--transport-retries` times
+  (default four) with a pause that starts at `--transport-backoff-secs`
+  (default five) and doubles up to a minute, and uses no attempt; each loss
+  is a `rejected.jsonl` line of kind `writer-unavailable` or
+  `reader-unavailable`, and only `content` lines reach `previous_refusal`.
+  Past the bound the run stops and says which model could not be reached, and
+  the article is counted under `unavailable` apart from `abandoned`. A draft
+  left unread by a spent budget is logged as `budget`. A reader answer in no
+  readable shape is a `content` rejection of its own (`Unreadable`), no
+  longer a decision with an invented case name. `mine` fails on an append
+  error and reads an article again for the cases it lacks. `recheck` fails
+  naming the line of a row without an article index (`recheck.rs`).
+  `jsonl::read` leaves a cut-short last line out and says so, `read_with_tail`
+  returns it and `Log::open` cuts it off. An unreadable `usage.json` fails
+  `corpus` before any request is made. The transport failures are scripted
+  through a model double and the pause is injected, so no test sleeps. Not
+  tested: the failure of an append to `decisions.jsonl` itself (the test
+  covers the resumption of an article that is partly logged). Not done: rows
+  written before `kind` existed carry none, and the counts of rejections by
+  reason behind the paper's `corpora.csv` have not been redone with the kinds.
 - **Problem.** Writer and reader transport failures consume attempts and are
   logged as content rejections (PF-06); the miner swallows an append failure
   and never completes a half-logged article (PF-07, PU-01); the job log cannot
   recover a torn tail (PF-08); an unreadable cost file resets to zero
   (PF-13); `recheck` defaults a missing index to article 0 (PF-20).
-- **Evidence.** `samples/synthetic-author/src/writer.rs:313-333`, `:388-410`;
-  `src/lab.rs:69-73`, `:93-104`; `crates/store/src/jsonl.rs:64-86`, `:134-146`;
-  `src/cache.rs:163-168`; `src/main.rs:366-367`.
+- **Evidence.** `samples/synthetic-author/src/writer.rs` (`Run::ask`,
+  `Run::write_article`, `Run::judge`), `src/lab.rs` (`mine_all`),
+  `src/cache.rs` (`Kind`, `note_rejected`, `usage`), `src/recheck.rs`,
+  `src/corpus_cmd.rs` (the flags and their defaults, named constants in
+  `src/writer.rs`) and `crates/store/src/jsonl.rs` (`read_with_tail`,
+  `Log::open`).
 - **Acceptance.** A transport failure is retried with a bounded backoff and
-  deadline and does not use an attempt; after the bound the run stops and says
-  so; `rejected.jsonl` gains a `kind` (`content`, `writer-unavailable`,
+  does not use an attempt; after the bound the run stops and says so;
+  `rejected.jsonl` gains a `kind` (`content`, `writer-unavailable`,
   `reader-unavailable`, `budget`) and only `content` reaches
   `previous_refusal`; an article given up for infrastructure is counted apart
   in the summary; `mine` fails on an append error and resumes an article from
@@ -102,28 +128,52 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 - **Design.** In the store's `jsonl` module for the log (it serves every
   sample); the rest in the sample.
 - **Depends on.** Nothing.
-- **Risk.** Low; the paper's `corpora.csv` reconciliation in
-  `build_data.py` reads the rejection reasons and must learn the new kinds.
+- **Risk.** Low; the paper's `corpora.csv` counts `rejected.jsonl` lines by
+  reason and must be recounted with the kinds when a corpus is rewritten.
 - **Size.** M.
 
 ## PP-13 Examination v2: balanced positions, trivial baselines, a trained-on axis
 
+- **Status.** Done for `synthetic-author`, except the training-prior baseline
+  and the freeze. `exam --exam v2` (the default) draws the same situations as
+  `--exam v1` (the examination as reported, which keeps its digests) and lists
+  each item's options in an order drawn from the exam seed, with the right
+  answer at each position equally often within every cell to within one item.
+  Version 2 is a different examination, recorded in the arm manifest, so
+  outcomes of version 1 are refused under it. Each version-2 item carries
+  `combination_trained`, read from the kept decisions of the corpus; the
+  examination refuses to be drawn before `mine` has read them, and `report`
+  does not score the baselines when the items drawn again no longer match the
+  digest the arms were asked. `report` scores two constant policies on the
+  arms' own items, the option listed first and the option the beliefs
+  determine most often, beside the arms and as sign-test comparisons with the
+  tuned arm. `items` shows the listed order and the right answer's position.
+  Not done: the training-prior baseline; a gate that freezes the exam file
+  before the training it examines (the manifest records its digest and
+  refuses a different one, but nothing forbids drawing it after training);
+  the paper's figures are unchanged.
 - **Problem.** The expected answer sits first in about half the items, so a
   constant policy beats the prompted arms and the reported chance level is the
   wrong reference (PF-05); `combo_seen` is documented as "seen" but means "not
   withheld" (PF-14).
-- **Evidence.** `samples/synthetic-author/src/scenario.rs:130`;
-  `src/exam.rs:47-48`, `:78-110`; `papers/persona-training/sections/06-results.tex:8`.
+- **Evidence.** `samples/synthetic-author/src/scenario.rs` (`options` sorts
+  them), `src/exam.rs` (`items`, `draw`, `Version`, `Trained`),
+  `src/report.rs` (`baselines`), `src/lab.rs` (`exam_items_of`,
+  `asked_items`) and `papers/persona-training/sections/06-results.tex:8`.
 - **Acceptance.** A new exam version (the reported v1 stays reproducible
-  under its name): option order drawn per item from the exam seed and
-  recorded, the expected position balanced within each cell; letter labels
-  follow the listed order; the report prints the first-listed,
-  majority-option and training-prior baselines beside the arms; each item
-  carries `combination_trained` (some kept, mined decision has its facts and
-  options) beside `combination_withheld`; the exam file is hashed and frozen
-  before the training it examines.
-- **Design.** `items` takes the order from a seeded shuffle of
-  `scenario.options`; baselines computed in `report` from the items alone.
+  under its name): option order drawn per item from the exam seed, the
+  expected position balanced within each cell; letter labels follow the
+  listed order; the report prints the first-listed and majority-option
+  baselines beside the arms; each item carries `combination_trained` (some
+  kept, mined decision has its facts and options) beside `combo_seen`, which
+  means only that the combination was not withheld. Open: the training-prior
+  baseline (what a model that knew only the corpus's decision frequencies
+  would score), and the exam file hashed and frozen before the training it
+  examines.
+- **Design.** `draw` gives each cell its right-answer positions in seeded
+  permutations, one per block of as many items as there are options, and
+  lists the other options after it in a seeded order; baselines are computed
+  in `report` from the items alone.
 - **Depends on.** PP-07 (exam seed), PP-11.
 - **Risk.** Results on v2 are not comparable item for item with v1; the
   paper reports v2 for new runs and keeps v1 for the published ones.
@@ -135,10 +185,10 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   shows the model what to do once the tool has answered, so in a multi-round
   chat a tuned model calls `decide` again after `Recorded.` unless the tool is
   marked final. Persona-chat's tools file defaults `final` to false.
-- **Evidence.** `samples/synthetic-author/src/records.rs:29-45` (system, user,
-  assistant call; no tool turn); `samples/persona-chat/src/tools.rs:37-38`
-  (`final` defaults to false), `src/session.rs:169` (the exchange continues
-  while calls are made). The repeat is the reported behaviour of the tuned
+- **Evidence.** `samples/synthetic-author/src/records.rs` (`chat_record`:
+  system, user, assistant call; no tool turn); `samples/persona-chat/src/tools.rs:37-38`
+  (`final` defaults to false), `src/session.rs:174` (the exchange continues
+  while calls are made and no final tool answered). The repeat is the reported behaviour of the tuned
   adapters in persona-chat; no recorded trace of it is in the repository.
 - **Acceptance.** Each record continues with the tool's result and a short
   supervised closing turn with no further call; persona-chat batch over the
@@ -161,9 +211,10 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 - **Problem.** Some records teach an empty motivation, and the adapters'
   reasons repeat the brief's private phrase verbatim (PF-15). Nothing measures
   a reason.
-- **Evidence.** `samples/synthetic-author/src/dataset.rs:46`;
-  `src/episode.rs:47-54`; `src/gates.rs:244-253` (the brief-copy check runs on
-  the third-person `did_phrase` only).
+- **Evidence.** `samples/synthetic-author/src/dataset.rs:33` (a decision with
+  no quoted reason gets `""`); `src/episode.rs:47-54` (`did_phrase`);
+  `src/gates.rs:253-262` (the brief-copy check in `check_form` runs on the
+  third-person `did_phrase` only).
 - **Acceptance.** No record has an empty reason (a decision without a quoted
   reason is not a record); the brief-copy gate also refuses the first-person
   forms of `did_phrase`, and records refuse a reason holding a 6-word run of
@@ -204,15 +255,14 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 - **Problem.** The divergence count compares a trained adapter with the
   opposite author's oracle only; no model is trained on the opposite author.
-- **Evidence.** `samples/synthetic-author/src/persona.rs:289-301`
-  (`opposite()`); `src/main.rs:579-611` (`cross` adds it as a rival oracle);
+- **Evidence.** `samples/synthetic-author/src/persona.rs:292-301`
+  (`opposite()`); `src/exam_cmd.rs:253` (`cross` adds it as a rival oracle);
   `corpus` draws an author from `--seed` with `Persona::generate`
-  (`src/main.rs:656`), and `generate(seed ^ OPPOSITE_SALT)` is not
-  `opposite()`, so the opposite cannot be written today. README claims the
-  arm (PF-19).
+  (`src/corpus_cmd.rs:98`), and `generate(seed ^ OPPOSITE_SALT)` is not
+  `opposite()`, so the opposite cannot be written today.
 - **Acceptance.** `corpus --opposite-of SEED` writes the opposite's corpus
   (its manifest says so); the opposite passes the same checkability rule
-  (`src/persona.rs:239-249`) or the run refuses it; on items where the two
+  (`src/persona.rs:239-249`, `is_checkable`) or the run refuses it; on items where the two
   authors are determined and differ, each adapter takes its own author's
   decision more often than the other's, by a paired test between the two
   adapters on the same items.
@@ -225,7 +275,7 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 ## PP-18 The long-context arm
 
 - **Problem.** The base with the whole corpus in its context is not run.
-- **Evidence.** `samples/synthetic-author/src/main.rs:508-514` loads every arm
+- **Evidence.** `samples/synthetic-author/src/exam_cmd.rs:149` loads every arm
   with a 16384-token context; the kept corpora run to 56,107, 57,362 and
   38,916 words (`papers/persona-training/data/corpora.csv`), several times that
   context.
@@ -248,9 +298,9 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   is bounded but not tested; the retrieval arm is one configuration; the
   principles arm lacks the verdict rules (review record, gate "mechanism
   ablation: FAIL").
-- **Evidence.** `samples/synthetic-author/src/dataset.rs:47-56` (the
+- **Evidence.** `samples/synthetic-author/src/dataset.rs:36-43` (the
   fixed-wording briefing); `src/retrieval.rs:21`, `:52-61`;
-  `src/lab.rs:288-289`; `.agents/research/persona-training-review.md` sec. 4.
+  `src/lab.rs:284-292` (the principles arm); `.agents/research/persona-training-review.md` sec. 4.
 - **Acceptance.** Pre-registered in the PP-16 protocol: adapters trained
   without the fixed-wording briefings and with them only; retrieval at 2, 6
   and 12 paragraphs, over whole articles, and over the training records
@@ -266,7 +316,7 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 - **Problem.** Every arm is decoded greedily; the robustness of the ranking
   under sampling is unmeasured (PU-06).
-- **Evidence.** `samples/synthetic-author/src/main.rs:513`;
+- **Evidence.** `samples/synthetic-author/src/exam_cmd.rs:134`;
   `crates/model/src/answer.rs:49-59` (`Sampled` exists, with no seed).
 - **Acceptance.** Each arm asked K times per item at a stated temperature,
   each draw with a recorded seed; per-item share right; arms compared with an
@@ -314,8 +364,8 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 - **Problem.** One hosted model writes the essays, reads them for the gate and
   extracts the decisions; a consistent error of that model passes every gate.
 - **Evidence.** `papers/persona-training/sections/07-discussion.tex` (scope of
-  validity); `src/main.rs:642-687` (`--writer`, `--reader`) and `:380-404`
-  (`--miner`) take any reference.
+  validity); `samples/synthetic-author/src/corpus_cmd.rs:47-53` (`--writer`, `--reader`) and `src/main.rs:91`
+  (`mine --miner`) take any reference.
 - **Acceptance.** Writer, gate reader and miner are three different model
   families in the protocol; the audit reports agreement between gate reader
   and miner per case and the oracle agreement of each.
@@ -331,12 +381,13 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   tool-decision, principle, polarity, rebuttal, anachronism, attribution or
   interlocutor kind (the persona task menu), and the decision mining and
   tool-call records exist only inside the synthetic-author sample.
-- **Evidence.** `crates/knowledge/src/tasks/kind.rs:424-640` (the built-in
+- **Evidence.** `crates/knowledge/src/tasks/kind.rs:424-643` (the built-in
   kinds: recall, arithmetic, format, explain, counterexample, transform,
   classify, retrieve, multi-turn, combine, advise, converse, predict,
   construct, debug); `samples/synthetic-author/src/mine.rs`,
-  `src/records.rs`, `src/tools.rs`; `crates/pipelines/src/learn/stages.rs:141-158`
-  (a persona run adds the voice share and the persona prompt, no decisions).
+  `src/records.rs`, `src/tools.rs`; `crates/pipelines/src/learn/stages.rs`
+  (`system_prompt`, `persona`: a persona run adds the voice share and the
+  persona prompt, no decisions).
 - **Acceptance.** A `decision` kind (a documented situation with the decision
   withheld, its options and its quoted reasons, verified by quotation) and a
   `tool-decision` kind (the same decision through a caller-defined tool,
@@ -348,8 +399,11 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   unseen tools. The synthetic-author sample then calls these instead of its
   own copies.
 - **Design.** Move, do not copy: the sample's verified pieces become the
-  crates' (rule in `persona-program.md`, generalizing sample code).
-- **Depends on.** PP-10, PP-14, PP-15.
+  crates' (rule in `persona-platform.md`, "Generalizing sample code into the
+  SDK").
+- **Depends on.** PP-10, PP-14, PP-15, PP-36, PP-37, PP-38 (the principle
+  verification, the scenario planner with its giveaway gate, and the judge
+  calibration and document bundling the new kinds and the miner use).
 - **Risk.** Real documents state options implicitly; the miner's `open`
   field may be empty, and a decision without alternatives is not a
   `tool-decision` task.
@@ -364,8 +418,10 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   listed, most marked base-guessable. `samples/jefferson/src/exam.rs` and
   `samples/adams/src/main.rs` exams grade recall, attribution and
   reconstruction, not a decision through a tool. Neither `materials`
-  command removes the EXCLUDE ranges (`samples/jefferson/src/main.rs:364`,
-  `samples/adams/src/materials.rs`).
+  command removes the draft's EXCLUDE ranges
+  (`samples/jefferson/src/main.rs:400` and `samples/adams/src/main.rs:325`,
+  `materials_command`; `samples/jefferson/src/corpus.rs:375` clears only the letters of
+  its recall exam).
 - **Acceptance.** Per author at least 30 documented decisions (13 cannot
   support a paired test; seven of seven wins is p = 0.0078 only when every
   item is discordant), each with a neutral briefing, options, the documented
@@ -391,10 +447,10 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 - **Problem.** Jefferson, Adams, their opposites and one non-historical
   profession have not been run through the identical command.
-- **Evidence.** `samples/jefferson/README.md:23-41` and
-  `samples/adams/README.md:23-50` run `learn` from the sentence without
+- **Evidence.** `samples/jefferson/README.md:39` and
+  `samples/adams/README.md:45` run `learn` from the sentence without
   `--adapter` and examine recall; the router maps "as the adapter NAME" to
-  `--adapter` (`crates/pipelines/src/router.rs:156-161`, `:219-236`).
+  `--adapter` (`crates/pipelines/src/router.rs:74-77`, `:229-233`).
 - **Acceptance.** For each person: `splinter "Learn to think and act like X
   from ./materials as the adapter x"`, its learn report, the PP-25 exam on the
   published adapter against the base, named, principles and retrieval arms,
@@ -421,9 +477,12 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   share one default seed), PF-06 (infrastructure failures among the given-up
   articles), PF-15 (the adapters echo a brief phrase as their reason).
 - **Acceptance.** Immediately, as AGENTS.md requires of a found defect in a
-  stated method: the paper states PF-01, PF-05 (with the first-option
-  baseline in the results table), PF-04 and PF-15, and `build_data.py` checks
-  the new numbers. For submission: the human confirmations recorded in the
+  stated method: the paper's limitations section says, in a sentence each,
+  the defects that bear on a claim it makes (PF-01, PF-04, PF-05 and PF-15),
+  and no more: no catalogue of defects, no log of failures. PF-05's
+  first-option baseline also enters the results table, since it is the
+  reference a result is read against. `build_data.py` checks the new
+  numbers. For submission: the human confirmations recorded in the
   review file; a venue chosen and its rules checked; the replication (PP-16)
   and ablations (PP-19) reported, superseding the single-run results; cost
   re-derived (PU-05); `make` clean.

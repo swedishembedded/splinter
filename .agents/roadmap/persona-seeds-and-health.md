@@ -159,7 +159,7 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
   `crates/pipelines/src/train/mod.rs:185-188`, `:389`;
   `crates/pipelines/src/train/full.rs:51`; CLI `crates/splinter/src/cli/learn.rs:177-181`,
   `cli/train.rs:163-166`, `cli/practice.rs:104-106` ("brain's default if not
-  given"); `samples/synthetic-author/src/main.rs:137-139`, `:462`, `:467-473`;
+  given"); `samples/synthetic-author/src/training.rs` (`train_seed`);
   brain `crates/sdk/src/finetune.rs:151`, `full_finetune.rs:102`,
   `preference.rs:108`. The three study adapters carry seed 1337 in their cards.
 - **Acceptance.** `FineTune.seed`, `FullFineTune.seed` and the preference
@@ -189,15 +189,17 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
   `persona.json`). `exam` writes `exam/manifest.json`, refuses to append under
   another manifest naming both digests, and takes over old outcomes only with
   `--adopt`. `train --train-seed` draws and prints when absent and
-  `summary.json` records the seed and every setting. What remains: `mine`'s
-  reader still draws an unrecorded seed per request.
+  `summary.json` records the seed and every setting. `mine` draws the seed
+  its reader's per-request seeds derive from when `--run-seed` is absent,
+  prints it and records it with the reader in `mine.json`; a later `mine`
+  continues with both and refuses another reader or seed.
 - **Problem.** The author seed is a required argument repeated on every
   subcommand and never checked against the corpus (PF-03); the writer's
   draws are unseeded and unrecorded; exam and corpus directories have no
   manifest of what produced them (PF-02).
-- **Evidence.** `samples/synthetic-author/src/main.rs:47-50` and the same
+- **Evidence.** `samples/synthetic-author/src/main.rs` and the same
   `seed: u64` on `plan`, `recheck`, `dataset`, `exam`, `show`, `items`,
-  `audit`, `cross`, `corpus`; local writer sampling `:289-293` inherits
+  `audit`, `cross`, `corpus`; local writer sampling (`src/models.rs`) inherits
   `seed: None` from `crates/model/src/local/mod.rs:61`, so the provider draws a
   seed for each sampled request and a recorded run keeps them
   (`crates/model/src/local/request.rs:37-43`, `Run.sampled`);
