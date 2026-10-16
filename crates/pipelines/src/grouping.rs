@@ -133,6 +133,17 @@ pub(crate) fn groups_of(
         .collect())
 }
 
+/// How many independent source texts the text parts of `sources` make:
+/// parts that overlap (two prints of one letter) are one. Sources with no
+/// text part make none.
+pub(crate) fn independent_text_groups(
+    ctx: &Context,
+    sources: &[SourceId],
+) -> Result<usize, OrchestratorError> {
+    let groups = groups_of(ctx, sources, BTreeSet::new())?;
+    Ok(groups.values().collect::<BTreeSet<_>>().len())
+}
+
 /// The family of each text part of `sources`: prints of one text share a
 /// family, named by the least content digest among them (the print the voice
 /// view keeps).

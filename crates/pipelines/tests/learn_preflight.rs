@@ -62,3 +62,32 @@ fn a_run_on_an_unwritable_state_root_is_refused_before_it_starts() {
         "nothing was written under the state root"
     );
 }
+
+#[test]
+fn one_source_text_is_refused_before_any_rollout_when_the_trainer_divides_by_group() {
+    let (_scratch, ctx) = scratch_context("learn-one-group", policy(), false);
+    let manual = std::env::temp_dir().join(format!("one-group-manual-{}.md", std::process::id()));
+    std::fs::write(&manual, MANUAL).unwrap();
+    let trainer = FakeTrainer::knowing(&[]).holding_out_by_group();
+    let outcome = learn(
+        &ctx,
+        &LearnRequest {
+            sources: vec![manual.display().to_string()],
+            kinds: vec!["recall".into()],
+            ..LearnRequest::default()
+        },
+        &trainer,
+    );
+    std::fs::remove_file(&manual).ok();
+    let Err(OrchestratorError::Refused(why)) = outcome else {
+        panic!("one text cannot be divided, so the run is refused: {outcome:?}");
+    };
+    assert!(
+        why.contains("1 independent source text") && why.contains("add sources"),
+        "the refusal counts the groups and names the fix: {why}"
+    );
+    assert!(
+        trainer.plans.lock().unwrap().is_empty(),
+        "nothing was trained"
+    );
+}

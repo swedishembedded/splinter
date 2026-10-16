@@ -40,6 +40,7 @@ use crate::curriculum::quota::{select_training_set, Quotas};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::DEFAULT_MIN_STRENGTH;
 use crate::exam_set::ExamSet;
+use crate::grouping::independent_text_groups;
 use crate::plan::plan as make_plan;
 use crate::raft::PassageShare;
 use crate::rehearsal::{rehearse, RehearseRequest};
@@ -379,6 +380,20 @@ fn sources_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut LearnState<'_>) -
         let added = sources::add(ctx, target)?;
         st.source_ids.push(added.source.id.clone());
         st.report.sources.push(added.source);
+    }
+    // A trainer that holds a group out whole cannot divide one text: found
+    // here, it costs nothing; found at the split, after the rollouts, it
+    // cost the run (knowledge 056).
+    if st.learn.trainer.holds_out_by_group() {
+        let groups = independent_text_groups(ctx, &st.source_ids)?;
+        if groups == 1 {
+            return Err(OrchestratorError::Refused(
+                "the sources are 1 independent source text and none of it can be held out whole; \
+                 a held-out measurement needs at least two, so add sources (a directory of \
+                 sheets, not one long file) before any rollout is spent"
+                    .into(),
+            ));
+        }
     }
     Ok(StageEnd::done(to_value(&st.report.sources)?))
 }

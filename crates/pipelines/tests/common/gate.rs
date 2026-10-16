@@ -520,6 +520,9 @@ pub struct FakeTrainer {
     /// of when asked to; the adapters carry the step and nothing else, for
     /// the test to serve as it likes.
     pub evaluations: Mutex<Vec<u32>>,
+    /// Whether it divides the records by independent source text, as the
+    /// real trainer does ([`Trainer::holds_out_by_group`]).
+    by_group: bool,
 }
 
 impl FakeTrainer {
@@ -533,6 +536,15 @@ impl FakeTrainer {
             resident_at_start: Mutex::new(Vec::new()),
             curve: Mutex::new(None),
             evaluations: Mutex::new(Vec::new()),
+            by_group: false,
+        }
+    }
+
+    /// This trainer, dividing the records by group as the real one does.
+    pub fn holding_out_by_group(self) -> Self {
+        Self {
+            by_group: true,
+            ..self
         }
     }
 
@@ -643,6 +655,10 @@ impl FakeTrainer {
 }
 
 impl Trainer for FakeTrainer {
+    fn holds_out_by_group(&self) -> bool {
+        self.by_group
+    }
+
     fn train(
         &self,
         ctx: &Context,
