@@ -504,8 +504,7 @@ pub fn grade(
             let started = Instant::now();
             let result = env.run(&tree, &without_bytecode(&runnable))?;
             let observation = expectation.map(|e| e.observe(&result));
-            let passed =
-                succeeded(&result) && observation.as_ref().map_or(true, Observation::proven);
+            let passed = succeeded(&result) && observation.as_ref().is_none_or(Observation::proven);
             graded.commands.push(CommandRun {
                 phase,
                 index,
