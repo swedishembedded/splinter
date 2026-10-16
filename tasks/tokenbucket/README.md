@@ -141,6 +141,7 @@ The tests are Python `unittest` files that start one `lua` process per test
   a non-empty string`, `malformed duration at position N`, `unknown unit: u`.
 - `dur_try_parse(text)`: value, or `nil, message`. `dur_is_valid(text)`.
 - `dur_total_millis(text)`, `dur_unit_millis(unit)`.
+<!-- perf-number: duration literals of the library's text format, not measurements -->
 - `dur_format(seconds)`: canonical text (`"1d1h1m1s1ms"`, `"0s"`), rounded to
   the millisecond. Error: `seconds must be a non-negative number`.
 - `dur_compare(a, b)` (-1, 0, 1), `dur_sum(list)`.

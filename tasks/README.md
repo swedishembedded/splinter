@@ -83,6 +83,7 @@ test), because fault seeding reads only `python3 -m unittest` per test.
 
 Fault generation is deterministic in the family tree and the flags; the seed
 only chooses which families an exam would reserve. No model is loaded:
+<!-- perf-number: a budget flag value, not a measurement -->
 `--budget 1s` stops the run after the reserve stage.
 
 ```
