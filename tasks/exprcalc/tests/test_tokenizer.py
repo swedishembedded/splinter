@@ -20,24 +20,18 @@ def texts(source):
     return [token.text for token in xpr_scan_tokens(source)]
 
 
-class ScanBasicsTests(unittest.TestCase):
+class ZA(unittest.TestCase):
     def test_empty_source_gives_only_end_token(self):
         self.assertEqual(xpr_scan_tokens(""), [XprToken("end", "", 0)])
-
-    def test_end_token_sits_after_the_last_character(self):
         self.assertEqual(xpr_scan_tokens("x ")[-1], XprToken("end", "", 2))
 
     def test_whitespace_is_skipped_everywhere(self):
         self.assertEqual(texts(" 1\t+\r\n2 "), ["1", "+", "2", ""])
-
-    def test_tokens_record_start_offsets(self):
         positions = [token.position for token in xpr_scan_tokens("ab + 12")]
         self.assertEqual(positions, [0, 3, 5, 7])
 
     def test_plus_expression_has_three_kinds_and_end(self):
         self.assertEqual(kinds("1+x"), ["number", "op", "name", "end"])
-
-    def test_call_syntax_token_kinds(self):
         self.assertEqual(
             kinds("f(a,b)"),
             ["name", "lparen", "name", "comma", "name", "rparen", "end"],
@@ -46,30 +40,22 @@ class ScanBasicsTests(unittest.TestCase):
     def test_token_fields_cannot_be_reassigned(self):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             XprToken("op", "+", 0).text = "-"
-
-    def test_token_is_a_value_object(self):
         self.assertEqual(XprToken("op", "+", 4), XprToken("op", "+", 4))
         self.assertNotEqual(XprToken("op", "+", 4), XprToken("op", "+", 5))
 
 
-class OperatorScanTests(unittest.TestCase):
+class ZB(unittest.TestCase):
     def test_every_single_character_operator(self):
         self.assertEqual(texts("+-*/%^<>!")[:-1], list("+-*/%^<>!"))
         self.assertEqual(set(kinds("+-*/%^<>!")[:-1]), {"op"})
-
-    def test_two_character_operators_stay_whole(self):
         self.assertEqual(texts("<= >= == != && ||")[:-1], ["<=", ">=", "==", "!=", "&&", "||"])
 
     def test_less_equal_beats_less_then_assign(self):
         self.assertEqual(texts("a<=b"), ["a", "<=", "b", ""])
-
-    def test_adjacent_bang_and_equals_make_not_equal(self):
         self.assertEqual(texts("a!=b")[1], "!=")
 
     def test_bang_before_name_is_a_lone_not(self):
         self.assertEqual(texts("!a"), ["!", "a", ""])
-
-    def test_double_bang_is_two_tokens(self):
         self.assertEqual(texts("!!a"), ["!", "!", "a", ""])
 
     def test_lone_equals_sign_is_rejected(self):
@@ -77,16 +63,12 @@ class OperatorScanTests(unittest.TestCase):
             xpr_scan_tokens("a = b")
         self.assertEqual(caught.exception.message, "unexpected character '='")
         self.assertEqual(caught.exception.position, 2)
-
-    def test_lone_ampersand_is_rejected(self):
         with self.assertRaisesRegex(XprSyntaxError, "unexpected character '&'"):
             xpr_scan_tokens("a & b")
 
     def test_lone_pipe_is_rejected(self):
         with self.assertRaisesRegex(XprSyntaxError, "unexpected character '[|]'"):
             xpr_scan_tokens("a | b")
-
-    def test_unknown_symbol_reports_its_position(self):
         with self.assertRaises(XprSyntaxError) as caught:
             xpr_scan_tokens("12 + $")
         self.assertEqual(caught.exception.position, 5)
@@ -96,31 +78,23 @@ class OperatorScanTests(unittest.TestCase):
             xpr_scan_tokens("\u00e9")
 
 
-class NumberScanTests(unittest.TestCase):
+class ZC(unittest.TestCase):
     def test_leading_zeros_are_preserved_in_text(self):
         self.assertEqual(texts("007")[0], "007")
-
-    def test_fraction_digits_stay_in_one_token(self):
         self.assertEqual(texts("3.25")[0], "3.25")
 
     def test_number_may_start_with_a_dot(self):
         self.assertEqual(texts(".5 + 1"), [".5", "+", "1", ""])
-
-    def test_negative_exponent_stays_in_one_token(self):
         self.assertEqual(texts("1.5e-3")[0], "1.5e-3")
 
     def test_exponent_with_plus_and_capital(self):
         self.assertEqual(texts("2E+10")[0], "2E+10")
-
-    def test_bare_exponent_digits_stay_in_one_token(self):
         self.assertEqual(texts("4e2")[0], "4e2")
 
     def test_trailing_dot_is_malformed(self):
         with self.assertRaises(XprSyntaxError) as caught:
             xpr_scan_tokens("1 + 2.")
         self.assertEqual((caught.exception.message, caught.exception.position), ("malformed number", 4))
-
-    def test_dot_before_exponent_is_malformed(self):
         with self.assertRaisesRegex(XprSyntaxError, "^malformed number"):
             xpr_scan_tokens("1.e3")
 
@@ -128,15 +102,11 @@ class NumberScanTests(unittest.TestCase):
         with self.assertRaises(XprSyntaxError) as caught:
             xpr_scan_tokens("5e")
         self.assertEqual((caught.exception.message, caught.exception.position), ("malformed exponent", 0))
-
-    def test_signed_exponent_without_digits_is_malformed(self):
         with self.assertRaisesRegex(XprSyntaxError, "^malformed exponent"):
             xpr_scan_tokens("5e+ 1")
 
     def test_second_dot_starts_another_number(self):
         self.assertEqual(texts("1.2.3"), ["1.2", ".3", ""])
-
-    def test_lone_dot_is_not_a_number(self):
         with self.assertRaisesRegex(XprSyntaxError, "unexpected character '[.]'"):
             xpr_scan_tokens("1 . 2")
 
@@ -145,11 +115,9 @@ class NumberScanTests(unittest.TestCase):
         self.assertEqual(kinds("12ab"), ["number", "name", "end"])
 
 
-class NameScanTests(unittest.TestCase):
+class ZD(unittest.TestCase):
     def test_name_with_digits_and_underscores(self):
         self.assertEqual(texts("_a1_b2")[0], "_a1_b2")
-
-    def test_name_stops_at_operator(self):
         self.assertEqual(texts("abc+d"), ["abc", "+", "d", ""])
 
 
@@ -159,12 +127,10 @@ class NameScanTests(unittest.TestCase):
 
 
 
-class NumberCheckTests(unittest.TestCase):
+class ZE(unittest.TestCase):
     def test_valid_literals_pass_the_check(self):
         for text in ("1", "10.5", ".5", "2e3", "2.5E-3", "0.0e+0"):
             self.assertIsNone(xpr_check_number_text(text, 0), text)
-
-    def test_missing_fraction_digits_are_malformed(self):
         with self.assertRaises(XprSyntaxError) as caught:
             xpr_check_number_text("7.", 3)
         self.assertEqual((caught.exception.message, caught.exception.position), ("malformed number", 3))
@@ -173,24 +139,18 @@ class NumberCheckTests(unittest.TestCase):
         with self.assertRaises(XprSyntaxError) as caught:
             xpr_check_number_text("7e-", 6)
         self.assertEqual((caught.exception.message, caught.exception.position), ("malformed exponent", 6))
-
-    def test_dot_wins_over_exponent_in_diagnosis(self):
         with self.assertRaisesRegex(XprSyntaxError, "^malformed number"):
             xpr_check_number_text("7.e", 0)
 
 
-class TokenIsTests(unittest.TestCase):
+class ZF(unittest.TestCase):
     def test_kind_match_without_text(self):
         self.assertTrue(xpr_token_is(XprToken("op", "+", 0), "op"))
-
-    def test_wrong_kind_makes_the_check_fail(self):
         self.assertFalse(xpr_token_is(XprToken("name", "+", 0), "op"))
 
     def test_text_must_match_when_given(self):
         token = XprToken("op", "+", 0)
         self.assertTrue(xpr_token_is(token, "op", "+"))
         self.assertFalse(xpr_token_is(token, "op", "-"))
-
-    def test_empty_text_is_still_compared(self):
         self.assertFalse(xpr_token_is(XprToken("end", "", 0), "end", "x"))
         self.assertTrue(xpr_token_is(XprToken("end", "", 0), "end", ""))
