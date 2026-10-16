@@ -50,3 +50,21 @@ serve and roll back as specified (E2, E3)? No benchmark claim is made.
 
 No item is excluded. Anything computed under a rule changed after the first measured run
 is labelled post hoc. All results are pilots: 24 facts per generation.
+
+# Second wave, E1 rerun (fixed 2026-10-16, 09:55 CEST, before the runs)
+
+Three defects found by the first wave's failures were repaired in Splinter (a set from one
+source text is no longer divided and then refused by its own leakage gate; markup inside a
+subject no longer hides it; a candidate's adapter card id carries a tag so `brain serve` accepts
+it). E1 is rerun on the repaired binary, once per corpus, nothing retried:
+
+- Corpus A: the same three Brain pages as the first wave (10625 bytes), kinds recall, explain,
+  classify, denoise, generator Qwen3-4B, context 8192, denoise seed drawn and recorded.
+- Corpus B: three pages of the Sven user documentation (introduction, quickstart,
+  troubleshooting), same settings.
+- Reported per corpus, no threshold: proposals, admissions and rejections per kind and per
+  reason; parts covered; wall time. The rejections of reason `no_subject` are classified by
+  reading each against the rule (markup only; words present but apart; subject absent from the
+  instruction; subject not in the source) as in the first wave's 82, with the script kept.
+- The only directional expectation: no rejection of the markup-only class remains. The
+  generator samples, so counts differ from the first wave by chance; no test is run on them.
