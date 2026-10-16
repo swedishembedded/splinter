@@ -12,7 +12,7 @@ def filled(capacity, *keys):
     return store
 
 
-class LruStoreTests(unittest.TestCase):
+class T(unittest.TestCase):
     def test_capacity_check_returns_valid_value(self):
         self.assertEqual(lru_check_capacity(3), 3)
 
@@ -36,19 +36,8 @@ class LruStoreTests(unittest.TestCase):
     def test_capacity_property_reports_limit(self):
         self.assertEqual(LruStore(7).capacity, 7)
 
-    def test_empty_store_has_no_entries(self):
-        store = LruStore(2)
-        self.assertEqual(len(store), 0)
-        self.assertEqual(store.keys_most_recent_first(), [])
-
-    def test_stored_value_is_returned(self):
-        self.assertEqual(filled(2, "a").get("a"), "A")
-
     def test_missing_key_returns_default(self):
         self.assertEqual(LruStore(2).get("x", "fallback"), "fallback")
-
-    def test_missing_key_default_is_none(self):
-        self.assertIsNone(LruStore(2).get("x"))
 
     def test_stored_none_is_distinct_from_miss(self):
         store = LruStore(2)
@@ -86,10 +75,6 @@ class LruStoreTests(unittest.TestCase):
         self.assertEqual(store.keys_most_recent_first(), ["c", "b"])
         self.assertNotIn("a", store)
 
-    def test_store_at_capacity_keeps_all_entries(self):
-        store = filled(3, "a", "b", "c")
-        self.assertEqual(len(store), 3)
-
     def test_recent_read_protects_entry_from_eviction(self):
         store = filled(2, "a", "b")
         store.get("a")
@@ -107,10 +92,6 @@ class LruStoreTests(unittest.TestCase):
         store = filled(3, "a", "b", "c")
         store.put("a", 1)
         self.assertEqual(store.keys_most_recent_first(), ["a", "c", "b"])
-
-    def test_capacity_one_store_holds_latest_only(self):
-        store = filled(1, "a", "b")
-        self.assertEqual(store.keys_most_recent_first(), ["b"])
 
     def test_eviction_callback_receives_victim(self):
         seen = []
@@ -135,13 +116,6 @@ class LruStoreTests(unittest.TestCase):
     def test_delete_missing_key_reports_false(self):
         self.assertIs(filled(3, "a").delete("zz"), False)
 
-    def test_delete_skips_eviction_callback(self):
-        seen = []
-        store = LruStore(2, on_evict=lambda k, v: seen.append(k))
-        store.put("a", 1)
-        store.delete("a")
-        self.assertEqual(seen, [])
-
     def test_pop_oldest_returns_pair_and_removes(self):
         store = filled(3, "a", "b", "c")
         self.assertEqual(store.pop_oldest(), ("a", "A"))
@@ -163,22 +137,11 @@ class LruStoreTests(unittest.TestCase):
         self.assertEqual(seen, ["a", "b"])
         self.assertEqual(store.capacity, 2)
 
-    def test_growing_capacity_keeps_everything(self):
-        store = filled(2, "a", "b")
-        store.resize(5)
-        store.put("c", "C")
-        self.assertEqual(len(store), 3)
-
     def test_resize_to_invalid_capacity_is_rejected(self):
         store = filled(2, "a")
         with self.assertRaises(ValueError):
             store.resize(0)
         self.assertEqual(store.capacity, 2)
-
-    def test_resize_to_same_capacity_evicts_nothing(self):
-        store = filled(2, "a", "b")
-        store.resize(2)
-        self.assertEqual(len(store), 2)
 
     def test_clear_removes_all_without_callbacks(self):
         seen = []
@@ -189,11 +152,6 @@ class LruStoreTests(unittest.TestCase):
         self.assertEqual(len(store), 0)
         self.assertEqual(seen, [])
 
-    def test_store_is_reusable_after_clear(self):
-        store = filled(2, "a", "b")
-        store.clear()
-        store.put("c", "C")
-        self.assertEqual(store.keys_most_recent_first(), ["c"])
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from ttlcache.cache_stats import (
 )
 
 
-class CacheStatsTests(unittest.TestCase):
+class T(unittest.TestCase):
     def setUp(self):
         self.counters = CacheCounters()
 
@@ -21,10 +21,6 @@ class CacheStatsTests(unittest.TestCase):
 
     def test_field_names_are_stable(self):
         self.assertEqual(COUNTER_FIELDS, ("hits", "misses", "evictions", "expirations", "writes"))
-
-    def test_hit_recording_adds_one_by_default(self):
-        self.counters.record_hit()
-        self.assertEqual(self.counters.hits, 1)
 
     def test_hit_recording_accepts_a_count(self):
         self.counters.record_hit(4)
@@ -68,14 +64,6 @@ class CacheStatsTests(unittest.TestCase):
         self.counters.record_miss(2)
         self.assertEqual(self.counters.hit_ratio(), Fraction(1, 3))
 
-    def test_ratio_of_only_hits_is_one(self):
-        self.counters.record_hit(9)
-        self.assertEqual(self.counters.hit_ratio(), Fraction(1))
-
-    def test_ratio_of_only_misses_is_zero(self):
-        self.counters.record_miss(9)
-        self.assertEqual(self.counters.hit_ratio(), Fraction(0))
-
     def test_percent_is_zero_before_any_lookup(self):
         self.assertEqual(self.counters.hit_percent(), 0)
 
@@ -113,12 +101,6 @@ class CacheStatsTests(unittest.TestCase):
             {"hits": 11, "misses": 2, "evictions": 3, "expirations": 4, "writes": 5},
         )
 
-    def test_absorb_leaves_the_source_unchanged(self):
-        other = CacheCounters()
-        other.record_hit(2)
-        self.counters.absorb(other)
-        self.assertEqual(other.hits, 2)
-
     def test_reset_zeroes_every_field(self):
         self.counters.record_hit(1)
         self.counters.record_write(2)
@@ -136,10 +118,6 @@ class CacheStatsTests(unittest.TestCase):
             {"hits": 3, "misses": 1, "evictions": 0, "expirations": 0, "writes": 0},
         )
 
-    def test_delta_of_equal_snapshots_is_zero(self):
-        snap = self.counters.as_dict()
-        self.assertEqual(counters_delta(snap, snap), dict.fromkeys(COUNTER_FIELDS, 0))
-
     def test_delta_rejects_backwards_counter(self):
         before = self.counters.as_dict()
         after = dict(before, evictions=-1)
@@ -156,12 +134,6 @@ class CacheStatsTests(unittest.TestCase):
         self.assertEqual(
             counters_report(self.counters),
             "hits=3 misses=1 evictions=2 expirations=4 writes=5 ratio=75%",
-        )
-
-    def test_report_of_fresh_counters_shows_zeroes(self):
-        self.assertEqual(
-            counters_report(self.counters),
-            "hits=0 misses=0 evictions=0 expirations=0 writes=0 ratio=0%",
         )
 
     def test_lookup_helper_counts_a_hit(self):

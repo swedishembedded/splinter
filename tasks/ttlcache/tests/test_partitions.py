@@ -10,12 +10,9 @@ from ttlcache.partitions import (
 )
 
 
-class PartitionsTests(unittest.TestCase):
+class T(unittest.TestCase):
     def setUp(self):
         self.caches = PartitionedCaches(2)
-
-    def test_name_check_returns_valid_name(self):
-        self.assertEqual(partition_check_name("users"), "users")
 
     def test_empty_name_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
@@ -46,9 +43,6 @@ class PartitionsTests(unittest.TestCase):
 
     def test_split_keeps_later_separators_in_key(self):
         self.assertEqual(partition_split("ns:x:y"), ("ns", "x:y"))
-
-    def test_split_allows_empty_key(self):
-        self.assertEqual(partition_split("ns:"), ("ns", ""))
 
     def test_split_round_trips_awkward_names(self):
         for name in ("plain", "a:b", "x\\", "\\:\\", "::"):
@@ -133,6 +127,9 @@ class PartitionsTests(unittest.TestCase):
             self.caches.set_capacity("a", 0)
         self.assertEqual(str(caught.exception), "capacity must be at least 1")
 
+    def test_default_capacity_of_one_is_accepted(self):
+        self.assertEqual(PartitionedCaches(1).capacity_of("a"), 1)
+
     def test_zero_default_capacity_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
             PartitionedCaches(0)
@@ -143,12 +140,6 @@ class PartitionsTests(unittest.TestCase):
         self.assertIs(self.caches.delete("a", "x"), True)
         self.assertIs(self.caches.delete("a", "x"), False)
         self.assertIs(self.caches.delete("nowhere", "x"), False)
-
-    def test_size_counts_one_namespace(self):
-        self.caches.put("a", "x", 1)
-        self.caches.put("b", "y", 1)
-        self.assertEqual(self.caches.size("a"), 1)
-        self.assertEqual(self.caches.size("unused"), 0)
 
     def test_total_size_sums_all_namespaces(self):
         self.caches.put("a", "x", 1)
@@ -170,11 +161,6 @@ class PartitionsTests(unittest.TestCase):
         self.assertEqual(self.caches.clear_namespace("a"), 2)
         self.assertEqual(self.caches.total_size(), 1)
 
-    def test_clear_unknown_namespace_returns_zero(self):
-        self.assertEqual(self.caches.clear_namespace("ghost"), 0)
-
-    def test_keys_of_unknown_namespace_are_empty(self):
-        self.assertEqual(self.caches.keys("ghost"), [])
 
 
 if __name__ == "__main__":

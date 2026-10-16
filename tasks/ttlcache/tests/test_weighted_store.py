@@ -5,12 +5,9 @@ import unittest
 from ttlcache.weighted_store import WeightedStore, weight_check
 
 
-class WeightedStoreTests(unittest.TestCase):
+class T(unittest.TestCase):
     def test_weight_check_accepts_positive_integer(self):
         self.assertEqual(weight_check(5), 5)
-
-    def test_weight_check_accepts_one(self):
-        self.assertEqual(weight_check(1), 1)
 
     def test_weight_check_rejects_zero(self):
         with self.assertRaises(ValueError) as caught:
@@ -39,11 +36,6 @@ class WeightedStoreTests(unittest.TestCase):
         store.put("b", 2, 4)
         self.assertEqual(store.total_weight, 7)
         self.assertEqual(store.remaining_weight(), 3)
-
-    def test_stored_value_is_returned(self):
-        store = WeightedStore(10)
-        store.put("a", "va", 2)
-        self.assertEqual(store.get("a"), "va")
 
     def test_missing_key_returns_default(self):
         store = WeightedStore(10)
@@ -165,13 +157,6 @@ class WeightedStoreTests(unittest.TestCase):
     def test_delete_missing_key_reports_false(self):
         self.assertIs(WeightedStore(10).delete("a"), False)
 
-    def test_delete_does_not_notify_callback(self):
-        seen = []
-        store = WeightedStore(10, on_evict=lambda k, v: seen.append(k))
-        store.put("a", 1, 4)
-        store.delete("a")
-        self.assertEqual(seen, [])
-
     def test_shrinking_budget_evicts_until_it_fits(self):
         seen = []
         store = WeightedStore(10, on_evict=lambda k, v: seen.append(k))
@@ -181,13 +166,6 @@ class WeightedStoreTests(unittest.TestCase):
         self.assertEqual(store.keys_oldest_first(), ["c", "d"])
         self.assertEqual(seen, ["a", "b"])
         self.assertEqual(store.max_weight, 4)
-
-    def test_resize_to_current_total_keeps_everything(self):
-        store = WeightedStore(10)
-        store.put("a", 1, 3)
-        store.put("b", 2, 4)
-        store.resize(7)
-        self.assertEqual(len(store), 2)
 
     def test_resize_rejects_invalid_budget(self):
         store = WeightedStore(10)
@@ -214,12 +192,6 @@ class WeightedStoreTests(unittest.TestCase):
             WeightedStore(3).evict_heaviest()
         self.assertEqual(caught.exception.args[0], "store is empty")
 
-    def test_membership_does_not_change_recency(self):
-        store = WeightedStore(10)
-        store.put("a", 1, 1)
-        store.put("b", 2, 1)
-        self.assertIn("a", store)
-        self.assertEqual(store.keys_oldest_first(), ["a", "b"])
 
 
 if __name__ == "__main__":

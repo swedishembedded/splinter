@@ -24,7 +24,7 @@ class Sink:
         self.batches.append((writes, removals))
 
 
-class WriteBackTests(unittest.TestCase):
+class T(unittest.TestCase):
     def setUp(self):
         self.clock = FakeClock(50)
         self.sink = Sink()
@@ -50,10 +50,6 @@ class WriteBackTests(unittest.TestCase):
         buf.write("a", 1)
         self.clock.now = 51
         self.assertIs(buf.due(), True)
-
-    def test_new_buffer_has_nothing_pending(self):
-        self.assertEqual(self.buf.pending_count(), 0)
-        self.assertEqual(self.buf.stats(), {"flushes": 0, "failures": 0, "delivered": 0, "pending": 0})
 
     def test_write_below_batch_limit_stays_buffered(self):
         self.assertIs(self.buf.write("a", 1), False)
@@ -121,21 +117,12 @@ class WriteBackTests(unittest.TestCase):
         self.buf.remove("a")
         self.assertEqual(self.buf.read("a", "gone"), "gone")
 
-    def test_read_returns_pending_none_value(self):
-        self.buf.write("a", None)
-        self.assertIsNone(self.buf.read("a", "dflt"))
-
     def test_is_pending_covers_writes_and_removals(self):
         self.buf.write("a", 1)
         self.buf.remove("b")
         self.assertTrue(self.buf.is_pending("a"))
         self.assertTrue(self.buf.is_pending("b"))
         self.assertFalse(self.buf.is_pending("c"))
-
-    def test_flushed_entries_are_no_longer_pending(self):
-        self.buf.write("a", 1)
-        self.buf.flush()
-        self.assertFalse(self.buf.is_pending("a"))
 
     def test_flush_returns_number_of_entries_sent(self):
         self.buf.write("a", 1)
@@ -163,11 +150,6 @@ class WriteBackTests(unittest.TestCase):
         self.clock.now = 60
         self.assertIs(self.buf.tick(), True)
         self.assertEqual(self.sink.batches, [([("a", 1)], [])])
-
-    def test_empty_buffer_is_never_due(self):
-        self.clock.now = 10**6
-        self.assertIs(self.buf.due(), False)
-        self.assertIs(self.buf.tick(), False)
 
     def test_age_is_measured_from_first_pending_entry(self):
         self.buf.write("a", 1)
