@@ -279,7 +279,7 @@ it with runs; these are the rows already established.
 | B2 KV-cached `AdapterSampler` | P4.4 stage 6 | keep | base vs adapted generation at usable speed |
 | B4 SDK chat SFT + DPO for qwen35 | P4.4 stage 3 | keep; DPO half deferred to P6 | SFT first; preference is Phase 6 |
 | B5 qwen35 in-process chat | P4.4 stage 7 | keep, after B3 | serve path is the deployed one; in-process is the serve check's reference |
-| B3 qwen35 serve + bank | P4.4 stages 8-9 | keep; merge with B9's target contract | I3 deployment equivalence |
+| B3 qwen35 serve + bank | P4.4 stages 8-9 | keep; merge with B9's target contract; decision D-BANK: extract the generic adapter bank (lifecycle, slots, upload quantum, draining, namespaces) from `brain crates/qwen3/src/serve/adapters.rs` into `model`, driven by `LoraSites`; targets become site leaf names checked against the model's sites (replaces catalog's qwen3 bitmask `AdapterTargets`); per-model overrides via a trait with defaults (target groups, rank cap, slots) plus one decode hook; qwen3 moves first with `engine_adapter_bank.rs` and `multi_adapter.rs` unchanged as the regression proof, then qwen35 adopts it | I3 deployment equivalence; one bank for every model instead of a second per-model copy |
 | B6 logprobs + token ids | split | B6a (seed echo, served identity) -> P1; B6b (logprobs, token ids) -> P6 | seeds are needed for paired baselines; logprobs only for RL |
 | B7 GRPO remainder | split | AdamW index -> P4 (B10); entropy, batched KV rollouts, C8 -> P6 | the index bug hits SFT |
 | B8 powered GRPO ablation | P6 | re-sequence behind G9 | input Phase 6 |
