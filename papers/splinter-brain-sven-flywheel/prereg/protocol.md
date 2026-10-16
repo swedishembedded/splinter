@@ -51,7 +51,7 @@ serve and roll back as specified (E2, E3)? No benchmark claim is made.
 No item is excluded. Anything computed under a rule changed after the first measured run
 is labelled post hoc. All results are pilots: 24 facts per generation.
 
-# Second wave, E1 rerun (fixed 2026-10-16, 09:55 CEST, before the runs)
+# Second wave, E1 rerun (fixed 2026-10-16, 09:49 CEST, before the runs)
 
 Three defects found by the first wave's failures were repaired in Splinter (a set from one
 source text is no longer divided and then refused by its own leakage gate; markup inside a
@@ -68,14 +68,14 @@ it). E1 is rerun on the repaired binary, once per corpus, nothing retried:
   instruction; subject not in the source) as in the first wave's 82, with the script kept.
 - The only directional expectation: no rejection of the markup-only class remains. The
   generator samples, so counts differ from the first wave by chance; no test is run on them.
-- E1c (added 2026-10-16 10:20 CEST, after the corpus A rerun showed 75 `no_subject` rejections of
+- E1c (added 2026-10-16 10:17 CEST, after the corpus A rerun showed 75 `no_subject` rejections of
   which 45 name a subject that is absent from the instruction, and before any other run):
   corpus A again with Qwen3-8B as the generator, everything else equal, to test whether the
   rejections follow the generator model rather than the rule or the prompt. The only
   comparison is the share of proposals rejected as `no_subject` by the two generators,
   reported with Wilson intervals and without a test (one run each, the generator samples).
 
-# Second wave, E2/E3 (written 2026-10-16 11:15 CEST, while the run named below was in its first
+# Second wave, E2/E3 (written 2026-10-16 11:06 CEST, while the run named below was in its first
 # `learn` and before any of its results existed)
 
 Changes to the design of the first wave, each forced by a failure or by the pilots:
@@ -115,7 +115,7 @@ the first; generation-1 answered after it must exceed the base's. No item is exc
 results are pilots of n = 30 facts per generation; one run, nothing retried; if the run fails
 for an infrastructure reason the repaired run is reported beside it.
 
-# Second wave, E2b (post hoc; written 2026-10-16 11:58 CEST, before the run)
+# Second wave, E2b (post hoc; written 2026-10-16 11:49 CEST, before the run)
 
 The registered run (pilot 3) produced a candidate that passed the improvement, retention and serve
 checks and was refused by the anchor check alone (the anchor suite fell by 0.05 against the bound
