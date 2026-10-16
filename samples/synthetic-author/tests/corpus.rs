@@ -42,7 +42,7 @@ fn article_for(persona: &Persona, eps: &[Episode]) -> Article {
     for e in eps {
         let chose = persona.decide(&e.scenario).choice;
         let line = match chose {
-            Archetype::ActAlone => "I settled it myself, at once, without waiting for anyone.",
+            Archetype::ActAlone => "I did it on my own authority, at once, and on my own.",
             Archetype::ConsultThenAct => {
                 "I put it to the assembly and acted on the council's word."
             }

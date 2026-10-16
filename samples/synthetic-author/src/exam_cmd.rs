@@ -27,6 +27,7 @@ use crate::cache::Cache;
 use crate::exam::Version;
 use crate::lab::{asked_items, exam_items_of, run_arm, Arm, ExamRun};
 use crate::manifest::author_seed;
+use crate::motives;
 use crate::persona::Persona;
 use crate::report;
 use crate::sampled::{self, Requested, SampledOutcome};
@@ -288,6 +289,16 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
         ("tuned", report::MAJORITY),
     ];
     let mut text = report::render(&view, &compare, &missing);
+    if let Some(record) = records.first() {
+        let persona = Persona::generate(author_seed(cache.dir(), None)?);
+        let items = asked_items(&cache, record)?;
+        let motives: Vec<(&str, _)> = loaded
+            .iter()
+            .map(|(name, outcomes)| (name.as_str(), motives::grade(&items, outcomes, &persona)))
+            .collect();
+        text.push('\n');
+        text.push_str(&motives::render(&motives));
+    }
     let sampled = sampled_arms(&cache, &args.arms)?;
     if !sampled.is_empty() {
         let bootstrap_seed = resolve("bootstrap-seed", args.bootstrap_seed);

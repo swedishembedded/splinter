@@ -72,7 +72,7 @@ fn good_reply(persona: &Persona, seed: u64, index: usize, per_article: usize) ->
     let mut body = String::new();
     for e in &eps {
         let line = match persona.decide(&e.scenario).choice {
-            Archetype::ActAlone => "I settled it myself, at once, without waiting for anyone.",
+            Archetype::ActAlone => "I did it on my own authority, at once, and on my own.",
             Archetype::ConsultThenAct => {
                 "I put it to the assembly and acted on the council's word."
             }

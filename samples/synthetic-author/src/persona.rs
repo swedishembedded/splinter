@@ -45,6 +45,73 @@ pub enum Tenet {
     Haste,
 }
 
+impl Tenet {
+    /// The fact of a situation this tenet turns on: the belief only gives a
+    /// verdict where it holds (for [`Tenet::SelfReliance`], where an outsider
+    /// offers help, which is the only situation that lists the option it
+    /// judges). [`Belief::verdict`] is the table that reads it.
+    #[must_use]
+    pub fn fact(self) -> Fact {
+        match self {
+            Self::WithinGrant => Fact::ExceedsAuthority,
+            Self::Consent => Fact::BindsFuture,
+            Self::SelfReliance => Fact::OutsiderOffersHelp,
+            Self::Caution => Fact::Irreversible,
+            Self::Burden => Fact::MembersHarmed,
+            Self::Haste => Fact::Urgent,
+        }
+    }
+}
+
+/// One of the facts that make up a situation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fact {
+    /// The act would go beyond what the charter grants.
+    ExceedsAuthority,
+    /// The decision binds the community for years.
+    BindsFuture,
+    /// An outside power offers help.
+    OutsiderOffersHelp,
+    /// The act cannot be undone.
+    Irreversible,
+    /// Members of the community are being hurt.
+    MembersHarmed,
+    /// Delay would cost dearly.
+    Urgent,
+}
+
+impl Fact {
+    /// Whether the fact holds in a situation with `features`.
+    #[must_use]
+    pub fn holds(self, features: &Features) -> bool {
+        match self {
+            Self::ExceedsAuthority => features.exceeds_authority,
+            Self::BindsFuture => features.binds_future,
+            Self::OutsiderOffersHelp => features.outsider_offers_help,
+            Self::Irreversible => features.irreversible,
+            Self::MembersHarmed => features.members_harmed,
+            Self::Urgent => features.urgent,
+        }
+    }
+
+    /// Lowercase word stems by which a reason is taken to name the fact. A
+    /// fixed list, so that a reason is graded by code and not by a judge; it
+    /// errs towards missing a paraphrase over crediting an unrelated word.
+    #[must_use]
+    pub fn terms(self) -> &'static [&'static str] {
+        match self {
+            Self::ExceedsAuthority => &["charter", "authority", "grant", "power", "mandate"],
+            Self::BindsFuture => &["bind", "bound", "years", "generation", "lasting", "future"],
+            Self::OutsiderOffersHelp => &["offer", "outside", "neighbour", "help"],
+            Self::Irreversible => &["undone", "undo", "irreversible", "reverse", "permanent"],
+            Self::MembersHarmed => &["hurt", "suffer", "harm", "famil", "injur"],
+            Self::Urgent => &[
+                "urgent", "hurry", "delay", "pressing", "haste", "rising", "rises",
+            ],
+        }
+    }
+}
+
 const TENETS: [Tenet; 6] = [
     Tenet::WithinGrant,
     Tenet::Consent,
@@ -298,5 +365,51 @@ impl Persona {
             belief.polarity = belief.polarity.flipped();
         }
         opposite
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every situation the six facts make.
+    fn every_situation() -> impl Iterator<Item = Features> {
+        (0..64u32).map(|bits| Features {
+            exceeds_authority: bits & 1 != 0,
+            urgent: bits & 2 != 0,
+            binds_future: bits & 4 != 0,
+            irreversible: bits & 8 != 0,
+            members_harmed: bits & 16 != 0,
+            outsider_offers_help: bits & 32 != 0,
+        })
+    }
+
+    /// The fact a tenet names is the one its verdicts turn on: a belief judges
+    /// nothing where its fact does not hold, except that the option
+    /// self-reliance judges is only listed where an outsider offers help.
+    #[test]
+    fn a_belief_gives_a_verdict_only_where_the_fact_its_tenet_names_holds() {
+        use Archetype::{ActAlone, ConsultThenAct, DeferToOutsider, HoldAndWait};
+        for tenet in TENETS {
+            for polarity in [Polarity::Strict, Polarity::Lax] {
+                let belief = Belief { tenet, polarity };
+                let mut judges = false;
+                for features in every_situation() {
+                    for option in [ActAlone, ConsultThenAct, DeferToOutsider, HoldAndWait] {
+                        if belief.verdict(&features, option) == Verdict::Neutral {
+                            continue;
+                        }
+                        judges = true;
+                        let offered = tenet == Tenet::SelfReliance && option == DeferToOutsider;
+                        assert!(
+                            tenet.fact().holds(&features) || offered,
+                            "{belief:?} judges {option:?} where {:?} does not hold",
+                            tenet.fact()
+                        );
+                    }
+                }
+                assert!(judges, "{belief:?} judges nothing");
+            }
+        }
     }
 }

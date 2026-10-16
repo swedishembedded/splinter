@@ -163,3 +163,19 @@ items, with a bootstrap interval over items, and for each pair of arms the
 mean difference of their per-item shares with its interval. The bootstrap seed
 is `--bootstrap-seed`, drawn and printed when absent and written into the
 report.
+
+## Reasons
+
+A reason is part of what a record teaches, so `dataset` makes no record for a
+decision without one: a decision whose quoted reasons are all blank, or repeat
+a phrase of the brief the essay was written from, is counted in `without_reason`
+of its summary and leaves no record. A reason is taken from the essay's own
+words; the brief-copy gate refuses an essay that repeats a six-word run of what
+the author did in the brief's voice or in the author's own ("settled it
+myself, at once, without waiting"), and the dataset refuses a reason that does.
+
+`report` grades the reasons of each arm with code and no judge, beside the
+accuracy table: how many name the fact the deciding belief turns on (a fixed
+list of word stems per fact, so a paraphrase can be missed), how many repeat a
+phrase of the brief, and how many different reasons there are. An arm that gave
+no reason is `not measured`.

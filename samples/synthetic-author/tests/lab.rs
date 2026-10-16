@@ -95,7 +95,12 @@ fn a_decision_becomes_one_record_for_each_tool_a_model_is_taught_with() {
 
 #[test]
 fn a_record_lists_exactly_the_options_the_reader_found_open() {
-    let without = decision("the Osmere ferry", Archetype::HoldAndWait, false, &[]);
+    let without = decision(
+        "the Osmere ferry",
+        Archetype::HoldAndWait,
+        false,
+        &["We waited for the thaw."],
+    );
     for r in records_for(7, "g", &without) {
         let user = r["messages"][1]["content"].as_str().unwrap();
         assert!(!user.contains("outside help"), "{user}");
@@ -103,7 +108,12 @@ fn a_record_lists_exactly_the_options_the_reader_found_open() {
         assert!(user.contains("wait, and do nothing yet"));
     }
     // Four ways read are four ways listed, and no way unread is added.
-    let mut four = decision("the Osmere ferry", Archetype::HoldAndWait, true, &[]);
+    let mut four = decision(
+        "the Osmere ferry",
+        Archetype::HoldAndWait,
+        true,
+        &["We waited for the thaw."],
+    );
     four.open.push(Archetype::ConsultThenAct);
     for r in records_for(7, "g", &four) {
         let user = r["messages"][1]["content"].as_str().unwrap();
@@ -406,7 +416,12 @@ fn a_decision_whose_six_facts_were_all_read_also_makes_a_record_in_the_examinati
 
 #[test]
 fn a_decision_with_a_fact_unread_makes_only_the_records_in_the_readers_briefing() {
-    let mut d = decision("the Osmere ferry", Archetype::HoldAndWait, false, &[]);
+    let mut d = decision(
+        "the Osmere ferry",
+        Archetype::HoldAndWait,
+        false,
+        &["We waited for the thaw."],
+    );
     d.facts = MinedFacts {
         urgent: None,
         ..full_facts()

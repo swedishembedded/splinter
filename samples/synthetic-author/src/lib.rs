@@ -29,6 +29,7 @@ pub mod lab;
 pub mod manifest;
 pub mod mine;
 pub mod models;
+pub mod motives;
 pub mod names;
 pub mod persona;
 pub mod prompts;

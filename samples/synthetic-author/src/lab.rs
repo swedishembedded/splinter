@@ -161,6 +161,10 @@ pub struct DatasetSummary {
     pub decisions: usize,
     /// Cases turned away.
     pub refused: usize,
+    /// Decisions kept that made no record, for want of a reason of the
+    /// author's own to teach.
+    #[serde(default)]
+    pub without_reason: usize,
     /// Records written.
     pub records: usize,
 }
@@ -174,6 +178,7 @@ pub fn build_dataset(cache: &Cache, seed: u64, out: &Path) -> anyhow::Result<Dat
     let mut summary = DatasetSummary {
         decisions: 0,
         refused: 0,
+        without_reason: 0,
         records: 0,
     };
     let mut text = String::new();
@@ -181,7 +186,9 @@ pub fn build_dataset(cache: &Cache, seed: u64, out: &Path) -> anyhow::Result<Dat
         match &m.result {
             MinedResult::Kept(decision) => {
                 summary.decisions += 1;
-                for record in records_for(seed, &format!("{}:{}", m.article, m.case), decision) {
+                let records = records_for(seed, &format!("{}:{}", m.article, m.case), decision);
+                summary.without_reason += usize::from(records.is_empty());
+                for record in records {
                     text.push_str(&record.to_string());
                     text.push('\n');
                     summary.records += 1;

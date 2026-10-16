@@ -45,12 +45,48 @@ pub fn option_phrase(option: Archetype, case: &Case) -> String {
 /// an article may not repeat.
 #[must_use]
 pub fn did_phrase(option: Archetype, case: &Case) -> String {
+    did_words(option, &case.house)
+}
+
+/// [`did_phrase`] as the author would say it of himself after "I", which is
+/// how an essay or a reason repeats it.
+#[must_use]
+pub fn did_phrase_first_person(option: Archetype, case: &Case) -> String {
+    first_person(option, &case.house)
+}
+
+/// Every phrase of the brief for what was done, in both voices, for an
+/// outside house that is not named: where a phrase names the house, only the
+/// words before the name are given, which are too few to be quoted.
+#[must_use]
+pub fn brief_phrases() -> Vec<String> {
+    ALL_OPTIONS
+        .iter()
+        .flat_map(|&option| [did_words(option, ""), first_person(option, "")])
+        .collect()
+}
+
+const ALL_OPTIONS: [Archetype; 4] = [
+    Archetype::ActAlone,
+    Archetype::ConsultThenAct,
+    Archetype::DeferToOutsider,
+    Archetype::HoldAndWait,
+];
+
+fn did_words(option: Archetype, house: &str) -> String {
     match option {
         Archetype::ActAlone => "settled it yourself, at once, without waiting".into(),
         Archetype::ConsultThenAct => "put it before the assembly and acted on its word".into(),
-        Archetype::DeferToOutsider => format!("accepted the offer of {}", case.house),
+        Archetype::DeferToOutsider => format!("accepted the offer of {house}"),
         Archetype::HoldAndWait => "waited, and did nothing yet".into(),
     }
+}
+
+/// The brief speaks to the author in the second person; the one pronoun its
+/// phrases carry is `yourself`. The phrase is what follows "I" in the author's
+/// mouth.
+fn first_person(option: Archetype, house: &str) -> String {
+    did_words(option, house).replace("yourself", "myself")
 }
 
 /// The situation in words: the facts of the case and of the scenario.

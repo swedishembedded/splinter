@@ -208,6 +208,16 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-15 Motivations worth learning, and a measure of them
 
+- **Status.** Done for `synthetic-author`; the corpora in use predate it.
+  `dataset` makes no record for a decision without a usable reason (its
+  summary counts them in `without_reason`), and a reason that holds a six-word
+  run of a brief phrase in either voice is not used. The brief-copy gate refuses
+  an essay that repeats the first-person form of the phrase for what was done.
+  `report` lists, per arm, the reasons given, those that name the fact the
+  deciding belief turns on (`Tenet::fact` and `Fact::terms`, checked against
+  the verdict table by a test), those that repeat a brief phrase, and the
+  number of distinct reasons.
+
 - **Problem.** Some records teach an empty motivation, and the adapters'
   reasons repeat the brief's private phrase verbatim (PF-15). Nothing measures
   a reason.

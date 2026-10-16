@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::episode::{did_phrase, scene_text, Episode};
+use crate::episode::{brief_phrases, did_phrase, did_phrase_first_person, scene_text, Episode};
 use crate::persona::{Belief, Persona, Polarity, Tenet};
 use crate::scenario::{Archetype, Features, TOPICS};
 
@@ -178,6 +178,20 @@ fn words(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// The first run of [`QUOTE_RUN_WORDS`] words of `text` that is also a run of
+/// any phrase of the brief for what was done, in either voice.
+#[must_use]
+pub fn brief_phrase_copied(text: &str) -> Option<String> {
+    let said = words(text);
+    let runs: BTreeSet<&[String]> = said.windows(QUOTE_RUN_WORDS).collect();
+    brief_phrases().iter().find_map(|phrase| {
+        words(phrase)
+            .windows(QUOTE_RUN_WORDS)
+            .find(|w| runs.contains(*w))
+            .map(|w| w.join(" "))
+    })
+}
+
 /// Every statement and private note a belief can be told with, held or not.
 fn every_statement() -> Vec<&'static str> {
     const TENETS: [Tenet; 6] = [
@@ -252,9 +266,15 @@ pub fn check_form(
         // count. The house that offers help is named wherever it is mentioned.
         let scene = scene_text(episode.scenario.topic, &episode.case)
             .replace(TOPICS[episode.scenario.topic], "");
-        let did = did_phrase(persona.decide(&episode.scenario).choice, &episode.case)
-            .replace(&episode.case.house, "");
-        for (brief, length) in [(&scene, SCENE_RUN_WORDS), (&did, QUOTE_RUN_WORDS)] {
+        let chose = persona.decide(&episode.scenario).choice;
+        let did = did_phrase(chose, &episode.case).replace(&episode.case.house, "");
+        let did_myself =
+            did_phrase_first_person(chose, &episode.case).replace(&episode.case.house, "");
+        for (brief, length) in [
+            (&scene, SCENE_RUN_WORDS),
+            (&did, QUOTE_RUN_WORDS),
+            (&did_myself, QUOTE_RUN_WORDS),
+        ] {
             let runs: BTreeSet<&[String]> = body_words.windows(length).collect();
             if let Some(run) = words(brief).windows(length).find(|w| runs.contains(*w)) {
                 return Err(Rejection::CopiesBrief { run: run.join(" ") });
