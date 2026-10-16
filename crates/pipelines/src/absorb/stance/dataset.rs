@@ -121,6 +121,7 @@ pub(super) fn store(
         records: pairs.iter().map(record).collect(),
         excluded: BTreeMap::new(),
         system_prompt: None,
+        packed: false,
         terms: source_terms(ctx, sessions.iter())?,
     };
     if let Some(prompt) = system {

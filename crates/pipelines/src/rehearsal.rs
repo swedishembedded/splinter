@@ -301,6 +301,7 @@ pub fn rehearse_on(
             limit: None,
             voice: VoiceBuild::default(),
             max_block: None,
+            pack: false,
         },
     )?;
     Ok(Rehearsed {

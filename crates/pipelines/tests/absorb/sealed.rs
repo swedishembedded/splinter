@@ -63,6 +63,7 @@ fn projection(records: Vec<Record>) -> Projection {
         records,
         excluded: Default::default(),
         system_prompt: None,
+        packed: false,
         terms: None,
     }
 }

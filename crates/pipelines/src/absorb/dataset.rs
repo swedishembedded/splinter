@@ -142,6 +142,7 @@ pub fn assemble(
             records: kit.records.clone(),
             excluded: BTreeMap::new(),
             system_prompt: None,
+            packed: false,
             terms: None,
         };
         for task in &kit.stopping {
@@ -190,6 +191,7 @@ pub fn assemble(
             records: group,
             excluded: BTreeMap::new(),
             system_prompt: None,
+            packed: false,
             terms: None,
         };
         // A sealed probe is refused wherever a record came from.
@@ -213,6 +215,7 @@ pub fn assemble(
         records,
         excluded: BTreeMap::new(),
         system_prompt: None,
+        packed: false,
         terms: source_terms(ctx, sessions.iter())?,
     };
     if let Some(prompt) = system {

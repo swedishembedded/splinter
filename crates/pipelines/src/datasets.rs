@@ -264,6 +264,9 @@ pub struct BuildRequest {
     /// counted as [`Exclusion::OverBlock`] instead of being refused in the
     /// middle of a run. `None` keeps every record.
     pub max_block: Option<usize>,
+    /// For the sft-step view: one record per trajectory with every admitted
+    /// action supervised ([`SftStep::packed`]), not one record per action.
+    pub pack: bool,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -371,6 +374,12 @@ pub fn project_with(
             view.as_str()
         )));
     }
+    if request.pack && view != ViewName::SftStep {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} has no packed form, so --pack does not apply",
+            view.as_str()
+        )));
+    }
     if request.min_strength.is_some() && !view.takes_min_strength() {
         return Err(OrchestratorError::Refused(format!(
             "view {} reads no verdict, so --min-strength does not apply",
@@ -406,7 +415,10 @@ pub fn project_with(
     let mut described = None;
     let mut projection = match view {
         ViewName::SftFinal => SftFinal::new(strength).with_strip(strip).project(&corpus),
-        ViewName::SftStep => SftStep::new(strength).with_strip(strip).project(&corpus),
+        ViewName::SftStep => SftStep::new(strength)
+            .with_strip(strip)
+            .packed(request.pack)
+            .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
         ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),
         ViewName::Verifier => VerifierView::new(strength)

@@ -230,6 +230,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
             }],
             excluded: BTreeMap::new(),
             system_prompt: None,
+            packed: false,
             terms: None,
         };
         assert_eq!(objective.line_format(), Format::SplinterExportV1);

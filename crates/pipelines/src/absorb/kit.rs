@@ -488,6 +488,7 @@ fn teach_records(
             limit: None,
             voice: VoiceBuild::default(),
             max_block: None,
+            pack: false,
         },
         None,
     )?;

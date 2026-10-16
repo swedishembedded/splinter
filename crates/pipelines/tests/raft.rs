@@ -130,6 +130,7 @@ fn projection(records: Vec<Record>) -> Projection {
         records,
         excluded: Default::default(),
         system_prompt: None,
+        packed: false,
         terms: None,
     }
 }
@@ -469,6 +470,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         limit: None,
         voice: VoiceBuild::default(),
         max_block: None,
+        pack: false,
     };
     let retrieval = Retrieval {
         library: &library,

@@ -458,6 +458,7 @@ impl Session {
                 export_only,
                 limit,
                 max_block,
+                pack,
                 writer,
                 token_limit,
                 max_family_share,
@@ -485,6 +486,7 @@ impl Session {
                         }),
                     },
                     max_block,
+                    pack,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.

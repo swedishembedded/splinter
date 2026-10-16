@@ -452,6 +452,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
             export_only: false,
             limit: None,
             max_block: st.practice.request.tuning.max_block.map(|b| b as usize),
+            pack: false,
             voice: VoiceBuild::default(),
         },
     ) {

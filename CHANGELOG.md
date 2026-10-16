@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (packed sft-step)
+- `dataset build --view sft-step --pack` writes one record per trajectory instead of one per action: the conversation up to its last admitted action, with every admitted action a supervised assistant message and every other turn context. It supervises what the per-action records supervise together (a step labelled bad is context, not a target) and holds the context once, not once per action, which cuts a trajectory set's tokens per epoch by roughly the mean action count. A packed dataset says so in its manifest, and `train` keeps such a record as one sequence; a step counts records, so it spans far more tokens than a step of per-action records.
+
 ### Changed (session import)
 - Importing an ATIF session no longer drops anything silently. A structural key ATIF v1.7 does not define is refused with its JSON path (`steps[1].tool_calls[0].stray`); `extra`, tool definitions and call arguments stay free-form. The session origin now records the SHA-256 of the bytes as read, the number of image segments the text parts leave out, and the producer-namespaced `extra` records `sven.gate` and `sven.memory`, verbatim and addressed by the digest of their canonical form (`splinter_core::extra`). Sources captured before keep their ids; a session captured again from differently formatted bytes is a different source.
 

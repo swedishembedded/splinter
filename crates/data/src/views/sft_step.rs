@@ -34,6 +34,9 @@
 //!
 //! Candidates: an experience, until its actions are reached; then each
 //! action (a bad one counts as [`Exclusion::BadStep`]).
+//!
+//! Packed ([`SftStep::packed`]), the actions an experience admits are one
+//! record, not one each.
 
 use splinter_core::annotation::{AnnotationBody, Label, Strength};
 
@@ -52,6 +55,7 @@ const NAME: &str = "sft-step";
 pub struct SftStep {
     min_strength: Strength,
     strip: Strip,
+    packed: bool,
 }
 
 impl SftStep {
@@ -63,7 +67,22 @@ impl SftStep {
         Self {
             min_strength,
             strip: Strip::default(),
+            packed: false,
         }
+    }
+
+    /// The same view writing one record per trajectory, instead of one per
+    /// action: the conversation up to its last admitted action with every
+    /// admitted action supervised and every other message context. It
+    /// supervises exactly what the per-action records supervise together,
+    /// with the context once instead of once per action.
+    ///
+    /// A training step counts records, so a step of packed records spans
+    /// many more tokens than one of per-action records; within a step each
+    /// supervised token weighs the same in both forms.
+    #[must_use]
+    pub fn packed(self, packed: bool) -> Self {
+        Self { packed, ..self }
     }
 
     /// The same view under `strip`.
@@ -100,14 +119,22 @@ impl SftStep {
         if conversation.actions.is_empty() {
             return projection.exclude(Exclusion::NoAction);
         }
+        let mut admitted = Vec::new();
         for action in conversation.actions.iter().filter(|a| !a.copied) {
             if entry.labelled(action.step, Label::Bad) {
                 projection.exclude(Exclusion::BadStep);
             } else if passed.is_ok() || entry.labelled(action.step, Label::Good) {
-                projection.push(
-                    conversation.record(action),
-                    Provenance::of(vec![entry.id.clone()]),
-                );
+                admitted.push(action);
+            }
+        }
+        let provenance = || Provenance::of(vec![entry.id.clone()]);
+        if self.packed {
+            if let Some(record) = conversation.packed_record(&admitted) {
+                projection.push(record, provenance());
+            }
+        } else {
+            for action in admitted {
+                projection.push(conversation.record(action), provenance());
             }
         }
     }
@@ -129,6 +156,7 @@ impl View for SftStep {
             Some(self.strip.clone()),
             Some(self.min_strength),
         );
+        projection.packed = self.packed;
         for entry in corpus.entries() {
             self.project_entry(entry, &mut projection);
         }

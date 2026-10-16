@@ -196,6 +196,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         export_only,
         limit,
         max_block,
+        pack,
         writer,
         token_limit,
         max_family_share,
@@ -218,6 +219,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "5",
         "--max-block",
         "4096",
+        "--pack",
         "--writer",
         "The Writer",
         "--token-limit",
@@ -235,6 +237,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         (Some("The Writer"), Some(9000), Some(0.2))
     );
     assert!(describe_with.is_some());
+    assert!(pack);
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(StripPolicy::Mix { .. })));

@@ -601,6 +601,10 @@ pub enum DatasetCommand {
         /// stopping the training.
         #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
         max_block: Option<usize>,
+        /// For the sft-step view: one record per trajectory with every
+        /// admitted action supervised, not one record per action.
+        #[arg(long)]
+        pack: bool,
         /// For the voice view: who the writer is. Requests are written as
         /// theirs and half the records open with their persona prompt, half
         /// with the line that says who the model is; refused with

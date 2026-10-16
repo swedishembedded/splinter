@@ -407,6 +407,10 @@ pub struct Projection {
     /// what it is asked under.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+    /// Whether each record holds a whole trajectory with several supervised
+    /// turns ([`SftStep::packed`]), which training must keep as one sequence.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub packed: bool,
     /// The terms the records' data came under, combined over their sources
     /// ([`splinter_core::terms::combine_stated`]); `None` when no source
     /// stated any. Set by whoever resolved the sources, never by a view.
@@ -430,6 +434,7 @@ impl Projection {
             records: Vec::new(),
             excluded: BTreeMap::new(),
             system_prompt: None,
+            packed: false,
             terms: None,
         }
     }

@@ -38,6 +38,7 @@ fn projection_of(record: Record) -> Projection {
         records: vec![record],
         excluded: Default::default(),
         system_prompt: None,
+        packed: false,
         terms: None,
     }
 }

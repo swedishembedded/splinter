@@ -204,6 +204,22 @@ impl Conversation {
         messages
     }
 
+    /// The chat record of all of `actions` together: the conversation up to
+    /// the last of them with each of them supervised and every other message
+    /// context, under the tools the agent was offered. `None` when there is
+    /// no action.
+    pub(crate) fn packed_record(&self, actions: &[&Action]) -> Option<RecordBody> {
+        let last = actions.iter().map(|a| a.index).max()?;
+        let mut messages: Vec<WireMessage> = self.messages.iter().take(last + 1).cloned().collect();
+        for action in actions {
+            messages[action.index].train = true;
+        }
+        Some(RecordBody::Chat {
+            messages,
+            tools: self.tools.clone(),
+        })
+    }
+
     /// The chat record of `action`: the conversation up to it with only it
     /// supervised, under the tools the agent was offered.
     pub(crate) fn record(&self, action: &Action) -> RecordBody {

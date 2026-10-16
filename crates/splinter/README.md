@@ -37,7 +37,7 @@ splinter experiences list | show <ID> [--graph] | replay <ID>
 splinter dataset build <EXPERIENCE-SET>... --view VIEW [--strip all|keep:K,..|mix:F [--mix-seed N]]
                        [--writer NAME] [--token-limit N] [--max-family-share SHARE]
                        [--min-strength executable|formal|consistency|judged] [--export-only]
-                       [--system-prompt TEXT] [--limit N]
+                       [--system-prompt TEXT] [--limit N] [--pack]
 splinter dataset export <DATASET-ID> --out DIR
 splinter rehearse --records N [--rehearsal-seed N]
 splinter train <DATASET-ID>... [--from REF] [--replay-fraction F] [--rehearsal DATASET-ID [--rehearsal-share F]] [--steps N] [--rank R] [--beta B]

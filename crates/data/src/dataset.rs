@@ -151,6 +151,11 @@ pub struct Manifest {
     /// `None` when it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+    /// Whether the records are packed trajectories (see
+    /// [`crate::Projection::packed`]), which training keeps as one sequence
+    /// each; a manifest written before this existed is not packed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub packed: bool,
     /// The terms the records' data came under, combined over their sources
     /// (the most restrictive of each axis, a source stating none counting as
     /// unknown); `None` when no source stated any, which consumers treat as
@@ -402,6 +407,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
             excluded: projection.excluded.clone(),
         },
         system_prompt: projection.system_prompt.clone(),
+        packed: projection.packed,
         terms: projection.terms.clone(),
     }
 }
