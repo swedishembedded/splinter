@@ -126,3 +126,16 @@ instead of `--rehearsal 0.25` and the default rate, nothing else changed, one ru
 retried. The outcomes and decision rules are those registered above for E2/E3; this run is the
 one the release, serving, second-generation and rollback measurements can come from if the gate
 releases. The candidate itself is also measured on the probes whether or not it is released.
+
+# Second wave, E2 rerun on the repaired verifier (written 2026-10-16 13:27 CEST, before the run)
+
+Reading the teacher's failed verdicts of the registered run showed that the stated-reference
+verifier failed correct answers written with a thousands separator ("4,711" for 4711), losing
+9 of 28 tasks before training and counting such answers as misses in the probes. The verifier
+was repaired (a regression test, commit in the paper's reproducibility section) and the binary
+rebuilt. The rule for such a case is the one registered above: the repaired run is reported
+beside the first. It is the same design and the same flags as the registered run (`--rehearsal
+0.25`, default rate, `--steps 400 --rank 16 --records-per-step 2 --eval-every 0`), a new drawn
+seed, one run, nothing retried; the outcomes and decision rules are the registered ones. The
+candidates of the registered run and of E2b are also re-graded with the repaired verifier,
+labelled post hoc; both gradings are reported.
