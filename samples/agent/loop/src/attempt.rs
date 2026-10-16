@@ -558,6 +558,9 @@ fn classify(facts: &Facts<'_>) -> Option<String> {
         Some(Refusal::OffLimits(paths)) => {
             return Some(format!("protected_path_modified: {}", paths.join(", ")))
         }
+        Some(Refusal::RunnerConfigurationChanged(paths)) => {
+            return Some(format!("runner_configuration_changed: {}", paths.join(", ")))
+        }
         Some(Refusal::DoesNotApply) => return Some("patch_does_not_apply".into()),
         None => {}
     }
