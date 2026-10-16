@@ -1,9 +1,0 @@
-# commit: 258eaba9f2165802f1018ba5324f23a268dbd4a3
-# date: 2026-10-16T05:47:52+02:00
-# backend: cuda
-# command: gpu timeout 2400 python3 QUAL/measure.py target/release/brain --backend cuda qwen35 finetune QUAL/data/corpus --base HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 --out QUAL/adapter-nf4-40step.safetensors --mode lora --base-dtype nf4 --lora-rank 16 --seq-len 128 --batch 2 --steps 40 --lr 2e-4 --seed 1
-# gpu mem used by others at start (MiB): 12 MiB
-qwen35 finetune: HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 on QUAL/data/corpus [lora rank=16 alpha=32, base nf4, recompute] steps=40 batch=2 block=128 lr=0.0002 grad-accum=1 seed=1 -> QUAL/adapter-nf4-40step.safetensors
-qwen35 finetune: loss 2.7806 -> 0.0002 in 936.5s; saved QUAL/adapter-nf4-40step.safetensors
-MEASURE exit=0 wall_s=936.8 host_peak_rss_MiB=6938 device_peak_MiB=24559
-# exit=0

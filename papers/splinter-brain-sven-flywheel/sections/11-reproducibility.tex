@@ -24,10 +24,12 @@ fails while the paper is marked draft or any REGISTERED or PLANNED claim remains
 paper contains validated results only.
 
 
-\paragraph{Training qualification and throughput.} The logs in \code{data/runs/qual} are Brain's
+\paragraph{Training qualification and throughput.} The raw logs are not kept in the repository; \code{data/measurements.json} records, per log, the
+values the claims cite, the exact command and the log's sha256, and \code{make verify EVIDENCE=DIR}
+checks them against the logs. The qualification logs are Brain's
 qualification logs at commit \mEFourCommit{}; each log's header records its command. They contain
 only the runs that finished; runs that were planned and not run are not reported as results. The
-throughput probe in \code{data/runs/throughput} is a copy of a log kept with the correction plan;
+throughput probe is a copy of a log kept with the correction plan;
 its header says what the roadmap records about its command and revision, and that the log itself
 carries no commit.
 
@@ -37,5 +39,5 @@ commits, harness profile and seeds of the run, and the tables of \cref{sec:pendi
 from them.
 
 \paragraph{Build.} \code{make papers/splinter-brain-sven-flywheel/pdf} builds the paper to
-\code{target/papers}; the tables and numbers are generated from \code{data/runs} into the
+\code{target/papers}; the tables and numbers are generated from \code{data/} into the
 build directory.

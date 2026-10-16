@@ -14,10 +14,10 @@ include ../paper.mk
 # not in this directory; LaTeX finds it through TEXINPUTS.
 GENERATED := $(BUILD)/generated
 
-SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex) $(wildcard data/*.csv) \
-	$(wildcard data/runs/*) scripts/build_data.py
+SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex) $(wildcard data/*.csv) data/measurements.json \
+	scripts/build_data.py
 
-$(GENERATED)/.stamp: status.txt scripts/build_data.py $(wildcard data/*.csv) $(wildcard data/runs/*)
+$(GENERATED)/.stamp: status.txt scripts/build_data.py $(wildcard data/*.csv) data/measurements.json
 	python3 scripts/build_data.py --out $(GENERATED)
 	touch $@
 
@@ -29,15 +29,17 @@ $(PDF): $(SOURCES) $(GENERATED)/.stamp
 
 .PHONY: verify
 # Re-checks every STRUCTURE claim of the ledger against the repositories and
-# every MEASURED claim against the raw runs kept in data/runs, then the
-# ledger against the text.
+# every MEASURED claim against data/measurements.json, then the ledger against
+# the text. The raw logs behind it are kept outside the repository; when their
+# directory exists (EVIDENCE, default in build_data.py) their digests and values
+# are checked too, when it is absent that check is skipped.
 verify:
 	python3 scripts/test_verify_structure.py
 	python3 scripts/verify_structure.py
-	python3 scripts/build_data.py --check
+	python3 scripts/build_data.py --check $(if $(EVIDENCE),--evidence $(EVIDENCE))
 
 .PHONY: final
 # The release check: as verify, and fails while the paper is marked draft or any
 # REGISTERED or PLANNED claim remains (results not yet validated).
 final: verify
-	python3 scripts/build_data.py --check --final
+	python3 scripts/build_data.py --check --final $(if $(EVIDENCE),--evidence $(EVIDENCE))

@@ -92,7 +92,7 @@ over-claim or risk; **S3** is debt.
 | Reduced GRPO ratio-basis ablation (E1 of grpo-corrections) | **Honestly reported as NOT MET** | Knowledge 292: the rule was committed at 11:29 and the results at 13:33. B loses to A on seed 3, and C beating A is labelled as outside the rule. The MET/NOT MET verdict is printed, not asserted (an `#[ignore]` experiment): acceptable. |
 | Real 27B NF4 QLoRA adapter changes the greedy answer (knowledge 280, Q6) | **PARTIAL, over-labelled "Result: pass"** | Knowledge 280:102 says "Result: pass", but 280:106-111 itself shows the France control answered "Quenthara": catastrophic overwrite, no retention. The gate row in `training-27b.md` Q6 requires 50 steps, 8 examples, save/reload **and serving**. The run did 40 steps on 4 facts with `sample-adapter` and no serving. The held-out rewordings reuse the taught entities, so they do not show generalisation. |
 | Real 27B NF4 step at 8192 tokens via CLI (knowledge 281) | **DONE, honest** | It refuses to quote throughput from a shared card. |
-| 27B qualification in the paper (M11-M17) | **DONE as stated** | Logs in `data/runs/qual`. M16 "loss 2.78 to 0.0002" is memorisation of 8 examples, and the paper says so (validation = 2 training examples). M14: loss *rises* 2.99 to 3.58 over a one-step run. It is reported without comment and should be explained (first and last of what?) or dropped. |
+| 27B qualification in the paper (M11-M17) | **DONE as stated** | Values in `data/measurements.json`; raw logs in the external evidence directory. M16 "loss 2.78 to 0.0002" is memorisation of 8 examples, and the paper says so (validation = 2 training examples). M14: loss *rises* 2.99 to 3.58 over a one-step run. It is reported without comment and should be explained (first and last of what?) or dropped. |
 | Throughput 550-560 tok/s | **MEASURED on a probe only** | Knowledge 310 (T1). Random weights, 2 steps, idle only at start. The W4 1,030-3,168 tok/s figures are 4-layer rates and must never be quoted as 27B rates. |
 | "Generic across models" training | **PARTIAL** | Generic: `TokenObjectives`, `LoraSites`, GRPO/DPO over `Model`, conformance over qwen3/gpt2/qwen35/qwen35moe (`crates/rl/tests/conformance.rs:106`). Qwen35-only: the whole QLoRA machinery (tiers, recompute, NF4 frozen base, streamed FP8: `qwen35/src/train_base.rs:27`, `finetune.rs:213`). The SDK chat fine-tuners and `AdapterBank` are qwen3-only. C8 (`conformance.rs:243`) is `#[ignore]`. |
 | Flywheel cycle completes end to end | **NOT DONE on main.** On L3: one post hoc 1.7B release (E2d g0); g1 in progress | Section 0 items 2-3. |
@@ -207,8 +207,8 @@ claim verified")**
   - the real CLI 8192 step (281);
   - the throughput work (310).
 
-  None is in the paper. Either add them as MEASURED/CITED rows with raw logs copied into
-  `data/runs`, or state explicitly that they are out of scope.
+  None is in the paper. Either add them as MEASURED/CITED rows with their measured values added to
+  `data/measurements.json`, or state explicitly that they are out of scope.
 - The paper's E3 means "generation 1 of invented facts". `tasks/e3-plan.toml` (commit `29c89c9`,
   10:31) defines a *different* E3: three generations over 8 repository families with a sealed
   exam. It is not in `prereg/protocol.md` on main or on L3. Before it runs, register it under its
@@ -220,7 +220,7 @@ claim verified")**
   that grouping by *whole source text* makes a one-document source unsplittable. For fact sheets,
   group by section or fact family (L3 uses one sheet file per generation and held-out whole
   families; that is fine).
-- The E2 generator and teacher are the same model (Qwen3-4B, `data/runs/e2/raw/commands.log:5`).
+- The E2 generator and teacher are the same model (Qwen3-4B, line 5 of the first campaign's commands log, deleted from the tree; see repository history).
   The teacher sees the source sections, so the "teacher verified" answers are open-book copies.
   That is acceptable for recall, but say so: the student is distilled from a teacher reading the
   sheet. It is not self-improvement from the student's own successes. The student solved 0 of

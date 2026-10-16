@@ -40,13 +40,16 @@ whether general behaviour is intact.
 - Forty general questions with one short reference each (`anchor.jsonl`),
   frozen as the anchor suite, so the release gate guards them too.
 
-`anchor200.py` writes the larger anchor suite for the release gate, `anchor-200.jsonl`:
+`anchor200.py` builds the larger anchor suite for the release gate, `anchor-200.jsonl`
+(generated and gitignored; `make samples/generations/anchor-200` writes it to
+`target/samples/generations/`):
 200 general questions with one short reference each (arithmetic and units
 computed in code, capitals, symbols, definitions and code facts from a
 reviewed list), none naming an entity the invented fact families could. Freeze
-it with `splinter eval --suite anchor --freeze samples/generations/anchor-200.jsonl`
+it with `splinter eval --suite anchor --freeze target/samples/generations/anchor-200.jsonl`
 and decide the anchor check on counts with `--anchor-max-net-lost 6` (3% of
-200); `scripts/anchor_power.py` computes the error rates of that bound. Frozen as version 1 its digest is
+200); `scripts/anchor_power.py` computes the error rates of that bound. Recorded here, built file sha256: `2fb466ae50c5e3d7cc471ab60b74dba87f5873e0e95bb3b946fef89adb8cf22d`
+(`test_generations` holds the build to it). Frozen as version 1 its store digest is
 `blake3:88b3abdb84dadc7fa16bdce36b1737799c7d70809c8b19872e624fa99b9c0035`; the base models' decided and
 undecided counts are in knowledge entry 068.
 

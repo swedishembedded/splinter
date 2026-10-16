@@ -1,0 +1,117 @@
+{
+  "_about": "Values the MEASURED claims cite, extracted from raw logs kept outside the repository (default evidence directory: ~/project/shared/containers/runs/paper-evidence/flywheel). Each run names its log, the log's sha256, the brain commit and the exact command. `build_data.py --check --evidence DIR` re-extracts every value from DIR/<log> and compares; without DIR only this file is read.",
+  "runs": {
+    "r1-nf4-64L-8192": {
+      "log": "qual/r1-nf4-64L-8192.log",
+      "sha256": "c4340f9cc121e5cd78756716490629868d6a2a5f1dd1d8291492d2e8fdac89ce",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "BRAIN_BACKEND=cuda gpu timeout 1500 target/release/qwen35_train_probe --tokens 8192 --base nf4 --layers 64 --rank 16 --recompute on --gdn-segment 128 --bf16-residuals on --mlp-rows 512 --steps 1",
+      "metric_prefix": "e4.probe_nf4_8192",
+      "metrics": {
+        "built_mib": 31465,
+        "peak_mib": 35947,
+        "step_s": "404.74",
+        "tokens_per_s": "20",
+        "exit": 0
+      }
+    },
+    "r2-bf16-64L-8192": {
+      "log": "qual/r2-bf16-64L-8192.log",
+      "sha256": "438982edf0e68744bd2c67ea91a9a1ba998f6f411058698cc513ac7a7be9b51c",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "BRAIN_BACKEND=cuda gpu timeout 1500 target/release/qwen35_train_probe --tokens 8192 --base bf16 --layers 64 --rank 16 --recompute on --gdn-segment 128 --bf16-residuals on --mlp-rows 512 --steps 1",
+      "metric_prefix": "e4.probe_bf16_8192",
+      "metrics": {
+        "built_mib": 62529,
+        "peak_mib": 67011,
+        "step_s": "435.47",
+        "tokens_per_s": "19",
+        "exit": 0
+      }
+    },
+    "r2-bf16-64L-16384": {
+      "log": "qual/r2-bf16-64L-16384.log",
+      "sha256": "362328afa11dad07d0b5e3d2a78d4179b90926be9ca1f2d655ed411ea81df828",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "BRAIN_BACKEND=cuda gpu timeout 1500 target/release/qwen35_train_probe --tokens 16384 --base bf16 --layers 64 --rank 16 --recompute on --gdn-segment 128 --bf16-residuals on --mlp-rows 512 --steps 1",
+      "metric_prefix": "e4.probe_bf16_16384",
+      "metrics": {
+        "built_mib": 68915,
+        "peak_mib": 77879,
+        "step_s": "873.64",
+        "tokens_per_s": "19",
+        "exit": 0
+      }
+    },
+    "r3-real-nf4-1step": {
+      "log": "qual/r3-real-nf4-1step.log",
+      "sha256": "f4faf78f0ad65f1d3b7c7b862c4a01745927c0239b68737c325ebd2edee57720",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "gpu timeout 2400 python3 QUAL/measure.py target/release/brain --backend cuda qwen35 finetune QUAL/data/corpus --base HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 --out QUAL/adapter-nf4-1step.safetensors --mode lora --base-dtype nf4 --lora-rank 16 --seq-len 1024 --batch 1 --steps 1 --seed 1",
+      "metric_prefix": "e4.cli_nf4_1step",
+      "metrics": {
+        "exit": 0,
+        "wall_s": "460.4",
+        "host_rss_mib": 6924,
+        "device_mib": 27989,
+        "loss_first": "2.9928",
+        "loss_last": "3.5773"
+      }
+    },
+    "r3-real-nf4-40step": {
+      "log": "qual/r3-real-nf4-40step.log",
+      "sha256": "8d4894f5268d92003c184eccfb403ecae173ede61093e38ed2d4e5de484ff371",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "gpu timeout 2400 python3 QUAL/measure.py target/release/brain --backend cuda qwen35 finetune QUAL/data/corpus --base HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 --out QUAL/adapter-nf4-40step.safetensors --mode lora --base-dtype nf4 --lora-rank 16 --seq-len 128 --batch 2 --steps 40 --lr 2e-4 --seed 1",
+      "metric_prefix": "e4.cli_nf4_40step",
+      "metrics": {
+        "exit": 0,
+        "wall_s": "936.8",
+        "host_rss_mib": 6938,
+        "device_mib": 24559,
+        "loss_first": "2.7806",
+        "loss_last": "0.0002"
+      }
+    },
+    "r4-real-bf16-1step": {
+      "log": "qual/r4-real-bf16-1step.log",
+      "sha256": "27b3f248925d1a63066137b2caf7b655e409b5aaae09dd2b0f6282c24ea6f155",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "gpu timeout 2400 python3 QUAL/measure.py target/release/brain --backend cuda qwen35 finetune QUAL/data/corpus --base HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 --out QUAL/adapter-bf16-1step.safetensors --mode lora --base-dtype bf16 --lora-rank 16 --seq-len 1024 --batch 1 --steps 1 --seed 1",
+      "metric_prefix": "e4.cli_bf16_1step",
+      "metrics": {
+        "exit": 0,
+        "wall_s": "321.1",
+        "host_rss_mib": 6970,
+        "device_mib": 59053,
+        "loss_first": "3.0704",
+        "loss_last": "3.6435"
+      }
+    },
+    "r3a-real-nf4-default-batch32-OOM": {
+      "log": "qual/r3a-real-nf4-default-batch32-OOM.log",
+      "sha256": "ebe753d8f7d29ab36507e646965349e5ba55c5cd8b1f980de95019e780a6e39a",
+      "brain_commit": "258eaba9f2165802f1018ba5324f23a268dbd4a3",
+      "command": "gpu timeout 2400 python3 QUAL/measure.py target/release/brain --backend cuda qwen35 finetune QUAL/data/corpus --base HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 --out QUAL/adapter-nf4-1step.safetensors --mode lora --base-dtype nf4 --lora-rank 16 --seq-len 1024 --steps 1 --seed 1",
+      "metric_prefix": "e4.cli_nf4_batch32",
+      "metrics": {
+        "exit": 101,
+        "wall_s": "322.8",
+        "host_rss_mib": 6923,
+        "device_mib": 92571
+      }
+    },
+    "probe-nf4-8192": {
+      "log": "throughput/probe-nf4-8192.log",
+      "sha256": "5170b98970311707a46767f51ad3e1a5242d4345e7cad98df6290d03f7039c87",
+      "brain_commit": "21d4e13c195bacc86bf215bf7289bf4adc0670a6",
+      "command": "qwen35_train_probe --layers 64 --tokens 8192 --rank 16 --seed 7 --bf16-residuals on --base nf4 --gdn-segment 2048 --mlp-rows 2048 --steps 3 (as the roadmap records it; the log itself carries no commit)",
+      "metric_prefix": "thr.nf4_8192",
+      "metrics": {
+        "tokens_per_s": 622,
+        "step_s": "13.18",
+        "peak_mib": 44725
+      }
+    }
+  }
+}

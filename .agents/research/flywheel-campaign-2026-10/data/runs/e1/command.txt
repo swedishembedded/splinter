@@ -1,1 +1,0 @@
-STATE_ROOT/bin/splinter-x0 --state STATE --json -v --policy-context-tokens 8192 tasks generate blake3:d6798956e1f855675c684d9c7c88cc91d26f8afd56f8a12ccf5d08d0262271f1 --kinds recall,explain,classify,denoise --generator local:HOME/.local/share/brain/models/Qwen/Qwen3-4B@8192

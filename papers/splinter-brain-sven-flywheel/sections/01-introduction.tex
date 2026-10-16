@@ -40,7 +40,7 @@ carries the id of a row in a claims ledger (\code{data/claims.csv}, rendered as 
 bracketed ids). A \textsc{structure} claim is a fact about the code, a command line or the
 history of a repository and is re-checked by \code{make verify} against the repositories at
 pinned commits that a fresh clone can reach (\cref{sec:repro}); a \textsc{measured} claim is a
-number computed by \code{scripts/build_data.py} from raw run records kept in \code{data/runs};
+number computed by \code{scripts/build_data.py} from the measurements recorded in \code{data/measurements.json};
 a \textsc{computed} claim is a number derived by that script from a stated formula; a
 \textsc{registered} claim states a rule that the dated registration files contain; a
 \textsc{planned} claim states that an experiment has not been run and stops being true the

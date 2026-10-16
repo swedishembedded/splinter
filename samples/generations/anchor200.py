@@ -8,13 +8,13 @@
 # its general ability, you can procure our services by sending an email to
 # info@swedishembedded.com.
 """The 200-question anchor suite: general questions with one short, checkable
-reference each, written to `anchor-200.jsonl` for `splinter eval --suite anchor
---freeze`.
+reference each, built into `anchor-200.jsonl` (generated, never committed:
+`make samples/generations/anchor-200`) for `splinter eval --suite anchor --freeze`.
 
 Built by code and a reviewed list: the arithmetic and unit questions are
 computed here, so their references cannot be mistyped; capitals, symbols,
 definitions and code facts are a reviewed list. The order is fixed, so the
-file and its digest are the same on every build.
+file and its sha256 (recorded in the sample's README) are the same on every build.
 
 No question shares an entity with an invented fact family: the families
 (`generations.make_facts`) name invented places and structures out of
@@ -22,6 +22,7 @@ No question shares an entity with an invented fact family: the families
 syllables can spell as a name.
 """
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -219,11 +220,25 @@ def shares_an_entity(text):
     return any(_spellable(w) for w in words)
 
 
+DEFAULT_OUT = Path(__file__).resolve().parents[2] / "target" / "samples" / "generations" / "anchor-200.jsonl"
+
+
+def render(rows):
+    """The bytes of the suite file: one JSON object a line, ASCII only."""
+    return "".join(json.dumps(r, ensure_ascii=True) + "\n" for r in rows).encode("ascii")
+
+
+def digest(rows):
+    """The sha256 of the built file, as the sample's README records it."""
+    return hashlib.sha256(render(rows)).hexdigest()
+
+
 def main():
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("anchor-200.jsonl")
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     rows = build()
-    out.write_text("".join(json.dumps(r, ensure_ascii=True) + "\n" for r in rows))
-    print(f"{len(rows)} questions -> {out}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(render(rows))
+    print(f"{len(rows)} questions -> {out} (sha256 {digest(rows)})")
 
 
 if __name__ == "__main__":

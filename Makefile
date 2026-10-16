@@ -174,6 +174,14 @@ $(PAPER_TARGETS): papers/%/pdf:
 samples:
 	@bash scripts/make-help.sh samples
 
+## samples/generations - lists the generations sample's targets; runs nothing
+samples/generations:
+	@bash scripts/make-help.sh samples/generations
+
+## samples/generations/anchor-200 - build the 200-question anchor suite into target/samples/generations/ (generated, gitignored)
+samples/generations/anchor-200:
+	python3 samples/generations/anchor200.py target/samples/generations/anchor-200.jsonl
+
 ## samples/tool-syntax - lists the tool-syntax sample's targets; runs nothing
 samples/tool-syntax:
 	@bash scripts/make-help.sh samples/tool-syntax
@@ -264,4 +272,4 @@ help:
 	deps deps/local deps/lock \
 	hooks hooks/install \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
-	samples samples/tool-syntax samples/tool-syntax/audit
+	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit

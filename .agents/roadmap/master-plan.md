@@ -138,7 +138,7 @@ The glue group in F3 covers (ms):
 | F28 | No group-count preflight. The monitor split still hard-fails on a one-group train set | READ-IN-CODE | `pipelines/src/train/mod.rs:335-337`; `train/rehearsal.rs:108-113`; `data/src/holdout.rs:365,407` |
 | F29 | GRPO surface re-exported, unused in any pipeline | READ-IN-CODE | `model/src/rl.rs:20-23` |
 | F30 | Paper: 168 claims (121 STRUCTURE, 36 MEASURED, 11 CITED); 232 structure checks, 231 `regex` + 1 `absent`; `verify` not in `make check`; `commits.json` splinter pin `dcb03816` unreachable | READ-IN-CODE | `papers/splinter-brain-sven-flywheel/data/*`; `scripts/verify_structure.py:30,85-91`; `git merge-base --is-ancestor` |
-| F31 | E2d: the g1 candidate was refused on the anchor; rollback was refused because there is no predecessor. No two-release turn exists | READ-IN-CODE | `sections/06-results.tex:182-188`; `data/runs/w2/e2d/raw/rollback.json` |
+| F31 | E2d: the g1 candidate was refused on the anchor; rollback was refused because there is no predecessor. No two-release turn exists | READ-IN-CODE | `sections/06-results.tex:182-188`; the first campaign's e2d rollback record (deleted from the tree; see repository history) |
 
 **Disk and memory budgets.**
 

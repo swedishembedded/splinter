@@ -1,4 +1,0 @@
-[policy] {"alias":"default","release":null,"roles":{"critic":"brain/Qwen/Qwen3-0.6B","generator":"brain/Qwen/Qwen3-4B","judge":"brain/Qwen/Qwen3-0.6B","policy":"brain/Qwen/Qwen3-0.6B","teacher":"brain/Qwen/Qwen3-4B"}}
-[sources] [{"bytes":1701,"captured_at":"2026-10-16T10:50:19.381Z","id":"blake3:394bb0e2698ff78c88138fd84d5d09cbfef84a57b772630a7cd1ec0be08e8e96","kind":"repository","origin":{"kind":"repository","path":"STATE_ROOT/sheets1","revision":null,"skipped":[]},"parts":30}]
-adapter: NVIDIA GH200 120GB (DiscreteGpu, Vulkan)
-limits: max_buffer_size 4094 MiB, max_storage_buffer_binding_size 2047 MiB (adapter caps: 4094 / 2047 MiB)

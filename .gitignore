@@ -35,3 +35,11 @@ __pycache__/
 *.ckpt
 *.pt
 *.bin
+
+# Generated output is never committed. The anchor suite is built by
+# samples/generations/anchor200.py (`make samples/generations/anchor-200`);
+# the flywheel paper keeps the values its claims cite in a hand-checked measurements file,
+# never the raw run logs or the tables its build script derives.
+/samples/generations/*.jsonl
+/papers/splinter-brain-sven-flywheel/data/runs/
+/papers/*/generated/

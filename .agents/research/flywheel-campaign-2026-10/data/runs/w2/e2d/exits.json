@@ -1,8 +1,0 @@
-{
- "rollback": {
-  "exit": 2
- },
- "learn_g1": {
-  "exit": 1
- }
-}

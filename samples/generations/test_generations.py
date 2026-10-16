@@ -7,6 +7,7 @@ criteria the run is judged by. Run: python3 -m unittest test_generations."""
 
 import json
 import random
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -80,10 +81,13 @@ class Anchor200(unittest.TestCase):
         self.assertTrue(all(r["reference"] and len(r["reference"]) < 30 for r in rows))
         self.assertTrue(all(r["kind"] == "recall" for r in rows))
 
-    def test_the_frozen_file_is_what_the_code_builds(self):
-        rows = [json.loads(l) for l in
-                Path(anchor200.__file__).with_name("anchor-200.jsonl").read_text().splitlines()]
-        self.assertEqual(rows, anchor200.build())
+    def test_the_built_file_has_the_digest_the_readme_records(self):
+        # The suite is generated, never committed: what the code builds is held to the sha256 the
+        # README records, so a changed question or reference is a deliberate, reviewed change.
+        readme = Path(anchor200.__file__).with_name("README.md").read_text()
+        recorded = re.search(r"built file sha256: `([0-9a-f]{64})`", readme)
+        self.assertIsNotNone(recorded, "README records no 'built file sha256: `...`'")
+        self.assertEqual(anchor200.digest(anchor200.build()), recorded.group(1))
 
     def test_no_question_shares_an_entity_with_an_invented_fact_family(self):
         # The checker finds every name the families invent, for any seed ...

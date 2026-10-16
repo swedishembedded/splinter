@@ -8,10 +8,12 @@
 # support, you can procure our services by sending an email to
 # info@swedishembedded.com.
 
-"""Builds every number, table and the limitations text of the paper from data/runs.
+"""Builds every number and table of the paper from data/measurements.json and the other files of data/.
 
-    build_data.py --out DIR     write macros.tex, tables and limitations.tex into DIR
-    build_data.py --check       verify the ledger against the runs and the text
+    build_data.py --out DIR     write macros.tex and the tables into DIR
+    build_data.py --check       verify the ledger against the measurements and the text
+    build_data.py --check --evidence DIR   also compare data/measurements.json with the raw logs in DIR
+                                (default ~/project/shared/containers/runs/paper-evidence/flywheel; absent = skipped)
     build_data.py --check --final   also fail while any REGISTERED or PLANNED claim remains
                                 or the paper is still marked draft (status.txt)
 
@@ -20,15 +22,17 @@ validated results only. status.txt holds `draft` or `final`; a `final` paper is 
 checked with --final.
 
 Nothing measured is typed by hand into the paper. A MEASURED claim names its
-evidence as `runs/<file>#<dotted.path>` or `runs/<file>#<metric>`; `--check`
-resolves each against the raw record, requires the claim's text to contain the
+evidence as a dotted metric of data/measurements.json; `--check`
+resolves each against that file, requires the claim's text to contain the
 value, and requires that the paper's text cites the claim. An experiment whose
 record is absent is printed as NOT MEASURED, never as zero.
 
-Raw records (data/runs):
-  qual/*                 training-substrate qualification files, copied verbatim
+Raw logs (run on a GPU, generated output, kept outside the repository; see DEFAULT_EVIDENCE):
+  qual/*                 training-substrate qualification logs
   throughput/*.log       a later probe of the 27B architecture's training step rate
-  ../results.csv         paired outcomes of the registered coding-task experiments (none yet)
+data/measurements.json records, per log, the values the claims cite, the brain commit, the exact
+command and the log's sha256. ../results.csv holds paired outcomes of the registered
+coding-task experiments (none yet).
 
 Claim kinds (data/claims.csv): STRUCTURE (verify_structure.py), MEASURED and COMPUTED (a
 metric of this script, whose value the claim text must contain), REGISTERED (a phrase the
@@ -38,6 +42,8 @@ soon as one exists) and CITED (a key of references.bib).
 
 import argparse
 import csv
+import hashlib
+import json
 import re
 import sys
 import tomllib
@@ -45,44 +51,78 @@ from math import comb
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNS = ROOT / "data" / "runs"
 SECTIONS = ROOT / "sections"
 
 
 # ---------------------------------------------------------------- metrics
-QUAL_PROBES = {"nf4_8192": "r1-nf4-64L-8192", "bf16_8192": "r2-bf16-64L-8192",
-               "bf16_16384": "r2-bf16-64L-16384"}
-QUAL_CLI = {"nf4_1step": "r3-real-nf4-1step", "nf4_40step": "r3-real-nf4-40step",
-            "bf16_1step": "r4-real-bf16-1step", "nf4_batch32": "r3a-real-nf4-default-batch32-OOM"}
+# The raw logs behind the MEASURED claims are generated output of GPU runs and are not kept in the
+# repository. data/measurements.json holds the values the claims cite, with each log's sha256, the
+# brain commit and the exact command; `--evidence DIR` re-extracts every value from the logs.
+MEASUREMENTS = ROOT / "data" / "measurements.json"
+DEFAULT_EVIDENCE = "~/project/shared/containers/runs/paper-evidence/flywheel"
+E4_COMMIT_RUN = "r1-nf4-64L-8192"
+
+
+def load_measurements():
+    return json.loads(MEASUREMENTS.read_text(encoding="utf-8"))["runs"]
 
 
 def qual_metrics():
-    """Numbers the qualification logs print: probe lines and the wrapper's MEASURE line."""
+    """E4: the values the qualification runs' logs printed, read from data/measurements.json."""
+    runs = load_measurements()
+    m = {"e4.commit": runs[E4_COMMIT_RUN]["brain_commit"][:8]}
+    for run in runs.values():
+        if run["metric_prefix"].startswith("e4."):
+            m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
+    return m
+
+
+def parse_log(prefix, text):
+    """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
+    the throughput probe. Used only to check measurements.json against the logs."""
     m = {}
-    qdir = RUNS / "qual"
-    if not (qdir / "r1-nf4-64L-8192.log").exists():
-        return m
-    commit = re.search(r"# commit: (\w+)", (qdir / "r1-nf4-64L-8192.log").read_text())
-    m["e4.commit"] = commit.group(1)[:8]
-    for tag, name in QUAL_PROBES.items():
-        text = (qdir / f"{name}.log").read_text()
+    if prefix.startswith("e4.probe_"):
         for field in ("built_mib", "peak_mib"):
-            m[f"e4.probe_{tag}.{field}"] = int(re.search(rf"PROBE {field}=(\d+)", text).group(1))
+            m[field] = int(re.search(rf"PROBE {field}=(\d+)", text).group(1))
         for field in ("step_s", "tokens_per_s"):
-            m[f"e4.probe_{tag}.{field}"] = re.search(rf"{field}=([\d.]+)", text).group(1)
-        m[f"e4.probe_{tag}.exit"] = int(re.search(r"# exit=(\d+)", text).group(1))
-    for tag, name in QUAL_CLI.items():
-        text = (qdir / f"{name}.log").read_text()
+            m[field] = re.search(rf"{field}=([\d.]+)", text).group(1)
+        m["exit"] = int(re.search(r"# exit=(\d+)", text).group(1))
+    elif prefix.startswith("e4.cli_"):
         meas = re.search(r"MEASURE exit=(\d+) wall_s=([\d.]+) host_peak_rss_MiB=(\d+) device_peak_MiB=(\d+)", text)
-        m[f"e4.cli_{tag}.exit"] = int(meas.group(1))
-        m[f"e4.cli_{tag}.wall_s"] = meas.group(2)
-        m[f"e4.cli_{tag}.host_rss_mib"] = int(meas.group(3))
-        m[f"e4.cli_{tag}.device_mib"] = int(meas.group(4))
+        m.update(exit=int(meas.group(1)), wall_s=meas.group(2), host_rss_mib=int(meas.group(3)),
+                 device_mib=int(meas.group(4)))
         loss = re.search(r"loss ([\d.]+) -> ([\d.]+)", text)
         if loss:
-            m[f"e4.cli_{tag}.loss_first"] = loss.group(1)
-            m[f"e4.cli_{tag}.loss_last"] = loss.group(2)
+            m.update(loss_first=loss.group(1), loss_last=loss.group(2))
+    else:
+        m["tokens_per_s"] = int(re.search(r"PROBE warm_tokens_per_s=(\d+)", text).group(1))
+        m["step_s"] = re.findall(r"step=3 .*?step_s=([\d.]+)", text)[0]
+        m["peak_mib"] = int(re.search(r"PROBE peak_mib=(\d+)", text).group(1))
     return m
+
+
+def check_evidence_dir(evidence, problems):
+    """Compare measurements.json with the raw logs in `evidence`: the sha256 of each log, the values
+    extracted from it, and (for the qualification logs) the commit and command of its header. An
+    absent directory is not checked and not a failure."""
+    if not evidence.is_dir():
+        print(f"evidence directory {evidence} absent: log digests not checked")
+        return
+    for name, run in load_measurements().items():
+        path = evidence / run["log"]
+        if not path.is_file():
+            problems.append(f"{name}: {run['log']} is missing from {evidence}")
+            continue
+        if hashlib.sha256(path.read_bytes()).hexdigest() != run["sha256"]:
+            problems.append(f"{name}: sha256 of {run['log']} differs from data/measurements.json")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if parse_log(run["metric_prefix"], text) != run["metrics"]:
+            problems.append(f"{name}: values extracted from {run['log']} differ from data/measurements.json")
+        if run["metric_prefix"].startswith("e4."):
+            if f"# commit: {run['brain_commit']}" not in text or f"# command: {run['command']}" not in text:
+                problems.append(f"{name}: commit or command differs from the header of {run['log']}")
+    print(f"evidence directory {evidence}: {len(load_measurements())} logs checked")
 
 
 ALPHA = 0.05
@@ -114,16 +154,10 @@ def design_metrics():
 
 
 def throughput_metrics():
-    """The probe's warm rate (steps two and three), step time and peak, and the card hours one
-    million tokens take at that rate."""
-    path = RUNS / "throughput" / "probe-nf4-8192.log"
-    if not path.exists():
-        return {}
-    text = path.read_text()
-    rate = int(re.search(r"PROBE warm_tokens_per_s=(\d+)", text).group(1))
-    return {"thr.nf4_8192.tokens_per_s": rate,
-            "thr.nf4_8192.step_s": re.findall(r"step=3 .*?step_s=([\d.]+)", text)[0],
-            "thr.nf4_8192.peak_mib": int(re.search(r"PROBE peak_mib=(\d+)", text).group(1)),
+    """The probe's warm rate, step time and peak, and the card hours one million tokens take at that rate."""
+    run = load_measurements()["probe-nf4-8192"]
+    rate = run["metrics"]["tokens_per_s"]
+    return {**{f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()},
             "thr.hours_per_million_tokens": f"{1e6 / (rate * 3600):.2f}"}
 
 
@@ -166,7 +200,7 @@ def e4_table():
 
 # ---------------------------------------------------------------- coding-task tables
 # The registered coding-task experiments (prereg/coding-tasks.md). A status is derived, never typed:
-# an experiment is PENDING until a row of data/results.csv or a directory data/runs/<id> exists.
+# an experiment is PENDING until a row of data/results.csv exists.
 REGISTERED = [
     ("CE1", "Untrained agent: resolve rate, failure profile, cost, discordance", "descriptive, no threshold"),
     ("CE4", "SFT on verified trajectories against the base (headline)", "sign test, qualification, alpha 0.05"),
@@ -184,8 +218,8 @@ def read_results():
 
 def experiment_status(key):
     rows = [r for r in read_results() if r["experiment"] == key]
-    if rows or (RUNS / key.lower()).exists():
-        return f"{len(rows)} result rows" if rows else "recorded"
+    if rows:
+        return f"{len(rows)} result rows"
     return r"\textbf{PENDING}"
 
 
@@ -263,17 +297,6 @@ def write_outputs(out):
     macros_extra = f"\\newcommand{{\\alphalevel}}{{{ALPHA}}}\n"
     with open(out / "macros.tex", "a") as handle:
         handle.write(macros_extra)
-    (out / "limitations.tex").write_text(limitations())
-
-
-def limitations():
-    """One sentence per experiment whose record is absent: not measured, never zero."""
-    absent = {
-        "qual/r1-nf4-64L-8192.log": "E4: the 27B training qualification was not measured; the substrate "
-                             "section states only what the code contains.",
-    }
-    lines = [text for rel, text in absent.items() if not (RUNS / rel).exists()]
-    return "\n\n".join(lines) + "\n" if lines else "\n"
 
 
 # ---------------------------------------------------------------- check
@@ -324,7 +347,7 @@ def paper_status():
     return status
 
 
-def check(final):
+def check(final, evidence):
     final = final or paper_status() == "final"
     with open(ROOT / "data" / "claims.csv", newline="", encoding="utf-8") as f:
         claims = list(csv.DictReader(f))
@@ -345,6 +368,7 @@ def check(final):
         if c["status"] != allowed:
             problems.append(f"{c['id']}: status {c['status']!r}, expected {allowed!r}")
         check_evidence(c, m, problems)
+    check_evidence_dir(evidence, problems)
     if final:
         if paper_status() == "draft":
             problems.append("status.txt says draft; a final paper is marked final")
@@ -361,6 +385,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=Path)
     p.add_argument("--check", action="store_true")
+    p.add_argument("--evidence", type=Path, help="with --check: directory of the raw logs "
+                   f"(default {DEFAULT_EVIDENCE}); skipped when absent")
     p.add_argument("--final", action="store_true", help="with --check: refuse a draft")
     p.add_argument("--list-metrics", action="store_true")
     args = p.parse_args()
@@ -368,7 +394,7 @@ def main():
         for k, v in sorted(metrics().items()):
             print(k, v)
     elif args.check:
-        check(args.final)
+        check(args.final, (args.evidence or Path(DEFAULT_EVIDENCE)).expanduser())
     elif args.out:
         write_outputs(args.out)
     else:
