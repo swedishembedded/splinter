@@ -77,6 +77,12 @@ args = sys.argv[1:]
 assert args[0] == "serve", args
 opts = dict(zip(args[1::2], args[2::2]))
 
+# Like brain, an adapter that corrects the MLP linears is refused unless the
+# server is told to bank them: the trainer's LoRA targets every linear.
+if ("--adapter" in opts or "--adapter-manifest" in opts) and opts.get("--adapter-targets") != "all":
+    print("brain serve: adapter corrects down, which this server's --adapter-targets (wq,wk,wv,wo) does not; widen the flag to serve it", file=sys.stderr, flush=True)
+    sys.exit(1)
+
 # A consolidated checkpoint is served with no adapter: the weights file of
 # the base is the card, and nothing is announced.
 weights = os.environ.get("BRAIN_QWEN_WEIGHTS", "")

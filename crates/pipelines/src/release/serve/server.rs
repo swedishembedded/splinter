@@ -127,6 +127,11 @@ pub(super) fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started
         }
         Offer::Nothing => {}
     }
+    // The trainer's LoRA corrects every linear, the MLP ones included, and
+    // brain's bank serves the attention linears only unless told otherwise.
+    if !matches!(launch.offer, Offer::Nothing) {
+        command.args(["--adapter-targets", "all"]);
+    }
     command
         .arg("--api-keys-out")
         .arg(&keys)

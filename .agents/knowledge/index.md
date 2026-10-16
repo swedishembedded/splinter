@@ -47,5 +47,6 @@ in the same commit.
 | [056](056-a-set-from-one-source-text-was-divided-and-then-refused-by-its-own-gate.md) | A set from one source text was divided, and then refused by its own gate |
 | [057](057-most-no-subject-rejections-were-the-generators-shape-and-a-fifth-were-markup.md) | Most no_subject rejections were the generator's shape, and a fifth were markup |
 | [058](058-every-release-was-blocked-by-a-serve-check-the-adapter-card-id-could-not-pass.md) | Every release was blocked by a serve check its adapter's card id could not pass |
+| [059](059-brain-serve-banks-attention-linears-only-so-the-serve-check-refused-an-adapter-that-corrects-the-mlp.md) | `brain serve` banks the attention linears only, so the serve check refused an MLP-correcting adapter |
 | [066](066-the-family-pre-flight-killed-the-test-runner-and-orphaned-its-lua-processes.md) | The family pre-flight killed the test runner and orphaned its Lua processes |
 | [067](067-a-looping-mutant-cost-the-sandbox-wall-limit-not-the-time-budget.md) | A looping mutant cost the sandbox's wall limit, not the generator's time budget |
