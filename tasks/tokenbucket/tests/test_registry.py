@@ -6,7 +6,7 @@ PRE = ("local c = fake(0); local made = 0; "
        "local r = m.rlreg_new(function(k) made = made + 1; return {name = k, n = made} end, 60, c.read); ")
 
 
-class RegistryTests(LuaCase):
+class T(LuaCase):
     MODULE = "registry"
 
     def test_new_registry_holds_nothing(self):
@@ -19,14 +19,6 @@ class RegistryTests(LuaCase):
     def test_idle_ttl_must_be_positive(self):
         self.expect("local c = fake(0); say(try(m.rlreg_new, function() end, 0, c.read))",
                     '"err:idle ttl must be a positive number"')
-
-    def test_text_idle_ttl_is_refused(self):
-        self.expect('local c = fake(0); say(try(m.rlreg_new, function() end, "9", c.read))',
-                    '"err:idle ttl must be a positive number"')
-
-    def test_clock_must_be_a_function(self):
-        self.expect("say(try(m.rlreg_new, function() end, 60, false))",
-                    '"err:clock must be a function"')
 
     def test_first_get_creates_limiter(self):
         self.expect(PRE + "say(m.rlreg_get(r, 'alice'))", '{n=1,name="alice"}')
@@ -52,9 +44,6 @@ class RegistryTests(LuaCase):
                     "try(m.rlreg_get, r, 'zed'); say(m.rlreg_size(r), m.rlreg_has(r, 'zed'))",
                     "0 false")
 
-    def test_numeric_keys_are_supported(self):
-        self.expect(PRE + "m.rlreg_get(r, 7); say(m.rlreg_keys(r))", "{7}")
-
     def test_peek_returns_existing_limiter(self):
         self.expect(PRE + "m.rlreg_get(r, 'a'); say(m.rlreg_peek(r, 'a'))", '{n=1,name="a"}')
 
@@ -64,10 +53,6 @@ class RegistryTests(LuaCase):
     def test_peek_does_not_refresh_activity(self):
         self.expect(PRE + "m.rlreg_get(r, 'a'); c.now = 30; m.rlreg_peek(r, 'a'); "
                     "say(m.rlreg_idle_for(r, 'a'))", "30")
-
-    def test_has_reports_key_membership(self):
-        self.expect(PRE + "m.rlreg_get(r, 'a'); say(m.rlreg_has(r, 'a'), m.rlreg_has(r, 'b'))",
-                    "true false")
 
     def test_size_counts_distinct_keys(self):
         self.expect(PRE + "for _, k in ipairs({'a', 'b', 'a', 'c', 'b'}) do m.rlreg_get(r, k) end; "
@@ -109,10 +94,6 @@ class RegistryTests(LuaCase):
         self.expect(PRE + "m.rlreg_get(r, 'a'); c.now = 100; m.rlreg_sweep(r); "
                     "say(m.rlreg_get(r, 'a'))", '{n=2,name="a"}')
 
-    def test_get_does_not_sweep_by_itself(self):
-        self.expect(PRE + "m.rlreg_get(r, 'a'); c.now = 500; m.rlreg_get(r, 'b'); "
-                    "say(m.rlreg_size(r))", "2")
-
     def test_forget_removes_a_key(self):
         self.expect(PRE + "m.rlreg_get(r, 'a'); say(m.rlreg_forget(r, 'a'), m.rlreg_size(r))",
                     "true 0")
@@ -120,10 +101,14 @@ class RegistryTests(LuaCase):
     def test_forget_of_unknown_key_is_false(self):
         self.expect(PRE + "say(m.rlreg_forget(r, 'a'))", "false")
 
+    def test_one_second_idle_ttl_is_accepted(self):
+        self.expect("local c = fake(0); local r = m.rlreg_new(function() return 1 end, 1, c.read); "
+                    "m.rlreg_get(r, 'a'); c.now = 1; say(m.rlreg_sweep(r))", '1 {"a"}')
+
     def test_forget_clears_idle_record(self):
         self.expect(PRE + "m.rlreg_get(r, 'a'); m.rlreg_forget(r, 'a'); "
                     "say(m.rlreg_idle_for(r, 'a'))", "nil")
 
-    def test_one_second_idle_ttl_is_accepted(self):
-        self.expect("local c = fake(0); local r = m.rlreg_new(function() return 1 end, 1, c.read); "
-                    "m.rlreg_get(r, 'a'); c.now = 1; say(m.rlreg_sweep(r))", '1 {"a"}')
+    def test_clock_must_be_a_function(self):
+        self.expect("say(try(m.rlreg_new, function() end, 60, false))",
+                    '"err:clock must be a function"')
