@@ -77,6 +77,11 @@ TEST_CRATE_TARGETS := $(addprefix test/crate/,$(CRATE_PACKAGES))
 $(TEST_CRATE_TARGETS): test/crate/%:
 	$(CARGO) test $(PROFILE) -p $*
 
+## test/families - the repository task families: baselines pass identically five times, conventions hold, faults are caught (no model, no GPU, minutes)
+test/families:
+	python3 scripts/tasks/families.py check
+	python3 scripts/tasks/families.py mutate
+
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
 test/e2e:
 	@bash scripts/make-help.sh test/e2e
@@ -189,7 +194,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven fmt \
+.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families fmt \
 	check check/fmt check/clippy check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	deps deps/local deps/lock \
 	hooks hooks/install \
