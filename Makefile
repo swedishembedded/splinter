@@ -16,6 +16,7 @@ BRAIN_DIR ?= ../edgeai/brain
 # The binaries and model store `make test/e2e/...` runs against.
 BRAIN_BIN ?= $(BRAIN_DIR)/target/release/brain
 SVEN_BIN ?= $(SVEN_DIR)/target/release/sven
+SPLINTER_BIN ?= target/release/splinter
 MODELS_DIR ?= $(HOME)/.local/share/brain/models
 
 CARGO ?= cargo
@@ -97,6 +98,14 @@ test/e2e:
 ## test/e2e/brain-sven - brain serves a model and sven completes a tool-using task with it (BRAIN_BIN, SVEN_BIN, MODELS_DIR; CPU backend, no GPU, minutes to tens of minutes; exit 3 means a prerequisite is missing and nothing was tested)
 test/e2e/brain-sven:
 	bash scripts/e2e/brain-sven.sh $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR)
+
+## test/e2e/turn - one full turn on Qwen3-0.6B: practice on a tiny fixture, experiences with verdicts, a trained candidate, the release gate, the candidate served and driven by sven (SPLINTER_BIN, BRAIN_BIN, SVEN_BIN, MODELS_DIR; BRAIN_DEVICE=cpu for the CPU backend; for the short GPU variant run it under `make lease/gpu/run`; exit 3 means a prerequisite is missing and nothing was tested)
+test/e2e/turn:
+	bash scripts/e2e/turn.sh $(SPLINTER_BIN) $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR) tasks/acceptance-tiny
+
+## test/e2e/turn/spec - the spec of test/e2e/turn against a fake splinter, brain and sven: each missing artifact fails the run with its name
+test/e2e/turn/spec:
+	python3 -I scripts/e2e/test-turn.py
 
 # ---------------------------------------------------------------------------
 ##@ Checks
@@ -249,7 +258,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families fmt \
+.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families fmt \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	deps deps/local deps/lock \
