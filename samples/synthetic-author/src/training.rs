@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Args;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::cache::Cache;
@@ -67,7 +67,7 @@ pub struct TrainArgs {
 
 /// What made an adapter: every setting of the run and the records it was
 /// trained on.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
     /// The seed of the adapter's initialisation and batch order.
     pub seed: u64,
@@ -89,6 +89,14 @@ pub struct Settings {
     pub briefings: Briefings,
 }
 
+/// The digest `Settings` records for the file of records at `dataset`.
+///
+/// # Errors
+/// The file cannot be read.
+pub fn dataset_digest(dataset: &Path) -> std::io::Result<String> {
+    Ok(Digest::of_reader(std::fs::File::open(dataset)?)?.to_string())
+}
+
 impl TrainArgs {
     /// The settings these arguments ask for, trained with `seed` on the
     /// records in `dataset`.
@@ -104,7 +112,7 @@ impl TrainArgs {
             learning_rate: self.lr,
             records_per_step: self.records_per_step,
             bf16: self.bf16,
-            dataset_digest: Digest::of_reader(std::fs::File::open(dataset)?)?.to_string(),
+            dataset_digest: dataset_digest(dataset)?,
             briefings: self.briefings,
         })
     }
@@ -115,26 +123,47 @@ impl TrainArgs {
 struct Summary<'a> {
     #[serde(flatten)]
     settings: &'a Settings,
-    adapter: &'a Path,
-    records: usize,
-    held_out_before: serde_json::Value,
-    held_out_after: serde_json::Value,
-    seconds: u64,
+    #[serde(flatten)]
+    trained: &'a Trained,
 }
 
-/// Runs `train`.
+/// What a training run came to.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Trained {
+    /// The adapter file.
+    pub adapter: PathBuf,
+    /// Records trained on.
+    pub records: usize,
+    /// Loss and token accuracy on the held-out records before training.
+    pub held_out_before: serde_json::Value,
+    /// Loss and token accuracy on the held-out records after training.
+    pub held_out_after: serde_json::Value,
+    /// Seconds the training took.
+    pub seconds: u64,
+}
+
+/// One adapter to train: where the base is, which records to train on, where
+/// the attempt is kept and every setting of the run.
+#[derive(Clone, Copy, Debug)]
+pub struct Job<'a> {
+    /// The checkpoint directory of the base model.
+    pub base: &'a Path,
+    /// The file of records.
+    pub dataset: &'a Path,
+    /// The directory the attempt, its split of the records and its
+    /// `summary.json` are kept in.
+    pub attempt: &'a Path,
+    /// Every setting of the run.
+    pub settings: &'a Settings,
+}
+
+/// Trains an adapter as `job` says and writes `summary.json` beside it.
 ///
 /// # Errors
 /// The records cannot be read or split, or the training fails.
-pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
-    let seed = splinter_sdk::seed::resolve("train-seed", args.train_seed);
-    let cache = Cache::open(args.cache.clone())?;
-    let dataset = crate::dataset::path(&cache, args.briefings);
-    let settings = args.settings(seed, &dataset)?;
-    let attempt = cache
-        .dir()
-        .join(format!("train{}", args.briefings.suffix()));
-    std::fs::create_dir_all(&attempt)?;
+pub fn fine_tune(job: &Job<'_>) -> anyhow::Result<Trained> {
+    let settings = job.settings;
+    std::fs::create_dir_all(job.attempt)?;
     let started = std::time::Instant::now();
     let report = |r: &splinter_sdk::model::train::StepReport| {
         eprintln!(
@@ -145,10 +174,10 @@ pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
             started.elapsed().as_secs_f64()
         );
     };
-    let split = splinter_sdk::data::holdout::split_dataset_file(&dataset, &attempt)?;
+    let split = splinter_sdk::data::holdout::split_dataset_file(job.dataset, job.attempt)?;
     let request = splinter_sdk::model::train::FineTune {
         max_block: None,
-        model_dir: &args.base,
+        model_dir: job.base,
         train: &split.train,
         held_out: &split.held_out,
         held_out_text: None,
@@ -156,7 +185,7 @@ pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
         eval_every: 0,
         patience: 0,
         keep_evaluations: None,
-        attempt_dir: &attempt,
+        attempt_dir: job.attempt,
         steps: settings.steps,
         rank: settings.rank,
         alpha: settings.alpha,
@@ -174,18 +203,47 @@ pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
     let trained = splinter_sdk::model::train::fine_tune(&request)?;
-    let summary = Summary {
-        settings: &settings,
-        adapter: &trained.adapter,
+    let trained = Trained {
+        adapter: trained.adapter,
         records: trained.records,
         held_out_before: serde_json::json!({"loss": trained.base.loss, "token_accuracy": trained.base.token_accuracy}),
         held_out_after: serde_json::json!({"loss": trained.tuned.loss, "token_accuracy": trained.tuned.token_accuracy}),
         seconds: started.elapsed().as_secs(),
     };
     std::fs::write(
-        attempt.join("summary.json"),
-        serde_json::to_string_pretty(&summary)?,
+        job.attempt.join("summary.json"),
+        serde_json::to_string_pretty(&Summary {
+            settings,
+            trained: &trained,
+        })?,
     )?;
-    println!("{}", serde_json::to_string_pretty(&summary)?);
+    Ok(trained)
+}
+
+/// Runs `train`.
+///
+/// # Errors
+/// The records cannot be read or split, or the training fails.
+pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
+    let seed = splinter_sdk::seed::resolve("train-seed", args.train_seed);
+    let cache = Cache::open(args.cache.clone())?;
+    let dataset = crate::dataset::path(&cache, args.briefings);
+    let settings = args.settings(seed, &dataset)?;
+    let attempt = cache
+        .dir()
+        .join(format!("train{}", args.briefings.suffix()));
+    let trained = fine_tune(&Job {
+        base: &args.base,
+        dataset: &dataset,
+        attempt: &attempt,
+        settings: &settings,
+    })?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&Summary {
+            settings: &settings,
+            trained: &trained,
+        })?
+    );
     Ok(())
 }

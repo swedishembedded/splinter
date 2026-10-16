@@ -18,7 +18,9 @@ use splinter_sdk::store::StateRoot;
 use splinter_sdk::{Config, Splinter};
 
 use super::corpus::{self, Pace, Staff};
+use super::examine::{self, BrainLoader};
 use super::layout::Study;
+use super::train;
 use crate::models::{is_remote, Source};
 use crate::writer::{DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES};
 
@@ -50,6 +52,45 @@ pub enum Stage {
     /// and freeze and hash the examination, all before anything is trained.
     /// Resumes what exists; run it again after a stop.
     Corpus(CorpusStageArgs),
+    /// Per author and training seed: train the adapters the protocol asks for
+    /// on the records of the corpus stage, with the protocol's settings. A GPU
+    /// stage; resumes, and leaves a trained adapter alone.
+    Train(TrainStageArgs),
+    /// Per author: put the frozen examination to every arm of the protocol.
+    /// A GPU stage; items already answered are not asked again.
+    Exam(ExamStageArgs),
+}
+
+/// Run the training stage.
+#[derive(Args)]
+pub struct TrainStageArgs {
+    /// The study directory holding the frozen protocol.
+    #[arg(long)]
+    study: PathBuf,
+    /// The checkpoint directory of the base model.
+    #[arg(long)]
+    base: PathBuf,
+    /// The authors to run, by seed, comma separated; every author when absent.
+    #[arg(long = "authors", value_delimiter = ',')]
+    only: Vec<u64>,
+}
+
+/// Run the examination stage.
+#[derive(Args)]
+pub struct ExamStageArgs {
+    /// The study directory holding the frozen protocol.
+    #[arg(long)]
+    study: PathBuf,
+    /// The checkpoint directory of the base model.
+    #[arg(long)]
+    base: PathBuf,
+    /// The authors to run, by seed, comma separated; every author when absent.
+    #[arg(long = "authors", value_delimiter = ',')]
+    only: Vec<u64>,
+    /// Also ask the sampled decoding the protocol names, beside the greedy
+    /// one.
+    #[arg(long)]
+    sampled: bool,
 }
 
 /// Run the corpus stage.
@@ -186,6 +227,8 @@ pub fn run(args: &StudyArgs) -> anyhow::Result<()> {
     match &args.stage {
         Stage::Freeze(freeze_args) => freeze_stage(freeze_args),
         Stage::Corpus(corpus_args) => corpus_stage(corpus_args),
+        Stage::Train(train_args) => train_stage(train_args),
+        Stage::Exam(exam_args) => exam_stage(exam_args),
     }
 }
 
@@ -316,4 +359,28 @@ fn origin(source: SeedSource) -> &'static str {
         SeedSource::Drawn => "drawn",
         SeedSource::Given => "given",
     }
+}
+
+fn train_stage(args: &TrainStageArgs) -> anyhow::Result<()> {
+    let study = Study::open(&args.study)?;
+    for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
+        let done = train::run(&study, seed, &args.base, &train::Brain)?;
+        println!(
+            "author {seed}: {} adapters trained, {} already trained",
+            done.trained, done.already
+        );
+        Ok(())
+    })
+}
+
+fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
+    let study = Study::open(&args.study)?;
+    let loader = BrainLoader { base: &args.base };
+    for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
+        let examined = examine::run(&study, seed, &args.base, &loader, args.sampled)?;
+        for (slot, arm, items) in &examined.arms {
+            println!("author {seed} {slot} {arm}: {items} items answered");
+        }
+        Ok(())
+    })
 }

@@ -31,6 +31,7 @@ use crate::cache::{Cache, Usage};
 use crate::dataset::Briefings;
 use crate::exam::Version;
 use crate::survivors::Survivors;
+use crate::training::Settings;
 
 /// The author's manifest, in the author's directory.
 pub const AUTHOR_MANIFEST: &str = "study.json";
@@ -107,6 +108,42 @@ pub struct AuthorManifest {
     pub exam: FrozenExam,
 }
 
+/// One adapter, trained: what made it and what came of the training. The
+/// run's directory holds this as `run.json`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RunManifest {
+    /// The digest of the protocol this was done under.
+    pub protocol_digest: String,
+    /// The author's seed.
+    pub author_seed: u64,
+    /// The seed this adapter was trained with.
+    pub training_seed: u64,
+    /// The digest of the base checkpoint.
+    pub base_digest: String,
+    /// The digest of the examination frozen for the author before training.
+    pub exam_digest: String,
+    /// The adapter file, relative to the study directory.
+    pub adapter: PathBuf,
+    /// The digest of the adapter file: what its outcomes are bound to.
+    pub adapter_digest: String,
+    /// Every setting of the training, including its seed and the digest of the
+    /// records.
+    pub settings: Settings,
+    /// Records trained on.
+    pub records: usize,
+    /// Held-out loss and token accuracy before training.
+    pub held_out_before: serde_json::Value,
+    /// Held-out loss and token accuracy after training.
+    pub held_out_after: serde_json::Value,
+    /// Seconds the training took.
+    pub seconds: u64,
+    /// The revision of the code that trained it.
+    pub code_revision: String,
+}
+
+/// The file in a run's directory that holds its [`RunManifest`].
+pub const RUN_MANIFEST: &str = "run.json";
+
 /// A study directory with its protocol read and checked.
 pub struct Study {
     root: PathBuf,
@@ -180,6 +217,44 @@ impl Study {
         self.author_dir(author)
             .join("runs")
             .join(format!("tuned{}-s{training_seed}", briefings.suffix()))
+    }
+
+    /// The manifest of the training run of the adapter trained on `briefings`
+    /// with `training_seed`, if it has finished.
+    ///
+    /// # Errors
+    /// The manifest cannot be read, or was written under another protocol.
+    pub fn run_manifest(
+        &self,
+        author: u64,
+        briefings: Briefings,
+        training_seed: u64,
+    ) -> anyhow::Result<Option<RunManifest>> {
+        let path = self
+            .run_dir(author, briefings, training_seed)
+            .join(RUN_MANIFEST);
+        let manifest: Option<RunManifest> = self.read_manifest(&path)?;
+        if let Some(m) = &manifest {
+            self.ensure_same_protocol(&path, &m.protocol_digest)?;
+        }
+        Ok(manifest)
+    }
+
+    /// Writes the manifest of a finished run, whole or not at all.
+    ///
+    /// # Errors
+    /// The file cannot be written.
+    pub fn write_run_manifest(
+        &self,
+        briefings: Briefings,
+        manifest: &RunManifest,
+    ) -> anyhow::Result<()> {
+        write_whole(
+            &self
+                .run_dir(manifest.author_seed, briefings, manifest.training_seed)
+                .join(RUN_MANIFEST),
+            &serde_json::to_vec_pretty(manifest)?,
+        )
     }
 
     /// The manifest the corpus stage wrote for `author`, if it has.

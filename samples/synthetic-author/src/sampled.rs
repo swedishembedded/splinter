@@ -123,7 +123,7 @@ pub struct Requested {
 /// # Errors
 /// The record cannot be read.
 pub fn resolve(cache: &Cache, arm: Arm, asked: Requested) -> anyhow::Result<SampledDecoding> {
-    let kept = recorded(&cache.dir().join("exam"), &key(arm.name()))?;
+    let kept = recorded(cache.exam_dir(), &key(arm.name()))?;
     let kept_seed = kept.as_ref().and_then(|r| r.model.decoding_seed);
     let kept_draws = kept.as_ref().and_then(|r| r.draws);
     Ok(SampledDecoding {
@@ -145,7 +145,7 @@ pub fn key(arm: &str) -> String {
 /// Where the sampled outcomes of `arm` are kept.
 #[must_use]
 pub fn sampled_path(cache: &Cache, arm: &str) -> PathBuf {
-    cache.dir().join("exam").join(format!("{}.jsonl", key(arm)))
+    cache.exam_dir().join(format!("{}.jsonl", key(arm)))
 }
 
 /// The sampled outcomes in `path`, each item once.

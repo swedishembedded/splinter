@@ -324,3 +324,26 @@ redone, and the stage refuses to continue under a protocol other than the one
 the manifest records, or when the examination the corpus makes now is not the
 one frozen. An author that fails does not stop the others; the command reports
 every failure at the end.
+
+### The training and examination stages
+
+```bash
+synthetic-author study train --study STUDY --base CHECKPOINT
+synthetic-author study exam --study STUDY --base CHECKPOINT [--sampled]
+```
+
+Both need a device. `train` trains, for each author, the full adapter at each of
+the author's training seeds and each ablation adapter at the first ones the
+protocol names, on the records the corpus stage made, with the protocol's
+settings; each finished adapter has a `run.json` (the protocol digest, the base
+and adapter digests, every setting including the seed and the digest of the
+records, the digest of the frozen examination, what the held-out records
+showed). The examination is drawn from the corpus again first and must be the
+one frozen. A run with a manifest is left alone, and is refused if it is asked
+again under another base or other settings. `exam` puts the frozen examination
+to every arm: the arms with no adapter share one loaded base and the directory
+`exam/shared/`, each adapter has one of its own (`exam/tuned-sSEED/`,
+`exam/tuned-reader-only-sSEED/`), each with the examination manifest `exam`
+writes; `--sampled` also asks the protocol's sampled decoding, whose run seed is
+drawn, printed and recorded in the arm's record. It refuses to start until every
+adapter it needs is trained and is the file its manifest records.

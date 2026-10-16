@@ -411,10 +411,7 @@ pub fn item_view(item: &Item) -> serde_json::Value {
 /// Where the outcomes of `arm` are kept.
 #[must_use]
 pub fn outcomes_path(cache: &Cache, arm: Arm) -> PathBuf {
-    cache
-        .dir()
-        .join("exam")
-        .join(format!("{}.jsonl", arm.name()))
+    cache.exam_dir().join(format!("{}.jsonl", arm.name()))
 }
 
 /// What an examination of one arm was asked with, besides the items: the

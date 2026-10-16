@@ -252,8 +252,14 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   protocol's models, writes `study.json` with the protocol digest, the
   survivors and the examination's digest, resumes, and refuses a changed
   protocol or a corpus changed after the freeze; it is tested with scripted
-  models only. Not built yet: training, examining and the report. No corpus has
-  been written with the three families.
+  models only. `study train` and `study exam` (`src/study/train.rs`,
+  `src/study/examine.rs`) train every adapter the protocol asks at its training
+  seeds, one `run.json` each, and put the frozen examination to every arm, one
+  directory of outcomes per adapter, resuming and refusing a changed base,
+  settings, records or adapter file; they are tested through a scripted trainer
+  and scripted models, and are not run. Not built yet: the report. No corpus has
+  been written with the three families and no adapter trained under the
+  protocol.
 - **Problem.** One training run per author and three authors (paper Sec. 7);
   all three runs used the same default seed (PF-04); no sign test across
   authors is possible with three.

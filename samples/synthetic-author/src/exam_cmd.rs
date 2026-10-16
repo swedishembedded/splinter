@@ -34,6 +34,9 @@ use crate::report;
 use crate::sampled::{self, Requested, SampledOutcome};
 use crate::sampled_report;
 
+/// The context the examination loads a model with, in tokens.
+pub const CONTEXT_TOKENS: u32 = 16384;
+
 /// Put the examination to a model.
 #[derive(Args)]
 pub struct ExamArgs {
@@ -169,7 +172,7 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
     let answerer = Answerer::load_with(
         &args.base,
         adapter,
-        Some(16384),
+        Some(CONTEXT_TOKENS),
         arm.name(),
         Decoding::Greedy,
     )?;
@@ -250,7 +253,7 @@ fn asked_decoding(args: &ExamArgs) -> anyhow::Result<Option<Requested>> {
 /// names, or arms were asked different items.
 pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
     let cache = Cache::open(args.cache.clone())?;
-    let exam_dir = cache.dir().join("exam");
+    let exam_dir = cache.exam_dir().to_path_buf();
     let mut loaded: Vec<(String, Vec<Outcome>)> = Vec::new();
     let mut records: Vec<ArmRecord> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
@@ -335,7 +338,7 @@ fn named<T: Clone>(arms: &[(String, Vec<T>)]) -> Vec<(&str, Vec<T>)> {
 /// The sampled outcomes of the arms named in `arms` that have any, each
 /// checked against its record and the items it was asked.
 fn sampled_arms(cache: &Cache, arms: &str) -> anyhow::Result<Vec<(String, Vec<SampledOutcome>)>> {
-    let exam_dir = cache.dir().join("exam");
+    let exam_dir = cache.exam_dir().to_path_buf();
     let mut found = Vec::new();
     let mut records = Vec::new();
     for name in arms.split(',') {

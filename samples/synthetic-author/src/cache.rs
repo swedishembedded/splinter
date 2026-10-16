@@ -76,6 +76,7 @@ pub struct ReadingRecord {
 /// A corpus directory.
 pub struct Cache {
     dir: PathBuf,
+    exam_dir: PathBuf,
 }
 
 impl Cache {
@@ -86,13 +87,30 @@ impl Cache {
     pub fn open(dir: PathBuf) -> anyhow::Result<Self> {
         std::fs::create_dir_all(dir.join("articles"))
             .with_context(|| format!("creating {}", dir.display()))?;
-        Ok(Self { dir })
+        let exam_dir = dir.join("exam");
+        Ok(Self { dir, exam_dir })
     }
 
     /// The directory.
     #[must_use]
     pub fn dir(&self) -> &Path {
         &self.dir
+    }
+
+    /// Where the examination's outcomes and their manifest are kept: `exam/`
+    /// of the corpus directory unless the cache was given a slot.
+    #[must_use]
+    pub fn exam_dir(&self) -> &Path {
+        &self.exam_dir
+    }
+
+    /// This corpus with its examination kept in `exam/<slot>/`, so that
+    /// several models (the adapters of a study) are examined on one corpus
+    /// without sharing outcome files or manifests.
+    #[must_use]
+    pub fn with_exam_slot(self, slot: &str) -> Self {
+        let exam_dir = self.dir.join("exam").join(slot);
+        Self { exam_dir, ..self }
     }
 
     fn article_path(&self, index: usize) -> PathBuf {

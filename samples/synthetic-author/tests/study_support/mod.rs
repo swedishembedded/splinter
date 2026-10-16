@@ -216,3 +216,34 @@ pub fn responding(seed: u64, protocol: &Protocol) -> (BlockingModel, Arc<AtomicU
         requests,
     )
 }
+
+/// A model that takes the first option of the tool it is offered, and counts
+/// the requests it is asked.
+pub struct FirstOption {
+    pub requests: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for FirstOption {
+    fn name(&self) -> &str {
+        "first"
+    }
+    fn model_name(&self) -> &str {
+        "first-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        self.requests.fetch_add(1, Ordering::SeqCst);
+        let tool = &req.tools[0];
+        let choice = tool.parameters["required"][0].as_str().unwrap().to_string();
+        let label = tool.parameters["properties"][&choice]["enum"][0].clone();
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::ToolCall {
+                index: 0,
+                id: "c".into(),
+                name: tool.name.clone(),
+                arguments: serde_json::json!({ choice: label }).to_string(),
+            }),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
