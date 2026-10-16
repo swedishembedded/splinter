@@ -36,6 +36,8 @@ pub mod recheck;
 pub mod records;
 pub mod report;
 pub mod retrieval;
+pub mod sampled;
+pub mod sampled_report;
 pub mod scenario;
 pub mod survivors;
 pub mod tools;

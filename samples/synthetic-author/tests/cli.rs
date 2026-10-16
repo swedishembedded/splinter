@@ -145,3 +145,25 @@ fn survivors_reports_a_corpus_that_turned_nothing_away() {
     assert_eq!(report["articles_planned"], 2);
     assert_eq!(report["given_up"]["unattempted"], serde_json::json!([0, 1]));
 }
+
+#[test]
+fn greedy_decoding_refuses_the_flags_of_sampling() {
+    let seed = splinter_sdk::model::seed::draw().value();
+    let dir = corpus_of(seed);
+    let out = run(&[
+        "exam",
+        "--cache",
+        dir.to_str().unwrap(),
+        "--base",
+        "none",
+        "--arm",
+        "base",
+        "--draws",
+        "3",
+    ]);
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("--draws"),
+        "{out:?}"
+    );
+}

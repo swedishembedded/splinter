@@ -71,7 +71,8 @@ beside what it made.
   `--seed`, else draw one and print it.
 * `exam` writes `exam/manifest.json`, one record per arm: the digest of the
   items, `--articles`, `--per-cell`, the base and adapter digests, the
-  decoding (greedy, which draws no seed), the reply limit and the arm's
+  decoding (greedy, which draws no seed; or sampled, with its temperature, run
+  seed and number of draws), the reply limit and the arm's
   system turn and which examination it is (`v1` or `v2`). Each outcome carries
   the digest of its item and of its model.
   Outcomes are never appended to under another manifest: a rerun with other
@@ -146,3 +147,19 @@ when a gate turned some attempt away, `writer-unavailable`,
 `reader-unavailable` or `budget` when only requests failed, `unattempted` when
 nothing was logged. A decision counts as kept when the kept article tells its
 case.
+
+## Sampled decoding beside greedy
+
+`exam --decoding sample[:T] [--draws K] [--decoding-seed S]` asks every item K
+times (default eight) at temperature T and keeps the outcomes beside the greedy
+ones, in `exam/<arm>-sampled.jsonl` under the record `<arm>-sampled`. Each
+draw has its own seed, derived from one run seed and the item's place and
+written with the draw; the run seed is the `--decoding-seed`, drawn and
+printed when absent and read back from the record afterwards. The record names
+the decoding, the run seed and the number of draws, and outcomes are never
+appended to under another one. `report` lists each sampled arm beside its
+greedy result: the share of an item's draws that were right, averaged over
+items, with a bootstrap interval over items, and for each pair of arms the
+mean difference of their per-item shares with its interval. The bootstrap seed
+is `--bootstrap-seed`, drawn and printed when absent and written into the
+report.

@@ -314,6 +314,18 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-20 Sampled decoding beside greedy
 
+- **Status.** The code is done for `synthetic-author` and checked with a
+  scripted model; no model has been asked. `Decoding::Sampled` and
+  `SampledThinking` in the model adapter carry an optional seed, and
+  `Answerer::provider_with` decodes under another seed without loading the
+  weights again. `exam --decoding sample[:T] --draws K` asks each item K times,
+  each draw with a seed derived from a run seed that is drawn, printed and
+  recorded in the arm's `<arm>-sampled` record beside the temperature and the
+  number of draws. `report` lists the sampled share right per arm beside
+  greedy, with an item-clustered bootstrap interval and, per pair of arms, the
+  interval of the mean per-item difference; its seed is drawn, printed and
+  written into the report. The study's sampled runs are not made.
+
 - **Problem.** Every arm is decoded greedily; the robustness of the ranking
   under sampling is unmeasured (PU-06).
 - **Evidence.** `samples/synthetic-author/src/exam_cmd.rs:134`;

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::store::jsonl;
 use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
-use crate::arms::{run_items, run_items_with, Outcome};
+use crate::arms::{run_items_with, Outcome};
 use crate::binding::{bind, items_digest, ArmRecord, ModelIdentity};
 use crate::cache::{Cache, StoredArticle};
 use crate::dataset::records_for;
@@ -473,6 +473,7 @@ pub fn arm_record(
         max_tokens: run.max_tokens,
         context_digest: Digest::of(&canonical_json(&context)?).to_string(),
         model: run.model.clone(),
+        draws: None,
         adopted: false,
     })
 }
@@ -497,24 +498,34 @@ pub fn run_arm(
     std::fs::create_dir_all(dir)?;
     let record = arm_record(cache, persona, arm, items, run)?;
     bind(dir, &path, &record, run.adopt)?;
-    let model = run.model.digest().to_string();
-    if arm == Arm::Retrieval {
-        let notes = crate::retrieval::Notes::new(&cache.articles()?);
-        return run_items_with(
-            provider,
-            |item| notes.system_for(item, RETRIEVED_PARAGRAPHS),
-            items,
-            &path,
-            run.max_tokens,
-            &model,
-        );
-    }
-    run_items(
+    run_items_with(
         provider,
-        &arm.system(persona),
+        system_of(cache, persona, arm)?,
         items,
         &path,
         run.max_tokens,
-        &model,
+        &run.model.digest().to_string(),
     )
+}
+
+/// The system turn `arm` puts each item under: the same for every item, except
+/// that the retrieval arm adds the paragraphs of the corpus that share the
+/// most with the situation.
+///
+/// # Errors
+/// The retrieval arm's corpus cannot be read.
+pub fn system_of(
+    cache: &Cache,
+    persona: &Persona,
+    arm: Arm,
+) -> anyhow::Result<impl Fn(&Item) -> String> {
+    let notes = (arm == Arm::Retrieval)
+        .then(|| cache.articles())
+        .transpose()?
+        .map(|articles| crate::retrieval::Notes::new(&articles));
+    let system = arm.system(persona);
+    Ok(move |item: &Item| match &notes {
+        Some(notes) => notes.system_for(item, RETRIEVED_PARAGRAPHS),
+        None => system.clone(),
+    })
 }

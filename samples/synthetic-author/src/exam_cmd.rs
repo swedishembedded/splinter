@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use splinter_sdk::model::answer::{Answerer, Decoding};
+use splinter_sdk::seed::resolve;
 
 use crate::arms::{read_outcomes, Outcome};
 use crate::binding::{
@@ -28,6 +29,8 @@ use crate::lab::{asked_items, exam_items_of, run_arm, Arm, ExamRun};
 use crate::manifest::author_seed;
 use crate::persona::Persona;
 use crate::report;
+use crate::sampled::{self, Requested, SampledOutcome};
+use crate::sampled_report;
 
 /// Put the examination to a model.
 #[derive(Args)]
@@ -66,6 +69,19 @@ pub struct ExamArgs {
     /// the flags given as their manifest, without checking them against it.
     #[arg(long)]
     adopt: bool,
+    /// How the model decodes: `greedy` (one answer per item) or `sample[:T]`
+    /// (every item asked `--draws` times at temperature T, outcomes kept
+    /// beside the greedy ones).
+    #[arg(long, default_value = "greedy")]
+    decoding: String,
+    /// How many times each item is asked under `--decoding sample`.
+    #[arg(long)]
+    draws: Option<usize>,
+    /// The seed every draw's own seed is derived from, under `--decoding
+    /// sample`; read from the manifest when the arm was begun, else drawn and
+    /// printed.
+    #[arg(long)]
+    decoding_seed: Option<u64>,
 }
 
 /// Report what the examinations found.
@@ -77,6 +93,10 @@ pub struct ReportArgs {
     /// The arms to report, comma separated.
     #[arg(long, default_value = "base,named,principles,retrieval,tuned")]
     arms: String,
+    /// The seed of the bootstrap intervals over sampled outcomes; drawn and
+    /// printed when absent, and written into the report.
+    #[arg(long)]
+    bootstrap_seed: Option<u64>,
 }
 
 /// Count, for each trained author, whose decision it took where another author
@@ -115,6 +135,7 @@ fn parse_arm(name: &str) -> anyhow::Result<Arm> {
 /// manifest, or the model fails.
 pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
     let arm = parse_arm(&args.arm)?;
+    let asked = asked_decoding(args)?;
     let adapter = match (arm, &args.adapter) {
         (Arm::Tuned, None) => anyhow::bail!("the tuned arm needs --adapter"),
         (Arm::Tuned, Some(path)) => Some(path.as_path()),
@@ -131,7 +152,6 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
         args.per_cell,
         args.exam,
     )?;
-    let decoding = Decoding::Greedy;
     let run = ExamRun {
         articles: args.articles,
         per_cell: args.per_cell,
@@ -146,16 +166,81 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
         exam: args.exam,
         adopt: args.adopt,
     };
-    let answerer = Answerer::load_with(&args.base, adapter, Some(16384), arm.name(), decoding)?;
-    let provider = answerer.provider();
-    let outcomes = run_arm(&cache, &persona, arm, &provider, &all, &run)?;
-    let r = report::accuracy(&outcomes);
-    if r.n == 0 {
-        println!("{}: not measured (no items)", arm.name());
-    } else {
-        println!("{}: {}/{} right ({:.3})", arm.name(), r.right, r.n, r.rate);
+    let answerer = Answerer::load_with(
+        &args.base,
+        adapter,
+        Some(16384),
+        arm.name(),
+        Decoding::Greedy,
+    )?;
+    match asked {
+        None => {
+            let outcomes = run_arm(&cache, &persona, arm, &answerer.provider(), &all, &run)?;
+            let r = report::accuracy(&outcomes);
+            if r.n == 0 {
+                println!("{}: not measured (no items)", arm.name());
+            } else {
+                println!("{}: {}/{} right ({:.3})", arm.name(), r.right, r.n, r.rate);
+            }
+        }
+        Some(requested) => {
+            let temperature = requested.temperature;
+            let how = sampled::resolve(&cache, arm, requested)?;
+            let provider_for = |seed| {
+                answerer.provider_with(Decoding::Sampled {
+                    temperature,
+                    seed: Some(seed),
+                })
+            };
+            let outcomes =
+                sampled::run_arm_sampled(&cache, &persona, arm, &provider_for, &all, &run, &how)?;
+            let shares: Vec<f64> = outcomes.iter().filter_map(|o| o.share_right()).collect();
+            if shares.is_empty() {
+                println!("{}: not measured (no items)", arm.name());
+            } else {
+                println!(
+                    "{}: {:.3} of {} draws each right on average over {} items ({}, seed {})",
+                    arm.name(),
+                    shares.iter().sum::<f64>() / shares.len() as f64,
+                    how.draws,
+                    shares.len(),
+                    how.name(),
+                    how.run_seed,
+                );
+            }
+        }
     }
     Ok(())
+}
+
+/// What `--decoding` asks for beyond greedy; `None` for greedy.
+///
+/// # Errors
+/// The decoding is not greedy or `sample[:T]`, or a sampling flag is given
+/// with greedy decoding, which draws nothing.
+fn asked_decoding(args: &ExamArgs) -> anyhow::Result<Option<Requested>> {
+    let decoding: Decoding = args
+        .decoding
+        .parse()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
+    match decoding {
+        Decoding::Greedy => {
+            anyhow::ensure!(
+                args.draws.is_none() && args.decoding_seed.is_none(),
+                "--draws and --decoding-seed apply to --decoding sample; greedy decoding draws nothing"
+            );
+            Ok(None)
+        }
+        Decoding::Sampled { temperature, .. } => Ok(Some(Requested {
+            temperature,
+            draws: args.draws,
+            run_seed: args.decoding_seed,
+        })),
+        Decoding::Thinking | Decoding::SampledThinking { .. } => anyhow::bail!(
+            "the examination is asked greedy or sample[:T] with reasoning off, not {:?}",
+            args.decoding
+        ),
+    }
 }
 
 /// Runs `report`.
@@ -187,10 +272,7 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
         loaded.push((name.to_string(), outcomes));
     }
     verify_same_items(&records)?;
-    let mut view: Vec<(&str, Vec<_>)> = loaded
-        .iter()
-        .map(|(n, o)| (n.as_str(), o.clone()))
-        .collect();
+    let mut view = named(&loaded);
     if let Some(record) = records.first() {
         view.extend(report::baselines(&asked_items(&cache, record)?));
     }
@@ -205,10 +287,58 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
         ("tuned", report::FIRST_LISTED),
         ("tuned", report::MAJORITY),
     ];
-    let text = report::render(&view, &compare, &missing);
+    let mut text = report::render(&view, &compare, &missing);
+    let sampled = sampled_arms(&cache, &args.arms)?;
+    if !sampled.is_empty() {
+        let bootstrap_seed = resolve("bootstrap-seed", args.bootstrap_seed);
+        let asked: Vec<&str> = args.arms.split(',').collect();
+        let compare: Vec<(&str, &str)> = compare
+            .iter()
+            .copied()
+            .filter(|(a, b)| asked.contains(a) && asked.contains(b))
+            .collect();
+        text.push('\n');
+        text.push_str(&sampled_report::render(
+            &named(&loaded),
+            &named(&sampled),
+            &compare,
+            bootstrap_seed,
+        ));
+    }
     std::fs::write(cache.dir().join("report.md"), &text)?;
     println!("{text}");
     Ok(())
+}
+
+/// Arms with their outcomes, named by reference.
+fn named<T: Clone>(arms: &[(String, Vec<T>)]) -> Vec<(&str, Vec<T>)> {
+    arms.iter().map(|(n, o)| (n.as_str(), o.clone())).collect()
+}
+
+/// The sampled outcomes of the arms named in `arms` that have any, each
+/// checked against its record and the items it was asked.
+fn sampled_arms(cache: &Cache, arms: &str) -> anyhow::Result<Vec<(String, Vec<SampledOutcome>)>> {
+    let exam_dir = cache.dir().join("exam");
+    let mut found = Vec::new();
+    let mut records = Vec::new();
+    for name in arms.split(',') {
+        let path = sampled::sampled_path(cache, name);
+        if !path.exists() {
+            continue;
+        }
+        let outcomes = sampled::read_sampled_file(&path)?;
+        let record = recorded(&exam_dir, &sampled::key(name))?.ok_or_else(|| {
+            anyhow::anyhow!(
+                "{}: no manifest for the sampled run of arm {name}",
+                path.display()
+            )
+        })?;
+        sampled::verify_sampled(&record, &asked_items(cache, &record)?, &outcomes, &path)?;
+        records.push(record);
+        found.push((name.to_string(), outcomes));
+    }
+    verify_same_items(&records)?;
+    Ok(found)
 }
 
 /// Runs `cross`.

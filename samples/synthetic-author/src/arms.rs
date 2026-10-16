@@ -84,6 +84,32 @@ pub async fn ask(
         .map(|call| (call.name, call.arguments)))
 }
 
+/// What one asking of a model came to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Answered {
+    /// Whether the call named the option the beliefs determine.
+    pub correct: bool,
+    /// The tool called and its arguments, if a call was made.
+    pub call: Option<Value>,
+}
+
+/// Puts `item` to `provider` under `system` and grades what it did.
+///
+/// # Errors
+/// The provider failed.
+pub async fn answer(
+    provider: &Arc<dyn ModelProvider>,
+    system: &str,
+    item: &Item,
+    max_tokens: u32,
+) -> anyhow::Result<Answered> {
+    let call = ask(provider, system, item, max_tokens).await?;
+    Ok(Answered {
+        correct: grade(item, call.as_ref().map(|(n, a)| (n.as_str(), a))),
+        call: call.map(|(name, args)| serde_json::json!({"name": name, "arguments": args})),
+    })
+}
+
 /// Reads the outcomes in `path`, each item once (the first answer stands).
 ///
 /// # Errors
@@ -136,15 +162,15 @@ pub fn run_items_with(
         if done.iter().any(|o| o.id == item.id) {
             continue;
         }
-        let call = runtime.block_on(ask(provider, &system(item), item, max_tokens))?;
+        let answered = runtime.block_on(answer(provider, &system(item), item, max_tokens))?;
         let outcome = Outcome {
             id: item.id.clone(),
-            correct: grade(item, call.as_ref().map(|(n, a)| (n.as_str(), a))),
+            correct: answered.correct,
             topic_seen: item.topic_seen,
             combo_seen: item.combo_seen,
             combo_trained: item.combo_trained,
             tool_seen: item.tool_seen,
-            call: call.map(|(name, args)| serde_json::json!({"name": name, "arguments": args})),
+            call: answered.call,
             item: item_digest(item).to_string(),
             model: model.to_string(),
         };

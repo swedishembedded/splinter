@@ -159,6 +159,10 @@ pub struct ArmRecord {
     pub context_digest: String,
     /// The model that answers.
     pub model: ModelIdentity,
+    /// How many times each item is asked, for a sampled arm; a greedy arm
+    /// asks once and does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draws: Option<usize>,
     /// Whether the record was written for outcomes that already existed,
     /// from the flags given, rather than begun with them.
     #[serde(default)]
@@ -200,6 +204,7 @@ impl ArmRecord {
             self.model.decoding_seed != other.model.decoding_seed,
             "decoding seed",
         );
+        note(self.draws != other.draws, "draws");
         named
     }
 }

@@ -45,6 +45,10 @@ pub struct Reply {
 /// a given set of weights. A reasoning model that is only ever asked greedily
 /// with its reasoning off is handicapped, so an exam can also let it think,
 /// or sample, to give a baseline its due.
+///
+/// A sampled decoding with a `seed` repeats: the same question on the same
+/// weights gives the same reply. Without one, the provider draws a seed for
+/// each request and the run that made the request records it.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum Decoding {
     /// Argmax, reasoning off.
@@ -53,9 +57,19 @@ pub enum Decoding {
     /// Argmax, with the model reasoning before it answers.
     Thinking,
     /// Sampled at this temperature, reasoning off.
-    Sampled(f32),
+    Sampled {
+        /// The softmax temperature.
+        temperature: f32,
+        /// The seed of the draws, if the caller fixes one.
+        seed: Option<u64>,
+    },
     /// Sampled at this temperature, with the model reasoning first.
-    SampledThinking(f32),
+    SampledThinking {
+        /// The softmax temperature.
+        temperature: f32,
+        /// The seed of the draws, if the caller fixes one.
+        seed: Option<u64>,
+    },
 }
 
 /// The default temperature of the sampled decodings.
@@ -65,15 +79,16 @@ impl Decoding {
     /// The sampling this decoding stands for.
     #[must_use]
     pub fn sampling(self) -> Sampling {
-        let (temperature, thinking) = match self {
-            Self::Greedy => (0.0, false),
-            Self::Thinking => (0.0, true),
-            Self::Sampled(t) => (t, false),
-            Self::SampledThinking(t) => (t, true),
+        let (temperature, thinking, seed) = match self {
+            Self::Greedy => (0.0, false, None),
+            Self::Thinking => (0.0, true, None),
+            Self::Sampled { temperature, seed } => (temperature, false, seed),
+            Self::SampledThinking { temperature, seed } => (temperature, true, seed),
         };
         Sampling {
             temperature,
             thinking,
+            seed,
             ..GREEDY_SAMPLING
         }
     }
@@ -100,8 +115,14 @@ impl std::str::FromStr for Decoding {
         match (name, temperature) {
             ("greedy", None) => Ok(Self::Greedy),
             ("thinking", None) => Ok(Self::Thinking),
-            ("sample", _) => Ok(Self::Sampled(at)),
-            ("sample-thinking", _) => Ok(Self::SampledThinking(at)),
+            ("sample", _) => Ok(Self::Sampled {
+                temperature: at,
+                seed: None,
+            }),
+            ("sample-thinking", _) => Ok(Self::SampledThinking {
+                temperature: at,
+                seed: None,
+            }),
             _ => Err(format!(
                 "unknown decoding {s:?}: use greedy, thinking, sample[:T] or sample-thinking[:T]"
             )),
@@ -160,6 +181,17 @@ impl Answerer {
     #[must_use]
     pub fn provider(&self) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
         std::sync::Arc::new(self.model.shared())
+    }
+
+    /// [`Self::provider`], decoding as `decoding` says instead of as the
+    /// answerer was loaded: the weights are shared, so asking the same
+    /// question under several seeds loads nothing again.
+    #[must_use]
+    pub fn provider_with(
+        &self,
+        decoding: Decoding,
+    ) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
+        std::sync::Arc::new(self.model.resampled(decoding.sampling()))
     }
 
     /// The model's reply to `user` under the system message `system`, within
@@ -222,11 +254,18 @@ mod tests {
     fn a_decoding_is_read_from_its_name_and_says_whether_the_model_reasons_and_samples() {
         assert_eq!("greedy".parse(), Ok(Decoding::Greedy));
         assert_eq!("thinking".parse(), Ok(Decoding::Thinking));
-        assert_eq!("sample".parse(), Ok(Decoding::Sampled(0.6)));
-        assert_eq!("sample:0.3".parse(), Ok(Decoding::Sampled(0.3)));
+        let sampled = |temperature| Decoding::Sampled {
+            temperature,
+            seed: None,
+        };
+        assert_eq!("sample".parse(), Ok(sampled(0.6)));
+        assert_eq!("sample:0.3".parse(), Ok(sampled(0.3)));
         assert_eq!(
             "sample-thinking:0.7".parse(),
-            Ok(Decoding::SampledThinking(0.7))
+            Ok(Decoding::SampledThinking {
+                temperature: 0.7,
+                seed: None
+            })
         );
         for bad in ["greedy:0.5", "sample:0", "sample:hot", "think", ""] {
             assert!(bad.parse::<Decoding>().is_err(), "{bad:?}");
@@ -234,7 +273,13 @@ mod tests {
         assert_eq!(Decoding::Greedy.sampling(), GREEDY_SAMPLING);
         let thinking = Decoding::Thinking.sampling();
         assert!(thinking.thinking && thinking.temperature == 0.0);
-        let sampled = Decoding::Sampled(0.6).sampling();
-        assert!(!sampled.thinking && sampled.temperature == 0.6);
+        let sampling = sampled(0.6).sampling();
+        assert!(!sampling.thinking && sampling.temperature == 0.6 && sampling.seed.is_none());
+        let seed = crate::seed::draw().value();
+        let seeded = Decoding::Sampled {
+            temperature: 0.6,
+            seed: Some(seed),
+        };
+        assert_eq!(seeded.sampling().seed, Some(seed));
     }
 }

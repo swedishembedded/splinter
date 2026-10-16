@@ -114,7 +114,7 @@ apart and untouched by any synthetic data.
 | PP-17 | The opposite author, trained on its own corpus | M | PP-07, PP-16 |
 | PP-18 | The long-context arm | M | PP-11, hardware |
 | PP-19 | Mechanism ablations | M | PP-16 |
-| PP-20 | Sampled decoding beside greedy | S | PP-05, PP-11 |
+| PP-20 | Sampled decoding beside greedy (the code is done; no sampled run is made) | S | PP-05, PP-11 |
 | PP-21 | Survivorship analysis (the report is done; the per-arm join with exam outcomes is not) | S | PP-12 |
 | PP-22 | Enough items to settle tuned against retrieval | S | PP-13, PP-16 |
 | PP-23 | A reader other than the writer | M | - |
