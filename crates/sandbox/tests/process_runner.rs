@@ -36,13 +36,18 @@ fn pid_in(dir: &Path, name: &str) -> u32 {
         .unwrap()
 }
 
-#[test]
-fn a_looping_grandchild_is_gone_after_the_timeout() {
-    let dir = std::env::temp_dir().join(format!("splinter-runner-{}", std::process::id()));
+/// A failing spec must not leave the busy loop it exists to catch.
+fn kill(pid: u32) {
+    let _ = std::process::Command::new("kill")
+        .args(["-9", &pid.to_string()])
+        .status();
+}
+
+/// Runs `script` under a 500 ms timeout in a scratch directory and says
+/// whether the process that wrote its pid to `grandchild.pid` outlived the run.
+fn outlived_the_run(name: &str, script: &str) -> bool {
+    let dir = std::env::temp_dir().join(format!("splinter-runner-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    // The run starts a middle process (as a test runner does), which starts
-    // a busy loop (the program under test) and waits for it.
-    let script = "sh -c 'echo $$ > grandchild.pid; while :; do :; done' & wait";
     let spec = ProcessSpec::new(
         vec!["sh".into(), "-c".into(), script.into()],
         &dir,
@@ -52,20 +57,53 @@ fn a_looping_grandchild_is_gone_after_the_timeout() {
     );
 
     let began = Instant::now();
-    let output = run(&spec).unwrap();
+    let ran = run(&spec);
 
+    let pid = pid_in(&dir, "grandchild.pid");
+    let output = match ran {
+        Ok(output) => output,
+        Err(e) => {
+            // The escaped process holds the run's output open.
+            kill(pid);
+            panic!("{e}");
+        }
+    };
     assert!(output.timed_out, "{output:?}");
     assert!(
         began.elapsed() < Duration::from_secs(10),
         "{:?}",
         began.elapsed()
     );
-    let pid = pid_in(&dir, "grandchild.pid");
     let deadline = Instant::now() + Duration::from_secs(5);
     while is_running(pid) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(20));
     }
     let survived = is_running(pid);
+    if survived {
+        kill(pid);
+    }
     let _ = std::fs::remove_dir_all(&dir);
-    assert!(!survived, "the looping grandchild outlived the run");
+    survived
+}
+
+/// A middle process (as a test runner is) starts a busy loop (the program
+/// under test) and waits for it.
+#[test]
+fn a_looping_grandchild_is_gone_after_the_timeout() {
+    let script = "sh -c 'echo $$ > grandchild.pid; while :; do :; done' & wait";
+    assert!(
+        !outlived_the_run("group", script),
+        "the looping grandchild outlived the run"
+    );
+}
+
+/// A program that puts itself in a session or group of its own (`setsid`,
+/// `timeout`) leaves the run's process group, but not its descendants.
+#[test]
+fn a_looping_descendant_that_left_the_process_group_is_gone_too() {
+    let script = "setsid sh -c 'echo $$ > grandchild.pid; while :; do :; done' & wait";
+    assert!(
+        !outlived_the_run("session", script),
+        "the descendant outlived the run"
+    );
 }

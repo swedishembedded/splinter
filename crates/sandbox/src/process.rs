@@ -16,9 +16,11 @@
 //! a cap and read to its end past it, so the program never blocks on a
 //! full pipe; a stream cut at the cap is reported as truncated. A run that
 //! outlives its timeout is timed out. Either way, once the run ends its
-//! whole process group is killed, so no process it started outlives it
-//! unless it left the group (which a process can do: this bounds a run, it
-//! does not confine one).
+//! whole process group is killed, and so is every descendant of the program
+//! still linked to it by parent (a process that moved to a session or group of
+//! its own is found that way). What a run cannot stop is a process that was
+//! orphaned before the end (its parent exited first): this bounds a run, it
+//! does not confine one.
 //!
 //! [`ResourceLimits`], when given, are applied with `setrlimit` in the
 //! child between `fork` and `exec`, so they bind the program and everything
@@ -278,17 +280,71 @@ fn has_exited(child: &Child) -> std::io::Result<bool> {
     }
 }
 
-/// Kills the run's whole process group, so a process it started cannot
-/// keep running, or keep its output open, past the run.
+/// Every process that descends from `root` by parent links, read from
+/// `/proc` (none where it is not mounted). A descendant that left the run's
+/// process group (`setsid`, `timeout`) is found this way as long as the chain
+/// of parents to `root` is unbroken.
+fn descendants(root: libc::pid_t) -> Vec<libc::pid_t> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    let mut children: std::collections::HashMap<libc::pid_t, Vec<libc::pid_t>> = Default::default();
+    for entry in entries.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|n| n.parse::<libc::pid_t>().ok())
+        else {
+            continue;
+        };
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
+            continue;
+        };
+        // `pid (comm) state ppid ...`: the name may hold spaces and
+        // parentheses, so the fields are read after the last `)`.
+        let parent = stat
+            .rsplit_once(") ")
+            .and_then(|(_, rest)| rest.split_whitespace().nth(1))
+            .and_then(|field| field.parse::<libc::pid_t>().ok());
+        if let Some(parent) = parent {
+            children.entry(parent).or_default().push(pid);
+        }
+    }
+    let mut found = Vec::new();
+    let mut frontier = vec![root];
+    while let Some(parent) = frontier.pop() {
+        for &child in children.get(&parent).into_iter().flatten() {
+            found.push(child);
+            frontier.push(child);
+        }
+    }
+    found
+}
+
+/// Kills the run's whole process group and every descendant of its leader, so
+/// a process it started cannot keep running, or keep its output open, past
+/// the run, even one that moved to a session or group of its own.
+///
+/// The descendants are listed before anything is killed, and the group
+/// (leader included) is killed first: killing a leader's children first would
+/// let it finish on its own and be recorded as exited, not killed.
 fn kill_group(child: &Child) {
-    if let Ok(group) = libc::pid_t::try_from(child.id()) {
-        // SAFETY: `killpg` takes plain integers and only sends a signal.
-        // `group` is the process group the child leads (it was spawned with
-        // `process_group(0)`), and the child is not reaped yet, so the id
-        // still names that group; an error (no member left) leaves nothing
-        // to do.
+    let Ok(group) = libc::pid_t::try_from(child.id()) else {
+        return;
+    };
+    let descendants = descendants(group);
+    // SAFETY: `killpg` takes plain integers and only sends a signal.
+    // `group` is the process group the child leads (it was spawned with
+    // `process_group(0)`), and the child is not reaped yet, so the id still
+    // names that group; an error (no member left) leaves nothing to do.
+    unsafe {
+        libc::killpg(group, libc::SIGKILL);
+    }
+    for pid in descendants {
+        // SAFETY: `kill` takes plain integers and only sends a signal; a
+        // process that is already gone is an error with nothing to do.
         unsafe {
-            libc::killpg(group, libc::SIGKILL);
+            libc::kill(pid, libc::SIGKILL);
         }
     }
 }

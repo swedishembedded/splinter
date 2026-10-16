@@ -27,7 +27,14 @@ is gone after `run_suite` times out; every host's `lua` has a CPU limit) and
 `crates/sandbox/tests/process_runner.rs` (the runner leaves no looping
 grandchild).
 
-Not covered: a process that leaves its group on purpose, and the death of the
+The runner's group kill alone did not reach a process that moves to a session or group of its
+own (`setsid`, `timeout`, which makes its child a group leader): such a loop kept the run's
+output open and made `run` fail with `OutputNotClosed`, and a busy loop wrapped in `timeout`
+was seen running for 25 minutes after its run, unrelated to the families. The runner now also
+kills every descendant of the program still linked to it by parent, read from `/proc`, before
+the group (`a_looping_descendant_that_left_the_process_group_is_gone_too`).
+
+Not covered: a process orphaned before the end of the run (its parent exited first), and the death of the
 supervising process itself (a killed `splinter` leaves the leader of its
 command group running until the command ends; only the hosts' CPU limit bounds
 what it started).
