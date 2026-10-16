@@ -70,6 +70,7 @@ fn runtime(scratch: &Scratch, workspace: WorkspaceSettings) -> Runtime {
         min_calibration_controls: 2,
         thinking: false,
         served_temperature: None,
+        build: Default::default(),
         workspace,
     };
     Runtime::new(config, false).unwrap()

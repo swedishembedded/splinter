@@ -192,6 +192,9 @@ pub struct Provenance {
     /// The commit of splinter that decided it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub splinter_commit: Option<String>,
+    /// The commit of sven that ran the agents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sven_commit: Option<String>,
 }
 
 impl Provenance {

@@ -10,7 +10,9 @@
 #![allow(clippy::unwrap_used)]
 
 use serde_json::json;
+use splinter_core::build::{BuildInfo, Revisions};
 use splinter_core::clock::FixedClock;
+use splinter_core::digest::Digest;
 use splinter_core::rng::Seed;
 use splinter_store::experiences::StoreError;
 use splinter_store::runs::{
@@ -161,5 +163,47 @@ fn a_run_records_the_seeds_it_used_and_a_run_without_any_reads_with_none() {
     assert_eq!(seeds.get("train"), Some(&u64::MAX));
     assert_eq!(seeds.get("replay"), Some(&0));
     assert!(read_run(&other, &old_id).unwrap().seeds.is_empty());
+    let _ = std::fs::remove_dir_all(root.path());
+}
+
+#[test]
+fn a_run_names_the_build_that_made_it_and_an_old_run_reads_back_without_one() {
+    let root = scratch("build");
+    let workspace = Workspace::at(&root);
+    let clock = FixedClock::new("2026-09-30T08:00:00.000Z");
+    let binary = Digest::sha256_of(b"the splinter binary");
+    let build = BuildInfo {
+        revisions: Revisions {
+            splinter: Some("a".repeat(40)),
+            sven: Some("b".repeat(40)),
+            brain: Some("c".repeat(40)),
+        },
+        dirty: Some(true),
+        binary_digest: Some(binary.clone()),
+        gpu_contexts: Some(0),
+    };
+    let named = RunLog::start_built(&workspace, "practice", json!({}), &build, &clock).unwrap();
+    let named_id = named.id().to_string();
+    // A run recorded before builds were named.
+    let old = RunLog::start(&workspace, "solve", json!({}), &clock).unwrap();
+    let old_id = old.id().to_string();
+
+    let other = Workspace::at(&root);
+    let read = read_run(&other, &named_id).unwrap();
+    assert_eq!(read.build, build);
+    assert_eq!(read.build.binary_digest, Some(binary));
+    // Zero contexts is a measurement; it reads back as zero.
+    assert_eq!(read.build.gpu_contexts, Some(0));
+
+    let old = read_run(&other, &old_id).unwrap();
+    assert_eq!(old.build, BuildInfo::default());
+    // Unmeasured is absent from the record, not 0 or "".
+    let shown = serde_json::to_value(&old).unwrap();
+    for key in ["revisions", "dirty", "binary_digest", "gpu_contexts"] {
+        assert!(shown.get(key).is_none(), "{key} in {shown}");
+    }
+    let shown = serde_json::to_value(&read).unwrap();
+    assert_eq!(shown["revisions"]["sven"], "b".repeat(40));
+    assert_eq!(shown["dirty"], true);
     let _ = std::fs::remove_dir_all(root.path());
 }

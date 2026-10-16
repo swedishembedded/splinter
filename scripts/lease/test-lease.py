@@ -104,6 +104,24 @@ class GpuTest(unittest.TestCase):
             self.assertIn("other_contexts_start=1", r.stderr)
             self.assertIn("other_contexts_end=1", r.stderr)
 
+    def test_the_command_is_told_how_many_foreign_contexts_there_were(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = fake_nvidia_smi(Path(d), "4242, python, 900 MiB")
+            r = run([LEASE / "gpu", "--lock", Path(d) / "gpu.lock",
+                     "--", "sh", "-c", "echo n=$SPLINTER_GPU_CONTEXTS"], env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("n=1", r.stdout)
+
+    def test_the_command_is_told_nothing_when_contexts_cannot_be_counted(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = fake_nvidia_smi(Path(d), "")
+            (Path(d) / "nvidia-smi").write_text("#!/bin/sh\nexit 9\n")
+            env["SPLINTER_GPU_CONTEXTS"] = "stale"
+            r = run([LEASE / "gpu", "--lock", Path(d) / "gpu.lock",
+                     "--", "sh", "-c", "echo n=[${SPLINTER_GPU_CONTEXTS-unset}]"], env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("n=[unset]", r.stdout)
+
     def test_lock_serialises_and_status_propagates(self):
         with tempfile.TemporaryDirectory() as d:
             env = fake_nvidia_smi(Path(d), "")

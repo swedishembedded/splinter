@@ -92,6 +92,7 @@ fn context(scratch: &Scratch) -> Context {
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        build: Default::default(),
     };
     Context::new(config, false).unwrap()
 }

@@ -64,6 +64,7 @@ fn context(test: &str) -> (Context, Reported, ModelRef) {
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        build: Default::default(),
     };
     let reported: Reported = Arc::default();
     let sink = Arc::clone(&reported);

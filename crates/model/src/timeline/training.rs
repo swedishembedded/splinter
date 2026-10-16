@@ -390,24 +390,7 @@ const LOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Carg
 /// workspace was built with; `None` when the lock names none.
 #[must_use]
 pub fn brain_revision() -> Option<&'static str> {
-    let mut lines = LOCK.lines();
-    while let Some(line) = lines.next() {
-        if line != "name = \"brain\"" {
-            continue;
-        }
-        for field in lines.by_ref() {
-            if field.is_empty() {
-                break;
-            }
-            if let Some(source) = field.strip_prefix("source = \"") {
-                return source
-                    .trim_end_matches('"')
-                    .rsplit_once('#')
-                    .map(|(_, rev)| rev);
-            }
-        }
-    }
-    None
+    splinter_core::build::locked_revision(LOCK, "brain")
 }
 
 #[cfg(test)]

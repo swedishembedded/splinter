@@ -53,6 +53,7 @@ fn context(test: &str) -> (Context, Reported) {
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        build: Default::default(),
     };
     let reported = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&reported);

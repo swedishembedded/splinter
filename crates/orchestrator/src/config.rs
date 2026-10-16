@@ -10,6 +10,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use splinter_core::build::BuildInfo;
 use splinter_knowledge::capture::DEFAULT_ENV_ALLOWLIST;
 use splinter_store::StateRoot;
 
@@ -95,6 +96,10 @@ pub struct Config {
     pub min_calibration_controls: usize,
     /// Where a workspace's commands run and what they are given.
     pub workspace: WorkspaceSettings,
+    /// What this process was built from and started beside; handed in by the
+    /// command line, which knows its own build. Recorded in every run and
+    /// release.
+    pub build: BuildInfo,
 }
 
 /// Where the commands of a workspace (a project's tests, a solver's shell)
@@ -171,7 +176,9 @@ impl Config {
     ///   and the digest-pinned image a workspace's commands run in, with the
     ///   [`DOCKER_CLIENT_ENV`] variables the client needs;
     /// * `SPLINTER_WORKSPACE_SCRATCH`, where workspace trees are laid out;
-    /// * `SPLINTER_CARGO_HOME`, the cargo home workspace commands build with.
+    /// * `SPLINTER_CARGO_HOME`, the cargo home workspace commands build with;
+    /// * `SPLINTER_GPU_CONTEXTS`, the foreign GPU contexts the lease wrapper
+    ///   counted before starting the command (a number; anything else is no count).
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -228,6 +235,10 @@ impl Config {
                     .collect(),
                 scratch_root: var("SPLINTER_WORKSPACE_SCRATCH").map(PathBuf::from),
                 cargo_home: var("SPLINTER_CARGO_HOME").map(PathBuf::from),
+            },
+            build: BuildInfo {
+                gpu_contexts: var("SPLINTER_GPU_CONTEXTS").and_then(|v| v.trim().parse().ok()),
+                ..BuildInfo::default()
             },
         }
     }

@@ -147,7 +147,13 @@ pub fn record<R: Serialize>(
     work: impl FnOnce(&mut Recorder<'_>) -> Result<R, OrchestratorError>,
 ) -> Result<Recorded<R>, OrchestratorError> {
     let arguments = to_json("arguments", arguments)?;
-    let log = RunLog::start(ctx.workspace(), command, arguments, ctx.clock())?;
+    let log = RunLog::start_built(
+        ctx.workspace(),
+        command,
+        arguments,
+        &ctx.config().build,
+        ctx.clock(),
+    )?;
     let run = log.id().to_string();
     let cancel = CancelToken::new();
     let done = Arc::new(AtomicBool::new(false));

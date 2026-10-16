@@ -319,6 +319,7 @@ fn a_full_checkpoint_is_stored_and_read_back_by_its_digest() {
         calibration: Some(Digest::of(b"calibration")),
         brain_commit: Some("3f019a23".into()),
         splinter_commit: Some("05f13d4".into()),
+        sven_commit: Some("02adbda".into()),
     };
     let mut evidence = Evidence::default();
     evidence.values.insert("slope".into(), 0.97);

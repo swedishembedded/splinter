@@ -615,6 +615,19 @@ impl Report for Run {
             self.started_at,
             self.updated_at
         );
+        let revisions = &self.build.revisions;
+        for (name, rev) in [
+            ("splinter", &revisions.splinter),
+            ("sven", &revisions.sven),
+            ("brain", &revisions.brain),
+        ] {
+            if let Some(rev) = rev {
+                let _ = writeln!(out, "  {name} {rev}");
+            }
+        }
+        if let Some(true) = self.build.dirty {
+            let _ = writeln!(out, "  built from a dirty tree");
+        }
         for stage in &self.stages {
             let took = stage.duration_ms.map_or(String::new(), |ms| {
                 format!(" in {:.1}s", ms as f64 / 1000.0)

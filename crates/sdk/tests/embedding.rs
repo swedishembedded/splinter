@@ -43,6 +43,7 @@ fn config(dir: &std::path::Path) -> Config {
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        build: Default::default(),
     }
 }
 

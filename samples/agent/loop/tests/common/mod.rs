@@ -235,6 +235,7 @@ impl Fixture {
             workspace: Default::default(),
             thinking: false,
             served_temperature: None,
+            build: Default::default(),
         };
         let splinter = Splinter::builder(config).build().unwrap();
         splinter.runtime().add_model(

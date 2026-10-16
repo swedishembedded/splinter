@@ -126,6 +126,7 @@ pub fn config(scratch: &Scratch) -> Config {
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        build: Default::default(),
     }
 }
 

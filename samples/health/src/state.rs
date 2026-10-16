@@ -142,6 +142,7 @@ impl Run {
             workspace: Default::default(),
             thinking: false,
             served_temperature: None,
+            build: Default::default(),
         };
         Ok(Context::new(config, false)?)
     }

@@ -20,6 +20,7 @@
 
 mod absorb_output;
 mod absorb_session;
+mod build_info;
 mod cli;
 mod consolidate_output;
 mod continual_output;
@@ -63,6 +64,7 @@ fn main() -> ExitCode {
         config.state_root = StateRoot::new(state);
     }
     config.policy_context_tokens = cli.global.policy_context_tokens;
+    config.build = build_info::current(config.build.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,
         Err(e) => {

@@ -14,7 +14,8 @@
 # Holds flock on <lock-file> for the command's lifetime. Before and after it
 # lists compute contexts with nvidia-smi and prints other_contexts_start=N and
 # other_contexts_end=N on stderr, so a throughput number can be judged against
-# the contention it ran under. With --exclusive it refuses to start (status 3)
+# the contention it ran under, and hands the start count to the command as
+# SPLINTER_GPU_CONTEXTS (unset when unknown). With --exclusive it refuses to start (status 3)
 # when any compute context already exists, and names it. Without nvidia-smi
 # the count is "unknown", and --exclusive refuses.
 set -u
@@ -31,7 +32,10 @@ done
 
 contexts() {
     command -v nvidia-smi >/dev/null 2>&1 || return 1
-    nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed '/^[[:space:]]*$/d'
+    # A failing nvidia-smi is "unknown", never an empty (idle) listing.
+    local listing
+    listing=$(nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader) || return 1
+    printf '%s\n' "$listing" | sed '/^[[:space:]]*$/d'
 }
 
 mkdir -p "$(dirname "$lock")" || exit 2
@@ -54,6 +58,13 @@ if [ "$exclusive" = 1 ]; then
     fi
 fi
 echo "gpu: other_contexts_start=$n_start" >&2
+# The command records the contention it ran under (splinter's run record
+# does); a stale value from an outer wrapper must not pass for this count.
+if [ "$n_start" = unknown ]; then
+    unset SPLINTER_GPU_CONTEXTS
+else
+    export SPLINTER_GPU_CONTEXTS=$n_start
+fi
 
 "$@"
 status=$?

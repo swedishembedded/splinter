@@ -11,6 +11,7 @@
 //!
 //! * [`digest`] - content addresses, and the canonical form they are
 //!   computed over.
+//! * [`build`] - the commits, tree state and binary a run was made by.
 //! * [`clock`] - the UTC clock records are stamped by, injected so a test
 //!   fixes it.
 //! * [`source`] - what Splinter learns from: documents, repositories and
@@ -58,6 +59,7 @@
 #![warn(missing_docs)]
 
 pub mod annotation;
+pub mod build;
 pub mod chat;
 pub mod claim;
 pub mod clock;

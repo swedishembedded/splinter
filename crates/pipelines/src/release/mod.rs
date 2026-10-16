@@ -404,6 +404,7 @@ pub(crate) fn manifest(
         .iter()
         .map(|id| ctx.datasets().get(id).map(|d| d.manifest.dataset))
         .collect::<Result<Vec<_>, _>>()?;
+    let revisions = &ctx.config().build.revisions;
     Ok(ReleaseManifest {
         format: RELEASE_FORMAT.into(),
         artifact: ReleasedArtifact::Adapter {
@@ -436,6 +437,9 @@ pub(crate) fn manifest(
         distribution,
         provenance: Provenance {
             dataset_snapshots,
+            brain_commit: revisions.brain.clone(),
+            splinter_commit: revisions.splinter.clone(),
+            sven_commit: revisions.sven.clone(),
             ..Provenance::default()
         },
         generation: None,

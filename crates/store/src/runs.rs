@@ -26,6 +26,7 @@ use splinter_expdb::model::Entity;
 use crate::error::StoreError;
 use crate::new_id_with_prefix;
 use crate::workspace::Workspace;
+use splinter_core::build::BuildInfo;
 use splinter_core::clock::Clock;
 use splinter_core::digest::Digest;
 use splinter_core::rng::Seed;
@@ -148,6 +149,10 @@ pub struct Run {
     /// recorded before they were kept.
     #[serde(default, skip_serializing_if = "SampledSeeds::is_empty")]
     pub sampled: SampledSeeds,
+    /// What the run was made by: commits, tree state, binary and GPU
+    /// contexts. Absent from a run recorded before they were kept.
+    #[serde(flatten)]
+    pub build: BuildInfo,
 }
 
 /// The writing side of one run. See the module documentation.
@@ -159,6 +164,21 @@ pub struct RunLog {
     /// Every sampling seed recorded so far, in order: the run record shows
     /// a bounded view of them.
     sampled: Vec<u64>,
+}
+
+/// The body of a run's start event. The build is named only when something is
+/// known of it, so a start without one is byte-for-byte what it was before
+/// builds were recorded, and so is its address.
+fn start_body(
+    command: &str,
+    arguments: &serde_json::Value,
+    build: &BuildInfo,
+) -> serde_json::Value {
+    let mut body = json!({ "command": command, "arguments": arguments });
+    if !build.is_empty() {
+        body["build"] = json!(build);
+    }
+    body
 }
 
 fn event(run: &str, seq: u64, kind: &str, at: &str, body: serde_json::Value) -> Entity {
@@ -175,6 +195,17 @@ impl RunLog {
         workspace: &Workspace,
         command: &str,
         arguments: serde_json::Value,
+        clock: &dyn Clock,
+    ) -> Result<Self, StoreError> {
+        Self::start_built(workspace, command, arguments, &BuildInfo::default(), clock)
+    }
+
+    /// [`Self::start`], recording what the run is `build`t by.
+    pub fn start_built(
+        workspace: &Workspace,
+        command: &str,
+        arguments: serde_json::Value,
+        build: &BuildInfo,
         clock: &dyn Clock,
     ) -> Result<Self, StoreError> {
         // Exclusive: an id is never reused, even by a racing process.
@@ -206,6 +237,7 @@ impl RunLog {
                 error: None,
                 seeds: BTreeMap::new(),
                 sampled: SampledSeeds::default(),
+                build: build.clone(),
             },
             events: 1,
             sampled: Vec::new(),
@@ -215,7 +247,7 @@ impl RunLog {
             0,
             "start",
             &now,
-            json!({ "command": command, "arguments": arguments }),
+            start_body(command, &arguments, build),
         ))?;
         Ok(log)
     }
@@ -421,6 +453,7 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
         error: None,
         seeds: BTreeMap::new(),
         sampled: SampledSeeds::default(),
+        build: serde_json::from_value(start["body"]["build"].clone()).unwrap_or_default(),
     };
     let sampled = sampled_in(events);
     run.sampled = SampledSeeds::of(&sampled);
@@ -493,4 +526,18 @@ pub fn list_runs(workspace: &Workspace) -> Result<Vec<Run>, StoreError> {
         .iter()
         .filter_map(|(id, events)| fold(id, events))
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_start_without_a_build_is_the_start_recorded_before_builds_were() {
+        let arguments = json!({ "n": 1 });
+        assert_eq!(
+            start_body("solve", &arguments, &BuildInfo::default()),
+            json!({ "command": "solve", "arguments": { "n": 1 } })
+        );
+    }
 }

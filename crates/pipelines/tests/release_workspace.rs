@@ -42,6 +42,7 @@ use common::repo::{project_of, Agent, Mender, Wording};
 use common::{config, Scratch};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
+use splinter_core::build::{BuildInfo, Revisions};
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Task};
 use splinter_core::model_ref::ModelRef;
@@ -60,6 +61,20 @@ const MODULES: usize = 9;
 /// which a unanimous sign test is significant at the default level.
 const EXAM_FAMILIES: usize = 5;
 
+/// The build the specs run as: three distinct commits the manifest and the
+/// run must each name.
+fn build() -> BuildInfo {
+    BuildInfo {
+        revisions: Revisions {
+            splinter: Some("5".repeat(40)),
+            sven: Some("7".repeat(40)),
+            brain: Some("b".repeat(40)),
+        },
+        dirty: Some(false),
+        ..BuildInfo::default()
+    }
+}
+
 /// A context over a scratch state root whose `policy:default` is the
 /// practising agent, whose base arm - the champion before any release - does
 /// nothing, and whose `brain` is `brain`.
@@ -70,6 +85,7 @@ fn context(test: &str, brain: Brain) -> (Scratch, Context) {
         Brain::Missing => None,
         other => Some(fake_brain(&scratch.0, other)),
     };
+    config.build = build();
     let base = arm(&config, None);
     let ctx = Context::new(config, false)
         .unwrap()
@@ -206,12 +222,24 @@ fn a_candidate_that_mends_the_exam_the_champion_fails_is_released_and_a_server_f
             report.candidate.as_ref().unwrap().adapter_digest.clone()
         ))
     );
-    let stages: Vec<String> = splinter_store::runs::read_run(ctx.workspace(), &run_of(&ctx))
-        .unwrap()
-        .stages
-        .iter()
-        .map(|s| s.stage.clone())
-        .collect();
+    // The manifest and the run name the three commits the release was made
+    // by, so it can be rebuilt.
+    let provenance = &stored.manifest.provenance;
+    assert_eq!(
+        (
+            provenance.splinter_commit.as_deref(),
+            provenance.sven_commit.as_deref(),
+            provenance.brain_commit.as_deref()
+        ),
+        (
+            build().revisions.splinter.as_deref(),
+            build().revisions.sven.as_deref(),
+            build().revisions.brain.as_deref()
+        )
+    );
+    let run = splinter_store::runs::read_run(ctx.workspace(), &run_of(&ctx)).unwrap();
+    assert_eq!(run.build, build());
+    let stages: Vec<String> = run.stages.iter().map(|s| s.stage.clone()).collect();
     assert_eq!(stages.last().map(String::as_str), Some("release"));
 }
 
