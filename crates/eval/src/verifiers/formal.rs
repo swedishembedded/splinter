@@ -14,12 +14,15 @@ use splinter_core::annotation::{Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Task};
 
-use super::normalise::Normalisation;
+use super::normalise::{drop_thousands_separators, Normalisation};
+use super::short_answer::sole_candidate_is;
 use super::{single_reference, Finding, Verifier, VerifyError};
 
 /// Passes an answer iff it equals the task's one
 /// [`Reference`](splinter_core::experience::PrivilegedKind::Reference)
-/// once both are normalised; fails a different answer or none. Abstains on
+/// once both are normalised, or when it states exactly one candidate of the
+/// reference's type and that is the reference (see
+/// [`short_answer`](super::short_answer)); fails a different answer or none. Abstains on
 /// a task without exactly one reference, or of a kind it is not for.
 #[derive(Clone, Debug)]
 pub struct ExactMatchVerifier {
@@ -67,19 +70,24 @@ impl Verifier for ExactMatchVerifier {
                 ));
             }
         }
-        let reference = match single_reference(task) {
-            Ok(reference) => self.normalisation.apply(reference),
+        let stated_reference = match single_reference(task) {
+            Ok(reference) => reference,
             Err(abstain) => return Ok(abstain),
         };
+        let reference = self.normalisation.apply(stated_reference);
         let output = exp
             .final_output
             .as_deref()
             .map(|o| self.normalisation.apply(o));
-        let passed = output.as_deref() == Some(reference.as_str());
+        let passed = output.as_deref() == Some(reference.as_str())
+            || exp
+                .final_output
+                .as_deref()
+                .is_some_and(|raw| sole_candidate_is(raw, stated_reference, &self.normalisation));
         Ok(Finding::decided(
             passed,
             json!({
-                "comparison": "exact after normalisation",
+                "comparison": "exact after normalisation, or the one candidate of its type",
                 "normalisation": self.normalisation,
                 "reference": Digest::of(reference.as_bytes()),
                 "output": output.map(|o| Digest::of(o.as_bytes())),
@@ -110,6 +118,9 @@ const STATED_SLACK: usize = 60;
 /// as one (`eight` is `8`).
 ///
 /// An answer that states the reference but runs past the length bound is
+/// still passed when its one candidate is the reference (the single phrase it
+/// emphasises, or for a numeric reference the single number it states; see
+/// [`short_answer`](super::short_answer)). Otherwise it is
 /// neither right nor wrong by code: the reference may be the point of a long
 /// explanation or one item of a list, which only a judge can tell apart, so
 /// the verifier abstains and leaves the answer to one. An answer that does
@@ -158,25 +169,11 @@ fn plain_digit(c: char) -> Option<char> {
 }
 
 /// `text` with sub- and superscript digits as plain digits and the commas
-/// that separate thousands (`9,123`, a digit before and exactly three after)
-/// dropped, so a number is the same number however it is written.
+/// that separate thousands dropped, so a number is the same number however
+/// it is written.
 fn fold_digits(text: &str) -> String {
-    let chars: Vec<char> = text.chars().map(|c| plain_digit(c).unwrap_or(c)).collect();
-    let digit_at = |at: Option<usize>| {
-        at.and_then(|i| chars.get(i))
-            .is_some_and(char::is_ascii_digit)
-    };
-    let mut out = String::with_capacity(text.len());
-    for (i, &c) in chars.iter().enumerate() {
-        let separates_thousands = c == ','
-            && digit_at(i.checked_sub(1))
-            && (1..=3).all(|k| digit_at(Some(i + k)))
-            && !digit_at(Some(i + 4));
-        if !separates_thousands {
-            out.push(c);
-        }
-    }
-    out
+    let plain: String = text.chars().map(|c| plain_digit(c).unwrap_or(c)).collect();
+    drop_thousands_separators(&plain)
 }
 
 /// The whole numbers a word names, below one hundred and a hundred itself.
@@ -292,15 +289,28 @@ impl Verifier for StatedReferenceVerifier {
     /// The evidence names the comparison and the digests of the two
     /// normalised texts, never the reference itself.
     fn verify(&self, task: &Task, exp: &Experience) -> Result<Finding, VerifyError> {
-        let reference = match single_reference(task) {
-            Ok(reference) => self.normalisation.apply(reference),
+        let stated_reference = match single_reference(task) {
+            Ok(reference) => reference,
             Err(abstain) => return Ok(abstain),
         };
+        let reference = self.normalisation.apply(stated_reference);
         let output = exp
             .final_output
             .as_deref()
             .map(|o| self.normalisation.apply(o));
         let stating = output.as_deref().map(|o| states(o, &reference));
+        // A long answer that states the reference is still an answer when
+        // its one candidate (what it emphasises, or its one number) is it.
+        let stating = match stating {
+            Some(Stating::TooLong)
+                if exp.final_output.as_deref().is_some_and(|raw| {
+                    sole_candidate_is(raw, stated_reference, &self.normalisation)
+                }) =>
+            {
+                Some(Stating::Stated)
+            }
+            other => other,
+        };
         let evidence = json!({
             "comparison": "reference stated in a bounded answer",
             "normalisation": self.normalisation,

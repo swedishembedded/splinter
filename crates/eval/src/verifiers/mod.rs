@@ -47,6 +47,7 @@ pub mod mutation;
 pub mod names;
 pub mod normalise;
 pub mod quotation;
+mod short_answer;
 pub mod speech;
 pub mod test_report;
 pub mod workspace;
