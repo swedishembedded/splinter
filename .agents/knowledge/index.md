@@ -54,3 +54,4 @@ in the same commit.
 | [066](066-the-family-pre-flight-killed-the-test-runner-and-orphaned-its-lua-processes.md) | The family pre-flight killed the test runner and orphaned its Lua processes |
 | [067](067-a-looping-mutant-cost-the-sandbox-wall-limit-not-the-time-budget.md) | A looping mutant cost the sandbox's wall limit, not the generator's time budget |
 | [068](068-the-anchor-suite-leaves-verbose-answers-undecided-and-the-served-agent-needs-a-longer-admission-deadline.md) | The anchor suite leaves verbose answers undecided, and the served agent needs a longer admission deadline |
+| [069](069-a-run-report-keeps-only-the-wrong-answers-so-undecided-ones-cannot-be-regraded.md) | A run report keeps only the wrong answers, so undecided ones cannot be regraded |
