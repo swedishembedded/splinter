@@ -414,6 +414,16 @@ class Ratchet(unittest.TestCase):
         self.assertIn("crates/demo/src/lib.rs:3: test seed literal t::seed", out)
         self.assertIn("// seed:", out)
 
+    def test_a_reason_that_says_any_seed_will_do_is_no_reason(self):
+        src = "#[test]\nfn t() {\n    // seed: Any value shows it is read back\n    let seed = 4;\n}\n"
+        out = "\n".join(gate.check(tests(src), {}))
+        self.assertIn("crates/demo/src/lib.rs:4: test seed literal t::seed", out)
+        self.assertIn("drop the literal", out)
+        py = gate.scan_other("samples/x/test_a.py", "def t():\n    f(seed=1)  # seed: any value; the folds matter\n")
+        self.assertIn("# seed:", "\n".join(gate.check(py, {})))
+        kept = "#[test]\nfn t() {\n    // seed: a fixed pair; a drawn one could resample alike\n    let seed = 4;\n}\n"
+        self.assertEqual(gate.check(tests(kept), {}), [])
+
     def test_a_test_literal_with_a_reason_passes_without_an_allowlist_entry(self):
         src = "#[test]\nfn t() {\n    let seed = 4; // seed: a golden digest\n}\n"
         self.assertEqual(gate.check(tests(src), {}), [])

@@ -309,8 +309,7 @@ async fn every_trace_line_names_the_model_and_the_seed_its_exchange_was_decoded_
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("trace.jsonl");
     let log = trace::open(&path).unwrap();
-    // seed: any value shows the session seed reaches every line, and differently
-    let session_seed = 40;
+    let session_seed = splinter_sdk::seed::resolve("seed", None);
     for (n, id) in [(1, "a"), (2, "b")] {
         let decoding = Decoding::for_exchange(session_seed, n);
         let exchange = chat.say("Left or right?").await.unwrap();

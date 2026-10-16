@@ -339,8 +339,8 @@ mod tests {
             Recipe::parse(&pairs(&["train_share=0.5"])).is_err(),
             "a subsample names its seed"
         );
-        // seed: any value shows a named subsample seed is accepted
-        assert!(Recipe::parse(&pairs(&["train_share=0.5", "train_seed=3"])).is_ok());
+        let drawn = format!("train_seed={}", splinter_sdk::seed::resolve("seed", None));
+        assert!(Recipe::parse(&pairs(&["train_share=0.5", &drawn])).is_ok());
         assert!(Recipe::parse(&pairs(&["arm=standard"])).is_err());
         assert_eq!(Recipe::parse(&[]).unwrap().arm().unwrap(), Arm::Horizon);
     }

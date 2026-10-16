@@ -442,8 +442,7 @@ mod tests {
     /// A run directory with a synthetic cohort imported.
     fn imported_run(dir: &Path) -> Run {
         let run = Run::new(dir);
-        // seed: the cohort only has to exist; the draws under test are the split's
-        let declaration = synth::write(&run.source_dir(), 400, Some(7), "redistributable").unwrap();
+        let declaration = synth::write(&run.source_dir(), 400, None, "redistributable").unwrap();
         let record = ImportRecord {
             dataset: declaration.dataset.clone(),
             supplies: declaration.supplies.clone(),

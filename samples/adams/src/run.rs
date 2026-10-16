@@ -765,6 +765,7 @@ mod tests {
 
     #[test]
     fn the_loop_trains_with_the_seed_it_was_given() {
+        let seed = splinter_sdk::seed::resolve("seed", None);
         let g = Grpo {
             base: PathBuf::new(),
             checkpoint: PathBuf::new(),
@@ -776,9 +777,8 @@ mod tests {
             temperature: 0.8,
             rank: 4,
             gate_one_in: 5,
-            // seed: any value shows it reaches the loop's options unchanged
-            seed: 77,
+            seed,
         };
-        assert_eq!(improve_options(&g, 64).seed, 77);
+        assert_eq!(improve_options(&g, 64).seed, seed);
     }
 }

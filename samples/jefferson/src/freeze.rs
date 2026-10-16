@@ -63,9 +63,9 @@ mod tests {
     #[test]
     fn a_second_command_without_a_seed_continues_the_directorys() {
         let dir = tempfile::tempdir().unwrap();
-        // seed: any value but the default shows the recorded one is read back
-        assert_eq!(recorded(dir.path(), Some(9)), 9);
-        assert_eq!(recorded(dir.path(), None), 9);
+        let given = splinter_sdk::seed::resolve("seed", None);
+        assert_eq!(recorded(dir.path(), Some(given)), given);
+        assert_eq!(recorded(dir.path(), None), given);
     }
 
     #[test]

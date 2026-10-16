@@ -576,10 +576,10 @@ mod tests {
     #[test]
     fn a_second_freeze_without_a_seed_is_accepted_and_another_seed_refused() {
         let dir = tempfile::tempdir().unwrap();
-        // seed: any value but the legacy one shows the recorded one is read back
-        assert_eq!(recorded(dir.path(), Some(9)), 9);
-        assert_eq!(recorded(dir.path(), None), 9);
-        assert!(freeze_seed(dir.path(), Some(10)).is_err());
+        let given = splinter_sdk::seed::resolve("seed", None);
+        assert_eq!(recorded(dir.path(), Some(given)), given);
+        assert_eq!(recorded(dir.path(), None), given);
+        assert!(freeze_seed(dir.path(), Some(given.wrapping_add(1))).is_err());
     }
 
     #[test]

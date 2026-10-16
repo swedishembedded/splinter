@@ -298,6 +298,7 @@ mod tests {
     use splinter_sdk::vocabulary::speech::Portrayal;
 
     fn set_of_groups(n: usize) -> SpokenSet {
+        let voice = splinter_sdk::seed::resolve("seed", None);
         let items = (0..n)
             .map(|i| Spoken {
                 id: format!("r{i}"),
@@ -306,7 +307,7 @@ mod tests {
                 text: "x".into(),
                 file: "x.wav".into(),
                 audio: Digest::of(b"x"),
-                seed: 1, // seed: the voice only has to exist; the grouping is under test
+                seed: voice,
                 word_error_rate: 0.0,
             })
             .collect();

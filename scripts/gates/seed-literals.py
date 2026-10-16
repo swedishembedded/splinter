@@ -35,7 +35,8 @@ random, so a test fixes a seed only where determinism is necessary (a golden
 or replay assertion, a parity or reproducibility claim, a fixture whose
 outcome was measured at one seed) and says why in a `// seed: <reason>` comment
 (`# seed:` in Python) on the line or the line above; where it is not necessary
-the literal is dropped and the test passes for any seed.
+the literal is dropped and the test passes for any seed. A reason that
+says any value will do (it starts with `any`) is no reason: the test draws.
 
 Detected, in Rust (beyond the seed written beside the word seed): a literal
 seed constructor (`Seed::new(<int>)`, `Mt19937`, `ChaCha*`, `Philox*`), a
@@ -73,7 +74,8 @@ import sys
 from pathlib import Path
 
 REASON_PREFIXES = ("salt:", "world:", "frozen:", "greedy:", "test-double:", "bench-input:", "todo:")
-TEST_MARK = re.compile(r"(?://|#)\s*seed:")
+TEST_MARK = re.compile(r"(?://|#)\s*seed:\s*(.*)$")
+NO_REASON = re.compile(r"any\b", re.I)  # "any value will do" says determinism is not needed
 
 INT = r"(?:0[xX][0-9A-Fa-f_]+|\d[\d_]*)(?:_?[ui](?:8|16|32|64|128|size))?"
 INT_EXPR = INT + r"(?:\s*<<\s*\d+)?"
@@ -147,9 +149,10 @@ SELF_SPEC = "scripts/gates/test-seed-literals.py"
 class Hit:
     """One seed literal: where, in which item, what kind, in test code or not."""
 
-    def __init__(self, path, symbol, kind, line, test, marked, const=None):
+    def __init__(self, path, symbol, kind, line, test, reason, const=None):
         self.path, self.symbol, self.kind = path, symbol, kind
-        self.line, self.test, self.marked = line, test, marked
+        self.line, self.test, self.reason = line, test, reason  # reason: the `seed:` text covering it, or None
+        self.marked = reason is not None
         self.const = const  # for a positional hit, the constant passed as the seed
 
     def key(self):
@@ -219,8 +222,8 @@ def scan_rust(path, text, test_file=False, seed_params=None):
         for name, kind, const in find_hits(code, skel, raw, idx, seed_params, seed_fns):
             opening = [(*pending, depth)] if pending is not None and "{" in skel else []
             symbol = scope_name(stack + opening) + name
-            marked = seed_marked(raw, idx + 1)
-            hits.append(Hit(path, symbol, kind, idx + 1, in_test or (pending_test and "{" in skel), marked, const))
+            reason = seed_reason(raw, idx + 1)
+            hits.append(Hit(path, symbol, kind, idx + 1, in_test or (pending_test and "{" in skel), reason, const))
 
         if '"seed"' in code:
             param_context = 5
@@ -355,17 +358,18 @@ def scan_other(path, text):
     return scan_makefile(path, text)
 
 
-def seed_marked(lines, n):
-    """Whether line n (1-based) is covered by a `seed:` reason: one on the line
+def seed_reason(lines, n):
+    """The `seed:` reason covering line n (1-based), or None: one on the line
     itself, or in the run of non-blank lines above it, so a comment of several
     lines (or a seed constant beside another) covers what follows it up to the
-    next blank line."""
+    next blank line. Its text is that of the comment's first line."""
     for i in range(n - 1, -1, -1):
         if not lines[i].strip():
-            return False
-        if TEST_MARK.search(lines[i]):
-            return True
-    return False
+            return None
+        found = TEST_MARK.search(lines[i])
+        if found:
+            return found.group(1).strip()
+    return None
 
 
 def scan_python(path, text):
@@ -375,7 +379,7 @@ def scan_python(path, text):
     lines = text.split("\n")
     defs = []  # (indent, name) of the open `def`s and classes
     for n, line in enumerate(lines, 1):
-        marked = seed_marked(lines, n)
+        reason = seed_reason(lines, n)
         code = line.split("#", 1)[0]
         if code.strip():
             indent = len(code) - len(code.lstrip())
@@ -383,7 +387,7 @@ def scan_python(path, text):
                 defs.pop()
 
         def add(symbol, kind):
-            hits.append(Hit(path, symbol, kind, n, test, marked))
+            hits.append(Hit(path, symbol, kind, n, test, reason))
 
         for m in PY_ARG_DEFAULT.finditer(line):
             add("--" + m.group(1), "default")
@@ -419,11 +423,11 @@ def scan_shell(path, text):
             owner = func.group(1)
         elif code.startswith("}"):
             owner = "-"
-        marked = seed_marked(lines, n)
+        reason = seed_reason(lines, n)
         found = [m.group(1) for pattern in (SH_FLAG, SH_DEFAULT, SH_ASSIGN) for m in pattern.finditer(code)]
         if SH_SEQ.search(code) and any("seed" in following.lower() for following in lines[n - 1 : n + SHELL_LOOKAHEAD]):
             found.append("seq-seed")
-        hits.extend(Hit(path, f"{owner}:{name}", "shell", n, test, marked) for name in found)
+        hits.extend(Hit(path, f"{owner}:{name}", "shell", n, test, reason) for name in found)
     return hits
 
 
@@ -434,15 +438,15 @@ def scan_makefile(path, text):
     lines = text.split("\n")
     target = "-"
     for n, line in enumerate(lines, 1):
-        marked = seed_marked(lines, n)
+        reason = seed_reason(lines, n)
         m = MAKE_ASSIGN.match(line)
         if m:
-            hits.append(Hit(path, m.group(1), "const", n, False, marked))
+            hits.append(Hit(path, m.group(1), "const", n, False, reason))
         t = MAKE_TARGET.match(line)
         if t:
             target = t.group(1)
         if line.startswith("\t"):
-            hits.extend(Hit(path, f"{target}:{f.group(1)}", "shell", n, False, marked) for f in SH_FLAG.finditer(line))
+            hits.extend(Hit(path, f"{target}:{f.group(1)}", "shell", n, False, reason) for f in SH_FLAG.finditer(line))
     return hits
 
 
@@ -623,12 +627,17 @@ def check(hits, entries):
     and test hits without a `seed:` reason."""
     failures = []
     for hit in hits:
+        marker = "#" if hit.path.endswith(".py") else "//"
         if hit.test and not hit.marked:
-            marker = "#" if hit.path.endswith(".py") else "//"
             failures.append(
                 f"{hit.path}:{hit.line}: test seed literal {hit.symbol} ({hit.kind}) has no reason: "
                 f"drop the literal so the test passes for any seed, or say why determinism is "
                 f"necessary with `{marker} seed: <reason>`"
+            )
+        elif hit.test and NO_REASON.match(hit.reason):
+            failures.append(
+                f"{hit.path}:{hit.line}: test seed literal {hit.symbol} ({hit.kind}) says any seed "
+                f"will do (`{marker} seed: {hit.reason}`): drop the literal so the test draws its seed"
             )
     named = {key[1].rsplit("::", 1)[-1] for key in entries} | {h.symbol.rsplit("::", 1)[-1] for h in hits if h.kind == "const"}
     production = {h.key(): h for h in hits if not h.test and not (h.const and h.const in named)}

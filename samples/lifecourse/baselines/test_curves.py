@@ -8,6 +8,7 @@
 """Specification of the learning-curve analysis: python -I test_curves.py"""
 import json
 import os
+import secrets
 import sys
 import tempfile
 import unittest
@@ -43,7 +44,7 @@ class Curves(unittest.TestCase):
                         if share == 50 and (r, k) == (1, 4):
                             continue  # one fold not run at one share
                         write(directory, r, k, base + 0.0001 * k)
-            rows = curves.analyse(d, [0, 1], bootstrap=20, seed=1)  # seed: any value; the assertions concern the folds, not the resamples
+            rows = curves.analyse(d, [0, 1], bootstrap=20, seed=secrets.randbits(63))
             row = rows["elastic-net Cox"]
             self.assertEqual(row["folds"], 9, "the fold missing at one share is dropped from all")
             self.assertAlmostEqual(row["mean_ibs"][0], 0.052 + 0.0001 * np.mean([0, 1, 2, 3, 0, 1, 2, 3, 4][:9]), places=6)

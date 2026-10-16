@@ -243,6 +243,12 @@ pub fn units_from_json_lines(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::hash::{BuildHasher, RandomState};
+
+    /// A seed drawn for this call, for a spec whose claim holds for every seed.
+    fn any_seed() -> u64 {
+        RandomState::new().hash_one(0_u8)
+    }
 
     fn units(n: usize) -> Vec<Unit> {
         (0..n)
@@ -263,8 +269,9 @@ mod tests {
     #[test]
     fn every_unit_lands_once_groups_stay_whole_and_strata_balance() {
         let u = units(3000);
-        // seed: any; the balance properties hold for every seed
-        let p = partition(&u, Digest::of(b"data"), &PartitionSpec::protocol(11)).unwrap();
+        let seed = any_seed();
+        let p = partition(&u, Digest::of(b"data"), &PartitionSpec::protocol(seed)).unwrap();
+        println!("seed {seed}");
         let group_of: BTreeMap<&str, &str> = u
             .iter()
             .map(|x| (x.id.as_str(), x.group.as_str()))

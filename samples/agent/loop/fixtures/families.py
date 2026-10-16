@@ -433,16 +433,18 @@ def run(cmd, cwd):
 
 def check():
     bad = 0
+    seed = secrets.randbits(63)
     for name in FAMILIES:
         for fixed in (False, True):
             with tempfile.TemporaryDirectory() as d:
-                # seed: any value renders the family; the check is about its bug
-                repo, accept, _ = render(name, os.path.join(d, "x"), seed=1, fixed=fixed)
+                repo, accept, _ = render(name, os.path.join(d, "x"), seed=seed, fixed=fixed)
                 tests = run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], repo)
                 acc = run([sys.executable, accept], repo)
                 ok = tests == 0 and (acc == 0) == fixed
                 print(f"{name:10} {'fixed' if fixed else 'buggy'}: repo tests {'pass' if tests == 0 else 'FAIL'}, acceptance {'pass' if acc == 0 else 'fail'} {'ok' if ok else 'WRONG'}")
                 bad += not ok
+    if bad:
+        print(f"rendered under seed {seed}; render <out> --family <name> --seed {seed} reproduces a family")
     return 1 if bad else 0
 
 

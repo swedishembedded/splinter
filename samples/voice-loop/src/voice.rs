@@ -106,8 +106,8 @@ mod tests {
     #[test]
     fn a_given_seed_is_the_voice_of_a_new_output() {
         let dir = tempfile::tempdir().unwrap();
-        // seed: any value shows the given one is recorded and read back
-        assert_eq!(seed(&manifest_in(dir.path()), Some(9)).unwrap(), 9);
-        assert_eq!(seed(&manifest_in(dir.path()), None).unwrap(), 9);
+        let given = splinter_sdk::seed::resolve("seed", None);
+        assert_eq!(seed(&manifest_in(dir.path()), Some(given)).unwrap(), given);
+        assert_eq!(seed(&manifest_in(dir.path()), None).unwrap(), given);
     }
 }

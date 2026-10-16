@@ -522,7 +522,7 @@ mod tests {
         let clusters: Vec<u64> = (0..obs.len() as u64).map(|i| i / 5).collect();
         let interval =
             |seed| auc_intervals(&obs, &flag_risk, Some(&all_risk), &clusters, 10.0, seed);
-        // seed: any two distinct values show the seed alone decides the resample
+        // seed: a fixed pair; drawn seeds could resample alike, which would fail this for no defect
         assert_eq!(interval(11), interval(11));
         assert_ne!(interval(11), interval(12));
     }
