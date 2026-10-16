@@ -346,14 +346,33 @@ fn the_exact_reference_verifier_conforms() {
         &["Paris"],
         Some("PASS: matches the reference"),
     );
-    // The thousands separator of knowledge 060 is a representation of the
-    // same number; this verifier compares text and does not know it.
-    let verdict_ = decide(&verifier, &["9123"], Some("9,123"));
-    table.gap(
+    judge(
         Class::Equivalent,
         "thousands separator",
         Want::Pass,
-        verdict_,
+        &["9123"],
+        Some("9,123"),
+    );
+    judge(
+        Class::Equivalent,
+        "emphasis and a final full stop",
+        Want::Pass,
+        &["K"],
+        Some("**K**."),
+    );
+    judge(
+        Class::Equivalent,
+        "the one number of a sentence",
+        Want::Pass,
+        &["42"],
+        Some("The answer is 42."),
+    );
+    judge(
+        Class::Incorrect,
+        "a hedge listing numbers",
+        Want::Fail,
+        &["8789"],
+        Some("8789 or 8790"),
     );
     table.assert_conforms(&[
         Class::Correct,
