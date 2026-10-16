@@ -13,7 +13,7 @@
 //! grammar, read once into the devices the process may schedule on; no
 //! environment variable chooses hardware.
 
-use crate::model::device::{select, select_backend, Devices};
+use crate::model::device::{select, select_backend};
 use crate::model::PolicyError;
 
 /// `--device` and `--backend`, as a program declares them.
@@ -54,23 +54,27 @@ impl DeviceFlags {
         })
     }
 
-    /// Fixes the process's backend and schedulable devices, and says which
-    /// they are on standard error.
+    /// Fixes the process's backend and schedulable devices when a flag names
+    /// them, and says which they are on standard error. Without a flag nothing
+    /// is probed: the first model loaded schedules on everything the machine
+    /// has.
     ///
     /// # Errors
     /// A flag names no backend or device, or the machine lacks it.
-    pub fn apply(&self) -> Result<&'static Devices, PolicyError> {
+    pub fn apply(&self) -> Result<(), PolicyError> {
         if let Some(backend) = &self.backend {
             select_backend(backend)?;
         }
-        let devices = select(self.device.as_deref().unwrap_or(""))?;
-        eprintln!(
-            "devices: {} (gpus {:?}, {} cpu cores)",
-            devices.source(),
-            devices.gpus(),
-            devices.cpu_cores().len()
-        );
-        Ok(devices)
+        if let Some(text) = &self.device {
+            let devices = select(text)?;
+            eprintln!(
+                "devices: {} (gpus {:?}, {} cpu cores)",
+                devices.source(),
+                devices.gpus(),
+                devices.cpu_cores().len()
+            );
+        }
+        Ok(())
     }
 }
 
