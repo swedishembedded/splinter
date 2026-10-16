@@ -139,3 +139,15 @@ beside the first. It is the same design and the same flags as the registered run
 seed, one run, nothing retried; the outcomes and decision rules are the registered ones. The
 candidates of the registered run and of E2b are also re-graded with the repaired verifier,
 labelled post hoc; both gradings are reported.
+
+# Second wave, E2d (post hoc; written 2026-10-16 13:55 CEST, before the run)
+
+All candidates of the runs above (policy Qwen3-0.6B) passed the improvement and retention checks
+and were refused by the anchor check alone, which allows a loss of less than one of the 40 anchor
+questions; the answers that were lost were numbers written where a general fact was asked. Whether
+a larger policy keeps the anchor while learning the same facts is a question raised by that
+result, so the run is post hoc: Qwen3-1.7B as the policy, a new drawn seed, the flags of the
+registered run, nothing else changed, one run, nothing retried. Outcomes and decision rules are the
+registered ones; the candidate is measured on the probes whether or not it is released.
+(The repaired-verifier rerun's serve check failed to start its server because the shell it was
+launched from lacked the CUDA runtime path; that check is reported as not measured for that run.)
