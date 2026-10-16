@@ -17,8 +17,6 @@
 //! if the examination drawn from the corpus now is not the one frozen, the
 //! corpus was changed after the freeze and the stage refuses.
 
-use std::time::Duration;
-
 use anyhow::Context as _;
 
 use super::layout::{AuthorManifest, CorpusRecord, DatasetRecord, FrozenExam, Study, EXAM_ITEMS};
@@ -29,6 +27,7 @@ use crate::lab::{build_dataset, exam_items_of, item_view, mine_all, read_mined, 
 use crate::manifest::{begin_or_continue_mining, code_revision};
 use crate::models::is_remote;
 use crate::survivors::of_corpus;
+use crate::transit::Transit;
 use crate::writer::Models;
 
 /// The models that do the corpus stage's work, as the protocol's three roles.
@@ -39,16 +38,6 @@ pub struct Staff<'a> {
     pub reader: &'a dyn Models,
     /// Reads the decisions out of the kept essays.
     pub miner: &'a dyn Models,
-}
-
-/// How the stage copes with a lossy network. Not part of the protocol: it
-/// changes how long a run takes, not what it makes.
-#[derive(Clone, Copy, Debug)]
-pub struct Pace {
-    /// How many times a request lost in transit is repeated.
-    pub transport_retries: usize,
-    /// The pause before the first repeat; it doubles up to a minute.
-    pub transport_backoff: Duration,
 }
 
 /// Runs the corpus stage for the author with seed `author_seed`.
@@ -63,7 +52,7 @@ pub fn run(
     study: &Study,
     author_seed: u64,
     staff: &Staff<'_>,
-    pace: &Pace,
+    pace: &Transit,
 ) -> anyhow::Result<AuthorManifest> {
     let protocol = study.protocol();
     let kept = study.author_manifest(author_seed)?;
@@ -79,8 +68,8 @@ pub fn run(
         max_calls: protocol.corpus.max_calls,
         max_output_tokens: protocol.corpus.max_output_tokens,
         workers: protocol.corpus.workers,
-        transport_retries: pace.transport_retries,
-        transport_backoff: pace.transport_backoff,
+        transport_retries: pace.retries,
+        transport_backoff: pace.backoff,
     };
     let prepared = plan.prepare(cache.dir(), Some(author_seed), None, None)?;
     let options = plan.begin(cache.dir(), &prepared)?;
@@ -94,12 +83,38 @@ pub fn run(
         &options,
     )?;
     print_summary(&author.persona.name, &summary);
-    anyhow::ensure!(
-        summary.stopped.is_none() && summary.unavailable == 0,
-        "author {author_seed}: the corpus is not finished ({}{} article(s) unreachable); run `study corpus` again to resume",
-        summary.stopped.as_deref().map_or_else(String::new, |why| format!("stopped: {why}; ")),
-        summary.unavailable,
-    );
+    let kept_articles = cache.articles()?.len();
+    if summary.stopped.is_some() || summary.unavailable > 0 || kept_articles == 0 {
+        let mut causes = Vec::new();
+        if let Some(why) = &summary.stopped {
+            causes.push(format!("stopped: {why}"));
+        }
+        if summary.abandoned > 0 {
+            causes.push(format!(
+                "{} article(s) given up after {} attempts each{}",
+                summary.abandoned,
+                protocol.corpus.attempts,
+                summary
+                    .last_turned_away
+                    .as_ref()
+                    .map_or_else(String::new, |why| format!(
+                        " (the last was turned away: {why})"
+                    )),
+            ));
+        }
+        let headline = if kept_articles == 0 {
+            "no article was written".to_string()
+        } else {
+            format!(
+                "{kept_articles} of {} articles written",
+                protocol.corpus.articles
+            )
+        };
+        anyhow::bail!(
+            "author {author_seed}: {headline}, so the corpus is not finished ({}); run `study corpus` again to resume",
+            causes.join("; "),
+        );
+    }
 
     begin_or_continue_mining(
         cache.dir(),
@@ -108,12 +123,24 @@ pub fn run(
         !is_remote(&protocol.models.miner)?,
         false,
     )?;
-    let read = mine_all(&cache, staff.miner, protocol.corpus.workers)?;
+    let read = mine_all(&cache, staff.miner, protocol.corpus.workers, pace)?;
     let mined = read_mined(&cache)?;
     let decisions_kept = mined
         .iter()
         .filter(|m| matches!(m.result, MinedResult::Kept(_)))
         .count();
+    anyhow::ensure!(
+        decisions_kept > 0,
+        "author {author_seed}: the miner read no decision out of {kept_articles} article(s): {} case(s) were turned away{}; run `study corpus` again after looking at decisions.jsonl",
+        mined.len(),
+        mined
+            .iter()
+            .find_map(|m| match &m.result {
+                MinedResult::Refused(why) => Some(format!(" (the first: {why})")),
+                MinedResult::Kept(_) => None,
+            })
+            .unwrap_or_default(),
+    );
     eprintln!(
         "author {author_seed}: {read} articles read; {decisions_kept} of {} cases kept",
         mined.len()

@@ -84,9 +84,12 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 ## PP-12 Failures accounted for, not mistaken for content
 
 - **Status.** Done for `synthetic-author` and the job log. A writer or reader
-  request lost in transit is repeated up to `--transport-retries` times
-  (default four) with a pause that starts at `--transport-backoff-secs`
-  (default five) and doubles up to a minute, and uses no attempt; each loss
+  request lost in transit (a rate limit, a 5xx, a timeout, a dropped
+  connection, a router's fallback refusing after the first choice failed; not
+  another 4xx) is repeated up to `--transport-retries` times (default eight)
+  with a pause that starts at `--transport-backoff-secs` (default five),
+  doubles up to a minute or follows a `retry-after` figure the error carries
+  (`src/transit.rs`), and uses no attempt; the miner is repeated the same way; each loss
   is a `rejected.jsonl` line of kind `writer-unavailable` or
   `reader-unavailable`, and only `content` lines reach `previous_refusal`.
   Past the bound the run stops and says which model could not be reached, and
@@ -263,8 +266,11 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   and majority baselines, item-clustered bootstrap intervals (seed drawn, printed
   and recorded), survivorship (PP-21) and reason measures (PP-15) as CSV and JSON,
   and `papers/persona-training/scripts/study_data.py` maps them to the columns the
-  paper's build reads. Not done: no corpus has been written with the three
-  families, no adapter trained under the protocol, and the paper's build is still
+  paper's build reads. `study freeze --workers` records how many articles are
+  written at a time and `study corpus` stops with the cause when it wrote no
+  article or read no decision. Not done: no corpus has been written with the
+  three families (a hosted smoke run with a paid writer kept none of 23 drafts
+  past the form gates), no adapter trained under the protocol, and the paper's build is still
   laid out for three authors.
 - **Problem.** One training run per author and three authors (paper Sec. 7);
   all three runs used the same default seed (PF-04); no sign test across

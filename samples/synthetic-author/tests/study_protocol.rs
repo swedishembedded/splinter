@@ -385,6 +385,43 @@ fn the_freeze_command_prints_every_seed_it_drew_and_repeats_without_redrawing() 
 }
 
 #[test]
+fn the_freeze_command_records_how_many_articles_the_corpus_stage_writes_at_a_time() {
+    let freeze_with = |tag: &str, extra: &[&str]| {
+        let root = scratch(tag);
+        let mut args = vec![
+            "freeze",
+            "--out",
+            root.to_str().unwrap(),
+            "--writer",
+            "remote:north/aster-xl-4",
+            "--reader",
+            "remote:south/birch-5",
+            "--miner",
+            "remote:east/cedar-70b",
+        ];
+        args.extend_from_slice(extra);
+        (study(&args), root)
+    };
+    let (out, root) = freeze_with("workers", &["--workers", "2"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(read(&root).unwrap().protocol.corpus.workers, 2);
+
+    let (out, root) = freeze_with("workers-default", &[]);
+    assert!(out.status.success());
+    assert_eq!(
+        read(&root).unwrap().protocol.corpus.workers,
+        synthetic_author::study::protocol::DEFAULT_WORKERS
+    );
+
+    let (out, _) = freeze_with("workers-none", &["--workers", "0"]);
+    assert!(!out.status.success());
+}
+
+#[test]
 fn a_family_no_number_of_authors_can_confirm_is_called_so_when_the_protocol_is_frozen() {
     // Eight authors can reach 1/256, which clears the level over the family;
     // five cannot reach below 1/32.

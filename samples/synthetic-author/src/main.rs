@@ -346,7 +346,12 @@ fn main() -> anyhow::Result<()> {
                 .context("starting the runtime")?;
             let ctx = splinter.context();
             let source = Source::open(&ctx, &miner, record.run_seed)?;
-            let read = synthetic_author::lab::mine_all(&cache, &source, workers)?;
+            let read = synthetic_author::lab::mine_all(
+                &cache,
+                &source,
+                workers,
+                &synthetic_author::transit::Transit::default(),
+            )?;
             let all = synthetic_author::lab::read_mined(&cache)?;
             let kept = all
                 .iter()

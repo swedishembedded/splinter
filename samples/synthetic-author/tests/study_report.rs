@@ -30,12 +30,13 @@ use synthetic_author::persona::Persona;
 use synthetic_author::study::analysis::{
     across_authors, analyse_author, AuthorInput, AuthorReport, Measured,
 };
-use synthetic_author::study::corpus::{self, Pace, Staff};
+use synthetic_author::study::corpus::{self, Staff};
 use synthetic_author::study::examine::{self, Examinee, Loader};
 use synthetic_author::study::layout::CorpusRecord;
 use synthetic_author::study::protocol::{AuthorPlan, Protocol};
 use synthetic_author::study::{render, report, train};
 use synthetic_author::survivors::{Survivors, Tally};
+use synthetic_author::transit::Transit;
 
 /// A fixed number of items per kind keeps the in-memory specs small.
 const PER_CELL: usize = 10;
@@ -411,11 +412,8 @@ impl Loader for Loading {
     }
 }
 
-fn pace() -> Pace {
-    Pace {
-        transport_retries: 1,
-        transport_backoff: Duration::ZERO,
-    }
+fn pace() -> Transit {
+    Transit::new(1, Duration::ZERO)
 }
 
 /// A study of `authors` authors run through every stage with scripted models.

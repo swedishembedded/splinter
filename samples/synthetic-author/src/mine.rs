@@ -14,8 +14,7 @@ use std::time::Duration;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
-use splinter_sdk::agent::typed::TypedCall;
-use splinter_sdk::agent::CallError;
+use splinter_sdk::agent::typed::{Measured, TypedCall};
 use splinter_sdk::measure::verifiers::quotation::contains_words as contains_run;
 
 use crate::cache::StoredArticle;
@@ -153,17 +152,15 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
 }
 
 /// Asks `model` to read the essay `body`, which tells `cases`, and returns what
-/// it wrote, unchecked.
-///
-/// # Errors
-/// The model could not be reached (`CallError::Infrastructure`) or did not
-/// answer in the shape asked for.
-pub fn read_raw(model: &BlockingModel, body: &str, cases: &[String]) -> Result<Mined, CallError> {
+/// it wrote, unchecked, with the tokens the call used. The result is an error
+/// when the model could not be reached (`CallError::Infrastructure`) or did
+/// not answer in the shape asked for.
+pub fn read_raw(model: &BlockingModel, body: &str, cases: &[String]) -> Measured<Mined> {
     let shown = serde_json::json!({"essay": body, "cases": cases});
     let call = TypedCall::<Mined>::new("mine_decisions", TASK, ROLE, REQUEST_DEADLINE)
         .max_output_tokens(MAX_TOKENS)
         .repairs(1);
-    model.call(call, &shown)
+    model.call_measured(call, &shown)
 }
 
 impl Mined {
@@ -184,20 +181,6 @@ impl Mined {
                 .collect(),
         }
     }
-}
-
-/// Asks `model` to read `article` and verifies what it wrote.
-///
-/// # Errors
-/// The model could not be reached or did not answer in the shape asked for.
-pub fn mine(
-    model: &BlockingModel,
-    article: &StoredArticle,
-) -> anyhow::Result<Vec<Result<Verified, String>>> {
-    Ok(verify(
-        article,
-        &read_raw(model, &article.body, &article.cases)?,
-    ))
 }
 
 /// The most tokens a reading of an essay may run to.

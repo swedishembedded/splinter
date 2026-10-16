@@ -47,4 +47,5 @@ pub mod study;
 pub mod survivors;
 pub mod tools;
 pub mod training;
+pub mod transit;
 pub mod writer;

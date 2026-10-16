@@ -25,10 +25,11 @@ use splinter_sdk::agent::sven::model::ModelProvider;
 use study_support::{frozen, responding, small_protocol, FirstOption, Scripted};
 use synthetic_author::binding::{file_digest, recorded};
 use synthetic_author::study::arm_key::SHARED_SLOT;
-use synthetic_author::study::corpus::{self, Pace, Staff};
+use synthetic_author::study::corpus::{self, Staff};
 use synthetic_author::study::examine::{self, Examinee, Loader};
 use synthetic_author::study::layout::Study;
 use synthetic_author::study::train;
+use synthetic_author::transit::Transit;
 
 /// Loads a scripted model and remembers which adapter each load attached.
 struct Scripting {
@@ -80,10 +81,7 @@ fn corpus_done(tag: &str) -> (Study, u64, PathBuf) {
             reader: &model,
             miner: &model,
         },
-        &Pace {
-            transport_retries: 1,
-            transport_backoff: Duration::ZERO,
-        },
+        &Transit::new(1, Duration::ZERO),
     )
     .unwrap();
     let base = study.root().join("base.bin");

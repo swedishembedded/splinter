@@ -25,10 +25,8 @@ use crate::manifest::{
     CorpusManifest, Limits, Recipe, SEED_DERIVATION,
 };
 use crate::models::{is_remote, Source, WRITER_DECODING};
-use crate::writer::{
-    write_corpus_read, Models, Options, Summary, DEFAULT_TRANSPORT_BACKOFF_SECS,
-    DEFAULT_TRANSPORT_RETRIES,
-};
+use crate::transit::{DEFAULT_BACKOFF_SECS, DEFAULT_RETRIES};
+use crate::writer::{write_corpus_read, Models, Options, Summary};
 
 /// Write the author's corpus into a cache directory.
 #[derive(Args)]
@@ -88,11 +86,11 @@ pub struct CorpusArgs {
     workers: usize,
     /// How many times a request that fails in transit is repeated before the
     /// model counts as unreachable and the run stops.
-    #[arg(long, default_value_t = DEFAULT_TRANSPORT_RETRIES)]
+    #[arg(long, default_value_t = DEFAULT_RETRIES)]
     transport_retries: usize,
     /// Seconds to pause before the first repeat of a lost request; each repeat
     /// waits twice as long, up to a minute.
-    #[arg(long, default_value_t = DEFAULT_TRANSPORT_BACKOFF_SECS)]
+    #[arg(long, default_value_t = DEFAULT_BACKOFF_SECS)]
     transport_backoff_secs: u64,
 }
 

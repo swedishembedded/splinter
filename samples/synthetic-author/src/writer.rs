@@ -9,6 +9,7 @@
 //! convictions can only be learned from what is decided. A run has a budget in
 //! requests and in tokens and stops before it is exceeded.
 
+use std::cell::Cell;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -16,7 +17,7 @@ use std::time::Duration;
 
 use serde_json::json;
 use splinter_sdk::agent::blocking::BlockingModel;
-use splinter_sdk::agent::typed::TypedCall;
+use splinter_sdk::agent::typed::{Measured, Spent, TypedCall};
 use splinter_sdk::agent::CallError;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
@@ -26,6 +27,7 @@ use crate::gates::{check_form, check_markers, check_reading, Article, Rejection}
 use crate::mine::{read_raw, MAX_READING_TOKENS};
 use crate::persona::Persona;
 use crate::scenario::TOPICS;
+use crate::transit::{self, Retried, Transit};
 
 /// Topics an author writes about. The rest are kept back to test what was
 /// learned on topics it never wrote about.
@@ -34,20 +36,14 @@ pub const TRAIN_TOPICS: [usize; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 /// Topics no article is written about.
 pub const HELD_OUT_TOPICS: [usize; 2] = [10, 11];
 
-/// The most tokens one article may run to.
-const MAX_ARTICLE_TOKENS: u64 = 6000;
+/// The most tokens one article may run to, the reasoning a model does before
+/// it writes included: a reasoning model spends several times the essay's own
+/// length thinking, and an essay cut off by the cap is lost whole.
+const MAX_ARTICLE_TOKENS: u64 = 16_000;
 /// How long one request may take, corrections included.
 const REQUEST_DEADLINE: Duration = Duration::from_secs(900);
 /// Consecutive unusable answers from the writer after which the run stops.
 const MAX_CONSECUTIVE_ERRORS_PER_WORKER: usize = 4;
-/// How many times a request lost in transit is repeated, unless the caller
-/// asks for another bound.
-pub const DEFAULT_TRANSPORT_RETRIES: usize = 4;
-/// Seconds paused before the first repeat of a lost request, unless the caller
-/// asks for another pause. Each further repeat waits twice as long as the last.
-pub const DEFAULT_TRANSPORT_BACKOFF_SECS: u64 = 5;
-/// The longest pause before a repeat, however many have been made.
-const MAX_TRANSPORT_PAUSE: Duration = Duration::from_secs(60);
 
 const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
@@ -163,6 +159,14 @@ pub struct Options {
     pub transport_backoff: Duration,
 }
 
+impl Options {
+    /// How requests lost in transit are repeated.
+    #[must_use]
+    pub fn transit(&self) -> Transit {
+        Transit::new(self.transport_retries, self.transport_backoff)
+    }
+}
+
 /// What a run did.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Summary {
@@ -179,12 +183,17 @@ pub struct Summary {
     pub rejected: usize,
     /// Requests made by this run.
     pub calls: usize,
-    /// Estimated tokens shown to the writer by this run.
+    /// Tokens shown to the models by this run, as their providers counted
+    /// them, else estimated from the text.
     pub input_tokens: u64,
-    /// Estimated tokens the writer wrote for this run.
+    /// Tokens the models wrote for this run, reasoning included, as their
+    /// providers counted them, else estimated from the text.
     pub output_tokens: u64,
     /// Why the run stopped early, if it did.
     pub stopped: Option<String>,
+    /// The reason of the last attempt turned away, or of the last answer that
+    /// could not be used: what a run that kept nothing has to say for itself.
+    pub last_turned_away: Option<String>,
 }
 
 fn tokens(text: &str) -> u64 {
@@ -379,76 +388,85 @@ impl Run<'_> {
         true
     }
 
-    /// Replaces a reservation of `reserved` tokens with the `written` ones.
-    fn settle(&self, reserved: u64, written: u64) {
+    /// Replaces the reservation `request` made with what the call used: the
+    /// tokens its provider counted, else, for an answer, `answer_estimate`
+    /// output tokens and the request's estimated input; nothing known of a
+    /// call that was not answered counts as nothing spent.
+    fn settle(&self, request: &Request<'_>, spent: &Spent, answer_estimate: Option<u64>) {
+        let input = spent
+            .input_tokens
+            .or_else(|| answer_estimate.map(|_| request.shown_tokens))
+            .unwrap_or(0);
+        let output = spent.output_tokens.or(answer_estimate).unwrap_or(0);
         let mut state = self.state();
-        state.summary.output_tokens = state.summary.output_tokens - reserved + written;
-    }
-
-    /// The pause before repeat number `repeat` (from one) of a lost request.
-    fn pause_before(&self, repeat: usize) -> Duration {
-        let doublings = u32::try_from(repeat - 1).unwrap_or(u32::MAX).min(16);
-        self.opts
-            .transport_backoff
-            .saturating_mul(1 << doublings)
-            .min(MAX_TRANSPORT_PAUSE)
+        state.summary.input_tokens = state.summary.input_tokens - request.shown_tokens + input;
+        state.summary.output_tokens = state.summary.output_tokens - request.max_output + output;
     }
 
     /// Puts one request to `models`, repeating it, without using an attempt,
-    /// while it is lost in transit and the bound allows. Every request made,
-    /// repeats included, is taken from the budget, and every loss is noted
-    /// under the kind of its role with `draft`. A reservation is settled here
-    /// only when nothing was answered; the caller settles an answer.
+    /// while it is lost in transit and the bound allows (see [`transit`]).
+    /// Every request made, repeats included, is taken from the budget, and
+    /// every loss is noted under the kind of its role with `draft`: in one
+    /// line, and with the provider's whole answer once, when the bound is
+    /// spent. A reservation is settled here unless the model answered; the
+    /// caller settles an answer.
     fn ask<T>(
         &self,
         models: &dyn Models,
         request: &Request<'_>,
-        call: impl Fn(&BlockingModel) -> Result<T, CallError>,
+        call: impl Fn(&BlockingModel) -> Measured<T>,
     ) -> anyhow::Result<Asked<T>> {
         let (who, kind) = match request.key.role {
             Role::Writer => ("writer", Kind::WriterUnavailable),
             Role::Reader | Role::Miner => ("reader", Kind::ReaderUnavailable),
         };
-        let mut last_loss = String::new();
-        for repeat in 0..=self.opts.transport_retries {
-            if repeat > 0 {
-                std::thread::sleep(self.pause_before(repeat));
+        let spent = Cell::new(Spent::default());
+        let outcome = transit::retry(
+            &self.opts.transit(),
+            || self.reserve(request.max_output, request.shown_tokens),
+            || {
+                spent.set(Spent::default());
+                let model = models
+                    .model(request.key)
+                    .map_err(|e| CallError::Precondition(format!("{e:#}")))?;
+                let measured = call(&model);
+                spent.set(measured.spent);
+                measured.result
+            },
+            |loss| {
+                self.settle(request, &spent.get(), None);
+                let shown = if loss.last {
+                    &loss.detail
+                } else {
+                    &loss.summary
+                };
+                self.cache.note_rejected(
+                    request.key.article,
+                    request.key.attempt,
+                    kind,
+                    &format!("the {who} could not be reached: {shown}"),
+                    request.draft,
+                )?;
+                eprintln!(
+                    "article {}: attempt {}: the {who} could not be reached: {}",
+                    request.key.article + 1,
+                    request.key.attempt,
+                    loss.summary
+                );
+                Ok(())
+            },
+        )?;
+        Ok(match outcome {
+            Retried::Answered(value) => Asked::Answered(value, spent.get()),
+            Retried::Refused(e) => {
+                self.settle(request, &spent.get(), None);
+                Asked::Unreadable(e)
             }
-            if !self.reserve(request.max_output, request.shown_tokens) {
-                return Ok(Asked::OutOfBudget);
-            }
-            let answer = models
-                .model(request.key)
-                .map_err(CallError::Infrastructure)
-                .and_then(|model| call(&model));
-            match answer {
-                Ok(value) => return Ok(Asked::Answered(value)),
-                Err(CallError::Infrastructure(e)) => {
-                    self.settle(request.max_output, 0);
-                    last_loss = format!("the {who} could not be reached: {e:#}");
-                    self.cache.note_rejected(
-                        request.key.article,
-                        request.key.attempt,
-                        kind,
-                        &last_loss,
-                        request.draft,
-                    )?;
-                    eprintln!(
-                        "article {}: attempt {}: {last_loss}",
-                        request.key.article + 1,
-                        request.key.attempt
-                    );
-                }
-                Err(e) => {
-                    self.settle(request.max_output, 0);
-                    return Ok(Asked::Unreadable(e));
-                }
-            }
-        }
-        Ok(Asked::Unreachable(format!(
-            "{last_loss}, in {} requests",
-            self.opts.transport_retries + 1
-        )))
+            Retried::Exhausted { last, requests } => Asked::Unreachable(format!(
+                "the {who} could not be reached: {last}, in {requests} requests"
+            )),
+            Retried::Halted => Asked::OutOfBudget,
+        })
     }
 
     fn write_article(&self, index: usize) -> anyhow::Result<()> {
@@ -481,11 +499,16 @@ impl Run<'_> {
                 let call = TypedCall::<Article>::new("write_article", TASK, ROLE, REQUEST_DEADLINE)
                     .max_output_tokens(MAX_ARTICLE_TOKENS)
                     .repairs(1);
-                writer.call(call, &shown)
+                writer.call_measured(call, &shown)
             })?;
             let article = match asked {
-                Asked::Answered(article) => {
+                Asked::Answered(article, spent) => {
                     self.state().errors = 0;
+                    self.settle(
+                        &request,
+                        &spent,
+                        Some(tokens(&article.title) + tokens(&article.body)),
+                    );
                     article
                 }
                 Asked::OutOfBudget => return Ok(()),
@@ -494,15 +517,12 @@ impl Run<'_> {
                     return Ok(());
                 }
                 Asked::Unreadable(e) => {
-                    self.cache.note_rejected(
-                        index,
-                        attempt,
-                        Kind::Content,
-                        &format!("the writer failed: {e}"),
-                        None,
-                    )?;
+                    let why = format!("the writer failed: {e}");
+                    self.cache
+                        .note_rejected(index, attempt, Kind::Content, &why, None)?;
                     let mut state = self.state();
                     state.summary.rejected += 1;
+                    state.summary.last_turned_away = Some(why);
                     state.errors += 1;
                     if state.errors >= MAX_CONSECUTIVE_ERRORS_PER_WORKER * self.opts.workers.max(1)
                     {
@@ -515,10 +535,6 @@ impl Run<'_> {
                     continue;
                 }
             };
-            self.settle(
-                MAX_ARTICLE_TOKENS,
-                tokens(&article.title) + tokens(&article.body),
-            );
             match self.judge(&article, episodes, index, attempt)? {
                 Verdict::Accepted => {
                     self.cache.write_article(&StoredArticle {
@@ -549,7 +565,11 @@ impl Run<'_> {
                     // so the writer is not told of it.
                     refusal = (!matches!(reason, Rejection::Unreadable { .. }))
                         .then(|| reason.to_string());
-                    self.state().summary.rejected += 1;
+                    {
+                        let mut state = self.state();
+                        state.summary.rejected += 1;
+                        state.summary.last_turned_away = Some(reason.to_string());
+                    }
                     eprintln!(
                         "article {}/{}: attempt {attempt} turned away: {reason}",
                         index + 1,
@@ -615,10 +635,11 @@ impl Run<'_> {
         };
         Ok(
             match self.ask(reader, &request, |r| read_raw(r, &article.body, &cases))? {
-                Asked::Answered(mined) => {
+                Asked::Answered(mined, spent) => {
                     self.settle(
-                        MAX_READING_TOKENS,
-                        tokens(&serde_json::to_string(&mined).unwrap_or_default()),
+                        &request,
+                        &spent,
+                        Some(tokens(&serde_json::to_string(&mined).unwrap_or_default())),
                     );
                     let reading = mined.as_reading();
                     let result = check_reading(&reading, self.persona, episodes);
@@ -647,8 +668,8 @@ struct Request<'a> {
 
 /// How a request, repeated as far as the bound allows, ended.
 enum Asked<T> {
-    /// The model answered.
-    Answered(T),
+    /// The model answered, using this many tokens.
+    Answered(T, Spent),
     /// The model answered in no shape that can be read.
     Unreadable(CallError),
     /// Every request was lost in transit; the text says how.

@@ -118,14 +118,26 @@ under the other (use another corpus directory, or pass `--exam v1`):
 
 ## Failures
 
-A request to the writer or the reader that fails in transit says nothing about
-the article. `corpus` repeats it up to `--transport-retries` times (default
-four), pausing `--transport-backoff-secs` (default five) before the first
-repeat and twice as long before each next, never more than a minute. A repeat
-uses no attempt at the article and is counted in the budget of calls. Past the
-bound the run stops and says which model could not be reached, and the article
-is reported as `unreachable`, apart from those given up on after their
-attempts. A reader whose answer is in no readable shape turns the draft away as
+A request to the writer, the reader or the miner that fails in transit says
+nothing about the article. Lost in transit are a rate limit (429), a server
+error (5xx), a timeout (408, 425, the call's own deadline), a dropped
+connection, and a refusal by a router's fallback provider after its first
+choice failed in transit; any other 4xx is the request's fault and is not
+repeated. `corpus` repeats a lost request up to `--transport-retries` times
+(default eight), pausing `--transport-backoff-secs` (default five) before the
+first repeat and twice as long before each next, never more than a minute,
+or as long as the error asks when it carries a `retry-after` figure: about
+five minutes of waiting in all. A repeat uses no attempt at the article and is
+counted in the budget of calls. Past the bound the run stops and says in one
+line which model could not be reached (the provider's whole answer is kept
+once in `rejected.jsonl`), and the article is reported as `unreachable`, apart
+from those given up on after their attempts. The tokens in `usage.json` are
+the ones the providers counted, a reasoning model's thinking included.
+A hosted model that shares a rate-limited pool needs fewer workers: give
+`study freeze --workers 1` (the protocol records it and `study corpus` obeys
+it). `study corpus` stops where it fails: with no article written, or no
+decision read, it names the cause and exits non-zero, and a repeat resumes.
+A reader whose answer is in no readable shape turns the draft away as
 a content rejection, which the writer is not told of.
 
 Each line of `rejected.jsonl` carries a `kind`: `content` (a gate or an

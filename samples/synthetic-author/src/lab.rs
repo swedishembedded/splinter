@@ -13,6 +13,7 @@ use std::sync::{Mutex, PoisonError};
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
+use splinter_sdk::agent::CallError;
 use splinter_sdk::store::jsonl;
 use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
@@ -25,10 +26,11 @@ use crate::dataset::{motivation_of, records_with, Briefings};
 use crate::exam::{draw, items, Item, Spec, Trained, Version};
 use crate::gates::same_ways;
 use crate::manifest::author;
-use crate::mine::{mine, Verified};
+use crate::mine::{read_raw, verify, Verified};
 use crate::persona::Persona;
 use crate::retrieval::Notes;
 use crate::scenario::Archetype;
+use crate::transit::{self, Retried, Transit};
 use crate::writer::{plan, Models, RequestKey, Role};
 
 /// One line of `decisions.jsonl`: what was read out of one case of one article.
@@ -68,12 +70,19 @@ pub fn read_mined(cache: &Cache) -> anyhow::Result<Vec<Mined>> {
 /// Reads the decisions out of every article that lacks some of its cases in
 /// `decisions.jsonl`, `workers` at a time, each article by a model `miner`
 /// makes for it (seeded from the recorded run seed when it runs here), and appends the lines for the cases
-/// it lacks. Returns how many articles were read by this call.
+/// it lacks. A request the provider failed at is repeated as `transit` says.
+/// Returns how many articles were read by this call.
 ///
 /// # Errors
 /// The cache cannot be read, a line cannot be appended, or the reader fails on
-/// an article. The first failure is returned after the workers have stopped.
-pub fn mine_all(cache: &Cache, miner: &dyn Models, workers: usize) -> anyhow::Result<usize> {
+/// an article or stays unreachable. The first failure is returned after the
+/// workers have stopped.
+pub fn mine_all(
+    cache: &Cache,
+    miner: &dyn Models,
+    workers: usize,
+    transit: &Transit,
+) -> anyhow::Result<usize> {
     let articles = cache.articles()?;
     let mut have: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
     for line in read_mined(cache)? {
@@ -121,10 +130,45 @@ pub fn mine_all(cache: &Cache, miner: &dyn Models, workers: usize) -> anyhow::Re
                     attempt: 1,
                     role: Role::Miner,
                 };
-                let lines = match miner.model(key).and_then(|model| mine(&model, article)) {
-                    Ok(results) => results,
+                let read = transit::retry(
+                    transit,
+                    || true,
+                    || {
+                        let model = miner
+                            .model(key)
+                            .map_err(|e| CallError::Precondition(format!("{e:#}")))?;
+                        read_raw(&model, &article.body, &article.cases).result
+                    },
+                    |loss| {
+                        eprintln!(
+                            "article {}: the miner could not be reached: {}",
+                            article.index, loss.summary
+                        );
+                        Ok(())
+                    },
+                );
+                let lines = match read {
+                    Ok(Retried::Answered(mined)) => verify(article, &mined),
+                    Ok(Retried::Refused(e)) => {
+                        fail(anyhow::Error::new(e).context(format!("reading article {}", article.index)));
+                        return;
+                    }
+                    Ok(Retried::Exhausted { last, requests }) => {
+                        fail(anyhow::anyhow!(
+                            "reading article {}: the miner could not be reached: {last}, in {requests} requests",
+                            article.index
+                        ));
+                        return;
+                    }
+                    Ok(Retried::Halted) => {
+                        fail(anyhow::anyhow!(
+                            "reading article {}: the request was declined",
+                            article.index
+                        ));
+                        return;
+                    }
                     Err(e) => {
-                        fail(e.context(format!("reading article {}", article.index)));
+                        fail(e);
                         return;
                     }
                 };

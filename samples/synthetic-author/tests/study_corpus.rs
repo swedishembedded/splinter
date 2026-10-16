@@ -20,16 +20,19 @@ mod study_support;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use splinter_sdk::agent::blocking::BlockingModel;
+use splinter_sdk::agent::solve::Model;
+use splinter_sdk::agent::sven::model::{
+    CompletionRequest, ModelProvider, ResponseEvent, ResponseStream,
+};
 use study_support::{frozen, responding, small_protocol};
 use synthetic_author::binding::file_digest;
 use synthetic_author::dataset::Briefings;
-use synthetic_author::study::corpus::{run, Pace, Staff};
+use synthetic_author::study::corpus::{run, Staff};
 use synthetic_author::study::layout::{AUTHOR_MANIFEST, EXAM_ITEMS};
+use synthetic_author::transit::Transit;
 
-const PACE: Pace = Pace {
-    transport_retries: 1,
-    transport_backoff: Duration::ZERO,
-};
+const PACE: Transit = Transit::new(1, Duration::ZERO);
 
 #[test]
 fn the_stage_writes_reads_and_freezes_the_examination_before_anything_is_trained() {
@@ -221,4 +224,59 @@ fn the_command_names_a_model_that_runs_here_instead_of_starting_a_run() {
         "{stderr}"
     );
     assert!(!study.author_dir(study.protocol().authors[0].seed).exists());
+}
+
+/// A writer whose every answer is no article.
+struct Gibberish;
+
+#[async_trait::async_trait]
+impl ModelProvider for Gibberish {
+    fn name(&self) -> &str {
+        "gibberish"
+    }
+    fn model_name(&self) -> &str {
+        "gibberish-1"
+    }
+    async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta("this is not an article".into())),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+#[test]
+fn a_corpus_stage_that_wrote_no_article_stops_with_the_cause_and_stays_resumable() {
+    let study = frozen("corpus-none", small_protocol(|_| {}), 1);
+    let seed = study.protocol().authors[0].seed;
+    let (model, _) = responding(seed, study.protocol());
+    let writer =
+        BlockingModel::new(Model::new(std::sync::Arc::new(Gibberish), "gibberish")).unwrap();
+    let broken = Staff {
+        writer: &writer,
+        reader: &model,
+        miner: &model,
+    };
+    let message = format!("{:#}", run(&study, seed, &broken, &PACE).unwrap_err());
+    assert!(
+        message.contains("no article was written")
+            && message.contains("given up")
+            && message.contains("the writer failed")
+            && message.contains("study corpus"),
+        "{message}"
+    );
+    assert!(
+        !message.contains("run mine"),
+        "the failure is reported where it happened: {message}"
+    );
+    assert!(!study.author_dir(seed).join(AUTHOR_MANIFEST).exists());
+
+    // Nothing was made that the next run cannot continue from.
+    let staff = Staff {
+        writer: &model,
+        reader: &model,
+        miner: &model,
+    };
+    let manifest = run(&study, seed, &staff, &PACE).unwrap();
+    assert!(manifest.corpus.articles_kept > 0);
 }

@@ -17,19 +17,20 @@ use clap::{Args, Subcommand};
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::{Config, Splinter};
 
-use super::corpus::{self, Pace, Staff};
+use super::corpus::{self, Staff};
 use super::examine::{self, BrainLoader};
 use super::layout::Study;
 use super::train;
 use super::{render, report};
 use crate::models::{is_remote, Source};
-use crate::writer::{DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES};
+use crate::transit::{Transit, DEFAULT_BACKOFF_SECS, DEFAULT_RETRIES};
 
 use super::power::{derive, Observed};
 use super::protocol::{
     freeze, Frozen, ModelRoles, Protocol, SampledDecoding, Seeds, Spec, DEFAULT_ALPHA_LEVEL,
     DEFAULT_ARTICLES, DEFAULT_AUTHORS, DEFAULT_DRAWS, DEFAULT_LEARNING_RATE, DEFAULT_POWER,
-    DEFAULT_REPLICATES, DEFAULT_STEPS, DEFAULT_TEMPERATURE, EARLIER_OBSERVATION, EARLIER_SOURCE,
+    DEFAULT_REPLICATES, DEFAULT_STEPS, DEFAULT_TEMPERATURE, DEFAULT_WORKERS, EARLIER_OBSERVATION,
+    EARLIER_SOURCE,
 };
 use crate::manifest::SeedSource;
 
@@ -126,11 +127,11 @@ pub struct CorpusStageArgs {
     allow_remote: bool,
     /// How many times a request lost in transit is repeated before the model
     /// counts as unreachable and the run stops.
-    #[arg(long, default_value_t = DEFAULT_TRANSPORT_RETRIES)]
+    #[arg(long, default_value_t = DEFAULT_RETRIES)]
     transport_retries: usize,
     /// Seconds to pause before the first repeat of a lost request; each repeat
     /// waits twice as long, up to a minute.
-    #[arg(long, default_value_t = DEFAULT_TRANSPORT_BACKOFF_SECS)]
+    #[arg(long, default_value_t = DEFAULT_BACKOFF_SECS)]
     transport_backoff_secs: u64,
 }
 
@@ -165,6 +166,10 @@ pub struct FreezeArgs {
     /// Articles planned for each author's corpus.
     #[arg(long, default_value_t = DEFAULT_ARTICLES)]
     articles: usize,
+    /// How many articles the corpus stage writes at a time. A hosted model
+    /// that rate-limits its callers needs fewer; the protocol records it.
+    #[arg(long, default_value_t = DEFAULT_WORKERS)]
+    workers: usize,
     /// Optimizer steps of each adapter.
     #[arg(long, default_value_t = DEFAULT_STEPS)]
     steps: u32,
@@ -217,6 +222,7 @@ impl FreezeArgs {
             sizing,
         );
         template.corpus.articles = self.articles;
+        template.corpus.workers = self.workers;
         template.training.steps = self.steps;
         template.training.learning_rate = self.learning_rate;
         template.decoding.secondary = (self.sampled_draws > 0).then_some(SampledDecoding {
@@ -306,10 +312,10 @@ fn corpus_stage(args: &CorpusStageArgs) -> anyhow::Result<()> {
         reader: &reader,
         miner: &miner,
     };
-    let pace = Pace {
-        transport_retries: args.transport_retries,
-        transport_backoff: Duration::from_secs(args.transport_backoff_secs),
-    };
+    let pace = Transit::new(
+        args.transport_retries,
+        Duration::from_secs(args.transport_backoff_secs),
+    );
     for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
         let manifest = corpus::run(&study, seed, &staff, &pace)?;
         println!(

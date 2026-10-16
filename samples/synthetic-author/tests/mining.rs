@@ -25,6 +25,7 @@ use synthetic_author::cache::{Cache, StoredArticle};
 use synthetic_author::lab::{mine_all, read_mined, MinedResult};
 use synthetic_author::persona::Persona;
 use synthetic_author::recheck::recheck;
+use synthetic_author::transit::Transit;
 use synthetic_author::writer::plan;
 
 /// A reader that gives the same reply to every request and counts them.
@@ -95,13 +96,13 @@ fn an_article_with_cases_unread_is_read_again_and_only_those_cases_are_appended(
     });
     std::fs::write(cache.dir().join("decisions.jsonl"), format!("{first}\n")).unwrap();
 
-    assert_eq!(mine_all(&cache, &model, 1).unwrap(), 1);
+    assert_eq!(mine_all(&cache, &model, 1, &Transit::default()).unwrap(), 1);
     let read = read_mined(&cache).unwrap();
     let cases: Vec<&str> = read.iter().map(|m| m.case.as_str()).collect();
     assert_eq!(cases, ["Alpha", "Beta"], "Alpha is not appended twice");
     assert!(matches!(read[1].result, MinedResult::Kept(_)));
 
-    assert_eq!(mine_all(&cache, &model, 1).unwrap(), 0);
+    assert_eq!(mine_all(&cache, &model, 1, &Transit::default()).unwrap(), 0);
     assert_eq!(
         *provider.requests.lock().unwrap(),
         1,
@@ -167,7 +168,10 @@ fn each_article_is_read_by_a_model_made_for_it_with_a_seed_of_its_own() {
         model: BlockingModel::new(Model::new(provider, "reader")).unwrap(),
         keys: Mutex::new(Vec::new()),
     };
-    assert_eq!(mine_all(&cache, &models, 1).unwrap(), 2);
+    assert_eq!(
+        mine_all(&cache, &models, 1, &Transit::default()).unwrap(),
+        2
+    );
     let mut keys = models.keys.into_inner().unwrap();
     keys.sort_by_key(|k| k.article);
     assert_eq!(
