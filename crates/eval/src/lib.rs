@@ -60,6 +60,7 @@
 
 pub mod canary;
 pub mod claim_gate;
+pub mod competence;
 pub mod continual;
 pub mod denoise;
 pub mod exposure;

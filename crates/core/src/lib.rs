@@ -69,6 +69,7 @@ pub mod extra;
 pub mod kinds;
 pub mod longitudinal;
 pub mod model_ref;
+pub mod outcome;
 pub mod prompt;
 pub mod release;
 pub mod rng;

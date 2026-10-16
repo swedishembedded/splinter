@@ -267,7 +267,7 @@ fn experiences(ctx: &Context, graph: &mut Graph) -> Result<(), OrchestratorError
                     graph.mention(other.as_str(), NodeKind::Experience, missing("experience"));
                     graph.link(exp, relation(*kind), other.as_str());
                 }
-                AnnotationBody::StepLabel { .. } => {}
+                AnnotationBody::StepLabel { .. } | AnnotationBody::AttemptReport(_) => {}
             }
         }
     }

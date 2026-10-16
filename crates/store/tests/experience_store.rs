@@ -657,3 +657,32 @@ fn a_constraint_vetoes_but_never_establishes() {
         assert_eq!(decided[&ids[refuted]].strength, Strength::Constraint);
     }
 }
+
+/// The facts of an attempt are kept as an annotation: they come back with
+/// the verdicts and take no part in the decision.
+#[test]
+fn an_attempt_report_is_kept_beside_the_verdicts_and_decides_nothing() {
+    use splinter_core::outcome::AttemptReport;
+    let scratch = Scratch::new("attempt-report");
+    let store = scratch.store();
+    let id = store.put(&experience("quick brown fox")).unwrap();
+    let report = AttemptReport {
+        wall_seconds: Some(3.5),
+        stopped_by_tool_cap: true,
+        ..AttemptReport::default()
+    };
+    let note = Annotation {
+        experience: id.clone(),
+        producer: Producer {
+            name: "t".into(),
+            version: "1".into(),
+        },
+        body: AnnotationBody::AttemptReport(report),
+    };
+    store.annotate(&note).unwrap();
+    // Saying it again is saying it once.
+    store.annotate(&note).unwrap();
+    let log = scratch.store().annotations(&id).unwrap();
+    assert_eq!(log.annotations, [note]);
+    assert_eq!(reward(&log.annotations), None);
+}

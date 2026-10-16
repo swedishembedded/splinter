@@ -19,6 +19,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::experience::ExperienceId;
+use crate::outcome::AttemptReport;
 
 /// What produced an annotation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +70,9 @@ pub enum AnnotationBody {
         /// The other experience.
         other: ExperienceId,
     },
+    /// The facts of the attempt that the experience itself, being
+    /// immutable, does not carry. It judges nothing.
+    AttemptReport(AttemptReport),
 }
 
 /// A verdict's outcome.

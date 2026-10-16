@@ -419,5 +419,7 @@ fn describe(body: &AnnotationBody) -> (String, f64, f64, Option<splinter_expdb::
                 .unwrap_or_default();
             (format!("relation:{name}"), 1.0, 1.0, None)
         }
+        // Facts, not a judgement: no score, and no weight in any decision.
+        AnnotationBody::AttemptReport(_) => ("attempt-report".to_owned(), 0.0, 0.0, None),
     }
 }
