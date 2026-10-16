@@ -11,6 +11,7 @@
 //! is made, and write it.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Args;
@@ -24,7 +25,9 @@ use crate::manifest::{
 };
 use crate::models::{is_remote, Source, WRITER_DECODING};
 use crate::persona::Persona;
-use crate::writer::{write_corpus_read, Models, Options};
+use crate::writer::{
+    write_corpus_read, Models, Options, DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES,
+};
 
 /// Write the author's corpus into a cache directory.
 #[derive(Args)]
@@ -72,6 +75,14 @@ pub struct CorpusArgs {
     /// How many articles are written at a time.
     #[arg(long, default_value_t = 1)]
     workers: usize,
+    /// How many times a request that fails in transit is repeated before the
+    /// model counts as unreachable and the run stops.
+    #[arg(long, default_value_t = DEFAULT_TRANSPORT_RETRIES)]
+    transport_retries: usize,
+    /// Seconds to pause before the first repeat of a lost request; each repeat
+    /// waits twice as long, up to a minute.
+    #[arg(long, default_value_t = DEFAULT_TRANSPORT_BACKOFF_SECS)]
+    transport_backoff_secs: u64,
 }
 
 /// Runs `corpus`.
@@ -132,6 +143,8 @@ pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
         max_calls: args.max_calls,
         max_output_tokens: args.max_output_tokens,
         workers: args.workers,
+        transport_retries: args.transport_retries,
+        transport_backoff: Duration::from_secs(args.transport_backoff_secs),
     };
     let summary = write_corpus_read(
         &persona,
@@ -142,11 +155,12 @@ pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
         &options,
     )?;
     println!(
-        "{}: {} written, {} already kept, {} given up, {} turned away; {} calls, about {} tokens in and {} out{}",
+        "{}: {} written, {} already kept, {} given up, {} unreachable, {} turned away; {} calls, about {} tokens in and {} out{}",
         persona.name,
         summary.written,
         summary.skipped,
         summary.abandoned,
+        summary.unavailable,
         summary.rejected,
         summary.calls,
         summary.input_tokens,

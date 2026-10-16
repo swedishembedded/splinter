@@ -11,20 +11,24 @@
 //! the ones that pass the gates and turns the rest away with the reason, never
 //! spends more than the budget it was given, and picks up where it stopped
 //! without rewriting what it has. Everything it keeps is in a cache outside
-//! the repository, from which an author can be drawn again.
+//! the repository, from which an author can be drawn again. A request that
+//! fails in transit is not a verdict on the article: it is retried without
+//! using up an attempt, logged under its own kind, kept out of what the writer
+//! is told was wrong, and reported apart when it ends the run.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::solve::Model;
 use splinter_sdk::agent::sven::model::{
     CompletionRequest, ModelProvider, ResponseEvent, ResponseStream,
 };
-use synthetic_author::cache::Cache;
+use synthetic_author::cache::{Cache, Kind};
 use synthetic_author::episode::episodes_for;
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::Archetype;
@@ -104,6 +108,8 @@ fn options(articles: usize) -> Options {
         max_calls: 100,
         max_output_tokens: 1_000_000,
         workers: 1,
+        transport_retries: 2,
+        transport_backoff: Duration::ZERO,
     }
 }
 
@@ -385,7 +391,9 @@ fn many_threads_noting_refusals_leave_a_log_every_line_of_which_reads() {
                     body: "word ".repeat(4000),
                 };
                 for n in 0..25 {
-                    cache.note_rejected(t, n, "a reason", Some(&draft)).unwrap();
+                    cache
+                        .note_rejected(t, n, Kind::Content, "a reason", Some(&draft))
+                        .unwrap();
                 }
             })
         })
@@ -398,4 +406,199 @@ fn many_threads_noting_refusals_leave_a_log_every_line_of_which_reads() {
     for line in text.lines() {
         let _: serde_json::Value = serde_json::from_str(line).unwrap();
     }
+}
+
+/// A model whose requests follow a script: `Some(reply)` answers, `None` fails
+/// in transit. Every request it is shown is kept.
+struct Flaky {
+    script: Mutex<VecDeque<Option<String>>>,
+    seen: Mutex<Vec<String>>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Flaky {
+    fn name(&self) -> &str {
+        "flaky"
+    }
+    fn model_name(&self) -> &str {
+        "flaky-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        self.seen
+            .lock()
+            .unwrap()
+            .push(format!("{:?}", req.messages));
+        let Some(reply) = self.script.lock().unwrap().pop_front().flatten() else {
+            anyhow::bail!("connection refused");
+        };
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(reply)),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+fn flaky(script: Vec<Option<String>>) -> (BlockingModel, Arc<Flaky>) {
+    let provider = Arc::new(Flaky {
+        script: Mutex::new(script.into()),
+        seen: Mutex::new(Vec::new()),
+    });
+    let model = BlockingModel::new(Model::new(provider.clone(), "flaky")).unwrap();
+    (model, provider)
+}
+
+fn kinds(cache: &Cache) -> Vec<String> {
+    let text = std::fs::read_to_string(cache.dir().join("rejected.jsonl")).unwrap();
+    text.lines()
+        .map(|l| {
+            let row: serde_json::Value = serde_json::from_str(l).unwrap();
+            row["kind"].as_str().unwrap().to_string()
+        })
+        .collect()
+}
+
+#[test]
+fn a_request_lost_in_transit_is_retried_without_using_an_attempt_or_blaming_the_article() {
+    let persona = Persona::generate(11);
+    let short = serde_json::json!({"title": "x", "body": "Far too short."}).to_string();
+    // Two attempts: a refused article, a lost request, then the article. Were
+    // the loss to use an attempt, the second attempt would be the lost one.
+    let (model, provider) = flaky(vec![
+        Some(short),
+        None,
+        Some(good_reply(&persona, 11, 0, 2)),
+    ]);
+    let cache = cache("transit");
+    let summary = write_corpus(&persona, 11, &model, &cache, &options(1)).unwrap();
+    assert_eq!(
+        (summary.written, summary.abandoned, summary.unavailable),
+        (1, 0, 0)
+    );
+    assert_eq!(
+        summary.rejected, 1,
+        "only the refusal counts as turned away"
+    );
+    assert_eq!(kinds(&cache), ["content", "writer-unavailable"]);
+    let seen = provider.seen.lock().unwrap();
+    assert_eq!(seen.len(), 3);
+    assert!(seen[2].contains("words"), "the refusal is still told");
+    assert!(!seen[2].contains("connection refused"), "{}", seen[2]);
+}
+
+#[test]
+fn a_writer_that_stays_unreachable_stops_the_run_and_its_article_is_reported_apart() {
+    let persona = Persona::generate(11);
+    let (model, _) = flaky(vec![]);
+    let cache = cache("unreachable");
+    let summary = write_corpus(&persona, 11, &model, &cache, &options(3)).unwrap();
+    assert_eq!(summary.calls, 3, "one request and two retries");
+    assert_eq!(
+        (summary.written, summary.abandoned, summary.unavailable),
+        (0, 0, 1)
+    );
+    let stopped = summary.stopped.unwrap();
+    assert!(
+        stopped.contains("writer") && stopped.contains("connection refused"),
+        "{stopped}"
+    );
+    assert_eq!(kinds(&cache), ["writer-unavailable"; 3]);
+}
+
+#[test]
+fn a_reader_that_stays_unreachable_leaves_the_draft_unjudged_and_a_spent_budget_is_logged_as_such()
+{
+    let persona = Persona::generate(11);
+    let reply = good_reply(&persona, 11, 0, 2);
+    let (model, _) = flaky(vec![Some(reply.clone())]);
+    let cache = cache("reader-unreachable");
+    let summary = synthetic_author::writer::write_corpus_read(
+        &persona,
+        11,
+        &model,
+        Some(&model as &dyn Models),
+        &cache,
+        &options(1),
+    )
+    .unwrap();
+    assert_eq!(
+        (summary.abandoned, summary.unavailable, summary.rejected),
+        (0, 1, 0)
+    );
+    assert_eq!(kinds(&cache), ["reader-unavailable"; 3]);
+    let first: serde_json::Value = serde_json::from_str(
+        std::fs::read_to_string(cache.dir().join("rejected.jsonl"))
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        first["draft"]["body"].is_string(),
+        "the draft is kept for judging later"
+    );
+
+    let (model, _) = flaky(vec![Some(reply)]);
+    let cache = self::cache("reader-budget");
+    let mut opts = options(1);
+    opts.max_calls = 1;
+    let summary = synthetic_author::writer::write_corpus_read(
+        &persona,
+        11,
+        &model,
+        Some(&model as &dyn Models),
+        &cache,
+        &opts,
+    )
+    .unwrap();
+    assert_eq!(
+        (summary.abandoned, summary.unavailable, summary.written),
+        (0, 0, 0)
+    );
+    assert_eq!(kinds(&cache), ["budget"]);
+}
+
+#[test]
+fn an_unreadable_usage_record_fails_the_run_before_anything_is_spent() {
+    let persona = Persona::generate(11);
+    let (model, provider) = flaky(vec![Some(good_reply(&persona, 11, 0, 2))]);
+    let cache = cache("usage");
+    std::fs::write(cache.dir().join("usage.json"), "{\"calls\": ").unwrap();
+    let error = write_corpus(&persona, 11, &model, &cache, &options(1)).unwrap_err();
+    assert!(format!("{error:#}").contains("usage.json"), "{error:#}");
+    assert!(provider.seen.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_reader_answer_in_no_readable_shape_turns_the_draft_away_as_content() {
+    let persona = Persona::generate(11);
+    // The reader is corrected once, so it answers twice, both times unreadably.
+    let (model, _) = flaky(vec![
+        Some(good_reply(&persona, 11, 0, 2)),
+        Some("not json".into()),
+        Some("still not json".into()),
+    ]);
+    let cache = cache("reader-unreadable");
+    let mut opts = options(1);
+    opts.attempts_per_article = 1;
+    let summary = synthetic_author::writer::write_corpus_read(
+        &persona,
+        11,
+        &model,
+        Some(&model as &dyn Models),
+        &cache,
+        &opts,
+    )
+    .unwrap();
+    assert_eq!(
+        (summary.rejected, summary.abandoned, summary.unavailable),
+        (1, 1, 0)
+    );
+    assert_eq!(kinds(&cache), ["content"]);
+    let text = std::fs::read_to_string(cache.dir().join("rejected.jsonl")).unwrap();
+    assert!(text.contains("could not be read"), "{text}");
+    assert!(
+        !text.contains("does not show the decision"),
+        "no decision is invented for it: {text}"
+    );
 }

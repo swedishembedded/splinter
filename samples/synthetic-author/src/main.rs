@@ -23,7 +23,6 @@ use splinter_sdk::{Config, Splinter};
 use synthetic_author::cache::Cache;
 use synthetic_author::corpus_cmd::CorpusArgs;
 use synthetic_author::exam_cmd::{CrossArgs, ExamArgs, ReportArgs};
-use synthetic_author::gates::check;
 use synthetic_author::manifest::author_seed;
 use synthetic_author::models::model_named;
 use synthetic_author::persona::Persona;
@@ -219,23 +218,18 @@ fn main() -> anyhow::Result<()> {
             let planned = plan(&persona, seed, articles, episodes_per_article);
             let text = std::fs::read_to_string(cache.join("rejected.jsonl"))
                 .context("reading rejected.jsonl")?;
-            let (mut drafts, mut now_pass) = (0, 0);
-            for line in text.lines() {
-                let row: serde_json::Value = serde_json::from_str(line)?;
-                let Some(draft) = row.get("draft").filter(|d| !d.is_null()) else {
-                    continue;
-                };
-                let article: synthetic_author::gates::Article =
-                    serde_json::from_value(draft.clone())?;
-                let index = row["article"].as_u64().unwrap_or(0) as usize;
-                let verdict = check(&article, &persona, &planned[index].1, min_words);
-                drafts += 1;
-                now_pass += usize::from(verdict.is_ok());
+            let rechecked =
+                synthetic_author::recheck::recheck(&text, &persona, &planned, min_words)?;
+            let drafts = rechecked.len();
+            let now_pass = rechecked.iter().filter(|r| r.now.is_ok()).count();
+            for r in rechecked {
                 println!(
-                    "article {index} attempt {}: was '{}' - now {}",
-                    row["attempt"],
-                    row["reason"].as_str().unwrap_or(""),
-                    verdict.map_or_else(|r| format!("turned away: {r}"), |()| "kept".into()),
+                    "article {} attempt {}: was '{}' - now {}",
+                    r.article,
+                    r.attempt,
+                    r.was,
+                    r.now
+                        .map_or_else(|why| format!("turned away: {why}"), |()| "kept".into()),
                 );
             }
             println!("{now_pass} of {drafts} saved drafts pass the gates as they are now");

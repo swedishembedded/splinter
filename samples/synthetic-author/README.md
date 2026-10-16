@@ -72,3 +72,25 @@ beside what it made.
   default), records per step, bf16 and the digest of the records.
 * A cell with no items reports `not measured`, and an arm asked for in
   `report` that has no outcomes is named in it.
+
+## Failures
+
+A request to the writer or the reader that fails in transit says nothing about
+the article. `corpus` repeats it up to `--transport-retries` times (default
+four), pausing `--transport-backoff-secs` (default five) before the first
+repeat and twice as long before each next, never more than a minute. A repeat
+uses no attempt at the article and is counted in the budget of calls. Past the
+bound the run stops and says which model could not be reached, and the article
+is reported as `unreachable`, apart from those given up on after their
+attempts. A reader whose answer is in no readable shape turns the draft away as
+a content rejection, which the writer is not told of.
+
+Each line of `rejected.jsonl` carries a `kind`: `content` (a gate or an
+unreadable answer turned the attempt away; only these reach the writer as the
+reason for a retry), `writer-unavailable`, `reader-unavailable` (the draft is
+kept, unjudged) or `budget` (the run stopped before the draft was read).
+
+`mine` fails when a line cannot be appended to `decisions.jsonl`, and reads an
+article again when some of its cases have no line, appending only those.
+`recheck` fails naming the line of `rejected.jsonl` that has no article index.
+An unreadable `usage.json` fails `corpus` before any request, naming the file.

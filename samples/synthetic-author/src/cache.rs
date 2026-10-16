@@ -41,6 +41,22 @@ pub struct Usage {
     pub output_tokens: u64,
 }
 
+/// Why a line was written to the log of attempts that came to nothing. Only a
+/// `Content` line is a verdict on the article, and only it is ever told to the
+/// writer; the others say that a request could not be carried out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Kind {
+    /// A gate, or an answer that could not be read, turned the attempt away.
+    Content,
+    /// The writer could not be reached.
+    WriterUnavailable,
+    /// The reader could not be reached, so the draft stands unjudged.
+    ReaderUnavailable,
+    /// The budget was spent before the draft was read.
+    Budget,
+}
+
 /// A corpus directory.
 pub struct Cache {
     dir: PathBuf,
@@ -130,8 +146,9 @@ impl Cache {
         Ok(out)
     }
 
-    /// Notes an attempt that was turned away, with the draft when there is
-    /// one, so that a gate can be judged against what it turned away.
+    /// Notes an attempt that came to nothing, of the `kind` given, with the
+    /// draft when there is one, so that a gate can be judged against what it
+    /// turned away.
     ///
     /// # Errors
     /// The file cannot be appended to.
@@ -139,13 +156,14 @@ impl Cache {
         &self,
         index: usize,
         attempt: usize,
+        kind: Kind,
         reason: &str,
         draft: Option<&Article>,
     ) -> anyhow::Result<()> {
         use std::io::Write as _;
         // One line, written whole, by one thread at a time.
         static LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let mut line = serde_json::json!({"article": index, "attempt": attempt, "reason": reason, "draft": draft}).to_string();
+        let mut line = serde_json::json!({"article": index, "attempt": attempt, "kind": kind, "reason": reason, "draft": draft}).to_string();
         line.push('\n');
         let _one_at_a_time = LOG
             .lock()
@@ -158,13 +176,20 @@ impl Cache {
         Ok(())
     }
 
-    /// What the corpus has cost so far.
-    #[must_use]
-    pub fn usage(&self) -> Usage {
-        std::fs::read_to_string(self.dir.join("usage.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default()
+    /// What the corpus has cost so far; nothing when no cost was recorded.
+    ///
+    /// # Errors
+    /// `usage.json` exists and cannot be read or parsed: a cost that cannot be
+    /// read must not be taken for none, or the budget would be spent twice.
+    pub fn usage(&self) -> anyhow::Result<Usage> {
+        let path = self.dir.join("usage.json");
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Usage::default()),
+            Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+        }
     }
 
     /// Records what the corpus has cost.

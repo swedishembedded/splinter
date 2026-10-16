@@ -32,6 +32,7 @@ pub mod models;
 pub mod names;
 pub mod persona;
 pub mod prompts;
+pub mod recheck;
 pub mod records;
 pub mod report;
 pub mod retrieval;

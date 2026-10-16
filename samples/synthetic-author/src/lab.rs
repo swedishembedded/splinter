@@ -6,7 +6,7 @@
 //! reads and writes files in the corpus directory, so any stage can be run
 //! again, or run on another machine, without the others.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -63,38 +63,67 @@ pub fn read_mined(cache: &Cache) -> anyhow::Result<Vec<Mined>> {
     Ok(jsonl::read(&decisions_path(cache))?)
 }
 
-/// Reads the decisions out of every article not yet read, `workers` at a time.
-/// Returns how many articles were read by this call.
+/// Reads the decisions out of every article that lacks some of its cases in
+/// `decisions.jsonl`, `workers` at a time, and appends the lines for the cases
+/// it lacks. Returns how many articles were read by this call.
 ///
 /// # Errors
-/// The cache cannot be read or written, or the reader fails on an article.
+/// The cache cannot be read, a line cannot be appended, or the reader fails on
+/// an article. The first failure is returned after the workers have stopped.
 pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow::Result<usize> {
     let articles = cache.articles()?;
-    let done: BTreeSet<usize> = read_mined(cache)?.iter().map(|m| m.article).collect();
-    let todo: Vec<&StoredArticle> = articles
+    let mut have: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
+    for line in read_mined(cache)? {
+        have.entry(line.article).or_default().insert(line.case);
+    }
+    let lacking = |article: &StoredArticle| -> Vec<String> {
+        let done = have.get(&article.index);
+        article
+            .cases
+            .iter()
+            .filter(|case| !done.is_some_and(|d| d.contains(*case)))
+            .cloned()
+            .collect()
+    };
+    let todo: Vec<(&StoredArticle, Vec<String>)> = articles
         .iter()
-        .filter(|a| !done.contains(&a.index))
+        .map(|article| (article, lacking(article)))
+        .filter(|(_, lacking)| !lacking.is_empty())
         .collect();
     let log = jsonl::Log::open(&decisions_path(cache))?;
     let next = AtomicUsize::new(0);
     let failure: Mutex<Option<anyhow::Error>> = Mutex::new(None);
+    let fail = |e: anyhow::Error| {
+        failure
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get_or_insert(e);
+    };
     std::thread::scope(|scope| {
         for _ in 0..workers.max(1) {
             scope.spawn(|| loop {
                 let n = next.fetch_add(1, Ordering::SeqCst);
-                let Some(article) = todo.get(n) else { return };
+                if failure
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .is_some()
+                {
+                    return;
+                }
+                let Some((article, lacking)) = todo.get(n) else {
+                    return;
+                };
                 let lines = match mine(miner, article) {
                     Ok(results) => results,
                     Err(e) => {
-                        eprintln!("article {}: {e}", article.index);
-                        failure
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
-                            .get_or_insert(e);
+                        fail(e.context(format!("reading article {}", article.index)));
                         return;
                     }
                 };
                 for (case, result) in article.cases.iter().zip(lines) {
+                    if !lacking.contains(case) {
+                        continue;
+                    }
                     let result = result.map_or_else(MinedResult::Refused, MinedResult::Kept);
                     let line = Mined {
                         article: article.index,
@@ -102,7 +131,10 @@ pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow:
                         result,
                     };
                     if let Err(e) = log.append(&line) {
-                        eprintln!("decisions.jsonl: {e}");
+                        fail(anyhow::Error::new(e).context(format!(
+                            "appending article {} case {case} to decisions.jsonl",
+                            article.index
+                        )));
                         return;
                     }
                 }

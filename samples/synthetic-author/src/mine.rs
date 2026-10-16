@@ -15,6 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::TypedCall;
+use splinter_sdk::agent::CallError;
 use splinter_sdk::measure::verifiers::quotation::contains_words as contains_run;
 
 use crate::cache::StoredArticle;
@@ -155,13 +156,14 @@ pub fn verify(article: &StoredArticle, mined: &Mined) -> Vec<Result<Verified, St
 /// it wrote, unchecked.
 ///
 /// # Errors
-/// The model could not be reached or did not answer in the shape asked for.
-pub fn read_raw(model: &BlockingModel, body: &str, cases: &[String]) -> anyhow::Result<Mined> {
+/// The model could not be reached (`CallError::Infrastructure`) or did not
+/// answer in the shape asked for.
+pub fn read_raw(model: &BlockingModel, body: &str, cases: &[String]) -> Result<Mined, CallError> {
     let shown = serde_json::json!({"essay": body, "cases": cases});
     let call = TypedCall::<Mined>::new("mine_decisions", TASK, ROLE, REQUEST_DEADLINE)
         .max_output_tokens(MAX_TOKENS)
         .repairs(1);
-    Ok(model.call(call, &shown)?)
+    model.call(call, &shown)
 }
 
 impl Mined {

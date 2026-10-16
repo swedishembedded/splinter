@@ -72,6 +72,12 @@ pub enum Rejection {
         /// What the beliefs determine.
         expected: Archetype,
     },
+    /// The reader's answer is in no shape that can be read, so the article has
+    /// not been judged and is turned away for it.
+    Unreadable {
+        /// What was wrong with the answer.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for Rejection {
@@ -89,6 +95,9 @@ impl std::fmt::Display for Rejection {
             Self::MissingCase { case } => write!(f, "does not tell {case}"),
             Self::WrongDecision { case, expected } => {
                 write!(f, "does not show the decision {expected:?} for {case}")
+            }
+            Self::Unreadable { detail } => {
+                write!(f, "the reader's answer could not be read: {detail}")
             }
         }
     }

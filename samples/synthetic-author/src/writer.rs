@@ -17,9 +17,10 @@ use std::time::Duration;
 use serde_json::json;
 use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::agent::typed::TypedCall;
+use splinter_sdk::agent::CallError;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
-use crate::cache::{Cache, StoredArticle, Usage};
+use crate::cache::{Cache, Kind, StoredArticle, Usage};
 use crate::episode::{did_phrase, episodes_for, Episode};
 use crate::gates::{check_form, check_markers, check_reading, Article, Rejection};
 use crate::mine::{read_raw, MAX_READING_TOKENS};
@@ -37,8 +38,16 @@ pub const HELD_OUT_TOPICS: [usize; 2] = [10, 11];
 const MAX_ARTICLE_TOKENS: u64 = 6000;
 /// How long one request may take, corrections included.
 const REQUEST_DEADLINE: Duration = Duration::from_secs(900);
-/// Consecutive failed requests after which the run stops.
+/// Consecutive unusable answers from the writer after which the run stops.
 const MAX_CONSECUTIVE_ERRORS_PER_WORKER: usize = 4;
+/// How many times a request lost in transit is repeated, unless the caller
+/// asks for another bound.
+pub const DEFAULT_TRANSPORT_RETRIES: usize = 4;
+/// Seconds paused before the first repeat of a lost request, unless the caller
+/// asks for another pause. Each further repeat waits twice as long as the last.
+pub const DEFAULT_TRANSPORT_BACKOFF_SECS: u64 = 5;
+/// The longest pause before a repeat, however many have been made.
+const MAX_TRANSPORT_PAUSE: Duration = Duration::from_secs(60);
 
 const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
@@ -141,6 +150,12 @@ pub struct Options {
     pub max_output_tokens: u64,
     /// How many articles are written at a time.
     pub workers: usize,
+    /// How many times a request that fails in transit is repeated before the
+    /// model counts as unreachable. A repeat uses no attempt at the article.
+    pub transport_retries: usize,
+    /// The pause before the first repeat; it doubles with each repeat up to a
+    /// minute.
+    pub transport_backoff: Duration,
 }
 
 /// What a run did.
@@ -152,6 +167,9 @@ pub struct Summary {
     pub skipped: usize,
     /// Articles given up on after their attempts.
     pub abandoned: usize,
+    /// Articles left unfinished because the writer or the reader could not be
+    /// reached, which says nothing about the articles.
+    pub unavailable: usize,
     /// Attempts turned away by the gates.
     pub rejected: usize,
     /// Requests made by this run.
@@ -215,7 +233,7 @@ pub fn plan(
 /// Writes the corpus of `persona` into `cache`, within `opts`.
 ///
 /// # Errors
-/// The cache cannot be written, or the writer fails on every request.
+/// The cache cannot be read or written.
 pub fn write_corpus(
     persona: &Persona,
     seed: u64,
@@ -233,7 +251,8 @@ pub fn write_corpus(
 /// passed however many are in flight.
 ///
 /// # Errors
-/// The cache cannot be written, or the writer fails on every request.
+/// The cache cannot be read or written, or its record of what was spent is
+/// unreadable.
 pub fn write_corpus_read(
     persona: &Persona,
     seed: u64,
@@ -242,6 +261,7 @@ pub fn write_corpus_read(
     cache: &Cache,
     opts: &Options,
 ) -> anyhow::Result<Summary> {
+    let spent_before = cache.usage()?;
     cache.write_persona(persona)?;
     let run = Run {
         persona,
@@ -277,7 +297,7 @@ pub fn write_corpus_read(
         .into_inner()
         .unwrap_or_else(PoisonError::into_inner)
         .summary;
-    let mut total = cache.usage();
+    let mut total = spent_before;
     total.calls += summary.calls;
     total.input_tokens += summary.input_tokens;
     total.output_tokens += summary.output_tokens;
@@ -360,6 +380,72 @@ impl Run<'_> {
         state.summary.output_tokens = state.summary.output_tokens - reserved + written;
     }
 
+    /// The pause before repeat number `repeat` (from one) of a lost request.
+    fn pause_before(&self, repeat: usize) -> Duration {
+        let doublings = u32::try_from(repeat - 1).unwrap_or(u32::MAX).min(16);
+        self.opts
+            .transport_backoff
+            .saturating_mul(1 << doublings)
+            .min(MAX_TRANSPORT_PAUSE)
+    }
+
+    /// Puts one request to `models`, repeating it, without using an attempt,
+    /// while it is lost in transit and the bound allows. Every request made,
+    /// repeats included, is taken from the budget, and every loss is noted
+    /// under the kind of its role with `draft`. A reservation is settled here
+    /// only when nothing was answered; the caller settles an answer.
+    fn ask<T>(
+        &self,
+        models: &dyn Models,
+        request: &Request<'_>,
+        call: impl Fn(&BlockingModel) -> Result<T, CallError>,
+    ) -> anyhow::Result<Asked<T>> {
+        let (who, kind) = match request.key.role {
+            Role::Writer => ("writer", Kind::WriterUnavailable),
+            Role::Reader => ("reader", Kind::ReaderUnavailable),
+        };
+        let mut last_loss = String::new();
+        for repeat in 0..=self.opts.transport_retries {
+            if repeat > 0 {
+                std::thread::sleep(self.pause_before(repeat));
+            }
+            if !self.reserve(request.max_output, request.shown_tokens) {
+                return Ok(Asked::OutOfBudget);
+            }
+            let answer = models
+                .model(request.key)
+                .map_err(CallError::Infrastructure)
+                .and_then(|model| call(&model));
+            match answer {
+                Ok(value) => return Ok(Asked::Answered(value)),
+                Err(CallError::Infrastructure(e)) => {
+                    self.settle(request.max_output, 0);
+                    last_loss = format!("the {who} could not be reached: {e:#}");
+                    self.cache.note_rejected(
+                        request.key.article,
+                        request.key.attempt,
+                        kind,
+                        &last_loss,
+                        request.draft,
+                    )?;
+                    eprintln!(
+                        "article {}: attempt {}: {last_loss}",
+                        request.key.article + 1,
+                        request.key.attempt
+                    );
+                }
+                Err(e) => {
+                    self.settle(request.max_output, 0);
+                    return Ok(Asked::Unreadable(e));
+                }
+            }
+        }
+        Ok(Asked::Unreachable(format!(
+            "{last_loss}, in {} requests",
+            self.opts.transport_retries + 1
+        )))
+    }
+
     fn write_article(&self, index: usize) -> anyhow::Result<()> {
         let (topic, episodes) = (self.planned[index].0, &self.planned[index].1);
         if self.cache.has_article(index) {
@@ -376,35 +462,37 @@ impl Run<'_> {
                 opts.min_words,
                 refusal.as_deref(),
             );
-            if !self.reserve(
-                MAX_ARTICLE_TOKENS,
-                tokens(TASK) + tokens(&shown.to_string()),
-            ) {
-                return Ok(());
-            }
-            let call = TypedCall::<Article>::new("write_article", TASK, ROLE, REQUEST_DEADLINE)
-                .max_output_tokens(MAX_ARTICLE_TOKENS)
-                .repairs(1);
-            let key = RequestKey {
-                article: index,
-                attempt,
-                role: Role::Writer,
+            let request = Request {
+                key: RequestKey {
+                    article: index,
+                    attempt,
+                    role: Role::Writer,
+                },
+                max_output: MAX_ARTICLE_TOKENS,
+                shown_tokens: tokens(TASK) + tokens(&shown.to_string()),
+                draft: None,
             };
-            let asked = self
-                .writer
-                .model(key)
-                .map_err(|e| e.to_string())
-                .and_then(|writer| writer.call(call, &shown).map_err(|e| e.to_string()));
+            let asked = self.ask(self.writer, &request, |writer| {
+                let call = TypedCall::<Article>::new("write_article", TASK, ROLE, REQUEST_DEADLINE)
+                    .max_output_tokens(MAX_ARTICLE_TOKENS)
+                    .repairs(1);
+                writer.call(call, &shown)
+            })?;
             let article = match asked {
-                Ok(article) => {
+                Asked::Answered(article) => {
                     self.state().errors = 0;
                     article
                 }
-                Err(e) => {
-                    self.settle(MAX_ARTICLE_TOKENS, 0);
+                Asked::OutOfBudget => return Ok(()),
+                Asked::Unreachable(why) => {
+                    self.give_up_unreachable(index, &why);
+                    return Ok(());
+                }
+                Asked::Unreadable(e) => {
                     self.cache.note_rejected(
                         index,
                         attempt,
+                        Kind::Content,
                         &format!("the writer failed: {e}"),
                         None,
                     )?;
@@ -415,10 +503,9 @@ impl Run<'_> {
                     {
                         state.stopped = true;
                         let errors = state.errors;
-                        state
-                            .summary
-                            .stopped
-                            .get_or_insert(format!("{errors} requests in a row failed: {e}"));
+                        state.summary.stopped.get_or_insert(format!(
+                            "{errors} answers in a row could not be used: {e}"
+                        ));
                     }
                     continue;
                 }
@@ -427,8 +514,8 @@ impl Run<'_> {
                 MAX_ARTICLE_TOKENS,
                 tokens(&article.title) + tokens(&article.body),
             );
-            match self.judge(&article, episodes, index, attempt) {
-                Ok(()) => {
+            match self.judge(&article, episodes, index, attempt)? {
+                Verdict::Accepted => {
                     self.cache.write_article(&StoredArticle {
                         index,
                         topic,
@@ -445,14 +532,18 @@ impl Run<'_> {
                     );
                     return Ok(());
                 }
-                Err(reason) => {
+                Verdict::Rejected(reason) => {
                     self.cache.note_rejected(
                         index,
                         attempt,
+                        Kind::Content,
                         &reason.to_string(),
                         Some(&article),
                     )?;
-                    refusal = Some(reason.to_string());
+                    // A reader's unreadable answer is no fault of the essay,
+                    // so the writer is not told of it.
+                    refusal = (!matches!(reason, Rejection::Unreadable { .. }))
+                        .then(|| reason.to_string());
                     self.state().summary.rejected += 1;
                     eprintln!(
                         "article {}/{}: attempt {attempt} turned away: {reason}",
@@ -460,10 +551,31 @@ impl Run<'_> {
                         opts.articles
                     );
                 }
+                Verdict::Unreachable(why) => {
+                    self.give_up_unreachable(index, &why);
+                    return Ok(());
+                }
+                Verdict::OutOfBudget => {
+                    self.cache.note_rejected(
+                        index,
+                        attempt,
+                        Kind::Budget,
+                        "the budget ended before the draft was read",
+                        Some(&article),
+                    )?;
+                    return Ok(());
+                }
             }
         }
         self.state().summary.abandoned += 1;
         Ok(())
+    }
+
+    /// Ends the run because a model stayed unreachable: the article is left
+    /// for a later run and reported apart from those given up on.
+    fn give_up_unreachable(&self, index: usize, why: &str) {
+        self.state().summary.unavailable += 1;
+        self.stop(format!("article {}: {why}", index + 1));
     }
 
     /// Whether the article may join the corpus: its form, then its decisions,
@@ -474,51 +586,80 @@ impl Run<'_> {
         episodes: &[Episode],
         index: usize,
         attempt: usize,
-    ) -> Result<(), Rejection> {
-        check_form(article, self.persona, episodes, self.opts.min_words)?;
+    ) -> anyhow::Result<Verdict> {
+        let turned_away = |result: Result<(), Rejection>| match result {
+            Ok(()) => Verdict::Accepted,
+            Err(reason) => Verdict::Rejected(reason),
+        };
+        if let Err(reason) = check_form(article, self.persona, episodes, self.opts.min_words) {
+            return Ok(Verdict::Rejected(reason));
+        }
         let Some(reader) = self.reader else {
-            return check_markers(article, self.persona, episodes);
+            return Ok(turned_away(check_markers(article, self.persona, episodes)));
         };
         let cases: Vec<String> = episodes.iter().map(|e| e.case.name.clone()).collect();
-        let shown_tokens = tokens(&article.body) + tokens(&cases.join(" "));
-        if !self.reserve(MAX_READING_TOKENS, shown_tokens) {
-            return Err(Rejection::WrongDecision {
-                case: "(the budget ended before it was read)".into(),
-                expected: self.persona.decide(&episodes[0].scenario).choice,
-            });
-        }
-        let key = RequestKey {
-            article: index,
-            attempt,
-            role: Role::Reader,
+        let request = Request {
+            key: RequestKey {
+                article: index,
+                attempt,
+                role: Role::Reader,
+            },
+            max_output: MAX_READING_TOKENS,
+            shown_tokens: tokens(&article.body) + tokens(&cases.join(" ")),
+            draft: Some(article),
         };
-        let read = reader
-            .model(key)
-            .map_err(|e| e.to_string())
-            .and_then(|reader| read_raw(&reader, &article.body, &cases).map_err(|e| e.to_string()));
-        match read {
-            Ok(mined) => {
-                let reading = mined.as_reading();
-                self.settle(
-                    MAX_READING_TOKENS,
-                    tokens(&serde_json::to_string(&mined).unwrap_or_default()),
-                );
-                check_reading(&reading, self.persona, episodes)
-            }
-            Err(e) => {
-                self.settle(MAX_READING_TOKENS, 0);
-                eprintln!("reading failed: {e}");
-                Err(Rejection::WrongDecision {
-                    case: "(the reader could not read it)".into(),
-                    expected: self.persona.decide(&episodes[0].scenario).choice,
-                })
-            }
-        }
+        Ok(
+            match self.ask(reader, &request, |r| read_raw(r, &article.body, &cases))? {
+                Asked::Answered(mined) => {
+                    self.settle(
+                        MAX_READING_TOKENS,
+                        tokens(&serde_json::to_string(&mined).unwrap_or_default()),
+                    );
+                    turned_away(check_reading(&mined.as_reading(), self.persona, episodes))
+                }
+                Asked::Unreadable(e) => Verdict::Rejected(Rejection::Unreadable {
+                    detail: e.to_string(),
+                }),
+                Asked::Unreachable(why) => Verdict::Unreachable(why),
+                Asked::OutOfBudget => Verdict::OutOfBudget,
+            },
+        )
     }
 }
 
+/// One request of an article: who is asked, what it may cost and the draft it
+/// concerns, if there is one.
+struct Request<'a> {
+    key: RequestKey,
+    max_output: u64,
+    shown_tokens: u64,
+    draft: Option<&'a Article>,
+}
+
+/// How a request, repeated as far as the bound allows, ended.
+enum Asked<T> {
+    /// The model answered.
+    Answered(T),
+    /// The model answered in no shape that can be read.
+    Unreadable(CallError),
+    /// Every request was lost in transit; the text says how.
+    Unreachable(String),
+    /// The budget ended before a request could be made.
+    OutOfBudget,
+}
+
+/// What came of judging a draft.
+enum Verdict {
+    Accepted,
+    Rejected(Rejection),
+    Unreachable(String),
+    OutOfBudget,
+}
+
 /// What a cache has cost so far.
-#[must_use]
-pub fn spent(cache: &Cache) -> Usage {
+///
+/// # Errors
+/// The record of what was spent cannot be read.
+pub fn spent(cache: &Cache) -> anyhow::Result<Usage> {
     cache.usage()
 }
