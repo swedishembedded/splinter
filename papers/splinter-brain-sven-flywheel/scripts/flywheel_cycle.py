@@ -51,7 +51,7 @@ import urllib.request
 from pathlib import Path
 
 ANSWERED = 3
-STEPS = ["base", "after-g0", "after-g1", "after-rollback"]
+STEPS = ["base", "candidate-g0", "after-g0", "candidate-g1", "after-g1", "after-rollback"]
 
 
 def load_generations(path):
@@ -126,11 +126,11 @@ class Runner:
         suite += [json.loads(l) for l in (self.out / "anchor.jsonl").read_text().splitlines()]
         return suite
 
-    def measure(self, name):
-        """Put the live policy every probe and the anchor; one eval, one load."""
+    def measure(self, name, model="policy:default"):
+        """Put `model` (the live policy, or a candidate by id) every probe and the anchor."""
         path = self.out / "suite.jsonl"
         path.write_text("".join(json.dumps(s) + "\n" for s in self.suite()))
-        _, report = self.splinter(f"measure-{name}", "eval", "policy:default", "--suite", path)
+        _, report = self.splinter(f"measure-{name}", "eval", model, "--suite", path)
         missed = [m["instruction"] for s in report.get("scores", []) for m in s.get("missed", [])]
         (self.out / f"missed-{name}.json").write_text(json.dumps(sorted(missed)))
 
@@ -219,11 +219,14 @@ def run(args):
     r.splinter("anchor-freeze", "eval", "--suite", "anchor", "--freeze", out / "anchor.jsonl")
     r.measure("base")
     for g in (0, 1):
-        code, _ = r.splinter(f"learn-g{g}", "learn", out / f"sheets{g}", "--kinds", "recall",
+        code, report = r.splinter(f"learn-g{g}", "learn", out / f"sheets{g}", "--kinds", "recall",
                              "--generator", r.helper, "--teacher", r.helper,
                              "--goal", "the invented places of the gazetteer",
                              *args.learn_arg, ok=(0, 1))
         exits[f"learn_g{g}"] = {"exit": code, "reason": reason_of(r.raw / f"learn-g{g}.stderr")}
+        candidate = (report.get("candidate") or {}).get("candidate")
+        if candidate:  # measured whether or not the gate released it
+            r.measure(f"candidate-g{g}", candidate)
         r.measure(f"after-g{g}")
         r.splinter(f"releases-after-g{g}", "release", "list")
         (r.raw / f"serving-after-g{g}.json").write_text(json.dumps(r.serving_manifest(), indent=1))

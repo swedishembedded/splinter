@@ -114,3 +114,15 @@ Retention (E3): generation-0 answered after the second release at most 1 below t
 the first; generation-1 answered after it must exceed the base's. No item is excluded. All
 results are pilots of n = 30 facts per generation; one run, nothing retried; if the run fails
 for an infrastructure reason the repaired run is reported beside it.
+
+# Second wave, E2b (post hoc; written 2026-10-16 11:58 CEST, before the run)
+
+The registered run (pilot 3) produced a candidate that passed the improvement, retention and serve
+checks and was refused by the anchor check alone (the anchor suite fell by 0.05 against the bound
+0.02; candidate probes: 13 of 30 generation-0 facts answered, 0 of 30 of generations 1 and 2).
+Whether a lower-forgetting setting reaches a release is a follow-up decided after seeing that
+result, so it is post hoc: the same design, a new seed, `--rehearsal 0.5` and `--lr 0.0001`
+instead of `--rehearsal 0.25` and the default rate, nothing else changed, one run, nothing
+retried. The outcomes and decision rules are those registered above for E2/E3; this run is the
+one the release, serving, second-generation and rollback measurements can come from if the gate
+releases. The candidate itself is also measured on the probes whether or not it is released.
