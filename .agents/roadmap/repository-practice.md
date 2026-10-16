@@ -99,7 +99,7 @@ Order matters; each line is one self-contained piece of work.
    validated by `splinter experiment check` and enforced per run by `practice --plan
    --generation`. Not yet enforced: the sealed families' tree ids are not kept in the state
    root, so a run without `--plan` can still read one.
-6. Put the measured numbers into `papers/training-code-skills-with-splinter/data/results.csv`
+6. Put the measured numbers into `papers/splinter-brain-sven-flywheel/data/results.csv`
    (nothing before it is measured), rebuild the figures, update the audit statuses, and
    settle with the maintainer whether a paper may hold results of a protocol still being run.
 
@@ -154,4 +154,4 @@ records, public adapter manifest writer, long-context memory measurement) and in
 repositories first.
 
 The measurement protocol and results are in the paper
-`papers/training-code-skills-with-splinter`.
+`papers/splinter-brain-sven-flywheel` (its coding-task protocol and registration `prereg/coding-tasks.md`).

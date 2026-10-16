@@ -936,8 +936,8 @@ untouched final, as the input requires. A gate that does not pass is a result.
 - **D-V2-7.** The `splinter benchmark` and `splinter improve` verbs compose existing stages;
   `report` replaces the missing generic report. No second experiment model.
 - **D-V2-8.** GRPO, DPO-for-qwen35, logprobs (B6b) wait for G9.
-- **D-V2-9.** The flywheel paper is frozen as a historical record; the code-skills paper
-  carries the campaign.
+- **D-V2-9.** (Superseded by D-PAPER, section 8: one paper.) The flywheel paper absorbs the
+  code-skills paper and carries the campaign.
 - **D-V2-10.** L0 `s-gate` stops after the bound and preflight; anchor-200 content and S5 are
   not authored in L0.
 
