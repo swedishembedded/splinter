@@ -37,7 +37,7 @@ use splinter_eval::verifiers::Verifier;
 use splinter_knowledge::capture::CapturedTree;
 use splinter_knowledge::tasks::workspace::{
     Fixture, Held, Qualified, Reason, RepositoryProfile, WorkspaceError, WorkspaceGeneration,
-    WorkspaceGenerator, WorkspacePlan, WorkspaceTask,
+    WorkspaceGenerator, WorkspacePlan, WorkspaceTask, MIN_HIDDEN_KILL_RATE,
 };
 use splinter_knowledge::tasks::{Catalogue, SolverEnvironment, VerifierKind};
 use splinter_sandbox::{CommandCall, Limits, ProcessSandbox};
@@ -58,6 +58,11 @@ impl Deref for Rig {
 
 impl Rig {
     fn new(name: &str, extra: &[(&str, &str)]) -> Self {
+        Self::with_mutants(name, extra, 6)
+    }
+
+    /// A rig that considers `mutants_per_file` mutants of each file.
+    fn with_mutants(name: &str, extra: &[(&str, &str)], mutants_per_file: usize) -> Self {
         let repo = Repo::new(name, extra);
         let calls = repo.scratch.0.join("calls");
         fs::create_dir_all(&calls).unwrap();
@@ -69,7 +74,7 @@ impl Rig {
             repo.scratch.0.join("work"),
         )
         .with_plan(WorkspacePlan {
-            mutants_per_file: 6,
+            mutants_per_file,
             ..WorkspacePlan::default()
         })
         .unwrap();
@@ -300,6 +305,17 @@ fn every_admitted_task_fails_on_the_baseline_passes_with_the_reverse_patch_and_h
             .iter()
             .all(|p| !check.hidden_paths.contains(p)));
 
+        // The measurement is recorded on the task: the hidden tests caught at
+        // least the floor of the faults seeded near this one, or there was
+        // none to measure (never a zero standing for "not measured").
+        if let Some(rate) = check.hidden_strength.and_then(|s| s.kill_rate()) {
+            assert!(
+                rate >= MIN_HIDDEN_KILL_RATE,
+                "{rate} for {}",
+                task.instruction
+            );
+        }
+
         // The request states a symptom and none of the changed lines.
         let instruction = &task.instruction;
         for line in CHANGED_LINES {
@@ -495,4 +511,73 @@ fn the_catalogue_names_the_workspace_kind_and_never_asks_a_model_for_it() {
     assert!(!kind.model_proposable());
     assert!(kind.validate().is_ok());
     assert!(!kind.needs_judge());
+}
+
+/// Two functions on neighbouring lines, each looked at by its own test file.
+/// A fault in one is caught by its file alone, so the hidden file (the one
+/// that catches it) would let a plausible wrong patch of the other function
+/// through: every fault seeded beside it is caught by the visible file only.
+const LEVEL: &str = "\
+def double(x):
+    return x * 2
+def bump(x):
+    return x + 1
+";
+
+const TEST_DOUBLE: &str = "\
+import unittest
+
+from shop.level import double
+
+
+class DoubleTest(unittest.TestCase):
+    def test_doubling(self):
+        self.assertEqual(double(3), 6)
+";
+
+const TEST_BUMP: &str = "\
+import unittest
+
+from shop.level import bump
+
+
+class BumpTest(unittest.TestCase):
+    def test_bumping(self):
+        self.assertEqual(bump(3), 4)
+";
+
+#[test]
+fn a_task_whose_hidden_tests_miss_the_faults_seeded_beside_it_is_refused_with_a_reason() {
+    let rig = Rig::with_mutants(
+        "weak",
+        &[
+            ("shop/level.py", LEVEL),
+            ("tests/test_double.py", TEST_DOUBLE),
+            ("tests/test_bump.py", TEST_BUMP),
+        ],
+        16,
+    );
+    let tree = rig.capture("HEAD");
+    let generation = rig.generate(&tree, &Held::none());
+    assert!(
+        generation.count(Reason::WeakHiddenTests) >= 1,
+        "refused {:?}",
+        generation.refused
+    );
+    assert!(
+        generation
+            .admitted
+            .iter()
+            .all(|t| t.family != "shop/level.py"),
+        "a weak task was admitted"
+    );
+    // The project whose one test file covers all its faults still yields tasks.
+    assert!(
+        generation
+            .admitted
+            .iter()
+            .any(|t| t.family == "shop/pricing.py"),
+        "refused {:?}",
+        generation.refused
+    );
 }

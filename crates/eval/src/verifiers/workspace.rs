@@ -108,6 +108,12 @@ pub struct WorkspaceCheck {
     /// overlay's contents.
     #[serde(default)]
     pub hidden_paths: Vec<String>,
+    /// How many of the faults seeded near the task's own the hidden tests
+    /// catch, measured at admission; `None` for a task made without the
+    /// measurement. Not read by the verifier: it grades a patch, and this
+    /// says how much a pass is worth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden_strength: Option<super::hidden_strength::HiddenStrength>,
 }
 
 impl WorkspaceCheck {

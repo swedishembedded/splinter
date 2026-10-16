@@ -37,6 +37,12 @@ missing: test strength, canaries, coverage, power.
   - Acceptance: a scripted cheating agent is flagged on at least 90% of 20 canaries and a clean
     one on none; the gate refuses a candidate whose canary pass rate is above 5%. `make test`.
 - [ ] RS-P3 (M-L, U2) Test strength at admission and a differential check of passing patches.
+  - Done: each mutation-seeded task's hidden-suite kill rate on the faults seeded within three
+    lines of its own is measured at admission, kept on the task's check (`hidden_strength`) and a
+    task below `MIN_HIDDEN_KILL_RATE` (0.5, with at least two measured variants) is refused as
+    `weak_hidden_tests` in the admission report (finding 048). Left: the release gate weighing a
+    pass by the recorded strength, the differential check of passing patches, the AUC acceptance
+    on 50 tasks with seeded wrong patches, the floor calibrated on that data.
   - Record each admitted task's hidden-suite kill rate on mutants of the reference (the mutation
     operators exist) and refuse below a pre-registered floor; demote a pass whose behaviour
     differs from the reference's to a hint-only strength.

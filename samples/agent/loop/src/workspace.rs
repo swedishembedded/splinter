@@ -134,6 +134,7 @@ pub fn workspace_check(contract: &Contract) -> WorkspaceCheck {
         hidden: None,
         protected: contract.protected.clone(),
         hidden_paths: Vec::new(),
+        hidden_strength: None,
     }
 }
 

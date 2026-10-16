@@ -25,7 +25,10 @@
 //! 5. the request, composed from the symptoms, quotes neither a changed
 //!    line nor the hidden tests, and is not a near duplicate of one already
 //!    admitted for the same file;
-//! 6. the reverse patch (the original file put back) is a clean change to
+//! 6. the hidden tests catch at least [`MIN_HIDDEN_KILL_RATE`] of the other
+//!    faults seeded within a few lines of this one that the whole suite
+//!    catches (the measurement is kept on the task's check);
+//! 7. the reverse patch (the original file put back) is a clean change to
 //!    that one file, and the workspace verifier passes it.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -46,8 +49,9 @@ use super::pack::lay_over;
 use super::profile::{is_test_path, Qualified};
 use super::staging::Staged;
 use super::{
-    instruction, run_quiet, FreshTree, Reason, WorkspaceError, WorkspaceGeneration,
-    WorkspaceGenerator, WorkspaceTask, REPRODUCTIONS,
+    instruction, run_quiet, FreshTree, HiddenStrength, Reason, WorkspaceError, WorkspaceGeneration,
+    WorkspaceGenerator, WorkspaceTask, MIN_HIDDEN_KILL_RATE, MIN_VARIANTS_TO_REFUSE, REPRODUCTIONS,
+    VARIANTS_PER_TASK, VARIANT_WINDOW_LINES,
 };
 use crate::tasks::dedup::Seen;
 
@@ -59,6 +63,10 @@ const HIDDEN_TEST: &str = "hidden-test";
 /// is a leak. A shorter one (a bracket, `pass`) is a word the request may
 /// use without saying anything of the change.
 const MIN_LEAKED_LINE_CHARS: usize = 6;
+
+/// The mutants of a file considered as variants of a fault, before the
+/// window of lines and the per-task cap choose among them.
+const VARIANT_POOL: usize = 64;
 
 /// Why one candidate stopped: it is refused for a reason, or the generation
 /// itself failed.
@@ -213,6 +221,15 @@ impl WorkspaceGenerator {
         let text = instruction::compose(base.command(), &failing, &killed.docs);
         admissible(&text, original, &mutant.text, &hidden, seen)?;
 
+        let strength = self.hidden_strength(base, path, original, mutant, &killed)?;
+        if strength.variants >= MIN_VARIANTS_TO_REFUSE
+            && strength
+                .kill_rate()
+                .is_some_and(|rate| rate < MIN_HIDDEN_KILL_RATE)
+        {
+            return Err(Stop::Refuse(Reason::WeakHiddenTests));
+        }
+
         let fix = self.fix(&env, &views, path, original)?;
         let check = WorkspaceCheck {
             fail_to_pass: vec![base.harness.select(base.command(), &failing)],
@@ -220,6 +237,7 @@ impl WorkspaceGenerator {
             hidden: views.hidden(),
             protected: protected(base, &killed.files),
             hidden_paths: killed.files.iter().cloned().collect(),
+            hidden_strength: Some(strength),
         };
         let task = self.build_task(&env, &check, &text, path, Some(&fix))?;
         self.keep(&views)?;
@@ -233,6 +251,58 @@ impl WorkspaceGenerator {
             hidden: views.hidden(),
             snapshot: views.snapshot,
         })
+    }
+
+    /// What the hidden tests (the test files `killed` takes out of the
+    /// solver's tree) do on the other faults seeded within
+    /// [`VARIANT_WINDOW_LINES`] of `mutant`, at most [`VARIANTS_PER_TASK`] of
+    /// them, each put in the baseline tree and run against the whole suite.
+    /// A variant counts when some test catches it (else it may be equivalent
+    /// to the original) and the suite still runs the baseline's tests; it is
+    /// caught by the hidden tests when a failing test lives in a hidden file.
+    /// A variant that runs past the budget or truncates the report is left
+    /// out: it says nothing of the tests.
+    fn hidden_strength(
+        &self,
+        base: &Parent<'_>,
+        path: &str,
+        original: &str,
+        mutant: &Mutant,
+        killed: &Killed,
+    ) -> Result<HiddenStrength, Stop> {
+        let mut strength = HiddenStrength {
+            variants: 0,
+            caught: 0,
+        };
+        let pool = mutants(original, VARIANT_POOL);
+        let near = pool
+            .iter()
+            .filter(|v| {
+                v.text != mutant.text && v.line.abs_diff(mutant.line) <= VARIANT_WINDOW_LINES
+            })
+            .take(VARIANTS_PER_TASK);
+        for variant in near {
+            let tree = FreshTree::lay(&base.env, &base.archive, &self.scratch)?;
+            write(&tree.path().join(path), &variant.text)?;
+            let call = base.harness.run_all(base.command());
+            let report = match self.suite(base, &base.env, tree.path(), &call) {
+                Ok(report) => report,
+                Err(Stop::Refuse(_)) => continue,
+                Err(fail) => return Err(fail),
+            };
+            let ran: BTreeSet<&String> = report.ran().collect();
+            if report.failed.is_empty() || ran != base.qualified.tests.iter().collect() {
+                continue;
+            }
+            strength.variants += 1;
+            if report.failed.iter().any(|id| {
+                base.locate(id)
+                    .is_some_and(|file| killed.files.contains(&file))
+            }) {
+                strength.caught += 1;
+            }
+        }
+        Ok(strength)
     }
 
     /// Runs the suite on the mutated tree and names what it kills.

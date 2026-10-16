@@ -42,6 +42,7 @@ pub mod executable;
 pub mod form;
 pub mod formal;
 pub mod grounding;
+pub mod hidden_strength;
 pub mod mutation;
 pub mod names;
 pub mod normalise;

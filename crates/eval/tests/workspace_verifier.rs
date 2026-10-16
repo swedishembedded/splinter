@@ -183,6 +183,7 @@ impl Fixture {
             hidden: Some(self.hidden.clone()),
             protected: vec!["test_keep.py".into()],
             hidden_paths: vec!["test_hidden.py".into()],
+            hidden_strength: None,
         }
     }
 

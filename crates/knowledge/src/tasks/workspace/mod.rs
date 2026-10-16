@@ -25,6 +25,12 @@
 //!   (a rendered seeded-bug repository, a family's workspace template),
 //!   checked the same way before it is admitted.
 //!
+//! A mutation-seeded task is also measured for the strength of its hidden
+//! tests: of the other faults seeded within a few lines of its own that
+//! some test catches, the share the hidden tests catch is recorded on the
+//! task's check ([`HiddenStrength`]) and a task below
+//! [`MIN_HIDDEN_KILL_RATE`] is refused as [`Reason::WeakHiddenTests`].
+//!
 //! Every candidate that is not admitted is counted under a [`Reason`].
 //! Admission is idempotent: a task is identified by a key over the baseline
 //! snapshot, the change that seeded it and its family, and a key already
@@ -63,6 +69,7 @@ pub use held::Held;
 pub use profile::{
     Qualified, RepositoryProfile, BASELINE_RUNS, CARGO_TEST, UNITTEST, UNITTEST_DISCOVER,
 };
+pub use splinter_eval::verifiers::hidden_strength::HiddenStrength;
 
 /// The generator's name in provenance.
 pub const WORKSPACE_GENERATOR: &str = "splinter-knowledge/workspace-tasks@1";
@@ -83,6 +90,27 @@ pub const DEFAULT_MIN_TIME_BUDGET: Duration = Duration::from_secs(60);
 
 /// How many times a failure must reproduce on the tree the solver is given.
 pub const REPRODUCTIONS: usize = 2;
+
+/// The least share of the faults seeded near a task's own, among those the
+/// whole suite catches, that its hidden tests must catch for the task to be
+/// admitted. Below it the hidden tests fail on the one seeded fault and let a
+/// plausible wrong patch of its neighbours through, so a pass would say
+/// little. Half is a floor, not a target: it refuses suites that miss most
+/// neighbours and tolerates the equivalent mutants and the faults the visible
+/// tests catch that the denominator cannot tell from a miss.
+pub const MIN_HIDDEN_KILL_RATE: f64 = 0.5;
+
+/// The fewest demonstrably wrong variants a refusal rests on. With fewer the
+/// rate is recorded but a task is not refused on it: one variant caught or
+/// missed is an anecdote, not a rate.
+pub const MIN_VARIANTS_TO_REFUSE: usize = 2;
+
+/// The most variants of a task's fault measured, each a run of the suite.
+pub const VARIANTS_PER_TASK: usize = 6;
+
+/// How far, in lines, from the seeded fault a variant lies: a wrong patch is
+/// made about the code the failing test points at.
+pub const VARIANT_WINDOW_LINES: usize = 3;
 
 /// Why a baseline, a mutant or a fixture was not made into a task.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -123,6 +151,10 @@ pub enum Reason {
     NotSelfContained,
     /// The request is a near duplicate of one admitted for the same family.
     NearDuplicate,
+    /// The hidden tests catch fewer than [`MIN_HIDDEN_KILL_RATE`] of the
+    /// other faults seeded near this one: a plausible wrong patch would pass
+    /// them.
+    WeakHiddenTests,
     /// A task with the same key is already held.
     AlreadyHeld,
     /// The fixture's check does not fail on its tree, or fails on a command
