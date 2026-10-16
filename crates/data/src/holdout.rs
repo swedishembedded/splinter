@@ -176,14 +176,28 @@ pub fn split_by_rule<'a, T>(
 }
 
 /// Which of the samples `memberships` describe are held out: the ones whose
-/// side is fixed as held out, and of the others those `rule` chooses.
+/// side is fixed as held out, and of the others those `rule` chooses. A
+/// sample left free that shares a group with a fixed one is not the rule's to
+/// place: it goes where its group-mate was fixed, because a group is divided
+/// between training and scoring never. A group with both sides fixed (a
+/// producer's contradiction the rule cannot repair) trains.
 fn held_out_flags(memberships: &[Membership], rule: &SplitRule) -> Vec<bool> {
+    let mut fixed_group: std::collections::HashMap<&str, Side> = std::collections::HashMap::new();
+    for m in memberships {
+        if let (Some(group), Some(side)) = (m.group.as_deref(), m.side) {
+            let entry = fixed_group.entry(group).or_insert(side);
+            if side == Side::Train {
+                *entry = Side::Train;
+            }
+        }
+    }
+    let followed = |m: &Membership| m.group.as_deref().and_then(|g| fixed_group.get(g)).copied();
     let free: Vec<usize> = (0..memberships.len())
-        .filter(|&n| memberships[n].side.is_none())
+        .filter(|&n| memberships[n].side.is_none() && followed(&memberships[n]).is_none())
         .collect();
     let mut held: Vec<bool> = memberships
         .iter()
-        .map(|m| m.side == Some(Side::HeldOut))
+        .map(|m| m.side.or_else(|| followed(m)) == Some(Side::HeldOut))
         .collect();
     if free.len() < MIN_SAMPLES {
         return held;
@@ -302,9 +316,9 @@ const TRAIN_FILE: &str = "train.jsonl";
 /// The file name the held-out records are written under.
 const HELD_OUT_FILE: &str = "held_out.jsonl";
 /// The file name the records a monitored run fits are written under.
-const FIT_FILE: &str = "fit.jsonl";
+pub const FIT_FILE: &str = "fit.jsonl";
 /// The file name the monitoring records are written under.
-const MONITOR_FILE: &str = "monitor.jsonl";
+pub const MONITOR_FILE: &str = "monitor.jsonl";
 /// The suffix of the file the writer's text of the taken-out families is
 /// written under, after the taken-out file's stem: `held_out_text.jsonl`.
 const TEXT_SUFFIX: &str = "_text";

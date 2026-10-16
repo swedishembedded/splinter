@@ -453,3 +453,38 @@ fn a_record_that_fixes_its_side_stays_on_it() {
     let (train, held) = holdout_split_records(&only_train).unwrap();
     assert_eq!((train.len(), held.len()), (4, 0));
 }
+
+/// A producer fixes the side of some records; a record of the same group it
+/// leaves free is not the split's to place apart from them. Held out while a
+/// group-mate trains, it would score a print of what was trained on; trained
+/// while a group-mate is held out, it would train on a print of what is scored.
+#[test]
+fn a_free_record_follows_the_fixed_side_of_its_group() {
+    // (name, group, side): twelve free singletons so the rule has units to
+    // choose from, then two groups that each mix a fixed and a free record.
+    let mut samples: Vec<(String, String, Option<Side>)> = (0..12)
+        .map(|n| (format!("solo-{n}"), format!("solo-{n}"), None))
+        .collect();
+    samples.push(("trained-fixed".into(), "kept".into(), Some(Side::Train)));
+    samples.push(("trained-free".into(), "kept".into(), None));
+    samples.push(("held-fixed".into(), "scored".into(), Some(Side::HeldOut)));
+    samples.push(("held-free".into(), "scored".into(), None));
+    let (train, held) = split_by_rule(
+        &samples,
+        |(_, group, side)| Membership {
+            group: Some(group.clone()),
+            examinable: true,
+            side: *side,
+        },
+        &SplitRule::HELD_OUT,
+    )
+    .unwrap();
+    let named =
+        |set: &[&(String, String, Option<Side>)], name: &str| set.iter().any(|(n, _, _)| n == name);
+    assert!(named(&train, "trained-free"), "{train:?}");
+    assert!(named(&held, "held-free"), "{held:?}");
+    // No group has records on both sides.
+    for (_, group, _) in &held {
+        assert!(train.iter().all(|(_, g, _)| g != group), "{group}");
+    }
+}
