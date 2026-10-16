@@ -114,7 +114,7 @@ pub struct Config {
 /// run, and what they are given. A container is used when both a docker
 /// client and an image are named; otherwise the commands run directly on the
 /// host, bounded but not isolated, and every environment record says so.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceSettings {
     /// The `docker` client executable.
     pub docker: Option<PathBuf>,
@@ -132,7 +132,32 @@ pub struct WorkspaceSettings {
     /// build offline from a registry that was fetched beforehand. `None`
     /// leaves the commands without one.
     pub cargo_home: Option<PathBuf>,
+    /// The most bytes kept of each output stream of a workspace command (a
+    /// test run's report); past it the middle is elided and the head and
+    /// tail are kept. The command line's `--test-output-cap`.
+    pub output_cap_bytes: u64,
 }
+
+impl Default for WorkspaceSettings {
+    fn default() -> Self {
+        Self {
+            docker: None,
+            image: None,
+            docker_env: BTreeMap::new(),
+            scratch_root: None,
+            cargo_home: None,
+            output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
+        }
+    }
+}
+
+/// The most bytes kept of each output stream of one workspace command, when
+/// the command line names none: the verbose report of a project's whole test
+/// suite runs to hundreds of KiB (115 KiB for sqlglot's 1301 tests). A run
+/// holds at most two streams of this size in memory (2 MiB), against the
+/// gigabytes its tree and test process already use, so concurrent runs are
+/// not made unsafe by it.
+pub const WORKSPACE_OUTPUT_CAP_BYTES: u64 = 1024 * 1024;
 
 /// The variables a docker client may need to reach its daemon.
 pub const DOCKER_CLIENT_ENV: &[&str] = &[
@@ -235,6 +260,7 @@ impl Config {
                     .collect(),
                 scratch_root: var("SPLINTER_WORKSPACE_SCRATCH").map(PathBuf::from),
                 cargo_home: var("SPLINTER_CARGO_HOME").map(PathBuf::from),
+                output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
             },
             build: BuildInfo {
                 gpu_contexts: var("SPLINTER_GPU_CONTEXTS").and_then(|v| v.trim().parse().ok()),

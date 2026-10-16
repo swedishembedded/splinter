@@ -154,20 +154,35 @@ fn a_sleeping_call_is_stopped_by_the_wall_clock() {
 }
 
 #[test]
-fn output_beyond_the_cap_is_truncated_and_flagged() {
+fn output_beyond_the_cap_keeps_its_head_and_tail_and_says_what_was_elided() {
     let scratch = Scratch::new("cap");
     let limits = Limits {
-        output_cap_bytes: 64,
+        output_cap_bytes: 256,
         ..Limits::default()
     };
     let env = python(&scratch, limits, &[]);
     let result = env
-        .run(&call("for _ in range(200):\n    print('0123456789')\n"))
+        .run(&call(
+            "for i in range(200):\n    print('line %03d' % i)\nprint('SUMMARY')\n",
+        ))
         .unwrap();
     assert_eq!(result.exit_code, Some(0), "the process ran to completion");
     assert!(result.stdout_truncated && !result.stderr_truncated);
-    assert_eq!(result.stdout.len(), 64);
-    assert!(result.stdout.starts_with("0123456789\n0123456789\n"));
+    assert!(result.stdout.starts_with("line 000\nline 001\n"));
+    assert!(
+        result.stdout.ends_with("line 199\nSUMMARY\n"),
+        "{}",
+        result.stdout
+    );
+    // 200 lines of 9 bytes and the summary were written; 256 bytes are kept.
+    assert!(result.stdout.contains("bytes elided"), "{}", result.stdout);
+    let kept = result.stdout.len();
+    assert!(kept < 256 + 64, "kept {kept} bytes");
+    // Whole lines only: the cut does not split one.
+    assert!(result
+        .stdout
+        .lines()
+        .all(|l| l.starts_with("line ") || l == "SUMMARY" || l.contains("bytes elided")));
 }
 
 #[test]

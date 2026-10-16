@@ -32,12 +32,13 @@ use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Provenance, Task};
 use splinter_core::kinds::WORKSPACE_CHANGE;
+use splinter_eval::verifiers::test_report::Verdict;
 use splinter_eval::verifiers::workspace::{WorkspaceCheck, WorkspaceVerifier};
 use splinter_eval::verifiers::Verifier;
 use splinter_knowledge::capture::CapturedTree;
 use splinter_knowledge::tasks::workspace::{
-    Fixture, Held, Qualified, Reason, RepositoryProfile, WorkspaceError, WorkspaceGeneration,
-    WorkspaceGenerator, WorkspacePlan, WorkspaceTask, MIN_HIDDEN_KILL_RATE,
+    Fixture, Harness, Held, Qualified, Reason, RepositoryProfile, WorkspaceError,
+    WorkspaceGeneration, WorkspaceGenerator, WorkspacePlan, WorkspaceTask, MIN_HIDDEN_KILL_RATE,
 };
 use splinter_knowledge::tasks::{Catalogue, SolverEnvironment, VerifierKind};
 use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
@@ -722,4 +723,66 @@ fn a_cargo_crate_is_read_per_test_and_a_seeded_fault_is_caught_by_exactly_the_na
         assert!(baseline_fails(&rig, admitted));
         assert!(reverse_patch_passes(&rig, admitted));
     }
+}
+
+/// A runner that prints 200 KiB of noise, then the unittest summary the
+/// suite would end with: `FAILED` with one failure listed, or `OK`.
+fn fake_runner(failing: bool) -> CommandCall {
+    let tail = if failing {
+        "======\\nFAIL: test_b (m.T.test_b)\\n------\\nAssertionError\\n\\nRan 3 tests in 0.1s\\n\\nFAILED (failures=1)\\n"
+    } else {
+        "\\nRan 3 tests in 0.1s\\n\\nOK\\n"
+    };
+    let script = format!(
+        "import sys\nsys.stderr.write('test_a (m.T.test_a) ... ok\\n')\n\
+         for i in range(4000):\n    sys.stderr.write('x' * 49 + '\\n')\n\
+         sys.stderr.write('{tail}')\nsys.exit({})\n",
+        i32::from(failing)
+    );
+    CommandCall {
+        argv: vec!["python3".into(), "-c".into(), script],
+        stdin: None,
+    }
+}
+
+#[test]
+fn a_test_report_past_the_output_cap_is_decided_from_its_summary_not_refused() {
+    let mut rig = Rig::new("cap", &[]);
+    let calls = rig.scratch.0.join("capped-calls");
+    fs::create_dir_all(&calls).unwrap();
+    let limits = Limits {
+        output_cap_bytes: 4096,
+        ..Limits::default()
+    };
+    rig.generator = WorkspaceGenerator::new(
+        Arc::new(ProcessSandbox::new(
+            &calls,
+            BTreeMap::new(),
+            &["PATH"],
+            limits,
+        )),
+        rig.host.clone(),
+        rig.store.clone(),
+        rig.scratch.0.join("capped-work"),
+    )
+    .with_plan(WorkspacePlan::default())
+    .unwrap();
+    let tree = rig.capture("HEAD");
+    let laid = rig.scratch.0.join("capped-laid");
+    let env = rig.generator.environment(&tree.snapshot);
+    env.materialize(&tree.archive_path, &laid).unwrap();
+
+    let failed = env.run(&laid, &fake_runner(true)).unwrap();
+    assert!(failed.stderr_truncated, "the report must pass the cap");
+    let report = Harness::Unittest.read(&failed);
+    assert!(!report.unreadable(), "a summary was kept: {report:?}");
+    assert_eq!(report.verdict, Some(Verdict::Fail));
+    assert!(report.failed.contains("m.T.test_b"), "{report:?}");
+
+    let passed = env.run(&laid, &fake_runner(false)).unwrap();
+    assert!(passed.stderr_truncated);
+    let report = Harness::Unittest.read(&passed);
+    assert!(!report.unreadable(), "{report:?}");
+    assert_eq!(report.verdict, Some(Verdict::Pass));
+    assert!(report.failed.is_empty());
 }

@@ -108,6 +108,15 @@ impl Observation {
     }
 }
 
+/// What a runner's summary says of the run as a whole.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    /// The run ended successfully.
+    Pass,
+    /// The run ended with a failure.
+    Fail,
+}
+
 /// What a runner's output holds, per test.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TestReport {
@@ -127,6 +136,13 @@ pub struct TestReport {
     /// Tests the runner says it ran, summed over its summaries; `None` when
     /// it printed none.
     pub declared: Option<usize>,
+    /// Whether the middle of the output was elided at the output cap: the
+    /// per-test lines kept are then only some of the run's.
+    pub elided: bool,
+    /// The run's verdict, from the runner's summary and the exit status;
+    /// `None` when no summary was printed (or kept). It holds when the
+    /// per-test lines are cut: the summary lives at the end of the output.
+    pub verdict: Option<Verdict>,
     /// What is wrong with the report as a whole.
     pub flaws: BTreeSet<Flaw>,
 }
@@ -176,21 +192,29 @@ impl TestRunner {
     /// Reads what the runner printed.
     #[must_use]
     pub fn read(self, result: &CodeResult) -> TestReport {
-        let (report, foreign_stream, truncated) = match self {
+        let (mut report, foreign_stream, elided) = match self {
             Self::Unittest => (
-                read_unittest(&result.stderr),
+                read_unittest(&result.stderr, result.stderr_truncated),
                 &result.stdout,
                 result.stderr_truncated,
             ),
             Self::Cargo => (
-                read_cargo(&result.stdout, &result.stderr),
+                read_cargo(&result.stdout, &result.stderr, result.stdout_truncated),
                 &result.stderr,
                 result.stdout_truncated,
             ),
         };
-        let mut report = report;
-        if truncated {
+        report.elided = elided;
+        if elided {
             report.flaws.insert(Flaw::Truncated);
+        }
+        if !report.flaws.contains(&Flaw::NoReport) {
+            let clean = result.exit_code == Some(0) && !result.timed_out;
+            report.verdict = Some(if clean && report.failed.is_empty() {
+                Verdict::Pass
+            } else {
+                Verdict::Fail
+            });
         }
         let mimicked = foreign_stream.lines().any(|line| match self {
             Self::Unittest => is_unittest_summary(line) || unittest_header(line).is_some(),
@@ -292,7 +316,7 @@ fn terminal_status(status: &str) -> bool {
             .any(|p| status.starts_with(p))
 }
 
-fn read_unittest(stderr: &str) -> TestReport {
+fn read_unittest(stderr: &str, elided: bool) -> TestReport {
     let lines: Vec<&str> = stderr.lines().collect();
     let mut report = TestReport::default();
     let mut tests = 0_usize;
@@ -354,7 +378,9 @@ fn read_unittest(stderr: &str) -> TestReport {
         }
         [n] => {
             report.declared = Some(*n);
-            if *n != tests {
+            // A cut report lacks the lines of the middle: its count cannot
+            // be checked against them.
+            if *n != tests && !elided {
                 report.flaws.insert(Flaw::Inconsistent);
             }
         }
@@ -431,7 +457,7 @@ fn is_doc_test(name: &str) -> bool {
 /// test is identified as `<source file of its binary>::<libtest name>`
 /// (`tests/total.rs::adds`), so that equal names in two binaries stay apart;
 /// when stderr names no binary for a block the bare libtest name is used.
-fn read_cargo(stdout: &str, stderr: &str) -> TestReport {
+fn read_cargo(stdout: &str, stderr: &str, elided: bool) -> TestReport {
     let binaries: Vec<&str> = stderr.lines().filter_map(cargo_binary_source).collect();
     let mut report = TestReport::default();
     let mut declared = 0_usize;
@@ -452,7 +478,7 @@ fn read_cargo(stdout: &str, stderr: &str) -> TestReport {
             quoting = false;
         } else if let Some(total) = cargo_result(line) {
             closed += 1;
-            if total != block_lines || total != block_declared {
+            if !elided && (total != block_lines || total != block_declared) {
                 report.flaws.insert(Flaw::Inconsistent);
             }
         } else if line == "failures:" {
@@ -480,11 +506,13 @@ fn read_cargo(stdout: &str, stderr: &str) -> TestReport {
             }
         }
     }
-    if blocks == 0 {
+    // A cut report ends in the summary of the last binary: without any
+    // closed block there is none.
+    if blocks == 0 || (elided && closed == 0) {
         report.flaws.insert(Flaw::NoReport);
     } else {
         report.declared = Some(declared);
-        if closed != blocks || counted != declared {
+        if !elided && (closed != blocks || counted != declared) {
             report.flaws.insert(Flaw::Inconsistent);
         }
     }
@@ -589,6 +617,60 @@ mod tests {
             .observe(&result(&cut, ""))
             .flaws
             .contains(&Flaw::Inconsistent));
+    }
+
+    /// What the sandbox hands over when a report passed the output cap: the
+    /// head, a marker, the tail.
+    fn elided(head: &str, tail: &str, exit_code: i32) -> CodeResult {
+        let mut cut = result("", &format!("{head}\n[... 90000 bytes elided ...]\n{tail}"));
+        cut.stderr_truncated = true;
+        cut.exit_code = Some(exit_code);
+        cut
+    }
+
+    #[test]
+    fn a_cut_unittest_report_is_decided_from_its_summary() {
+        let head = "test_a (m.T.test_a) ... ok\ntest_b (m.T.test_b) ... FAIL\n";
+        let failing = "======\nFAIL: test_b (m.T.test_b)\n------\nAssertionError\n\n\
+            Ran 400 tests in 1.0s\n\nFAILED (failures=1)\n";
+        let report = TestRunner::Unittest.read(&elided(head, failing, 1));
+        assert_eq!(report.verdict, Some(Verdict::Fail));
+        assert!(report.failed.contains("m.T.test_b"), "{report:?}");
+        assert!(report.elided && !report.flaws.contains(&Flaw::NoReport));
+        assert!(!report.flaws.contains(&Flaw::Inconsistent), "{report:?}");
+
+        let passing = "test_z (m.T.test_z) ... ok\n\nRan 400 tests in 1.0s\n\nOK\n";
+        let report = TestRunner::Unittest.read(&elided("test_a (m.T.test_a) ... ok\n", passing, 0));
+        assert_eq!(report.verdict, Some(Verdict::Pass));
+        assert!(report.failed.is_empty() && report.elided);
+    }
+
+    #[test]
+    fn a_cut_report_without_its_summary_has_no_outcome() {
+        let report = TestRunner::Unittest.read(&elided(
+            "test_a (m.T.test_a) ... ok\n",
+            "test_q (m.T.test_q) ... ok\n",
+            0,
+        ));
+        assert_eq!(report.verdict, None);
+        assert!(report.flaws.contains(&Flaw::NoReport));
+        assert!(report.flaws.contains(&Flaw::Truncated));
+    }
+
+    #[test]
+    fn a_cut_cargo_report_is_decided_from_its_summary() {
+        let tail = "test tests::z ... FAILED\n\nfailures:\n    tests::z\n\n\
+            test result: FAILED. 399 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n";
+        let mut cut = result(
+            &format!("running 400 tests\ntest tests::a ... ok\n\n[... 5 bytes elided ...]\n{tail}"),
+            "",
+        );
+        cut.stdout_truncated = true;
+        cut.exit_code = Some(101);
+        let report = TestRunner::Cargo.read(&cut);
+        assert_eq!(report.verdict, Some(Verdict::Fail));
+        assert!(report.failed.contains("tests::z"), "{report:?}");
+        assert!(!report.flaws.contains(&Flaw::Inconsistent), "{report:?}");
     }
 
     #[test]

@@ -24,7 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use splinter_eval::verifiers::test_report::TestRunner;
+use splinter_eval::verifiers::test_report::{TestRunner, Verdict};
 use splinter_sandbox::{CodeResult, CommandCall};
 
 /// The test runners read per test.
@@ -47,9 +47,22 @@ pub struct SuiteReport {
     pub failed: BTreeSet<String>,
     /// The first line of each test's docstring, for the tests that have one.
     pub docs: BTreeMap<String, String>,
+    /// Whether the middle of the runner's output was elided at the output
+    /// cap, so that the tests above are only those the head and tail show.
+    pub elided: bool,
+    /// How the run ended by the runner's own summary; `None` when no
+    /// summary was kept, which is the only case a run is unreadable.
+    pub verdict: Option<Verdict>,
 }
 
 impl SuiteReport {
+    /// Whether the run cannot be read at all: its output was cut and the
+    /// summary that closes it is not among what was kept.
+    #[must_use]
+    pub fn unreadable(&self) -> bool {
+        self.elided && self.verdict.is_none()
+    }
+
     /// Every test that ran, passed or failed.
     pub fn ran(&self) -> impl Iterator<Item = &String> {
         self.passed.iter().chain(&self.failed)
@@ -144,6 +157,8 @@ impl Harness {
             passed: report.passed,
             failed: report.failed,
             docs: report.docs,
+            elided: report.elided,
+            verdict: report.verdict,
         }
     }
 
@@ -421,6 +436,7 @@ test src/lib.rs - total (line 3) ... ok
             passed: ["a".to_string()].into(),
             failed: ["b".to_string()].into(),
             docs: BTreeMap::new(),
+            ..SuiteReport::default()
         };
         let asked: BTreeSet<String> = ["a", "b", "c"].map(String::from).into();
         assert_eq!(

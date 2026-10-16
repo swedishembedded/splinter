@@ -344,7 +344,7 @@ fn a_command_that_outlives_its_timeout_is_killed_and_recorded() {
 }
 
 #[test]
-fn output_beyond_the_cap_is_truncated_and_recorded() {
+fn output_beyond_the_cap_is_recorded_as_head_and_tail() {
     let scratch = Scratch::new("cap");
     let mut run = spec(
         &[
@@ -368,8 +368,11 @@ fn output_beyond_the_cap_is_truncated_and_recorded() {
     assert_eq!(*exit_code, Some(0), "the process ran to completion");
     assert!(*stdout_truncated && !stderr_truncated);
     let stdout = captured.content("stdout").unwrap();
-    assert_eq!(stdout.len(), 64);
-    assert!(stdout.starts_with(b"0123456789\n0123456789\n"));
+    let text = String::from_utf8(stdout.to_vec()).unwrap();
+    assert!(text.starts_with("0123456789\n0123456789\n"));
+    assert!(text.ends_with("0123456789\n"));
+    assert!(text.contains("bytes elided"), "{text}");
+    assert!(text.len() < 64 + 64, "kept {} bytes", text.len());
 }
 
 #[test]

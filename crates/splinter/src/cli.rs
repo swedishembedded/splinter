@@ -56,7 +56,6 @@ pub struct Cli {
     pub command: Option<Command>,
 }
 
-
 /// The commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {

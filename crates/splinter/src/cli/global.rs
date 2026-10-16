@@ -45,6 +45,14 @@ pub struct Global {
         help = format!("How many seconds one task's solve may take on the wall clock \
                         [default: {}]", DEFAULT_SOLVE_DEADLINE.as_secs()))]
     pub solve_deadline: Option<u64>,
+    /// The most bytes kept of each output stream of a project's test run
+    /// (practice, solve, eval): past it the middle is elided and the head
+    /// and tail kept, so a verbose report is still read from its summary.
+    #[arg(long, global = true, value_name = "BYTES",
+        value_parser = clap::value_parser!(u64).range(1024..),
+        help = format!("Bytes kept of each output stream of a test run [default: {}]",
+            splinter_sdk::config::WORKSPACE_OUTPUT_CAP_BYTES))]
+    pub test_output_cap: Option<u64>,
     /// The sampling temperature, 0 to 2, asked of a model reached through
     /// sven's providers (the provider's own default when not given). The
     /// same flag sets the pass@k sampling of a verb that measures it; when

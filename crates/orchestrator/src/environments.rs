@@ -53,14 +53,16 @@ pub const WORKSPACE_MEMORY_BYTES: u64 = 32 * 1024 * 1024 * 1024;
 pub const WORKSPACE_FILE_SIZE_BYTES: u64 = 1024 * 1024 * 1024;
 
 /// What a workspace's commands run under: [`Limits::default`] raised to the
-/// size of a project's own test suite.
+/// size of a project's own test suite and its report, with each output
+/// stream kept up to `output_cap_bytes`.
 #[must_use]
-pub fn workspace_limits() -> Limits {
+pub fn workspace_limits(output_cap_bytes: u64) -> Limits {
     Limits {
         wall_time_ms: WORKSPACE_WALL_TIME_MS,
         cpu_seconds: WORKSPACE_CPU_SECONDS,
         memory_bytes: WORKSPACE_MEMORY_BYTES,
         file_size_bytes: WORKSPACE_FILE_SIZE_BYTES,
+        output_cap_bytes,
         ..Limits::default()
     }
 }
@@ -182,7 +184,7 @@ impl Environments {
                 settings.docker_env.clone(),
                 image,
                 &self.workspace_calls,
-                workspace_limits(),
+                workspace_limits(settings.output_cap_bytes),
             )));
         }
         // Cargo builds offline from the cargo home it is given and leaves no
@@ -201,7 +203,7 @@ impl Environments {
             &self.workspace_calls,
             cargo,
             &["CARGO_HOME", "CARGO_INCREMENTAL"],
-            workspace_limits(),
+            workspace_limits(settings.output_cap_bytes),
         )))
     }
 

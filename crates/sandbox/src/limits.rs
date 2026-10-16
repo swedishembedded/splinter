@@ -30,7 +30,8 @@ pub const DEFAULT_FILE_SIZE_BYTES: u64 = 16 * 1024 * 1024;
 /// The default process (and thread) limit of one call.
 pub const DEFAULT_MAX_PROCESSES: u64 = 1024;
 
-/// The default cap on each output stream of one call, in bytes.
+/// The default cap on each output stream of one call, in bytes. Past it the
+/// middle of the stream is elided and its head and tail are kept.
 pub const DEFAULT_OUTPUT_CAP_BYTES: u64 = 64 * 1024;
 
 /// What one code call may use. The defaults are the `DEFAULT_*` constants.

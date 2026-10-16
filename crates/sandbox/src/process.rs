@@ -104,7 +104,8 @@ pub struct ProcessSpec {
     pub stdin: Option<Vec<u8>>,
     /// How long the run may take before its process group is killed.
     pub timeout: Duration,
-    /// The most bytes kept of each output stream.
+    /// The most bytes kept of each output stream (head and tail; see
+    /// [`Stream`]), plus a short marker line when the middle is elided.
     pub output_cap: usize,
     /// Kernel limits applied to the program, when set.
     pub resources: Option<ResourceLimits>,
@@ -133,13 +134,16 @@ impl ProcessSpec {
     }
 }
 
-/// One output stream as captured: at most the cap, and whether it was cut.
+/// One output stream as captured: at most the cap, kept as a head and a
+/// tail with a marker line between them when the program wrote more.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stream {
-    /// The bytes kept.
+    /// The bytes kept, the marker line included.
     pub bytes: Vec<u8>,
     /// Whether the program wrote more than was kept.
     pub truncated: bool,
+    /// How many bytes the marker line says were left out of the middle.
+    pub elided_bytes: u64,
 }
 
 /// How a run ended.
@@ -206,10 +210,19 @@ pub fn environment_from(
         .collect()
 }
 
-/// Reads `reader` to its end, keeping the first `cap` bytes.
+/// Reads `reader` to its end, keeping at most `cap` bytes: all of it when it
+/// fits, otherwise the first and last halves of the cap with a marker line
+/// between them that says how many bytes were elided.
+///
+/// The end of a test runner's output is where its summary and the
+/// failures it lists are, and the start is where its per-test lines begin, so
+/// both are kept; memory is bounded by `cap` whatever the program writes.
 fn read_bounded(mut reader: impl Read, cap: usize) -> std::io::Result<Stream> {
-    let mut bytes = Vec::new();
-    let mut truncated = false;
+    let head_cap = cap / 2;
+    let tail_cap = cap - head_cap;
+    let mut head = Vec::new();
+    let mut tail = std::collections::VecDeque::new();
+    let mut dropped = 0_u64;
     let mut buf = [0u8; 8192];
     loop {
         let n = match reader.read(&mut buf) {
@@ -218,22 +231,54 @@ fn read_bounded(mut reader: impl Read, cap: usize) -> std::io::Result<Stream> {
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => return Err(e),
         };
-        let room = cap - bytes.len();
-        if n > room {
-            truncated = true;
-        }
-        bytes.extend_from_slice(&buf[..n.min(room)]);
-    }
-    if truncated {
-        // A cut through a multi-byte character would make text output read
-        // as binary; drop the partial character instead.
-        if let Err(e) = std::str::from_utf8(&bytes) {
-            if e.error_len().is_none() {
-                bytes.truncate(e.valid_up_to());
-            }
+        let chunk = &buf[..n];
+        let into_head = (head_cap - head.len()).min(n);
+        head.extend_from_slice(&chunk[..into_head]);
+        tail.extend(&chunk[into_head..]);
+        if tail.len() > tail_cap {
+            let excess = tail.len() - tail_cap;
+            tail.drain(..excess);
+            dropped += excess as u64;
         }
     }
-    Ok(Stream { bytes, truncated })
+    let tail: Vec<u8> = tail.into();
+    if dropped == 0 {
+        head.extend_from_slice(&tail);
+        return Ok(Stream {
+            bytes: head,
+            truncated: false,
+            elided_bytes: 0,
+        });
+    }
+    // Cut between lines, so the reader of the text sees whole lines only;
+    // output with no line end in reach is cut at a character boundary
+    // instead, so text never reads as binary for a split character.
+    let head_end = head
+        .iter()
+        .rposition(|b| *b == b'\n')
+        .map_or_else(|| complete_prefix(&head), |at| at + 1);
+    let tail_start = tail.iter().position(|b| *b == b'\n').map_or_else(
+        || tail.iter().take_while(|b| (**b & 0xC0) == 0x80).count(),
+        |at| at + 1,
+    );
+    let elided_bytes = dropped + (head.len() - head_end) as u64 + tail_start as u64;
+    let mut bytes = head[..head_end].to_vec();
+    bytes.extend_from_slice(format!("[... {elided_bytes} bytes elided ...]\n").as_bytes());
+    bytes.extend_from_slice(&tail[tail_start..]);
+    Ok(Stream {
+        bytes,
+        truncated: true,
+        elided_bytes,
+    })
+}
+
+/// The length of the longest prefix of `bytes` that does not end inside a
+/// multi-byte character.
+fn complete_prefix(bytes: &[u8]) -> usize {
+    match std::str::from_utf8(bytes) {
+        Err(e) if e.error_len().is_none() => e.valid_up_to(),
+        _ => bytes.len(),
+    }
 }
 
 fn reader(stream: impl Read + Send + 'static, cap: usize) -> JoinHandle<std::io::Result<Stream>> {

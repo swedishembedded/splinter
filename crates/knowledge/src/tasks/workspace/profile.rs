@@ -22,6 +22,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use splinter_eval::verifiers::test_report::Verdict;
 use splinter_sandbox::{CommandCall, WorkspaceEnvironment};
 
 use super::harness::Harness;
@@ -178,14 +179,31 @@ impl RepositoryProfile {
         let quarantined: BTreeSet<&String> = self.flaky.iter().collect();
         let mut reports = Vec::new();
         for (result, _) in runs {
-            if result.stderr_truncated {
+            let mut report = harness.read(result);
+            if report.unreadable() {
                 return Err(refused(
                     Reason::OutputTruncated,
                     1,
-                    "the runner's report was cut at the output cap",
+                    "the runner's output passed the output cap and its summary was not among what was kept",
                 ));
             }
-            let mut report = harness.read(result);
+            if report.elided {
+                // The summary decides pass or fail, but a baseline names its
+                // tests one by one and the middle of the list is gone.
+                return Err(match report.verdict {
+                    Some(Verdict::Fail) => refused(
+                        Reason::RedBaseline,
+                        report.failed.len().max(1),
+                        "the suite fails on the baseline (its report passed the output cap)",
+                    ),
+                    _ => refused(
+                        Reason::OutputTruncated,
+                        1,
+                        "the suite passes but its per-test report passed the output cap; \
+                         raise --test-output-cap",
+                    ),
+                });
+            }
             let failures = report.failed.len();
             report.passed.retain(|id| !quarantined.contains(id));
             report.failed.retain(|id| !quarantined.contains(id));

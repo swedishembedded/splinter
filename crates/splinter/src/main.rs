@@ -80,6 +80,9 @@ fn main() -> ExitCode {
     if let Some(seconds) = cli.global.solve_deadline {
         config.solve_deadline = std::time::Duration::from_secs(seconds);
     }
+    if let Some(bytes) = cli.global.test_output_cap {
+        config.workspace.output_cap_bytes = bytes;
+    }
     config.build = build_info::current(config.build.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,

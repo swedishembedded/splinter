@@ -24,6 +24,11 @@ use std::path::PathBuf;
 use splinter_sandbox::{CodeResult, CommandCall, WorkspaceEnvironment};
 use sven_sdk::tool::{ApprovalPolicy, OutputCategory, Tool, ToolCall, ToolCapability, ToolOutput};
 
+/// The most bytes of a command's output the model is shown. The sandbox may
+/// keep far more (a test run's whole report); the model reads the head and
+/// the tail of it, which is where a command says what it did and how it ended.
+const MODEL_VIEW_BYTES: usize = 32 * 1024;
+
 /// The tool's name: the one of sven's built-in shell, which it replaces.
 pub const SHELL: &str = "shell";
 
@@ -121,6 +126,7 @@ fn render(result: &CodeResult) -> String {
         }
         out.push_str(&result.stderr);
     }
+    let mut out = clip_middle(out, MODEL_VIEW_BYTES);
     if result.stdout_truncated || result.stderr_truncated {
         out.push_str("\n[output truncated]");
     }
@@ -132,4 +138,40 @@ fn render(result: &CodeResult) -> String {
         out.push_str(&format!("\n[exit code {code}]"));
     }
     out
+}
+
+/// `text` cut to about `max` bytes by dropping a middle part, at character
+/// boundaries, and saying so.
+fn clip_middle(text: String, max: usize) -> String {
+    if text.len() <= max {
+        return text;
+    }
+    let mut head = max / 2;
+    while !text.is_char_boundary(head) {
+        head -= 1;
+    }
+    let mut tail = text.len() - (max - max / 2);
+    while !text.is_char_boundary(tail) {
+        tail += 1;
+    }
+    format!(
+        "{}\n[... {} bytes not shown ...]\n{}",
+        &text[..head],
+        tail - head,
+        &text[tail..]
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clip_middle;
+
+    #[test]
+    fn a_long_output_shows_its_head_and_tail() {
+        let text = format!("first{}last", "é".repeat(100));
+        let clipped = clip_middle(text.clone(), 40);
+        assert!(clipped.starts_with("first") && clipped.ends_with("last"));
+        assert!(clipped.contains("bytes not shown") && clipped.len() < 100);
+        assert_eq!(clip_middle("short".into(), 40), "short");
+    }
 }

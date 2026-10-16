@@ -40,7 +40,7 @@ use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Privileged, PrivilegedKind};
 use splinter_core::selfcontained::check_self_contained;
 use splinter_eval::verifiers::mutation::{mutants, Mutant};
-use splinter_eval::verifiers::test_report::TestExpectation;
+use splinter_eval::verifiers::test_report::{TestExpectation, Verdict};
 use splinter_eval::verifiers::workspace::{Phase, WorkspaceCheck};
 use splinter_sandbox::{CommandCall, Patch, TreeSnapshot, WorkspaceEnvironment};
 
@@ -315,6 +315,15 @@ impl WorkspaceGenerator {
     /// Runs the suite on the mutated tree and names what it kills.
     fn kill(&self, base: &Parent<'_>, tree: &Path) -> Result<Killed, Stop> {
         let report = self.suite(base, &base.env, tree, &base.harness.run_all(base.command()))?;
+        if report.elided {
+            // The summary says whether the mutant was caught, but a task
+            // needs the exact failing and passing tests, and the middle of
+            // the per-test list is gone.
+            return Err(Stop::Refuse(match report.verdict {
+                Some(Verdict::Pass) => Reason::EquivalentMutant,
+                _ => Reason::OutputTruncated,
+            }));
+        }
         let ran: BTreeSet<&String> = report.ran().collect();
         if ran != base.qualified.tests.iter().collect() {
             return Err(Stop::Refuse(Reason::BrokenBuild));
@@ -409,7 +418,9 @@ impl WorkspaceGenerator {
     }
 
     /// One run of `call` in `tree`, read per test, refused when it ran past
-    /// the budget or its report was cut off.
+    /// the budget or its report was cut at the output cap and its summary
+    /// was lost with it. A cut report whose summary was kept is returned,
+    /// with [`SuiteReport::elided`] set.
     fn suite(
         &self,
         base: &Parent<'_>,
@@ -421,10 +432,10 @@ impl WorkspaceGenerator {
         if result.timed_out || result.exit_code == Some(TIMEOUT_EXIT) || took > base.budget {
             return Err(Stop::Refuse(Reason::OverTimeBudget));
         }
-        if result.stderr_truncated {
+        let mut report = base.harness.read(&result);
+        if report.unreadable() {
             return Err(Stop::Refuse(Reason::OutputTruncated));
         }
-        let mut report = base.harness.read(&result);
         base.quarantined(&mut report);
         Ok(report)
     }
