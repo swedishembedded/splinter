@@ -329,6 +329,14 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-21 Survivorship analysis
 
+- **Status.** The report is done for `synthetic-author`: `survivors --cache DIR`
+  prints the planned and kept decisions by option, by deciding belief and by
+  combination of facts and options, and the planned articles that were not kept
+  by why (`content`, `writer-unavailable`, `reader-unavailable`, `budget`,
+  `unattempted`). It reads the plan, `articles/` and `rejected.jsonl`. The
+  per-option accuracy of each arm set beside the share kept needs the study's
+  exam outcomes and is not produced by the command.
+
 - **Problem.** The corpus keeps only essays whose reading agrees with the
   oracle; author 303 gave up 24 of 60 articles. What was lost is not
   reported, and infrastructure failures are mixed into it (PF-06, PF-22).

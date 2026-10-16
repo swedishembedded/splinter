@@ -37,6 +37,7 @@ pub mod records;
 pub mod report;
 pub mod retrieval;
 pub mod scenario;
+pub mod survivors;
 pub mod tools;
 pub mod training;
 pub mod writer;

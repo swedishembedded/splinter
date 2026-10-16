@@ -128,3 +128,20 @@ fn a_corpus_names_the_author_and_a_different_seed_is_refused() {
         assert!(stderr.contains(&seed.to_string()), "{command}: {stderr}");
     }
 }
+
+#[test]
+fn survivors_reports_a_corpus_that_turned_nothing_away() {
+    let seed = splinter_sdk::model::seed::draw().value();
+    let dir = corpus_of(seed);
+    let out = run(&[
+        "survivors",
+        "--cache",
+        dir.to_str().unwrap(),
+        "--articles",
+        "2",
+    ]);
+    assert!(out.status.success(), "{out:?}");
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["articles_planned"], 2);
+    assert_eq!(report["given_up"]["unattempted"], serde_json::json!([0, 1]));
+}

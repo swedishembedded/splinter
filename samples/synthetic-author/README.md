@@ -134,3 +134,15 @@ kept, unjudged) or `budget` (the run stopped before the draft was read).
 article again when some of its cases have no line, appending only those.
 `recheck` fails naming the line of `rejected.jsonl` that has no article index.
 An unreadable `usage.json` fails `corpus` before any request, naming the file.
+
+## What the gates took out
+
+`survivors --cache DIR` reads the plan, `articles/` and `rejected.jsonl`, asks
+no model, and prints JSON: the decisions planned against the ones the kept
+articles tell, by the option chosen (`by_option`), by the belief that decided
+(`by_belief`) and by the facts and options of the case (`by_combination`), and
+the planned articles that were not kept, grouped by why (`given_up`): `content`
+when a gate turned some attempt away, `writer-unavailable`,
+`reader-unavailable` or `budget` when only requests failed, `unattempted` when
+nothing was logged. A decision counts as kept when the kept article tells its
+case.

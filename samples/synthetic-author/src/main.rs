@@ -91,6 +91,23 @@ enum Command {
         #[arg(long, default_value_t = 700)]
         min_words: usize,
     },
+    /// Report what the gates took out of a corpus: the decisions planned
+    /// against the ones kept, by option, deciding belief and combination, and
+    /// why the articles given up were given up. Asks no model.
+    Survivors {
+        /// The seed the author is drawn from; read from the corpus when absent.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// The corpus directory.
+        #[arg(long)]
+        cache: PathBuf,
+        /// How many articles the corpus has.
+        #[arg(long, default_value_t = 100)]
+        articles: usize,
+        /// How many episodes each article tells.
+        #[arg(long, default_value_t = 3)]
+        episodes_per_article: usize,
+    },
     /// Read the decisions out of the articles of a corpus.
     Mine {
         /// The corpus directory.
@@ -261,6 +278,23 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             println!("{now_pass} of {drafts} saved drafts pass the gates as they are now");
+            Ok(())
+        }
+        Command::Survivors {
+            seed,
+            cache,
+            articles,
+            episodes_per_article,
+        } => {
+            let persona = Persona::generate(author_seed(&cache, seed)?);
+            let cache = Cache::open(cache)?;
+            let report = synthetic_author::survivors::of_corpus(
+                &cache,
+                &persona,
+                articles,
+                episodes_per_article,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
             Ok(())
         }
         Command::Mine {
