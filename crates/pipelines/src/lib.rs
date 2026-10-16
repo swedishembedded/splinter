@@ -69,6 +69,7 @@ pub mod dialogue;
 pub mod doctor;
 pub mod eval;
 pub mod exam;
+pub mod exam_seal;
 pub mod exam_set;
 pub mod experiences;
 pub mod experiment;

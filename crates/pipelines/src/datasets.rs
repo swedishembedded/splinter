@@ -34,6 +34,7 @@ use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
 use crate::describe::{describe, DescribeRequest, Described};
+use crate::exam_seal;
 use crate::grouping::{assign_groups, part_families};
 use crate::raft::{with_passages, Abstainer, PassageShare};
 use crate::retrieval::Retrieval as PassageSearch;
@@ -527,6 +528,7 @@ pub fn project_with(
         )?;
     }
     assign_groups(ctx, &corpus, &mut projection)?;
+    exam_seal::seal(ctx, &corpus, &projection)?;
     Ok((projection, described))
 }
 

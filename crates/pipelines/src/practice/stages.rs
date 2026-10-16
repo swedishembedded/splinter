@@ -31,9 +31,7 @@ use splinter_sandbox::TreeSnapshot;
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use super::exam::{
-    assert_no_exam_family, exam_canaries, remember_trained, remembered_seed, reserve,
-};
+use super::exam::{exam_canaries, remembered_seed, reserve};
 use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
 use super::PracticeRequest;
@@ -466,7 +464,6 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
         }
         Err(e) => return Err(e),
     };
-    remember_trained(ctx, &assert_no_exam_family(&built.path, &st.exam_families)?)?;
     // The gate measures what this dataset trains on the exam reserved
     // against it, and every later release is held to it.
     exams::record(

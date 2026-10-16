@@ -24,49 +24,25 @@
 //! chosen by the same recorded seed.
 //!
 //! The reserved tasks are not solved here, so no attempt at them exists to
-//! be trained on; [`assert_no_exam_family`] additionally reads the dataset
-//! that was written and refuses a run whose training records carry one. The
-//! other direction is kept as well: the families a run's dataset trained on
-//! are remembered, and a family a model was trained on is never reserved
-//! later, since a later exam would then be examining what an earlier release
-//! learned. A run may therefore reserve fewer families than it was asked to.
+//! be trained on; [`crate::exam_seal`] additionally refuses a dataset build
+//! whose records carry one. The other direction is kept as well: the
+//! families a build trained on are remembered, and a family a model was
+//! trained on is never reserved later, since a later exam would then be
+//! examining what an earlier release learned. A run may therefore reserve
+//! fewer families than it was asked to.
 
 use std::collections::BTreeSet;
-use std::path::Path;
 
-use serde::{Deserialize, Serialize};
-use splinter_core::digest::Digest;
+use serde::Serialize;
 use splinter_core::experience::Task;
 use splinter_core::rng::Seed;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::canaries;
+use crate::exam_seal;
 use crate::family::{family_of_task, rank};
 use splinter_orchestrator::context::Context;
-use splinter_orchestrator::error::{io, OrchestratorError};
-
-/// The class of the stored record of the reserved families.
-const RESERVED: &str = "practice_exam_families";
-
-/// The pointer that names the latest record of the reserved families.
-const RESERVED_POINTER: &str = "practice-exam-families";
-
-/// The class of the stored record of the families trained on.
-const TRAINED: &str = "practice_trained_families";
-
-/// The pointer that names the latest record of the families trained on.
-const TRAINED_POINTER: &str = "practice-trained-families";
-
-/// A set of families, as the store keeps them.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-struct Families {
-    families: BTreeSet<String>,
-    /// The seed the families were chosen by. Records of reserved families
-    /// made before it was kept have none and were chosen by seed 0; the
-    /// record of the families trained on never has one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    seed: Option<u64>,
-}
+use splinter_orchestrator::error::OrchestratorError;
 
 /// What the reserve stage decided.
 #[derive(Clone, Debug, Serialize)]
@@ -107,7 +83,7 @@ fn family_of(ctx: &Context, entry: &TaskEntry) -> Result<Option<String>, Orchest
 /// The seed the remembered exam families were chosen by; `None` when no run
 /// has reserved any yet.
 pub(super) fn remembered_seed(ctx: &Context) -> Result<Option<Seed>, OrchestratorError> {
-    Ok(stored(ctx, RESERVED, RESERVED_POINTER)?.map(|record| Seed::new(record.seed.unwrap_or(0))))
+    exam_seal::reserved_seed(ctx)
 }
 
 /// Divides `members`, the tasks a run made, into the exam's and the ones to
@@ -123,8 +99,8 @@ pub(super) fn reserve(
     asked: Option<usize>,
     seed: Seed,
 ) -> Result<Divided, OrchestratorError> {
-    let before = recorded(ctx, RESERVED, RESERVED_POINTER)?;
-    let trained = recorded(ctx, TRAINED, TRAINED_POINTER)?;
+    let before = exam_seal::reserved(ctx)?;
+    let trained = exam_seal::trained(ctx)?;
     let mut by_family: Vec<(Option<String>, TaskEntry)> = Vec::with_capacity(members.len());
     for entry in members {
         by_family.push((family_of(ctx, &entry)?, entry));
@@ -151,13 +127,7 @@ pub(super) fn reserve(
         )));
     }
     let exam: BTreeSet<String> = already.union(&chosen).cloned().collect();
-    remember(
-        ctx,
-        (RESERVED, RESERVED_POINTER),
-        &before,
-        &chosen,
-        Some(seed),
-    )?;
+    exam_seal::remember_reserved(ctx, &chosen, seed)?;
 
     let (exam_entries, training): (Vec<_>, Vec<_>) = by_family
         .into_iter()
@@ -186,119 +156,6 @@ pub(super) fn reserve(
         training,
         exam_families: before.union(&exam).cloned().collect(),
     })
-}
-
-/// The families kept under `pointer` as documents of `class`.
-fn recorded(
-    ctx: &Context,
-    class: &str,
-    pointer: &str,
-) -> Result<BTreeSet<String>, OrchestratorError> {
-    Ok(stored(ctx, class, pointer)?
-        .map(|r| r.families)
-        .unwrap_or_default())
-}
-
-/// The record kept under `pointer` as a document of `class`, if there is one.
-fn stored(
-    ctx: &Context,
-    class: &str,
-    pointer: &str,
-) -> Result<Option<Families>, OrchestratorError> {
-    let Some((_, value)) = ctx.workspace().pointer(pointer)? else {
-        return Ok(None);
-    };
-    let digest = Digest::parse(&value).map_err(|e| {
-        OrchestratorError::Refused(format!("the pointer {pointer} is corrupt: {e}"))
-    })?;
-    Ok(ctx.workspace().get_document(class, &digest)?)
-}
-
-/// Records `before` and `added` as the families kept under `(class,
-/// pointer)`, chosen by `seed` when they are an exam's.
-fn remember(
-    ctx: &Context,
-    (class, pointer): (&str, &str),
-    before: &BTreeSet<String>,
-    added: &BTreeSet<String>,
-    seed: Option<Seed>,
-) -> Result<(), OrchestratorError> {
-    if added.is_subset(before) {
-        return Ok(());
-    }
-    let all = Families {
-        families: before.union(added).cloned().collect(),
-        seed: seed.map(Seed::value),
-    };
-    let digest = ctx.workspace().put_document(class, &all)?;
-    let current = ctx.workspace().pointer(pointer)?.map(|(_, value)| value);
-    ctx.workspace().move_pointer(
-        pointer,
-        current.as_deref(),
-        digest.as_str(),
-        &ctx.clock().utc_now(),
-    )?;
-    Ok(())
-}
-
-/// Remembers `families` as trained on, so that no later run reserves one of
-/// them.
-pub(super) fn remember_trained(
-    ctx: &Context,
-    families: &BTreeSet<String>,
-) -> Result<(), OrchestratorError> {
-    let before = recorded(ctx, TRAINED, TRAINED_POINTER)?;
-    remember(ctx, (TRAINED, TRAINED_POINTER), &before, families, None)
-}
-
-/// The gate: refuses a dataset one of whose records is of a family of
-/// `exam`, or of no family at all (a record whose family is not known
-/// cannot be shown to be outside the exam). Returns the families the
-/// dataset trains on.
-pub(super) fn assert_no_exam_family(
-    dataset: &Path,
-    exam: &BTreeSet<String>,
-) -> Result<BTreeSet<String>, OrchestratorError> {
-    #[derive(Deserialize)]
-    struct Line {
-        metadata: Metadata,
-    }
-    #[derive(Deserialize)]
-    struct Metadata {
-        #[serde(default)]
-        group: Option<String>,
-    }
-    let text = std::fs::read_to_string(dataset).map_err(io(dataset))?;
-    let mut trained = BTreeSet::new();
-    for (n, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
-        let record: Line = serde_json::from_str(line).map_err(|e| {
-            OrchestratorError::Refused(format!(
-                "record {} of {} cannot be read for the leakage check: {e}",
-                n + 1,
-                dataset.display()
-            ))
-        })?;
-        match record.metadata.group {
-            Some(group) if exam.contains(&group) => {
-                return Err(OrchestratorError::Refused(format!(
-                    "leakage: record {} of {} is of the exam family {group}",
-                    n + 1,
-                    dataset.display()
-                )));
-            }
-            None => {
-                return Err(OrchestratorError::Refused(format!(
-                    "leakage check: record {} of {} names no family",
-                    n + 1,
-                    dataset.display()
-                )));
-            }
-            Some(group) => {
-                trained.insert(group);
-            }
-        }
-    }
-    Ok(trained)
 }
 
 /// The canaries of the exam this run reserved: its workspace tasks with the
