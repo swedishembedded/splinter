@@ -3,4 +3,3 @@ samples/lifecourse/src/commands.rs	PREREGISTERED_SEED	world: the training seed t
 samples/lifecourse/src/report.rs	PREREGISTERED_BOOTSTRAP_SEED	world: the bootstrap seed the preregistration names for its intervals; a report passes it to reproduce them and otherwise draws its own
 samples/lifecourse/README.md	doc:--seed 1	world: the pre-registered protocol trains on seed 1; the paragraph after the block says the published numbers reproduce with it
 samples/lifecourse/README.md	doc:--seed 20261005	world: the pre-registered protocol names bootstrap seed 20261005; the paragraph after the block says the published numbers reproduce with it
-samples/lifecourse/README.md	doc:--seed 20261006	todo: the baselines draw and print a seed when none is given, so the command is shown without one and the seed that reproduces the paper is named beside the results

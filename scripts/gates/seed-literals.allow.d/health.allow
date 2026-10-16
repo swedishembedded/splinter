@@ -1,6 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
 samples/health/analysis/fasting_transitions.py	self_test:seed	test-double: the self-test asserts detection and counts that hold for one stream; the analysis itself takes --seed
-samples/health/README.md	doc:--seed 7	todo: the walkthrough shows a fixed seed as the way to run; it shows the commands without one and names the seeds that reproduce the numbers
-samples/health/README.md	doc:--seed 3	todo: the walkthrough shows a fixed seed as the way to run; it shows the commands without one and names the seeds that reproduce the numbers
-samples/health/README.md	doc:--seed 1	todo: the walkthrough shows a fixed seed as the way to run; it shows the commands without one and names the seeds that reproduce the numbers
-samples/health/README.md	doc:--seed 20261006	todo: the fasting analysis requires a seed, so its documented command pins one; it draws and prints one when none is given

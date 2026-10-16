@@ -31,11 +31,12 @@ is never read as an assignment effect. A trial without randomisation (the
 single-arm pilot) gets a table and a within-person summary but no arm model.
 
 Usage:
-    python -I fasting_transitions.py --data-dir <health resources> --out-dir <dir> --seed <n>
+    python -I fasting_transitions.py --data-dir <health resources> --out-dir <dir> [--seed <n>]
     python -I fasting_transitions.py --self-test
 """
 import argparse
 import json
+import secrets
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -600,6 +601,20 @@ def render_report(results):
     return "\n".join(lines)
 
 
+# numpy's RandomState takes 32-bit seeds and the analysis adds offsets to the
+# seed per repeat, fold and control, so a seed stays well below 2**32.
+SEED_LIMIT = 2**31
+
+
+def resolve_seed(given):
+    """`given`, else a fresh draw, printed so that passing it back reproduces the run."""
+    if given is not None:
+        return given
+    seed = secrets.randbelow(SEED_LIMIT)
+    print(f"no --seed given, using seed {seed} (pass --seed {seed} to reproduce)", file=sys.stderr)
+    return seed
+
+
 def run(data_dir, out_dir, seed):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -681,6 +696,9 @@ def self_test():
 
     single = analyse_trial(Trial("single", rows, base.roles, False, base.outcomes, ["age_y"]), seed)
     assert single["arm_models"].startswith("not run"), "no arm model without randomisation"
+    given = secrets.randbelow(SEED_LIMIT)
+    assert resolve_seed(given) == given, "a given seed is used as it is"
+    assert 0 <= resolve_seed(None) < SEED_LIMIT, "a drawn seed is one the analysis can use"
     print("fasting_transitions self-test: OK")
 
 
@@ -689,18 +707,18 @@ def main(argv):
     parser.add_argument("--data-dir", help="directory holding bath_if_rct, timet, queen_mary_tre")
     parser.add_argument("--out-dir", help="directory for tables, results.json, report.md")
     parser.add_argument("--seed", type=int,
-                        help="seed of the cross-validation folds and the bootstrap; required "
-                             "with --data-dir, recorded in results.json and report.md")
+                        help="seed of the cross-validation folds and the bootstrap, recorded in "
+                             "results.json and report.md (drawn and printed when not given)")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
     if args.self_test:
         self_test()
         return 0
-    if not (args.data_dir and args.out_dir) or args.seed is None:
-        parser.error("--data-dir, --out-dir and --seed are required")
-    if args.seed < 0:
-        parser.error("--seed must not be negative")
-    run(args.data_dir, args.out_dir, args.seed)
+    if not (args.data_dir and args.out_dir):
+        parser.error("--data-dir and --out-dir are required")
+    if args.seed is not None and not 0 <= args.seed < SEED_LIMIT:
+        parser.error(f"--seed must be in 0..{SEED_LIMIT - 1}")
+    run(args.data_dir, args.out_dir, resolve_seed(args.seed))
     print(f"wrote {args.out_dir}")
     return 0
 

@@ -19,15 +19,15 @@ trains in the shared device lock if the device is shared.
 cargo build --release -p splinter-health
 H="target/release/splinter-health --dir health-run"
 
-$H synth --seed 7                         # source file + declaration: seed, digest, usage terms, outcomes supplied
+$H synth                                  # source file + declaration: seed, digest, usage terms, outcomes supplied
 $H import                                 # one immutable episode per participant, under opaque keys
-$H split --seed 3                         # train / validation (early stopping) / test; leakage-checked, stored with its seed
-$H train --as baseline --steps 3 --max-tokens 16 --seed 1   # an untrained baseline: the first champion
-$H train --as v1 --max-tokens 16 --seed 1                    # the candidate, calibrated at 5 and 10 years
+$H split                                  # train / validation (early stopping) / test; leakage-checked, stored with its seed
+$H train --as baseline --steps 3 --max-tokens 16   # an untrained baseline: the first champion
+$H train --as v1 --max-tokens 16                    # the candidate, calibrated at 5 and 10 years
 $H eval --as e1 --candidate v1 --champion baseline  # scored on the test part, requirements registered first
 $H release --evaluation e1 --unrestricted           # released only if the gate passes (exit 3: rejected)
 
-$H train --as weak --steps 5 --max-tokens 16 --seed 1        # a deliberately bad candidate
+$H train --as weak --steps 5 --max-tokens 16        # a deliberately bad candidate
 $H eval --as e2 --candidate weak --champion release:health
 $H release --evaluation e2 --unrestricted           # rejected and recorded; the alias stays
 
@@ -49,8 +49,17 @@ $H train --as v6 --calibrate-at 5,10 | --no-calibration           # which horizo
 A seed that is not given (`synth`, `split`, `train`, `eval`) is drawn and
 printed on stderr, and the command's output states it: the declaration, the
 split record and the candidate's report carry `seed`, and passing it back
-reproduces the draw. The commands above give the seeds the numbers below were
-measured with.
+reproduces the draw.
+
+To reproduce the numbers below, pass the seeds they were measured with:
+
+```bash
+$H synth --seed 7
+$H split --seed 3
+$H train --as baseline --steps 3 --max-tokens 16 --seed 1
+$H train --as v1 --max-tokens 16 --seed 1
+$H train --as weak --steps 5 --max-tokens 16 --seed 1
+```
 
 Each command prints a JSON report (and keeps it under `health-run/reports/`).
 Terms: `synth --usage research_only` (or `restricted_DUA`) declares terms that
@@ -118,8 +127,8 @@ calibration is what would.
 
 The bands are a design choice and the test is finite: with these defaults a
 candidate trained with another seed can miss a band by a little and be
-rejected, which is the gate working. The commands above state their seeds so a
-run is reproducible; the integration tests train twice and require
+rejected, which is the gate working. Every run states the seeds it used, so it
+can be repeated; the integration tests train twice and require
 identical data membership, configuration, lineage and metrics.
 
 ## Predict: a patient history
@@ -198,5 +207,5 @@ outcome and counted, never imputed.
 ```bash
 python -I samples/health/analysis/fasting_transitions.py --self-test
 python -I samples/health/analysis/fasting_transitions.py \
-  --data-dir "$HEALTH_DATA" --out-dir "$OUT_DIR" --seed 20261006   # tables, results.json, report.md
+  --data-dir "$HEALTH_DATA" --out-dir "$OUT_DIR"   # tables, results.json, report.md; the seed is drawn, printed and recorded
 ```

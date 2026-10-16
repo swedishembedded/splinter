@@ -97,7 +97,7 @@ held after year 15. The scores are kept beside the predictions, not under
 `runs/`.
 
 ```bash
-python -I baselines/run.py --data <data> --out <data>/baselines --jobs 8 --seed 20261006   # all baselines, all folds
+python -I baselines/run.py --data <data> --out <data>/baselines --jobs 8   # all baselines, all folds; the seed is drawn, printed and recorded
 lifecourse external --data <data> --baseline gbs-all                      # score its prediction files
 lifecourse compare  --data <data> --a horizon --b external:gbs-all
 lifecourse compare  --data <data> --a external:cox-net-all --b additive
@@ -273,8 +273,9 @@ states it: a run's file name and record carry its `--seed`, and the bootstrap
 commands (`report`, `flags`, `screen`, `bootstrap`, `calibration`) print the
 seed their intervals resample with. Passing it back reproduces the draw. The
 pre-registered comparisons are made on training seed 1 (`cv` and `final` with
-`--seed 1`), and the criteria name bootstrap seed 20261005: the published
-numbers reproduce with those seeds, and `report` says when it used another.
+`--seed 1`), the criteria name bootstrap seed 20261005, and the Python
+baselines of the paper were run with `--seed 20261006`: the published numbers
+reproduce with those seeds, and `report` says when it used another.
 
 `final` also saves the model it scored in `runs/<arm>-s<seed>-locked-model/`
 with a manifest of its data, partition and file digests: the directory
