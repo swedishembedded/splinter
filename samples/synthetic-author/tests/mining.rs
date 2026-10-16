@@ -129,3 +129,104 @@ fn a_saved_draft_whose_article_cannot_be_placed_fails_the_recheck_naming_the_lin
     let error = recheck(&format!("{far}\n"), &persona, &planned, 100).unwrap_err();
     assert!(format!("{error:#}").contains("line 1"), "{error:#}");
 }
+
+#[test]
+fn each_article_is_read_by_a_model_made_for_it_with_a_seed_of_its_own() {
+    use synthetic_author::writer::{Lent, Models, RequestKey, Role};
+
+    /// Hands out the same reader for every request and keeps the requests.
+    struct Recording {
+        model: BlockingModel,
+        keys: Mutex<Vec<RequestKey>>,
+    }
+    impl Models for Recording {
+        fn model(&self, request: RequestKey) -> anyhow::Result<Lent<'_>> {
+            self.keys.lock().unwrap().push(request);
+            Ok(Lent::Borrowed(&self.model))
+        }
+    }
+
+    let cache = cache("mine-keys");
+    for index in 0..2 {
+        cache
+            .write_article(&StoredArticle {
+                index,
+                topic: 0,
+                title: "t".into(),
+                body: "Alpha was settled by waiting.".into(),
+                cases: vec!["Alpha".into()],
+                attempts: 1,
+            })
+            .unwrap();
+    }
+    let provider = Arc::new(Reader {
+        reply: serde_json::json!({"cases": [case_reading("Alpha")]}).to_string(),
+        requests: Mutex::new(0),
+    });
+    let models = Recording {
+        model: BlockingModel::new(Model::new(provider, "reader")).unwrap(),
+        keys: Mutex::new(Vec::new()),
+    };
+    assert_eq!(mine_all(&cache, &models, 1).unwrap(), 2);
+    let mut keys = models.keys.into_inner().unwrap();
+    keys.sort_by_key(|k| k.article);
+    assert_eq!(
+        keys.iter().map(|k| (k.article, k.role)).collect::<Vec<_>>(),
+        [(0, Role::Miner), (1, Role::Miner)]
+    );
+    let run_seed = 5; // seed: only that the three roles differ for one request matters
+    let reader = RequestKey {
+        role: Role::Reader,
+        ..keys[0]
+    };
+    let writer = RequestKey {
+        role: Role::Writer,
+        ..keys[0]
+    };
+    let seeds = [
+        keys[0].seed(run_seed),
+        keys[1].seed(run_seed),
+        reader.seed(run_seed),
+        writer.seed(run_seed),
+    ];
+    assert_eq!(
+        seeds
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        4,
+        "no two requests share a seed: {seeds:?}"
+    );
+}
+
+#[test]
+fn how_the_decisions_were_read_is_recorded_and_a_later_mine_continues_with_it() {
+    use synthetic_author::manifest::begin_or_continue_mining;
+    let dir = cache("mine-record").dir().to_path_buf();
+    let first = begin_or_continue_mining(&dir, "local:reader", None, true).unwrap();
+    let seed = first.run_seed.expect("a reader that runs here is seeded");
+    assert!(dir.join("mine.json").exists());
+    assert_eq!(
+        begin_or_continue_mining(&dir, "local:reader", None, true).unwrap(),
+        first,
+        "a later mine reads the seed back"
+    );
+    assert_eq!(
+        begin_or_continue_mining(&dir, "local:reader", Some(seed), true).unwrap(),
+        first
+    );
+    let other_seed = format!(
+        "{:#}",
+        begin_or_continue_mining(&dir, "local:reader", Some(seed ^ 1), true).unwrap_err()
+    );
+    assert!(other_seed.contains("mine.json"), "{other_seed}");
+    let other_reader = format!(
+        "{:#}",
+        begin_or_continue_mining(&dir, "local:another", None, true).unwrap_err()
+    );
+    assert!(other_reader.contains("local:reader"), "{other_reader}");
+
+    let remote = cache("mine-record-remote").dir().to_path_buf();
+    let record = begin_or_continue_mining(&remote, "remote:model", None, false).unwrap();
+    assert_eq!(record.run_seed, None, "a remote reader is not seeded");
+}

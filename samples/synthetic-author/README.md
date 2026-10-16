@@ -52,6 +52,10 @@ beside what it made.
   reader seeds are derived from (pass `--run-seed` to reproduce, or read it
   from the manifest), the options and the code revision. A corpus is only
   continued with the recipe it was begun with.
+* `mine` without `--run-seed` draws the seed its reader's per-request seeds
+  are derived from, prints it and records it with the reader in `mine.json`
+  (a reader reached over a network is not seeded). A later `mine` of the
+  corpus continues with both and refuses another reader or another seed.
 * Every later command that is given the corpus directory (`recheck`,
   `dataset`, `exam`, `items`, `audit`) reads the author from it and refuses a
   `--seed` that names another author. `persona`, `plan` and `show` have no

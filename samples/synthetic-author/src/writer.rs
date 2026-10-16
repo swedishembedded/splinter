@@ -59,6 +59,8 @@ pub const TASK: &str = "Write one long first-person essay - a steward's reflecti
 const WRITER_SALT: u64 = 0x5752_4954_4552_0001;
 /// Keeps the reader's seeds apart from the writer's.
 const READER_SALT: u64 = 0x5245_4144_4552_0002;
+/// Keeps the miner's seeds apart from the writer's and the reader's.
+const MINER_SALT: u64 = 0x4d49_4e45_5200_0003;
 
 /// Which model of a run is being asked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,6 +69,8 @@ pub enum Role {
     Writer,
     /// The model that reads each article back.
     Reader,
+    /// The model that reads the decisions out of the kept articles.
+    Miner,
 }
 
 /// One request of a run: the article, the attempt at it (from one) and who is
@@ -91,6 +95,7 @@ impl RequestKey {
         let salt = match self.role {
             Role::Writer => WRITER_SALT,
             Role::Reader => READER_SALT,
+            Role::Miner => MINER_SALT,
         };
         let place = ((self.article as u64) << 24) ^ self.attempt as u64;
         SplitMix64::new(run_seed ^ salt ^ place).next_u64()
@@ -402,7 +407,7 @@ impl Run<'_> {
     ) -> anyhow::Result<Asked<T>> {
         let (who, kind) = match request.key.role {
             Role::Writer => ("writer", Kind::WriterUnavailable),
-            Role::Reader => ("reader", Kind::ReaderUnavailable),
+            Role::Reader | Role::Miner => ("reader", Kind::ReaderUnavailable),
         };
         let mut last_loss = String::new();
         for repeat in 0..=self.opts.transport_retries {

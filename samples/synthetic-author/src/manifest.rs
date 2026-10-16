@@ -27,6 +27,9 @@ pub const MANIFEST: &str = "manifest.json";
 /// before manifests existed have this and no manifest.
 const PERSONA: &str = "persona.json";
 
+/// The file in a corpus directory that records how its decisions were read.
+pub const MINE_RECORD: &str = "mine.json";
+
 /// How the corpus's random draws were derived from the run seed, so that a
 /// request's seed can be recomputed from the manifest.
 pub const SEED_DERIVATION: &str =
@@ -260,5 +263,66 @@ impl Recipe {
         );
         note(self.min_words != other.min_words, "min words");
         named
+    }
+}
+
+/// How the decisions of a corpus are read out of its articles: what a later
+/// `mine` must continue with, as a reader of another kind or another seed
+/// would make decisions that are not comparable with the ones already read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MineRecord {
+    /// The model that reads, as a model reference.
+    pub miner: String,
+    /// The seed the reader's per-request seeds are derived from; `None` when
+    /// the reader is reached over a network and cannot be seeded.
+    pub run_seed: Option<u64>,
+    /// How the per-request seeds follow from the run seed.
+    pub seed_derivation: String,
+}
+
+/// The record of how the decisions of the corpus in `dir` are read: the one
+/// kept when there is one, which `miner` and `given` must agree with; else a
+/// new one, with a fresh run seed (printed) when none is given and the reader
+/// `seedable`, written to the directory.
+///
+/// # Errors
+/// The corpus was mined with another reader or another run seed, or the
+/// record cannot be read or written.
+pub fn begin_or_continue_mining(
+    dir: &Path,
+    miner: &str,
+    given: Option<u64>,
+    seedable: bool,
+) -> anyhow::Result<MineRecord> {
+    let path = dir.join(MINE_RECORD);
+    match std::fs::read_to_string(&path) {
+        Ok(text) => {
+            let kept: MineRecord = serde_json::from_str(&text)
+                .with_context(|| format!("parsing {}", path.display()))?;
+            anyhow::ensure!(
+                kept.miner == miner,
+                "{}: the decisions were read by {}, not {miner}; use another cache directory",
+                path.display(),
+                kept.miner,
+            );
+            if let (Some(recorded), Some(_)) = (kept.run_seed, given) {
+                agree(path, recorded, "recorded", given)?;
+            }
+            Ok(kept)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let record = MineRecord {
+                miner: miner.to_string(),
+                run_seed: seedable.then(|| resolve("run-seed", given)),
+                seed_derivation: SEED_DERIVATION.to_string(),
+            };
+            std::fs::create_dir_all(dir)?;
+            let part = path.with_extension("part");
+            std::fs::write(&part, serde_json::to_vec_pretty(&record)?)
+                .with_context(|| format!("writing {}", part.display()))?;
+            std::fs::rename(&part, &path).with_context(|| format!("writing {}", path.display()))?;
+            Ok(record)
+        }
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
     }
 }

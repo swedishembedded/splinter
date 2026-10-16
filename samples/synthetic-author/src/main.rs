@@ -17,14 +17,13 @@ use std::path::PathBuf;
 
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
-use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::{Config, Splinter};
 use synthetic_author::cache::Cache;
 use synthetic_author::corpus_cmd::CorpusArgs;
 use synthetic_author::exam_cmd::{CrossArgs, ExamArgs, ReportArgs};
-use synthetic_author::manifest::author_seed;
-use synthetic_author::models::model_named;
+use synthetic_author::manifest::{author_seed, begin_or_continue_mining};
+use synthetic_author::models::{is_remote, Source};
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::{scenario_pool, TOPICS};
 use synthetic_author::training::TrainArgs;
@@ -96,6 +95,11 @@ enum Command {
         /// How many articles are read at a time.
         #[arg(long, default_value_t = 4)]
         workers: usize,
+        /// The seed the reader's per-request seeds are derived from; drawn and
+        /// printed when absent, and read back from the corpus when it was
+        /// mined before.
+        #[arg(long)]
+        run_seed: Option<u64>,
     },
     /// Make the training records from the decisions read.
     Dataset {
@@ -244,8 +248,11 @@ fn main() -> anyhow::Result<()> {
             miner,
             allow_remote,
             workers,
+            run_seed,
         } => {
             let cache = Cache::open(cache)?;
+            let record =
+                begin_or_continue_mining(cache.dir(), &miner, run_seed, !is_remote(&miner)?)?;
             let mut config = Config::from_env();
             config.state_root = StateRoot::new(cache.dir().join("state"));
             config.thinking = false;
@@ -254,8 +261,8 @@ fn main() -> anyhow::Result<()> {
                 .build()
                 .context("starting the runtime")?;
             let ctx = splinter.context();
-            let model = BlockingModel::new(model_named(&ctx, &miner)?)?;
-            let read = synthetic_author::lab::mine_all(&cache, &model, workers)?;
+            let source = Source::open(&ctx, &miner, record.run_seed)?;
+            let read = synthetic_author::lab::mine_all(&cache, &source, workers)?;
             let all = synthetic_author::lab::read_mined(&cache)?;
             let kept = all
                 .iter()

@@ -13,7 +13,6 @@ use std::sync::{Mutex, PoisonError};
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
-use splinter_sdk::agent::blocking::BlockingModel;
 use splinter_sdk::store::jsonl;
 use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
@@ -28,7 +27,7 @@ use crate::mine::{mine, Verified};
 use crate::persona::Persona;
 use crate::prompts::SYSTEM;
 use crate::scenario::Archetype;
-use crate::writer::plan;
+use crate::writer::{plan, Models, RequestKey, Role};
 
 /// One line of `decisions.jsonl`: what was read out of one case of one article.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,13 +64,14 @@ pub fn read_mined(cache: &Cache) -> anyhow::Result<Vec<Mined>> {
 }
 
 /// Reads the decisions out of every article that lacks some of its cases in
-/// `decisions.jsonl`, `workers` at a time, and appends the lines for the cases
+/// `decisions.jsonl`, `workers` at a time, each article by a model `miner`
+/// makes for it (seeded from the recorded run seed when it runs here), and appends the lines for the cases
 /// it lacks. Returns how many articles were read by this call.
 ///
 /// # Errors
 /// The cache cannot be read, a line cannot be appended, or the reader fails on
 /// an article. The first failure is returned after the workers have stopped.
-pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow::Result<usize> {
+pub fn mine_all(cache: &Cache, miner: &dyn Models, workers: usize) -> anyhow::Result<usize> {
     let articles = cache.articles()?;
     let mut have: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
     for line in read_mined(cache)? {
@@ -114,7 +114,12 @@ pub fn mine_all(cache: &Cache, miner: &BlockingModel, workers: usize) -> anyhow:
                 let Some((article, lacking)) = todo.get(n) else {
                     return;
                 };
-                let lines = match mine(miner, article) {
+                let key = RequestKey {
+                    article: article.index,
+                    attempt: 1,
+                    role: Role::Miner,
+                };
+                let lines = match miner.model(key).and_then(|model| mine(&model, article)) {
                     Ok(results) => results,
                     Err(e) => {
                         fail(e.context(format!("reading article {}", article.index)));

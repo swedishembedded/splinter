@@ -51,22 +51,6 @@ fn sampling(seed: Option<u64>) -> Sampling {
     }
 }
 
-/// The model `name` names, sampling at the writer's temperature when it runs
-/// here and at its server's own when it does not. A model that runs here
-/// draws a fresh seed for every sampled request, which the recorded run keeps
-/// (`runs show` lists the first and counts the rest).
-///
-/// # Errors
-/// `name` is not a model reference, or the model cannot be had.
-pub fn model_named(ctx: &Context, name: &str) -> anyhow::Result<splinter_sdk::agent::solve::Model> {
-    let reference = reference(name)?;
-    if reference.is_remote() {
-        return Ok(ctx.model(&reference)?);
-    }
-    ctx.resampled(&reference, sampling(None))?
-        .with_context(|| format!("{reference} cannot be sampled at a temperature"))
-}
-
 /// The model a run asks: one model for every request when it is reached over a
 /// network, and for a model that runs here a model made for each request with
 /// that request's own seed.
