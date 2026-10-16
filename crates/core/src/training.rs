@@ -192,6 +192,12 @@ pub struct TrainingCurve {
     pub selection: Selection,
     /// True when the patience ran out before the budget did.
     pub stopped_early: bool,
+    /// Why part or all of the requested monitoring was not done (no whole
+    /// group of the training records could be set aside to monitor on);
+    /// `None` when nothing asked for was skipped. A candidate with a reason
+    /// here carries its last step, not a chosen one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitoring_skipped: Option<String>,
 }
 
 /// The generalisation gap at the selected step, as a share of the
@@ -216,6 +222,7 @@ impl TrainingCurve {
             selected_step: steps_completed,
             selection: Selection::LastStep,
             stopped_early: false,
+            monitoring_skipped: None,
         }
     }
 
@@ -246,10 +253,10 @@ impl TrainingCurve {
     /// ([`LARGE_GAP_SHARE`]); an exported last step that is not the
     /// curve's best (the monitoring loss rose after it); a best that is the
     /// last evaluation, where the loss may still have been falling when the
-    /// budget ran out. Empty when nothing was monitored or nothing is amiss.
+    /// budget ran out. Empty when nothing is amiss; a monitoring that was asked for and skipped is the first warning.
     #[must_use]
     pub fn warnings(&self) -> Vec<String> {
-        let mut warnings = Vec::new();
+        let mut warnings: Vec<String> = self.monitoring_skipped.iter().cloned().collect();
         let (Some(selected), Some(best), Some(last)) =
             (self.selected(), self.best(), self.points.last())
         else {
@@ -350,6 +357,7 @@ mod tests {
             selected_step,
             selection: Selection::BestMonitorLoss,
             stopped_early,
+            monitoring_skipped: None,
         }
     }
 

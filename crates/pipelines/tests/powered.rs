@@ -329,6 +329,7 @@ fn a_kept_evaluation_is_chosen_on_the_dev_suite_by_what_it_answers() {
         selected_step: 30,
         selection: Selection::BestMonitorLoss,
         stopped_early: false,
+        monitoring_skipped: None,
     });
     let candidate = train(
         &ctx,

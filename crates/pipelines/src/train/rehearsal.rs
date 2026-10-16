@@ -15,9 +15,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use splinter_core::training::Regime;
-use splinter_data::holdout::monitor_split_named;
 use splinter_data::StoredDataset;
 
+use super::monitoring::{carve_monitor, Monitoring};
 use super::{concatenate, trainable};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
@@ -48,6 +48,9 @@ pub struct RehearsalPlan {
     /// The records that join the monitoring set; `None` when the run
     /// monitors nothing.
     pub monitor: Option<PathBuf>,
+    /// Why the run was to monitor on the rehearsal and could not: its records
+    /// are one group, so none can be set aside whole. `None` otherwise.
+    pub monitor_skipped: Option<String>,
     /// The share of the training draws `fit` takes.
     pub share: f32,
     /// Records in `fit`.
@@ -105,23 +108,32 @@ pub(super) fn prepare_rehearsal(
             .filter(|l| !l.trim().is_empty())
             .count())
     };
-    let (fit, monitor) = if split.monitored {
-        let halves = monitor_split_named(
-            &dataset.path,
-            split.dir,
-            split.monitor_share,
-            (REHEARSAL_FILE, REHEARSAL_MONITOR_FILE),
-        )?;
-        (halves.fit, Some(halves.monitor))
-    } else {
-        (
+    let carved = split
+        .monitored
+        .then(|| {
+            carve_monitor(
+                &dataset.path,
+                split.dir,
+                split.monitor_share,
+                (REHEARSAL_FILE, REHEARSAL_MONITOR_FILE),
+            )
+        })
+        .transpose()?;
+    let (fit, monitor, monitor_skipped) = match carved {
+        Some(Monitoring::Carved(halves)) => (halves.fit, Some(halves.monitor), None),
+        unmonitored => (
             concatenate(&[&dataset.path], &split.dir.join(REHEARSAL_FILE))?,
             None,
-        )
+            match unmonitored {
+                Some(Monitoring::Skipped(why)) => Some(why),
+                _ => None,
+            },
+        ),
     };
     Ok(RehearsalPlan {
         trained: count(&fit)?,
         monitored: monitor.as_deref().map_or(Ok(0), count)?,
+        monitor_skipped,
         dataset,
         fit,
         monitor,

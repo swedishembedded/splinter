@@ -500,6 +500,7 @@ fn curve_of(outcome: &brain::ChatFineTuneOutcome) -> TrainingCurve {
             brain::Selection::BestMonitorLoss => Selection::BestMonitorLoss,
         },
         stopped_early: outcome.stopped_early,
+        monitoring_skipped: None,
     }
 }
 

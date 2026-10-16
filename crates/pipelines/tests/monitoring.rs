@@ -151,6 +151,7 @@ fn the_gate_repeats_what_the_curve_warns_of() {
         selected_step: 40,
         selection: Selection::LastStep,
         stopped_early: false,
+        monitoring_skipped: None,
     });
     let candidate = train(
         &ctx,

@@ -54,6 +54,7 @@
 mod candidate;
 mod full;
 mod keep;
+mod monitoring;
 mod rehearsal;
 mod seeds;
 pub mod sizing;
@@ -78,7 +79,7 @@ use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::training::{Regime, ReplaySample, ReplaySource};
-use splinter_data::holdout::{monitor_split_file, split_dataset_file};
+use splinter_data::holdout::split_dataset_file;
 use splinter_data::{replay_sample, Format, Fraction, StoredDataset};
 use splinter_model::train::{
     fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
@@ -133,11 +134,6 @@ const EVALUATIONS_DIR: &str = "evaluations";
 
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
-
-/// The monitoring set a run scores when it is made of several files: the
-/// training families' monitoring records, the writer's text of those
-/// families and the rehearsal's records together.
-const MONITOR_ALL_FILE: &str = "monitor_all.jsonl";
 
 /// The regime a dataset of `format` is trained by; `None` for a format
 /// brain does not train.
@@ -268,6 +264,14 @@ pub struct TrainPlan {
 /// Trains a candidate; the seam `train` and `learn` train through. `train`
 /// calls the method of the plan's regime.
 pub trait Trainer {
+    /// Whether this trainer divides its records between training and scoring
+    /// by independent source text, so that a set from fewer than two texts
+    /// cannot be divided: `learn` then refuses such sources before it spends
+    /// a rollout on them. A trainer that holds nothing out says no.
+    fn holds_out_by_group(&self) -> bool {
+        false
+    }
+
     /// Trains the supervised adapter `plan` describes into `plan.dir`,
     /// stopping when `cancel` fires.
     fn train(
@@ -322,6 +326,10 @@ pub trait Trainer {
 pub struct BrainTrainer;
 
 impl Trainer for BrainTrainer {
+    fn holds_out_by_group(&self) -> bool {
+        true
+    }
+
     fn train(
         &self,
         _ctx: &Context,
@@ -329,31 +337,7 @@ impl Trainer for BrainTrainer {
         cancel: &CancelToken,
     ) -> Result<Trained, OrchestratorError> {
         let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
-        // The monitoring set is carved from the training half: the held-out
-        // half is the gate's and the exam's evidence, and a step chosen on
-        // it would be chosen on what it is then judged by.
-        let monitored = (plan.eval_every > 0)
-            .then(|| monitor_split_file(&split.train, &plan.dir, plan.monitor_share))
-            .transpose()?;
-        // The monitoring set is the training families' monitoring records,
-        // the writer's text of those families and the rehearsal's records
-        // together: the step selected is the one that generalises best on
-        // the mixture the run trains - the writer's text included, which is
-        // most of the tokens of a persona run - not on the dialogues alone.
-        let monitor = match &monitored {
-            Some(m) => {
-                let parts: Vec<&Path> = std::iter::once(m.monitor.as_path())
-                    .chain(m.monitor_text.as_deref())
-                    .chain(plan.rehearsal.as_ref().and_then(|r| r.monitor.as_deref()))
-                    .collect();
-                Some(if parts.len() == 1 {
-                    m.monitor.clone()
-                } else {
-                    concatenate(&parts, &plan.dir.join(MONITOR_ALL_FILE))?
-                })
-            }
-            None => None,
-        };
+        let watch = monitoring::plan_monitoring(plan, &split.train)?;
         let kept = plan
             .tuning
             .keep_evaluations
@@ -367,11 +351,11 @@ impl Trainer for BrainTrainer {
         fine_tune(&FineTune {
             max_block: plan.tuning.max_block,
             model_dir: &plan.base,
-            train: monitored.as_ref().map_or(&split.train, |m| &m.fit),
+            train: watch.fit.as_deref().unwrap_or(&split.train),
             held_out: &split.held_out,
             held_out_text: split.held_out_text.as_deref(),
-            monitor: monitor.as_deref(),
-            eval_every: plan.eval_every,
+            monitor: watch.monitor.as_deref(),
+            eval_every: watch.eval_every,
             patience: plan.patience,
             attempt_dir: &plan.dir,
             steps: plan.steps,
@@ -397,6 +381,10 @@ impl Trainer for BrainTrainer {
             keep_evaluations: kept.as_deref(),
         })
         .map_err(trainer_error)
+        .map(|mut trained| {
+            trained.curve.monitoring_skipped = watch.skipped;
+            trained
+        })
     }
 
     fn train_preference(
