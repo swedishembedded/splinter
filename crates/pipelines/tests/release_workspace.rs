@@ -46,6 +46,7 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
+use splinter_core::rng::Seed;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
@@ -91,6 +92,9 @@ fn request(repo: &Path, release: bool) -> PracticeRequest {
         max_tasks: Some(64),
         mutants_per_file: Some(2),
         exam_families: Some(EXAM_FAMILIES),
+        // seed: which modules form the exam decides how many training records
+        // the fixture leaves; the spec needs one split that leaves enough.
+        exam_seed: Some(Seed::new(1)),
         pass_at_k: PassAtK::new(2, None, None),
         no_release: !release,
         ..PracticeRequest::default()

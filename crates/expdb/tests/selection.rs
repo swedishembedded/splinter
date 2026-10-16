@@ -156,17 +156,15 @@ fn passing_and_failing_attempts_of_one_task_are_paired_at_equal_rank() {
         "each pass against each fail of the same rank, within one task"
     );
 
-    let capped = snapshot
-        .compile(&Recipe::dpo().by_task().max_pairs_per_task(1))
-        .unwrap();
+    // A recipe without a seed draws one and records it in the plan, so two
+    // plans are the same only when the seed is fixed.
+    // seed: the property under test is that a fixed recipe compiles to one plan.
+    let capped_recipe = Recipe::dpo().by_task().max_pairs_per_task(1).seed(1);
+    let capped = snapshot.compile(&capped_recipe).unwrap();
     assert_eq!(capped.samples.len(), 1);
     assert_eq!(
         capped.id().unwrap(),
-        snapshot
-            .compile(&Recipe::dpo().by_task().max_pairs_per_task(1))
-            .unwrap()
-            .id()
-            .unwrap(),
+        snapshot.compile(&capped_recipe).unwrap().id().unwrap(),
         "the cap picks the same pair every time"
     );
 }

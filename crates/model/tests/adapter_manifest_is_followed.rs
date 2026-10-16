@@ -48,9 +48,8 @@ fn a_written_manifest_is_followed_and_a_wrong_digest_is_not() {
     let digest_of = |path: &std::path::Path| Digest::parse(&file_digest(path)).unwrap();
     let manifest = dir.join("serving").join("default.json");
     let mut follower = ManifestFollower::new(&manifest, ServedBase::new(&base, None));
-    assert_eq!(
-        follower.poll(),
-        ManifestPoll::Missing,
+    assert!(
+        matches!(follower.poll(), ManifestPoll::Missing),
         "nothing is published yet"
     );
 
@@ -59,7 +58,10 @@ fn a_written_manifest_is_followed_and_a_wrong_digest_is_not() {
         panic!("a manifest written for an adapter bound to the base is a release");
     };
     assert_eq!(
-        (release.path.as_path(), release.digest.as_str()),
+        (
+            release.release.path.as_path(),
+            release.release.digest.as_str()
+        ),
         (first.as_path(), digest_of(&first).as_str())
     );
 
@@ -68,7 +70,7 @@ fn a_written_manifest_is_followed_and_a_wrong_digest_is_not() {
     let ManifestPoll::Release(release) = follower.poll() else {
         panic!("the next release is followed");
     };
-    assert_eq!(release.path, second);
+    assert_eq!(release.release.path, second);
 
     // A manifest that states another file's digest is rejected, and says
     // which; the server keeps what it serves.
@@ -77,12 +79,12 @@ fn a_written_manifest_is_followed_and_a_wrong_digest_is_not() {
         ManifestPoll::Rejected(why) => {
             assert!(why.contains(digest_of(&second).as_str()), "{why}");
         }
-        other => panic!("a digest mismatch is rejected, got {other:?}"),
+        _ => panic!("a digest mismatch is rejected"),
     }
 
     // Withdrawing it leaves nothing to follow.
     withdraw_adapter_manifest(&manifest).unwrap();
-    assert_eq!(follower.poll(), ManifestPoll::Missing);
+    assert!(matches!(follower.poll(), ManifestPoll::Missing));
     withdraw_adapter_manifest(&manifest).unwrap();
     assert_eq!(
         std::fs::read_dir(manifest.parent().unwrap())

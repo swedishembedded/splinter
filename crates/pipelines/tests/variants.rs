@@ -36,6 +36,7 @@ use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::rng::Seed;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
@@ -73,7 +74,8 @@ fn manual_tasks(test: &str) -> (Scratch, Context, splinter_pipelines::tasks::Tas
             generator: &ModelRef::policy_default(),
             goal: None,
             author: None,
-            denoise_seed: None,
+            // seed: the denoise kind refuses to build without one; any value serves
+            denoise_seed: Some(Seed::new(1)),
             deadline: None,
             cancel: CancelToken::new(),
         },

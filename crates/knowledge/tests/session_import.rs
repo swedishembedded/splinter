@@ -94,9 +94,28 @@ fn the_source_bytes_digest_is_recorded() -> anyhow::Result<()> {
 
 #[test]
 fn gate_and_memory_records_survive_import() -> anyhow::Result<()> {
-    let gate = json!({"version": 1, "decision": "allow", "rule": "r7"});
-    let memory = json!({"version": 2, "used": ["m-1", "m-2"]});
+    let gate = json!({
+        "schema": "sven.gate.v1",
+        "decisions": [{
+            "decision_id": "d-1", "call_id": "c1", "capability": "ExecuteShell",
+            "policy": "requires_approval", "decision": "approved", "decided_by": "human"
+        }]
+    });
+    let memory = json!({
+        "schema": "sven.memory.v1",
+        "retrievals": [{
+            "call_id": "c1", "query": "dashboard port", "space_ids": ["space-1"],
+            "generation_id": "gen-a",
+            "results": [{
+                "unit_id": "unit-7", "revision": "sha256:abc",
+                "anchor": {"heading_path": ["Ports"], "block_ordinal": 2, "text_fingerprint": "f00d"},
+                "score": 0.83, "rank": 1, "inserted": true
+            }]
+        }]
+    });
     let mut value = session();
+    value["steps"][1]["tool_calls"] =
+        json!([{"tool_call_id": "c1", "function_name": "shell", "arguments": {}}]);
     value["steps"][1]["extra"] = json!({
         "sven": {"gate": gate, "memory": memory, "other": {"kept": "in the trajectory only"}}
     });
