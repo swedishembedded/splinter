@@ -45,3 +45,4 @@ in the same commit.
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |
 | [049](049-a-gate-that-could-not-grade-its-canaries-is-not-clean.md) | A gate that could not grade its canaries is not clean |
 | [066](066-the-family-pre-flight-killed-the-test-runner-and-orphaned-its-lua-processes.md) | The family pre-flight killed the test runner and orphaned its Lua processes |
+| [067](067-a-looping-mutant-cost-the-sandbox-wall-limit-not-the-time-budget.md) | A looping mutant cost the sandbox's wall limit, not the generator's time budget |

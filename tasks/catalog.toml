@@ -76,6 +76,10 @@ test_files = 9
 digest = "sha256:7e33b39f0855180f3c3b16968298c470aa56734076716a0be65e6157014936c5"
 tree = "04d1d21c93d5802854ec20c1ffb2d5f094c37e2a"
 files_under_test = ["linediff/csvdiff.py", "linediff/csvio.py", "linediff/editscript.py", "linediff/hunks.py", "linediff/merge3.py", "linediff/patchapply.py", "linediff/patchparse.py", "linediff/similarity.py", "linediff/unified.py"]
+generation_seed = "7496158157323079533"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 152
+funnel = { candidates = 720, broken_build = 142, equivalent_mutant = 118, near_duplicate = 249, output_truncated = 52, over_time_budget = 7 }
 
 [[family]]
 id = "mdrender"
@@ -91,6 +95,10 @@ test_files = 9
 digest = "sha256:910e3a67a28dadac1f188d5579bde938641751f157615856e1fe8308fcaaf489"
 tree = "3b48f8f5610cd7d31c9ef78c3704b928b52d1154"
 files_under_test = ["mdrender/alignment.py", "mdrender/blocks.py", "mdrender/escapes.py", "mdrender/html_render.py", "mdrender/inline.py", "mdrender/tables.py", "mdrender/text_render.py", "mdrender/toc.py", "mdrender/wrapping.py"]
+generation_seed = "13622763178703663033"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 148
+funnel = { candidates = 720, broken_build = 118, equivalent_mutant = 103, near_duplicate = 299, output_truncated = 37, over_time_budget = 15 }
 
 [[family]]
 id = "caldate"
@@ -125,6 +133,10 @@ test_files = 12
 digest = "sha256:3d11a92328aee204c22c078cb754d267e55e90d0145093028e7ed5fe6b20e161"
 tree = "8743c3c92e813c9db14cef5ac7df63475c62de24"
 files_under_test = ["src/adjacency.lua", "src/bipartite.lua", "src/components.lua", "src/heap.lua", "src/hops.lua", "src/reach.lua", "src/shortest.lua", "src/spantree.lua", "src/strong.lua", "src/topo.lua", "src/traversal.lua", "src/unionfind.lua"]
+generation_seed = "5043110901902413120"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 155
+funnel = { candidates = 960, equivalent_mutant = 208, near_duplicate = 422, output_truncated = 166, over_time_budget = 9 }
 
 [[family]]
 id = "tokenbucket"
@@ -140,3 +152,7 @@ test_files = 10
 digest = "sha256:fdc54263ee5a3b2d4c9837e6eef76de9d41cd9cdb66e18ba139c1d68917330b2"
 tree = "4b787040967b2e32fd3c9886567bf53129324293"
 files_under_test = ["src/backoff.lua", "src/breaker.lua", "src/duration.lua", "src/fixedwindow.lua", "src/leakybucket.lua", "src/quotareport.lua", "src/registry.lua", "src/slidinglog.lua", "src/tokenbucket.lua", "src/waittime.lua"]
+generation_seed = "17833792332253628022"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 135
+funnel = { candidates = 799, equivalent_mutant = 113, near_duplicate = 270, output_truncated = 280, over_time_budget = 1 }

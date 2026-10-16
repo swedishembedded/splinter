@@ -95,8 +95,7 @@ splinter practice $WORK/<family> --state $STATE -v --budget 1s --max-tasks 1000 
 ```
 
 The `[tasks]` line of the output holds the admitted count and the refusals by
-reason. Funnel measured with the release binary of the main tree (a quiet host
-was not available; times are not comparable). `caught` is candidates minus
+reason. Funnel measured with the release binary of this tree. `caught` is candidates minus
 faults that did not run (`broken_build`) minus faults no test noticed
 (`equivalent_mutant`); faults refused as `output_truncated` are inside it.
 
@@ -105,20 +104,27 @@ faults that did not run (`broken_build`) minus faults no test noticed
 | iniparse | python | 11 | 279 | 80 | 828 | 281 | 64 | 483 | near_duplicate 207, output_truncated 99 | 177 |
 | ttlcache | python | 9 | 257 | 80 | 701 | 187 | 96 | 418 | near_duplicate 252, output_truncated 7 | 159 |
 | exprcalc | python | 12 | 256 | 80 | 916 | 235 | 118 | 563 | near_duplicate 280, output_truncated 96, weak_hidden_tests 1 | 186 |
-| linediff | python | 9 | 278 | - | not measured | | | | | |
-| mdrender | python | 9 | 270 | - | not measured | | | | | |
-| caldate | lua | 8 | 250 | - | not measured | | | | | |
-| graphkit | lua | 12 | 262 | - | not measured | | | | | |
-| tokenbucket | lua | 10 | 296 | - | not measured | | | | | |
+| linediff | python | 9 | 278 | 80 | 720 | 142 | 118 | 460 | near_duplicate 249, output_truncated 52, over_time_budget 7 | 152 |
+| mdrender | python | 9 | 270 | 80 | 720 | 118 | 103 | 499 | near_duplicate 299, output_truncated 37, over_time_budget 15 | 148 |
+| caldate | lua | 8 | 250 | 80 | 640 | 0 | 103 | 537 | near_duplicate 213, output_truncated 190, over_time_budget 2 | 132 |
+| graphkit | lua | 12 | 262 | 80 | 960 | 0 | 208 | 752 | near_duplicate 422, output_truncated 166, over_time_budget 9 | 155 |
+| tokenbucket | lua | 10 | 296 | 80 | 799 | 0 | 113 | 686 | near_duplicate 270, output_truncated 280, over_time_budget 1 | 135 |
 
 Seeds drawn per family (exam seed, `mutants/file` as in the table):
 
 - iniparse: 6640021429841191778
 - ttlcache: 3027157304785842583
 - exprcalc: 5816860101842795554
+- linediff: 7496158157323079533
+- mdrender: 13622763178703663033
+- caldate: 10647562179294028461
+- graphkit: 5043110901902413120
+- tokenbucket: 17833792332253628022
 
-Families without a row of numbers were still running when this was written;
-their admitted counts are not measured.
+Every family admits at least 25 tasks. The Lua families are driven through a per-test `lua` with a
+CPU limit and a wall timeout; a suite that loops is stopped at the generator's time budget.
+Tokenbucket's baseline, re-timed with `families.py check` on a quiet host, is well under the
+checker's limit: the slow reading seen under load was the load, so the family is not slow.
 
 ### The E3 plan
 
