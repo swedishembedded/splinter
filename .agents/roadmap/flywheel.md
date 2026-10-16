@@ -72,3 +72,20 @@ Gains are judged only by a measurement the policy under training cannot influenc
 (held-out, retention, anchor); an unmeasured number is absent, never zero; a final test
 set tuned on is no longer a final test set; underpowered comparisons are reported as
 inconclusive and more tasks are collected rather than the threshold changed.
+
+## Findings of the second-wave experiments (2026-10-16), outstanding
+
+- Retention for a facts campaign: the gate's retention check holds a candidate to each earlier
+  release's held-out families, which a facts campaign never taught, so it cannot see forgetting of
+  taught facts (knowledge 061). Hold it to the release's trained facts under their stored variants.
+- Early stopping on a monitor set of unseen families is meaningless for invented facts; the default
+  picks an early step. Offer a monitor drawn from the trained facts' variants, or refuse to monitor
+  when the held-out families cannot be learned.
+- Pipeline resume (item 7) would have saved most of the wall time of every rerun here: a run that
+  fails at its last stage repeats the generator's tasks stage (about 8 to 25 minutes on a shared card).
+- A learn on a single source file is refused after its rollouts; check the number of independent
+  groups before spending them (knowledge 056).
+- The generator omits the subject it names from its own question in about half of its proposals at 4B
+  and 8B; the brief, not the rule, is the next thing to test.
+- The serve check reports the beginning of the server's output in its not-measured reason after the
+  notices of every model it skipped; show the last lines first.
