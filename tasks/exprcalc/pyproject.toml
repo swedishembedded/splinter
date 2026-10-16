@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+[project]
+name = "exprcalc"
+version = "0.1.0"
+requires-python = ">=3.10"
