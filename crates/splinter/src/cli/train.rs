@@ -36,7 +36,7 @@ fn monitor_share(text: &str) -> Result<f64, String> {
     }
 }
 
-fn positive_count(text: &str) -> Result<usize, String> {
+pub(super) fn positive_count(text: &str) -> Result<usize, String> {
     match text.parse::<usize>() {
         Ok(n) if n > 0 => Ok(n),
         _ => Err(format!("{text:?} is not a count of at least one")),

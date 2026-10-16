@@ -13,6 +13,7 @@ use clap::Parser;
 use serde_json::json;
 use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
+use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest, VoiceBuild};
@@ -380,6 +381,14 @@ impl Session {
                 })?;
                 emit(json, &varied);
             }
+            Command::Tasks(TasksCommand::Canaries { task_set, count }) => {
+                let set = resolve_task_set(ctx, &task_set)?;
+                let arguments = json!({ "task_set": set, "count": count });
+                let made = record(ctx, "tasks canaries", &arguments, |_| {
+                    canaries::make(ctx, &set, Some(count))
+                })?;
+                emit(json, &made);
+            }
             Command::Tasks(TasksCommand::List) => emit(json, &tasks::list(ctx)?),
             Command::Tasks(TasksCommand::Show { id }) => emit(json, &tasks::show(ctx, &id)?),
             Command::Solve(args) if args.frontier => {
@@ -595,8 +604,14 @@ impl Session {
                 if let Some(judge) = args.judge {
                     ctx.set_judge(judge);
                 }
+                let canaries = args
+                    .canaries
+                    .map(|id| canaries::load(ctx, &resolve_task_set(ctx, &id)?))
+                    .transpose()?
+                    .unwrap_or_default();
                 let request = ReleaseRequest {
                     alias: args.alias,
+                    canaries,
                     distribution: if args.unrestricted {
                         Distribution::Unrestricted
                     } else {

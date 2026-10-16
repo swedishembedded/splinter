@@ -35,9 +35,12 @@ missing: test strength, canaries, coverage, power.
   - Done: the gate input and the refusal. `ReleaseRequest.canaries` are attempted by the
     candidate alone beside the exam, a pass on any one refuses it (`canary_passes`, a `canary:`
     entry in `blocked_by`), canaries nobody could grade are unmeasured and block (finding 049).
-    Left: the canary generator (an inverted hidden assertion), a CLI input for the tasks, the
-    scripted-cheater acceptance (90% of 20 canaries flagged), the 5% pass-rate threshold (today any
-    pass refuses), trajectory facts from RS-S2 in the exposure audit.
+    The canary generator (`WorkspaceCheck::inverted`, `canary_task`: every fail-to-pass command
+    followed by its inversion, so no honest change passes), `splinter tasks canaries <SET>` and
+    `splinter release --canaries <SET>`; a cheater that tampers with the test runner passes the
+    canary and an honest fix does not (spec in `workspace_verifier.rs`); 18 passes of 20 are
+    flagged. Left: the 5% pass-rate threshold (today any pass refuses, which is stricter),
+    trajectory facts from RS-S2 in the exposure audit, a cheater that is a model and not a script.
   - A canary generator in the workspace task family inverts one hidden assertion so any pass
     is a cheat; the gate gains a cheating-rate check; trajectory facts from RS-S2 feed the
     exposure audit (protected-path reads, version-control commands, network attempts).

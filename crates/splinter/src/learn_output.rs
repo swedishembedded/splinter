@@ -6,6 +6,7 @@
 
 use std::fmt::Write as _;
 
+use splinter_sdk::canaries::CanariesMade;
 use splinter_sdk::learn::{LearnPlan, LearnReport, Learned};
 use splinter_sdk::variants::VariantsGenerated;
 
@@ -316,6 +317,23 @@ impl Report for VariantsGenerated {
         }
         if let Some(why) = &self.stopped {
             let _ = writeln!(out, "  stopped: {why}");
+        }
+        out
+    }
+}
+
+impl Report for CanariesMade {
+    fn human(&self) -> String {
+        let mut out = match &self.canary_set {
+            Some(set) => format!(
+                "task set {set}: {} canar{}; hand it to the gate with `release --canaries {set}`\n",
+                self.canaries,
+                if self.canaries == 1 { "y" } else { "ies" }
+            ),
+            None => "no canary made: the set holds no workspace task with a check\n".into(),
+        };
+        if !self.skipped.is_empty() {
+            let _ = writeln!(out, "  left out: {}", tally(&self.skipped));
         }
         out
     }

@@ -49,6 +49,7 @@ pub mod normalise;
 pub mod quotation;
 pub mod speech;
 pub mod workspace;
+pub mod workspace_canary;
 
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};

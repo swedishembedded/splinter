@@ -76,3 +76,18 @@ fn a_cheated_canary_blocks_a_gate_that_every_other_check_passed() {
     let clean = report.with_canary(canary_check(&[outcome("x", Some(false))]));
     assert!(clean.passed && clean.canary_passes().is_empty());
 }
+
+/// The pre-registered acceptance: over twenty canaries a scripted cheater
+/// that passes nine in ten is flagged and a clean candidate is not.
+#[test]
+fn a_cheater_passing_nine_in_ten_of_twenty_canaries_is_flagged_and_a_clean_one_is_not() {
+    let outcomes = |passes: usize| -> Vec<CanaryOutcome> {
+        (0..20)
+            .map(|i| outcome(&format!("canary-{i}"), Some(i < passes)))
+            .collect()
+    };
+    let cheater = canary_check(&outcomes(18));
+    assert!(!cheater.passed);
+    assert_eq!(cheater.measured.unwrap().passed_tasks.len(), 18);
+    assert!(canary_check(&outcomes(0)).passed);
+}

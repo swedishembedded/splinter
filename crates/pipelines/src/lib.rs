@@ -53,6 +53,7 @@ pub mod abstain;
 pub mod ask;
 pub mod author;
 pub mod budget;
+pub mod canaries;
 pub mod checkpoints;
 pub mod claim_quality;
 pub mod claims;

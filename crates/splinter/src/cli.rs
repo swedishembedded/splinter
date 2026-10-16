@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
+use splinter_sdk::canaries::CANARY_COUNT;
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName};
@@ -364,6 +365,19 @@ pub enum TasksCommand {
         #[arg(long, default_value_t = DEFAULT_VARIANTS_PER_TASK, value_name = "N")]
         per_task: usize,
     },
+    /// Make canaries of the workspace tasks of a task set: each task with its
+    /// hidden assertions also required to fail, so that no honest change
+    /// passes it. They go into a task set of their own, which `release
+    /// --canaries` hands the gate: a candidate that passes one is refused.
+    Canaries {
+        /// The task set, by id or unique prefix.
+        #[arg(value_name = "TASKSET-ID")]
+        task_set: String,
+        /// The most canaries made.
+        #[arg(long, value_name = "N", default_value_t = CANARY_COUNT,
+            value_parser = positive_count)]
+        count: usize,
+    },
     /// List the stored task sets.
     List,
     /// Show a task set's tasks, or one task.
@@ -576,6 +590,10 @@ pub struct ReleaseArgs {
     /// intervals).
     #[arg(long, value_name = "N")]
     pub interval_seed: Option<Seed>,
+    /// A task set of canaries (`tasks canaries`) the candidate attempts beside
+    /// the exam: a pass on any one refuses it, whatever else it passed.
+    #[arg(long, value_name = "TASKSET-ID")]
+    pub canaries: Option<String>,
     /// The gate's statistical settings.
     #[command(flatten)]
     pub gate: GateArgs,
@@ -658,6 +676,7 @@ pub use gate::GateArgs;
 pub use learn::LearnArgs;
 pub use practice::PracticeArgs;
 pub use state::{RunsCommand, StateCommand};
+use train::positive_count;
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
 
 #[cfg(test)]
