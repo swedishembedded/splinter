@@ -12,6 +12,12 @@
 
     build_data.py --out DIR     write macros.tex, tables and limitations.tex into DIR
     build_data.py --check       verify the ledger against the runs and the text
+    build_data.py --check --final   also fail while any REGISTERED or PLANNED claim remains
+                                or the paper is still marked draft (status.txt)
+
+A draft may contain registered but not yet validated results; a final paper contains
+validated results only. status.txt holds `draft` or `final`; a `final` paper is always
+checked with --final.
 
 Nothing measured is typed by hand into the paper. A MEASURED claim names its
 evidence as `runs/<file>#<dotted.path>` or `runs/<file>#<metric>`; `--check`
@@ -245,6 +251,7 @@ def write_outputs(out):
     out.mkdir(parents=True, exist_ok=True)
     m = metrics()
     macros = "".join(f"\\newcommand{{\\{macro_name(k)}}}{{{v}}}\n" for k, v in sorted(m.items()))
+    macros += f"\\newcommand{{\\mPaperStatus}}{{{paper_status()}}}\n"
     macros += f"\\newcommand{{\\mExperimentsMeasured}}{{{len({k.split('.')[0] for k in m})}}}\n"
     (out / "macros.tex").write_text(macros)
     (out / "e4_table.tex").write_text(e4_table() + "\n")
@@ -310,7 +317,15 @@ def check_evidence(c, m, problems):
                 problems.append(f"{c['id']}: {key} is not in references.bib")
 
 
-def check():
+def paper_status():
+    status = (ROOT / "status.txt").read_text().strip()
+    if status not in ("draft", "final"):
+        sys.exit(f"status.txt must say draft or final, not {status!r}")
+    return status
+
+
+def check(final):
+    final = final or paper_status() == "final"
     with open(ROOT / "data" / "claims.csv", newline="", encoding="utf-8") as f:
         claims = list(csv.DictReader(f))
     ids = [c["id"] for c in claims]
@@ -330,6 +345,12 @@ def check():
         if c["status"] != allowed:
             problems.append(f"{c['id']}: status {c['status']!r}, expected {allowed!r}")
         check_evidence(c, m, problems)
+    if final:
+        if paper_status() == "draft":
+            problems.append("status.txt says draft; a final paper is marked final")
+        for c in claims:
+            if c["kind"] in ("REGISTERED", "PLANNED"):
+                problems.append(f"{c['id']}: {c['kind']} claim remains; a final paper holds validated results only")
     print(f"{len(claims)} claims ({', '.join(f'{k} {v}' for k, v in sorted(counts.items()))}), {len(problems)} problems")
     for p in problems:
         print("FAIL", p)
@@ -340,13 +361,14 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=Path)
     p.add_argument("--check", action="store_true")
+    p.add_argument("--final", action="store_true", help="with --check: refuse a draft")
     p.add_argument("--list-metrics", action="store_true")
     args = p.parse_args()
     if args.list_metrics:
         for k, v in sorted(metrics().items()):
             print(k, v)
     elif args.check:
-        check()
+        check(args.final)
     elif args.out:
         write_outputs(args.out)
     else:

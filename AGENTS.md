@@ -101,8 +101,12 @@ fact inline instead.
 
 `papers/` holds research papers, not plans. A paper is a proper, high-quality
 paper in the style of an arXiv submission (abstract, method, evaluation,
-results, limitations, references; buildable to PDF), and it contains only
-findings that are proven and verified. Roadmaps, intentions, open questions
+results, limitations, references; buildable to PDF). A final paper contains only
+findings that are proven and verified. While a paper is a draft (marked in the paper
+directory; a paper that carries a claims ledger keeps `status.txt`) it may also hold
+registered experiments whose results are not yet validated, stated as such with empty
+result tables; a paper's `final` target, where it has one, fails while any registered or
+planned claim remains. Roadmaps, intentions, open questions
 and "next steps" belong in `.agents/roadmap/` and `.agents/research/`; a paper
 that reads like one of them is wrong.
 

@@ -16,6 +16,14 @@ splinter pin is the reachable twin of an earlier pin that no branch contained.
 \code{make check} includes this verification as \code{check/papers}. The bibliography entries
 were checked against the archive's abstract pages on 2026-10-16.
 
+\paragraph{Draft and final.} The paper is marked a draft in \code{status.txt}. A draft may contain
+registered but not yet validated results: the experiments of \cref{sec:pending} are REGISTERED
+and PLANNED claims, and \code{verify} passes with them. \code{make -C
+papers/splinter-brain-sven-flywheel final} runs \code{build\_data.py --check --final}, which
+fails while the paper is marked draft or any REGISTERED or PLANNED claim remains, so a final
+paper contains validated results only.
+
+
 \paragraph{Training qualification and throughput.} The logs in \code{data/runs/qual} are Brain's
 qualification logs at commit \mEFourCommit{}; each log's header records its command. They contain
 only the runs that finished; runs that were planned and not run are not reported as results. The

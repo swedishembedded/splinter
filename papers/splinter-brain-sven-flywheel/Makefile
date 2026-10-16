@@ -14,10 +14,10 @@ include ../paper.mk
 # not in this directory; LaTeX finds it through TEXINPUTS.
 GENERATED := $(BUILD)/generated
 
-SOURCES := $(PAPER).tex references.bib $(wildcard sections/*.tex) $(wildcard data/*.csv) \
+SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex) $(wildcard data/*.csv) \
 	$(wildcard data/runs/*) scripts/build_data.py
 
-$(GENERATED)/.stamp: scripts/build_data.py $(wildcard data/*.csv) $(wildcard data/runs/*)
+$(GENERATED)/.stamp: status.txt scripts/build_data.py $(wildcard data/*.csv) $(wildcard data/runs/*)
 	python3 scripts/build_data.py --out $(GENERATED)
 	touch $@
 
@@ -35,3 +35,9 @@ verify:
 	python3 scripts/test_verify_structure.py
 	python3 scripts/verify_structure.py
 	python3 scripts/build_data.py --check
+
+.PHONY: final
+# The release check: as verify, and fails while the paper is marked draft or any
+# REGISTERED or PLANNED claim remains (results not yet validated).
+final: verify
+	python3 scripts/build_data.py --check --final
