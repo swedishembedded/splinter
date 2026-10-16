@@ -28,8 +28,9 @@ fixed before the runs and extended before each later one (\code{prereg/protocol.
 training flags are described there and are not part of any claim. Deviations: E1 ran without a time limit; the registered E2 success
 criterion was not met; a repaired run, a post hoc run and a post hoc E1 variant are reported beside it and labelled;
 the E2d run was assembled from three invocations of the same script
-(\code{run} until its first served probe failed on an authentication bug of the script, repaired; \code{rb.py}-style
-rollback of its first release; and the second \code{learn} on a copy of its state taken before the rollback), all on the state
+(\code{run} until its first served probe failed on an authentication bug of the script, repaired in \code{finish}, whose
+served probes were stopped under load; the rollback of its first release; and \code{second\_generation.py}, the second \code{learn} on a copy
+of its state taken before the rollback), all on the state
 the first produced, nothing retried.
 
 \paragraph{Training qualification (E4).} The logs in \code{data/runs/qual} are Brain's
