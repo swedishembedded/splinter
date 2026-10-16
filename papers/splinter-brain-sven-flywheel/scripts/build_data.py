@@ -129,7 +129,8 @@ def e1w2_table():
                       r"\bottomrule", r"\end{tabular}"])
 
 
-W2_E2 = [("e2r", "w2/e2", "registered run"), ("e2b", "w2/e2b", "E2b"), ("e2c", "w2/e2c", "repaired rerun")]
+W2_E2 = [("e2r", "w2/e2", "registered run"), ("e2b", "w2/e2b", "E2b"), ("e2c", "w2/e2c", "repaired rerun"),
+          ("e2d", "w2/e2d", "E2d, 1.7B policy")]
 CHECKS = ["improvement", "retention", "anchor", "serve"]
 
 
@@ -192,7 +193,8 @@ def e2w2_metrics():
             if gate:
                 m[f"{tag}.g{g}.released"] = "yes" if r["release"].get("release") else "no"
                 for c in CHECKS:
-                    m[f"{tag}.g{g}.gate.{c}"] = "passed" if gate[c]["passed"] else "refused"
+                    m[f"{tag}.g{g}.gate.{c}"] = ("passed" if gate[c]["passed"] else
+                                             "refused" if gate[c]["measured"] is not None else "not measured")
                 imp = gate["improvement"]["measured"]
                 rec = imp["recall"]
                 m[f"{tag}.g{g}.imp.variants_n"] = rec["comparison"]["items"]

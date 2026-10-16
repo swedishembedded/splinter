@@ -119,9 +119,9 @@ class Runner:
              "report": report}, indent=1))
         return done.returncode, report
 
-    def suite(self):
+    def suite(self, generations=(0, 1, 2)):
         suite = []
-        for g in range(3):
+        for g in generations:
             suite += [json.loads(l) for l in (self.out / f"probes{g}.jsonl").read_text().splitlines()]
         suite += [json.loads(l) for l in (self.out / "anchor.jsonl").read_text().splitlines()]
         return suite
@@ -138,7 +138,7 @@ class Runner:
         path = self.state / "serving" / "default.json"
         return json.loads(path.read_text()) if path.exists() else None
 
-    def served_missed(self, name):
+    def served_missed(self, name, generations=(0,)):
         """The probes the release the alias serves misses, asked over `brain serve`.
 
         Brain is started from the serving manifest alone, as a deployment would;
@@ -163,7 +163,7 @@ class Runner:
                 if server.poll() is not None or time.time() > deadline:
                     return {"error": "brain serve did not become ready", "missed": None}
                 time.sleep(2)
-            key = re.search(r"\S{16,}", keys.read_text()).group(0)
+            key = next(iter(json.loads(keys.read_text()).values()))
             auth = {"Authorization": f"Bearer {key}"}
             base = f"http://127.0.0.1:{port}/v1"
             listing = json.load(urllib.request.urlopen(
@@ -172,7 +172,7 @@ class Runner:
             if not adapters:
                 return {"error": "no adapter is served", "models": listing, "missed": None}
             missed = []
-            for item in self.suite():
+            for item in self.suite(generations):
                 body = json.dumps({"model": adapters[0], "temperature": 0, "max_tokens": 128,
                                    "messages": [{"role": "user", "content": item["instruction"]}]})
                 request = urllib.request.Request(
@@ -183,7 +183,7 @@ class Runner:
                 if not re.search(rf"(?<![\d.]){re.escape(item['reference'])}(?!\d)", text):
                     missed.append(item["instruction"])
             return {"adapter": adapters[0], "manifest": self.serving_manifest(),
-                    "missed": sorted(missed)}
+                    "generations": list(generations), "missed": sorted(missed)}
         finally:
             server.send_signal(signal.SIGTERM)
             try:
@@ -244,10 +244,27 @@ def run(args):
     (out / "exits.json").write_text(json.dumps(exits, indent=1) + "\n")
 
 
-def row_of(name, missed, facts, anchor, gens):
+def finish(args):
+    """Completes a run that stopped after its first release: the probes over `brain serve`,
+    the rollback of the alias and the probes again. Writes the same records as `run`."""
+    out = Path(args.out)
+    r = Runner(args)
+    exits = {}
+    served = r.served_missed("after-g0")
+    if served is not None:
+        (out / "served-after-g0.json").write_text(json.dumps(served, indent=1))
+    code, _ = r.splinter("rollback", "rollback", "default", ok=(0, 1, 2))
+    exits["rollback"] = {"exit": code, "reason": reason_of(r.raw / "rollback.stderr")}
+    r.measure("after-rollback")
+    (r.raw / "serving-after-rollback.json").write_text(json.dumps(r.serving_manifest(), indent=1))
+    r.splinter("releases-final", "release", "list")
+    (out / "exits.json").write_text(json.dumps(exits, indent=1) + "\n")
+
+
+def row_of(name, missed, facts, anchor, gens, generations=(0, 1, 2)):
     row = {"step": name, "anchor_correct": sum(a not in missed for a in anchor),
            "anchor_n": len(anchor)}
-    for g in range(3):
+    for g in generations:
         per_fact = {}
         mine = [f for f in facts if f["generation"] == g]
         for f in mine:
@@ -272,8 +289,9 @@ def summary(args):
     for name in STEPS[1:]:
         path = out / f"served-{name}.json"
         if path.exists() and json.loads(path.read_text()).get("missed") is not None:
-            rows.append(row_of(f"served-{name}", set(json.loads(path.read_text())["missed"]),
-                               facts, anchor, gens))
+            served = json.loads(path.read_text())
+            rows.append(row_of(f"served-{name}", set(served["missed"]), facts, anchor, gens,
+                               tuple(served.get("generations", (0, 1, 2)))))
     text = json.dumps(rows, indent=1)
     (out / "summary.json").write_text(text + "\n")
     print(text)
@@ -282,7 +300,7 @@ def summary(args):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("build", "run", "summary"):
+    for name in ("build", "run", "finish", "summary"):
         q = sub.add_parser(name)
         q.add_argument("--out", required=True)
         q.add_argument("--generations-py", default=str(
@@ -290,7 +308,7 @@ def main():
         if name == "build":
             q.add_argument("--seed", type=int)
             q.add_argument("--facts", type=int, default=30)
-        if name == "run":
+        if name in ("run", "finish"):
             q.add_argument("--splinter", required=True)
             q.add_argument("--brain", required=True)
             q.add_argument("--policy-weights", required=True)
@@ -300,7 +318,7 @@ def main():
             q.add_argument("--learn-arg", action="append", default=[],
                            help="an extra argument of `splinter learn`, repeated (a flag and its value are two)")
     args = p.parse_args()
-    {"build": build, "run": run, "summary": summary}[args.cmd](args)
+    {"build": build, "run": run, "finish": finish, "summary": summary}[args.cmd](args)
 
 
 if __name__ == "__main__":

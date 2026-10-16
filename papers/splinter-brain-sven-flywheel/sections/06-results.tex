@@ -152,6 +152,23 @@ generation~0 facts (\mETwobBaseCandidateGZeroGZeroGained{} gained, none lost,
 $p=\mETwobBaseCandidateGZeroGZeroP$) and \mETwobCandidateGZeroAnchor{} of 40 anchor questions.\cl{M29}
 More rehearsal did not protect the anchor here.
 
+\paragraph{Repaired-verifier rerun.} Reading the teacher's failed verdicts showed that the stated-reference
+verifier failed correct answers written with a thousands separator (``4,711'' for 4711), which, with
+references that carry a unit word the answer omits, left \mETworGZeroNever{} of the registered run's
+\mETworGZeroTasks{} tasks untaught (\cref{sec:defects}). We repaired it and, as
+registered, reran the same design with a new seed. The rerun taught \mETwocGZeroTaught{} of \mETwocGZeroTasks{} tasks
+(\mETwocGZeroNever{} not) and trained on \mETwocGZeroTrainRecords{} records. Improvement (sign test
+$p=\mETwocGZeroImpSignP$; \mETwocGZeroImpVariantsRight{} of \mETwocGZeroImpVariantsN{} paraphrase tasks right) and
+retention passed; the anchor check refused it (a drop of \mETwocGZeroAnchorDrop); and the serve check is
+\emph{not measured} in this run, because the shell it was started from lacked the CUDA runtime path
+and the served model faulted (the serve check passed in the other runs).\cl{M31} The candidate answered \mETwocCandidateGZeroGZero{}
+of 30 facts of generation~0 against none at base (\mETwocBaseCandidateGZeroGZeroGained{} gained, none lost,
+$p=\mETwocBaseCandidateGZeroGZeroP$), none of generations 1 and 2, and \mETwocCandidateGZeroAnchor{} of 40 anchor
+questions; the generation~1 candidate, trained from the base because no champion existed, answered
+\mETwocCandidateGOneGOne{} of the generation~1 facts and \mETwocCandidateGOneAnchor{} anchor questions, and was refused
+with an anchor drop of \mETwocGOneAnchorDrop. The rollback was refused for lack of a release (status
+\mETwocRollbackExit; \mETwocReleasesFinal{} releases listed).\cl{M32}
+
 \paragraph{Re-grading.} After the runs the stated-reference verifier was repaired so that a number
 written with a thousands separator is the same number (\cref{sec:defects}). The candidates of the
 registered run and of E2b were measured again with the repaired verifier and gave the same counts

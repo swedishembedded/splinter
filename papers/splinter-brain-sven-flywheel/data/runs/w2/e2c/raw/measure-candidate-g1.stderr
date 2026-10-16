@@ -1,0 +1,2 @@
+adapter: NVIDIA GH200 120GB (DiscreteGpu, Vulkan)
+limits: max_buffer_size 4094 MiB, max_storage_buffer_binding_size 2047 MiB (adapter caps: 4094 / 2047 MiB)

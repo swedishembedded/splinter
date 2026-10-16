@@ -1,0 +1,33 @@
+brain serve: no --seed given, using random seed 666449823605371552 (pass --seed 666449823605371552 to reproduce)
+brain serve: auto-fetch off -- a request for a model that is not pulled errors (pass --autofetch or set BRAIN_AUTO_FETCH=1 to enable on-demand fetching)
+brain serve: compute gpu[0] + cpu[72 core(s)] | 1 GPU(s), 0 NPU(s) schedulable, 2 GB reserved/card, 756 GB RAM budget
+brain serve: scanning model dir HOME/.local/share/brain/models
+brain: z-image not served over the scheduler (set BRAIN_S3DIT_DIT/_VAE/_QWEN/_TOKENIZER, or place a checkpoint under the model dir)
+brain: yolo not served over the scheduler (set BRAIN_YOLOV8 to a checkpoint)
+brain: lfm not served over the scheduler (set BRAIN_LFM2 + BRAIN_LFM2_TOKENIZER)
+brain: flux2-klein not served over the scheduler (set BRAIN_FLUX2_DIT/_VAE/_TE/_TOKENIZER, or place a checkpoint under the model dir)
+brain: wan not served over the scheduler (set BRAIN_WAN_DIT/_VAE/_T5/_TOKENIZER)
+brain: ltxv not served over the scheduler (set BRAIN_LTXV_VAE)
+brain: fastvlm serving no default checkpoint (fastvlm: weights: no artifact classifies as weights for arch fastvlm
+)
+brain: moondream3 not served over the scheduler (moondream3: dir: no artifact classifies as dir for arch moondream3
+)
+brain: januspro not served over the scheduler (januspro: dir: no artifact classifies as dir for arch januspro
+)
+brain: skip Qwen3.8-27B (HOME/.local/share/brain/models/unsloth/Qwen3.8-27B-GGUF/Q8_0.gguf: GGUF architecture 'qwen35' needs a one-time conversion -- run `brain import-gguf HOME/.local/share/brain/models/unsloth/Qwen3.8-27B-GGUF/Q8_0.gguf`)
+brain: HOME/.local/share/brain/models/Qwen/Qwen3-ASR-1.7B (family 'qwen3asr') not registered: compound family 'qwen3asr' not servable from the model dir yet -- check its brain.manifest.json roles, or re-fetch it
+brain: HOME/.local/share/brain/models/Qwen/Qwen3-TTS-12Hz-0.6B-Base (family 'qwen3tts') not registered: compound family 'qwen3tts' not servable from the model dir yet -- check its brain.manifest.json roles, or re-fetch it
+brain: HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 (family 'qwen35') not registered: compound family 'qwen35' not servable from the model dir yet -- check its brain.manifest.json roles, or re-fetch it
+brain: HOME/.local/share/brain/models/nvidia/nemotron-3.5-asr-streaming-0.6b (family 'nemotronasr') not registered: compound family 'nemotronasr' not servable from the model dir yet -- check its brain.manifest.json roles, or re-fetch it
+brain: deepseek-ai/DeepSeek-OCR not served (deepseek2ocr: dir: no artifact classifies as dir for arch deepseek2ocr
+)
+brain: brain/deepseekvl not served (deepseekvl: dir: no artifact classifies as dir for arch deepseekvl
+)
+brain: brain/Qwen3-Omni-30B-A3B-Instruct-W8A16 not served over the scheduler (set BRAIN_QWEN3OMNIMOE_INT8_CHECKPOINT)
+brain serve: models: brain/qwen3, brain/splat, brain/decision, brain/demo, brain/imageops, brain/fastvlm, brain/llava, brain/imgpipe, Qwen/Qwen3-0.6B, Qwen/Qwen3-1.7B, Qwen/Qwen3-14B, Qwen/Qwen3-4B, Qwen/Qwen3-8B, Qwen/Qwen3-Embedding-0.6B, deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B, deepseek-ai/DeepSeek-R1-Distill-Qwen-7B, unsloth/Qwen3.8-27B-GGUF
+brain serve: local/Qwen3-1.7B:splinter:candidate:latest adapter=local/Qwen3-1.7B:splinter:candidate:latest digest=sha256:e753d1470cfc902a88fc2f70463fc057c547366b6a389e1c935db5e2b6ba588c
+brain serve: following release manifest STATE_ROOT/state/serving/default.json
+APIKEY openai sk-brain-9f99baf88a7e44c7af76a33f29e011fd
+brain apiserve: openai on http://127.0.0.1:18404
+brain serve: ready — all 1 surface(s) bound (openai last); touched STATE_ROOT/raw/serve-after-g0.ready
+brain: received SIGTERM, shutting down (send it again to force-exit)
