@@ -35,6 +35,7 @@ in the same commit.
 | [027](027-an-append-only-result-log-counted-an-item-twice.md) | An append-only result log counted an item twice |
 | [028](028-a-drawn-seed-made-three-tests-compare-nothing.md) | A drawn seed made three tests compare different things |
 | [029](029-a-dependency-moved-under-a-lock-that-pinned-a-missing-commit.md) | The dependency moved under a lock that named a commit nobody had |
+| [036](036-the-cli-readme-placed-releases-in-a-directory-that-does-not-exist.md) | The CLI README placed releases in a directory that does not exist |
 | [046](046-forward-transfer-has-no-base-cell-in-a-gate-report.md) | Forward transfer had no base cell to read in the gate reports |
 | [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |

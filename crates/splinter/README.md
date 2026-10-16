@@ -768,14 +768,16 @@ of trained tasks) each print their own comparison and sign test, and the
 report states the system prompt each arm was asked each suite under
 (`prompts`). Retention, anchor and serve are measured as before.
 
-A release is written once under `<state>/releases/<hex>/`: the adapter
-file, read-only, and `manifest.json` in canonical JSON - the base model and
+A release is written once. Its manifest is kept in the experience database
+(`<state>/expdb`) in canonical JSON - the base model and
 its digest, the adapter digest, the parent release, the candidate, the new
 datasets, the replay sample and the rehearsal with their digests, the training record
 (brain's included), every gate number with the anchor suite's version and
-digest, and `created_at`. `<hex>` is the manifest's digest: the release
-id. `<state>/releases/aliases/<name>` names the release an alias points
-at; it moves only from the champion the gate measured against. `release
+digest, and `created_at` - and names the adapter file, which stays where the candidate
+was kept, by content address under `<state>/artifacts/`. The manifest's
+digest is the release id. An alias is a pointer in the same database that moves only
+from the champion the gate measured against; `<state>/serving/<name>.json` is the manifest a
+server follows for it, rewritten whenever it moves. `release
 list` shows every release with its parent and aliases; `rollback <ALIAS>`
 points the alias at the release its current one was trained from, and
 refuses when there is none.
@@ -786,7 +788,7 @@ say which checkpoint it is - and the release's adapter, as the serve check
 does:
 
 ```bash
-BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter <state>/releases/<hex>/adapter.safetensors
+BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter-manifest <state>/serving/<alias>.json
 ```
 
 brain serves the adapter on that one Qwen3 base, as the model
