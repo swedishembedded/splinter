@@ -42,6 +42,7 @@ use std::time::{Duration, Instant};
 
 use futures::FutureExt;
 use splinter_core::experience::Task;
+use splinter_core::outcome::AttemptReport;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
     Baseline, CodeResult, CommandCall, Isolation, Patch, ResolvedEnvironment, SandboxError,
@@ -155,6 +156,22 @@ pub struct WorkReport {
     pub repeated_call: Option<String>,
     /// Events the observer missed, if it fell behind.
     pub dropped_events: u64,
+}
+
+impl WorkReport {
+    /// The facts of this attempt that an experience, being immutable, does
+    /// not carry, for the annotation that keeps them. Only what the report
+    /// measured is set; the rest stays absent.
+    #[must_use]
+    pub fn attempt_report(&self, wall: Duration) -> AttemptReport {
+        AttemptReport {
+            wall_seconds: Some(wall.as_secs_f64()),
+            tool_calls: Some(self.tool_calls),
+            stopped_by_tool_cap: self.stopped_by_tool_cap,
+            stopped_by_repetition: self.stopped_by_repetition,
+            ..AttemptReport::default()
+        }
+    }
 }
 
 /// A coding agent working in one directory.

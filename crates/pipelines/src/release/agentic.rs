@@ -173,7 +173,7 @@ fn attempt_at(
         return Err(OrchestratorError::Cancelled);
     }
     let solution = match solved {
-        Ok(solution) => solution,
+        Ok((solution, _)) => solution,
         Err(SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_)) => {
             return Ok(Attempt::failed());
         }

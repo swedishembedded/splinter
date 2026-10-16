@@ -151,3 +151,57 @@ fn a_model_on_the_local_device_is_asked_one_request_at_a_time() {
     let (most, ..) = solve_with("local-narrow", local, 3);
     assert_eq!(most, 1);
 }
+
+#[test]
+fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
+    use splinter_core::annotation::AnnotationBody;
+    let scratch = Scratch::new("attempt-facts");
+    let ctx = Context::new(config(&scratch), true).unwrap();
+    let reference: ModelRef = "remote:test/model".parse().unwrap();
+    let slow = Arc::new(Slow {
+        waiting: AtomicUsize::new(0),
+        most: AtomicUsize::new(0),
+    });
+    ctx.add_model(reference.clone(), Model::new(slow, "slow/model"));
+    let set = tasks(&ctx, 2);
+    let solved = solve_tasks(
+        &ctx,
+        &SolveRequest {
+            task_set: &set,
+            solver: &reference,
+            attempts: 1,
+            sampling: SamplingChoice::Own,
+            teacher: false,
+            system: None,
+            work: splinter_agent::work::WorkProtocol::default(),
+            deadline: None,
+            cancel: CancelToken::new(),
+        },
+    )
+    .unwrap();
+    let members = ctx
+        .experiences()
+        .get_set(&solved.experience_set)
+        .unwrap()
+        .members;
+    assert_eq!(members.len(), 2);
+    for id in &members {
+        let reports: Vec<_> = ctx
+            .experiences()
+            .annotations(id)
+            .unwrap()
+            .annotations
+            .into_iter()
+            .filter_map(|n| match n.body {
+                AnnotationBody::AttemptReport(report) => Some(report),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(reports.len(), 1);
+        // The model takes 60 ms to answer; an answer in one reply has no
+        // tool calls to count, and nothing else was measured.
+        assert!(reports[0].wall_seconds.unwrap() >= 0.05);
+        assert_eq!(reports[0].tool_calls, None);
+        assert_eq!(reports[0].gpu_seconds, None);
+    }
+}

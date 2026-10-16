@@ -39,8 +39,10 @@ use splinter_agent::solve::{
 };
 use splinter_agent::work::WorkProtocol;
 use splinter_agent::{CancelToken, RunConclusion};
+use splinter_core::annotation::{Annotation, AnnotationBody, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Provenance, Task};
+use splinter_core::outcome::AttemptReport;
 use splinter_knowledge::material::teacher_material;
 use splinter_knowledge::tasks::Catalogue;
 use splinter_model::Sampling;
@@ -57,6 +59,12 @@ use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::concurrency::fan_out;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+
+/// The producer name of the annotation that keeps an attempt's facts.
+pub const ATTEMPT_PRODUCER: &str = "splinter-pipelines/attempt-report";
+
+/// The version of that producer.
+pub const ATTEMPT_VERSION: &str = "1";
 
 /// How long one task's solve may take.
 pub const DEFAULT_SOLVE_DEADLINE: Duration = Duration::from_secs(300);
@@ -320,8 +328,8 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
             }
             Attempted::Solved(solved) => solved,
         };
-        let solution = match solved {
-            Ok(solution) => *solution,
+        let (solution, attempt_report) = match solved {
+            Ok(solved) => *solved,
             Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
                 report.skipped.push(skip(&entry.task, &e));
                 unusable.push(plan);
@@ -344,6 +352,14 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         };
         let experience = solution.into_experience(task.clone(), provenance)?;
         let id = store.put(&experience)?;
+        store.annotate(&Annotation {
+            experience: id.clone(),
+            producer: Producer {
+                name: ATTEMPT_PRODUCER.into(),
+                version: ATTEMPT_VERSION.into(),
+            },
+            body: AnnotationBody::AttemptReport(attempt_report),
+        })?;
         if !members.contains(&id) {
             members.push(id);
         }
@@ -416,7 +432,7 @@ enum Attempted {
     /// The budget was spent before it began.
     BudgetSpent,
     /// It ran.
-    Solved(Result<Box<Solution>, SolveError>),
+    Solved(Result<Box<(Solution, AttemptReport)>, SolveError>),
 }
 
 /// One attempt at `planned`, unless a cancel or the budget forbids beginning.
@@ -431,6 +447,7 @@ async fn attempt_once(
     if request.deadline.is_some_and(|d| Instant::now() >= d) {
         return Attempted::BudgetSpent;
     }
+    let started = Instant::now();
     let mut options = SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
     options.cancel = Some(request.cancel.clone());
     let options = model.solving(options);
@@ -442,37 +459,45 @@ async fn attempt_once(
         dialogue,
         prompt,
     } = planned;
-    let solved =
-        if let (ResolvedEnvironment::Workspace(env), Some(inputs)) = (environment, workspace) {
-            solve_attempt(task, env, inputs, model, options, &request.work).await
-        } else if *dialogue {
-            match Student::new(
-                model,
-                &entry.task,
-                DIALOGUE_TURNS,
-                &options,
-                &request.cancel,
-            ) {
-                Ok(student) => {
-                    converse_prompted(
-                        &Dialogue {
-                            task,
-                            opening: prompt,
-                            environment,
-                            interlocutor: &student,
-                            turns: DIALOGUE_TURNS,
-                        },
-                        model.provider.clone(),
-                        options,
-                    )
-                    .await
-                }
-                Err(e) => Err(e.into()),
+    if let (ResolvedEnvironment::Workspace(env), Some(inputs)) = (environment, workspace) {
+        let solved = solve_attempt(task, env, inputs, model, options, &request.work).await;
+        return Attempted::Solved(solved.map(Box::new));
+    }
+    let solved = if *dialogue {
+        match Student::new(
+            model,
+            &entry.task,
+            DIALOGUE_TURNS,
+            &options,
+            &request.cancel,
+        ) {
+            Ok(student) => {
+                converse_prompted(
+                    &Dialogue {
+                        task,
+                        opening: prompt,
+                        environment,
+                        interlocutor: &student,
+                        turns: DIALOGUE_TURNS,
+                    },
+                    model.provider.clone(),
+                    options,
+                )
+                .await
             }
-        } else {
-            solve_prompted(task, prompt, environment, model.provider.clone(), options).await
+            Err(e) => Err(e.into()),
+        }
+    } else {
+        solve_prompted(task, prompt, environment, model.provider.clone(), options).await
+    };
+    // Only an episode in a workspace reports more than its duration.
+    Attempted::Solved(solved.map(|solution| {
+        let report = AttemptReport {
+            wall_seconds: Some(started.elapsed().as_secs_f64()),
+            ..AttemptReport::default()
         };
-    Attempted::Solved(solved.map(Box::new))
+        Box::new((solution, report))
+    }))
 }
 
 /// Why a teacher's solve of a task was skipped: it has nothing to show.

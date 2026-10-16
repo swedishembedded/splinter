@@ -18,9 +18,12 @@
 //! reach the solver, not even as feedback.
 
 use splinter_agent::solve::{Model, Solution, SolveError, SolveOptions};
+use std::time::Instant;
+
 use splinter_agent::work::{solve_in_workspace, WorkOptions, WorkProtocol};
 use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
+use splinter_core::outcome::AttemptReport;
 use splinter_eval::verifiers::workspace::WorkspaceCheck;
 use splinter_sandbox::{CommandCall, WorkspaceEnvironment};
 use std::path::PathBuf;
@@ -70,7 +73,8 @@ pub(crate) fn attempt_seed(task: &Digest, attempt: u32) -> u64 {
 }
 
 /// One attempt at `task` in the workspace `env`: the worker's episode under
-/// `protocol`, as a solution whose final output is the patch.
+/// `protocol`, as a solution whose final output is the patch, and the facts
+/// of the episode the solution does not carry.
 pub(crate) async fn solve_attempt(
     task: &Task,
     env: &WorkspaceEnvironment,
@@ -78,7 +82,8 @@ pub(crate) async fn solve_attempt(
     model: &Model,
     options: SolveOptions,
     protocol: &WorkProtocol,
-) -> Result<Solution, SolveError> {
+) -> Result<(Solution, AttemptReport), SolveError> {
+    let started = Instant::now();
     let solved = solve_in_workspace(
         task,
         env,
@@ -89,7 +94,8 @@ pub(crate) async fn solve_attempt(
         protocol,
     )
     .await?;
-    Ok(solved.solution)
+    let report = solved.report.attempt_report(started.elapsed());
+    Ok((solved.solution, report))
 }
 
 #[cfg(test)]
