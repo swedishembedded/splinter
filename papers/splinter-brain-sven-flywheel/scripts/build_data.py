@@ -203,11 +203,12 @@ def e4_table():
 # an experiment is PENDING until a row of data/results.csv exists.
 REGISTERED = [
     ("CE1", "Untrained agent: resolve rate, failure profile, cost, discordance", "descriptive, no threshold"),
-    ("CE4", "SFT on verified trajectories against the base (headline)", "sign test, qualification, alpha 0.05"),
+    ("CE4", "8B SFT on verified 27B-teacher trajectories against the untrained 8B (headline)", "sign test, qualification, alpha 0.05"),
     ("CE6", "27B training and deployment, ten stages", "gates G7 and G8"),
     ("CE7", "Replication on a second, independent repository", "same test, independently"),
+    ("CE8", "27B SFT on its own verified trajectories against the 27B base", "sign test, qualification, alpha 0.05"),
 ]
-COMPARISONS = ("CE4", "CE7")
+COMPARISONS = ("CE4", "CE7", "CE8")
 
 
 def read_results():

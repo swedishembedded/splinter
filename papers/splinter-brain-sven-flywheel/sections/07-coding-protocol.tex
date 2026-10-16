@@ -8,7 +8,7 @@ The question that matters to a team, once the loop of
 \emph{given a git repository, can a local agentic model be tuned to work competently in
 it, repeatedly and with further repositories, and does it get better at what it has met
 rather than only at the newest?} This section states the protocol that asks it. It was
-registered before any run (\code{prereg/coding-tasks.md}, \cref{sec:pending}); everything
+registered before any run (\code{prereg/coding-tasks.md} and its dated amendment, \cref{sec:pending}); everything
 in it is a registered rule or a statement about the code, and no coding-task measurement
 exists yet.\cl{PR00}
 
@@ -49,10 +49,18 @@ fails.\cl{V07}
 
 \paragraph{Solving, recording and trajectory data.} The solver is a Sven coding worker with
 file, search and shell tools, a tool-call budget and a repetition stop, started in a fresh
-copy of the snapshot, with follow-up turns when the visible checks stay red.\cl{R03,PS01} The
+copy of the snapshot. One harness profile is pinned for every solve of every arm and for data
+collection alike (amendment of 2026-10-16): at most two follow-up turns, at most sixty tool
+calls and a repetition stop at three; a follow-up is given when the visible checks stay red
+and also when a turn ends with the tree unchanged, asking the worker to make the change by
+calling the edit tools.\cl{R03,PS01,PR14} Measurements made before this profile are not
+comparable and are excluded from every analysis; the reason is a pilot observation recorded in
+the lane notes, in which the untrained 8B model almost never edited a file under the earlier
+unbounded harness.\cl{PR14,PR15} The
 recorded unit is the full trajectory; the verdict is produced outside the agent. Only
-attempts whose patch passes and whose exposure audit is clean are eligible for
-training;\cl{L06,L08} each assistant action becomes a training record conditioned on the prior
+attempts whose patch passes and whose exposure audit is clean are eligible for training, and
+for the headline experiment the attempts are those of a stronger teacher model, not of the
+student (\cref{sec:pending});\cl{PR15}\cl{L06,L08} each assistant action becomes a training record conditioned on the prior
 conversation and on the tool definitions the agent was offered, with system and user turns
 carrying no loss, and compacted trajectories are excluded rather than repaired.\cl{D04,D05,D06,AU02}
 
@@ -125,7 +133,8 @@ than the gate's.
 \paragraph{Controls and stop rules.} A gain must survive three controls, each a separate
 training run on the same budget: training on trajectories regardless of verdict (does
 verification matter), an adapter trained on a different repository (did it learn the tool
-protocol rather than the repository), and no replay of earlier rounds.\cl{PR07} Registered
+protocol rather than the repository), and no replay of earlier rounds; for teacher-distilled data these are teacher trajectories
+regardless of verdict and verified teacher trajectories of a different repository.\cl{PR07,PR15} Registered
 stop rules include dropping a task kind whose verifier false-pass rate exceeds 5\% and reporting
 a development gain without a qualification gain as memorisation.\cl{PR08}
 

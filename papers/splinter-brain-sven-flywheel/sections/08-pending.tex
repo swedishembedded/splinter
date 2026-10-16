@@ -11,7 +11,8 @@ section states exactly what will be run, what each outcome will mean, and where 
 will appear. Nothing in it is a result.
 
 The experiments are registered in \code{prereg/coding-tasks.md}, dated 2026-10-16 and written
-before any of their runs. \Cref{tab:registered} lists them. Their
+before any of their runs, and amended once, also before any run, on 2026-10-16 at 22:00 CEST
+(\cref{sec:amend}). \Cref{tab:registered} lists them. Their
 numbers will be read from \code{data/results.csv} by \code{scripts/build_data.py}; a row exists
 only for a finished run, and the status column below changes by itself when one does.\cl{PL02}
 
@@ -27,13 +28,14 @@ only for a finished run, and the status column below changes by itself when one 
 profile, its cost per resolved task and the discordance between two seeds of the same arm per
 family, which sizes the qualification partition. No threshold; nothing is trained before it is
 reported.\cl{PR10}
-\item[CE4, the headline.] A LoRA adapter on Qwen3-8B trained only on verified trajectories from
-development-partition families, compared with the base on the qualification partition by the
+\item[CE4, the headline (as amended).] A LoRA adapter on Qwen3-8B trained only on verified
+trajectories, produced by the 27B teacher served as the base, from
+development-partition families, compared with the untrained 8B on the qualification partition by the
 primary test of \cref{sec:protocol}, served through Brain and driven by Sven, with retention,
 serve-verdict agreement and the three controls. The headline holds only if the sign test has
 $p<0.05$, retention is not refused and agreement is within the serve check's tolerance; any
 other outcome is reported as what it is, including ``no held-out improvement'' and
-``memorisation''.\cl{PR11}
+``memorisation''.\cl{PR11,PR15}
 \item[CE6, the 27B model.] Ten stages from loading the exact model to comparing correctness,
 tool-call validity and resources against the base, gated by training correctness and by
 deployment agreement. The 27B is not used for a confirmatory query until both gates pass;
@@ -44,7 +46,28 @@ repository chosen by a rule fixed in advance (permissive licence, offline build,
 bounded running time, no part of the pipeline tuned on it), with the cross cells that separate
 learning a repository from learning the protocol. The headline counts as reproduced only if
 both repositories pass the primary test independently.\cl{PR13}
+\item[CE8, 27B self-improvement.] The 27B model fine-tuned on its own verified trajectories,
+compared with the 27B base on the qualification partition by the same primary test, retention
+and controls. It runs only after the 27B adapter serving path exists (CE6 passes its training
+and deployment gates), is a separate comparison with its own qualification query, and does not
+enter the headline.\cl{PR16}
 \end{description}
+
+\subsection{Amendment of 2026-10-16}\label{sec:amend}
+
+Before any run, the registration was amended in three respects; the original text is
+unchanged and the amendment is dated below it.\cl{PR14} \emph{First}, the student of CE4 is
+trained on verified trajectories produced by the 27B teacher on the development partition, not
+on its own. The reason is a pilot observation, made on one repository family under a harness
+that this amendment replaces and cited only as the reason: the untrained 8B model almost never
+edited a file, so its own verified trajectories are too few to train on (lane notes
+\code{runs/l1-measure/results.md} and \code{runs/l1-measure/rerun/results.md} on the project
+drive). The training-data source and the arms of the test change; the partitions, the
+primary test, the size rule, retention, the exclusions, the stop rules and the success
+condition do not.\cl{PR15} \emph{Second}, CE8 is registered as the 27B counterpart, with the same
+protocol.\cl{PR16} \emph{Third}, one harness profile is pinned for all experiments (episode
+bounds and a follow-up for an unchanged tree, \cref{sec:protocol}), and results measured
+before it are excluded from all analyses.\cl{PR14}
 
 \begin{table}[t]
 \centering\small
@@ -54,7 +77,7 @@ of the family than the base; losses: fewer), with the exact one-sided sign test.
 empty until its run exists; a cell is never filled with an estimate.}\label{tab:results}
 \end{table}
 
-\paragraph{What a failure would show.} An adapter that does not win, a gain that a different
+\paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
 repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
 a served adapter that disagrees with the in-process one are each stated outcomes of the
 registration, and each is publishable as such. A development gain with no qualification gain

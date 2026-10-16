@@ -143,7 +143,82 @@ Measured throughput is reported as measured; no target is registered here.
 
 ## Amendments
 
-(none)
+### Amendment 1, 2026-10-16, 22:00 CEST: teacher-distilled CE4, CE8, harness profile
+
+Written and committed before any run of CE1, CE4, CE6, CE7 or CE8 exists. It changes the
+design below where it says so and nowhere else; the text above is left as registered. Where
+the amendment and the text above disagree, the amendment governs.
+
+**Reason.** Two pilot observations, both outside this registration: they were made on one
+repository family (10 development tasks, one attempt each), with a harness profile that this
+amendment replaces, and were not frozen in advance. They are cited as the reason for the
+change, not as results of CE1 or CE4. They are recorded in the lane notes
+`runs/l1-measure/results.md` and `runs/l1-measure/rerun/results.md` on the project drive. (i)
+The untrained Qwen3-8B almost never edited a file (one `edit_file` call in 67 requests of
+the re-run) and none of its attempts passed the hidden checks; the diagnosis found that
+in non-thinking mode it ends turns with prose after announcing an action. Its own verified
+trajectories are therefore too few to train on, and the CE4 text above (trajectories of the
+policy being trained) cannot produce a training set. (ii) The served 27B passed some of the
+same tasks (2 to 3 of 10 over runs; the difference between runs is within noise at that size).
+(iii) `splinter solve` ran with no follow-up, no tool-call cap and no repetition stop, which
+the lane diagnosis found to be a cause of both observations.
+
+**A1.1 CE4 changes: where the training trajectories come from.** The student is still
+Qwen3-8B with a LoRA adapter, and the training set is still only trajectories whose patch
+passes the hidden checks and whose exposure audit is clean, from development-partition
+families only, with assistant decisions supervised and other turns as context. What changes:
+the trajectories are produced by the teacher, Qwen3.8-27B served as the base (the CE1 serving
+path, no adapter), solving development-partition tasks in the harness profile of A1.3. CE4
+therefore tests distillation of verified agent experience from a stronger model into a
+smaller one. The student's own trajectories are not used for training.
+Arms of the primary test: the untrained Qwen3-8B (base) against Qwen3-8B with the adapter,
+both served through `brain serve` and driven by Sven in the same pinned profile. The teacher
+is not an arm of the test. Its CE1 resolve rate on the qualification partition is reported as
+context, with no threshold and no test. The three controls are restated for this source:
+(a) teacher trajectories regardless of verdict; (b) verified teacher trajectories from a
+different repository's families; (c) no replay of earlier rounds when a later round exists.
+A gain that (a) or (b) matches is reported as not attributable to verified,
+repository-specific data. The teacher's qualification-partition families are never solved
+for data purposes (the existing partition rule applies to the teacher as to any solver).
+
+**A1.2 What does not change in CE4.** The partitions and their stable-hash assignment, the
+exposure audit, the primary test (one-sided exact sign test over non-tied qualification
+families, alpha 0.05, adapter against the untrained 8B), the size rule and the pilot label,
+G8 and G10 and the retention rule, cost per verified outcome (G11), the exclusions, the stop
+rules (including the two registered confirmatory queries and the memorisation rule), and the
+success condition for the headline. The headline is read as before, with the stated source of
+the training data.
+
+**A1.3 Harness profile (all experiments).** Every solve of CE1, CE4, CE6, CE7 and CE8, for data
+collection and for evaluation, runs in one pinned profile with these episode bounds: at most
+2 follow-up turns, at most 60 tool calls, and a repetition stop at 3. A follow-up is also given when the worker ends a turn with the tree unchanged from the
+snapshot, whether or not a visible check is red, and it counts against the 2 follow-ups. The
+follow-up text is, from the implementing change (splinter commit 2019ea4): "You have changed
+no file yet. Make the change now by calling the edit tools; do not only describe it." The
+bounds are implemented by splinter commit afcef42, which makes `splinter solve` use the same
+episode bounds as the other verbs; the pinned splinter revision of every run must contain
+both commits. All arms use the same profile. Results measured before this profile (the pilot
+observations above and any other `splinter solve` output made without the bounds) are not
+comparable and are excluded from every CE analysis.
+
+**A1.4 CE8: self-improvement of the 27B model.** Question: does the 27B model improve on
+unseen repository tasks when fine-tuned on its own verified trajectories. Policy and teacher
+are the same model: Qwen3.8-27B. Training data: trajectories of the served 27B base on
+development-partition families in the profile of A1.3, only those whose patch passes the
+hidden checks with a clean exposure audit. Everything else follows CE4: the LoRA recipe,
+the partitions, the one qualification query, the sign test at alpha 0.05 against the 27B
+base, retention, G8, G11, the three controls, exclusions and stop rules. Arms are the 27B base
+and the 27B with the adapter, both served through the path that serves the adapter (CE6
+stage 8), so base and adapter share weights and precision; the CE1 numbers for a different
+serving format are not that arm. Precondition: CE6 passes G7 and G8, so that the adapter
+serving path exists; if it does not, CE8 is not run and the paper says so. CE8 is a separate
+registered comparison with its own qualification query and its own test; it does not enter
+the headline, whose success condition is CE4's (and CE7's for replication), and its result
+is reported whatever it is. It is not run on the strength of CE4: CE4 not winning does not
+cancel it, and CE4 winning does not substitute for it.
+
+**A1.5 Experiment list.** The registered experiments are CE1, CE4 (amended), CE6, CE7 and CE8.
+CE7 repeats CE4 as amended on the independent repository; its selection rule is unchanged.
 
 ## Provenance
 
