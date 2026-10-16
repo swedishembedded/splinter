@@ -164,14 +164,10 @@ impl Config {
     ///   assistant;
     /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
     ///   held at bf16;
-    /// * `SPLINTER_TEMPERATURE`, the sampling temperature (0 to 2) asked of
-    ///   a model reached through sven's providers;
     /// * `SPLINTER_MIN_CALIBRATION_CONTROLS`, the fewest controls a judge is
     ///   measured on before its verdicts count;
     /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
     ///   names no `--budget`;
-    /// * `SPLINTER_REMOTE_CONCURRENCY`, how many requests to a model reached
-    ///   over an API may be in flight at once ([`DEFAULT_REMOTE_CONCURRENCY`]);
     /// * `SPLINTER_DOCKER` and `SPLINTER_WORKSPACE_IMAGE`, the docker client
     ///   and the digest-pinned image a workspace's commands run in, with the
     ///   [`DOCKER_CLIENT_ENV`] variables the client needs;
@@ -215,17 +211,12 @@ impl Config {
             default_budget: var("SPLINTER_BUDGET"),
             thinking: var("SPLINTER_THINKING")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
-            served_temperature: var("SPLINTER_TEMPERATURE")
-                .and_then(|v| v.parse().ok())
-                .filter(|t: &f32| (0.0..=2.0).contains(t)),
+            served_temperature: None,
             min_calibration_controls: var("SPLINTER_MIN_CALIBRATION_CONTROLS")
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)
                 .unwrap_or(DEFAULT_MIN_CALIBRATION_CONTROLS),
-            remote_concurrency: var("SPLINTER_REMOTE_CONCURRENCY")
-                .and_then(|v| v.parse().ok())
-                .filter(|n| *n > 0)
-                .unwrap_or(DEFAULT_REMOTE_CONCURRENCY),
+            remote_concurrency: DEFAULT_REMOTE_CONCURRENCY,
             workspace: WorkspaceSettings {
                 docker: var("SPLINTER_DOCKER").map(PathBuf::from),
                 image: var("SPLINTER_WORKSPACE_IMAGE"),

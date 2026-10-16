@@ -457,6 +457,7 @@ impl Session {
                 system_prompt,
                 export_only,
                 limit,
+                max_block,
                 writer,
                 token_limit,
                 max_family_share,
@@ -483,7 +484,7 @@ impl Session {
                             cancel: CancelToken::new(),
                         }),
                     },
-                    max_block: None,
+                    max_block,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.
@@ -525,6 +526,7 @@ impl Session {
                         patience: args.monitoring.patience,
                         monitor_share: args.monitoring.monitor_share,
                         keep_evaluations: args.monitoring.keep_evaluations,
+                        max_block: args.max_block,
                         seed: args.seed,
                         ..Tuning::default()
                     }),

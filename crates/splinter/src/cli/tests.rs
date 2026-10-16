@@ -195,6 +195,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         system_prompt,
         export_only,
         limit,
+        max_block,
         writer,
         token_limit,
         max_family_share,
@@ -215,6 +216,8 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--export-only",
         "--limit",
         "5",
+        "--max-block",
+        "4096",
         "--writer",
         "The Writer",
         "--token-limit",
@@ -240,6 +243,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert_eq!(system_prompt.as_deref(), Some("You are a clerk."));
     assert!(export_only);
     assert_eq!(limit, Some(5));
+    assert_eq!(max_block, Some(4096));
     assert!(parse(&["dataset", "build", "ab12", "--view", "sft"]).is_err());
     assert!(
         parse(&["dataset", "export", "ab12"]).is_err(),
@@ -756,4 +760,5 @@ fn abstentions_are_taken_from_the_records_given_passages() {
 }
 
 mod absorb;
+mod flags;
 mod measure;

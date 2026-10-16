@@ -73,6 +73,10 @@ fn main() -> ExitCode {
         config.state_root = StateRoot::new(state);
     }
     config.policy_context_tokens = cli.global.policy_context_tokens;
+    if let Some(width) = cli.global.remote_concurrency {
+        config.remote_concurrency = width as usize;
+    }
+    config.served_temperature = cli.global.temperature;
     config.build = build_info::current(config.build.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,

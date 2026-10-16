@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
 use splinter_sdk::canaries::CANARY_COUNT;
+use splinter_sdk::config::DEFAULT_REMOTE_CONCURRENCY;
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName};
@@ -81,6 +82,18 @@ pub struct Global {
     /// `local:<checkpoint>@<tokens>`.
     #[arg(long, global = true, value_name = "TOKENS", value_parser = clap::value_parser!(u32).range(1..))]
     pub policy_context_tokens: Option<u32>,
+    /// How many requests to a model reached over an API may be in flight at
+    /// once (a model run on this machine's device is asked one at a time).
+    #[arg(long, global = true, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
+        help = format!("How many requests to a model reached over an API may be in flight at \
+                        once [default: {DEFAULT_REMOTE_CONCURRENCY}]"))]
+    pub remote_concurrency: Option<u32>,
+    /// The sampling temperature, 0 to 2, asked of a model reached through
+    /// sven's providers (the provider's own default when not given). The
+    /// same flag sets the pass@k sampling of a verb that measures it; when
+    /// given twice, the last wins.
+    #[arg(long, global = true, value_name = "T", value_parser = served_temperature)]
+    pub temperature: Option<f32>,
 }
 
 /// The commands.
@@ -583,6 +596,11 @@ pub enum DatasetCommand {
         /// projection (for voice, over the parts of the sources).
         #[arg(long, value_name = "N")]
         limit: Option<usize>,
+        /// The longest record, in tokens, the training that reads the
+        /// dataset fits: a longer record is left out and counted instead of
+        /// stopping the training.
+        #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
+        max_block: Option<usize>,
         /// For the voice view: who the writer is. Requests are written as
         /// theirs and half the records open with their persona prompt, half
         /// with the line that says who the model is; refused with
@@ -764,6 +782,14 @@ pub use learn::LearnArgs;
 pub use practice::PracticeArgs;
 pub use state::{RunsCommand, StateCommand};
 use train::positive_count;
+
+/// A sampling temperature a provider accepts: 0 to 2.
+fn served_temperature(text: &str) -> Result<f32, String> {
+    match text.parse::<f32>() {
+        Ok(t) if (0.0..=2.0).contains(&t) => Ok(t),
+        _ => Err(format!("{text:?} is not a temperature from 0 to 2")),
+    }
+}
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
 
 #[cfg(test)]

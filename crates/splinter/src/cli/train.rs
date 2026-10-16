@@ -154,6 +154,11 @@ pub struct TrainArgs {
     /// The DPO temperature, for preference datasets only.
     #[arg(long, value_name = "BETA", help = beta_help())]
     pub beta: Option<f32>,
+    /// The longest training record, in tokens, the card fits: a longer
+    /// record is named and refused before any device is claimed (build the
+    /// dataset with the same `--max-block` to leave such records out).
+    #[arg(long, value_name = "TOKENS", value_parser = clap::value_parser!(u32).range(1..))]
+    pub max_block: Option<u32>,
     /// The learning rate, alpha and weight decay of the training.
     #[command(flatten)]
     pub optimiser: OptimiserArgs,
