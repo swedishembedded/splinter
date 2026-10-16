@@ -1,0 +1,17 @@
+{
+  "run": "run-20261016T021526.877-6b5b",
+  "source": {
+    "id": "blake3:d6798956e1f855675c684d9c7c88cc91d26f8afd56f8a12ccf5d08d0262271f1",
+    "kind": "repository",
+    "origin": {
+      "kind": "repository",
+      "path": "EXP/e1x/corpus/docs",
+      "revision": null,
+      "skipped": []
+    },
+    "parts": 3,
+    "bytes": 10625,
+    "captured_at": "2026-10-16T02:15:26.925Z"
+  },
+  "new": true
+}

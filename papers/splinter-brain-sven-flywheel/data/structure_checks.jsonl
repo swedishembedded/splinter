@@ -1,0 +1,223 @@
+{"id": "S01.1", "repo": "splinter", "path": "architecture.toml", "kind": "regex", "pattern": "foundation", "min": 1}
+{"id": "S01.2", "repo": "splinter", "path": "architecture.toml", "kind": "regex", "pattern": "\"sample\",\\ \\ \\ \\ \\ \\ \\#\\ standalone\\ programs", "min": 1}
+{"id": "S02.1", "repo": "splinter", "path": "architecture.toml", "kind": "regex", "pattern": "allowed\\ =\\ \\[\"splinter\\-model\"\\]", "min": 1}
+{"id": "S03.1", "repo": "splinter", "path": "architecture.toml", "kind": "regex", "pattern": "allowed\\ =\\ \\[\"splinter\\-agent\",\\ \"splinter\\-model\"\\]", "min": 1}
+{"id": "S04.1", "repo": "splinter", "path": "architecture.toml", "kind": "regex", "pattern": "tiers\\ =\\ \\[\"surface\",\\ \"sample\"\\]", "min": 1}
+{"id": "S05.1", "repo": "splinter", "path": "AGENTS.md", "kind": "regex", "pattern": "Neither\\ sven\\ nor\\ brain\\ depends\\ on\\ Splinter", "min": 1}
+{"id": "S06.1", "repo": "splinter", "path": "AGENTS.md", "kind": "regex", "pattern": "`policy`,\\ `teacher`,\\ `generator`,\\ `planner`,\\ `judge`,\\ `critic`,\\ `router`", "min": 1}
+{"id": "S07.1", "repo": "splinter", "path": "AGENTS.md", "kind": "regex", "pattern": "An\\ experience\\ is\\ immutable", "min": 1}
+{"id": "R01.1", "repo": "splinter", "path": "crates/agent/src/solve.rs", "kind": "regex", "pattern": "Toolset::none\\(\\)", "min": 1}
+{"id": "R02.1", "repo": "splinter", "path": "crates/agent/src/run_code.rs", "kind": "regex", "pattern": "pub\\ const\\ RUN_CODE:\\ \\&str\\ =\\ \"run_code\"", "min": 1}
+{"id": "R02.2", "repo": "splinter", "path": "crates/agent/src/solve.rs", "kind": "regex", "pattern": "RunCode::new\\(", "min": 1}
+{"id": "R03.1", "repo": "splinter", "path": "crates/agent/src/work.rs", "kind": "regex", "pattern": "Toolset::coding\\(\\)", "min": 1}
+{"id": "R03.2", "repo": "splinter", "path": "crates/agent/src/work.rs", "kind": "regex", "pattern": "ApprovalPolicy::Auto", "min": 1}
+{"id": "R04.1", "repo": "splinter", "path": "crates/core/src/prompt.rs", "kind": "regex", "pattern": "pub\\ const\\ SYSTEM_PROMPT", "min": 1}
+{"id": "R04.2", "repo": "splinter", "path": "crates/agent/src/solve.rs", "kind": "regex", "pattern": "SYSTEM_PROMPT", "min": 1}
+{"id": "R05.1", "repo": "splinter", "path": "crates/agent/src/solve.rs", "kind": "regex", "pattern": "EnvironmentMismatch", "min": 1}
+{"id": "R06.1", "repo": "splinter", "path": "crates/core/src/experience.rs", "kind": "regex", "pattern": "ExperienceId\\(Digest::of\\(\\&self\\.canonical\\(\\)\\?\\)\\)", "min": 1}
+{"id": "R07.1", "repo": "splinter", "path": "crates/core/src/annotation.rs", "kind": "regex", "pattern": "Annotations\\ are\\ append\\-only\\ and\\ never\\ rewrite", "min": 1}
+{"id": "R07.2", "repo": "splinter", "path": "crates/core/src/annotation.rs", "kind": "regex", "pattern": "StepLabel", "min": 1}
+{"id": "R08.1", "repo": "splinter", "path": "crates/store/src/decision.rs", "kind": "regex", "pattern": "Reward\\ is\\ derived,\\ never\\ stored", "min": 1}
+{"id": "R09.1", "repo": "splinter", "path": "crates/core/src/annotation.rs", "kind": "regex", "pattern": "Judged,", "min": 1}
+{"id": "R09.2", "repo": "splinter", "path": "crates/core/src/annotation.rs", "kind": "regex", "pattern": "Constraint\\ =\\ 255", "min": 1}
+{"id": "V01.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/kind.rs", "kind": "regex", "pattern": "MutationValidated", "min": 1}
+{"id": "V01.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/kind.rs", "kind": "regex", "pattern": "Quotation", "min": 1}
+{"id": "V01.3", "repo": "splinter", "path": "crates/knowledge/src/tasks/kind.rs", "kind": "regex", "pattern": "LineCount", "min": 1}
+{"id": "V02.1", "repo": "splinter", "path": "crates/eval/src/verifiers/mod.rs", "kind": "regex", "pattern": "pub\\ trait\\ Verifier", "min": 1}
+{"id": "V03.1", "repo": "splinter", "path": "crates/eval/src/verifiers/calibration.rs", "kind": "regex", "pattern": "DEFAULT_MIN_PRECISION:\\ f64\\ =\\ 0\\.9", "min": 1}
+{"id": "V03.2", "repo": "splinter", "path": "crates/eval/src/verifiers/mod.rs", "kind": "regex", "pattern": "SelfJudging", "min": 1}
+{"id": "V04.1", "repo": "splinter", "path": "crates/eval/src/verifiers/executable.rs", "kind": "regex", "pattern": "splinter\\-check\\-completed\\-", "min": 1}
+{"id": "V05.1", "repo": "splinter", "path": "crates/eval/src/verifiers/formal.rs", "kind": "regex", "pattern": "STATED_FACTOR:\\ usize\\ =\\ 4", "min": 1}
+{"id": "V05.2", "repo": "splinter", "path": "crates/eval/src/verifiers/formal.rs", "kind": "regex", "pattern": "STATED_SLACK:\\ usize\\ =\\ 60", "min": 1}
+{"id": "V06.1", "repo": "splinter", "path": "crates/eval/src/verifiers/mutation.rs", "kind": "regex", "pattern": "DEFAULT_MAX_MUTANTS:\\ usize\\ =\\ 32", "min": 1}
+{"id": "V06.2", "repo": "splinter", "path": "crates/eval/src/verifiers/mutation.rs", "kind": "regex", "pattern": "DEFAULT_MIN_KILL_RATE:\\ f64\\ =\\ 1\\.0", "min": 1}
+{"id": "V07.1", "repo": "splinter", "path": "crates/eval/src/verifiers/workspace.rs", "kind": "regex", "pattern": "PYTHONDONTWRITEBYTECODE", "min": 1}
+{"id": "V07.2", "repo": "splinter", "path": "crates/eval/src/verifiers/workspace.rs", "kind": "regex", "pattern": "WORKSPACE_PRODUCER", "min": 1}
+{"id": "V08.1", "repo": "splinter", "path": "crates/store/src/decision.rs", "kind": "regex", "pattern": "pub\\ fn\\ decide", "min": 1}
+{"id": "L01.1", "repo": "splinter", "path": "crates/data/src/holdout.rs", "kind": "regex", "pattern": "MIN_HELD_OUT_UNITS:\\ usize\\ =\\ 8", "min": 1}
+{"id": "L01.2", "repo": "splinter", "path": "crates/data/src/holdout.rs", "kind": "regex", "pattern": "MAX_HELD_OUT_SHARE:\\ usize\\ =\\ 4", "min": 1}
+{"id": "L02.1", "repo": "splinter", "path": "crates/eval/src/overlap.rs", "kind": "regex", "pattern": "RUN:\\ usize\\ =\\ 8", "min": 1}
+{"id": "L02.2", "repo": "splinter", "path": "crates/eval/src/overlap.rs", "kind": "regex", "pattern": "SHARED_TO_MERGE:\\ usize\\ =\\ 8", "min": 1}
+{"id": "L02.3", "repo": "splinter", "path": "crates/eval/src/overlap.rs", "kind": "regex", "pattern": "MAX_HOLDERS:\\ usize\\ =\\ 6", "min": 1}
+{"id": "L03.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "DEFAULT_SHINGLE_WORDS:\\ usize\\ =\\ 3", "min": 1}
+{"id": "L03.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "DEFAULT_MAX_OVERLAP:\\ f64\\ =\\ 0\\.8", "min": 1}
+{"id": "L04.1", "repo": "splinter", "path": "crates/pipelines/src/release/leakage.rs", "kind": "regex", "pattern": "LEAKED:\\ \\&str\\ =\\ \"leaked\"", "min": 1}
+{"id": "L05.1", "repo": "splinter", "path": "crates/pipelines/src/absorb/sealed.rs", "kind": "regex", "pattern": "GRAM_WORDS:\\ usize\\ =\\ 8", "min": 1}
+{"id": "L06.1", "repo": "splinter", "path": "crates/eval/src/exposure.rs", "kind": "regex", "pattern": "SHINGLE_TOKENS:\\ usize\\ =\\ 12", "min": 1}
+{"id": "L06.2", "repo": "splinter", "path": "crates/eval/src/exposure.rs", "kind": "regex", "pattern": "hidden_path", "min": 1}
+{"id": "L06.3", "repo": "splinter", "path": "crates/eval/src/exposure.rs", "kind": "regex", "pattern": "forbidden_string", "min": 1}
+{"id": "L06.4", "repo": "splinter", "path": "crates/eval/src/exposure.rs", "kind": "regex", "pattern": "content_shingle", "min": 1}
+{"id": "L07.1", "repo": "splinter", "path": "crates/pipelines/src/reserve.rs", "kind": "regex", "pattern": "MIN_FAMILY_WORDS:\\ usize\\ =\\ 120", "min": 1}
+{"id": "L07.2", "repo": "splinter", "path": "crates/pipelines/src/reserve.rs", "kind": "regex", "pattern": "DEFAULT_EXAM_FAMILIES:\\ usize\\ =\\ 50", "min": 1}
+{"id": "L08.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "pub\\ struct\\ Withheld", "min": 1}
+{"id": "D01.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "pub\\ enum\\ Objective", "min": 1}
+{"id": "D01.2", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "\\|\\ \\[`Preference`\\]\\ \\|\\ DPO\\ \\|", "min": 1}
+{"id": "D02.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "Self::Dpo\\ =>\\ Format::GenericPreferenceV1", "min": 1}
+{"id": "D03.1", "repo": "splinter", "path": "crates/data/src/dataset.rs", "kind": "regex", "pattern": "pub\\ struct\\ Manifest", "min": 1}
+{"id": "D03.2", "repo": "splinter", "path": "crates/data/src/dataset.rs", "kind": "regex", "pattern": "\\.manifest\\.json", "min": 1}
+{"id": "D04.1", "repo": "splinter", "path": "crates/data/src/strip.rs", "kind": "regex", "pattern": "pub\\ enum\\ Strip", "min": 1}
+{"id": "D05.1", "repo": "splinter", "path": "crates/data/src/trajectory.rs", "kind": "regex", "pattern": "last\\.train\\ =\\ true", "min": 1}
+{"id": "D06.1", "repo": "splinter", "path": "crates/data/src/trajectory.rs", "kind": "regex", "pattern": "Compacted", "min": 1}
+{"id": "D07.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/quota.rs", "kind": "regex", "pattern": "DEFAULT_MAX_CONCEPT_SHARE:\\ f64\\ =\\ 0\\.25", "min": 1}
+{"id": "D07.2", "repo": "splinter", "path": "crates/pipelines/src/curriculum/quota.rs", "kind": "regex", "pattern": "DEFAULT_MAX_KIND_SHARE:\\ f64\\ =\\ 0\\.5", "min": 1}
+{"id": "D07.3", "repo": "splinter", "path": "crates/pipelines/src/curriculum/quota.rs", "kind": "regex", "pattern": "DEFAULT_MAX_STRENGTH_SHARE:\\ f64\\ =\\ 0\\.75", "min": 1}
+{"id": "D08.1", "repo": "splinter", "path": "crates/data/src/holdout.rs", "kind": "regex", "pattern": "MIN_MONITOR_FAMILIES:\\ usize\\ =\\ 3", "min": 1}
+{"id": "D08.2", "repo": "splinter", "path": "crates/pipelines/src/train/sizing.rs", "kind": "regex", "pattern": "DEFAULT_MONITOR_SHARE:\\ f64\\ =\\ 0\\.1", "min": 1}
+{"id": "D09.1", "repo": "splinter", "path": "crates/data/src/replay.rs", "kind": "regex", "pattern": "pub\\ fn\\ replay_sample", "min": 1}
+{"id": "T01.1", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "brain::ChatFineTune::from_pretrained", "min": 1}
+{"id": "T01.2", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "brain::PreferenceFineTune::from_pretrained", "min": 1}
+{"id": "T02.1", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_LEARNING_RATE:\\ f32\\ =\\ 2e\\-4", "min": 1}
+{"id": "T02.2", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_LORA_RANK:\\ u32\\ =\\ 8", "min": 1}
+{"id": "T02.3", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_LORA_ALPHA_PER_RANK:\\ f32\\ =\\ 2\\.0", "min": 1}
+{"id": "T02.4", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_WEIGHT_DECAY:\\ f32\\ =\\ 0\\.0", "min": 1}
+{"id": "T03.1", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_STEPS:\\ u32\\ =\\ 40", "min": 1}
+{"id": "T03.2", "repo": "splinter", "path": "crates/pipelines/src/train/sizing.rs", "kind": "regex", "pattern": "MAX_PASSES:\\ u32\\ =\\ 3", "min": 1}
+{"id": "T03.3", "repo": "splinter", "path": "crates/pipelines/src/train/sizing.rs", "kind": "regex", "pattern": "MAX_AUTO_STEPS:\\ u32\\ =\\ 2000", "min": 1}
+{"id": "T04.1", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_REPLAY_FRACTION:\\ f64\\ =\\ 0\\.25", "min": 1}
+{"id": "T04.2", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "DEFAULT_REPLAY_SHARE:\\ f32\\ =\\ 0\\.25", "min": 1}
+{"id": "T05.1", "repo": "splinter", "path": "crates/pipelines/src/rehearsal.rs", "kind": "regex", "pattern": "DEFAULT_REHEARSAL_SHARE:\\ f64\\ =\\ 0\\.25", "min": 1}
+{"id": "T05.2", "repo": "splinter", "path": "crates/pipelines/src/rehearsal.rs", "kind": "regex", "pattern": "FORM_SHARE:\\ f64\\ =\\ 0\\.5", "min": 1}
+{"id": "T06.1", "repo": "splinter", "path": "crates/pipelines/src/train/mod.rs", "kind": "regex", "pattern": "continue_from:\\ weights\\.adapter\\.clone\\(\\)", "min": 1}
+{"id": "T07.1", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "\\.keep_best\\(request\\.eval_every\\ >\\ 0\\)", "min": 1}
+{"id": "T08.1", "repo": "splinter", "path": "crates/orchestrator/src/generation.rs", "kind": "regex", "pattern": "pub\\ enum\\ ConsolidationMode", "min": 1}
+{"id": "T08.2", "repo": "splinter", "path": "crates/pipelines/src/absorb/consolidate/mod.rs", "kind": "regex", "pattern": "Merge", "min": 1}
+{"id": "T09.1", "repo": "splinter", "path": "crates/pipelines/src/train/full.rs", "kind": "regex", "pattern": "DEFAULT_FULL_LEARNING_RATE:\\ f32\\ =\\ 1e\\-5", "min": 1}
+{"id": "T09.2", "repo": "splinter", "path": "crates/pipelines/src/absorb/consolidate/mod.rs", "kind": "regex", "pattern": "DEFAULT_CONSOLIDATION_EPOCHS:\\ u32\\ =\\ 6", "min": 1}
+{"id": "T09.3", "repo": "splinter", "path": "crates/pipelines/src/absorb/generation.rs", "kind": "regex", "pattern": "DEFAULT_RETENTION_REPLAY_SHARE:\\ f64\\ =\\ 0\\.25", "min": 1}
+{"id": "T10.1", "repo": "splinter", "path": "crates/pipelines/src/absorb/generation.rs", "kind": "regex", "pattern": "DEFAULT_CONSOLIDATE_AFTER_RECORDS:\\ usize\\ =\\ 2000", "min": 1}
+{"id": "T11.1", "repo": "splinter", "path": "crates/model/src/consolidate.rs", "kind": "regex", "pattern": "brain::ChatFullFineTune", "min": 1}
+{"id": "T11.2", "repo": "brain", "path": "crates/sdk/src/full_finetune.rs", "kind": "regex", "pattern": "pub\\ fn\\ merge_adapter", "min": 1}
+{"id": "G01.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "improvement\\.passed\\ \\&\\&\\ ", "min": 1}
+{"id": "G01.2", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "add\\(\"retention\"", "min": 1}
+{"id": "G01.3", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "add\\(\"anchor\"", "min": 1}
+{"id": "G01.4", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "add\\(\"serve\"", "min": 1}
+{"id": "G02.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "not\\ measured:\\ \\{\\}", "min": 1}
+{"id": "G03.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "DEFAULT_ALPHA:\\ f64\\ =\\ 0\\.05", "min": 1}
+{"id": "G03.2", "repo": "splinter", "path": "crates/eval/src/paired.rs", "kind": "regex", "pattern": "by_cluster", "min": 1}
+{"id": "G04.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "DEFAULT_RETENTION_BOUND:\\ f64\\ =\\ 0\\.05", "min": 1}
+{"id": "G05.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "DEFAULT_ANCHOR_BOUND:\\ f64\\ =\\ 0\\.02", "min": 1}
+{"id": "G05.2", "repo": "splinter", "path": "crates/pipelines/src/release/statistics.rs", "kind": "regex", "pattern": "DROP_INTERVAL_RESAMPLES:\\ usize\\ =\\ 4000", "min": 1}
+{"id": "G06.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "DEFAULT_SERVE_SAMPLE:\\ usize\\ =\\ 8", "min": 1}
+{"id": "G06.2", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "SERVE_AGREEMENT_PERCENT:\\ usize\\ =\\ 75", "min": 1}
+{"id": "G07.1", "repo": "splinter", "path": "crates/eval/src/gate.rs", "kind": "regex", "pattern": "Verdicts", "min": 1}
+{"id": "G08.1", "repo": "splinter", "path": "crates/pipelines/src/release/mod.rs", "kind": "regex", "pattern": "GATE_INTERVAL_SEED:\\ \\&str\\ =\\ \"gate\\-interval\"", "min": 1}
+{"id": "G09.1", "repo": "splinter", "path": "crates/pipelines/src/release/mod.rs", "kind": "regex", "pattern": "enqueue_retention", "min": 1}
+{"id": "G10.1", "repo": "splinter", "path": "crates/pipelines/src/release/mod.rs", "kind": "regex", "pattern": "from\\ the\\ champion\\ can\\ replace\\ it", "min": 1}
+{"id": "X01.1", "repo": "splinter", "path": "crates/orchestrator/src/release_manifest.rs", "kind": "regex", "pattern": "RELEASE_FORMAT:\\ \\&str\\ =\\ \"splinter\\-release\\-v4\"", "min": 1}
+{"id": "X01.2", "repo": "splinter", "path": "crates/orchestrator/src/release_manifest.rs", "kind": "regex", "pattern": "pub\\ struct\\ ReleaseManifest", "min": 1}
+{"id": "X02.1", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "a\\ release\\ is\\ written\\ once", "min": 1}
+{"id": "X03.1", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "permits_unrestricted_release", "min": 1}
+{"id": "X04.1", "repo": "splinter", "path": "crates/core/src/model_ref.rs", "kind": "regex", "pattern": "POLICY_DEFAULT:\\ \\&str\\ =\\ \"default\"", "min": 1}
+{"id": "X04.2", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "PointerConflict", "min": 1}
+{"id": "X05.1", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "write_adapter_manifest", "min": 1}
+{"id": "X05.2", "repo": "splinter", "path": "README.md", "kind": "regex", "pattern": "\\-\\-adapter\\-manifest", "min": 1}
+{"id": "X06.1", "repo": "splinter", "path": "crates/pipelines/src/release/listing.rs", "kind": "regex", "pattern": "there\\ is\\ no\\ previous\\ release\\ to\\ roll", "min": 1}
+{"id": "X07.1", "repo": "splinter", "path": "crates/pipelines/src/lineage/mod.rs", "kind": "regex", "pattern": "derived\\ on\\ every\\ call", "min": 1}
+{"id": "X07.2", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "pub\\ struct\\ LineageArgs", "min": 1}
+{"id": "X08.1", "repo": "splinter", "path": "crates/splinter/README.md", "kind": "regex", "pattern": "A\\ release\\ is\\ written\\ once\\ under\\ `<state>/releases/<hex>/`", "min": 1}
+{"id": "X08.2", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "nothing\\ is\\ copied", "min": 1}
+{"id": "I01.1", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ enum\\ Origin", "min": 1}
+{"id": "I01.2", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ struct\\ SourceId\\(pub\\ Digest\\)", "min": 1}
+{"id": "I01.3", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "\"repository\"", "min": 1}
+{"id": "I02.1", "repo": "splinter", "path": "crates/knowledge/src/capture/mod.rs", "kind": "regex", "pattern": "DEFAULT_MAX_FILE_BYTES:\\ u64\\ =\\ 1024\\ \\*\\ 1024", "min": 1}
+{"id": "I02.2", "repo": "splinter", "path": "crates/knowledge/src/capture/mod.rs", "kind": "regex", "pattern": "NotText", "min": 1}
+{"id": "I03.1", "repo": "splinter", "path": "crates/knowledge/src/capture/repository.rs", "kind": "regex", "pattern": "\\&\\[\"\\.git\",\\ \"target\",\\ \"node_modules\"\\]", "min": 1}
+{"id": "I03.2", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ enum\\ SkipReason", "min": 1}
+{"id": "I04.1", "repo": "splinter", "path": "crates/knowledge/src/capture/command.rs", "kind": "regex", "pattern": "Duration::from_secs\\(30\\)", "min": 1}
+{"id": "I04.2", "repo": "splinter", "path": "crates/knowledge/src/capture/command.rs", "kind": "regex", "pattern": "DEFAULT_OUTPUT_CAP:\\ usize\\ =\\ 1024\\ \\*\\ 1024", "min": 1}
+{"id": "I04.3", "repo": "splinter", "path": "crates/knowledge/src/capture/command.rs", "kind": "regex", "pattern": "\\[\"PATH\",\\ \"HOME\",\\ \"LANG\"\\]", "min": 1}
+{"id": "I05.1", "repo": "splinter", "path": "crates/knowledge/src/capture/tree.rs", "kind": "regex", "pattern": "SNAPSHOT_PART:\\ \\&str\\ =\\ \"workspace\\-snapshot\\.json\"", "min": 1}
+{"id": "I05.2", "repo": "splinter", "path": "crates/knowledge/src/capture/tree.rs", "kind": "regex", "pattern": "Refuse,", "min": 1}
+{"id": "I06.1", "repo": "splinter", "path": "crates/knowledge/src/capture/session.rs", "kind": "regex", "pattern": "64\\ \\*\\ 1024\\ \\*\\ 1024", "min": 1}
+{"id": "I06.2", "repo": "splinter", "path": "crates/knowledge/src/capture/session.rs", "kind": "regex", "pattern": "NoUserStep", "min": 1}
+{"id": "I06.3", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ struct\\ Redaction", "min": 1}
+{"id": "I07.1", "repo": "splinter", "path": "crates/knowledge/src/sections.rs", "kind": "regex", "pattern": "pub\\ fn\\ sections", "min": 1}
+{"id": "I07.2", "repo": "splinter", "path": "crates/core/src/experience.rs", "kind": "regex", "pattern": "pub\\ struct\\ Span", "min": 1}
+{"id": "I08.1", "repo": "splinter", "path": "crates/pipelines/src/tasks/mod.rs", "kind": "regex", "pattern": "SECTIONS_PER_REQUEST:\\ usize\\ =\\ 3", "min": 1}
+{"id": "I09.1", "repo": "splinter", "path": "crates/pipelines/src/sources.rs", "kind": "regex", "pattern": "COMMAND_PREFIX:\\ \\&str\\ =\\ \"cmd:\"", "min": 1}
+{"id": "I09.2", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "pub\\ enum\\ SourceCommand", "min": 1}
+{"id": "A01.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/kind.rs", "kind": "regex", "pattern": "fn\\ builtin_kinds", "min": 1}
+{"id": "A01.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/kind.rs", "kind": "regex", "pattern": "pub\\ fn\\ model_proposable", "min": 1}
+{"id": "A02.1", "repo": "splinter", "path": "crates/knowledge/src/denoise.rs", "kind": "regex", "pattern": "SPAN_WORDS:\\ usize\\ =\\ 12", "min": 1}
+{"id": "A02.2", "repo": "splinter", "path": "crates/knowledge/src/denoise.rs", "kind": "regex", "pattern": "MIN_WORDS:\\ usize\\ =\\ 4", "min": 1}
+{"id": "A02.3", "repo": "splinter", "path": "crates/core/src/kinds.rs", "kind": "regex", "pattern": "pub\\ const\\ DENOISE:\\ \\&str\\ =\\ \"denoise\"", "min": 1}
+{"id": "A03.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "and\\ code\\ decides\\ which\\ are", "min": 1}
+{"id": "A03.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "pub\\ enum\\ Rejection", "min": 1}
+{"id": "A04.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "MaterialNotShown", "min": 1}
+{"id": "A04.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "NearDuplicate", "min": 1}
+{"id": "A04.3", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "ReferenceChanged", "min": 1}
+{"id": "A04.4", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "NoSubject", "min": 1}
+{"id": "A04.5", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "Contradiction", "min": 1}
+{"id": "A04.6", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "QuoteNotFound", "min": 1}
+{"id": "A04.7", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "TestNotAdmitted", "min": 1}
+{"id": "A05.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/mod.rs", "kind": "regex", "pattern": "DEFAULT_MIN_SUPPORT:\\ f64\\ =\\ 0\\.8", "min": 1}
+{"id": "A05.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/grounding.rs", "kind": "regex", "pattern": "pub\\ fn\\ support", "min": 1}
+{"id": "A06.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/kind.rs", "kind": "regex", "pattern": "pub\\ fn\\ names_subject", "min": 1}
+{"id": "A06.2", "repo": "splinter", "path": "crates/core/src/selfcontained.rs", "kind": "regex", "pattern": "MIN_QUOTED_WORDS:\\ usize\\ =\\ 8", "min": 1}
+{"id": "A07.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/admit.rs", "kind": "regex", "pattern": "Rejection::Contradiction", "min": 1}
+{"id": "A07.2", "repo": "splinter", "path": "crates/pipelines/src/tasks/batch.rs", "kind": "regex", "pattern": "fn\\ drop_contradictions", "min": 1}
+{"id": "A08.1", "repo": "splinter", "path": "crates/pipelines/src/tasks/batch.rs", "kind": "regex", "pattern": "MIN_PROPOSALS_BEFORE_GIVING_UP:\\ usize\\ =\\ 24", "min": 1}
+{"id": "A08.2", "repo": "splinter", "path": "crates/pipelines/src/tasks/batch.rs", "kind": "regex", "pattern": "MIN_ADMISSION_RATE:\\ f64\\ =\\ 0\\.1", "min": 1}
+{"id": "A08.3", "repo": "splinter", "path": "crates/pipelines/src/tasks/batch.rs", "kind": "regex", "pattern": "MIN_REFUSALS_BEFORE_CORRECTING:\\ usize\\ =\\ 3", "min": 1}
+{"id": "A08.4", "repo": "splinter", "path": "crates/pipelines/src/tasks/batch.rs", "kind": "regex", "pattern": "MAX_CORRECTIONS:\\ usize\\ =\\ 2", "min": 1}
+{"id": "A09.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/workspace/mod.rs", "kind": "regex", "pattern": "pub\\ enum\\ Reason", "min": 1}
+{"id": "A09.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/workspace/mod.rs", "kind": "regex", "pattern": "EquivalentMutant", "min": 1}
+{"id": "A09.3", "repo": "splinter", "path": "crates/knowledge/src/tasks/workspace/mod.rs", "kind": "regex", "pattern": "TestsNotSeparable", "min": 1}
+{"id": "A09.4", "repo": "splinter", "path": "crates/knowledge/src/tasks/workspace/mod.rs", "kind": "regex", "pattern": "AlreadyHeld", "min": 1}
+{"id": "A10.1", "repo": "splinter", "path": "crates/pipelines/src/tasks/mod.rs", "kind": "regex", "pattern": "pub\\ struct\\ TasksGenerated", "min": 1}
+{"id": "A10.2", "repo": "splinter", "path": "crates/pipelines/src/tasks/mod.rs", "kind": "regex", "pattern": "pub\\ struct\\ KindTally", "min": 1}
+{"id": "A10.3", "repo": "splinter", "path": "crates/pipelines/src/tasks/mod.rs", "kind": "regex", "pattern": "pub\\ struct\\ CallNote", "min": 1}
+{"id": "C01.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/variants.rs", "kind": "regex", "pattern": "DEFAULT_VARIANTS_PER_TASK:\\ usize\\ =\\ 3", "min": 1}
+{"id": "C01.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/variants.rs", "kind": "regex", "pattern": "Rejection::ReferenceChanged", "min": 1}
+{"id": "C02.1", "repo": "splinter", "path": "crates/pipelines/src/variants.rs", "kind": "regex", "pattern": "variants\\ are\\ only\\ measured,\\ never\\ trained\\ on", "min": 1}
+{"id": "C03.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/dedup.rs", "kind": "regex", "pattern": "pub\\ enum\\ Repeat", "min": 1}
+{"id": "C03.2", "repo": "splinter", "path": "crates/pipelines/src/curriculum/quota.rs", "kind": "regex", "pattern": "Seen::new\\(DEFAULT_SHINGLE_WORDS,\\ DEFAULT_MAX_OVERLAP\\)", "min": 1}
+{"id": "C04.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/quota.rs", "kind": "regex", "pattern": "STRAY_SHARE:\\ f64\\ =\\ 0\\.05", "min": 1}
+{"id": "C04.2", "repo": "splinter", "path": "crates/pipelines/src/curriculum/quota.rs", "kind": "regex", "pattern": "pub\\ capped:\\ BTreeMap<String,\\ usize>", "min": 1}
+{"id": "C05.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/queue.rs", "kind": "regex", "pattern": "pub\\ fn\\ enqueue_retention", "min": 1}
+{"id": "C06.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/mastery.rs", "kind": "regex", "pattern": "DEFAULT_MASTERY_WINDOW:\\ usize\\ =\\ 32", "min": 1}
+{"id": "C06.2", "repo": "splinter", "path": "crates/pipelines/src/curriculum/mastery.rs", "kind": "regex", "pattern": "DEFAULT_WEAKEST:\\ usize\\ =\\ 5", "min": 1}
+{"id": "C07.1", "repo": "splinter", "path": "crates/pipelines/src/rehearsal.rs", "kind": "regex", "pattern": "FORM_SHARE:\\ f64\\ =\\ 0\\.5", "min": 1}
+{"id": "C07.2", "repo": "splinter", "path": "crates/pipelines/src/rehearsal.rs", "kind": "regex", "pattern": "PROMPTS_PER_REQUEST:\\ usize\\ =\\ 8", "min": 1}
+{"id": "C07.3", "repo": "splinter", "path": "crates/pipelines/src/rehearsal.rs", "kind": "regex", "pattern": "excluded_as_anchor:\\ usize", "min": 1}
+{"id": "C08.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/teacher.rs", "kind": "regex", "pattern": "by\\ the\\ task's\\ own\\ verifiers\\ \\(no\\ judge\\)", "min": 1}
+{"id": "C08.2", "repo": "splinter", "path": "crates/pipelines/src/curriculum/teacher.rs", "kind": "regex", "pattern": "pub\\ fn\\ teach", "min": 1}
+{"id": "C09.1", "repo": "splinter", "path": "crates/pipelines/src/reserve.rs", "kind": "regex", "pattern": "DEFAULT_DEV_FAMILIES:\\ usize\\ =\\ 50", "min": 1}
+{"id": "C09.2", "repo": "splinter", "path": "crates/pipelines/src/exam_set.rs", "kind": "regex", "pattern": "DEFAULT_TASKS_PER_FAMILY:\\ usize\\ =\\ 8", "min": 1}
+{"id": "C09.3", "repo": "splinter", "path": "crates/pipelines/src/exam_set.rs", "kind": "regex", "pattern": "DEFAULT_DEV_TASKS_PER_FAMILY:\\ usize\\ =\\ 4", "min": 1}
+{"id": "C10.1", "repo": "splinter", "path": "crates/pipelines/src/absorb/kit.rs", "kind": "regex", "pattern": "PARAPHRASES_WRITTEN:\\ usize\\ =\\ 12", "min": 1}
+{"id": "C10.2", "repo": "splinter", "path": "crates/pipelines/src/absorb/kit.rs", "kind": "regex", "pattern": "STOPPING_PARAPHRASES:\\ usize\\ =\\ 4", "min": 1}
+{"id": "C10.3", "repo": "splinter", "path": "crates/knowledge/src/claims/forms.rs", "kind": "regex", "pattern": "STATEMENT_FORMS:\\ usize\\ =\\ 4", "min": 1}
+{"id": "C10.4", "repo": "splinter", "path": "crates/knowledge/src/claims/forms.rs", "kind": "regex", "pattern": "REVERSE_FORMS:\\ usize\\ =\\ 2", "min": 1}
+{"id": "C10.5", "repo": "splinter", "path": "crates/knowledge/src/claims/forms.rs", "kind": "regex", "pattern": "IMPLICATION_FORMS:\\ usize\\ =\\ 2", "min": 1}
+{"id": "C11.1", "repo": "splinter", "path": "crates/pipelines/src/absorb/kit.rs", "kind": "regex", "pattern": "A\\ claim\\ of\\ kind\\ procedure\\ is\\ stored\\ and\\ never\\ trained\\ on", "min": 1}
+{"id": "K01.1", "repo": "splinter", "path": "crates/core/src/claim.rs", "kind": "regex", "pattern": "pub\\ enum\\ ClaimKind", "min": 1}
+{"id": "K01.2", "repo": "splinter", "path": "crates/pipelines/src/claims.rs", "kind": "regex", "pattern": "DEFAULT_EXTRACTION_PASSES:\\ u32\\ =\\ 2", "min": 1}
+{"id": "K02.1", "repo": "splinter", "path": "crates/knowledge/src/claims/gates.rs", "kind": "regex", "pattern": "QuoteNotVerbatim", "min": 1}
+{"id": "K02.2", "repo": "splinter", "path": "crates/knowledge/src/claims/gates.rs", "kind": "regex", "pattern": "NoUserEvidence", "min": 1}
+{"id": "K02.3", "repo": "splinter", "path": "crates/knowledge/src/claims/gates.rs", "kind": "regex", "pattern": "AssistantEvidence", "min": 1}
+{"id": "K03.1", "repo": "splinter", "path": "crates/knowledge/src/claims/gates.rs", "kind": "regex", "pattern": "UnsupportedTerm", "min": 1}
+{"id": "K04.1", "repo": "splinter", "path": "crates/core/src/claim.rs", "kind": "regex", "pattern": "\"wrong_answer_not_said\"", "min": 1}
+{"id": "K04.2", "repo": "splinter", "path": "crates/core/src/claim.rs", "kind": "regex", "pattern": "\"third_party_personal\"", "min": 1}
+{"id": "K04.3", "repo": "splinter", "path": "crates/core/src/claim.rs", "kind": "regex", "pattern": "\"not_entailed\"", "min": 1}
+{"id": "K05.1", "repo": "splinter", "path": "crates/core/src/claim.rs", "kind": "regex", "pattern": "pub\\ enum\\ Ruling", "min": 1}
+{"id": "B01.1", "repo": "brain", "path": "crates/sdk/src/finetune.rs", "kind": "regex", "pattern": "pub\\ struct\\ ChatFineTune", "min": 1}
+{"id": "B01.2", "repo": "brain", "path": "crates/sdk/src/preference.rs", "kind": "regex", "pattern": "pub\\ struct\\ PreferenceFineTune", "min": 1}
+{"id": "B01.3", "repo": "brain", "path": "crates/sdk/src/full_finetune.rs", "kind": "regex", "pattern": "pub\\ struct\\ ChatFullFineTune", "min": 1}
+{"id": "B02.1", "repo": "brain", "path": "crates/sdk/src/finetune.rs", "kind": "regex", "pattern": "qwen3::Dtype::BF16", "min": 1}
+{"id": "B03.1", "repo": "brain", "path": "crates/qwen3/src/model.rs", "kind": "regex", "pattern": "the\\ backward\\ recomputes\\ layer", "min": 1}
+{"id": "B04.1", "repo": "brain", "path": "crates/qwen3/src/model.rs", "kind": "regex", "pattern": "fn\\ head_chunk_rows", "min": 1}
+{"id": "B04.2", "repo": "brain", "path": "crates/model/src/lossw.rs", "kind": "regex", "pattern": "pub\\ fn\\ new_chunked", "min": 1}
+{"id": "B05.1", "repo": "brain", "path": "crates/model/src/block.rs", "kind": "regex", "pattern": "FLASH_GQA_MAX_HEAD_DIM:\\ u32\\ =\\ 256", "min": 1}
+{"id": "B06.1", "repo": "brain", "path": "crates/qwen35/src/fp8_source.rs", "kind": "regex", "pattern": "pub\\ struct\\ Qwen35Source", "min": 1}
+{"id": "B06.2", "repo": "brain", "path": "crates/qwen35/src/base_source.rs", "kind": "regex", "pattern": "pub\\ enum\\ BaseDtype", "min": 1}
+{"id": "B07.1", "repo": "brain", "path": "crates/backend-api/src/lib.rs", "kind": "regex", "pattern": "NF4,", "min": 1}
+{"id": "B07.2", "repo": "brain", "path": "crates/model/src/lut4.rs", "kind": "regex", "pattern": "NF4_LUT", "min": 1}
+{"id": "B08.1", "repo": "brain", "path": "Makefile", "kind": "regex", "pattern": "test/gradcheck:", "min": 1}
+{"id": "B08.2", "repo": "brain", "path": "crates/gradcheck/src/lib.rs", "kind": "regex", "pattern": "pub\\ fn\\ check_qwen35_lora", "min": 1}
+{"id": "B09.1", "repo": "brain", "path": "Makefile", "kind": "regex", "pattern": "test/parity:", "min": 1}
+{"id": "B09.2", "repo": "brain", "path": "Makefile", "kind": "regex", "pattern": "scripts/gates/parity\\-gate\\.sh", "min": 1}
+{"id": "B10.1", "repo": "brain", "path": "crates/model/tests/flash_gqa_train.rs", "kind": "regex", "pattern": "fn\\ mixer_gradcheck", "min": 1}
+{"id": "B10.2", "repo": "brain", "path": "crates/model/tests/flash_gqa_train.rs", "kind": "regex", "pattern": "fn\\ mixer_flash_path_gradcheck_wide_and_narrow_heads", "min": 1}
+{"id": "B11.1", "repo": "brain", "path": "AGENTS.md", "kind": "regex", "pattern": "3:1\\ Gated\\ DeltaNet\\ :\\ GQA\\ mixer\\ split", "min": 1}
+{"id": "B11.2", "repo": "brain", "path": "AGENTS.md", "kind": "regex", "pattern": "Qwen3\\.8\\-27B\\ dense\\ model\\ /\\ import\\ /\\ LoRA\\ /\\ finetune", "min": 1}

@@ -1,0 +1,47 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Introduction}\label{sec:intro}
+
+A deployed local model does not know what its users' documents, tools and repositories
+say, and what it is taught by hand is lost the next time it is replaced. The
+\emph{self-learning flywheel} is the closed loop that Splinter, Brain and Sven implement
+to address this: take a source, write tasks from it, have an agent attempt them, keep
+only what code can verify, project the verified experience into training data, train a
+LoRA adapter (and later consolidate it into the weights), measure on material the
+learner cannot influence, and release the result only if it is measurably better without
+being worse at what it already did. The released artifact is an ordinary Brain adapter
+that runs on plain \code{brain serve}; the next turn starts from it.
+
+\paragraph{Scope.} This paper describes the whole loop from corpus to release,
+including how the corpus is expanded and trained on, and states for each part what was
+verified and how. It asks one question: \emph{does each stage of the loop do what its
+specification says, and does a full turn of the loop, run twice, produce a
+policy that answers facts it was not given and keeps what it knew?} It does not claim a
+general improvement of any benchmark score, and it contains no plans: a mechanism the
+code does not contain is absent, and a measurement that was not made is stated as not
+made.
+
+\paragraph{How claims are verified.} Every statement about the system or a measurement
+carries the id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey
+bracketed ids). A \textsc{structure} claim is a fact about the code or command line and
+is re-checked by \code{make verify} against the repositories at pinned commits
+(\cref{sec:repro}); a \textsc{measured} claim is a number computed by
+\code{scripts/build_data.py} from raw run records kept in \code{data/runs}; a
+\textsc{cited} claim states what a published paper does and points at its bibliography
+entry. A structure check shows that a definition, constant or message exists in a file;
+it does not show that the code behaves accordingly, which only the experiments of
+\cref{sec:design,sec:results} address.
+
+\paragraph{Contributions, all verified in this paper.}
+(i)~A description of the division of labour among the three projects and of its
+enforcement (\cref{sec:architecture}).
+(ii)~The intake, task-admission and verification funnel with its rejection reasons, its
+leakage controls and its corpus-expansion mechanisms (\cref{sec:intake,sec:admission,%
+sec:verify,sec:dataset}), and a measured funnel on a real corpus (E1).
+(iii)~The training, consolidation, release-gate, release and rollback machinery
+(\cref{sec:training,sec:gate}) and a two-generation turn on a controlled domain
+(E2, E3) that stopped before the gate, which we report as it happened.
+(iv)~An account of what Brain's training substrate contains for a 27B model on one card,
+and what its qualification measured (\cref{sec:substrate,sec:e4}).
+(v)~A documentation defect found while verifying the claims.

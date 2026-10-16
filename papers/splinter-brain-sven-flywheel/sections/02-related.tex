@@ -1,0 +1,32 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Related work}\label{sec:related}
+
+\emph{Self-generated training data.} Self-Instruct has a model write its own
+instructions and filters them before fine-tuning on them;~\citep{selfinstruct2022}\cl{CT01} STaR and ReST keep
+only the model's own outputs that a reward or answer check confirms and train on those,
+repeatedly.~\citep{star2022,rest2023}\cl{CT02} The flywheel shares the principle that the check, not the model,
+decides what is trained on; its checks are typed verifiers of different strengths
+(\cref{sec:verify}) and the admission of tasks is itself done by code
+(\cref{sec:admission}).
+\emph{Parameter-efficient training.} LoRA freezes the base and trains low-rank
+adapters;~\citep{lora2021}\cl{CT03} QLoRA does so over a base quantised to 4~bits;~\citep{qlora2023}\cl{CT04} DPO optimises
+preferences without a separate reward model.~\citep{dpo2023}\cl{CT05} The flywheel uses LoRA and DPO as
+objectives it selects, and delegates their computation to Brain (\cref{sec:training}).
+\emph{Retrieval-aware fine-tuning.} RAFT trains a model on domain documents with
+distractor passages;~\citep{raft2024}\cl{CT06} Splinter has an optional passage-mixing share of the same
+family (\cref{sec:dataset}), which we do not evaluate here.
+\emph{Forgetting.} Catastrophic forgetting is the loss of earlier capability when a
+network is trained on new data;~\citep{ewc2016}\cl{CT07} Splinter's response is empirical: it measures
+retention against every earlier release at release time (\cref{sec:gate}).
+\emph{Memory and compute for training.} Recomputing activations trades compute for memory
+in the backward pass;~\citep{recompute2016}\cl{CT08} fused or chunked cross-entropy avoids materialising the
+logits of a large vocabulary;~\citep{cutxent2024}\cl{CT09} FlashAttention computes exact attention without
+materialising the score matrix;~\citep{flashattention2022}\cl{CT10} Gated DeltaNet is a gated linear-attention layer based on the delta rule
+and is the recurrent layer type of the 27B model Brain implements (three Gated DeltaNet
+layers to one attention layer).~\citep{gateddelta2024}\cl{CT11,B11} Section~\ref{sec:substrate}
+reports which of these Brain contains.
+\emph{Repository tasks.} The sibling paper in this repository
+(\texttt{papers/training-code-skills-with-splinter}) treats executable repository tasks
+and the paired exam; this paper only describes how they fit the flywheel.

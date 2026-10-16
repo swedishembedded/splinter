@@ -1,0 +1,75 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Training}\label{sec:training}
+
+Splinter chooses the objective and the data; Brain runs the optimisation. LoRA
+supervised fine-tuning is Brain's \code{ChatFineTune} and DPO is its
+\code{PreferenceFineTune}; both are called from the model adapter crate.\cl{T01} The
+defaults are a learning rate of $1\times10^{-4}$, rank 8, alpha twice the rank and no
+weight decay;\cl{T02} the step budget is three passes over the records clamped to between
+40 and 2000 steps.\cl{T03} A candidate \emph{continues the champion}: its training starts
+from the parent release's adapter,\cl{T06} mixes in a replay of each earlier release's
+records (a quarter of each earlier release's records, entering a quarter of training draws),\cl{T04} and mixes in a rehearsal of the base's own
+answers (a quarter of draws, half of it code-graded form tasks).\cl{T05} A monitored run
+keeps the best evaluation's adapter.\cl{T07}
+
+\paragraph{Consolidation.} A policy that keeps learning would grow its adapter, or must
+retrain from scratch on every claim. Splinter therefore consolidates a generation into
+the weights in one of two modes: a full fine-tune of every weight of the generation's
+base, or merging the adapter into the base.\cl{T08} The full mode defaults to a learning
+rate of $1\times10^{-5}$ for six epochs with a retention replay share of a quarter;\cl{T09} a
+generation is consolidated automatically after more than 2000 trained records.\cl{T10}
+Both are carried out by Brain (\code{ChatFullFineTune}, \code{merge\_adapter}).\cl{T11}
+
+\section{Release gate, releases, rollback and lineage}\label{sec:gate}
+
+\paragraph{The gate.} A candidate is released only if four checks all pass, each over
+material it was not trained on.\cl{G01} A check that was not measured fails with the
+reason \emph{not measured}.\cl{G02}
+\emph{Improvement}: a one-sided exact paired sign test at $\alpha=0.05$ over discordant
+clusters, a family of items counting once.\cl{G03}
+\emph{Retention}: accuracy on every earlier release's held-out suite may not drop by more
+than 0.05.\cl{G04}
+\emph{Anchor}: accuracy on the frozen suite of general tasks may not drop by more than
+0.02; the report carries a 95\% bootstrap interval over 4000 resamples.\cl{G05}
+\emph{Serve}: plain \code{brain serve} must report the candidate's adapter digest and
+agree with the in-process answers on at least 75\% of up to eight re-answered held-out
+tasks.\cl{G06} Repository exams use the same four checks, with the exam families as the
+improvement suite and agreement judged on the graded verdicts.\cl{G07} The bootstrap seed
+is drawn when not given and recorded;\cl{G08} a failed retention check queues the
+forgotten concepts;\cl{G09} and only a candidate trained from the current champion can
+replace it.\cl{G10}
+
+\paragraph{Releases.} A release manifest (format \code{splinter-release-v4}) records the
+artifact, parent, candidate, datasets, replay, rehearsal, training settings, the whole
+gate report, metrics, terms, provenance and generation.\cl{X01} A release is written
+once and an existing one is refused;\cl{X02} unrestricted distribution is refused unless
+the terms of everything it was made from permit it.\cl{X03} The default policy is the alias
+\code{policy:default}; moving an alias is a compare-and-set from the release the gate
+measured against.\cl{X04} After every move the serving manifest
+\code{<state>/serving/<alias>.json} is rewritten, so \code{brain serve --adapter-manifest}
+follows the release without a restart.\cl{X05} \code{splinter rollback} moves the alias to
+the release the current one was trained from and refuses when there is none.\cl{X06}
+\code{splinter lineage} walks any artifact up to its source bytes and down to everything
+derived from it, computed from the stores on every call.\cl{X07}
+
+\section{The training substrate}\label{sec:substrate}
+
+Training a 27-billion-parameter model on one 95~GiB card needs the frozen base in a
+reduced-precision tier, activation recomputation, a loss that never materialises the
+full logits, an attention kernel that supports the model's head dimension, and a loader
+that never holds the checkpoint in host memory. We state what Brain's main tree
+contains, at the commit read, for each. The Splinter trainer's seam is the
+Qwen3-family trainer.\cl{B01} In that trainer the frozen base can be held in
+bf16,\cl{B02} each layer is recomputed in the backward pass from its saved
+residual,\cl{B03} and the logits are sized in row chunks with a chunked weighted
+cross-entropy.\cl{B04} Brain has a causal grouped-query flash-attention forward and
+backward supporting head dimensions up to 256, with finite-difference gradient checks at
+head dimensions 40, 128 and 256.\cl{B05,B10} For the 27B model's crate it has a streaming
+FP8 source that dequantises in 128-row bands and a base-dtype enumeration with F32, bf16
+and NF4 members,\cl{B06} and an NF4 weight type with a 16-entry lookup table.\cl{B07} The
+numerical gates are \code{make test/gradcheck} (finite-difference checks of the
+Qwen3.5 architecture including LoRA) and \code{make test/parity}, which runs the checks on
+the CPU backend.\cl{B08,B09} \Cref{sec:e4} reports what was and was not measured on the
+27B model.

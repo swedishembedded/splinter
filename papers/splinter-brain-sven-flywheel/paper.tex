@@ -1,0 +1,61 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Swedish Embedded AB implements self-improving local model pipelines whose
+% every claim is backed by a rerunnable measurement, for its clients. If your
+% team needs expertise in turning an agent's verified experience into a
+% better local model, you can procure our services by sending an email to
+% info@swedishembedded.com.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{caption}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage[capitalise,nameinlink]{cleveref}
+
+\setlist{nosep,leftmargin=1.4em}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\emergencystretch}{2em}
+
+\input{generated/macros}
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+% A ledger reference: every statement of the paper about the system or a
+% measurement carries the ids of its rows in data/claims.csv.
+\newcommand{\cl}[1]{\textsuperscript{\scriptsize\textcolor{gray}{[#1]}}}
+
+\title{The Self-learning Flywheel: Splinter + Brain + Sven}
+\author{Martin Schröder\\
+Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
+\date{October 2026}
+
+\begin{document}
+\maketitle
+
+\input{sections/00-abstract}
+\input{sections/01-introduction}
+\input{sections/02-related}
+\input{sections/03-architecture}
+\input{sections/04-training-release}
+\input{sections/05-experiments}
+\input{sections/06-results}
+\input{sections/07-limitations}
+\input{sections/08-reproducibility}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

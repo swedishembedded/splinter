@@ -1,0 +1,27 @@
+{
+ "command": [
+  "gpu",
+  "EXP/bin/splinter-x0",
+  "--state",
+  "EXP/e2/state",
+  "--json",
+  "--policy-context-tokens",
+  "8192",
+  "learn",
+  "EXP/e2/handbook1.md",
+  "--kinds",
+  "recall",
+  "--generator",
+  "local:MODELS/Qwen/Qwen3-4B@8192",
+  "--teacher",
+  "local:MODELS/Qwen/Qwen3-4B@8192",
+  "--goal",
+  "the invented places of the gazetteer"
+ ],
+ "exit": 1,
+ "elapsed_s": 718.2,
+ "report": {
+  "error": "1 group(s) and 0 unit(s) appear in more than one of train, validation and test",
+  "refused": false
+ }
+}

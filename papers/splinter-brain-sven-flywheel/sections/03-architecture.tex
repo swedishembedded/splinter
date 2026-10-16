@@ -1,0 +1,182 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Division of labour}\label{sec:architecture}
+
+The flywheel is a composition of three projects with one rule of ownership.
+\textbf{Sven} runs agents (tools, sessions, delegation) and keeps the authoritative
+record of what an agent did. \textbf{Brain} computes: inference, training algorithms,
+checkpoints, adapters and serving. \textbf{Splinter} decides what is learned, which
+experience qualifies as training data, what to train and whether to release the
+result.\cl{S05} Splinter's repository states that neither Sven nor Brain depends on
+it, so each can demonstrate its own capabilities without it and the released artifact
+is an ordinary Brain adapter.\cl{S05,X05}
+
+The boundary is enforced by a machine-readable layering file rather than convention.
+Splinter's crates are placed in ten tiers from a dependency-free foundation to
+standalone samples; a crate may depend only on a strictly lower tier.\cl{S01} Only the
+model adapter crate may depend on Brain, only the agent adapter and the model adapter
+may depend on Sven, and the command line and every sample depend on the SDK and
+nothing else of Splinter's.\cl{S02,S03,S04} A model is never named by a stage: stages
+ask for one of seven roles (policy, teacher, generator, planner, judge, critic,
+router) and configuration decides which checkpoint plays it.\cl{S06} Experience is
+immutable; verdicts, rewards, step labels and dataset membership are facts derived
+about it, never written into it.\cl{S07}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw,rounded corners,align=center,minimum width=2.5cm,minimum height=0.9cm,font=\footnotesize},
+  arr/.style={-{Stealth[length=2mm]},thick}]
+\node[box,fill=blue!8] (src) {Sources\\(\S\ref{sec:intake})};
+\node[box,fill=green!10,right=0.7cm of src] (task) {Tasks +\\admission};
+\node[box,fill=orange!15,right=0.7cm of task] (roll) {Rollouts\\(Sven)};
+\node[box,fill=green!10,right=0.7cm of roll] (ver) {Verifiers +\\leakage};
+\node[box,fill=green!10,below=0.9cm of ver] (data) {Dataset\\projection};
+\node[box,fill=red!10,left=0.7cm of data] (train) {LoRA /\\consolidate\\(Brain)};
+\node[box,fill=green!10,left=0.7cm of train] (gate) {Release\\gate};
+\node[box,fill=green!10,left=0.7cm of gate] (rel) {Release\\+ alias};
+\draw[arr] (src) -- (task);
+\draw[arr] (task) -- (roll);
+\draw[arr] (roll) -- (ver);
+\draw[arr] (ver) -- (data);
+\draw[arr] (data) -- (train);
+\draw[arr] (train) -- (gate);
+\draw[arr] (gate) -- (rel);
+\draw[arr,dashed] (rel.north) -- ++(0,0.5) -| (roll.north west);
+\end{tikzpicture}
+\caption{The flywheel. Green: Splinter; orange: Sven; red: Brain. The dashed arrow is the
+next turn: rollouts run on the policy the release alias points at.}\label{fig:arch}
+\end{figure}
+
+\section{Source intake}\label{sec:intake}
+
+A source is content addressed (a blake3 digest over its canonical origin and parts) and
+has one of four origins: a document, a repository, a command, or a recorded
+session.\cl{I01} A document is one UTF-8 text file of at most 1~MiB; larger or
+non-text files are refused.\cl{I02} A directory is captured file by file, ignoring
+\code{.git}, \code{target} and \code{node_modules}, and every file left out is recorded
+with a reason.\cl{I03} A command is run without a shell, with a 30~s timeout, a 1~MiB
+output cap and an environment limited to \code{PATH}, \code{HOME} and \code{LANG}, so
+its real output becomes a source with provenance.\cl{I04} A repository revision is
+archived as a snapshot of its tracked files and a dirty tree is refused.\cl{I05} A
+recorded agent session is an ATIF trajectory of at most 64~MiB; unknown ATIF keys and
+sessions without a user step are refused; secrets are removed before storage and only
+the fact of the removal is kept.\cl{I06} On the command line, \code{source add} takes a
+file, a directory, or \code{cmd:} followed by a command.\cl{I09}
+
+Text is cut into sections that are byte ranges: Markdown at headings outside code
+fences, other text at blank lines. Evidence points at a section by content digest and
+byte offsets, so a task's grounding can be resolved back to exact source bytes.\cl{I07}
+A generator model is shown three sections per request.\cl{I08}
+
+\section{Tasks and admission}\label{sec:admission}
+
+\paragraph{Who decides.} Models propose; code admits.\cl{A03} The built-in catalogue
+holds model-writable kinds (recall, taught, arithmetic, format, advise, converse,
+explain, predict, construct, debug, counterexample, transform, classify, retrieve,
+multi-turn, combine); repository-change tasks are made by code and never proposed by a
+model.\cl{A01} One kind, \code{denoise}, is built by code from the source itself: a
+window of 12 words with one word dropped and two neighbours swapped, graded by exact
+match, so it needs no generator model.\cl{A02}
+
+\paragraph{The funnel and its rejection reasons.} A model-written task is refused for
+one of twenty-one reasons: malformed, no\_reply, over\_count, unknown\_section,
+quote\_not\_found, too\_few\_sections, unresolved, missing\_material,
+material\_not\_shown, not\_self\_contained, wrong\_form, ungrounded, not\_quoted,
+checks\_failed, test\_not\_admitted, duplicate, near\_duplicate, reference\_changed,
+no\_subject, contradiction, invalid.\cl{A04} Three deserve explanation. \emph{Grounding}:
+a text answer is admitted only if at least 80\% of the reference's content words and
+every number in it occur in the cited evidence.\cl{A05} \emph{Subject}: a task must name
+what it is about, so that someone who never saw the source gets exactly one answer, and
+is self-contained only if it does not quote a dropped privileged item of eight or more
+words.\cl{A06} \emph{Contradiction}: two tasks on one subject whose grounded references
+disagree are both refused.\cl{A07} The batch driver gives up on a kind after 24
+proposals if fewer than a tenth were admitted, and sends the generator a correction after
+three refusals for one reason, at most twice.\cl{A08} Repository tasks have their own
+vocabulary of refusals (red or flaky baseline, equivalent mutant, tests not separable
+from the change, not restorable, already held and others).\cl{A09}
+
+The task report counts, per kind, tasks admitted and rejected, rejections by reason,
+every rejection with its detail, and each model call with its pre-admission candidate
+count, so the funnel of \cref{sec:e1} is read from the report rather than reconstructed.\cl{A10}
+
+\section{Verification and leakage control}\label{sec:verify}
+
+\paragraph{Rollouts.} Sven runs the attempt. A closed-book solve builds an engine with
+no tools;\cl{R01} a code task gives the solver exactly one tool, \code{run\_code};\cl{R02}
+a repository episode uses Sven's coding toolset with automatic approval inside a fresh
+copy of the snapshot.\cl{R03} Every request runs under Splinter's single system
+prompt,\cl{R04} and a solve refuses to run in an environment other than the one its task
+records.\cl{R05}
+
+\paragraph{Experience and verdicts.} An experience is content addressed by the digest of
+its canonical JSON.\cl{R06} Verdicts, step labels and relations are annotations
+appended beside it.\cl{R07} Verdicts have a strength ordered judged, consistency,
+formal, executable, constraint.\cl{R09} The decision rule ignores abstentions, uses only
+verdicts of the strongest rank present, and returns no decision if they conflict;\cl{V08}
+the reward is derived from the decision and never stored.\cl{R08} Tasks are graded by one
+of thirteen verifier kinds.\cl{V01} A verifier sees the output and privileged material but
+never the trajectory.\cl{V02} Examples: a stated reference may be matched by an answer at
+most four times its length plus 60 characters;\cl{V05} an executable check passes only if
+a completion line derived from its digest is seen, so a solution that exits early cannot
+pass;\cl{V04} a generated test oracle must kill every one of at most 32 mutants;\cl{V06}
+a repository verifier overlays the hidden checks on a fresh copy and fails a patch that
+touches a protected path.\cl{V07} A judge model may grade only when calibrated to a
+precision of at least 0.9 and never grades its own model's output.\cl{V03}
+
+\paragraph{Leakage.} Four mechanisms separate what is trained on from what is measured.
+(i)~Held-out records are whole groups, a tenth of the samples grown to at least eight
+units and at most a quarter;\cl{L01} groups are formed by merging texts that share at
+least eight distinct runs of eight words, ignoring runs held by more than six
+texts.\cl{L02} (ii)~Before grading, every gate task that matches a prompt the candidate
+trained on, including replay and rehearsal, is excluded and counted as
+\emph{leaked}.\cl{L04} (iii)~For recorded sessions, sealed probes refuse any training
+record that contains a probe's question or shares an eight-word run with it.\cl{L05}
+(iv)~For repositories, exam families are reserved by stable hash before any task is
+generated, and a family needs at least 120 words;\cl{L07} the exposure audit fails an
+attempt whose tool calls name a hidden path or a forbidden string, or whose outputs
+repeat a 12-token shingle of hidden content;\cl{L06} exposed attempts and harness
+failures are withheld and counted in no denominator.\cl{L08}
+
+\section{Datasets and corpus expansion}\label{sec:dataset}
+
+\paragraph{Projection.} Datasets are projected from verified experience by named views
+and six objectives (SFT, classification, DPO, contrastive, reward, continued
+pre-training).\cl{D01} SFT is written as Brain's \code{generic-messages-v2} and DPO as
+\code{generic-preference-v1}.\cl{D02} A manifest stored beside the file names the views,
+experiences, tasks and sources every record came from.\cl{D03} The student's turn is the
+instruction alone: privileged teacher context is stripped by default;\cl{D04} only the
+assistant action is supervised, system and user turns carry no loss;\cl{D05} compacted or
+pruned trajectories are excluded rather than repaired.\cl{D06} The training set is capped
+per concept (0.25), task kind (0.5) and verification strength (0.75), after
+deduplication by the same near-duplicate rule as admission,\cl{D07,C03,C04} which compares 3-word shingles and refuses a Jaccard overlap of at least 0.8.\cl{L03} Replay sampling is deterministic in the content digest and the seed.\cl{D09} A monitoring
+split of whole families (at least three, default share 0.1) supports early
+stopping.\cl{D08}
+
+\paragraph{Expansion beyond the first pass.} The corpus grows by five mechanisms, each
+with its own gate. (i)~\emph{Variants}: a model-written task may be given up to three
+differently worded questions that keep its reference, evidence and verifiers; a variant
+that changes the reference is rejected, and variants are only measured, never trained
+on.\cl{C01,C02} (ii)~\emph{Teacher solves}: a task the policy never solves is solved
+once more by a teacher shown the source sections it is grounded in, and the answer is
+kept only if the task's verifiers pass it.\cl{C08} (iii)~\emph{Retention queue}: when a
+retention check fails, the forgotten concepts are queued and their sections receive new
+tasks on the next run.\cl{C05} (iv)~\emph{Rehearsal}: half code-built form tasks and
+half general requests the base writes, eight per request, answered greedily by the base;
+requests matching the anchor are excluded and repeats refused.\cl{C07} (v)~\emph{Claims
+from sessions}: per claim, a model writes twelve paraphrases of which four are held out
+for stopping, plus four statement, two reverse and two implication forms;\cl{C10} a claim
+of kind procedure is stored and never trained on.\cl{C11} Mastery of a concept is its
+pass rate over the last 32 decided attempts and the five weakest are listed.\cl{C06}
+Exam and development families are reserved before generation (50 each by default, 8
+tasks per exam family, 4 per development family).\cl{C09} We found no mechanism that
+generates new tasks from failed attempts other than the retention queue and the teacher
+solve.
+
+\paragraph{Claims intake.} A claim is a correction, a fact or a procedure;\cl{K01}
+extraction keeps only claims that each of two passes produced.\cl{K01} A claim is admitted
+by code only when every quote is a verbatim substring of the person's own message at the
+cited step,\cl{K02} and every number, quoted term and name in its statement occurs in the
+cited words;\cl{K03} eleven refusal codes are defined;\cl{K04} a ruling is admitted
+(superseding earlier claims), reinforced, forgotten or refused.\cl{K05}

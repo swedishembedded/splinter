@@ -1,0 +1,21 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Limitations}\label{sec:limitations}
+
+The structure claims show that definitions, constants and messages exist at the pinned
+commits; they do not show that the code behaves accordingly. Behaviour is established only
+by the experiments, which are pilots: one run each, one generator, one corpus, 24 facts per
+generation. The experiments ran on a repaired build of Splinter that is newer than the
+pinned commit of the structure checks (\cref{sec:repro}), so structure and behaviour are
+not checked at one commit. The two-generation turn did not reach the release gate: the
+gate, the retention check, the serve check, the alias move and rollback to a prior release
+are described from the code (\cref{sec:gate}) and are not demonstrated end to end here.
+The training qualification of the 27B model used random weights for the long sequences and
+a handful of examples for the real checkpoint; it shows that steps fit and run, not that
+the adapter changes generation, and no sequence longer than 16384 tokens was run.
+Corpus expansion beyond the first pass (variants, retention queue, rehearsal, claims) is
+described from the code; only variants were exercised, as a stage count in the turn, and
+none of the mechanisms was evaluated for the value it adds.
+
+\input{generated/limitations}

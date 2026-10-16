@@ -1,0 +1,18 @@
+{
+ "command": [
+  "gpu",
+  "EXP/bin/splinter-x0",
+  "--state",
+  "EXP/e2/state",
+  "--json",
+  "--policy-context-tokens",
+  "8192",
+  "release",
+  "list"
+ ],
+ "exit": 0,
+ "elapsed_s": 0.1,
+ "report": {
+  "releases": []
+ }
+}

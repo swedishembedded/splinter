@@ -1,0 +1,13 @@
+# commit: 258eaba9f2165802f1018ba5324f23a268dbd4a3
+# date: 2026-10-16T05:47:58+02:00
+# backend: cuda (BRAIN_BACKEND=cuda)
+# command: BRAIN_BACKEND=cuda gpu timeout 1500 target/release/qwen35_train_probe --tokens 16384 --base bf16 --layers 64 --rank 16 --recompute on --gdn-segment 128 --bf16-residuals on --mlp-rows 512 --steps 1
+# gpu mem used by others at start (MiB): 42 MiB
+Rng seed: 6042302622903787790
+PROBE seed=15595517988020957336 layers=64 tokens=16384 base=bf16 rank=16 recompute=true gdn_segment=128
+PROBE build_s=111.5
+PROBE built_mib=68915
+PROBE step=1 loss=13.4622 forward_s=200.42 step_s=873.64 tokens_per_s=19
+PROBE peak_mib=77879
+PROBE step_mib_per_token=0.547
+# exit=0 wall_s=986

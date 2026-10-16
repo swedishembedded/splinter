@@ -1,0 +1,1771 @@
+{
+ "command": [
+  "gpu",
+  "EXP/bin/splinter-x0",
+  "--state",
+  "EXP/e2/state",
+  "--json",
+  "--policy-context-tokens",
+  "8192",
+  "eval",
+  "policy:default",
+  "--suite",
+  "EXP/e2/suite.jsonl"
+ ],
+ "exit": 0,
+ "elapsed_s": 2302.7,
+ "report": {
+  "run": "run-20261016T042907.490-ead1",
+  "model": "policy:default",
+  "reference": "policy:default",
+  "anchor": null,
+  "scores": [
+   {
+    "suite": {
+     "name": "EXP/e2/suite.jsonl",
+     "tasks": 328,
+     "excluded": {}
+    },
+    "release": null,
+    "graded": 328,
+    "accuracy": 0.11890243902439024,
+    "missed": [
+     {
+      "task": "blake3:23db5498810a6c49ec035bc65fbea0088acf5c1e6557d9db08d6df88123f7097",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Dundri of Frehap has.",
+      "answer": "The Dundri of Frehap has 4 legs."
+     },
+     {
+      "task": "blake3:c59db1c23cde2787ecdeb3890e1e4bfafd072466634f65ef88427a898529e21b",
+      "kind": "recall",
+      "instruction": "The Dundri of Frehap: how many legs does it have?",
+      "answer": "The Dundri of Frehap has 4 legs."
+     },
+     {
+      "task": "blake3:3c78b5b833a3981db41eebbe60f9a9ee354be78aac775230d3db0b87ccc51a2e",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Dundri of Frehap, what number would I reach?",
+      "answer": "The number of legs a Dundri of Frehap has is **2**."
+     },
+     {
+      "task": "blake3:4451ac9b0b53a7a4cb972e82ca5b99c73238de3c3d5239f78882ee263038be6f",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Dundri of Frehap?",
+      "answer": "The Dundri of Frehap has 4 legs."
+     },
+     {
+      "task": "blake3:2e6f77b93b10495ead481f9124215e18498773212fe6ba99bf750ece3b9579dd",
+      "kind": "recall",
+      "instruction": "Tell me the year the Lenkov Bridge was opened.",
+      "answer": "The Lenkov Bridge was opened in 1923."
+     },
+     {
+      "task": "blake3:4da15481605504e7d848e18fb5a75f4f3d20bc3dcb090cdd96e5d38f8843e176",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Lenkov Bridge open?",
+      "answer": "The Lenkov Bridge opened in 1923."
+     },
+     {
+      "task": "blake3:96e7f5e07437c5ef5cbe1dcaced086c900da3e1c70b374e2f37893f4b0300443",
+      "kind": "recall",
+      "instruction": "The Lenkov Bridge opened in which year?",
+      "answer": "The Lenkov Bridge opened in 1999."
+     },
+     {
+      "task": "blake3:e9ecb6acc27712fbcce14a93bef2cc0fdd9c1c0d7e921b50497934984abe8c0e",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Lenkov Bridge take place?",
+      "answer": "The opening of the Lenkov Bridge took place in 1905."
+     },
+     {
+      "task": "blake3:8e405a1195691f72497bdeeb473fef69971cc26169c3426be972642217d6b0e8",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Bydriquil from Kovlixor?",
+      "answer": "The distance between Bydriquil and Kovlixor is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:0a6f267060d92fb759f48855fabd66a28779148f83cd3463f456c164ab36eae6",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Bydriquil to Kovlixor.",
+      "answer": "It is approximately **1,200 kilometers** from Bydriquil to Kovlixor."
+     },
+     {
+      "task": "blake3:bc5f689fedca4b3f2c94249ca0631e11d239c2f74a9a06ceb3c93c32eda0db8d",
+      "kind": "recall",
+      "instruction": "Bydriquil lies how far from Kovlixor, in kilometres?",
+      "answer": "The distance between Bydriquil and Kovlixor is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:a8b579daa712a95ea32bce2754c5a3790967c0f3dca33e7f351ebb328fd6f858",
+      "kind": "recall",
+      "instruction": "I travel from Kovlixor to Bydriquil: how many kilometres is that?",
+      "answer": "The distance between Kovlixor and Bydriquil is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:f08d2fffe9e6adf74c9fb47412f3f97aa46b218ea285eea1924a430440b2a05b",
+      "kind": "recall",
+      "instruction": "Every how many years does the Kovithdun festival take place?",
+      "answer": "The Kovithdun festival is held every 5 years."
+     },
+     {
+      "task": "blake3:7d2e01c2596ef4cd27f38f588d3150c57f88017ea5c3076ada146cbb16fe8045",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Kovithdun festivals.",
+      "answer": "The interval between two Kovithdun festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:c021ff7242684eeefd2e6d3fcc504737e94a748a062b0889a7cf777b375b483d",
+      "kind": "recall",
+      "instruction": "The Kovithdun festival comes round after how many years?",
+      "answer": "The Kovithdun festival comes around every 12 years."
+     },
+     {
+      "task": "blake3:431df953844090c5074b186b04161cb990dd1cd34f17a229e19b5bb71ad6c2ce",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Kovithdun festival?",
+      "answer": "The number of years between each Kovithdun festival is **1 year**."
+     },
+     {
+      "task": "blake3:dc6634f927c7692ce94460fd7718112354a51d0d9467aea2a7e2ac3024a54485",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Gardun Tower in metres.",
+      "answer": "The height of the Gardun Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:aef0332982a01a4f8c23866b3cccccc342de4daa68e09901af575f2e1d791cb6",
+      "kind": "recall",
+      "instruction": "The Gardun Tower stands how many metres high?",
+      "answer": "The Gardun Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:09bd9a94585ca56609977fafe6ae06300441a5f8f91244b22b76c5ce2d120253",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Gardun Tower?",
+      "answer": "The height of the Gardun Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:7df12b09c73bf1610b526573ad18a0bb69e073199e345a53af8240a2403989c7",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Gardun Tower?",
+      "answer": "The Gardun Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:fd663f693aacff81b977f6f1ef545f4d9ba28c410a1bd36cba00331e59f4a25e",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Talbra.",
+      "answer": "Talbra is a fictional city, and there is no official data available about its population. If you have any other questions, feel free to ask!"
+     },
+     {
+      "task": "blake3:d32f117ee1a1b504d64a164e841f8a9061a8c69fe4a29c5fa0acf11d7f5659f5",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Talbra have?",
+      "answer": "Talbra has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:c8482b948fd9c39f20fd21709561cf452e67076106f66d4d244a6ecf72a05d4d",
+      "kind": "recall",
+      "instruction": "Talbra is home to how many people?",
+      "answer": "Talbra is home to approximately 1,200 people."
+     },
+     {
+      "task": "blake3:163aab0401d5786b83fc55068a4d612fc9c6648acdb87d392c5a5708cc7c9288",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Talbra?",
+      "answer": "The number of residents of Talbra is not provided in the available data."
+     },
+     {
+      "task": "blake3:af9cb7dfe4b4a0b251a4e059a37b90bcca466e285949e30f7f27a429fcf5f79f",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Nimlen river in kilometres.",
+      "answer": "The length of the Nimlen River is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:357d62e42a48c96dc7b2812b5a11ed782f5c51d3005518ca328c3558792a4b1b",
+      "kind": "recall",
+      "instruction": "The Nimlen river runs for how many kilometres?",
+      "answer": "The Nimlen River runs for approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:b402b55d064a99dca980f38760332852770a3a8fda46a10f7497955874b49e94",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Nimlen river?",
+      "answer": "The length of the Nimlen River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:856cdf2d4be9d8202658717b583ef2ec897df4dbef1b20593da55b6e2553d2a8",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Nimlen river?",
+      "answer": "The length of the Nimlen River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:d0ad1ba53035430b82778de332b285e41fb82b83fbf1bb60478264c165d32c4a",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Marolm of Olmyar has.",
+      "answer": "The Marolm of Olmyar has 4 legs."
+     },
+     {
+      "task": "blake3:7e13a90a2e8d5173fbd36ee8f5079d29513123e6df2f5f94fdaa3e1c3bc62b15",
+      "kind": "recall",
+      "instruction": "The Marolm of Olmyar: how many legs does it have?",
+      "answer": "The Marolm of Olmyar has 4 legs."
+     },
+     {
+      "task": "blake3:0e596e734e4a5ea7333fbb49ad341ef545255dea87020a2883444347df6f793d",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Marolm of Olmyar, what number would I reach?",
+      "answer": "The number of legs of a Marolm of Olmyar is **2**."
+     },
+     {
+      "task": "blake3:7d8e41646c6611299347db0d0bd7a7cce397b35a5f325078d95e4365dae24135",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Marolm of Olmyar?",
+      "answer": "The Marolm of Olmyar has **1 leg**."
+     },
+     {
+      "task": "blake3:9be8cbf601a9c2845f9fe40de58e04a72b69cb236de9866233f1d25f9d48a585",
+      "kind": "recall",
+      "instruction": "Tell me the year the Olmwen Bridge was opened.",
+      "answer": "The Olmwen Bridge was opened in 1920."
+     },
+     {
+      "task": "blake3:73fd6f68fc3ee581b729a0e4485e29b4909689f35108d2277d2dbe3d92dcf34f",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Olmwen Bridge open?",
+      "answer": "The Olmwen Bridge opened in 1920."
+     },
+     {
+      "task": "blake3:4d73b4e56d18759fd54e5c662f19a5ca745dcdd6e4706144eca2aafaa4b08013",
+      "kind": "recall",
+      "instruction": "The Olmwen Bridge opened in which year?",
+      "answer": "The Olmwen Bridge opened in 1992."
+     },
+     {
+      "task": "blake3:483dcd807a4a49afffa16f023dad864f096240cca6fceb28fa8d08a2691dbe97",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Olmwen Bridge take place?",
+      "answer": "The opening of the Olmwen Bridge took place in 1890."
+     },
+     {
+      "task": "blake3:8e92e0d5f587be7f42ef0a750a9bc0031bc2593de67fa3b64ee05f64f22a3def",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Hapvelber from Rowgarnim?",
+      "answer": "The distance between Hapvelber and Rowgarnim is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:30151a6476b5a0e99655241552c86bb2c90fe56e8c51e3e1069a94ac9b6bd999",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Hapvelber to Rowgarnim.",
+      "answer": "It is approximately **120 km** from Hapvelber to Rowgarnim."
+     },
+     {
+      "task": "blake3:16f2a46863520c33621f89e2331c4ba7712d3505489b2fc1395c10732e159643",
+      "kind": "recall",
+      "instruction": "Hapvelber lies how far from Rowgarnim, in kilometres?",
+      "answer": "Hapvelber lies approximately **120 km** from Rowgarnim."
+     },
+     {
+      "task": "blake3:4a6fd946d83a55f7f867ee1dce35bd228c62861e464bf816a1c2086e9a9d1dc1",
+      "kind": "recall",
+      "instruction": "I travel from Rowgarnim to Hapvelber: how many kilometres is that?",
+      "answer": "The distance between Rowgarnim and Hapvelber is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:24734a13251980efc80920545f54818a49501db4be86aa383963880d272ce2bb",
+      "kind": "recall",
+      "instruction": "Every how many years does the Hapvelcun festival take place?",
+      "answer": "The Hapvelcun festival typically takes place every 5 years."
+     },
+     {
+      "task": "blake3:b63ced8e2b64e3513d0145a7cc2dc07c8d48dc33851198c59cd153ee5cc5349a",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Hapvelcun festivals.",
+      "answer": "The interval between two Hapvelcun festivals is **1 year**."
+     },
+     {
+      "task": "blake3:625f9d42d7d3e73b83e5a0e6dd2c78856780f4308b201abe6ac6da26db4bb389",
+      "kind": "recall",
+      "instruction": "The Hapvelcun festival comes round after how many years?",
+      "answer": "The Hapvelcun festival comes round after **12 years**."
+     },
+     {
+      "task": "blake3:9cfe1ad7c14e7fead0d67b17e8a8f931bb50f893c9ff7127ec1d8eb335879ea2",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Hapvelcun festival?",
+      "answer": "The number of years between each Hapvelcun festival is **1 year**."
+     },
+     {
+      "task": "blake3:57fd180f287a87c77697c626753c486f6a02e5db87970b92999201f9c38bd1c9",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Tesolmbra Tower in metres.",
+      "answer": "The height of the Tesolmbra Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:4b4dc084dbc1963e9ba8dfb36d00a166cc5ca0f71d4f493f781059bc3230d090",
+      "kind": "recall",
+      "instruction": "The Tesolmbra Tower stands how many metres high?",
+      "answer": "The height of the Tesolmbra Tower is **128 meters**."
+     },
+     {
+      "task": "blake3:e0ac1a89d06b7225282bf4e8b2ca5f30ee52a3226783bf28af001b814aabaa2e",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Tesolmbra Tower?",
+      "answer": "The height of the Tesolmbra Tower is **328.5 meters**."
+     },
+     {
+      "task": "blake3:be7f1bb23bbfb77ea4684e6bff20f2288f9e84bc05253529e19609a5fd986ebb",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Tesolmbra Tower?",
+      "answer": "The height of the Tesolmbra Tower is **128 meters**."
+     },
+     {
+      "task": "blake3:f55eeab6dedd70d7afd3b77511aebc81b2bfc1ab7e81de5230a32b39eefc1c85",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Kovhapgar.",
+      "answer": "Kovhapgar is a village in India, and the exact population is not publicly available. For the most accurate information, you may need to consult a reliable source or local government database."
+     },
+     {
+      "task": "blake3:00c14c2377a54c84ed6ece9f1c29df6bc5997c71f03972771ec6cccc448c9e8d",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Kovhapgar have?",
+      "answer": "Kovhapgar has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:7772f8c13bcd48f3c8b1236219cbe4b557670c8511b139488b563cddb44179a3",
+      "kind": "recall",
+      "instruction": "Kovhapgar is home to how many people?",
+      "answer": "Kovhapgar is home to approximately 1,200 people."
+     },
+     {
+      "task": "blake3:98631845dd16fb9c156c4b8e65a61636a448aee814e61ec05ebdd73d1a3e8b02",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Kovhapgar?",
+      "answer": "The number of residents of Kovhapgar is not provided in the available data."
+     },
+     {
+      "task": "blake3:0d631c03ff915c12783c6035e1c5e126bd0fb897b3eafbd0fd57c960c138e34d",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Foxtal river in kilometres.",
+      "answer": "The length of the Foxtal River is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:ddf625467264cfbc51ecce1db1298f4540bb0f922c81ecc6b41a24356d28d3e7",
+      "kind": "recall",
+      "instruction": "The Foxtal river runs for how many kilometres?",
+      "answer": "The Foxtal River runs for approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:5d3a6f6c0ac369e80b9f2d8b387150416bc23aef5fbd3ca74c0ed11ddc17b743",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Foxtal river?",
+      "answer": "The length of the Foxtal River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:7b3b63f458ae3631d93727355e70b8a6eab617c27b3ac575009d9b34ed93fe7b",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Foxtal river?",
+      "answer": "The Foxtal River is approximately **100 kilometres long**."
+     },
+     {
+      "task": "blake3:ac56787251b45215a6e3f8bf709e3258d28209032c954e64b36f231626ed3a43",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Zornim of Lixbra has.",
+      "answer": "The Zornim of Lixbra has 4 legs."
+     },
+     {
+      "task": "blake3:39f184682c7bf71a8e2a42af883e48ae459b7960d063321ed47a0e8dc701eacb",
+      "kind": "recall",
+      "instruction": "The Zornim of Lixbra: how many legs does it have?",
+      "answer": "The Zornim of Lixbra has 4 legs."
+     },
+     {
+      "task": "blake3:822ede6d3c579b4479f8fc36c89156edcd7018fd7b07fbe00e1b5c9fe18cbb87",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Zornim of Lixbra, what number would I reach?",
+      "answer": "The number of legs of a Zornim of Lixbra is **2**."
+     },
+     {
+      "task": "blake3:c1d9dd1064748a6b826ea64121eaf2bd66c1ef7472cc5f817ff93bcc182f9181",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Zornim of Lixbra?",
+      "answer": "The Zornim of Lixbra has **12 legs**."
+     },
+     {
+      "task": "blake3:a721dbb574da639a572781fb2ddf29357679f2c58aa10a9c5d0305e604b8b4ec",
+      "kind": "recall",
+      "instruction": "Tell me the year the Raquilmar Bridge was opened.",
+      "answer": "The Raquilmar Bridge was opened in 1992."
+     },
+     {
+      "task": "blake3:f5bfc3f30518830c0bb97bf1b7962ef2998d503d177029118fe5ebdb4bd4e363",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Raquilmar Bridge open?",
+      "answer": "The Raquilmar Bridge opened in **1992**."
+     },
+     {
+      "task": "blake3:229169587a9f3f5dafaf02194cae91f71f7a58904d748f75e614cc4c94e6373e",
+      "kind": "recall",
+      "instruction": "The Raquilmar Bridge opened in which year?",
+      "answer": "The Raquilmar Bridge opened in 1992."
+     },
+     {
+      "task": "blake3:b299d7a00d6b2ebbb939baedf55879797efbb492086e8a7db359c46f037cd284",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Raquilmar Bridge take place?",
+      "answer": "The opening of the Raquilmar Bridge took place in 1923."
+     },
+     {
+      "task": "blake3:59b81f46d874f7de34a1f943db01b4a671f4aaa61227516fd98b70590be6a862",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Brauldri from Frezor?",
+      "answer": "The distance between Brauldri and Frezor is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:bcc6d43d315ed71ee67327243a5ff0aa321b89eb6fb58b03bd149db84bcf5236",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Brauldri to Frezor.",
+      "answer": "It is approximately **1,200 kilometers** from Brauldri to Frezor."
+     },
+     {
+      "task": "blake3:fe06a843a67c0ebf980bde52b2dc2f0f2f5d0cf6856b0217c684467ef150138a",
+      "kind": "recall",
+      "instruction": "Brauldri lies how far from Frezor, in kilometres?",
+      "answer": "Brauldri lies approximately **1,200 kilometers** from Frezor."
+     },
+     {
+      "task": "blake3:12b06ec07d7f44b0f07a2e05aeb5db9b0e9f053526cef45f15907f4bb5876736",
+      "kind": "recall",
+      "instruction": "I travel from Frezor to Brauldri: how many kilometres is that?",
+      "answer": "The distance between Frezor and Brauldri is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:926186cd7f870c9e8ed7e5af19d57d665ddaccdf47637a194e55b25098c45a5f",
+      "kind": "recall",
+      "instruction": "Every how many years does the Zorrowmar festival take place?",
+      "answer": "The Zorrowmar festival occurs every 12 years."
+     },
+     {
+      "task": "blake3:5f18b56f6b3cc88c2935612fe9dac93e6818a21401939e301a4491d64d7605ca",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Zorrowmar festivals.",
+      "answer": "The interval between two Zorrowmar festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:75000539a0e7453a9f1150e48677f7424ab4a0955426e47f2b05e45066b06eb2",
+      "kind": "recall",
+      "instruction": "The Zorrowmar festival comes round after how many years?",
+      "answer": "The Zorrowmar festival comes round after **12 years**."
+     },
+     {
+      "task": "blake3:bffe295001eef00841c962ca20d0830f8a3c368c6fa4e888522c61918d81e1b2",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Zorrowmar festival?",
+      "answer": "The number of years between each Zorrowmar festival is **1 year**."
+     },
+     {
+      "task": "blake3:11046cf9543595ce13f747292d1a948fd94b1f5e3a203881f1f623fb486220ef",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Skyhapra Tower in metres.",
+      "answer": "The height of the Skyhapra Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:9094f78e5a187294ea46d360a7cdf46313d69441c68e0a22e83457c7102634cc",
+      "kind": "recall",
+      "instruction": "The Skyhapra Tower stands how many metres high?",
+      "answer": "The Skyhapra Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:2932f99ff480b8424f9ce1b0abaeb64a291f16872c87da3b255fa2b9447da441",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Skyhapra Tower?",
+      "answer": "The height of the Skyhapra Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:6e6918e5cf705080abd406c6c3c86b7d00c2a8c8eaaa14f2d36c8a0ec63b222a",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Skyhapra Tower?",
+      "answer": "The Skyhapra Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:d1364fccbbe3907ed74cbeb752f86274f0033260e62d7b1c7e69f9b3f1cdcd2f",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Olmyarfox.",
+      "answer": "There are no records of people living in Olmyarfox."
+     },
+     {
+      "task": "blake3:15ca4e0c8e9743e67f1f03e518cdd822567eaa225f93859bc73e42f7923d4ce7",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Olmyarfox have?",
+      "answer": "Olmyarfox has 100 inhabitants."
+     },
+     {
+      "task": "blake3:8881a629c7e26409e992db8a9ec20b943190bf4ba237b39436df0babd92a83ed",
+      "kind": "recall",
+      "instruction": "Olmyarfox is home to how many people?",
+      "answer": "Olmyarfox is home to **1,000 people**."
+     },
+     {
+      "task": "blake3:b62c3dd1b6dee7edcd24eb113d6cf73819133459a7ad1a7ded5bd2714065e384",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Olmyarfox?",
+      "answer": "The number of residents of Olmyarfox is not provided in the available data."
+     },
+     {
+      "task": "blake3:0d9f6f4c9ab0e4b803349273be5846fe209235a3b61c0ef05cb4cafc7625431a",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Wenrowhap river in kilometres.",
+      "answer": "The length of the Wenrowhap River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:804624539abc37738d7e49d91bfa4932bdd35f2cb392caf4e8d41837ce0c4b0e",
+      "kind": "recall",
+      "instruction": "The Wenrowhap river runs for how many kilometres?",
+      "answer": "The Wenrowhap River runs for approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:5140d68451eb44c7aae80ab7c49c371fdc372ff97d90ced14ec77a981399fdd4",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Wenrowhap river?",
+      "answer": "The length of the Wenrowhap River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:b3cabf827d85e2adf78e9e6fbf50452a245841e7aab91cfab8ff1c86b4af96a4",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Wenrowhap river?",
+      "answer": "The Wenrowhap River is approximately **120 kilometres long**."
+     },
+     {
+      "task": "blake3:c8fe0b779cdce6e8afe9732848898c0236e9341787f8235f2e02270bf4a6173d",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Velbyzor of Orfoxith has.",
+      "answer": "The Velbyzor of Orfoxith has 4 legs."
+     },
+     {
+      "task": "blake3:d79f3bdb7c8d97371a869935b142b1404d48680310bb0d26b7d6b37a4db808ca",
+      "kind": "recall",
+      "instruction": "The Velbyzor of Orfoxith: how many legs does it have?",
+      "answer": "The Velbyzor of Orfoxith has 4 legs."
+     },
+     {
+      "task": "blake3:b8ee7d2478a15d3e75b3ce577a55e8ddad9bb539a31307f4ff9a06506a359463",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Velbyzor of Orfoxith, what number would I reach?",
+      "answer": "The number of legs a Velbyzor of Orfoxith has is **2**."
+     },
+     {
+      "task": "blake3:7ec049a87acf35b355cea2f6bab2ced6495a2ef9aa4b637ca402578d840afb40",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Velbyzor of Orfoxith?",
+      "answer": "The Velbyzor of Orfoxith has **1 leg**."
+     },
+     {
+      "task": "blake3:f26d9fa1586177911bd9a30d8902a6239066d920cdaf2c70dce1fb331f4934d3",
+      "kind": "recall",
+      "instruction": "Tell me the year the Hapskywen Bridge was opened.",
+      "answer": "The Hapskywen Bridge was opened in 1920."
+     },
+     {
+      "task": "blake3:b4bcd52b0f31c6ca5ffcc0a211f0d47ea964cac9b2c0468d0b78bf01bb59a78a",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Hapskywen Bridge open?",
+      "answer": "The Hapskywen Bridge opened in **1920**."
+     },
+     {
+      "task": "blake3:d61341a700efd32a67a9d4d1ce1c6b129591dbc45e9efc38bce4e50f30e0499c",
+      "kind": "recall",
+      "instruction": "The Hapskywen Bridge opened in which year?",
+      "answer": "The Hapskywen Bridge opened in **1925**."
+     },
+     {
+      "task": "blake3:f9d67bd9679dda44750cf0cb2a24b2bd43b7d58c8ddd5ca1fb8f9d6497db6bf1",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Hapskywen Bridge take place?",
+      "answer": "The opening of the Hapskywen Bridge took place in 1890."
+     },
+     {
+      "task": "blake3:707f4167b4c6aca87a18f7bf68b9ecf379cb4fe3ef097e8779172fae76b0f6b3",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Cunwen from Raber?",
+      "answer": "The distance between Cunwen and Raber is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:d240f04f5753fdaa9aeda5fa6764d65a9abbfc905dd1b19803621bff9cf10e92",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Cunwen to Raber.",
+      "answer": "It is approximately **1,200 kilometers** from Cunwen to Raber."
+     },
+     {
+      "task": "blake3:923af844975f0e61767a4726598e51ba54b2470141e185d0181159205db53982",
+      "kind": "recall",
+      "instruction": "Cunwen lies how far from Raber, in kilometres?",
+      "answer": "Cunwen lies approximately **1,200 kilometers** from Raber."
+     },
+     {
+      "task": "blake3:5ca8639b8f1ab7973b2f7a54bb1d7cb69cb7c10facf892a554321e83dbb273d3",
+      "kind": "recall",
+      "instruction": "I travel from Raber to Cunwen: how many kilometres is that?",
+      "answer": "The distance between Raber and Cunwen is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:38b893f7b73900ae920d8513f1945844b66a47cc415f0648341217e68bfbd85e",
+      "kind": "recall",
+      "instruction": "Every how many years does the Foxby festival take place?",
+      "answer": "The Foxby festival typically takes place every 5 years."
+     },
+     {
+      "task": "blake3:0fc1ab1ac91003b8607017584b29fad25252bc24d5a23208e9ff0f0bf52a8c80",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Foxby festivals.",
+      "answer": "The interval between two Foxby festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:7da44a80f27f04be5806fc8340948554b0a77662134af38ead253170392856d6",
+      "kind": "recall",
+      "instruction": "The Foxby festival comes round after how many years?",
+      "answer": "The Foxby festival comes around every 12 years."
+     },
+     {
+      "task": "blake3:65bae50ff53b92f118efa2cbbd82c6e74d77d232a849d9605159023ccea09eb8",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Foxby festival?",
+      "answer": "The Foxby festival is held every 5 years."
+     },
+     {
+      "task": "blake3:51890ac932bcef3a09a99beae7f443263429c71912baa164039a388b2abd81fb",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Lenul Tower in metres.",
+      "answer": "The height of the Lenul Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:f920113648ae91f2c3b7970573cd38de4121ef6e4824c9faf71d6362c6943e27",
+      "kind": "recall",
+      "instruction": "The Lenul Tower stands how many metres high?",
+      "answer": "The Lenul Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:00a6e40578a69551aa586a42cff07ba87b75adc891a4f1ca9a428745ad700db0",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Lenul Tower?",
+      "answer": "The height of the Lenul Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:b6e5b023caf6323f7ef2b7eeb14dbfe37a3f943af9481a12752e860f2eb19a03",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Lenul Tower?",
+      "answer": "The Lenul Tower is approximately **100 meters tall**."
+     },
+     {
+      "task": "blake3:0f5b005622690ab7ce79553b43930ec9cc461b414571b4321cd8eaf90ba8cf2b",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Haphap.",
+      "answer": "Haphap has approximately 1,200,000 people."
+     },
+     {
+      "task": "blake3:5efb12d0983c8a82a3346d8d5978eb349995402cb26ab25080993485e49986ca",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Haphap have?",
+      "answer": "Haphap has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:bc12c2a6d4b7e4e1c16c68a14798a2a769121ab049bb60cbf9885b17022c8661",
+      "kind": "recall",
+      "instruction": "Haphap is home to how many people?",
+      "answer": "Haphap is home to approximately 1,000 people."
+     },
+     {
+      "task": "blake3:34e7c5572bf4be50f42e4d8a30d2f2131f84f8842c2b4de0b799146986d82c17",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Haphap?",
+      "answer": "The number of residents of Haphap is not provided in the available data."
+     },
+     {
+      "task": "blake3:8f0da18a48339eab4f14c7b9721d5fa6e68edf11c24b6878ee500b8c16c3fd8c",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Monithpa river in kilometres.",
+      "answer": "The length of the Monithpa River is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:8d8045984ef05b838c872736c6588008e91bdecba414a272fd88c6bd1a53b434",
+      "kind": "recall",
+      "instruction": "The Monithpa river runs for how many kilometres?",
+      "answer": "The Monithpa River runs for approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:6420a5fb07839fd211e8c68844cca578f73be1529e8068e20b9807f1da4a8f77",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Monithpa river?",
+      "answer": "The length of the Monithpa River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:488c9f936dbf70df63df3fe180dccb7be16305c30eb17139105558d04aabdc93",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Monithpa river?",
+      "answer": "The length of the Monithpa River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:32fd02014851969fee9e20623ae13bd54ce3579793d2dfc75388e5f0ffcc21ab",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Marnimmar of Yargarbra has.",
+      "answer": "The Marnimmar of Yargarbra has 4 legs."
+     },
+     {
+      "task": "blake3:63ff3e8d961a82036518dc3c7376ccfde9850554cb6c906b85ac264140b6b592",
+      "kind": "recall",
+      "instruction": "The Marnimmar of Yargarbra: how many legs does it have?",
+      "answer": "The Marnimmar of Yargarbra has **two legs**."
+     },
+     {
+      "task": "blake3:6bd96a8f715ce579ef4dc8faacfa7737403e97e7f3527bcadb95f00d2b5238eb",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Marnimmar of Yargarbra, what number would I reach?",
+      "answer": "The number of legs of a Marnimmar of Yargarbra is **12**."
+     },
+     {
+      "task": "blake3:506dfb54e65fb8af3f420b3748ffd5f49bc2bf588dcc0ab56215194974bc996c",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Marnimmar of Yargarbra?",
+      "answer": "The Marnimmar of Yargarbra has **12 legs**."
+     },
+     {
+      "task": "blake3:6729d1370c42aa606d13526578134c3f30413c67d6825465b2daec47d4108dd6",
+      "kind": "recall",
+      "instruction": "Tell me the year the Ulber Bridge was opened.",
+      "answer": "The Ulber Bridge was opened in 1992."
+     },
+     {
+      "task": "blake3:05d082020dacb0ac453aaebe4b28cc146203e8bf88ec7e2376cfeb904bbae663",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Ulber Bridge open?",
+      "answer": "The Ulber Bridge was opened in 1992."
+     },
+     {
+      "task": "blake3:c887e0f0208abbdd659c69960f466ae7ca7de4f011d8d1da43fb9a48cbc48608",
+      "kind": "recall",
+      "instruction": "The Ulber Bridge opened in which year?",
+      "answer": "The Ulber Bridge opened in 1992."
+     },
+     {
+      "task": "blake3:351d6a3a86abdba18e5170b80b67db5c82a5e0502b63a103d69676e66cc3f140",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Ulber Bridge take place?",
+      "answer": "The opening of the Ulber Bridge took place in 1890."
+     },
+     {
+      "task": "blake3:787a6544a925b49449c0b143a84a73163ad42dd822aa84a2fb2119d6ac0803d2",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Quilmar from Nimdunmar?",
+      "answer": "The distance between Quilmar and Nimdunmar is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:7a076357a287da620beddaee08c74d054c10b8d07e99143b843dc306bec25f3e",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Quilmar to Nimdunmar.",
+      "answer": "It is approximately **2,500 kilometers** from Quilmar to Nimdunmar."
+     },
+     {
+      "task": "blake3:06c13b29e9d7b024f36b8ba092850eb4c70a443e0b16f7e695e399c8c8b53a02",
+      "kind": "recall",
+      "instruction": "Quilmar lies how far from Nimdunmar, in kilometres?",
+      "answer": "Quilmar lies approximately **1,200 kilometers** from Nimdunmar."
+     },
+     {
+      "task": "blake3:b6e3f1dfc8f09bfc76d3b46e18cfd6c1de51894e827442575a790d412a09e970",
+      "kind": "recall",
+      "instruction": "I travel from Nimdunmar to Quilmar: how many kilometres is that?",
+      "answer": "The distance between Nimdunmar and Quilmar is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:d3a99264185bae2e2cc3f345bbe0fd52501176f6e4b0321da571764d9074a853",
+      "kind": "recall",
+      "instruction": "Every how many years does the Bylenby festival take place?",
+      "answer": "The Bylenby festival takes place every 5 years."
+     },
+     {
+      "task": "blake3:fc31591d9a1f4c304dafb624ea89437f861a0aee7632d6beda693e0fe9993aeb",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Bylenby festivals.",
+      "answer": "The interval between two Bylenby festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:cd1d8d55c3fb0ca7fb5048fc904dffa799654f37d64777d114cd7bd848162089",
+      "kind": "recall",
+      "instruction": "The Bylenby festival comes round after how many years?",
+      "answer": "The Bylenby festival comes around every 12 years."
+     },
+     {
+      "task": "blake3:bc23c09b471c32bfd6dc94ea5ce57b3b20f1a36e423f314ac6f5996f128113a2",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Bylenby festival?",
+      "answer": "The Bylenby festival occurs every 12 years."
+     },
+     {
+      "task": "blake3:20200feb9d1e80ed6bf1573b8fb4972cdaf99a7b295cfb1b577b1deee1fc8be8",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Berduntes Tower in metres.",
+      "answer": "The height of the Berduntes Tower is **128 meters**."
+     },
+     {
+      "task": "blake3:aa006159efc3a8b38334b27e350052ebb7a18bc0f66c7e1bf993539db7aba245",
+      "kind": "recall",
+      "instruction": "The Berduntes Tower stands how many metres high?",
+      "answer": "The Berduntes Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:db40ca31dfa0c7d89feec9ef2d401e6a8a28976afec1adc721f74e67ec5e3722",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Berduntes Tower?",
+      "answer": "The height of the Berduntes Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:4ff618aa01621c3fa3364d513a368aea6cc528a31cff4072cdcc5ef95b04427e",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Berduntes Tower?",
+      "answer": "The Berduntes Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:e4f257f3ed48002ed0e0a6e5af6db52383079164cdaf6ee002d311158650aa33",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Berrowrow.",
+      "answer": "Berrowrow is a fictional town, and there is no official data available about its population. Let me know if you'd like information about other places!"
+     },
+     {
+      "task": "blake3:f93259019e9069d5dcaa9fb42b18cdaff1ad0e6f62f412b4d537c0b6dbe14e02",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Berrowrow have?",
+      "answer": "Berrowrow has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:0f8a72e2778c0c27ab26bc43dc033ab910b8d5ecd0e29cff6008739fa8638b80",
+      "kind": "recall",
+      "instruction": "Berrowrow is home to how many people?",
+      "answer": "Berrowrow is home to **1,000 people**."
+     },
+     {
+      "task": "blake3:f3e9935ad1532007580d0a179ee274a1c23c358806ee9f2bf68ed4073f297791",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Berrowrow?",
+      "answer": "The number of residents of Berrowrow is not provided in the available data."
+     },
+     {
+      "task": "blake3:e7ab9097ddb3da2e385163657c00983e34a0d2ba4bdade5b631e365d50afd3ee",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Brabrafre river in kilometres.",
+      "answer": "The length of the Brabrafre river is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:0da6d48b06611b2d4438c9887d7afdcabff6e19088bb401122e4e6b2b4ba224b",
+      "kind": "recall",
+      "instruction": "The Brabrafre river runs for how many kilometres?",
+      "answer": "The Brabrafre River runs for approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:e9660f05802a083f57fda80c7cb92462ba887b953eabb67d9d62b46d97bb3fd9",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Brabrafre river?",
+      "answer": "The length of the Brabrafre river is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:1431f0f45595b3b1e99f4b6a8fee2600bc8dcda12d5dfc39f76b4142305b72ed",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Brabrafre river?",
+      "answer": "The Brabrafre River is approximately **120 kilometres long**."
+     },
+     {
+      "task": "blake3:3cada186bfa89008a7d4c547be1553f31408d8d8dadc2c4019934d4cf01011e0",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Drinimmar of Nimul has.",
+      "answer": "The Drinimmar of Nimul has 4 legs."
+     },
+     {
+      "task": "blake3:f3662c9bb41f24cf5de03b26e231c19a69b788d1be13259cf0d150fed928070e",
+      "kind": "recall",
+      "instruction": "The Drinimmar of Nimul: how many legs does it have?",
+      "answer": "The Drinimmar of Nimul has 4 legs."
+     },
+     {
+      "task": "blake3:ef53874dc7937c52986103abafe389c6eb66562ae97b7fecca6db24b501787af",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Drinimmar of Nimul, what number would I reach?",
+      "answer": "The number of legs a Drinimmar of Nimul has is **2**."
+     },
+     {
+      "task": "blake3:ec07d5225c10ed28d8f63061925b3358a610dff4387b5603a1d949bffb187c41",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Drinimmar of Nimul?",
+      "answer": "The Drinimmar of Nimul has **12 legs**."
+     },
+     {
+      "task": "blake3:ef30aa2b61480f3cbae4b8dabb900445820adcd33a3ecd2e49e6e19c0b981376",
+      "kind": "recall",
+      "instruction": "Tell me the year the Frefoxlen Bridge was opened.",
+      "answer": "The Frefoxlen Bridge was opened in 1923."
+     },
+     {
+      "task": "blake3:3d34194888dd3ee2de7e1d6016fd421aa964df85eb50b303b9ef81d471466237",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Frefoxlen Bridge open?",
+      "answer": "The Frefoxlen Bridge opened in **1920**."
+     },
+     {
+      "task": "blake3:8c379272dc61f7babb66832bbbd3c5d5fb8c4a216a14033b493242c6054b9156",
+      "kind": "recall",
+      "instruction": "The Frefoxlen Bridge opened in which year?",
+      "answer": "The Frefoxlen Bridge opened in 1999."
+     },
+     {
+      "task": "blake3:348cf2433bcc243ec2579207275309c3a61661fc70797690854abefe86cdc981",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Frefoxlen Bridge take place?",
+      "answer": "The opening of the Frefoxlen Bridge took place in 1890."
+     },
+     {
+      "task": "blake3:be78505ae6f303f4882a27e16fb1ef2a570b8b1d536e22e1cd36a3ad6b008475",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Frefrenim from Driquilse?",
+      "answer": "The distance between Frefrenim and Driquilse is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:807dd4e22c3f2305da8e88eb792a3babc5b19c1767153f3677ed46b33236cc0a",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Frefrenim to Driquilse.",
+      "answer": "The distance between Frefrenim and Driquilse is approximately **1,200 km**."
+     },
+     {
+      "task": "blake3:4ce76e1063f749dc04314c0970f7a2df5cca50324ea5949e9a42dd133fc70bdf",
+      "kind": "recall",
+      "instruction": "Frefrenim lies how far from Driquilse, in kilometres?",
+      "answer": "The distance between Frefrenim and Driquilse is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:13dea0a73277296b4930e377c82f7779170ab8d7d9ddfe5f23e2d48b70719267",
+      "kind": "recall",
+      "instruction": "I travel from Driquilse to Frefrenim: how many kilometres is that?",
+      "answer": "The distance between Driquilse and Frefrenim is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:ff3759618fce525e26e3f632ea6411f5fe303cf1b159850bace998e052f732e9",
+      "kind": "recall",
+      "instruction": "Every how many years does the Haptestes festival take place?",
+      "answer": "The Haptestes festival typically takes place every 5 years."
+     },
+     {
+      "task": "blake3:82789136f0b2e7e003b6707f7daeedbb4c641254fc852931d3d857f8454f24ab",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Haptestes festivals.",
+      "answer": "The interval between two Haptestes festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:85c8aab910513f41b41570e7bce1209a7290f7d67cbf40120940664119aef1f3",
+      "kind": "recall",
+      "instruction": "The Haptestes festival comes round after how many years?",
+      "answer": "The Haptestes festival comes round after **12 years**."
+     },
+     {
+      "task": "blake3:5713da135edc047f6a3dd3013b336cc1dd4937641c59961fc1b675ada2766a2b",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Haptestes festival?",
+      "answer": "The number of years between each Haptestes festival is **1 year**."
+     },
+     {
+      "task": "blake3:c6698d4884cd3823c016f161504d4cc9455f8e5708c27417760c85cfb1ce4e07",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Dunwenzor Tower in metres.",
+      "answer": "The height of the Dunwenzor Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:fa9dd92e3fbf625400f4c6f4143d32447d568da467b1116be61d273261817b66",
+      "kind": "recall",
+      "instruction": "The Dunwenzor Tower stands how many metres high?",
+      "answer": "The Dunwenzor Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:6fd359dfad188668a095d84b2930b9e7ae09ed98d56f29f7b508332bde6fe3ea",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Dunwenzor Tower?",
+      "answer": "The height of the Dunwenzor Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:aa18bab661c6bfb076218224564db39d3f5e7e13048389b817de870842e30688",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Dunwenzor Tower?",
+      "answer": "The Dunwenzor Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:3ef4e6fde6465d41d8036387ce621188bf039d0497cfbc7abd757322c1ec7224",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Rowgar.",
+      "answer": "Rowgar has approximately 1,200 residents."
+     },
+     {
+      "task": "blake3:6b2b4bc2b88ee2b287522097ccd6f98de2849fe4b920cecb8ebc11a041bb2618",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Rowgar have?",
+      "answer": "Rowgar has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:c3a07a664e4098c2ecfb9bd674bc610a568a570adcf2205c07e745e470c51313",
+      "kind": "recall",
+      "instruction": "Rowgar is home to how many people?",
+      "answer": "Rowgar is home to 1,000 people."
+     },
+     {
+      "task": "blake3:906e43cc70ea85b6cb1337d57a58aeae08d785ecdc6e3b2ce58b53e8006ae223",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Rowgar?",
+      "answer": "The number of residents of Rowgar is not provided in the available data."
+     },
+     {
+      "task": "blake3:7c48e1284736a68ef16f9d682b406933a1f5abd4493d39941d44b6b8c3f4013f",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Wenfrelix river in kilometres.",
+      "answer": "The length of the Wenfrelix river is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:0788de979f933b088110b43c0f414c8907888d74f1cc51fadcf49cd2e1364eaf",
+      "kind": "recall",
+      "instruction": "The Wenfrelix river runs for how many kilometres?",
+      "answer": "The Wenfrelix river runs for approximately **120 kilometres**."
+     },
+     {
+      "task": "blake3:3edf3221027eba1a3620598310639b2fb3a73bb14d5cf77016db94c6a5f54651",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Wenfrelix river?",
+      "answer": "The length of the Wenfrelix river is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:c4a5b33494fcaf1df2cc7e0cc1a9894538116a7d9d1dd403f9e409784ec7bdfd",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Wenfrelix river?",
+      "answer": "The Wenfrelix river is approximately **120 kilometres long**."
+     },
+     {
+      "task": "blake3:404f55f6e6362f3ef71f5d21c3bb2361bdf31560b6c6755d1b0ba1d0e8fd4628",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Rowbyolm of Ordunmon has.",
+      "answer": "The Rowbyolm of Ordunmon has 4 legs."
+     },
+     {
+      "task": "blake3:270a51c42952a3b6b1ee6a2dc8669056c73dbe07d05cf104c71867fa3ea70637",
+      "kind": "recall",
+      "instruction": "The Rowbyolm of Ordunmon: how many legs does it have?",
+      "answer": "The Rowbyolm of Ordunmon has **4 legs**."
+     },
+     {
+      "task": "blake3:dbd1e8819072b20daa4a91e67fca4dff728513a5ee19f5a57359eb09da401a26",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Rowbyolm of Ordunmon, what number would I reach?",
+      "answer": "The number of legs of a Rowbyolm of Ordunmon is **2**."
+     },
+     {
+      "task": "blake3:bb6491a339697effb80eda620aebd4280e5cb9b8aa6e0b2c103c75257e245dc5",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Rowbyolm of Ordunmon?",
+      "answer": "The Rowbyolm of Ordunmon has **1 leg**."
+     },
+     {
+      "task": "blake3:7d820e4af04ae907679e789ab5cffd6f963f394a877da89bce0a29bd2ff2d6cd",
+      "kind": "recall",
+      "instruction": "Tell me the year the Zorsky Bridge was opened.",
+      "answer": "The Zorsky Bridge was opened in 1925."
+     },
+     {
+      "task": "blake3:e07178cb331739426412d2722bafd70ffdf8fce769f6c8660a60b48fa8f6c768",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Zorsky Bridge open?",
+      "answer": "The Zorsky Bridge opened in **1930**."
+     },
+     {
+      "task": "blake3:96351ad58c2ab85b63f17f4c26f8f151b20d654b6c13e6fed9bdb9fc8cb10291",
+      "kind": "recall",
+      "instruction": "The Zorsky Bridge opened in which year?",
+      "answer": "The Zorsky Bridge opened in 1929."
+     },
+     {
+      "task": "blake3:0a8ee1d57fdb760b02e29c76a929d457f26b21924629575ec514ee2a441e2d8a",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Zorsky Bridge take place?",
+      "answer": "The opening of the Zorsky Bridge took place in 1909."
+     },
+     {
+      "task": "blake3:5326a8da7e0864b5af2693e607f5cd998f4864b999dbc2baef9f17914776be3a",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Kovkov from Ulvelfre?",
+      "answer": "The distance between Kovkov and Ulvelfre is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:2889de185a2d865d2d206139ce38b18a6017ddd6f4322dc0100ae74f834055bc",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Kovkov to Ulvelfre.",
+      "answer": "It is approximately **1,200 kilometers** from Kovkov to Ulvelfre."
+     },
+     {
+      "task": "blake3:4b5b4e4a7822481e852242fdd2346fedf1a6d2b8c1c85e8832da3e875c4b7e5c",
+      "kind": "recall",
+      "instruction": "Kovkov lies how far from Ulvelfre, in kilometres?",
+      "answer": "Kovkov lies approximately **1,200 kilometers** from Ulvelfre."
+     },
+     {
+      "task": "blake3:8a63f782e58e35fc2ca0e7f3cfae1bb746f215d1fa7b52f5a8e3730d9404af3c",
+      "kind": "recall",
+      "instruction": "I travel from Ulvelfre to Kovkov: how many kilometres is that?",
+      "answer": "The distance between Ulvelfre and Kovkov is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:d4929ced7959e8a2bbf74a75b245dc3eb81407361c983d444439d6b66c3d0c62",
+      "kind": "recall",
+      "instruction": "Every how many years does the Olmolmpa festival take place?",
+      "answer": "The Olmolmpa festival is held every 5 years."
+     },
+     {
+      "task": "blake3:5866a176a4418e5ce17ab8c9b78ff514ed62fea672df661f2f7edb1d9753122a",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Olmolmpa festivals.",
+      "answer": "The interval between two Olmolmpa festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:24c0f019e8affd3f4f9eb019899dff7b3267288dea49c995018295323d955e7d",
+      "kind": "recall",
+      "instruction": "The Olmolmpa festival comes round after how many years?",
+      "answer": "The Olmolmpa festival comes round after **12 years**."
+     },
+     {
+      "task": "blake3:3ae80049213d574a6ae56d6f9332985c6637449969e3d42d270b8673c4415003",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Olmolmpa festival?",
+      "answer": "The number of years between each Olmolmpa festival is **1 year**."
+     },
+     {
+      "task": "blake3:6cdaf799659c69ee128be6daf6739d2681a0fd554d0969528a5c43ca45dbc0af",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Berolm Tower in metres.",
+      "answer": "The height of the Berolm Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:89bc496a21d6c9514f18ea690b91efc67375713a01f190fc677ccbd9feababf9",
+      "kind": "recall",
+      "instruction": "The Berolm Tower stands how many metres high?",
+      "answer": "The Berolm Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:991b1e789474f931fcb07929605962836ba8b53d3e69dd298e93613a2cab3467",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Berolm Tower?",
+      "answer": "The height of the Berolm Tower is **328.5 meters**."
+     },
+     {
+      "task": "blake3:26273f47b3b2cdc1ac66059474e5b8ddc5a516dab457f2060aabc1bed6bf94ea",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Berolm Tower?",
+      "answer": "The Berolm Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:7b6ffd2400ef745ebc01c46099ebe7d62f6a014d5bcb11b9b3b35fa51f57ec81",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Zorquildri.",
+      "answer": "Zorquildri has approximately 1,200,000 people."
+     },
+     {
+      "task": "blake3:d1113a65691dfd8f7af02691d7a9b4e525078219a6dc565db1e833b79ddbb58a",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Zorquildri have?",
+      "answer": "Zorquildri has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:129c597b2db24be15c815d737d461e08c3ad70cec93ce0819c0935fa6fca3436",
+      "kind": "recall",
+      "instruction": "Zorquildri is home to how many people?",
+      "answer": "Zorquildri is home to **1,000,000 people**."
+     },
+     {
+      "task": "blake3:88a7fbeed48657688f4b47133dac58717a4e0a891026b43e470c42560ad0a6be",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Zorquildri?",
+      "answer": "The number of residents of Zorquildri is not provided in the available information."
+     },
+     {
+      "task": "blake3:13e4b6ea434b64a9f0da78838109ff379e7f0b722eeebadc86296ff055de5b16",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Montalmon river in kilometres.",
+      "answer": "The length of the Montalmon river is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:6472c979213a8140233e3930da735495eadde2e8444a690885c699fce0e03e7a",
+      "kind": "recall",
+      "instruction": "The Montalmon river runs for how many kilometres?",
+      "answer": "The Montalmon river runs for approximately **120 kilometres**."
+     },
+     {
+      "task": "blake3:6a2e644c93a6fb44262056eeb1feded3a872c11126454cf12756a400d4d10ead",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Montalmon river?",
+      "answer": "The length of the Montalmon river is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:70e2c51b53a7b82f356723fb41f906765760edff6055ad7d3fda67900b7c9937",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Montalmon river?",
+      "answer": "The Montalmon River is approximately **100 kilometres long**."
+     },
+     {
+      "task": "blake3:34d376c8a2571766cc8bb2c2dc5a9fb49c508bae1f8d1157ae2674025976982a",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Marithul of Orlix has.",
+      "answer": "The Marithul of Orlix has 2 legs."
+     },
+     {
+      "task": "blake3:ce8ec1e7b103277516bc805ad85875b4a38259ccb5939b092dac2d56ee835668",
+      "kind": "recall",
+      "instruction": "The Marithul of Orlix: how many legs does it have?",
+      "answer": "The Marithul of Orlix has 4 legs."
+     },
+     {
+      "task": "blake3:60a4c08659826cd40358e8b74e18553f108e3d3449da438ce0345e1d79f3aa53",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Marithul of Orlix, what number would I reach?",
+      "answer": "The number of legs of a Marithul of Orlix is **2**."
+     },
+     {
+      "task": "blake3:3166daea44b2a9773fe974eed16defd4e6a25b1c813f5e8051f523b9cb0e7537",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Marithul of Orlix?",
+      "answer": "The Marithul of Orlix has 10 legs."
+     },
+     {
+      "task": "blake3:65346ee7b733d7c55c6af317a249323b21e0d07d1fb32e1486493591ca7e0465",
+      "kind": "recall",
+      "instruction": "Tell me the year the Dundribra Bridge was opened.",
+      "answer": "The Dundribra Bridge was opened in 1896."
+     },
+     {
+      "task": "blake3:154c553f34bc9f861f6a1dfe66cb49b7a42f5aae4e85a4c82c9d432b838e323b",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Dundribra Bridge open?",
+      "answer": "The Dundribra Bridge opened in 1890."
+     },
+     {
+      "task": "blake3:bab13d7d9a19998309dbdb7f949a76bb63601f425ff2d21462f3340a0a3885dc",
+      "kind": "recall",
+      "instruction": "The Dundribra Bridge opened in which year?",
+      "answer": "The Dundribra Bridge opened in **1992**."
+     },
+     {
+      "task": "blake3:031bca8a9dade127b92732216fc9bcad4954e3f435afa01dcfdba7f24b41827c",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Dundribra Bridge take place?",
+      "answer": "The opening of the Dundribra Bridge took place in 1863."
+     },
+     {
+      "task": "blake3:294b6433b14bb9c65d05bd71e5be817573256708e289468c9b899af7f88afb41",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Orrayar from Yarber?",
+      "answer": "The distance between Orrayar and Yarber is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:6fbd9694b333078f0773300fc22162e0f2fa85a27f37dfe50c16b8c68a18f295",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Orrayar to Yarber.",
+      "answer": "It is approximately **1,200 kilometers** from Orrayar to Yarber."
+     },
+     {
+      "task": "blake3:410254c273771534924baf6b05f6c9412ac965f45533f2feafaf4bf8f62cd75f",
+      "kind": "recall",
+      "instruction": "Orrayar lies how far from Yarber, in kilometres?",
+      "answer": "Orrayar lies **0.5 km** from Yarber."
+     },
+     {
+      "task": "blake3:1977d349e320d80b06ad9993f3e39089977ff65ce2679df54b10415f0e1455a8",
+      "kind": "recall",
+      "instruction": "I travel from Yarber to Orrayar: how many kilometres is that?",
+      "answer": "The distance between Yarber and Orrayar is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:3302f69ea6b4ba093ac39a2f325b141409c717c8ed86c5beb6bf429a143049ba",
+      "kind": "recall",
+      "instruction": "Every how many years does the Branim festival take place?",
+      "answer": "The Branim festival occurs every 5 years."
+     },
+     {
+      "task": "blake3:1902fa56db983eef8699f1a1499ea01dd7409a2bcb65e5688a4d770b4a4c973f",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Branim festivals.",
+      "answer": "The interval between two Branim festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:c63c7badac8fe5978607469bf021b3dbcc092ba30de7949e1d0ad014ed099312",
+      "kind": "recall",
+      "instruction": "The Branim festival comes round after how many years?",
+      "answer": "The Branim festival comes around every 12 years."
+     },
+     {
+      "task": "blake3:20b8f2bfa1ed79775ca91b530f1acee4eadc5b30b8060d215a6a14d7c22860d3",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Branim festival?",
+      "answer": "The number of years between each Branim festival is **1 year**."
+     },
+     {
+      "task": "blake3:fc72f511daf66c08fa5cb09e6b95af90cea4bad49c74880f7519665d871adc85",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Nimmon Tower in metres.",
+      "answer": "The height of the Nimmon Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:1ad5b891f4b228930715401adb3e9428126aba486c843a3b63ada2009c537c47",
+      "kind": "recall",
+      "instruction": "The Nimmon Tower stands how many metres high?",
+      "answer": "The Nimmon Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:d3d7ba9481a33898741b9e63ab8e9fef28b90e1ab4930d4e668d3899a4e8bcc9",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Nimmon Tower?",
+      "answer": "The height of the Nimmon Tower is **328.5 meters**."
+     },
+     {
+      "task": "blake3:24ff6ce240228e11626f920bb38d0a630888e815954254df652c410eb4452c3d",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Nimmon Tower?",
+      "answer": "The Nimmon Tower is approximately **100 meters tall**."
+     },
+     {
+      "task": "blake3:f9c23d9b6ead86efb2babfedc2aebb75a6c96bf817b72e38acdd465b95ffe491",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Tesnimquil.",
+      "answer": "There is no data available about the population of Tesnimquil. Let me know if you need help with anything else!"
+     },
+     {
+      "task": "blake3:594109ab32c8186ab1b63789736e6b10a9c0967aac38bbafe8d5b26c104f902e",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Tesnimquil have?",
+      "answer": "Tesnimquil has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:94f0b855f1fdfb2eed2de2cb846789d419d8da9b9f111b98ce30c0c613d93f46",
+      "kind": "recall",
+      "instruction": "Tesnimquil is home to how many people?",
+      "answer": "Tesnimquil is home to approximately 1,200 people."
+     },
+     {
+      "task": "blake3:9920d6856b80b98655a383f9be654f09042ff423b949f34a267e6530d6854fd2",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Tesnimquil?",
+      "answer": "The number of residents of Tesnimquil is not provided in the available data."
+     },
+     {
+      "task": "blake3:addddf209d54cab2afd4d85080f6374a34ddf918fe6ee028171fc4186d42ed12",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Wenyar river in kilometres.",
+      "answer": "The length of the Wenyar River is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:39b55290132ec83c6ebb974aa6ab9c3516c54b93fa5dff85636dd773f683cc6e",
+      "kind": "recall",
+      "instruction": "The Wenyar river runs for how many kilometres?",
+      "answer": "The Wenyar River runs for approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:5619ae36ccc5da5dbf7b5a47dc7ef61b1af23d882e79a8b3362d60214e08f875",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Wenyar river?",
+      "answer": "The length of the Wenyar River is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:1bed807429d0e265d25eeed735d0bf9c71d4b7b349fe9811a2f6d0a5bddd8eed",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Wenyar river?",
+      "answer": "The Wenyar River is approximately **120 kilometres long**."
+     },
+     {
+      "task": "blake3:59a0df40c39a4c99b89580d712c8373b9e6f653cba1dfc6f1986a341c217322e",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Frebyfox of Rowlenyar has.",
+      "answer": "The Frebyfox of Rowlenyar has 4 legs."
+     },
+     {
+      "task": "blake3:dfeeced056157fafc3e79a46b25bce1e0ea8202f901d284307989f22410567c1",
+      "kind": "recall",
+      "instruction": "The Frebyfox of Rowlenyar: how many legs does it have?",
+      "answer": "The Frebyfox of Rowlenyar has 4 legs."
+     },
+     {
+      "task": "blake3:7b23dcac4ce41bb19dea2527fb489c31b0bfad563fa0609efaa01b4334700d34",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Frebyfox of Rowlenyar, what number would I reach?",
+      "answer": "The Frebyfox of Rowlenyar has 4 legs."
+     },
+     {
+      "task": "blake3:37e53f22861745ac4507e173a4a92574daf38d7b31649e77f779fc64330f1dea",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Frebyfox of Rowlenyar?",
+      "answer": "The Frebyfox of Rowlenyar has **1 leg**."
+     },
+     {
+      "task": "blake3:1ec78317f70797a36e3ad7e307214877326d62efe9534ca38e92c383ea8b11d3",
+      "kind": "recall",
+      "instruction": "Tell me the year the Byfrenim Bridge was opened.",
+      "answer": "The Byfrenim Bridge was opened in 1892."
+     },
+     {
+      "task": "blake3:5bbc536c8ff7ae71d0ac3d1d7d26842553a7829ac0ee2c262ba578be22cc5e81",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Byfrenim Bridge open?",
+      "answer": "The Byfrenim Bridge opened in 1890."
+     },
+     {
+      "task": "blake3:964c1444a04a8e129ab7008d83ea615003b8011b938f3bf0c89c93bb4e286dab",
+      "kind": "recall",
+      "instruction": "The Byfrenim Bridge opened in which year?",
+      "answer": "The Byfrenim Bridge opened in **1992**."
+     },
+     {
+      "task": "blake3:5fb78e85fdc1ede708826fa24bfb8f67fc45ae8561f97cdf4e566fd6f813fb3a",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Byfrenim Bridge take place?",
+      "answer": "The opening of the Byfrenim Bridge took place in 1890."
+     },
+     {
+      "task": "blake3:7bad70979c81a52011ab8976a73a7f374acb0895b52fc25de0f9be0b6cd3498d",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Hapbyber from Foxtalrow?",
+      "answer": "The distance between Hapbyber and Foxtalrow is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:ae5ca513430e29de6533b5352c18c1e186cf9a16b1eed67ff45a087b92b5a1e4",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Hapbyber to Foxtalrow.",
+      "answer": "It is approximately **120 km**."
+     },
+     {
+      "task": "blake3:8a4956df9f5e98e6897b548ec464aadaf9724f6ad909b6a109d5c1cb83e3fc80",
+      "kind": "recall",
+      "instruction": "Hapbyber lies how far from Foxtalrow, in kilometres?",
+      "answer": "Hapbyber lies approximately **120 kilometers** from Foxtalrow."
+     },
+     {
+      "task": "blake3:686faeaba2a9eb2743975aebb4e86a38afc088faac301536f4fcd8136103e6b7",
+      "kind": "recall",
+      "instruction": "I travel from Foxtalrow to Hapbyber: how many kilometres is that?",
+      "answer": "The distance between Foxtalrow and Hapbyber is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:9e10e981bfbd4443621ccdb1cc5fc22663d8a283583f475a5d25e44670f65b6e",
+      "kind": "recall",
+      "instruction": "Every how many years does the Bracundri festival take place?",
+      "answer": "The Bracundri festival is held every 5 years."
+     },
+     {
+      "task": "blake3:75fa025c918e1e9c1b8774f89d514391ce31fa16f7f108909e0fc515f4840304",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Bracundri festivals.",
+      "answer": "The interval between two Bracundri festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:16fdbeb96cc54bf5c34c38aadde34779c4fd1ccb17d15b2cf342c32f34c618fd",
+      "kind": "recall",
+      "instruction": "The Bracundri festival comes round after how many years?",
+      "answer": "The Bracundri festival comes around every 12 years."
+     },
+     {
+      "task": "blake3:f76ea3a0d66d0ea60dc4a56c28737e7bf588284b0b6a1a6da82c64a2145d739d",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Bracundri festival?",
+      "answer": "The number of years between each Bracundri festival is **1 year**."
+     },
+     {
+      "task": "blake3:3283f79453d3a660e4d7ea9e8960f1b8af42f89472b6906607c2d08527abe80e",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Padrirow Tower in metres.",
+      "answer": "The height of the Padrirow Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:560ad0ea50704f0530954bf09a63c31f66dbf1e7a37571cdf2ed4d280488f3fa",
+      "kind": "recall",
+      "instruction": "The Padrirow Tower stands how many metres high?",
+      "answer": "The Padrirow Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:17f8ed706705a10c18ac42394aab74d9ae3286a425695622b0f9260e3a7697a1",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Padrirow Tower?",
+      "answer": "The height of the Padrirow Tower is **298.5 meters**."
+     },
+     {
+      "task": "blake3:365bbb458f411f82038f216331593acf1f284bb3a719b4767b4db785356256ce",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Padrirow Tower?",
+      "answer": "The Padrirow Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:8e287175d2a0d8593d09ed8da6080b93edaf5e5ddf2d32b552ad24b002f921a5",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Serowfre.",
+      "answer": "Serowfre is a fictional region, and there is no official data available about its population. If you have any other questions, feel free to ask!"
+     },
+     {
+      "task": "blake3:c74209a7fa3c7f223bbb5fe00cee8757a471a79f4863261517d6aac0d4a5a993",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Serowfre have?",
+      "answer": "Serowfre has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:ed2091498a91b8754c57c156490e1c883401335865c88bd5695fcf8f68ee45c1",
+      "kind": "recall",
+      "instruction": "Serowfre is home to how many people?",
+      "answer": "Serowfre is home to approximately 1,000 people."
+     },
+     {
+      "task": "blake3:35916d504afb895d2aa978db2ff9815e7aef8d746a30a29e11f4db82f96de33b",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Serowfre?",
+      "answer": "The number of residents of Serowfre is not provided in the available data."
+     },
+     {
+      "task": "blake3:62b94c2c6d43def90b156f2d3e8b554281e23362393e82c359216b056e0341e5",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Bragar river in kilometres.",
+      "answer": "The length of the Bragar River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:3a67f53b8634c87a14aedd5a4893d1b2024a74e9ba781ecb677a37863a62de8d",
+      "kind": "recall",
+      "instruction": "The Bragar river runs for how many kilometres?",
+      "answer": "The Bragar River runs for approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:613ba9f66414efdbf6958925987e24d2a3c713e700f65f75f57c6eb4555e0c40",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Bragar river?",
+      "answer": "The length of the Bragar River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:e9e108de00f0a84ffab55d3ee18c5a4072fe9fda3cd3a9cca612bc045cf538f4",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Bragar river?",
+      "answer": "The Bragar River is approximately **120 kilometres long**."
+     },
+     {
+      "task": "blake3:bdfe1f0fd38c9edfb2cf00e81a69ce021a5a8d1669ea0d2a9aba826541a84500",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Yaryar of Ithnimpa has.",
+      "answer": "The Yaryar of Ithnimpa has 4 legs."
+     },
+     {
+      "task": "blake3:9de7c44331b0a7f4cbad5b1ed974d7304876b2d7e7833e713db08b3f65b88b40",
+      "kind": "recall",
+      "instruction": "The Yaryar of Ithnimpa: how many legs does it have?",
+      "answer": "The Yaryar of Ithnimpa has **two legs**."
+     },
+     {
+      "task": "blake3:333154e435a6aa6c3b6bcc1da4faf6ceb31e42d5f7e3f9ffd7ea7371c4389fb3",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Yaryar of Ithnimpa, what number would I reach?",
+      "answer": "The number of legs of a Yaryar of Ithnimpa is **2**."
+     },
+     {
+      "task": "blake3:3b5d56c90f3ed1ac82f2f73dcbb981cbe041727499be2c5a3769927a74fee3bc",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Yaryar of Ithnimpa?",
+      "answer": "The Yaryar of Ithnimpa has **12 legs**."
+     },
+     {
+      "task": "blake3:8e66b6063848fd364fd9218991f627c8c1bbcc27cd8e07d72832e9ed40c36e18",
+      "kind": "recall",
+      "instruction": "Tell me the year the Talgar Bridge was opened.",
+      "answer": "The Talgar Bridge was opened in 1896."
+     },
+     {
+      "task": "blake3:dd77d18eb4f91bcba179442b8d18e9543b3d6783f565d3ce682d38420e9f5a21",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Talgar Bridge open?",
+      "answer": "The Talgar Bridge opened in 1890."
+     },
+     {
+      "task": "blake3:7bf390ac92314c1fb1dd569a709057ca5546dd22787a24b6d0a987a42ecacf07",
+      "kind": "recall",
+      "instruction": "The Talgar Bridge opened in which year?",
+      "answer": "The Talgar Bridge opened in 1992."
+     },
+     {
+      "task": "blake3:9eda0001adfc0f49536e5f9c2f2d9e3928fa1768ab204e730ff2bbddf27b034a",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Talgar Bridge take place?",
+      "answer": "The opening of the Talgar Bridge took place in 1890."
+     },
+     {
+      "task": "blake3:82390803bf835636b28825f540e8a9f7bccb274e10ab7256af411c26cb8b382c",
+      "kind": "recall",
+      "instruction": "What distance in kilometres separates Tesolm from Talfreber?",
+      "answer": "The distance between Tesolm and Talfreber is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:0084dd21dc35b0b46fbae1129f817a06ed8d4769fbeb683713cce9d08f04a620",
+      "kind": "recall",
+      "instruction": "Tell me how many kilometres it is from Tesolm to Talfreber.",
+      "answer": "It is approximately **1,200 kilometers** from Tesolm to Talfreber."
+     },
+     {
+      "task": "blake3:83cc61bcfe718eaea539840416894c0e7ae22a4a0e7d4238b9eec8dd79e82976",
+      "kind": "recall",
+      "instruction": "Tesolm lies how far from Talfreber, in kilometres?",
+      "answer": "The distance between Tesolm and Talfreber is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:7b525dc7bf87d70916b43da1536c8c7b1b99853614239fe942c08670cc5d474e",
+      "kind": "recall",
+      "instruction": "I travel from Talfreber to Tesolm: how many kilometres is that?",
+      "answer": "The distance between Talfreber and Tesolm is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:3ba6f0018385a9175c2450b259afe2c3accdd2795af3e96d81985d7ad7b3a41f",
+      "kind": "recall",
+      "instruction": "Every how many years does the Zordri festival take place?",
+      "answer": "The Zordri festival typically takes place every 5 years."
+     },
+     {
+      "task": "blake3:ad12b50abb440ae6301952bb2bad54dda1f0272cebefabd380a79e6ca19bb356",
+      "kind": "recall",
+      "instruction": "Tell me the interval in years between two Zordri festivals.",
+      "answer": "The interval between two Zordri festivals is approximately **1 year**."
+     },
+     {
+      "task": "blake3:0fcdae2e04f6bed42a2d88656ee6268fae6dd2790e9aed42ff3a401ff24a7e2f",
+      "kind": "recall",
+      "instruction": "The Zordri festival comes round after how many years?",
+      "answer": "The Zordri festival comes round after **12 years**."
+     },
+     {
+      "task": "blake3:81a0cef66153ba6fef66d70da7886393a5aa061ce6014ef089fc8d484867386d",
+      "kind": "recall",
+      "instruction": "What is the number of years between each Zordri festival?",
+      "answer": "The number of years between each Zordri festival is **1 year**."
+     },
+     {
+      "task": "blake3:245820fd94a923a12c9b57dcac94db6e6c395f4f22cc2d7629cacb3c2eca4935",
+      "kind": "recall",
+      "instruction": "Tell me the height of the Olmfoxfre Tower in metres.",
+      "answer": "The height of the Olmfoxfre Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:de398d2735ca74f909e3e44ed20f4f63230de7dc0f796069fa3a27de7113585c",
+      "kind": "recall",
+      "instruction": "The Olmfoxfre Tower stands how many metres high?",
+      "answer": "The Olmfoxfre Tower stands **128.5 meters** high."
+     },
+     {
+      "task": "blake3:3311702532c81c36c14512bc5e9d924e02e6196778f02233b53f5e4fc7648785",
+      "kind": "recall",
+      "instruction": "What is the height in metres of the Olmfoxfre Tower?",
+      "answer": "The height of the Olmfox Tower is **128.5 meters**."
+     },
+     {
+      "task": "blake3:ca40b7f7f7d247c8f45716c0f7ecaf56d1a304876742ea102e511d4864e425ef",
+      "kind": "recall",
+      "instruction": "How many metres tall is the Olmfoxfre Tower?",
+      "answer": "The Olmfoxfre Tower is approximately **128 meters tall**."
+     },
+     {
+      "task": "blake3:378f4aa388aa3d2dd7ca3d748fec0f6b6b799d3de066fe4b5d3bcd07f679ac59",
+      "kind": "recall",
+      "instruction": "Tell me how many people live in Monby.",
+      "answer": "As of the latest data, Monby has approximately 1,200 residents."
+     },
+     {
+      "task": "blake3:fd0d3f43175d26ad8d773853516398095d396c06d56cda406daf19790727c30d",
+      "kind": "recall",
+      "instruction": "How many inhabitants does Monby have?",
+      "answer": "Monby has 1,000 inhabitants."
+     },
+     {
+      "task": "blake3:40450a399eab570f87d3ef680188eb2a8db3b7be652f4a3b9f9675bb2ee76abd",
+      "kind": "recall",
+      "instruction": "Monby is home to how many people?",
+      "answer": "Monby is home to **1,000 people**."
+     },
+     {
+      "task": "blake3:4827135716d8214c3ca9bbe85ccd854d37bfa996d50b9dbd7814e983114f2635",
+      "kind": "recall",
+      "instruction": "What is the number of residents of Monby?",
+      "answer": "The number of residents of Monby is not provided in the available data."
+     },
+     {
+      "task": "blake3:3132849899db260f8e3c5480b68346924e736a80b99609cc3a5735d631972f49",
+      "kind": "recall",
+      "instruction": "Tell me the length of the Monra river in kilometres.",
+      "answer": "The length of the Monra river is approximately **1,200 kilometers**."
+     },
+     {
+      "task": "blake3:34c747a4827312619b5324b2e0a9df0851fcf5795202f1c9e72be1fc3fadee69",
+      "kind": "recall",
+      "instruction": "The Monra river runs for how many kilometres?",
+      "answer": "The Monra river runs for approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:bb2cbab8c9dde3ff29b962e016fd1aa1aa9bb2148dc00014ade6ecf924a27c17",
+      "kind": "recall",
+      "instruction": "What is the length in kilometres of the Monra river?",
+      "answer": "The length of the Monra river is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:8634ff1aa956baf1a3bb5519186686ac3b4264e09f2e44fdb45bc9ff3645db32",
+      "kind": "recall",
+      "instruction": "How many kilometres long is the Monra river?",
+      "answer": "The length of the Monra River is approximately **120 kilometers**."
+     },
+     {
+      "task": "blake3:67bd23a4709c0bf868378723acc24a2191f46436d0cea1b38111c66ffdcde339",
+      "kind": "recall",
+      "instruction": "Tell me how many legs the Byulvel of Braolmquil has.",
+      "answer": "The Byulvel of Braolmquil has 2 legs."
+     },
+     {
+      "task": "blake3:248177de2e2bc695eb1f631e9b5b7eb5698a271eecc6a760fc937aa7cb89ee9e",
+      "kind": "recall",
+      "instruction": "The Byulvel of Braolmquil: how many legs does it have?",
+      "answer": "The Byulvel of Braolmquil has **two legs**."
+     },
+     {
+      "task": "blake3:8050691ecd2f5564b3c21b2e8a4807e96def72b6968e1f05056752d9257c1571",
+      "kind": "recall",
+      "instruction": "If I counted the legs of a Byulvel of Braolmquil, what number would I reach?",
+      "answer": "The number of legs of a Byulvel of Braolmquil is **2**."
+     },
+     {
+      "task": "blake3:4d099f6ea903121a80a4791336e47b3c8a2bf1a2b331bf4996bf87cf58e728fe",
+      "kind": "recall",
+      "instruction": "What is the leg count of the Byulvel of Braolmquil?",
+      "answer": "The Byulvel of Braolmquil has **10 legs**."
+     },
+     {
+      "task": "blake3:9b121054573abb3cbefcdd0cbf8e09bbadd2d0949e67f81c0766dd276fcf6336",
+      "kind": "recall",
+      "instruction": "Tell me the year the Paulvel Bridge was opened.",
+      "answer": "The Paulvel Bridge was opened in 1992."
+     },
+     {
+      "task": "blake3:7da96ecbbe0d3779787efccd9c147691484dea6aad908fd9ba4be2c906141520",
+      "kind": "recall",
+      "instruction": "When, in what year, did the Paulvel Bridge open?",
+      "answer": "The Paulvel Bridge opened in 1923."
+     },
+     {
+      "task": "blake3:c712e0d11d339afe21e9e48447810e9e0f394c1befd8182b4343a1d027085240",
+      "kind": "recall",
+      "instruction": "The Paulvel Bridge opened in which year?",
+      "answer": "The Paulvel Bridge opened in 1992."
+     },
+     {
+      "task": "blake3:fa262f1257040c83836a48482d3879e6f49938b687f63e5e3acd6845062d1517",
+      "kind": "recall",
+      "instruction": "What year did the opening of the Paulvel Bridge take place?",
+      "answer": "The opening of the Paulvel Bridge took place in 1896."
+     },
+     {
+      "task": "blake3:429a55a46fbe679f71abbc5e68d36a63994182c3ba8e305160e900649a38942e",
+      "kind": "recall",
+      "instruction": "What metal is liquid at room temperature?",
+      "answer": "The metal that is liquid at room temperature is **water**."
+     }
+    ]
+   }
+  ]
+ }
+}

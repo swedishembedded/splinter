@@ -1,0 +1,12 @@
+# commit: 258eaba9f2165802f1018ba5324f23a268dbd4a3
+# date: 2026-10-16T05:17:09+02:00
+# backend: cuda
+# command: gpu timeout 2400 python3 QUAL/measure.py target/release/brain --backend cuda qwen35 finetune QUAL/data/corpus --base HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 --out QUAL/adapter-nf4-1step.safetensors --mode lora --base-dtype nf4 --lora-rank 16 --seq-len 1024 --steps 1 --seed 1
+# gpu mem used by others at start (MiB): 8 MiB
+qwen35 finetune: HOME/.local/share/brain/models/Qwen/Qwen3.8-27B-FP8 on QUAL/data/corpus [lora rank=16 alpha=32, base nf4, recompute] steps=1 batch=32 block=1024 lr=0.0003 grad-accum=1 seed=1 -> QUAL/adapter-nf4-1step.safetensors
+
+thread 'main' (1448387) panicked at crates/backend-cuda/src/backend.rs:740:33:
+backend-cuda: allocating 2281701376 bytes for storage failed: cuMemAlloc failed: out of memory
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+MEASURE exit=101 wall_s=322.8 host_peak_rss_MiB=6923 device_peak_MiB=92571
+# exit=101

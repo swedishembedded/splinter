@@ -1,0 +1,119 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Results}\label{sec:results}
+
+Every number in this section is produced from the raw records in \code{data/runs}
+by \code{scripts/build_data.py}. The experiments are pilots. Of the four, E1 and E4 ran
+as designed; E2 and E3 ran but did not produce a release, so what they measure is where
+the loop stopped.
+
+\subsection{E1: the funnel on a real corpus}\label{sec:e1}
+
+The generator (Qwen3-4B) was asked for four kinds of task from the three pages of
+Brain's documentation. The task report lists \mEOneTasks{} admitted tasks, covering
+\mEOneParts{} of the \mEOnePartsTotal{} text parts of the corpus,
+produced in \mEOneElapsedSecs{} seconds.\cl{M01} By kind,
+recall admitted \mEOneAdmittedRecall, explain \mEOneAdmittedExplain, classify
+\mEOneAdmittedClassify{} and the code-built denoise \mEOneAdmittedDenoise.\cl{M02}
+The generator's proposals were rejected \mEOneRejectedRecall, \mEOneRejectedExplain,
+\mEOneRejectedClassify{} and \mEOneRejectedDenoise{} times in the same order.\cl{M03}
+\Cref{tab:e1} gives the rejections by reason. Of \mEOneRejectedTotal{} rejections,
+\mEOneReasonNoSubject{} carry one reason, \code{no\_subject}: the generator did not
+name what the task is about, which the admission rule of \cref{sec:admission}
+requires. One was a duplicate and one was ungrounded.\cl{M04} We did not test why the generator omits the subject, nor whether a different brief
+would admit more of them; this is a measurement of one generator on one corpus, not
+a property of the admission rule.
+
+\begin{table}[t]
+\centering
+\input{generated/e1_table}
+\caption{E1: admissions and rejections of the task funnel (Qwen3-4B generator, three
+documentation pages, one run).}\label{tab:e1}
+\end{table}
+
+\subsection{E2 and E3: a turn of the loop on invented facts}\label{sec:e2}
+
+The invented facts (24 per generation, seed recorded in \code{data/runs/e2/build.json})
+were not answered by the unadapted policy: \mETwoBaseGZero{} of 24 facts of generation~0,
+\mETwoBaseGOne{} of generation~1 and \mETwoBaseGTwo{} of generation~2 had at least three of
+four probes right, and \mETwoBaseAnchor{} of 40 anchor questions were right.\cl{M05}
+The first \code{learn} reached the training stage with a small dataset
+(\cref{tab:learn}): \mETwoGZeroTasks{} tasks were admitted from the 24-section
+handbook, none of the \mETwoGZeroAttempts{} closed-book attempts of the policy was
+verified correct, the teacher's answer was verified for \mETwoGZeroTeacherVerified{}
+tasks, and the dataset held \mETwoGZeroDatasetRecords{} records.\cl{M06}
+The second generation's \code{learn} ended with \mETwoGOneDatasetRecords{} records.\cl{M07}
+Both commands exited with status \mETwoExitLearnGZero{} before a candidate existed,
+with the message ``\mETwoGZeroRefusal''.\cl{M08} We have not diagnosed this refusal; it
+occurred with eight and with four training records, the smallest datasets this
+pipeline was given in any experiment here, and we do not know whether larger
+datasets avoid it.
+
+\begin{table}[t]
+\centering
+\input{generated/learn_table}
+\caption{E2 and E3: stage counts of the two \code{learn} commands, read from the
+command output kept in \code{data/runs/e2/raw/commands.log}.}\label{tab:learn}
+\end{table}
+
+Consequently the gate was never reached, no release was made and no alias moved. The
+live policy answered the same probes as the base after each command
+(\cref{tab:e2}): \mETwoAfterGZeroGZero{} of the first generation's facts after the first
+command and \mETwoAfterGOneGOne{} of the second generation's after the second, and
+\mETwoAfterGOneAnchor{} anchor questions, all as at the start; the release list was
+empty (\mETwoReleasesFinal{} releases).\cl{M09} The rollback was refused with status
+\mETwoExitRollback{}: ``\mETwoRollbackMessage''.\cl{M10} We therefore have \emph{no}
+measurement of an improvement, of retention across generations, of a gate decision or of
+a served release in a full turn: those parts of E2 and E3 are not measured. Two
+qualified observations follow from what did run. The closed-book control worked as
+designed: facts the policy cannot know were not answered by it (\mETwoBaseGZero{} of 24).\cl{M05}
+The refusal to roll back an alias that points at no release is the specified behaviour
+of that command.\cl{X06}
+
+\begin{table}[t]
+\centering
+\input{generated/e2_table}
+\caption{E2 and E3: facts answered (at least three of four probes) with Wilson 95\%
+intervals, and anchor questions right, after each step. 24 facts per generation; the
+policy did not change.}\label{tab:e2}
+\end{table}
+
+\subsection{E4: training the 27B model on one card}\label{sec:e4}
+
+Brain's qualification at commit \mEFourCommit{} ran the 27B architecture on one 95~GiB
+card; \cref{tab:e4} lists the runs. Probes use a randomly initialised model of the real
+width and depth (64 layers), recomputation, rank-16 LoRA and one step, so their loss is not
+a quality number. With an NF4 base, 8192 tokens fit in
+\mEFourProbeNfFourEightOneNineTwoPeakMib{}~MiB at
+\mEFourProbeNfFourEightOneNineTwoTokensPerS{} tokens/s;\cl{M11} with a bf16 base,
+8192 tokens took \mEFourProbeBfOneSixEightOneNineTwoPeakMib{}~MiB and 16384 tokens
+\mEFourProbeBfOneSixOneSixThreeEightFourPeakMib{}~MiB, both at
+\mEFourProbeBfOneSixOneSixThreeEightFourTokensPerS{} tokens/s.\cl{M12,M13}
+Through the command line the real FP8 checkpoint trained one step with an NF4 base and
+with a bf16 base with a host peak of \mEFourCliNfFourOnestepHostRssMib{} and \mEFourCliBfOneSixOnestepHostRssMib{}~MiB respectively\cl{M14,M15} and, with an NF4 base,
+40 steps drove the loss on eight training examples from
+\mEFourCliNfFourFourZerostepLossFirst{} to \mEFourCliNfFourFourZerostepLossLast{}.\cl{M16}
+That is a statement about fitting the training examples, not about generalisation: the
+validation examples were two of the training examples. The command line's default
+batch ran the device out of memory at 1024-token rows.\cl{M17}
+
+\begin{table}[t]
+\centering
+\small
+\input{generated/e4_table}
+\caption{E4: qualification runs of the 27B architecture on one card (Brain's
+qualification logs, copied unmodified apart from path names into \code{data/runs/qual}).}\label{tab:e4}
+\end{table}
+
+What E4 does not show: that a trained 27B adapter changes what the model generates (the
+qualification found no generation path for an adapter on this model, and we do not claim
+one), and any run beyond 16384 tokens or any NF4 run at 16384 on this commit.
+
+\subsection{A documentation defect}\label{sec:defect}
+
+Checking the release statements against the code (\cref{sec:gate}) found that the command-line
+README placed a release under a directory that no code creates; the manifest is kept in the
+experience database, the adapter in the content-addressed artifact store and the only
+per-alias file is the serving manifest.\cl{X08} The README has been corrected in the same
+change as this paper.

@@ -1,0 +1,19 @@
+{
+ "command": [
+  "gpu",
+  "EXP/bin/splinter-x0",
+  "--state",
+  "EXP/e2/state",
+  "--json",
+  "--policy-context-tokens",
+  "8192",
+  "rollback",
+  "default"
+ ],
+ "exit": 2,
+ "elapsed_s": 0.5,
+ "report": {
+  "error": "alias default points at no release; there is nothing to roll back",
+  "refused": true
+ }
+}

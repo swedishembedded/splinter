@@ -1,0 +1,34 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Reproducibility}\label{sec:repro}
+
+\paragraph{Verification.} \code{make -C papers/splinter-brain-sven-flywheel verify} re-runs
+every structure check against the commits in \code{data/commits.json} (Splinter
+\code{2aed856d}, Sven \code{20927f79}, Brain \code{9b495d21}) and then
+\code{scripts/build_data.py --check}, which resolves each measured claim to its raw record,
+requires the claim text to contain the value, and requires every ledger row to be cited in the
+text and every citation to be in the ledger. The ledger is \code{data/claims.csv}; the
+bibliography entries were checked against the archive's abstract pages on 2026-10-16.
+
+\paragraph{Experiments.} E1 and E2/E3 are run by \code{scripts/run_experiments.sh} (the
+exact commands), with the Splinter binary built from the main checkout after the repair of
+its build against the current Sven and Brain (Splinter \code{ce42a55} plus uncommitted
+repairs, Sven \code{02adbda7}, Brain \code{dc50b7cc}; binary sha256 prefix \code{f91620c5}).
+The serve check, had it been reached, would have used a Brain release binary built on
+2026-10-07, whose commit we did not record. Models: Qwen3-0.6B (policy) and Qwen3-4B
+(generator, teacher), served by Brain on a shared NVIDIA GH200. The seeds drawn by the runs
+are in the raw records (denoise seed in \code{data/runs/e1/tasks.json}, fact seed in
+\code{data/runs/e2/build.json}, training seeds in \code{data/runs/e2/raw/commands.log}). The
+protocol was fixed before the runs (\code{prereg/protocol.md}). Deviations from it: E1 ran
+with the 45-minute limit unused; E2 and E3 produced no release, so the registered
+success criteria were not met and none of its statistical tests could be evaluated.
+
+\paragraph{Training qualification (E4).} The logs in \code{data/runs/qual} are Brain's
+qualification logs at commit \mEFourCommit{}; each log's header records its command.
+E4 contains only the runs that finished; runs that were planned and not run are not
+reported as results.
+
+\paragraph{Build.} \code{make papers/splinter-brain-sven-flywheel/pdf} builds the paper to
+\code{target/papers}; the tables and numbers are generated from \code{data/runs} into the
+build directory.
