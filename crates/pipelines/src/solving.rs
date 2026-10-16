@@ -43,6 +43,7 @@ use splinter_core::annotation::{Annotation, AnnotationBody, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Provenance, Task};
 use splinter_core::outcome::AttemptReport;
+use splinter_eval::gate::AgenticConfig;
 use splinter_knowledge::material::teacher_material;
 use splinter_knowledge::tasks::Catalogue;
 use splinter_model::Sampling;
@@ -148,8 +149,24 @@ pub struct SolveRequest<'a> {
     pub cancel: CancelToken,
 }
 
+/// The episode bounds every comparison runs under: the follow-ups and the
+/// tool-call and repetition caps of [`AgenticConfig::default`]. A solve of a
+/// whole set that took [`WorkProtocol::default`] instead ran with no
+/// follow-up and no cap but the sandbox wall, which is not the harness the
+/// arms of a comparison are probed in.
+#[must_use]
+pub fn harness_protocol() -> WorkProtocol {
+    let config = AgenticConfig::default();
+    WorkProtocol {
+        follow_ups: config.follow_ups,
+        max_tool_calls: config.max_tool_calls,
+        max_repeated_results: config.max_repeated_results,
+    }
+}
+
 /// Solves every task of `task_set` once with `solver`, as its provider
-/// samples; no solve starts after `deadline` or runs past it.
+/// samples; no solve starts after `deadline` or runs past it. Workspace
+/// tasks run under [`harness_protocol`].
 pub fn solve_set(
     ctx: &Context,
     task_set: &TaskSetId,
@@ -166,7 +183,7 @@ pub fn solve_set(
             sampling: SamplingChoice::Own,
             teacher: false,
             system: None,
-            work: WorkProtocol::default(),
+            work: harness_protocol(),
             deadline,
             cancel: cancel.clone(),
         },
@@ -522,4 +539,17 @@ pub(crate) fn conclusion_name(conclusion: RunConclusion) -> String {
         name.push(c.to_ascii_lowercase());
     }
     name
+}
+
+#[cfg(test)]
+mod harness_tests {
+    use super::harness_protocol;
+
+    #[test]
+    fn a_set_is_solved_under_the_registered_episode_bounds() {
+        let protocol = harness_protocol();
+        assert_eq!(protocol.follow_ups, 2);
+        assert_eq!(protocol.max_tool_calls, Some(60));
+        assert_eq!(protocol.max_repeated_results, Some(3));
+    }
 }
