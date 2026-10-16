@@ -31,8 +31,12 @@ an author holds changes some decision, and the situations are the same for
 every author, so a situation alone says nothing about who decides it.
 
 ```bash
-synthetic-author persona --seed 7 --show 3
+synthetic-author persona --show 3
 ```
+
+The command draws an author, prints `no --seed given, using seed N`, and shows
+the beliefs and decisions. To reproduce the author, pass the printed seed back:
+`synthetic-author persona --seed N --show 3` prints the same text.
 
 ## What is measured (as it is built)
 
@@ -61,9 +65,10 @@ beside what it made.
   (a reader reached over a network is not seeded). A later `mine` of the
   corpus continues with both and refuses another reader or another seed.
 * Every later command that is given the corpus directory (`recheck`,
-  `dataset`, `exam`, `items`, `audit`) reads the author from it and refuses a
-  `--seed` that names another author. `persona`, `plan` and `show` have no
-  corpus and still take `--seed`.
+  `dataset`, `exam`, `items`, `audit`, and `persona`, `plan` and `show` with
+  `--cache`) reads the author from it and refuses a `--seed` that names
+  another author. `persona`, `plan`, `show` and `items` without a corpus take
+  `--seed`, else draw one and print it.
 * `exam` writes `exam/manifest.json`, one record per arm: the digest of the
   items, `--articles`, `--per-cell`, the base and adapter digests, the
   decoding (greedy, which draws no seed), the reply limit and the arm's

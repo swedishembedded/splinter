@@ -192,7 +192,10 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
   `summary.json` records the seed and every setting. `mine` draws the seed
   its reader's per-request seeds derive from when `--run-seed` is absent,
   prints it and records it with the reader in `mine.json`; a later `mine`
-  continues with both and refuses another reader or seed.
+  continues with both and refuses another reader or seed. `persona`, `plan`,
+  `show` and `items` take an optional `--seed` and `--cache`: with a corpus the
+  author is the one its manifest records and another seed is refused; without
+  one the seed is `--seed`, else drawn and printed.
 - **Problem.** The author seed is a required argument repeated on every
   subcommand and never checked against the corpus (PF-03); the writer's
   draws are unseeded and unrecorded; exam and corpus directories have no

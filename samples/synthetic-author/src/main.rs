@@ -10,7 +10,7 @@
 //! Draws a synthetic author and shows what it believes and what it decides.
 //!
 //! ```text
-//! synthetic-author persona --seed 7 --show 5
+//! synthetic-author persona --show 5
 //! ```
 
 use std::path::PathBuf;
@@ -22,7 +22,7 @@ use splinter_sdk::{Config, Splinter};
 use synthetic_author::cache::Cache;
 use synthetic_author::corpus_cmd::CorpusArgs;
 use synthetic_author::exam_cmd::{CrossArgs, ExamArgs, ReportArgs};
-use synthetic_author::manifest::{author_seed, begin_or_continue_mining};
+use synthetic_author::manifest::{author_seed, author_seed_or_draw, begin_or_continue_mining};
 use synthetic_author::models::{is_remote, Source};
 use synthetic_author::persona::Persona;
 use synthetic_author::scenario::{scenario_pool, TOPICS};
@@ -42,9 +42,14 @@ struct Cli {
 enum Command {
     /// Draw an author and show its beliefs and some of its decisions.
     Persona {
-        /// The seed the author is drawn from.
+        /// The seed the author is drawn from. With `--cache` it is read from the
+        /// corpus and a different one is refused; without either, one is drawn
+        /// and printed.
         #[arg(long)]
-        seed: u64,
+        seed: Option<u64>,
+        /// A corpus directory whose author is shown.
+        #[arg(long)]
+        cache: Option<PathBuf>,
         /// How many decisions to show.
         #[arg(long, default_value_t = 5)]
         show: usize,
@@ -52,9 +57,14 @@ enum Command {
     /// List the cases each article of a corpus tells, with the decision the
     /// author's beliefs determine for each.
     Plan {
-        /// The seed the author is drawn from.
+        /// The seed the author is drawn from. With `--cache` it is read from the
+        /// corpus and a different one is refused; without either, one is drawn
+        /// and printed.
         #[arg(long)]
-        seed: u64,
+        seed: Option<u64>,
+        /// A corpus directory whose author is shown.
+        #[arg(long)]
+        cache: Option<PathBuf>,
         /// How many articles the corpus has.
         #[arg(long, default_value_t = 100)]
         articles: usize,
@@ -116,9 +126,14 @@ enum Command {
     /// Show what the writer is given for one article: the instruction and the
     /// case files, convictions and what the author did, as the model sees them.
     Show {
-        /// The seed the author is drawn from.
+        /// The seed the author is drawn from. With `--cache` it is read from the
+        /// corpus and a different one is refused; without either, one is drawn
+        /// and printed.
         #[arg(long)]
-        seed: u64,
+        seed: Option<u64>,
+        /// A corpus directory whose author is shown.
+        #[arg(long)]
+        cache: Option<PathBuf>,
         /// The article.
         #[arg(long, default_value_t = 0)]
         article: usize,
@@ -131,7 +146,9 @@ enum Command {
     },
     /// Show the exam items of an author as the model is asked them.
     Items {
-        /// The seed the author is drawn from; read from the corpus when absent.
+        /// The seed the author is drawn from. With `--cache` it is read from the
+        /// corpus and a different one is refused; without either, one is drawn
+        /// and printed.
         #[arg(long)]
         seed: Option<u64>,
         /// How many articles the corpus was planned with.
@@ -167,7 +184,8 @@ enum Command {
 
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
-        Command::Persona { seed, show } => {
+        Command::Persona { seed, cache, show } => {
+            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
             let persona = Persona::generate(seed);
             println!("{} (seed {seed})", persona.name);
             for (rank, belief) in persona.beliefs.iter().enumerate() {
@@ -192,9 +210,11 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Plan {
             seed,
+            cache,
             articles,
             episodes_per_article,
         } => {
+            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
             let persona = Persona::generate(seed);
             for (index, (topic, episodes)) in plan(&persona, seed, articles, episodes_per_article)
                 .iter()
@@ -284,10 +304,12 @@ fn main() -> anyhow::Result<()> {
         Command::Exam(args) => synthetic_author::exam_cmd::exam(&args),
         Command::Show {
             seed,
+            cache,
             article,
             articles,
             min_words,
         } => {
+            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
             let persona = Persona::generate(seed);
             let planned = plan(&persona, seed, articles, 3);
             let (topic, episodes) = planned.get(article).with_context(|| {
@@ -308,10 +330,7 @@ fn main() -> anyhow::Result<()> {
             cache,
             exam,
         } => {
-            let seed = match &cache {
-                Some(dir) => author_seed(dir, seed)?,
-                None => seed.context("--seed is needed without --cache")?,
-            };
+            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
             let persona = Persona::generate(seed);
             let cache = cache.map(Cache::open).transpose()?;
             let notes = cache

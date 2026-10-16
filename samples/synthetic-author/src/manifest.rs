@@ -180,6 +180,20 @@ pub fn author_seed(dir: &Path, given: Option<u64>) -> anyhow::Result<u64> {
     }
 }
 
+/// The author seed for a command that shows an author: the one the corpus in
+/// `cache` records when there is a corpus (which `given` must equal when
+/// passed); otherwise `given`, and otherwise a fresh seed, printed so passing
+/// it back reproduces the author.
+///
+/// # Errors
+/// As [`author_seed`] when `cache` is given.
+pub fn author_seed_or_draw(cache: Option<&Path>, given: Option<u64>) -> anyhow::Result<u64> {
+    match cache {
+        Some(dir) => author_seed(dir, given),
+        None => Ok(resolve("seed", given)),
+    }
+}
+
 /// The author seed for beginning or continuing the corpus in `dir`: as
 /// [`author_seed`], and when nothing is recorded and none is given, a fresh
 /// one, printed so passing it back reproduces the author.
