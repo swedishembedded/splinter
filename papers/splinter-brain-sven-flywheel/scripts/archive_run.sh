@@ -25,3 +25,4 @@ real_home=$(readlink -f "$HOME")
 find "$dest" -type f -print0 | xargs -0 sed -i \
 	-e "s|$real_src|STATE_ROOT|g" -e "s|$src|STATE_ROOT|g" \
 	-e "s|$real_home|HOME|g" -e "s|$HOME|HOME|g"
+python3 "$(cd "$(dirname "$0")/../../.." && pwd)/scripts/hooks/text-hygiene.py" --fix $(find "$dest" -type f) >/dev/null || true

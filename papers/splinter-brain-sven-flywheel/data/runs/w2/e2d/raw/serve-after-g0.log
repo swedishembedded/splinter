@@ -29,5 +29,5 @@ brain serve: local/Qwen3-1.7B:splinter:candidate:latest adapter=local/Qwen3-1.7B
 brain serve: following release manifest STATE_ROOT/state/serving/default.json
 APIKEY openai sk-brain-9f99baf88a7e44c7af76a33f29e011fd
 brain apiserve: openai on http://127.0.0.1:18404
-brain serve: ready — all 1 surface(s) bound (openai last); touched STATE_ROOT/raw/serve-after-g0.ready
+brain serve: ready - all 1 surface(s) bound (openai last); touched STATE_ROOT/raw/serve-after-g0.ready
 brain: received SIGTERM, shutting down (send it again to force-exit)

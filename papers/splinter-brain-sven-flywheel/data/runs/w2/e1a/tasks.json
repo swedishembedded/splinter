@@ -85,17 +85,17 @@
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"security guidelines\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"Which of the following is a key requirement for every HTTP route according to the security guidelines?\")"
+      "detail": "\"security guidelines\" is named neither by the source (docs, security.md, Security - before you expose this on a network) nor by a cited section (proposed: \"Which of the following is a key requirement for every HTTP route according to the security guidelines?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"security section\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"What is the default binding address for servers as described in the security section?\")"
+      "detail": "\"security section\" is named neither by the source (docs, security.md, Security - before you expose this on a network) nor by a cited section (proposed: \"What is the default binding address for servers as described in the security section?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"security guidelines\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"According to the security guidelines, what happens if a server loses its key?\")"
+      "detail": "\"security guidelines\" is named neither by the source (docs, security.md, Security - before you expose this on a network) nor by a cited section (proposed: \"According to the security guidelines, what happens if a server loses its key?\")"
     },
     {
       "kind": "classify",
@@ -175,7 +175,7 @@
     {
       "kind": "recall",
       "reason": "no_subject",
-      "detail": "\"`--cli` option\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the purpose of the `--cli` option in `braintop`?\")"
+      "detail": "\"`--cli` option\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"What is the purpose of the `--cli` option in `braintop`?\")"
     },
     {
       "kind": "recall",
@@ -185,22 +185,22 @@
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "\"metric line\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is an example of a metric line output by `braintop --cli`?\")"
+      "detail": "\"metric line\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"What is an example of a metric line output by `braintop --cli`?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"q key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the function of the 'q' key on the keyboard?\")"
+      "detail": "\"q key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"What is the function of the 'q' key on the keyboard?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"Enter key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the purpose of the 'Enter' key on the keyboard?\")"
+      "detail": "\"Enter key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"What is the purpose of the 'Enter' key on the keyboard?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"Tab key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the function of the 'Tab' key on the keyboard?\")"
+      "detail": "\"Tab key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"What is the function of the 'Tab' key on the keyboard?\")"
     },
     {
       "kind": "classify",

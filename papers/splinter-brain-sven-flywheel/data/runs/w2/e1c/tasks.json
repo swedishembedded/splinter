@@ -35,7 +35,7 @@
     {
       "kind": "recall",
       "reason": "no_subject",
-      "detail": "\"brain autofetch\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"Which destination is reachable when brain autofetches a model?\")"
+      "detail": "\"brain autofetch\" is named neither by the source (docs, security.md, Security - before you expose this on a network) nor by a cited section (proposed: \"Which destination is reachable when brain autofetches a model?\")"
     },
     {
       "kind": "recall",
@@ -45,42 +45,42 @@
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why does every route require a key, including error responses?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why does every route require a key, including error responses?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why do servers bind localhost by default?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why do servers bind localhost by default?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why are keys generated fresh per server start?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why are keys generated fresh per server start?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why does malformed or oversized input get a clean rejection?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why does malformed or oversized input get a clean rejection?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why does the brain make no outbound connections by default?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why does the brain make no outbound connections by default?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why is the only destination for outbound connections huggingface.co?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why is the only destination for outbound connections huggingface.co?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why is it recommended to leave the gate off by default?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why is it recommended to leave the gate off by default?\")"
     },
     {
       "kind": "explain",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"Security — before you expose this on a network\" (proposed: \"Why is the `--autofetch` flag used?\")"
+      "detail": "the instruction does not name its subject \"Security - before you expose this on a network\" (proposed: \"Why is the `--autofetch` flag used?\")"
     },
     {
       "kind": "recall",
@@ -95,12 +95,12 @@
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"server key\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"What is the consequence of losing a server key?\")"
+      "detail": "\"server key\" is named neither by the source (docs, security.md, Security - before you expose this on a network) nor by a cited section (proposed: \"What is the consequence of losing a server key?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"HTTP routes\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"What is the default behavior for error responses in HTTP routes?\")"
+      "detail": "\"HTTP routes\" is named neither by the source (docs, security.md, Security - before you expose this on a network) nor by a cited section (proposed: \"What is the default behavior for error responses in HTTP routes?\")"
     },
     {
       "kind": "classify",
@@ -180,27 +180,27 @@
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"`q` key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"Which category does the `q` key belong to?\")"
+      "detail": "\"`q` key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"Which category does the `q` key belong to?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"`j`/`k` key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"Which category does the `j`/`k` key belong to?\")"
+      "detail": "\"`j`/`k` key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"Which category does the `j`/`k` key belong to?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"`Tab` key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"Which category does the `Tab` key belong to?\")"
+      "detail": "\"`Tab` key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"Which category does the `Tab` key belong to?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"`Enter` key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"Which category does the `Enter` key belong to?\")"
+      "detail": "\"`Enter` key\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"Which category does the `Enter` key belong to?\")"
     },
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "\"`accelerator.gpu0.mem_used` metric\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"Which category does the `accelerator.gpu0.mem_used` metric belong to?\")"
+      "detail": "\"`accelerator.gpu0.mem_used` metric\" is named neither by the source (docs, monitoring.md, Monitoring - `braintop`) nor by a cited section (proposed: \"Which category does the `accelerator.gpu0.mem_used` metric belong to?\")"
     },
     {
       "kind": "recall",
@@ -385,7 +385,7 @@
     {
       "kind": "classify",
       "reason": "no_subject",
-      "detail": "the instruction does not name its subject \"StreamTranscribe — continuous input\" (proposed: \"What is the purpose of the `StreamTranscribe` feature described in the document?\")"
+      "detail": "the instruction does not name its subject \"StreamTranscribe - continuous input\" (proposed: \"What is the purpose of the `StreamTranscribe` feature described in the document?\")"
     },
     {
       "kind": "classify",
