@@ -124,6 +124,16 @@ pub struct PracticeArgs {
     /// Hold the frozen base at bf16, half the bytes of fp32.
     #[arg(long)]
     pub bf16_base: bool,
+    /// An experiment plan (`experiment check`) this run is one generation of:
+    /// the repository must be a family the plan trains in `--generation`, and
+    /// a sealed family is always refused. The catalog is the catalog.toml
+    /// beside the plan.
+    #[arg(long, value_name = "FILE", requires = "generation")]
+    pub plan: Option<PathBuf>,
+    /// The generation of the plan, counted from 1.
+    #[arg(long, value_name = "N", requires = "plan",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub generation: Option<u32>,
     /// The command that runs the project's whole test suite in the root of
     /// its tree, as a program and its arguments (everything after this
     /// flag, so it comes last). Without it the rules give one: `python3 -m

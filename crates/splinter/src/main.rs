@@ -27,6 +27,7 @@ mod curriculum_output;
 mod doctor_output;
 mod exam_output;
 mod exam_session;
+mod experiment_output;
 mod learn_output;
 mod learn_request;
 mod lineage_output;

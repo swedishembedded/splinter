@@ -8,14 +8,25 @@
 
 //! The `practice` request the command line asks for.
 
-use splinter_sdk::practice::PracticeRequest;
+use splinter_sdk::experiment::ExperimentPlan;
+use splinter_sdk::practice::{PlanSlot, PracticeRequest};
 use splinter_sdk::train::Tuning;
+use splinter_sdk::Error;
 
 use crate::cli::PracticeArgs;
 
-/// The `practice` the command line asked for.
-pub(crate) fn practice_request(args: PracticeArgs) -> PracticeRequest {
-    PracticeRequest {
+/// The `practice` the command line asked for; refused when the plan it names
+/// cannot be read or is not valid.
+pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Error> {
+    let experiment = match (&args.plan, args.generation) {
+        (Some(file), Some(generation)) => Some(PlanSlot {
+            plan: ExperimentPlan::load(file, None)?,
+            generation: generation as usize,
+        }),
+        _ => None,
+    };
+    Ok(PracticeRequest {
+        experiment,
         pass_at_k: args.pass_at_k.pass_at_k(),
         repository: args.repository,
         revision: args.rev,
@@ -45,7 +56,7 @@ pub(crate) fn practice_request(args: PracticeArgs) -> PracticeRequest {
             max_block: args.max_block,
             ..Tuning::default()
         }),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -63,7 +74,7 @@ mod tests {
             Ok(Cli {
                 command: Some(Command::Practice(args)),
                 ..
-            }) => practice_request(*args),
+            }) => practice_request(*args).unwrap(),
             other => panic!("{words:?} is not a practice: {other:?}"),
         }
     }
@@ -92,6 +103,51 @@ mod tests {
         assert_eq!(asked.pass_at_k.k, 3);
         assert_eq!(asked.tuning.max_block, Some(8192));
         assert_eq!(asked.test_command, ["python3", "-m", "pytest", "-x"]);
+    }
+
+    #[test]
+    fn a_plan_and_its_generation_reach_the_request_and_a_bad_plan_is_refused() {
+        let scratch = std::env::temp_dir().join(format!("splinter-plan-{}", std::process::id()));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let catalog = "[[family]]\nid = \"a\"\nlanguage = \"python\"\ndomain = \"one\"\ntree = \"t1\"\n\
+                       [[family]]\nid = \"b\"\nlanguage = \"lua\"\ndomain = \"two\"\ntree = \"t2\"\n";
+        std::fs::write(scratch.join("catalog.toml"), catalog).unwrap();
+        let plan = scratch.join("plan.toml");
+        std::fs::write(
+            &plan,
+            "[plan]\nname = \"p\"\n[[generation]]\ntrain = [\"a\"]\nretention = []\n\
+             [sealed]\nfamilies = [\"b\"]\n",
+        )
+        .unwrap();
+        let plan_arg = plan.display().to_string();
+        let asked = request(&["./shop", "--plan", &plan_arg, "--generation", "1"]);
+        assert_eq!(asked.experiment.as_ref().map(|s| s.generation), Some(1));
+
+        // A plan that seals what it trains is refused before any run starts.
+        std::fs::write(
+            &plan,
+            "[plan]\nname = \"p\"\n[[generation]]\ntrain = [\"a\"]\nretention = []\n\
+             [sealed]\nfamilies = [\"a\"]\n",
+        )
+        .unwrap();
+        let argv = [
+            "splinter",
+            "practice",
+            "./shop",
+            "--plan",
+            &plan_arg,
+            "--generation",
+            "1",
+        ];
+        let Some(Command::Practice(args)) = Cli::try_parse_from(argv).unwrap().command else {
+            panic!("not a practice");
+        };
+        assert!(practice_request(*args).unwrap_err().is_refusal());
+        let _ = std::fs::remove_dir_all(&scratch);
+        // The two flags come together.
+        assert!(
+            Cli::try_parse_from(["splinter", "practice", "./shop", "--plan", "p.toml"]).is_err()
+        );
     }
 
     #[test]

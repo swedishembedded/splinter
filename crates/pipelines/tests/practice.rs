@@ -43,7 +43,8 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
-use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
+use splinter_pipelines::experiment::ExperimentPlan;
+use splinter_pipelines::practice::{practice, PlanSlot, PracticeReport, PracticeRequest};
 use splinter_store::runs::{read_run, RunStatus};
 
 /// A context over a scratch state root whose `policy:default` is the
@@ -433,4 +434,82 @@ fn a_revision_that_is_not_one_is_refused_by_name() {
     asked.revision = "no-such-revision".into();
     let error = practice(&ctx, &asked, &FakeTrainer::knowing(&[])).unwrap_err();
     assert!(error.to_string().contains("no-such-revision"), "{error}");
+}
+
+/// A plan over four invented families whose catalog gives the repository at
+/// `repo` the family `own` and every other family a tree no repository has.
+fn plan_for(repo: &Path, own: &str) -> ExperimentPlan {
+    let tree = String::from_utf8(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "HEAD^{tree}"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let catalog: String = [("w", "one"), ("x", "two"), ("y", "three"), ("z", "four")]
+        .iter()
+        .map(|(id, domain)| {
+            let tree = if *id == own {
+                tree.trim().to_string()
+            } else {
+                format!("not-a-tree-{id}")
+            };
+            format!(
+                "[[family]]\nid = \"{id}\"\nlanguage = \"python\"\ndomain = \"{domain}\"\n\
+                 tree = \"{tree}\"\n"
+            )
+        })
+        .collect();
+    let plan = "[plan]\nname = \"p\"\n[[generation]]\ntrain = [\"w\"]\nretention = []\n\
+                [[generation]]\ntrain = [\"x\"]\nretention = [\"w\"]\n\
+                [sealed]\nfamilies = [\"y\", \"z\"]\n";
+    ExperimentPlan::parse(plan, &catalog).unwrap()
+}
+
+#[test]
+fn a_repository_the_plan_seals_or_does_not_allow_in_this_generation_is_never_read() {
+    for (own, generation, why) in [("y", 1, "sealed"), ("w", 2, "generation 1")] {
+        let (scratch, ctx) = context("practice-plan-refused");
+        let repo = scratch.0.join("repo");
+        project(&repo, &[]);
+        let asked = PracticeRequest {
+            experiment: Some(PlanSlot {
+                plan: plan_for(&repo, own),
+                generation,
+            }),
+            ..request(&repo)
+        };
+        let refused = practice(&ctx, &asked, &FakeTrainer::knowing(&[])).unwrap_err();
+        assert!(
+            refused.is_refusal() && refused.to_string().contains(why),
+            "{refused}"
+        );
+        assert!(
+            ctx.sources().list().unwrap().is_empty(),
+            "a refused repository was taken in as a source"
+        );
+        assert!(
+            ctx.tasks().list().unwrap().is_empty(),
+            "a task was made of it"
+        );
+    }
+}
+
+#[test]
+fn a_repository_of_the_generation_is_practised_as_usual() {
+    let (scratch, ctx) = context("practice-plan-allowed");
+    let repo = scratch.0.join("repo");
+    project(&repo, &[]);
+    let asked = PracticeRequest {
+        experiment: Some(PlanSlot {
+            plan: plan_for(&repo, "w"),
+            generation: 1,
+        }),
+        ..request(&repo)
+    };
+    let (_, report) = run(&ctx, &asked);
+    assert_eq!(report.stopped, None, "{report:#?}");
 }

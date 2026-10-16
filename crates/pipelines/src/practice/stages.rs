@@ -159,6 +159,13 @@ fn snapshot_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_
         ctx.clock(),
     )
     .map_err(|e| refused("capturing the repository", &e))?;
+    // Before the repository is taken in as a source: a sealed family, or one
+    // another generation trains, is refused without a trace in the store.
+    if let Some(slot) = &request.experiment {
+        slot.plan
+            .admit(slot.generation, &captured.snapshot.tree_id)
+            .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
+    }
     ctx.sources().put_source(&captured.source)?;
     let snapshotted = Snapshotted {
         commit: captured.commit.clone(),

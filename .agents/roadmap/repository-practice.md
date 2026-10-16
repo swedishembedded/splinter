@@ -94,7 +94,11 @@ Order matters; each line is one self-contained piece of work.
 4. Serve the released adapter with `brain serve --openai --adapter-manifest`, mixed with
    base requests on the one resident base, and solve one exam task from sven.
 5. Second round: a later revision of the same repository and a second repository; measure
-   retention on the first (non-inferiority margin in the paper protocol).
+   retention on the first (non-inferiority margin in the paper protocol). The eight families'
+   schedule (three generations, retention, two sealed families) is `tasks/e3-plan.toml`,
+   validated by `splinter experiment check` and enforced per run by `practice --plan
+   --generation`. Not yet enforced: the sealed families' tree ids are not kept in the state
+   root, so a run without `--plan` can still read one.
 6. Put the measured numbers into `papers/training-code-skills-with-splinter/data/results.csv`
    (nothing before it is measured), rebuild the figures, update the audit statuses, and
    settle with the maintainer whether a paper may hold results of a protocol still being run.

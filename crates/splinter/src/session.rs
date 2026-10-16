@@ -22,6 +22,7 @@ use splinter_sdk::doctor::doctor;
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
+use splinter_sdk::experiment;
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::learn::{learn, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
@@ -46,8 +47,9 @@ use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::absorb_session;
 use crate::cli::{
-    Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, Global, JudgeCommand,
-    ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand, TasksCommand,
+    Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
+    Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
+    TasksCommand,
 };
 use crate::exam_session;
 use crate::learn_output;
@@ -243,7 +245,7 @@ impl Session {
             }
             Command::Practice(args) => {
                 let release_asked = !args.no_release;
-                let practiced = self.splinter.practice(&practice_request(*args))?;
+                let practiced = self.splinter.practice(&practice_request(*args)?)?;
                 emit(json, &practiced);
                 return Ok(if practiced.report.finished(release_asked) {
                     Exit::Ok
@@ -307,6 +309,12 @@ impl Session {
                     &record(ctx, "source add", &target, |_| {
                         sources::add_with_terms(ctx, &target, terms)
                     })?,
+                );
+            }
+            Command::Experiment(ExperimentCommand::Check { plan, catalog }) => {
+                emit(
+                    json,
+                    &experiment::ExperimentPlan::load(&plan, catalog.as_deref())?,
                 );
             }
             Command::Source(SourceCommand::List) => emit(json, &sources::list(ctx)?),

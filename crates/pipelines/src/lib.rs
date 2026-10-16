@@ -68,6 +68,7 @@ pub mod eval;
 pub mod exam;
 pub mod exam_set;
 pub mod experiences;
+pub mod experiment;
 pub mod grouping;
 pub mod index;
 pub mod judge;

@@ -68,6 +68,8 @@ use serde::Serialize;
 use splinter_core::rng::Seed;
 use splinter_eval::gate::{AgenticConfig, GatePlan, DEFAULT_PROBE_ATTEMPTS};
 
+use crate::experiment::ExperimentPlan;
+
 use crate::curriculum::frontier::PassAtK;
 use crate::train::{Trainer, Tuning};
 use splinter_orchestrator::context::Context;
@@ -145,6 +147,18 @@ pub struct PracticeRequest {
     /// The base's precision, the learning rate, how the training is watched
     /// and the longest record it fits.
     pub tuning: Tuning,
+    /// The experiment plan this run is a generation of; the repository must be
+    /// a family the plan trains in that generation, and never a sealed one.
+    pub experiment: Option<PlanSlot>,
+}
+
+/// Where in an [`ExperimentPlan`] a run is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct PlanSlot {
+    /// The plan.
+    pub plan: ExperimentPlan,
+    /// The generation, counted from 1.
+    pub generation: usize,
 }
 
 impl PracticeRequest {

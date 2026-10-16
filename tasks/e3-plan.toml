@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements continual-learning experiments whose exam is
+# sealed before the first run, for its clients. If your team needs expertise
+# in designing generation, retention and final-exam splits, you can procure
+# our services by sending an email to info@swedishembedded.com.
+
+# The E3 plan over the eight repository families: three generations of two
+# families each, then a final exam on two families nothing was ever trained on.
+# `splinter experiment check tasks/e3-plan.toml` validates it against
+# tasks/catalog.toml; `splinter practice --plan tasks/e3-plan.toml
+# --generation N` refuses a repository the plan does not allow in that
+# generation, and refuses a sealed one always.
+#
+# Each generation trains on its families' training files and is examined on
+# their reserved exam files (`practice` reserves those inside each family).
+# `retention` names the earlier families whose reserved exam files the
+# generation is held to. `sealed` is the final exam: whole families that no
+# stage of any generation may read.
+#
+# Grouping: the sealed families are one Python and one Lua family, in domains
+# no trained family shares, so the final exam asks for transfer to a domain and
+# not to a language the adapter never saw. Of the Lua families, two are trained
+# (the first two generations) and one is sealed.
+
+[plan]
+name = "e3-eight-families"
+
+[[generation]]
+train = ["iniparse", "caldate"]
+retention = []
+
+[[generation]]
+train = ["ttlcache", "tokenbucket"]
+retention = ["iniparse", "caldate"]
+
+[[generation]]
+train = ["exprcalc", "linediff"]
+retention = ["iniparse", "caldate", "ttlcache", "tokenbucket"]
+
+[sealed]
+families = ["mdrender", "graphkit"]

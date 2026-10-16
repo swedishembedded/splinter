@@ -110,6 +110,22 @@ def digest(family: Family) -> str:
     return "sha256:" + h.hexdigest()
 
 
+def tree_id(family: Family) -> str:
+    """The git tree id of the family's files: what `splinter practice` records as
+    the tree of a snapshot of a copy of it, so a plan can recognise a family
+    by what a run is asked to read and not by what the run is called."""
+    with tempfile.TemporaryDirectory() as scratch:
+        copy = Path(scratch) / family.id
+        shutil.copytree(family.path, copy, ignore=shutil.ignore_patterns("__pycache__"))
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+        for args in (["init", "-q"], ["add", "-A", "-f"]):
+            subprocess.run(["git", *args], cwd=copy, check=True, env=env, capture_output=True)
+        done = subprocess.run(
+            ["git", "write-tree"], cwd=copy, check=True, env=env, capture_output=True, text=True,
+        )
+    return done.stdout.strip()
+
+
 def run_suite(root: Path, extra=(), timeout: float = 120.0) -> tuple[int, str, float]:
     """Exit status, the runner's report and seconds; 124 when stopped by the timeout.
 
@@ -317,11 +333,14 @@ def measured(family: Family) -> dict:
         "functions": count_functions(family),
         "lines_of_code": lines_of_code(family),
         "digest": digest(family),
+        "tree": tree_id(family),
     }
 
 
 HAND_FIELDS = ("id", "kind", "language", "domain", "runner", "summary")
-MEASURED_FIELDS = ("lines_of_code", "functions", "tests", "test_files", "digest", "files_under_test")
+MEASURED_FIELDS = (
+    "lines_of_code", "functions", "tests", "test_files", "digest", "tree", "files_under_test",
+)
 EXTRA_FIELDS = ("generation_seed", "generation_flags", "admitted", "funnel")
 
 
@@ -387,6 +406,8 @@ def check_catalog(families: list[Family]) -> list[str]:
             problems.append(f"{fam.id}: catalog says {entry.get('language')}, the tree is {fam.language}")
         if entry.get("digest") != digest(fam):
             problems.append(f"{fam.id}: the catalog digest is stale; run catalog --write")
+        if entry.get("tree") != tree_id(fam):
+            problems.append(f"{fam.id}: the catalog tree id is stale; run catalog --write")
     return problems
 
 

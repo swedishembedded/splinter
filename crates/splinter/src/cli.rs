@@ -107,6 +107,10 @@ pub enum Command {
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
+    /// Check an experiment plan: which families each generation trains on,
+    /// which earlier ones it is held to, which are the sealed final exam.
+    #[command(subcommand)]
+    Experiment(ExperimentCommand),
     /// Learn from the sessions you held with an agent: take them in, extract
     /// what you taught, teach it from many records, train again from the base
     /// and release only if every claim the champion answered still is and a
@@ -631,6 +635,23 @@ pub struct EvalArgs {
     /// `matrix`.
     #[command(subcommand)]
     pub command: Option<EvalCommand>,
+}
+
+/// `experiment ...`.
+#[derive(Debug, Subcommand)]
+pub enum ExperimentCommand {
+    /// Validate a plan against the catalog of families and show its schedule:
+    /// families disjoint by domain, no sealed family scheduled for training or
+    /// retention, retention only on families an earlier generation trained.
+    /// A plan that is not valid is refused with every violation.
+    Check {
+        /// The plan file.
+        #[arg(value_name = "PLAN")]
+        plan: PathBuf,
+        /// The catalog of families (default: catalog.toml beside the plan).
+        #[arg(long, value_name = "FILE")]
+        catalog: Option<PathBuf>,
+    },
 }
 
 /// `eval ...`.

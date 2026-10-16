@@ -119,3 +119,24 @@ Seeds drawn per family (exam seed, `mutants/file` as in the table):
 
 Families without a row of numbers were still running when this was written;
 their admitted counts are not measured.
+
+### The E3 plan
+
+`e3-plan.toml` assigns the eight families to the experiment: three generations of two
+families each, each held to the reserved exam files of every earlier family (retention), and
+two families sealed as the final exam. `catalog.toml` records each family's git `tree` id (the
+tree of a snapshot of its files), which is how a run is recognised as reading a family.
+
+```
+splinter experiment check tasks/e3-plan.toml
+splinter practice $WORK/<family> --plan tasks/e3-plan.toml --generation N ...
+```
+
+`experiment check` refuses a plan whose played families (trained or sealed) share a domain,
+that schedules a sealed family in any generation's training or retention list, that trains a
+family twice, or whose retention names a family no earlier generation trained. `practice
+--plan` refuses, before the repository is taken in as a source, a sealed family always and a
+family the plan does not train in that generation; it decides by the snapshot's tree id, so
+renaming a family opens nothing. Not enforced: a repository that is a copy of a sealed family
+with one file changed has another tree id; the plan seals the families as they are
+catalogued.
